@@ -45,6 +45,17 @@ public struct Note: Sendable, Equatable {
     /// note is still engraved but emits no MIDI. C++: `Note::play()`,
     /// which gates `CompatMidiRender::collectNote`.
     public var play: Bool
+    /// Per-note velocity override (`<velocity>` on `<Note>`). `0` means
+    /// "no override" — the note sounds at the velocity the prevailing
+    /// dynamic produced. Interpretation of a non-zero value depends on
+    /// `velocityType`; use `customizedVelocity(_:)` rather than reading
+    /// this directly. C++: `Note::userVelocity()`.
+    public var userVelocity: Int
+    /// Whether `userVelocity` is an absolute MIDI velocity (`.user`) or
+    /// a signed percentage offset (`.offset`). Meaningless when
+    /// `userVelocity` is 0, where it stays at MuseScore 4's default
+    /// (`.user`). C++: `Note::veloType()` / `<veloType>`.
+    public var velocityType: NoteVelocityType
     /// Base element properties shared with every engravable element.
     /// Currently carries only `<visible>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
@@ -68,6 +79,8 @@ public struct Note: Sendable, Equatable {
         parentheses: NoteParentheses = .none,
         isSmall: Bool = false,
         play: Bool = true,
+        userVelocity: Int = 0,
+        velocityType: NoteVelocityType = .user,
         visible: Bool = true,
     ) {
         self.pitch = pitch
@@ -82,6 +95,8 @@ public struct Note: Sendable, Equatable {
         self.parentheses = parentheses
         self.isSmall = isSmall
         self.play = play
+        self.userVelocity = userVelocity
+        self.velocityType = velocityType
         elementProperties = ElementProperties(visible: visible)
     }
 }

@@ -102,21 +102,35 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private var staffChannelSwitches: [Int: [(tick: Int, channel: UInt8)]] = [:]
 
     /// Master output stage. The score synth feeds `scoreGainMixer`,
-    /// whose `outputVolume` is the user's master gain (`0...3`). Its
-    /// output is summed with the metronome at `sumMixer`, brick-walled
-    /// by `limiter`, then routed into `mainMixerNode`. Built once in
+    /// whose `outputVolume` is the user's master gain (`0...`). Its
+    /// output is summed with the metronome at `sumMixer`, passed through
+    /// `softClip` and `limiter` — both bypassed unless
+    /// `masterOutputStage` selects one — then routed into
+    /// `mainMixerNode`. Built once in
     /// `init` and reused across every `prepare(score:)`, so `masterGain`
     /// survives score reloads. `internal` so the `+Master` / `+Export`
     /// extensions in sibling files can reach the nodes directly.
     let scoreGainMixer = AVAudioMixerNode()
     let sumMixer = AVAudioMixerNode()
+    let softClip = SoftClipAudioUnit.makeNode()
     let limiter = PlaybackEngine.makePeakLimiter()
 
+    /// Which shaping node — if any — is active past full scale. Setter is
+    /// module-internal so the `+Master` extension (a different file) can
+    /// mirror the value here. See `MasterOutputStage` for why `.none` is
+    /// the default.
+    public internal(set) var masterOutputStage: MasterOutputStage = .none // swiftlint:disable:this inclusive_language
+
     /// Linear amplitude multiplier applied to the full mix, post
-    /// per-channel mixing. `1.0` = unity. Clamped to `0...3` by
-    /// `setMasterGain`. Setter is module-internal so the `+Master`
-    /// extension (a different file) can mirror the clamped value here.
+    /// per-channel mixing. `1.0` = unity. Floored at `0` by
+    /// `setMasterGain`; no ceiling. Setter is module-internal so the
+    /// `+Master` extension (a different file) can mirror the value here.
     public internal(set) var masterGain: Float = 1.0 // swiftlint:disable:this inclusive_language
+
+    /// `true` while a peak-level tap is installed on `sumMixer`. Setter is
+    /// module-internal so the `+Metering` extension (a different file) can
+    /// mirror the tap's lifecycle here.
+    public internal(set) var isLevelMonitoring = false
 
     /// Current A4-calibration offset in cents (0 = A4 440 Hz). Stored so it survives
     /// synth rebuilds in `prepareSynth`, like `masterGain`.
@@ -377,6 +391,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         /// `PlaybackEngine.masterGain`, so the export engine rebuilds
         /// the master stage at the same gain the user hears live.
         let masterGain: Float // swiftlint:disable:this inclusive_language
+        /// Shaping stage captured from `PlaybackEngine.masterOutputStage`,
+        /// so an export that was driven past full scale is shaped the same
+        /// way the user just heard it.
+        let masterOutputStage: MasterOutputStage // swiftlint:disable:this inclusive_language
         /// Resolved metronome SoundFont URL (host click SF2, host SF2, or
         /// GM drum-kit), so the export plays the same click as live.
         let metronomeSoundFontURL: URL?
@@ -397,6 +415,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             rate: pendingRate,
             metronomeBeats: metronomeBeats,
             masterGain: masterGain,
+            masterOutputStage: masterOutputStage,
             metronomeSoundFontURL: clickResolver.resolvedSoundFontURL(),
             transposeSemitones: transposeSemitones,
             masterTuningCents: masterTuningCents,

@@ -28,7 +28,18 @@ extension Score {
         else {
             throw SheetMusicError.malformedScore(reason: "missing <Division>")
         }
+        // Resolved up front and published as a TaskLocal: element
+        // decoders nested arbitrarily deep need it to tell "absent
+        // because default" apart across wire-format generations.
+        let version = detectVersion(root: root, scoreNode: scoreNode)
+        return try MSCXParserContext.$version.withValue(version) {
+            try decodeBody(scoreNode: scoreNode, division: division, version: version)
+        }
+    }
 
+    private static func decodeBody(
+        scoreNode: XMLTreeNode, division: Int, version: MSCXVersion,
+    ) throws -> Score {
         let partPairings = try scoreNode.all("Part").enumerated().map {
             try Part.decodePairing($0.element, fallbackIndex: $0.offset + 1)
         }
@@ -66,7 +77,6 @@ extension Score {
         } else {
             style = .museScoreDefaults
         }
-        let version = detectVersion(root: root, scoreNode: scoreNode)
         let resolvedSystemMeasures = version == .v2
             ? promoteMS2StaffTextSwingToSystem(systemMeasures)
             : systemMeasures

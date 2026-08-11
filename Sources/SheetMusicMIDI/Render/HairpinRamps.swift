@@ -164,7 +164,7 @@ enum HairpinRamps {
             endVel = dyn.velocity
         } else {
             let delta = p.payload.veloChange ?? defaultDeltaVelocity
-            let signed = p.payload.subtype == .crescendo ? delta : -delta
+            let signed = p.payload.subtype.isCrescendo ? delta : -delta
             endVel = max(1, min(127, p.startVelocity + signed))
         }
         return HairpinRamp(

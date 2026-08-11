@@ -42,6 +42,38 @@ extension PDFImporter {
             table.isEmpty
         }
 
+        /// Does this font map any codepoint in the STANDARD SMuFL range
+        /// that `smuflSemantic` recognizes?
+        ///
+        /// This is the per-font evidence gate for Tier 1b (see
+        /// `PDFImporter+SMuFLOptionalRange.swift`). SMuFL leaves
+        /// U+F400–U+F8FF font-specific, so reading a codepoint there as the
+        /// Steinberg notehead layout is only defensible for a font that has
+        /// demonstrated it speaks standard SMuFL. Measured, the two
+        /// populations are nowhere near each other: a Bravura or Petaluma
+        /// export maps 39 distinct recognized standard codepoints alongside
+        /// the four optional-range noteheads, while a font that merely
+        /// squats on the private use area maps none.
+        ///
+        /// A set predicate over the whole table, so it is independent of
+        /// CMap ordering. Recognition — not mere PUA membership — is what is
+        /// asked: the question is what the font demonstrably speaks, and an
+        /// unrecognized U+E999 answers nothing.
+        var mapsRecognizedStandardSMuFLCodepoints: Bool {
+            for scalars in table.values {
+                guard let first = scalars.first else { continue }
+                let codepoint = first.value
+                guard !PDFImporter.smuflOptionalGlyphRange.contains(codepoint) else {
+                    continue
+                }
+                if case .unknown = PDFImporter.smuflSemantic(codepoint: codepoint) {
+                    continue
+                }
+                return true
+            }
+            return false
+        }
+
         // MARK: - Parsing
 
         /// Parse a plaintext (already FlateDecode-inflated) ToUnicode

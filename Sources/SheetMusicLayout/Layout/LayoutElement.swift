@@ -290,17 +290,6 @@ public enum LayoutElement: Sendable, Equatable {
         /// color and don't carry a per-element override here.
         case lyrics(color: ScoreColor? = nil)
     }
-
-    public enum SpannerKind: Sendable, Equatable {
-        case slur
-        case volta(endings: [Int])
-        case hairpinOpen
-        case hairpinClose
-        case pedal
-        case ottava(raw: String)
-        case textLine
-        case vibrato(VibratoType)
-    }
 }
 
 public struct LayoutChordNote: Sendable, Equatable {
