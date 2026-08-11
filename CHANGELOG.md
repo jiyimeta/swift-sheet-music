@@ -87,8 +87,90 @@ and this project adheres to
   resulting commands (rather than treating them as opaque) is the only thing that could observe a difference.
 - **Every `Score.stableFingerprint` value changes** as a consequence of the widened walk above — this is not a
   bug, it is the point (the walk previously blind to a planner's own repairs now sees them). A host comparing a
-  fingerprint it computed and stored under 1.10.0 or earlier against one computed under 1.11.0 will see them
+  fingerprint it computed and stored under 1.10.1 or earlier against one computed under 1.11.0 will see them
   disagree even for an unedited score, and must re-baseline rather than treat the mismatch as drift.
+
+## [1.10.1] - 2026-08-12
+
+### Fixed
+
+- A tuplet whose members are all rests engraves its number and bracket.
+  The emitter required at least one chord to anchor the marking against
+  and returned early otherwise, so a triplet of rests printed as three
+  plain rests with nothing saying three-in-the-time-of-two — the marking
+  is the only thing that distinguishes them. Rests already widened the
+  bracket's span; now they can carry it alone, and the vertical anchor
+  falls back to the middle line, placing the bracket where a middle-line
+  note would have put it. Sample `30-rest-tuplet` covers both the
+  all-rest tuplet and the note-then-rests one.
+
+- PDF import reads chords and note values correctly on scores engraved at
+  a larger-than-typical staff size. The importer matched a notehead to its
+  stem within a fixed ±7pt window, but a stem abuts its notehead's edge at
+  a distance set by the music font — 1.2–1.3 staff spaces, measured over
+  the whole reference corpus — so the window is only correct at one page
+  scale. On a piano score engraved at a 5.95pt staff space every stem-up
+  stem sat 7.41pt away, 0.41pt outside the window: 577 noteheads found no
+  stem at all, each becoming its own one-note chord, and every value that
+  depended on beam attachment collapsed to a quarter. The window is now
+  1.4 staff spaces, which reproduces the old constant exactly at the
+  corpus's most common staff space.
+
+- PDF import produces the same `Score` for the same page regardless of
+  the order the PDF's content stream happened to emit its glyphs.
+  `buildScore` was sensitive to that order in about thirty places — not
+  only comparators, but first-minimum scans, greedy consume-in-arrival
+  loops, and readers that break at the first content glyph — so an
+  identical glyph multiset in a different order could decode to a
+  different score. The four glyph/path streams are now canonicalized once
+  on entry (`WalkedContent.canonicalized()`), which makes every
+  downstream array a function of the content; the order chosen (page,
+  then bottom-up, then left-to-right, then a total order over the
+  semantic and every remaining field) was decided by measuring both
+  directions against the reference corpus.
+
+- PDF import no longer drops noteheads on deep ledger lines. The
+  capture band around a staff was exactly three staff spaces, and a piano
+  bass routinely writes 3.0–4.5 spaces out; on one page 25 of 271
+  noteheads were captured by no staff at all, which read as chords
+  losing their lower notes. The band is now five spaces, the neighbouring
+  staff still being excluded by the midpoint clamp that was added after
+  the band was first narrowed.
+
+- PDF import reads a chord that contains a SECOND as one chord. The
+  engraver has to mirror one head of a second across the stem, so the two
+  heads never share an x column, and the cluster rule demanded one within
+  a fixed 2.5pt. The window is now 1.35 staff spaces — measured to sit
+  between the mirror offset (1.2 sp) and the minimum note-to-note
+  spacing (~1.5 sp) — and a mirrored head must also be at a different
+  staff position, since merging a unison would delete a note.
+
+- PDF import reads a chord's stem direction from the whole chord rather
+  than from its lowest notehead, so a wide chord whose stem barely clears
+  the near head is no longer read as pointing the other way (which put it
+  in the wrong voice).
+
+- PDF import matches a flag to the stem it hangs from. A flag attaches at
+  the stem's bare end — measured over the reference corpus, 53,058 of the
+  ~54,000 flags sharing a stem's x column sit within 0.04 staff spaces of
+  that end — but the importer looked for it in a fixed 4–22pt window
+  measured from the lead notehead. An engraving-correct stem is 28pt long
+  at an 8pt staff space, outside that window, so the eighth read as a
+  quarter; and on a CHORD the stem's bare end is a chord-height farther
+  from the lead notehead, so a flagged chord lost its flag at any staff
+  size.
+
+- PDF import decides which note an augmentation dot belongs to by the
+  notehead's own width rather than a fixed 12pt. Measured over the
+  reference corpus, a note's own dot sits 0.8–1.2 notehead-advances to its
+  right and nothing at all sits at 1.3–1.4, so the bound is now 1.35
+  advances; 12pt was 1.0 advance on the largest staves (clipping real
+  dots) and 2.5 on the smallest (admitting the following note's dot).
+
+- PDF import reads a rest that sits outside the staff, recognizes the
+  repeat dot MuseScore actually draws (`repeatDot` U+E044, never the
+  combined `repeatDots` U+E043), and classifies seven glyph families the
+  importer had names for but never produced.
 
 ## [1.10.0] - 2026-08-11
 

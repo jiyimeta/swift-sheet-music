@@ -57,9 +57,9 @@
         }
 
         /// Distance from a notehead's origin to its own stem — the same
-        /// value `PDFSyntheticTupletTests` uses, inside `nearestStem`'s ±7pt
-        /// window and to the right of the origin so the stem reads as
-        /// stem-up.
+        /// value `PDFSyntheticTupletTests` uses, inside `nearestStem`'s
+        /// window (1.4 × the 5pt staff space here) and to the right of the
+        /// origin so the stem reads as stem-up.
         private static let stemOffset: CGFloat = 5.5
         private static let noteX: CGFloat = 150
 

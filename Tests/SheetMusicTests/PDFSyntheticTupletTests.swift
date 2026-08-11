@@ -69,9 +69,10 @@
         /// and survives as `m l l l h f`. Measured: with slope 0 the walker
         /// reported 0 beams and 2 rectangles.
         private static let beamSlope: CGFloat = 1.5
-        /// Distance from a notehead's origin to its own stem. Under
-        /// `nearestStem`'s ±7pt window and right of the origin, so
-        /// `stemLegalityLeftSlop` is satisfied and the stem reads as stem-up.
+        /// Distance from a notehead's origin to its own stem. Inside
+        /// `nearestStem`'s window (1.4 × this fixture's 5pt staff space) and
+        /// right of the origin, so `stemLegalityLeftSlop` is satisfied and
+        /// the stem reads as stem-up.
         private static let stemOffset: CGFloat = 5.5
 
         private static func staffLines() -> [PDFFixtureBuilder.PathPlacement] {

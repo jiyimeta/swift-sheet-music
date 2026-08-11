@@ -64,6 +64,144 @@
             #expect(PDFImporter.smuflSemantic(codepoint: 0xE4E7) == .rest(.sixteenth))
         }
 
+        /// The whole fermata family, not just `fermataAbove`.
+        ///
+        /// SMuFL's "Holds and pauses" range opens with fourteen fermata
+        /// variants (U+E4C0 fermataAbove … U+E4CD fermataShortHenzeBelow)
+        /// and only then turns to breath marks and caesuras, which are
+        /// NOT fermatas and have no detector class. Endpoints read out of
+        /// MuseScore's own bundled `fonts/smufl/glyphnames.json` +
+        /// `ranges.json`, not guessed: the range as a whole is
+        /// U+E4C0–U+E4DF, but `breathMarkComma` sits at U+E4CE, so the
+        /// fermata block is the contiguous prefix and stops one short of
+        /// it.
+        ///
+        /// Mapping only `fermataAbove` left `fermataBelow` — engraved
+        /// routinely under a bottom staff — falling through to
+        /// `.unknown`, i.e. unlabeled ink inside a class the detector
+        /// vocabulary already carries.
+        @Test func classifiesTheWholeFermataFamilyButNotBreathMarks() {
+            for cp in UInt32(0xE4C0) ... UInt32(0xE4CD) {
+                #expect(PDFImporter.smuflSemantic(codepoint: cp) == .fermata)
+            }
+            // breathMarkComma / breathMarkTick / caesura — no class.
+            for cp in UInt32(0xE4CE) ... UInt32(0xE4D7) {
+                #expect(PDFImporter.smuflSemantic(codepoint: cp) == .unknown(cp))
+            }
+        }
+
+        /// Repeats range: the two jump WORDS that SMuFL does draw as
+        /// glyphs. `dalSegno` U+E045 and `daCapo` U+E046 sit immediately
+        /// before the `segno` / `coda` pair this switch already knew.
+        ///
+        /// There is deliberately no `fine` and no `toCoda` here: SMuFL
+        /// has no such glyph (only `coda` U+E048 and `codaSquare`
+        /// U+E049), so those two detector classes are recovered from the
+        /// TEXT stream instead — see `PDFImporter+Structure`'s marker
+        /// text mapping.
+        /// A rest sitting outside the staff is the same rest.
+        ///
+        /// Whole and half rests hang from a staff line, so one placed
+        /// above or below the staff carries its own leger line — SMuFL
+        /// gives that its own glyph (`restWholeLegerLine` U+E4F4,
+        /// `restHalfLegerLine` U+E4F5, right after the plain rests and
+        /// the H-bar family). Same duration, same class. Leaving them
+        /// unmapped dropped the rest from the import entirely.
+        ///
+        /// Measured on the owner's own scores during the coverage round.
+        /// No synthetic source would have caught it: the generators
+        /// never place a rest off-staff.
+        @Test func classifiesLegerLineRestsAsTheirPlainDurations() {
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE4F4) == .rest(.whole))
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE4F5) == .rest(.half))
+            // U+E4F3 is the DOUBLE-whole leger-line rest, and this
+            // package's NoteDuration has no breve — mapping it would
+            // need a duration that does not exist, so it stays unknown
+            // rather than being rounded to a whole rest.
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE4F3) == .unknown(0xE4F3))
+        }
+
+        /// Both spellings of a repeat barline's dots.
+        ///
+        /// SMuFL has `repeatDots` U+E043 — the pair as one glyph — and
+        /// `repeatDot` U+E044, a single dot. MuseScore draws the pair as
+        /// TWO `repeatDot` glyphs at the same x, one per staff position
+        /// (upstream `rendering/score/tdraw.cpp:683-684`), so a
+        /// MuseScore-engraved repeat barline contains no U+E043 at all
+        /// and mapping only that codepoint recognized none of them.
+        /// Measured: a probe over MuseScore output labelled 140 glyphs
+        /// `unknownE044`, exactly two per repeat barline, and the
+        /// `repeatBarlineDots` class finished at zero.
+        ///
+        /// Both collapse to one semantic on purpose. Nothing downstream
+        /// counts the dots — `PDFImporter+Structure`'s `repeatDotsCount`
+        /// is read through `> 0` — and a separate class would leave
+        /// `repeatBarlineDots` permanently empty in MuseScore-derived
+        /// training data while not being honestly unreachable either.
+        @Test func classifiesBothSpellingsOfRepeatDots() {
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE043) == .repeatBarlineDots)
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE044) == .repeatBarlineDots)
+        }
+
+        @Test func classifiesDalSegnoAndDaCapoGlyphs() {
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE043) == .repeatBarlineDots)
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE045) == .dalSegno)
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE046) == .daCapo)
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE047) == .segno)
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE048) == .coda)
+        }
+
+        /// The three coarse buckets. Whole SMuFL ranges map to one value
+        /// each: the importer does not model dynamics, articulations or
+        /// ornaments, and the point of classifying them is that their ink
+        /// is accounted for rather than left to be mistaken for a
+        /// neighbouring class.
+        ///
+        /// A blanket range claim is safe HERE and would not be in
+        /// U+F400–F8FF: these are standard SMuFL ranges whose meanings
+        /// are fixed by the specification, whereas the optional range is
+        /// font-specific by definition (which is why the notehead
+        /// aliases live in their own gated table).
+        @Test func classifiesTheCoarseExpressionBuckets() {
+            for cp in UInt32(0xE4A0) ... UInt32(0xE4BF) {
+                #expect(PDFImporter.smuflSemantic(codepoint: cp) == .articulation)
+            }
+            for cp in UInt32(0xED40) ... UInt32(0xED4F) {
+                #expect(PDFImporter.smuflSemantic(codepoint: cp) == .articulation)
+            }
+            for cp in UInt32(0xE520) ... UInt32(0xE54F) {
+                #expect(PDFImporter.smuflSemantic(codepoint: cp) == .dynamic)
+            }
+            // commonOrnaments U+E560–E56F + otherBaroqueOrnaments U+E570–E58F.
+            for cp in UInt32(0xE560) ... UInt32(0xE58F) {
+                #expect(PDFImporter.smuflSemantic(codepoint: cp) == .ornament)
+            }
+        }
+
+        /// The ranges must not run past their own boundaries. A bucket
+        /// that swallows one codepoint too many is invisible: the label
+        /// is present, plausible, and wrong — the failure mode this
+        /// importer treats as the worst kind.
+        @Test func coarseBucketsStopAtTheirRangeBoundaries() {
+            for cp: UInt32 in [
+                0xE49F,
+                0xE51F,
+                0xE550,
+                0xE55F,
+                0xE590,
+                0xED3F,
+                0xED50,
+            ] {
+                let semantic = PDFImporter.smuflSemantic(codepoint: cp)
+                #expect(semantic != .articulation)
+                #expect(semantic != .dynamic)
+                #expect(semantic != .ornament)
+            }
+            // U+E4C0 is inside neither articulation nor the bucket that
+            // follows it — it is the fermata the switch already had.
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE4C0) == .fermata)
+        }
+
         @Test func unknownCodepointReportsAsUnknown() {
             let semantic = PDFImporter.smuflSemantic(codepoint: 0xE999)
             if case let .unknown(cp) = semantic {

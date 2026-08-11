@@ -122,12 +122,16 @@
 
         @Test func blackPlusOneFlagIsEighth() {
             let (g, dp) = notehead(x: 100, y: 500)
-            // Stem extends upward from notehead to y=530. The flag glyph's
-            // ORIGIN sits ~12pt above the notehead in MuseScore's real export
-            // (R7-calibrated `applyFlags` gate is 4…22pt from the notehead,
-            // NOT from the stem end), so the fixture places it at y=512.
+            // The stem runs up from the notehead to y=530, and the flag glyph's
+            // ORIGIN sits AT that bare end. Measured over the 135-score real
+            // corpus, 53,058 of the ~54,000 flags sharing a stem's x column are
+            // within 0.04 staff spaces of the stem end; the next population is
+            // 3.1 sp away and belongs to another note. (This fixture used to
+            // put the flag at y=512, calibrated against an `applyFlags` that
+            // measured from the NOTEHEAD through a 4…22pt window — a geometry
+            // MuseScore does not emit.)
             let stems = [stem(x: 100, yMin: 500, yMax: 530)]
-            let f = flag(x: 100, y: 512, kind: .flag8thUp)
+            let f = flag(x: 100, y: 530, kind: .flag8thUp)
             let m = makeMeasure(glyphs: [g, f])
             let rhythm = PDFImporter.decodeRhythm(
                 measure: m, decoded: [dp], paths: stems,
@@ -138,13 +142,13 @@
 
         @Test func blackPlusTwoFlagsIsSixteenth() {
             let (g, dp) = notehead(x: 100, y: 500)
-            // Combined 16th flag glyph (single glyph carrying both beam
-            // levels) at a realistic ~12pt-above-notehead origin; a separate
-            // 8th flag a touch lower, both inside the 4…22pt gate. (R7 stale
-            // fixture used y=528/530 ≈ dy 28-30, outside the real flag band.)
+            // A combined 16th flag glyph (one glyph carrying both levels) at
+            // the stem's bare end, plus a stray 8th flag — the higher level
+            // wins. Both sit at the stem end, which is where MuseScore anchors
+            // them (see `blackPlusOneFlagIsEighth` for the measurement).
             let stems = [stem(x: 100, yMin: 500, yMax: 530)]
-            let f1 = flag(x: 100, y: 512, kind: .flag8thUp)
-            let f2 = flag(x: 100, y: 514, kind: .flag16thUp)
+            let f1 = flag(x: 100, y: 530, kind: .flag8thUp)
+            let f2 = flag(x: 100, y: 530, kind: .flag16thUp)
             let m = makeMeasure(glyphs: [g, f1, f2])
             let rhythm = PDFImporter.decodeRhythm(
                 measure: m, decoded: [dp], paths: stems,
@@ -156,7 +160,11 @@
         @Test func blackPlusOneDotIsDottedQuarter() {
             let (g, dp) = notehead(x: 100, y: 500)
             let stems = [stem(x: 100, yMin: 500, yMax: 530)]
-            let d = dot(x: 110, y: 500)
+            // 1.0 notehead-advance to the right (advance 5). Measured over
+            // the real corpus a note's own dot sits at 0.8–1.2 advances and
+            // nothing at all sits at 1.3–1.4; this fixture used to place it
+            // at 2.0 advances, which is where a LATER note's dot lives.
+            let d = dot(x: 105, y: 500)
             let m = makeMeasure(glyphs: [g, d])
             let rhythm = PDFImporter.decodeRhythm(
                 measure: m, decoded: [dp], paths: stems,

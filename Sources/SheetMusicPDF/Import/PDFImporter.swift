@@ -22,12 +22,23 @@ public enum PDFImporter {
     /// staff can be detected on any page.
     static func buildScore(
         pageCount: Int,
-        walked: WalkedContent,
+        walked incoming: WalkedContent,
         pageSizes: [Int: CGSize],
         documentAttributes: [String: Any]?,
         options: PDFImportOptions,
         geometry: PDFGeometryCollector? = nil,
     ) throws -> Score {
+        // THE FIRST THING THAT HAPPENS. Every pass below reads an
+        // order-preserving `filter` of these four streams, so imposing one
+        // canonical order here makes the whole decode a function of the
+        // streams' CONTENT rather than of the order a front-end happened to
+        // emit them in. That is not a nicety: a raster front-end finds glyphs
+        // on a page and cannot reproduce a PDF content stream's order, so
+        // without this the raster and vector decodes of the same page can
+        // never agree — which is exactly what gate P0-G1 measures. See
+        // `PDFImporter+Canonical` for why this is one sort and not thirty
+        // comparator fixes.
+        let walked = incoming.canonicalized()
         // Page sizes (mediaBox) drive the geometry side-car's system rects and
         // display flips; only consumed on the geometry-capture path.
         geometry?.setPageSizes(pageSizes)
