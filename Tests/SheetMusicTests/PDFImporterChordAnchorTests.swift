@@ -5,22 +5,40 @@
     @testable import SheetMusicPDF
     import Testing
 
-    /// A chord's stem direction and dot count are properties of the WHOLE
-    /// chord, not of whichever notehead happened to be first in the glyph
-    /// array.
+    /// What a chord's decode may and may not read off ONE of its noteheads.
     ///
-    /// Both were anchored on the cluster's "lead" — the first unconsumed
-    /// notehead `decodeRhythm` walks into. That made them depend on glyph
-    /// order until the streams were canonicalized, and it leaves them
-    /// depending on an arbitrary choice even now: the canonical order puts
-    /// the LOWEST notehead first, which is the right anchor for an up-stem
-    /// chord and the wrong one for a down-stem chord. Measured over the
-    /// 141-score corpus, bottom-first beat top-first — but "beats the other
-    /// arbitrary choice" is not the same as correct, and these tests pin the
-    /// cases where a fixed anchor is simply wrong.
+    /// Stem direction and dot count were both anchored on the cluster's
+    /// "lead" — the first unconsumed notehead `decodeRhythm` walks into,
+    /// i.e. the lowest one under the canonical stream order. For STEM
+    /// DIRECTION that anchor is genuinely wrong on a wide chord, and the
+    /// first test below is the case; it is fixed.
+    ///
+    /// FOR DOTS IT IS NOT WRONG, and three attempts to "fix" it each
+    /// measured worse on the 141-score corpus (nearest-mate ownership: 1
+    /// score worse; distinct dot columns: 6 worse, one of them dur% 99→95;
+    /// max-over-mates: rejected at design time). The reason is upstream, in
+    /// `rendering/score/chordlayout.cpp`, and it makes the lead anchor exact
+    /// rather than lucky:
+    ///
+    /// - `int dots = chord->dots()` (:3139) — the dot COUNT is a property of
+    ///   the chord, and every notehead is dotted at the chord's shared
+    ///   `dotPosX()`. So any notehead's own dots already give the chord's
+    ///   level.
+    /// - `placeDots` (:2468-2507) never leaves two notes' dots on one staff
+    ///   step, so two noteheads' dots are ≥ 1sp ≈ 7pt apart vertically —
+    ///   outside the `dy < 4` window, which admits only a note's own dots
+    ///   (≤ 0.5sp).
+    /// - `conflict = (std::abs(prevLine - line) < 2)` (:2368) mirrors one
+    ///   head of a SECOND to the other side of the stem, ~1.07sp away, so
+    ///   two noteheads never share an x-column either.
+    ///
+    /// Fixtures that put a second's two heads at one x, or dot only one
+    /// notehead of a chord, therefore describe geometry MuseScore cannot
+    /// emit. Three such fixtures were written here and deleted: they did not
+    /// document a defect, they documented a false model of one, and the next
+    /// reader would have been steered into a fourth attempt. The real defect
+    /// in this area is the last test below.
     @MainActor struct PDFImporterChordAnchorTests {
-        private static let lineGap: CGFloat = 5
-
         private func notehead(
             x: CGFloat, y: CGFloat, midi: Int,
         ) -> (ClassifiedGlyph, PDFImporter.DecodedPitch) {
@@ -123,44 +141,9 @@
 
         // MARK: - Augmentation dots
 
-        /// A chord of a SECOND puts its two dots close enough together that
-        /// BOTH fall inside one notehead's `dy < 4` window — so counting
-        /// every dot near the anchor makes a single-dotted chord read as
-        /// DOUBLE-dotted, which is a wrong duration rather than a wrong
-        /// attachment.
-        ///
-        /// A dot belongs to exactly one notehead, so the chord's dot LEVEL is
-        /// how many dots any single notehead owns — not how many dots are
-        /// nearby.
-        @Test func aChordOfASecondIsSingleDottedNotDoubleDotted() {
-            let (low, lowPitch) = notehead(x: 100, y: 500, midi: 71)
-            let (high, highPitch) = notehead(x: 100, y: 502.5, midi: 72)
-            let dots = [dot(x: 106, y: 500), dot(x: 106, y: 502.5)]
-            let rhythm = PDFImporter.decodeRhythm(
-                measure: measure([low, high] + dots),
-                decoded: [lowPitch, highPitch],
-                paths: [stem(x: 100, yMin: 500, yMax: 530)],
-            )
-            #expect(rhythm.count == 1)
-            #expect(rhythm.first?.chord.duration == .quarter.dotted(1))
-        }
-
-        /// And the miss in the other direction: a wide chord whose dots sit
-        /// beside their own noteheads, far from the anchor. The anchor sees
-        /// nothing within `dy < 4` and the chord loses its dot entirely.
-        @Test func aWideChordKeepsTheDotBesideItsFarNotehead() {
-            let (low, lowPitch) = notehead(x: 100, y: 496, midi: 71)
-            let (high, highPitch) = notehead(x: 100, y: 512, midi: 76)
-            let rhythm = PDFImporter.decodeRhythm(
-                measure: measure([low, high, dot(x: 106, y: 512)]),
-                decoded: [lowPitch, highPitch],
-                paths: [stem(x: 100, yMin: 496, yMax: 522)],
-            )
-            #expect(rhythm.count == 1)
-            #expect(rhythm.first?.chord.duration == .quarter.dotted(1))
-        }
-
-        /// A single notehead's dot is unaffected — the common case again.
+        /// The dot rule reads a note's OWN dots, and that is all it needs to
+        /// read — see the type doc comment for why anchoring on one notehead
+        /// of a chord is exact rather than lucky.
         @Test func aSingleNoteheadKeepsItsDot() {
             let (g, dp) = notehead(x: 100, y: 500, midi: 71)
             let rhythm = PDFImporter.decodeRhythm(
@@ -168,6 +151,52 @@
                 paths: [stem(x: 100, yMin: 500, yMax: 530)],
             )
             #expect(rhythm.first?.chord.duration == .quarter.dotted(1))
+        }
+
+        // MARK: - The real defect in this area
+
+        /// KNOWN ISSUE: a chord containing a SECOND splits into two
+        /// sequential chords.
+        ///
+        /// This is what the dot investigation actually found, once the
+        /// fixtures were made physical. MuseScore mirrors one head of a
+        /// second to the other side of the stem — `conflict =
+        /// (std::abs(prevLine - line) < 2)` then
+        /// `mirror.set_value(...)`, offset `headWidth - stemWidth`
+        /// (`rendering/score/chordlayout.cpp:2368, 2404, 2733-2741`), about
+        /// 1.07sp. `stemCluster` admits a chord-mate only within
+        /// `abs(dx) <= 2.5` pt (`PDFImporter+Rhythm.swift`), which at any
+        /// real staff size is far narrower than that offset, so the two
+        /// heads never join one cluster.
+        ///
+        /// The consequence is a NOTE-COUNT error, not a dot error: two
+        /// chords where the score has one, and `hasCoincidentOnset`'s 3pt
+        /// tolerance does not see them as simultaneous either, so they do
+        /// not even become two voices.
+        ///
+        /// Left as a known issue rather than fixed here: widening the
+        /// cluster window is a change to chord and voice assembly, and it
+        /// needs its own evidence first — a census of how many seconds the
+        /// corpus actually contains — because three dot "fixes" in a row
+        /// were rejected by that corpus for want of exactly that discipline.
+        /// Note also that once mirrored heads DO join a cluster, the dot
+        /// anchor starts to matter for dotted seconds (the two halves' dot
+        /// dx straddle the `minDX` floor and the 12pt cap), so the anchor
+        /// question reopens then — with real geometry to design against.
+        @Test func aSecondSplitsIntoTwoChords() {
+            // Two heads a staff step apart, the upper mirrored to the right
+            // of the shared stem by about one notehead width.
+            let (left, leftPitch) = notehead(x: 100, y: 500, midi: 71)
+            let (right, rightPitch) = notehead(x: 105, y: 502.5, midi: 72)
+            let rhythm = PDFImporter.decodeRhythm(
+                measure: measure([left, right]),
+                decoded: [leftPitch, rightPitch],
+                paths: [stem(x: 105, yMin: 500, yMax: 530)],
+            )
+            withKnownIssue("seconds split — see the doc comment") {
+                #expect(rhythm.count == 1)
+                #expect(rhythm.first?.chord.notes.count == 2)
+            }
         }
     }
 #endif
