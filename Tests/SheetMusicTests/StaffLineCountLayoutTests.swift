@@ -367,5 +367,60 @@
             #expect(abs(one.top + spMM * 2) < 0.01)
             #expect(abs(one.bottom - spMM * 2) < 0.01)
         }
+
+        // MARK: - Ledger lines
+
+        /// Count of `.ledgerLine` elements in a one-staff, one-note score.
+        /// G4 in treble clef sits at staff `step` −2 — always, regardless
+        /// of `lineCount` (`StaffLineGeometry.topStep` is fixed at 4 for
+        /// every line count, and `step` is measured from that same
+        /// reference; only where the *other* lines fall moves).
+        ///
+        /// On a 5-line staff (bottomStep −4, `firstLedgerStepBelow` −6)
+        /// step −2 sits inside the staff (between the middle and bottom
+        /// lines): 0 ledger lines.
+        /// On a 3-line staff (bottomStep 0, `firstLedgerStepBelow` −2)
+        /// step −2 IS the first ledger position below the staff: exactly
+        /// 1 ledger line. This is the case Task 13's brief got wrong —
+        /// shrinking the staff raises its bottom line, so the same note
+        /// gains a ledger line rather than losing one.
+        private func ledgerLineCount(lineCount: Int) throws -> Int {
+            guard #available(macOS 15.0, *) else { return -1 }
+            let g4 = Note(pitch: 67, tpc: 15)
+            let measure = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: .quarter, notes: [g4])),
+            ])])
+            let part = Part(
+                id: "P1",
+                trackName: "Percussion",
+                instrument: Instrument(
+                    id: "perc", longName: "Percussion", shortName: "Perc.",
+                ),
+                staves: [Staff(lineCount: lineCount, measures: [measure])],
+            )
+            let score = Score(division: 480, parts: [part])
+            let doc = LayoutEngine.layout(
+                score: score,
+                options: .init(wrapToViewWidth: false),
+                availableWidth: 900,
+            )
+            let system = try #require(doc.systems.first)
+            var count = 0
+            for measure in system.measures {
+                for element in measure.elements {
+                    if case .ledgerLine = element { count += 1 }
+                }
+            }
+            return count
+        }
+
+        @Test("Ledger bounds follow the staff's own line count")
+        func ledgerBoundsFollowLineCount() throws {
+            guard #available(macOS 15.0, *) else { return }
+            #expect(try ledgerLineCount(lineCount: 5) == 0)
+            #expect(try ledgerLineCount(lineCount: 3) == 1)
+        }
     }
 #endif

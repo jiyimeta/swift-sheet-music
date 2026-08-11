@@ -843,6 +843,11 @@ extension LayoutEngine {
                 // so placement coords end up in system coords.
                 let yOffset = staffOrigins[staffIdx].y
                     - metrics.sp * 2
+                // Ledger lines are emitted here, the last point where
+                // staff identity still exists (their count depends on
+                // the staff's line count). Running after spacing keeps
+                // `.ledgerLine` out of the width computation.
+                let geometry = staffGeometries[staffIdx]
                 if let els = um.perStaffElements[staffIdx] {
                     // Record dynamic spans BEFORE aggregation — after
                     // it, the staff each dynamic belongs to is gone.
@@ -851,15 +856,11 @@ extension LayoutEngine {
                         in: els, staffIndex: staffIdx,
                         tickColumns: um.tickCols, metrics: metrics,
                     ))
-                    // Ledger lines are emitted here, the last point where
-                    // staff identity still exists (their count depends on
-                    // the staff's line count). Running after spacing keeps
-                    // `.ledgerLine` out of the width computation.
                     let withLedgers = LedgerLinePass.insert(
                         into: els,
                         metrics: metrics,
-                        firstStepAbove: 6,
-                        firstStepBelow: -6,
+                        firstStepAbove: geometry.firstLedgerStepAbove,
+                        firstStepBelow: geometry.firstLedgerStepBelow,
                         invisibleNotes: false,
                     )
                     aggregated.append(contentsOf: withLedgers.map {
@@ -876,8 +877,8 @@ extension LayoutEngine {
                     let withLedgers = LedgerLinePass.insert(
                         into: invisible,
                         metrics: metrics,
-                        firstStepAbove: 6,
-                        firstStepBelow: -6,
+                        firstStepAbove: geometry.firstLedgerStepAbove,
+                        firstStepBelow: geometry.firstLedgerStepBelow,
                         invisibleNotes: false,
                     )
                     aggregatedInvisible.append(contentsOf: withLedgers.map {
@@ -895,8 +896,8 @@ extension LayoutEngine {
                     let hidden = LedgerLinePass.insert(
                         into: els,
                         metrics: metrics,
-                        firstStepAbove: 6,
-                        firstStepBelow: -6,
+                        firstStepAbove: geometry.firstLedgerStepAbove,
+                        firstStepBelow: geometry.firstLedgerStepBelow,
                         invisibleNotes: true,
                     ).filter { if case .ledgerLine = $0 { true } else { false } }
                     aggregatedInvisible.append(contentsOf: hidden.map {
@@ -915,8 +916,8 @@ extension LayoutEngine {
                     let hidden = LedgerLinePass.insert(
                         into: invisible,
                         metrics: metrics,
-                        firstStepAbove: 6,
-                        firstStepBelow: -6,
+                        firstStepAbove: geometry.firstLedgerStepAbove,
+                        firstStepBelow: geometry.firstLedgerStepBelow,
                         invisibleNotes: true,
                     ).filter { if case .ledgerLine = $0 { true } else { false } }
                     aggregatedInvisible.append(contentsOf: hidden.map {
