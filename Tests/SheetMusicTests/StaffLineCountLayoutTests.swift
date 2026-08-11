@@ -370,27 +370,19 @@
 
         // MARK: - Ledger lines
 
-        /// Count of `.ledgerLine` elements in a one-staff, one-note score.
-        /// G4 in treble clef sits at staff `step` −2 — always, regardless
-        /// of `lineCount` (`StaffLineGeometry.topStep` is fixed at 4 for
-        /// every line count, and `step` is measured from that same
-        /// reference; only where the *other* lines fall moves).
-        ///
-        /// On a 5-line staff (bottomStep −4, `firstLedgerStepBelow` −6)
-        /// step −2 sits inside the staff (between the middle and bottom
-        /// lines): 0 ledger lines.
-        /// On a 3-line staff (bottomStep 0, `firstLedgerStepBelow` −2)
-        /// step −2 IS the first ledger position below the staff: exactly
-        /// 1 ledger line. This is the case Task 13's brief got wrong —
-        /// shrinking the staff raises its bottom line, so the same note
-        /// gains a ledger line rather than losing one.
-        private func ledgerLineCount(lineCount: Int) throws -> Int {
-            guard #available(macOS 15.0, *) else { return -1 }
-            let g4 = Note(pitch: 67, tpc: 15)
+        /// One-staff, one-note score. `pitch`/`tpc` select the note so the
+        /// caller can pin a specific staff `step` (the mapping is clef-only,
+        /// independent of `lineCount` — `StaffLineGeometry.topStep` is
+        /// fixed at 4 for every line count; only where the *other* lines
+        /// fall moves).
+        private func ledgerScore(
+            lineCount: Int, pitch: Int, tpc: Int,
+        ) -> Score {
+            let note = Note(pitch: pitch, tpc: tpc)
             let measure = Measure(voices: [Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-                .chord(Chord(duration: .quarter, notes: [g4])),
+                .chord(Chord(duration: .quarter, notes: [note])),
             ])])
             let part = Part(
                 id: "P1",
@@ -400,9 +392,18 @@
                 ),
                 staves: [Staff(lineCount: lineCount, measures: [measure])],
             )
-            let score = Score(division: 480, parts: [part])
+            return Score(division: 480, parts: [part])
+        }
+
+        /// Count of `.ledgerLine` elements among the VISIBLE elements of a
+        /// `ledgerScore` layout — the call site reached when the chord (and
+        /// its note) is ordinarily visible.
+        private func ledgerLineCount(
+            lineCount: Int, pitch: Int, tpc: Int,
+        ) throws -> Int {
+            guard #available(macOS 15.0, *) else { return -1 }
             let doc = LayoutEngine.layout(
-                score: score,
+                score: ledgerScore(lineCount: lineCount, pitch: pitch, tpc: tpc),
                 options: .init(wrapToViewWidth: false),
                 availableWidth: 900,
             )
@@ -416,11 +417,93 @@
             return count
         }
 
-        @Test("Ledger bounds follow the staff's own line count")
-        func ledgerBoundsFollowLineCount() throws {
+        /// On a 5-line staff (bottomStep −4, `firstLedgerStepBelow` −6)
+        /// G4 (step −2) sits inside the staff (between the middle and
+        /// bottom lines): 0 ledger lines.
+        /// On a 3-line staff (bottomStep 0, `firstLedgerStepBelow` −2)
+        /// the same G4 step −2 IS the first ledger position below the
+        /// staff: exactly 1 ledger line. This is the case Task 13's brief
+        /// got wrong — shrinking the staff raises its bottom line, so the
+        /// same note gains a ledger line rather than losing one.
+        /// On a 1-line staff (bottomStep 4, `firstLedgerStepBelow` +2) —
+        /// the ONLY non-five line count that actually occurs in the
+        /// rendered corpus, and the only one where `firstLedgerStepBelow`
+        /// goes positive — D5 (step +2) IS that first ledger position:
+        /// exactly 1 ledger line. The corpus itself cannot exercise this:
+        /// every non-five-line staff in the library is a 1-line drumset
+        /// track whose notes are pinned to steps {4, 5} by the drum
+        /// definition's own `<line>`, never off it, so this parameterized
+        /// case is the only evidence this task has for the shipping line
+        /// count.
+        @Test(
+            "Ledger bounds follow the staff's own line count",
+            arguments: [
+                (lineCount: 5, pitch: 67, tpc: 15, expected: 0), // G4
+                (lineCount: 3, pitch: 67, tpc: 15, expected: 1), // G4
+                (lineCount: 1, pitch: 74, tpc: 16, expected: 1), // D5
+            ],
+        )
+        func ledgerBoundsFollowLineCount(
+            lineCount: Int, pitch: Int, tpc: Int, expected: Int,
+        ) throws {
             guard #available(macOS 15.0, *) else { return }
-            #expect(try ledgerLineCount(lineCount: 5) == 0)
-            #expect(try ledgerLineCount(lineCount: 3) == 1)
+            #expect(
+                try ledgerLineCount(lineCount: lineCount, pitch: pitch, tpc: tpc)
+                    == expected,
+            )
+        }
+
+        /// Same G4/3-line boundary case, but routed through the
+        /// hidden-notehead-inside-a-visible-chord call site (the third of
+        /// the four `LedgerLinePass.insert` calls in
+        /// `LayoutEngine+SystemBuild.swift`): the chord stays visible but
+        /// its one note is marked `visible: false`, and layout runs with
+        /// `showsInvisibleElements: true`. That call site is the only one
+        /// of the four the OTHER three tests in this file never reach —
+        /// the default fixture is a plain visible chord under
+        /// `showsInvisibleElements: false`, so a literal `-6` left behind
+        /// on any of the three invisible/hidden batches would still ship
+        /// green without this case.
+        @Test("Ledger bounds follow line count for a hidden notehead too")
+        func ledgerBoundsFollowLineCountForHiddenNotehead() throws {
+            guard #available(macOS 15.0, *) else { return }
+
+            func hiddenLedgerCount(lineCount: Int) throws -> Int {
+                let hidden = Note(pitch: 67, tpc: 15, visible: false)
+                let measure = Measure(voices: [Voice(elements: [
+                    .clef(Clef(concertClefType: "G")),
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .chord(Chord(duration: .quarter, notes: [hidden])),
+                ])])
+                let part = Part(
+                    id: "P1",
+                    trackName: "Percussion",
+                    instrument: Instrument(
+                        id: "perc", longName: "Percussion", shortName: "Perc.",
+                    ),
+                    staves: [Staff(lineCount: lineCount, measures: [measure])],
+                )
+                let score = Score(division: 480, parts: [part])
+                let doc = LayoutEngine.layout(
+                    score: score,
+                    options: .init(
+                        wrapToViewWidth: false,
+                        showsInvisibleElements: true,
+                    ),
+                    availableWidth: 900,
+                )
+                let system = try #require(doc.systems.first)
+                var count = 0
+                for measure in system.measures {
+                    for element in measure.invisibleElements {
+                        if case .ledgerLine = element { count += 1 }
+                    }
+                }
+                return count
+            }
+
+            #expect(try hiddenLedgerCount(lineCount: 5) == 0)
+            #expect(try hiddenLedgerCount(lineCount: 3) == 1)
         }
     }
 #endif
