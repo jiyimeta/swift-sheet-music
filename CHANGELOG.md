@@ -7,7 +7,7 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [1.11.0] - 2026-08-11
+## [1.11.0] - 2026-08-12
 
 ### Added
 
@@ -41,6 +41,17 @@ and this project adheres to
   `.createTuplet`, `.removeTuplet`. Together with the five SP0 cases (`.inputNote`, `.setRestDuration`,
   `.setChordDuration`, `.delete`, `.composite`), every edit `ScoreEditSession` can plan is now reachable from a
   relayed intent.
+- An eighth new `EditIntent` case, `.writeNote(at:pitch:tpc:duration:)`, wire discriminator 12 — the letter key on a
+  slot that ALREADY holds a note: re-pitch it and re-time it in one undo step. Distinct from `.inputNote`, which
+  targets a rest, and deliberately not expressible as `.setChordDuration` followed by `.setNotePitch`: when the
+  length outruns the bar the note is spelled as a tied chain, the chain is planned by cloning one chord into every
+  link, and the two-intent form would therefore retune only the chain's head and leave its tail tied to it at the
+  old pitch.
+- `TiePlanner.tieChain(containing:in:)` returns every notehead a note is tied to, in voice order, including itself —
+  walked in both directions, so the chain is the same whichever member the caller holds, and an untied note comes
+  back as a chain of one. Within a chord the n-th tie out pairs with the n-th tie in (the rule `MidiRenderer`
+  already resolves tied pitches by), not the n-th in-chord index, which would pair the wrong voices whenever only
+  some of a chord's notes are tied.
 - A new Android-gated `SheetMusicEditWire` library product carries every wire codec Folino's own `FolinoEditorJNI`
   would otherwise have had to hand-duplicate: `EditIntentCodec`, `PathIDCodecs`, `StaffAddressCodec`,
   `ScoreItemIDCodec`, `ClefAnchorCodec`, and the new `EditGeometryCodec` (`SelectionTintCodec`,
@@ -85,6 +96,17 @@ and this project adheres to
   note or rest write that overruns its bar may chain a tied continuation across the barline instead of being
   refused. One `apply` call is still one undo step either way; a host that inspects the *count* or *shape* of the
   resulting commands (rather than treating them as opaque) is the only thing that could observe a difference.
+- `.setChordDuration` reaches across the barline, as `.setRestDuration` already did. The engine refuses any
+  single-slot lengthening that would cross a barline, so a host's length key read as dead at every barline — the
+  very hole `CrossBarInputPlanner` was written to close on the input side. The chain is planned from the chord
+  ALREADY in the slot, so its other notes, articulations, grace notes and ties survive into the continuation. No
+  `.measure` promotion here, unlike the rest case: `.measure` is a rest-only spelling.
+- `.setNotePitch` retunes the whole tie chain the named note belongs to, not that notehead alone. A tie says these
+  noteheads are one sounding note, and `MidiRenderer` reads it that way — it carries the head's pitch through the
+  chain — so retuning one member left two different pitches joined by a tie, unperformable and still sounding at
+  the old pitch. The accidental lands on the chain's head alone, matching MuseScore and `MeasureAccidentals`, which
+  skips tied-back notes when it renotates a measure. **Source-behavior change, not source-breaking:** an untied note
+  is a chain of one and still plans to a bare `SetNotePitch`.
 - **Every `Score.stableFingerprint` value changes** as a consequence of the widened walk above — this is not a
   bug, it is the point (the walk previously blind to a planner's own repairs now sees them). A host comparing a
   fingerprint it computed and stored under 1.10.1 or earlier against one computed under 1.11.0 will see them
