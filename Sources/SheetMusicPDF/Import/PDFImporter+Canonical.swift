@@ -90,9 +90,31 @@ enum PDFImporterCanonicalOrder {
 
     // MARK: - Glyphs
 
-    /// Reading order — top of the page first, then left to right — with every
-    /// remaining field as a tiebreak. `-origin.y` because PDF page space has
-    /// its origin at the BOTTOM left, so a larger y is higher on the page.
+    /// Page, then BOTTOM-UP, then left to right, with every remaining field as
+    /// a tiebreak.
+    ///
+    /// Bottom-up rather than reading order, and the direction was MEASURED,
+    /// not reasoned. Both directions are equally total, so the invariance gate
+    /// cannot choose between them — but the choice is not neutral downstream:
+    /// the first notehead of a same-x cluster becomes that chord's LEAD
+    /// (`decodeRhythm`), and the lead anchors both the stem direction
+    /// (`stem.rect.midY > lead.origin.y`) and the augmentation-dot window.
+    ///
+    /// Over the 141-score corpus gate (curated 6 + real 135), against the
+    /// pre-canonicalization baseline:
+    ///
+    ///   top-first (`-y`):    13 scores moved, 12 of them WORSE
+    ///                        (dur% −1 to −3, pitch% −1)
+    ///   bottom-first (`+y`):  3 scores moved, ALL BETTER, none worse
+    ///                        (mimicopy_ラストオーダー dur% 97→98,
+    ///                         革命道中 dur% 99→100)
+    ///
+    /// The mechanism agrees: a chord's stem runs upward from its LOWEST
+    /// notehead, so with the lowest as lead `stem.midY > lead.y` reads `.up`,
+    /// which is right for the common case. (It is not right for every case —
+    /// a down-stem chord wants its highest notehead as lead, so no fixed
+    /// direction is universally correct. Making those decisions independent of
+    /// the lead entirely is the real repair, and a separate one.)
     static func precedes(_ a: ClassifiedGlyph, _ b: ClassifiedGlyph) -> Bool {
         precedes(key(a), key(b))
     }
@@ -100,7 +122,7 @@ enum PDFImporterCanonicalOrder {
     private static func key(_ g: ClassifiedGlyph) -> [Double] {
         [
             Double(g.geometry.pageIndex),
-            -Double(g.geometry.origin.y),
+            Double(g.geometry.origin.y),
             Double(g.geometry.origin.x),
         ]
             + semanticKey(g.semantic)
