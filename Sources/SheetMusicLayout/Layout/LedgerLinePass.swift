@@ -115,9 +115,19 @@ extension LedgerLinePass {
         var out: [LayoutElement] = []
         out.reserveCapacity(elements.count)
         for element in elements {
-            guard case let .chord(
-                notes, _, stem, _, _, _, _, _, _, _, mag,
-            ) = element else {
+            let notes: [LayoutChordNote]
+            let stem: StemDirection
+            let mag: CGFloat
+            switch element {
+            case let .chord(chordNotes, _, chordStem, _, _, _, _, _, _, _, chordMag):
+                notes = chordNotes
+                stem = chordStem
+                mag = chordMag
+            case let .graceChord(graceNotes, _, graceStem, _, _, _, graceMag, _):
+                notes = graceNotes
+                stem = graceStem
+                mag = graceMag
+            default:
                 out.append(element)
                 continue
             }
@@ -125,6 +135,22 @@ extension LedgerLinePass {
             // Copied verbatim from the two renderers this pass replaces
             // (`ScoreLayerBuilder+Element` / `ScoreCanvas`): small and
             // cue noteheads scale every glyph dimension by `mag`.
+            //
+            // KNOWN DEFECT, inherited — NOT introduced by the
+            // `.graceChord` case above. `strokes` recovers the staff
+            // mid-line from `notes.first` using these SCALED metrics,
+            // but note origins are placed with the UNSCALED `sp` (small
+            // and grace noteheads sit on the parent staff's lines), so a
+            // stroke at step `s` lands
+            // `(sp/2) * (1 - mag) * |s - notes.first.step|` off. That
+            // cancels only when a ledger's step equals `notes.first.step`
+            // — which a note in a space never reaches (step -7 at
+            // `graceNoteMag` 0.6 is 0.2 sp out), nor does a chord whose
+            // first note is not its outermost. The `smallNoteMag` path is
+            // affected identically. The pre-Task-3 renderers computed it
+            // exactly this way (`drawGraceChord` handed `drawChord` the
+            // same scaled metrics), so correcting it is a deliberate
+            // pixel change that needs its own before/after gate.
             let chordMetrics = mag == 1.0
                 ? metrics
                 : StaffMetrics(staffSize: metrics.staffHeight * mag)

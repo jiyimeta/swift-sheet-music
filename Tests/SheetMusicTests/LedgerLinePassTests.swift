@@ -94,5 +94,28 @@
             // steps -2, -4
             #expect(strokes.count == 2)
         }
+
+        @Test func graceChordsGetLedgerLinesToo() {
+            let grace = LayoutElement.graceChord(
+                notes: [note(step: -6, sp: metrics.sp)],
+                duration: .eighth,
+                stem: .up,
+                stemOrigin: .zero,
+                relativeX: -10,
+                hasSlash: true,
+                mag: 1.0,
+                voiceIndex: 0,
+            )
+            let out = LedgerLinePass.insert(
+                into: [grace], metrics: metrics,
+                firstStepAbove: 6, firstStepBelow: -6,
+                invisibleNotes: false,
+            )
+            #expect(out.count == 2)
+            guard case .ledgerLine = out[0] else {
+                Issue.record("ledger must precede its grace chord")
+                return
+            }
+        }
     }
 #endif

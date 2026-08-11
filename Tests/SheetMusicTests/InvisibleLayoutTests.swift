@@ -1001,6 +1001,46 @@
             // ledger is grayed with the rest of the invisible pass.
             #expect(ledgerLines(on, inInvisible: false).isEmpty)
             #expect(ledgerLines(on, inInvisible: true).count == 1)
+
+            // `invisibleElements` must contain *only* that ledger line —
+            // not the rest of the staff (chords, rests, clefs, beams)
+            // redrawn a second time at 50 %. This pins the batch-3
+            // filter in `LayoutEngine+SystemBuild.swift`.
+            #expect(on.systems.flatMap(\.measures).allSatisfy { m in
+                m.invisibleElements.allSatisfy {
+                    if case .ledgerLine = $0 { true } else { false }
+                }
+            })
+        }
+
+        @Test func hiddenNoteheadInsideFullyHiddenChordStillGetsLedger() {
+            // The fourth batch: `chord.visible == false` AND the note
+            // inside it hidden too. The chord routes to
+            // `invisibleElements`, and within that list the note's own
+            // `isInvisible` is true — so only the INVISIBLE subset of the
+            // invisible list reaches it. Before this batch existed such a
+            // notehead got no ledger at all. It renders at the same flat
+            // 50 % as every other invisible element.
+            var note = Note(pitch: 60, tpc: 14) // middle C, one ledger below
+            note.visible = false
+            var chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+            chord.visible = false
+
+            let off = LayoutEngine.layout(
+                score: scoreWithSingleChord(chord),
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 800,
+            )
+            #expect(ledgerLines(off, inInvisible: false).isEmpty)
+            #expect(ledgerLines(off, inInvisible: true).isEmpty)
+
+            let on = LayoutEngine.layout(
+                score: scoreWithSingleChord(chord),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            #expect(ledgerLines(on, inInvisible: false).isEmpty)
+            #expect(ledgerLines(on, inInvisible: true).count == 1)
         }
     }
 #endif

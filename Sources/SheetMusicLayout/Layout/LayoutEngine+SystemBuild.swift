@@ -867,6 +867,26 @@ extension LayoutEngine {
                         translate(element: $0, dy: yOffset)
                     })
                 }
+                // Ledgers of hidden NOTEHEADS inside an already fully
+                // hidden chord. These used to render at ~25 % opacity (a
+                // 50 % group nested inside the invisible pass's own 50 %
+                // context) before ledgers became sibling elements of the
+                // chord's layer group; that nesting no longer exists, so
+                // they now render at the same flat 50 % as every other
+                // invisible element, matching MuseScore's single
+                // `invisibleColor()`.
+                if let invisible = um.perStaffInvisibleElements[staffIdx] {
+                    let hidden = LedgerLinePass.insert(
+                        into: invisible,
+                        metrics: metrics,
+                        firstStepAbove: 6,
+                        firstStepBelow: -6,
+                        invisibleNotes: true,
+                    ).filter { if case .ledgerLine = $0 { true } else { false } }
+                    aggregatedInvisible.append(contentsOf: hidden.map {
+                        translate(element: $0, dy: yOffset)
+                    })
+                }
             }
             // Markers / jumps come from the first staff only — they
             // apply to the whole system at this measure, not per
