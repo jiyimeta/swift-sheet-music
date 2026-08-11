@@ -35,4 +35,14 @@ public enum EditIntent: Sendable, Equatable {
     case createTuplet(at: VoiceElementID, actualNotes: Int, normalNotes: Int)
     /// Collapse the tuplet containing `at` back into a single chord or rest of the same tick span.
     case removeTuplet(at: VoiceElementID)
+
+    /// Write a note into a slot that already holds a chord: re-pitch it, and re-time it to `duration` in the same
+    /// undo step. `nil` keeps the slot's current length.
+    ///
+    /// Distinct from `.inputNote`, which targets a rest — and deliberately not a widening of it, because a rest slot
+    /// and an occupied one differ in what "write a note here" has to do. The separation earns its keep at the
+    /// barline: when `duration` outruns the bar this spells the note as a tied chain carrying the NEW pitch, which
+    /// `.setChordDuration` followed by `.setNotePitch` cannot express. The chain is planned by cloning a chord, so
+    /// the second intent would retune only the chain's head and leave its tail tied to it at the old pitch.
+    case writeNote(at: VoiceElementID, pitch: Int, tpc: Int, duration: NoteDuration?)
 }

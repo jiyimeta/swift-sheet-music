@@ -333,6 +333,89 @@ struct ScoreEditSessionTests {
         #expect(chord.notes.first?.tieForward == nil)
     }
 
+    // MARK: - SP2: writeNote, the letter key on an occupied slot
+
+    /// Writing over a note is still writing a note, so the armed length has to apply too — leaving it alone would
+    /// silently ignore half of what a host's pad is showing. One undo step for both halves.
+    @Test func `writeNote re-pitches and re-times an occupied slot in one step`() {
+        let session = ScoreEditSession(score: EditingFixtures.chordAtIndex1())
+        let slot = VoiceElementID(EditingFixtures.restID(element: 1))
+
+        #expect(session.apply(.writeNote(at: slot, pitch: 62, tpc: 16, duration: .eighth)))
+
+        guard case let .chord(chord) = session.score[slot] else { Issue.record("expected a chord"); return }
+        #expect(chord.duration == .eighth)
+        #expect(chord.notes.count == 1)
+        #expect(chord.notes.first?.pitch == 62)
+        #expect(chord.notes.first?.tpc == 16)
+        #expect(session.undo())
+        #expect(session.canUndo == false) // one step, even though the plan considered two commands
+    }
+
+    /// The whole reason this case exists rather than a `.setChordDuration` + `.setNotePitch` composite: the chain
+    /// has to carry the NEW pitch. Re-timing first and re-pitching afterwards would retune only the chain's head
+    /// and leave its tail tied to it at the old pitch — a tie between two different pitches.
+    @Test func `writeNote past the barline writes the new pitch into every piece`() {
+        var score = EditingFixtures.twoMeasuresOfQuarterRests()
+        let slot = VoiceElementID(EditingFixtures.restID(element: 4))
+        score[slot] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let session = ScoreEditSession(score: score)
+
+        #expect(session.apply(.writeNote(at: slot, pitch: 62, tpc: 16, duration: .half)))
+
+        guard case let .chord(head) = session.score[slot] else { Issue.record("expected a chord"); return }
+        let tailSlot = VoiceElementID(EditingFixtures.restID(measure: 1, element: 0))
+        guard case let .chord(tail) = session.score[tailSlot] else { Issue.record("expected a chord"); return }
+        #expect(head.notes.first?.pitch == 62)
+        #expect(tail.notes.first?.pitch == 62)
+        #expect(head.notes.first?.tieForward != nil)
+        #expect(tail.notes.first?.tieBack != nil)
+    }
+
+    /// Inside a tuplet the member lengths are the tuplet's to decide: the engine refuses the length change, and a
+    /// composite would take the pitch write down with it. Write the pitch at whatever length the slot already has —
+    /// the same rule `.inputNote` follows.
+    @Test func `writeNote inside a tuplet keeps the slot's own length`() throws {
+        var score = EditingFixtures.chordAtIndex1()
+        let slot = VoiceElementID(EditingFixtures.restID(element: 1))
+        _ = try CreateTuplet(at: slot, actualNotes: 3, normalNotes: 2).apply(to: &score)
+        let session = ScoreEditSession(score: score)
+        guard case let .chord(before) = session.score[slot] else { Issue.record("expected a chord"); return }
+
+        #expect(session.apply(.writeNote(at: slot, pitch: 62, tpc: 16, duration: .whole)))
+
+        guard case let .chord(after) = session.score[slot] else { Issue.record("expected a chord"); return }
+        #expect(after.duration == before.duration)
+        #expect(after.notes.first?.pitch == 62)
+    }
+
+    /// A `nil` duration means "keep the slot's length" — what a pad sends before anything is armed.
+    @Test func `writeNote with no duration only re-pitches`() {
+        var score = EditingFixtures.fourQuarterRests()
+        let slot = VoiceElementID(EditingFixtures.restID(element: 1))
+        score[slot] = .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)]))
+        let session = ScoreEditSession(score: score)
+
+        #expect(session.apply(.writeNote(at: slot, pitch: 62, tpc: 16, duration: nil)))
+
+        guard case let .chord(chord) = session.score[slot] else { Issue.record("expected a chord"); return }
+        #expect(chord.duration == .half)
+        #expect(chord.notes.first?.pitch == 62)
+    }
+
+    /// A rest slot is `.inputNote`'s job. Refusing rather than quietly re-routing keeps each case telling the truth
+    /// about what it means, which matters most for a relayed intent nobody is watching apply.
+    @Test func `writeNote refuses a slot holding a rest`() {
+        let score = EditingFixtures.fourQuarterRests()
+        let session = ScoreEditSession(score: score)
+        let slot = VoiceElementID(EditingFixtures.restID(element: 1))
+
+        #expect(!session.apply(.writeNote(at: slot, pitch: 62, tpc: 16, duration: .quarter)))
+
+        #expect(session.score == score)
+        #expect(session.lastRefusalReason != nil)
+    }
+
     /// The whole chain is one undo step, like every other intent.
     @Test func `undoing a cross-barline re-time puts both bars back`() {
         var score = EditingFixtures.twoMeasuresOfQuarterRests()

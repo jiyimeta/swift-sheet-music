@@ -198,6 +198,8 @@ public final class ScoreEditSession {
             guard let first = commands.first else { return nil }
             guard commands.count > 1 else { return first }
             return CompositeEditCommand(commands: commands, location: first.affectedLocation)
+        case let .writeNote(location, pitch, tpc, duration):
+            return try writeNoteCommand(at: location, pitch: pitch, tpc: tpc, duration: duration, in: score)
         case .setNotePitch, .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet,
              .removeTuplet:
             // These seven note-editing intents each map straight onto their `EditCommand`, with no cross-bar or
@@ -245,6 +247,52 @@ public final class ScoreEditSession {
             return RemoveTuplet(at: location)
         }
         return nil
+    }
+
+    /// `.writeNote`: re-pitch the chord already in `location`, and re-time it to `duration` in the same undo step.
+    ///
+    /// Three shapes, in the order they are ruled out:
+    ///
+    /// 1. Nothing to re-time — no length asked for, the slot is already that length, or the slot is inside a tuplet,
+    ///    where the member lengths are the tuplet's to decide and the engine refuses the change outright. A composite
+    ///    is all-or-nothing, so that refusal would take the pitch write down with it; write the pitch alone.
+    /// 2. The length outruns the bar — spell the note as a beat-aligned tied chain. The chain is planned from a FRESH
+    ///    chord carrying the new pitch, not from the one in the slot: `CrossBarInputPlanner.piece` clones what it is
+    ///    handed into every link, and that is precisely what a `.setChordDuration` + `.setNotePitch` pair cannot
+    ///    reproduce — it would retune the head and leave the tail tied to it at the old pitch.
+    /// 3. Otherwise — re-time and re-pitch as one composite.
+    ///
+    /// Throws when the slot holds a rest rather than a chord. That is `.inputNote`'s case, and re-routing quietly
+    /// would make a relayed intent do something its name does not say.
+    private static func writeNoteCommand(
+        at location: VoiceElementID, pitch: Int, tpc: Int, duration: NoteDuration?, in score: Score,
+    ) throws -> any EditCommand {
+        guard case let .chord(current)? = score[location], !current.notes.isEmpty else {
+            throw SheetMusicError.invalidEdit(reason: "writeNote: no chord at \(location)")
+        }
+        let repitch = SetNotePitch(
+            at: NoteID(
+                staff: location.staff,
+                measureIndex: location.measureIndex,
+                voiceIndex: location.voiceIndex,
+                elementIndex: location.elementIndex,
+                noteIndexInChord: 0,
+            ),
+            pitch: pitch, tpc: tpc,
+        )
+        guard let duration, current.duration != duration, !isInTuplet(location, in: score) else {
+            return repitch
+        }
+        if let plan = CrossBarInputPlanner.plan(
+            .chord(Chord(duration: duration, notes: [Note(pitch: pitch, tpc: tpc)])),
+            duration: duration, at: location, in: score,
+        ) {
+            return CompositeEditCommand(commands: plan.commands, location: plan.head)
+        }
+        return CompositeEditCommand(
+            commands: [SetChordDuration(at: location, duration: duration), repitch],
+            location: location,
+        )
     }
 
     /// Whether `slot` sits inside a tuplet in `score`.

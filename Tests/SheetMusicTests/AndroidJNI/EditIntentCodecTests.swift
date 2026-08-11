@@ -113,10 +113,33 @@ struct EditIntentCodecTests {
             .setTie(from: note, to: otherNote, sourceTieForward: 7, targetTieBack: nil),
             .createTuplet(at: slot, actualNotes: 3, normalNotes: 2),
             .removeTuplet(at: slot),
+            // SP2's addition. Both duration shapes: `nil` writes the `kind = 1` placeholder with `hasDuration == 0`,
+            // and a real duration has to survive alongside it.
+            .writeNote(at: slot, pitch: 62, tpc: 16, duration: .eighth),
+            .writeNote(at: slot, pitch: 62, tpc: 16, duration: nil),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
         }
+    }
+
+    /// The discriminator order is frozen, and nothing else in this repo can catch a break: a case that moves encodes
+    /// fine, decodes fine, and applies the WRONG edit to the mirror session on the far side of the relay. There is no
+    /// build error to lean on, because both sides compile against the same enum — the break only appears when an
+    /// older `.so` meets newer bytes, which is precisely the case the version stamp exists to refuse and this test
+    /// exists to prevent needing.
+    ///
+    /// Reads the case index directly out of the frame rather than trusting a round trip. `EditIntentWire`'s top-level
+    /// bytes are `varint(payloadLength)` then `varint(caseIndex)`, and every index so far is below 128, so both are
+    /// single bytes and the index is `bytes[1]`. The two anchors either side of the new case are asserted too: if the
+    /// framing assumption above ever stops holding, all three fail together rather than one silently drifting.
+    @Test func `the wire discriminators stay where they were`() {
+        let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let rest = RestID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 0)
+        let slot = VoiceElementID(rest)
+        #expect(EditIntentCodec.encode(.inputNote(at: rest, pitch: 60, tpc: 14, duration: nil))[1] == 0)
+        #expect(EditIntentCodec.encode(.removeTuplet(at: slot))[1] == 11)
+        #expect(EditIntentCodec.encode(.writeNote(at: slot, pitch: 60, tpc: 14, duration: nil))[1] == 12)
     }
 
     /// An accidental spelling this build does not know must fail the decode, not decode as "no accidental" —

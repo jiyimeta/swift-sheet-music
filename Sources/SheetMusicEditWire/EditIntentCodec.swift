@@ -43,9 +43,10 @@ import Wirelet
 /// 9 = setTie(SetTieIntentWire)
 /// 10 = createTuplet(CreateTupletIntentWire)
 /// 11 = removeTuplet(VoiceElementIDWire)
+/// 12 = writeNote(WriteNoteIntentWire)
 /// ```
 ///
-/// Cases 5…11 were appended in SP1; 0…4 predate them and must keep their indices and byte layout.
+/// Cases 5…11 were appended in SP1 and 12 in SP2; 0…4 predate them and must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -57,6 +58,16 @@ import Wirelet
 ///                     always writes `kind = 1` (whole) with `numerator = denominator = 0` in that case, so a
 ///                     byte-for-byte parity check between platforms should expect that exact placeholder, not a
 ///                     zeroed-out discriminator
+/// ```
+///
+/// `WriteNoteIntentWire` is `InputNoteIntentWire` with a `VoiceElementIDWire` location — the two intents differ in
+/// what they may target (a rest slot versus an occupied one), not in what they carry:
+/// ```
+/// tag 1: location     VoiceElementIDWire, see layout below
+/// tag 2: pitch        i32, zig-zag varint
+/// tag 3: tpc          i32, zig-zag varint
+/// tag 4: hasDuration  u8, varint — 0 = keep the slot's length, 1 = retime it to `duration`
+/// tag 5: duration     NoteDurationWire — same `kind = 1` placeholder when hasDuration == 0
 /// ```
 ///
 /// `SlotDurationIntentWire` fields (shared by `setRestDuration` and `setChordDuration` — the discriminator case
@@ -289,6 +300,8 @@ public enum EditIntentWire {
     case setTie(SetTieIntentWire)
     case createTuplet(CreateTupletIntentWire)
     case removeTuplet(VoiceElementIDWire)
+    /// Appended in SP2 — index 12. Never renumber anything above it.
+    case writeNote(WriteNoteIntentWire)
 
     public init(from intent: EditIntent) {
         switch intent {
@@ -327,6 +340,8 @@ public enum EditIntentWire {
             )
         case let .removeTuplet(location):
             self = .removeTuplet(VoiceElementIDWire(from: location))
+        case let .writeNote(location, pitch, tpc, duration):
+            self = .writeNote(WriteNoteIntentWire(location: location, pitch: pitch, tpc: tpc, duration: duration))
         }
     }
 
@@ -376,6 +391,9 @@ public enum EditIntentWire {
             )
         case let .removeTuplet(wire):
             return .removeTuplet(at: wire.decoded())
+        case let .writeNote(wire):
+            let decoded = try wire.decoded()
+            return .writeNote(at: decoded.at, pitch: decoded.pitch, tpc: decoded.tpc, duration: decoded.duration)
         }
     }
 }
@@ -403,6 +421,43 @@ public struct InputNoteIntentWire {
     }
 
     public func decoded() throws -> (at: RestID, pitch: Int, tpc: Int, duration: NoteDuration?) {
+        try (
+            at: location.decoded(),
+            pitch: Int(pitch),
+            tpc: Int(tpc),
+            duration: hasDuration != 0 ? duration.decoded() : nil,
+        )
+    }
+}
+
+/// `.writeNote`'s payload — `InputNoteIntentWire` with a `VoiceElementIDWire` location.
+///
+/// A separate struct rather than a shared one with a "which kind of ID" flag: the two IDs have different field
+/// counts, and a flag would make the decoder's answer depend on a byte that could disagree with the discriminator.
+/// The duplication is five stored properties; the ambiguity would be a silent misdecode.
+@WireFormat
+public struct WriteNoteIntentWire {
+    public var location: VoiceElementIDWire
+    public var pitch: Int32
+    public var tpc: Int32
+    /// 0 = keep the slot's length, 1 = retime it to `duration`.
+    public var hasDuration: UInt8
+    public var duration: NoteDurationWire
+
+    public init(location: VoiceElementID, pitch: Int, tpc: Int, duration: NoteDuration?) {
+        self.location = VoiceElementIDWire(from: location)
+        self.pitch = Int32(pitch)
+        self.tpc = Int32(tpc)
+        if let duration {
+            hasDuration = 1
+            self.duration = NoteDurationWire(from: duration)
+        } else {
+            hasDuration = 0
+            self.duration = NoteDurationWire(from: .whole)
+        }
+    }
+
+    public func decoded() throws -> (at: VoiceElementID, pitch: Int, tpc: Int, duration: NoteDuration?) {
         try (
             at: location.decoded(),
             pitch: Int(pitch),
