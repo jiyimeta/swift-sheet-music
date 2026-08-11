@@ -95,3 +95,48 @@ public enum LedgerLinePass {
         return result
     }
 }
+
+extension LedgerLinePass {
+    /// Insert ledger strokes into one staff's element list, immediately
+    /// before each chord so they render behind it.
+    ///
+    /// Visible and invisible noteheads are handled in separate batches,
+    /// preserving the renderers' previous behavior: the mirror-extension
+    /// bounds are computed within whichever subset is being drawn, and
+    /// the caller routes the invisible batch into
+    /// `LayoutMeasure.invisibleElements` for 50 % graying.
+    public static func insert(
+        into elements: [LayoutElement],
+        metrics: StaffMetrics,
+        firstStepAbove: Int,
+        firstStepBelow: Int,
+        invisibleNotes: Bool,
+    ) -> [LayoutElement] {
+        var out: [LayoutElement] = []
+        out.reserveCapacity(elements.count)
+        for element in elements {
+            guard case let .chord(
+                notes, _, stem, _, _, _, _, _, _, _, mag,
+            ) = element else {
+                out.append(element)
+                continue
+            }
+            let subset = notes.filter { $0.isInvisible == invisibleNotes }
+            // Copied verbatim from the two renderers this pass replaces
+            // (`ScoreLayerBuilder+Element` / `ScoreCanvas`): small and
+            // cue noteheads scale every glyph dimension by `mag`.
+            let chordMetrics = mag == 1.0
+                ? metrics
+                : StaffMetrics(staffSize: metrics.staffHeight * mag)
+            out.append(contentsOf: strokes(
+                for: subset,
+                stem: stem,
+                metrics: chordMetrics,
+                firstStepAbove: firstStepAbove,
+                firstStepBelow: firstStepBelow,
+            ))
+            out.append(element)
+        }
+        return out
+    }
+}

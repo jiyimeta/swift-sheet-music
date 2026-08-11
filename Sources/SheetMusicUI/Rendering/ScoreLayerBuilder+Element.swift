@@ -49,12 +49,13 @@ extension ScoreLayerBuilder {
                 subtype: s, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case .ledgerLine:
-            // Not emitted yet — `LedgerLinePass` (Task 2) has no caller
-            // until Task 3 wires it into chord placement. The two
-            // `drawLedgerLines` duplicates below remain the only ledger
-            // renderers until then.
-            break
+        case let .ledgerLine(from, to, thickness):
+            let path = CGMutablePath()
+            path.move(to: shift(from))
+            path.addLine(to: shift(to))
+            parent.addSublayer(strokeLayer(
+                path: path, height: height, lineWidth: thickness,
+            ))
         case let .rest(d, p, _, rid, hll):
             if let layer = drawRest(
                 duration: d, origin: shift(p),

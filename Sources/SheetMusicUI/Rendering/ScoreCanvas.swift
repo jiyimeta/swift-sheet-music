@@ -257,12 +257,11 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, subtype: s,
                 origin: shift(p), metrics: metrics,
             )
-        case .ledgerLine:
-            // Not emitted yet — `LedgerLinePass` (Task 2) has no caller
-            // until Task 3 wires it into chord placement. The two
-            // `drawLedgerLines` duplicates below remain the only ledger
-            // renderers until then.
-            break
+        case let .ledgerLine(from, to, thickness):
+            var p = Path()
+            p.move(to: shift(from))
+            p.addLine(to: shift(to))
+            context.stroke(p, with: .color(.primary), lineWidth: thickness)
         case let .rest(d, p, _, _, hll):
             let (baseDur, dots) = DurationInterpretation.split(d)
             RestRenderer.draw(
@@ -320,29 +319,10 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             let stemColor: Color = shiftedNotes
                 .compactMap(\.color).first
                 .map { Color(scoreColor: $0) } ?? .primary
-            // Ledger lines first, so note heads / stems / flags (and the
-            // beams drawn by later elements) render ON TOP of them — the
-            // ledger sits visually behind the chord's ink. A ledger
-            // attached to a hidden notehead follows the notehead's
-            // visibility: skip at toggle-off, gray at 50% at toggle-on.
-            let visibleLedgerNotes = shiftedNotes.filter { !$0.isInvisible }
-            let invisibleLedgerNotes = shiftedNotes.filter(\.isInvisible)
-            drawLedgerLines(
-                context: &context,
-                notes: visibleLedgerNotes, stem: stem,
-                metrics: chordMetrics,
-            )
-            if !invisibleLedgerNotes.isEmpty, showsInvisibleElements {
-                // MuseScore invisibleColor() = #808080; 50% black on
-                // white is the equivalent.
-                var gray = context
-                gray.opacity = 0.5
-                drawLedgerLines(
-                    context: &gray,
-                    notes: invisibleLedgerNotes, stem: stem,
-                    metrics: chordMetrics,
-                )
-            }
+            // Ledger lines are no longer drawn here: `LedgerLinePass`
+            // emits them as `.ledgerLine` elements immediately before
+            // this chord, so they still render behind the chord's ink
+            // while the geometry lives in one place.
             for n in shiftedNotes {
                 let mirrorDx = n.mirrorDx(stem: stem, sp: chordMetrics.sp)
                 let visualOrigin = CGPoint(
@@ -630,76 +610,6 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             )
         case .note, .graceChord:
             break
-        }
-    }
-
-    // MARK: - Ledger lines
-
-    static func drawLedgerLines(
-        context: inout GraphicsContext,
-        notes: [LayoutChordNote],
-        stem: StemDirection,
-        metrics: StaffMetrics,
-    ) {
-        guard let ref = notes.first else { return }
-        let allSteps = notes.map(\.step)
-        let maxStep = allSteps.max() ?? 0
-        let minStep = allSteps.min() ?? 0
-        guard maxStep > 4 || minStep < -4 else { return }
-
-        let staffMidYAbs = ref.origin.y
-            + CGFloat(ref.step) * metrics.sp / 2
-        let chordX = ref.origin.x
-        let halfWidth = metrics.sp * 0.9
-        let lineWidth = metrics.staffLineThickness * 1.5
-
-        func bounds(forLedgerStep ledger: Int) -> (CGFloat, CGFloat) {
-            var leftExt: CGFloat = 0
-            var rightExt: CGFloat = 0
-            for n in notes
-                where abs(n.step - ledger) <= 1 && n.mirror
-            {
-                let dx = n.mirrorDx(stem: stem, sp: metrics.sp)
-                if dx > 0 { rightExt = max(rightExt, dx) } else { leftExt = max(leftExt, -dx) }
-            }
-            return (
-                chordX - halfWidth - leftExt,
-                chordX + halfWidth + rightExt,
-            )
-        }
-
-        if maxStep > 4 {
-            let topEven = maxStep.isMultiple(of: 2)
-                ? maxStep : maxStep - 1
-            for ledgerStep in stride(from: 6, through: topEven, by: 2) {
-                let y = staffMidYAbs
-                    - CGFloat(ledgerStep) * metrics.sp / 2
-                let (xL, xR) = bounds(forLedgerStep: ledgerStep)
-                var p = Path()
-                p.move(to: CGPoint(x: xL, y: y))
-                p.addLine(to: CGPoint(x: xR, y: y))
-                context.stroke(
-                    p, with: .color(.primary), lineWidth: lineWidth,
-                )
-            }
-        }
-
-        if minStep < -4 {
-            let botEven = minStep.isMultiple(of: 2)
-                ? minStep : minStep + 1
-            for ledgerStep in stride(
-                from: -6, through: botEven, by: -2,
-            ) {
-                let y = staffMidYAbs
-                    - CGFloat(ledgerStep) * metrics.sp / 2
-                let (xL, xR) = bounds(forLedgerStep: ledgerStep)
-                var p = Path()
-                p.move(to: CGPoint(x: xL, y: y))
-                p.addLine(to: CGPoint(x: xR, y: y))
-                context.stroke(
-                    p, with: .color(.primary), lineWidth: lineWidth,
-                )
-            }
         }
     }
 }

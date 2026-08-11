@@ -815,14 +815,55 @@ extension LayoutEngine {
                         in: els, staffIndex: staffIdx,
                         tickColumns: um.tickCols, metrics: metrics,
                     ))
-                    aggregated.append(contentsOf: els.map {
+                    // Ledger lines are emitted here, the last point where
+                    // staff identity still exists (their count depends on
+                    // the staff's line count). Running after spacing keeps
+                    // `.ledgerLine` out of the width computation.
+                    let withLedgers = LedgerLinePass.insert(
+                        into: els,
+                        metrics: metrics,
+                        firstStepAbove: 6,
+                        firstStepBelow: -6,
+                        invisibleNotes: false,
+                    )
+                    aggregated.append(contentsOf: withLedgers.map {
                         translate(element: $0, dy: yOffset)
                     })
                 }
                 // Hidden annotations get the same staff-local → system
                 // translation so renderers can draw them at the right Y.
                 if let invisible = um.perStaffInvisibleElements[staffIdx] {
-                    aggregatedInvisible.append(contentsOf: invisible.map {
+                    // These are fully hidden CHORDS, whose notes normally
+                    // still carry `isInvisible == false` — the renderers
+                    // draw them through the ordinary chord path, so the
+                    // VISIBLE subset is the one that gets ledgers here.
+                    let withLedgers = LedgerLinePass.insert(
+                        into: invisible,
+                        metrics: metrics,
+                        firstStepAbove: 6,
+                        firstStepBelow: -6,
+                        invisibleNotes: false,
+                    )
+                    aggregatedInvisible.append(contentsOf: withLedgers.map {
+                        translate(element: $0, dy: yOffset)
+                    })
+                }
+                // Ledgers of hidden NOTEHEADS inside a visible chord.
+                // They used to be drawn inline in a 50 % group; routing
+                // them through `invisibleElements` matches how every
+                // other invisible element is handled, at the cost of
+                // moving them above later ink in the same measure.
+                if let els = um.perStaffElements[staffIdx],
+                   context.options.showsInvisibleElements
+                {
+                    let hidden = LedgerLinePass.insert(
+                        into: els,
+                        metrics: metrics,
+                        firstStepAbove: 6,
+                        firstStepBelow: -6,
+                        invisibleNotes: true,
+                    ).filter { if case .ledgerLine = $0 { true } else { false } }
+                    aggregatedInvisible.append(contentsOf: hidden.map {
                         translate(element: $0, dy: yOffset)
                     })
                 }
