@@ -82,6 +82,7 @@ extension Note {
         } else if let drumDefaultHead {
             children.append(XMLTreeNode(name: "head", text: drumDefaultHead))
         }
+        appendVelocity(into: &children, targetVersion: options.targetVersion)
         // MuseScore omits `<play>` for the default (true); emit only
         // the muted form. Element order mirrors the writer: after
         // `<head>`. C++: `TWrite::write(const Note*, …)`.
@@ -93,6 +94,35 @@ extension Note {
         }
         children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Note", children: children)
+    }
+
+    /// Append the per-note velocity override. MuseScore's writer emits
+    /// `USER_VELOCITY` between `HEAD_GROUP` (`<head>`) and `PLAY`
+    /// (`<play>`), and skips it at the default of 0.
+    ///
+    /// `<veloType>` rides along only when there *is* an override — the
+    /// type is meaningless without a value, and emitting it
+    /// unconditionally would stamp `<veloType>offset</veloType>` onto
+    /// every note of a score that came from a 3.x file. It is likewise
+    /// omitted when it already matches the target generation's default
+    /// (`offset` for `.v3`, `user` for `.v4`), which keeps round-tripped
+    /// MuseScore 4 files byte-identical.
+    private func appendVelocity(
+        into children: inout [XMLTreeNode],
+        targetVersion: MSCXVersion,
+    ) {
+        guard userVelocity != 0 else { return }
+        children.append(XMLTreeNode(name: "velocity", text: String(userVelocity)))
+        let versionDefault: NoteVelocityType =
+            switch targetVersion {
+            case .v2, .v3: .offset
+            case .v4: .user
+            }
+        if velocityType != versionDefault {
+            children.append(XMLTreeNode(
+                name: "veloType", text: velocityType.mscxToken,
+            ))
+        }
     }
 
     private func tieSpanner(side: String, location: TieLocation?) -> XMLTreeNode {

@@ -163,7 +163,7 @@ extension MidiRenderer {
                     event: .noteOn(
                         channel: channel,
                         pitch: note.pitch,
-                        velocity: velocity,
+                        velocity: note.customizedVelocity(velocity),
                     ),
                 ))
                 events.append(TimedMidiEvent(
@@ -237,7 +237,8 @@ extension MidiRenderer {
                 events.append(TimedMidiEvent(
                     tick: afterCursor,
                     event: .noteOn(
-                        channel: channel, pitch: note.pitch, velocity: velocity,
+                        channel: channel, pitch: note.pitch,
+                        velocity: note.customizedVelocity(velocity),
                     ),
                 ))
                 events.append(TimedMidiEvent(
@@ -311,6 +312,7 @@ extension MidiRenderer {
         // A muted note (`<play>0</play>`) emits no MIDI. Mirrors the
         // `if (!note->play()) return;` guard in CompatMidiRender::collectNote.
         guard note.play else { return }
+        let velocity = note.customizedVelocity(velocity)
         if note.tieBack == nil {
             events.append(TimedMidiEvent(
                 tick: onTick,

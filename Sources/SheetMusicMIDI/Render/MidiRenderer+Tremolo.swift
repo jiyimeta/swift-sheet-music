@@ -158,6 +158,17 @@ extension MidiRenderer {
         velocity: Int,
         events: inout [TimedMidiEvent],
     ) {
+        // Segments carry bare pitches, so per-note velocity overrides
+        // are keyed by pitch — the same approximation the tie sets
+        // below already rely on. A chord holding the same pitch twice
+        // with different overrides collapses to the first, which no
+        // engraved score produces.
+        var velocityByPitch: [Int: Int] = [:]
+        for note in chord.notes + (followerChord.map { Array($0.notes) } ?? [])
+            where velocityByPitch[note.pitch] == nil
+        {
+            velocityByPitch[note.pitch] = note.customizedVelocity(velocity)
+        }
         let tiedBackPitches = Set(
             chord.notes.filter { $0.tieBack != nil }.map(\.pitch),
         )
@@ -187,7 +198,8 @@ extension MidiRenderer {
                     events.append(TimedMidiEvent(
                         tick: cursor,
                         event: .noteOn(
-                            channel: channel, pitch: shifted, velocity: velocity,
+                            channel: channel, pitch: shifted,
+                            velocity: velocityByPitch[pitch] ?? velocity,
                         ),
                     ))
                 }
