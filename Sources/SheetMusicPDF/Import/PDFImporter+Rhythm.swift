@@ -187,8 +187,10 @@ extension PDFImporter {
             duration: withBeamsOrFlags, glyphs: glyphs, lead: lead,
         )
         let dir = cluster.stem.map { stem in
-            stem.rect.midY > lead.geometry.origin.y
-                ? StemDirection.up : .down
+            stemDirection(
+                of: stem,
+                noteheadYs: cluster.indices.map { glyphs[$0].geometry.origin.y },
+            )
         }
         return RhythmElement(
             chord: Chord(duration: withDots, notes: ChordNotes(notes)),
@@ -524,6 +526,32 @@ extension PDFImporter {
                 denominator: f.denominator * 2,
             ))
         }
+    }
+
+    /// Which way a chord's stem points, read from the WHOLE chord.
+    ///
+    /// A stem attaches at one end of the chord and extends away from it, so
+    /// the direction is whichever end it overshoots further: an up-stem rises
+    /// past the TOP notehead, a down-stem falls past the BOTTOM one.
+    ///
+    /// This used to compare the stem's midpoint against one notehead — the
+    /// cluster's "lead", i.e. whichever notehead the glyph array happened to
+    /// present first. For a single notehead the two rules are ALGEBRAICALLY
+    /// IDENTICAL (`midY > y` ⟺ `maxY - y > y - minY`), so the common case is
+    /// untouched, including the tie, which both resolve to `.down`. For a
+    /// chord they differ, and the old one was wrong whenever the stem's
+    /// midpoint fell between two chord-mates: MuseScore sizes a stem from the
+    /// FAR notehead plus about a space, so a wide chord's down-stem barely
+    /// clears the near notehead and its midpoint lands above it. That read
+    /// `.up`, and `voiceFor` turns `.up` into voice 1 — so the chord moved
+    /// voice.
+    private static func stemDirection(
+        of stem: PathSegment, noteheadYs: [CGFloat],
+    ) -> StemDirection {
+        guard let top = noteheadYs.max(), let bottom = noteheadYs.min() else {
+            return .down
+        }
+        return (stem.rect.maxY - top) > (bottom - stem.rect.minY) ? .up : .down
     }
 
     private static func applyDots(
