@@ -160,7 +160,11 @@
         @Test func blackPlusOneDotIsDottedQuarter() {
             let (g, dp) = notehead(x: 100, y: 500)
             let stems = [stem(x: 100, yMin: 500, yMax: 530)]
-            let d = dot(x: 110, y: 500)
+            // 1.0 notehead-advance to the right (advance 5). Measured over
+            // the real corpus a note's own dot sits at 0.8–1.2 advances and
+            // nothing at all sits at 1.3–1.4; this fixture used to place it
+            // at 2.0 advances, which is where a LATER note's dot lives.
+            let d = dot(x: 105, y: 500)
             let m = makeMeasure(glyphs: [g, d])
             let rhythm = PDFImporter.decodeRhythm(
                 measure: m, decoded: [dp], paths: stems,

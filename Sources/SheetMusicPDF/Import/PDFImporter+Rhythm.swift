@@ -653,6 +653,24 @@ extension PDFImporter {
         return (stem.rect.maxY - top) > (bottom - stem.rect.minY) ? .up : .down
     }
 
+    /// Farthest a dot may sit to the right of its notehead and still be that
+    /// note's own, in units of the notehead's advance width.
+    ///
+    /// Measured over the 135-score real corpus, the dx of every dot that
+    /// clears the staccato floor and the 4pt dy band:
+    ///
+    ///     0.8 adv   6,711     ← the note's own dot
+    ///     0.9 adv  15,183
+    ///     1.1 adv     162
+    ///     1.2 adv   1,269
+    ///     1.3 – 1.4     0     ← nothing at all
+    ///     1.5 adv+    ...     ← a later note's dot, a continuum out to 45
+    ///
+    /// so 1.35 sits in an empty gap. The advance is the one length in scope
+    /// that tracks the staff size (it measures 2.00 staff spaces on every
+    /// corpus font), which is why the floor was already expressed in it.
+    static let dotOwnerMaxAdvances: CGFloat = 1.35
+
     private static func applyDots(
         duration: NoteDuration,
         glyphs: [ClassifiedGlyph],
@@ -681,15 +699,17 @@ extension PDFImporter {
         // nothing here.
         let advance = lead.geometry.advance
         let minDX = advance > 0 ? advance * 0.5 : 0
+        let maxDX = advance > 0 ? advance * dotOwnerMaxAdvances : 12
         for g in glyphs {
             guard case .augmentationDot = g.semantic else { continue }
             let dx = g.geometry.origin.x - leadX
             let dy = abs(g.geometry.origin.y - leadY)
-            // A note's own dot sits ~7–10pt to its right (measured). The
-            // previous `< 20`pt window also caught the FOLLOWING note's dot
-            // ~15pt away (a phantom `3/32` at the tail of beamed 16th runs);
-            // 12pt keeps every owner dot and rejects the ~15pt neighbour.
-            guard dx > minDX, dx < 12, dy < 4 else { continue }
+            // The ceiling is in the SAME units as the floor — see
+            // `dotOwnerMaxAdvances`. It used to be a fixed 12pt, which is
+            // 1.2 advances at the corpus's most common staff space but only
+            // 1.0 at its largest (clipping real dots) and 2.5 at its
+            // smallest (admitting a neighbour's).
+            guard dx > minDX, dx < maxDX, dy < 4 else { continue }
             // A LATER note's staccato can still fall in this note's window
             // (12 of the corpus's 131, all in 君とParadiso). It belongs to
             // whichever notehead it is centred over, so hand it back.
