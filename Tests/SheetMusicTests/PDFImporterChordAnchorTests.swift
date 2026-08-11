@@ -153,75 +153,85 @@
             #expect(rhythm.first?.chord.duration == .quarter.dotted(1))
         }
 
-        // MARK: - The real defect in this area
+        // MARK: - Chords containing a second
 
-        /// KNOWN ISSUE: a chord containing a SECOND splits into two
-        /// sequential chords.
+        /// A chord containing a SECOND is ONE chord, even though the engraver
+        /// has to draw its two heads in different columns.
         ///
-        /// This is what the dot investigation actually found, once the
-        /// fixtures were made physical. MuseScore mirrors one head of a
-        /// second to the other side of the stem — `conflict =
-        /// (std::abs(prevLine - line) < 2)` then
+        /// MuseScore mirrors one head of a second to the other side of the
+        /// stem — `conflict = (std::abs(prevLine - line) < 2)` then
         /// `mirror.set_value(...)`, offset `headWidth - stemWidth`
-        /// (`rendering/score/chordlayout.cpp:2368, 2404, 2733-2741`), about
-        /// 1.07sp. `stemCluster` admits a chord-mate only within
-        /// `abs(dx) <= 2.5` pt (`PDFImporter+Rhythm.swift`), which at any
-        /// real staff size is far narrower than that offset, so the two
-        /// heads never join one cluster.
+        /// (`rendering/score/chordlayout.cpp:2368, 2404, 2733-2741`). So the
+        /// two heads of a second NEVER share an x column, and a cluster rule
+        /// that demands a shared x cannot ever join them.
         ///
-        /// The consequence is a NOTE-COUNT error, not a dot error: two
-        /// chords where the score has one, and `hasCoincidentOnset`'s 3pt
-        /// tolerance does not see them as simultaneous either, so they do
-        /// not even become two voices.
+        /// `stemCluster` used to demand exactly that, within `abs(dx) <= 2.5`
+        /// pt — narrower than the mirror offset at every real staff size, and
+        /// a fixed number of points for a distance that scales with the
+        /// staff. The consequence was a NOTE-COUNT error: two chords where
+        /// the score has one, and since `hasCoincidentOnset`'s tolerance does
+        /// not see them as simultaneous either, they did not even become two
+        /// voices.
         ///
-        /// LEFT UNFIXED DELIBERATELY, and the census that decided it is the
-        /// point of this comment. Widening the cluster window is a change to
-        /// chord and voice assembly on shipped code, so the upper bound on
-        /// what it could buy was measured first — over the ground-truth
-        /// (`.mscz`) side of the whole corpus, 137 scores:
+        /// THE WINDOW IS MEASURED, not guessed. Over the 135-score real
+        /// corpus, every notehead that (a) resolves to the SAME stem as the
+        /// cluster's lead and (b) fell outside the old 2.5pt window — 1,312
+        /// of them — sits at:
         ///
-        ///     chords                 418,963
-        ///     multi-note chords        3,192   (0.76% — these parts are
-        ///                                       overwhelmingly monophonic)
-        ///     chords with a SECOND       429   (0.10% of all chords)
-        ///     with a unison               19
-        ///     dotted seconds              18
-        ///     scores containing any       21 of 137
+        ///     |dx| 1.2 sp   980    |dy| 0.50 sp = one staff step (a second)
+        ///     |dx| 1.5 sp   266    the same, in a wider-headed font
+        ///     |dx| 1.6 sp    48
+        ///     |dx| ≥ 1.9 sp  18    (the whole tail)
         ///
-        /// And the 429 are concentrated where they cannot pay: 113 are in a
-        /// score with no PDF in the corpus, so it is never scored at all;
-        /// 200 more are in `ファンファーレ`, which already reads
-        /// `pitch%=99% dur%=99%` with most of its notes hidden from scoring
-        /// anyway. What remains is roughly a hundred chords spread over
-        /// nineteen scores, several already near-perfect and one
-        /// (`疑事無功_piano`, 8%) broken for structural reasons a chord fix
-        /// would not touch.
+        /// so 1.8 sp lies in the gap. The dx spread 1.2 … 1.6 is font
+        /// variation in `headWidth - stemWidth`, which is why the window has
+        /// to be expressed in staff spaces.
         ///
-        /// So the ceiling is a fraction of a percentage point, against a
-        /// change that has to relax a window whose narrowness was itself
-        /// tuned on measured drum-voice failures. Not worth it — and this
-        /// census is exactly the step whose absence cost three rejected
-        /// `applyDots` attempts.
+        /// WHAT KEEPS THE DRUM FIX WORKING is the SAME-STEM condition, not
+        /// the x window: a drum downbeat stacks a crash (stem-up) over a kick
+        /// (stem-down) at one x, on two different stems, and it is the stem
+        /// index that separates them. Over the same corpus 237,751 candidates
+        /// outside the old window resolve to a DIFFERENT stem and are still
+        /// rejected; only 3 have no stem at all. Widening the x window
+        /// therefore cannot re-open the 群青 / 君と drum loss.
         ///
-        /// If it is ever revisited: once mirrored heads DO join a cluster,
-        /// the dot anchor starts to matter for dotted seconds (the two
-        /// halves' dot dx straddle the `minDX` floor and the 12pt cap), so
-        /// the anchor question reopens then — with real geometry to design
-        /// against.
-        @Test func aSecondSplitsIntoTwoChords() {
-            // Two heads a staff step apart, the upper mirrored to the right
-            // of the shared stem by about one notehead width.
+        /// (The earlier census of the ground-truth side — 429 chords with a
+        /// second, 0.10% of the corpus's chords — is a statement about THIS
+        /// corpus, which is band scores. It is not a statement about whether
+        /// the importer needs to read chords: piano and guitar writing is
+        /// full of seconds.)
+        @Test func aChordContainingASecondStaysOneChord() {
+            // The measured geometry: heads one staff step apart (dy 0.5 sp),
+            // the upper mirrored to the right of the shared stem by one
+            // notehead width (dx 1.2 sp — the corpus's dominant value).
+            // `measure` engraves a 5pt staff space.
             let (left, leftPitch) = notehead(x: 100, y: 500, midi: 71)
-            let (right, rightPitch) = notehead(x: 105, y: 502.5, midi: 72)
+            let (right, rightPitch) = notehead(x: 106, y: 502.5, midi: 72)
             let rhythm = PDFImporter.decodeRhythm(
                 measure: measure([left, right]),
                 decoded: [leftPitch, rightPitch],
-                paths: [stem(x: 105, yMin: 500, yMax: 530)],
+                paths: [stem(x: 106, yMin: 500, yMax: 530)],
             )
-            withKnownIssue("seconds split — see the doc comment") {
-                #expect(rhythm.count == 1)
-                #expect(rhythm.first?.chord.notes.count == 2)
-            }
+            #expect(rhythm.count == 1)
+            #expect(rhythm.first?.chord.notes.count == 2)
+        }
+
+        /// Two noteheads at one x on TWO stems stay two chords — the drum
+        /// downbeat (crash over kick) the same-stem condition exists for.
+        /// Widening the x window must not touch this.
+        @Test func twoStemsAtOneXStayTwoChords() {
+            let (up, upPitch) = notehead(x: 100, y: 512, midi: 76)
+            let (down, downPitch) = notehead(x: 100, y: 496, midi: 60)
+            let rhythm = PDFImporter.decodeRhythm(
+                measure: measure([up, down]),
+                decoded: [upPitch, downPitch],
+                paths: [
+                    stem(x: 106, yMin: 512, yMax: 534), // crash, stem-up
+                    stem(x: 100, yMin: 474, yMax: 496), // kick, stem-down
+                ],
+            )
+            #expect(rhythm.count == 2)
+            #expect(rhythm.allSatisfy { $0.chord.notes.count == 1 })
         }
     }
 #endif
