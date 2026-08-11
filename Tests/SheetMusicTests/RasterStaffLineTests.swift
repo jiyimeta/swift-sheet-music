@@ -63,6 +63,47 @@
             #expect(wide.count == 1)
         }
 
+        /// A ROW OF LEDGER LINES must not be bridged into a staff line.
+        ///
+        /// This is the defect the ink-fraction gate exists for: each mark
+        /// is ~1.6 spaces, far too short to be a candidate alone, and the
+        /// vector path leaves them as fragments the importer discards —
+        /// but a 1.0-space gap tolerance joins them into one run wide
+        /// enough to pass. `detectStaves` then fits its five-line window
+        /// to six lines, picks the top five, and every pitch on that
+        /// staff moves two steps while measure counts, note counts and
+        /// durations all stay perfect.
+        @Test func aRowOfLedgerLinesIsNotBridgedIntoAStaffLine() {
+            var bmp = RasterTestBitmaps.blank(widthPx: 900, heightPx: 300, dpi: 300)
+            // 1.6-space marks (19px) every 31px — an 11px gap, inside the
+            // 12px tolerance — spanning 400px, well over the 50pt gate.
+            for i in 0 ..< 13 {
+                let x0 = 100 + i * 31
+                RasterTestBitmaps.hLine(&bmp, y: 150, x0: x0, x1: x0 + 19, thickness: 1)
+            }
+            let mask = RasterPage.binarize(bmp)
+            let segs = RasterPage.staffLineSegments(
+                mask, spacingPx: 12, transform: Self.transform(bmp), pageIndex: 0,
+            )
+            #expect(segs.filter { $0.rect.width > 50 }.isEmpty)
+        }
+
+        /// …while a genuinely broken staff line, whose ink fraction stays
+        /// high, must still survive. Without this the fix above would
+        /// simply undo the gap tolerance it is guarding.
+        @Test func aMostlyInkedLineStillSurvivesTheInkFractionGate() {
+            var bmp = RasterTestBitmaps.blank(widthPx: 900, heightPx: 300, dpi: 300)
+            for chunk in 0 ..< 6 {
+                let x0 = 45 + chunk * 135
+                RasterTestBitmaps.hLine(&bmp, y: 150, x0: x0, x1: x0 + 125, thickness: 1)
+            }
+            let mask = RasterPage.binarize(bmp)
+            let segs = RasterPage.staffLineSegments(
+                mask, spacingPx: 12, transform: Self.transform(bmp), pageIndex: 0,
+            )
+            #expect(segs.count(where: { $0.rect.width > 50 }) == 1)
+        }
+
         /// A gap WIDER than the tolerance must still break the line —
         /// otherwise the merge would reach across a system and invent a
         /// staff line spanning two of them.

@@ -34,6 +34,30 @@ extension RasterPage {
     /// `detectStaves` is going to discard anyway.
     static let staffLineMinWidthPt: Double = 50
 
+    /// Least fraction of a merged run's span that must actually be inked.
+    ///
+    /// Without this the gap tolerance MANUFACTURES STAFF LINES. A row of
+    /// ledger lines above a staff is a series of ~1.6-space marks about
+    /// one note apart; each is far too short to be a staff-line candidate
+    /// on its own, and the vector path leaves them as fragments that
+    /// `lineClusterWidthGate` discards — but a 1.0-space gap tolerance
+    /// bridges them into one run wide enough to pass. `detectStaves` then
+    /// has six lines to fit a five-line window to, picks the top five,
+    /// and every pitch on that staff moves by two steps.
+    ///
+    /// That was measured, not imagined: on `cov_accidentals` the raster
+    /// staff came out as `[71.6, 76.4, 81.2, 86.2, 91.0]` against the
+    /// oracle's `[76.3, 81.2, 86.0, 90.8, 95.7]` — the same window
+    /// shifted up by exactly one line spacing — while measure counts,
+    /// note counts and durations were all perfect.
+    ///
+    /// 0.75 is far below any real line and far above a bridged row of
+    /// marks. Measured gap statistics put a degraded staff line's ink
+    /// fraction above 0.99 (2.5 gaps per line at a 0.16-space median at
+    /// 200dpi, 0.24 gaps at 2.8 spaces at 300dpi, over spans of ~100
+    /// spaces), while ledger-line rows come out near 0.5.
+    static let staffLineMinInkFraction = 0.75
+
     /// Staff-line spacing in pixels, from the row projection's peak
     /// spacing; nil when the page has no staff.
     ///
@@ -114,25 +138,38 @@ extension RasterPage {
     }
 
     /// Inked stretches of one row, with gaps up to `gapTolerance`
-    /// bridged, keeping only those at least `minWidthPx` wide.
+    /// bridged, keeping only those at least `minWidthPx` wide AND at
+    /// least `staffLineMinInkFraction` inked.
+    ///
+    /// The ink fraction is what separates a broken staff line from a
+    /// bridged row of ledger lines — see `staffLineMinInkFraction`.
     private static func rowRuns(
         _ mask: InkMask, y: Int, gapTolerance: Int, minWidthPx: Int,
     ) -> [(x0: Int, x1: Int)] {
         var out: [(x0: Int, x1: Int)] = []
         var start: Int?
         var lastInk: Int?
-        for x in 0 ..< mask.width where mask[x, y] {
-            if let last = lastInk, x - last > gapTolerance, let from = start {
-                if last - from + 1 >= minWidthPx { out.append((from, last)) }
-                start = x
-            } else if start == nil {
-                start = x
-            }
-            lastInk = x
-        }
-        if let from = start, let last = lastInk, last - from + 1 >= minWidthPx {
+        var inked = 0
+        func close(_ from: Int, _ last: Int, _ ink: Int) {
+            let span = last - from + 1
+            guard span >= minWidthPx,
+                  Double(ink) >= staffLineMinInkFraction * Double(span)
+            else { return }
             out.append((from, last))
         }
+        for x in 0 ..< mask.width where mask[x, y] {
+            if let last = lastInk, x - last > gapTolerance, let from = start {
+                close(from, last, inked)
+                start = x
+                inked = 0
+            } else if start == nil {
+                start = x
+                inked = 0
+            }
+            lastInk = x
+            inked += 1
+        }
+        if let from = start, let last = lastInk { close(from, last, inked) }
         return out
     }
 
