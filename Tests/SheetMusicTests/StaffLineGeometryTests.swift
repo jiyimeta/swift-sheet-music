@@ -39,6 +39,9 @@
             let three = StaffLineGeometry(lineCount: 3)
             #expect(three.firstLedgerStepAbove == 6)
             #expect(three.firstLedgerStepBelow == -2)
+            let sixteen = StaffLineGeometry(lineCount: 16)
+            #expect(sixteen.firstLedgerStepAbove == 6)
+            #expect(sixteen.firstLedgerStepBelow == -28)
         }
 
         @Test func lineYStepsDownBySp() {
