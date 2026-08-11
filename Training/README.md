@@ -269,6 +269,61 @@ stage's contribution and nothing else's. Two env vars vary it:
 numbers are not far above it, the harness is measuring nothing, and the
 same run also catches truth paths leaking into the hybrid plumbing.
 
+#### Measured 2026-08-12 — the numbers these gates are frozen at
+
+Seam level, v2, all 4650 pages, run twice byte-identical:
+
+| | clean | frozen (degraded) |
+|---|---|---|
+| staff-line recall | **0.7593** | 0.7119 |
+| barline recall / precision | 0.9201 / 0.6740 | 0.8470 / 0.5872 |
+| beam recall / precision | 0.9663 / 0.8175 | 0.6424 / 0.4867 |
+| mean abs deskew angle | 0.002° | 1.004° |
+| peak RSS | 361MB | 624MB |
+
+Barline precision is low **by design** and is not a defect: the raster
+front-end does not separate stems from barlines (they overlap in length —
+measured peaks at 3.0 and 4.0 staff spaces), so it emits every vertical
+and lets `barlineCandidates` separate them downstream using notehead
+abutment. Accidental and clef strokes clear the 2-space floor too. The
+number that matters for verticals is the hybrid's measure-count
+agreement, not this one.
+
+Score level, hybrid vs `source.mscx`, 173 renders of a fixed 200-render
+subsample, against the oracle-replay ceiling on the SAME renders:
+
+| configuration | pitch p50 | pitch mean | dur p50 | dur mean |
+|---|---|---|---|---|
+| oracle ceiling (perfect detector, perfect paths) | 100 | 79.4 | — | — |
+| **hybrid `full`** | **49** | **44.4** | **37** | **40.1** |
+| `noBeams` | 49 | 44.4 | 25 | 31.7 |
+| `noVerticals` | 2 | 4.7 | 4 | 9.2 |
+| `noStaffLines` | *no score at all* — 180 renders throw | | | |
+| `nullFrontEnd` | *no score at all* — 180 renders throw | | | |
+
+**So the classical-CV primitives cost about 35 points of pitch against a
+perfect detector.** That is this stage's contribution, and the number
+P3d inherits.
+
+The lobotomy rows are the evidence that the harness can fail, and each
+craters its own metric and only its own: `noBeams` leaves pitch
+bit-identical while removing 12 points of duration, `noVerticals`
+destroys the measure structure and with it everything, and removing
+staff lines leaves nothing to detect a staff from at all.
+
+Origin-jitter (P3d's error budget), same renders:
+
+| σ (staff spaces) | pitch p50 | pitch mean |
+|---|---|---|
+| 0 | 49 | 44.4 |
+| 0.1 | 52 | 45.3 |
+| 0.25 | 46 | 39.7 |
+| **0.5** | **20** | **16.8** |
+
+Detector origin error up to ~0.25 sp is free; at 0.5 sp pitch halves.
+Duration barely moves (37 → 36), which is consistent — it comes from
+beams and stems, not from glyph origins.
+
 Memory: every sweep prints `peakRSS`, and page bitmaps are only ever
 touched through `OMRPageBitmapLoader.withPageBitmap`, which owns the
 `autoreleasepool` so a call site cannot forget it. Run under
