@@ -313,6 +313,57 @@ class FluidSynthEngineTest {
         )
     }
 
+    @Test fun setupStaves_opensBreathControllerOnMelodicChannels() {
+        // MuseScore's "expressive" banks implement single-note dynamics with
+        // SF2 modulators that put ~80 dB of initialAttenuation under CC2
+        // (breath) control — verified by reading MuseScore_General's pmod
+        // chunk for bank 17 program 21 ("Accordion Expr."):
+        //     MOD src=CC2 -> initialAttenuation amount=800  (x2)
+        //     MOD src=CC2 -> initialFilterFc    amount=-3600 / -2000
+        // MuseScore streams CC2 while playing; this engine never sends it, so
+        // such a preset sits at the attenuated end and the part is SILENT.
+        // Open the controller at setup so the authored timbre is audible.
+        // Bank-0 presets carry no CC2 modulators, so this is inert for them.
+        val engine = buildEngine()
+
+        setupStaves(engine, 2)
+
+        val synth = capturedSynth!!
+        assertTrue(
+            "melodic channel 0 should have CC2 opened, got ${synth.calls}",
+            synth.calls.contains("cc(0,2,127)"),
+        )
+        assertTrue(
+            "melodic channel 1 should have CC2 opened, got ${synth.calls}",
+            synth.calls.contains("cc(1,2,127)"),
+        )
+    }
+
+    @Test fun setupStaves_doesNotOpenBreathControllerOnDrumChannels() {
+        // A percussion preset has no single-note-dynamics gating to release,
+        // and CC2 there would be an unrequested change to drum-kit behavior.
+        val engine = FluidSynthEngine(synthFactory = { _ ->
+            FakeSynth().also { capturedSynth = it }
+        })
+        engine.setupStaves(
+            params = listOf(
+                fakeStaffParams(0, isDrums = false),
+                fakeStaffParams(1, isDrums = true),
+            ),
+            resolver = FakeResolver(),
+            context = null,
+        )
+        val synth = capturedSynth!!
+        assertTrue(
+            "melodic channel keeps CC2, got ${synth.calls}",
+            synth.calls.contains("cc(0,2,127)"),
+        )
+        assertTrue(
+            "drum channel must not get CC2, got ${synth.calls}",
+            synth.calls.none { it == "cc(1,2,127)" },
+        )
+    }
+
     @Test fun setupStaves_drumStaff_selectsBank128() {
         val engine = FluidSynthEngine(synthFactory = { _ ->
             FakeSynth().also { capturedSynth = it }

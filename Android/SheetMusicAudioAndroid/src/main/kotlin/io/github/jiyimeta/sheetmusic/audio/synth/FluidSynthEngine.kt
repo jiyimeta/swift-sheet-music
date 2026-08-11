@@ -135,6 +135,37 @@ internal class FluidSynthEngine(
         // Staff is silent (sfid < 0 or uri was null) but the channel routing is
         // still correct — fluid_player replays events on the relabeled channels.
 
+        // Open the breath controller on every melodic channel.
+        //
+        // MuseScore's "expressive" banks implement single-note dynamics with
+        // SF2 modulators that put the preset's attenuation under CC2 (breath)
+        // control. Reading MuseScore_General's `pmod` chunk for bank 17
+        // program 21 ("Accordion Expr.") shows:
+        //
+        //     MOD src=CC2 -> initialAttenuation amount=800   (x2)
+        //     MOD src=CC2 -> initialFilterFc    amount=-3600 / -2000
+        //
+        // i.e. ~80 dB of attenuation is CC2-controlled. MuseScore streams CC2
+        // continuously while playing; this engine never sends it, and a MIDI
+        // channel starts with CC2 = 0 — so such a preset sits at the fully
+        // attenuated end and the part is SILENT, with no error anywhere.
+        //
+        // Android is the only backend that honors the score's declared bank
+        // (`InstrumentParams.bankLSB`); Apple hardcodes bank 0
+        // (`MIDISynthBuilder.preloadPreset`) and so never selects an
+        // expressive preset. Opening CC2 keeps the authored timbre AND makes
+        // it audible. A static full-open value is the honest stand-in until
+        // real single-note-dynamics streaming exists; bank-0 presets carry no
+        // CC2 modulators, so this is inert for them.
+        //
+        // Drums are excluded: a percussion preset has no dynamics gating to
+        // release, and CC2 there would be an unrequested behavior change.
+        if (sfid >= 0) {
+            for (p in params) {
+                if (!p.isDrums) driver.cc(channel = p.staffIndex, controller = 2, value = 127)
+            }
+        }
+
         // Reset CC7 round-trip state for all channels (Bug 2).
         for (i in 0 until 16) {
             rememberedCC7[i] = 100  // GM default channel volume
