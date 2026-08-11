@@ -17,19 +17,28 @@
     ///   SM_COLLIDE_SPANNERS — also pair `system.spanners` against the
     ///     per-measure elements (off by default so the historical
     ///     annotation-only count stays comparable across runs)
+    ///   SM_COLLIDE_BASE — also pair every autoplaced item against the
+    ///     NON-autoplaced (base-skyline) shapes: chords, beams, rests,
+    ///     articulations, fermatas, clefs, bar lines … (off by default,
+    ///     same comparability reason)
     ///
     /// No score path is hardcoded and no result is committed — the
     /// corpus is the author's private library.
     ///
     /// **Reach.** The count is a lower bound, not a proof of absence.
-    /// Two whole classes of pair are invisible to it:
+    /// Two whole classes of pair are excluded from the default walk:
     ///
     /// - **Base-skyline kinds** (chords, articulations, fermatas,
-    ///   breaths, clefs …) are filtered out by `isAutoplaced`, so a
-    ///   vertical error in one of their shapes — which moves every
-    ///   annotation that clears it, CONSISTENTLY — reports zero
-    ///   collisions. `LayoutElementShapeTests` pins those bands
-    ///   positionally for that reason.
+    ///   breaths, clefs …) are filtered out by `isAutoplaced`. That
+    ///   makes the default count blind to "an annotation sits on top of
+    ///   a notehead" — the class this detector could not see at all
+    ///   before `SM_COLLIDE_BASE`. Note that even with the flag on,
+    ///   base × base is deliberately NOT walked: those shapes are placed
+    ///   by the engraving rules rather than by autoplace, and a vertical
+    ///   error in one of them moves every annotation that clears it
+    ///   CONSISTENTLY, so it still reports zero.
+    ///   `LayoutElementShapeTests` pins those bands positionally for
+    ///   that reason.
     /// - **Spanner segments** are off by default: the walk covers
     ///   `measure.elements + markers + jumps`, while hairpins, pedals,
     ///   voltas, ottavas and text lines are synthesized into
@@ -37,6 +46,10 @@
     ///   `SM_COLLIDE_SPANNERS=1` to fold them in — they are reported
     ///   under the same pair histogram, so the total is no longer
     ///   comparable with a run that leaves the flag off.
+    ///
+    /// `SM_COLLIDE_SPANNERS=1 SM_COLLIDE_BASE=1` together are what make
+    /// "a below-staff hairpin overlaps a low ledger-line note" a
+    /// reportable pair.
     @available(macOS 15.0, *)
     @MainActor
     enum CollisionReport {
@@ -56,6 +69,12 @@
         /// Whether `system.spanners` participates. Off by default.
         private static var includesSpanners: Bool {
             ProcessInfo.processInfo.environment["SM_COLLIDE_SPANNERS"] != nil
+        }
+
+        /// Whether NON-autoplaced shapes participate as the second side
+        /// of a pair. Off by default.
+        private static var includesBaseShapes: Bool {
+            ProcessInfo.processInfo.environment["SM_COLLIDE_BASE"] != nil
         }
 
         static func run() throws {
@@ -102,41 +121,50 @@
             var found: [Collision] = []
             for (sysIdx, system) in doc.systems.enumerated() {
                 let metrics = StaffMetrics(staffSize: system.sp * 4)
+                // Autoplaced items pair against each other AND (under
+                // `SM_COLLIDE_BASE`) against the base shapes. Base
+                // shapes never pair with each other — see the type doc.
                 var shapes: [(LayoutShape, ShapeItemKind)] = []
+                var baseShapes: [(LayoutShape, ShapeItemKind)] = []
                 var id = 0
+                func collect(
+                    _ el: LayoutElement, xOffset: CGFloat,
+                ) {
+                    guard let kind = LayoutElementShape.kind(of: el)
+                    else { return }
+                    let autoplaced = AutoplaceRules.isAutoplaced(kind)
+                    guard autoplaced || includesBaseShapes else { return }
+                    guard let shape = LayoutElementShape.shape(
+                        for: el, id: id, xOffset: xOffset,
+                        metrics: metrics,
+                    ) else { return }
+                    id += 1
+                    if autoplaced {
+                        shapes.append((shape, kind))
+                    } else {
+                        baseShapes.append((shape, kind))
+                    }
+                }
                 for measure in system.measures {
                     let elements = measure.elements
                         + measure.markers + measure.jumps
                     for el in elements {
-                        guard let kind = LayoutElementShape.kind(of: el),
-                              AutoplaceRules.isAutoplaced(kind),
-                              let shape = LayoutElementShape.shape(
-                                  for: el, id: id,
-                                  xOffset: measure.origin.x,
-                                  metrics: metrics,
-                              )
-                        else { continue }
-                        id += 1
-                        shapes.append((shape, kind))
+                        collect(el, xOffset: measure.origin.x)
                     }
                 }
                 if includesSpanners {
                     // Spanner origins are already system-local, so no
                     // per-measure `xOffset` applies here.
                     for el in system.spanners {
-                        guard let kind = LayoutElementShape.kind(of: el),
-                              AutoplaceRules.isAutoplaced(kind),
-                              let shape = LayoutElementShape.shape(
-                                  for: el, id: id, xOffset: 0,
-                                  metrics: metrics,
-                              )
-                        else { continue }
-                        id += 1
-                        shapes.append((shape, kind))
+                        collect(el, xOffset: 0)
                     }
                 }
                 found.append(contentsOf: pairwise(
                     shapes, file: url.lastPathComponent, system: sysIdx,
+                ))
+                found.append(contentsOf: crossPairs(
+                    shapes, baseShapes,
+                    file: url.lastPathComponent, system: sysIdx,
                 ))
             }
             return found
@@ -149,20 +177,54 @@
             var found: [Collision] = []
             for i in shapes.indices {
                 for j in shapes.indices where j > i {
-                    let (sa, ka) = shapes[i]
-                    let (sb, kb) = shapes[j]
-                    guard let ia = sa.rects.first?.item,
-                          let ib = sb.rects.first?.item,
-                          !ignoreForReporting(ia, ib)
-                    else { continue }
-                    guard let d = overlapDepth(sa, sb) else { continue }
-                    found.append(Collision(
-                        file: file, system: system, staff: 0,
-                        a: "\(ka)", b: "\(kb)", overlap: d,
-                    ))
+                    if let c = collision(
+                        shapes[i], shapes[j], file: file, system: system,
+                    ) {
+                        found.append(c)
+                    }
                 }
             }
             return found
+        }
+
+        /// Every `a × b` across the two lists. Used for
+        /// autoplaced × base, where no `j > i` de-duplication applies
+        /// because the lists are disjoint.
+        private static func crossPairs(
+            _ a: [(LayoutShape, ShapeItemKind)],
+            _ b: [(LayoutShape, ShapeItemKind)],
+            file: String, system: Int,
+        ) -> [Collision] {
+            guard !a.isEmpty, !b.isEmpty else { return [] }
+            var found: [Collision] = []
+            for lhs in a {
+                for rhs in b {
+                    if let c = collision(
+                        lhs, rhs, file: file, system: system,
+                    ) {
+                        found.append(c)
+                    }
+                }
+            }
+            return found
+        }
+
+        private static func collision(
+            _ lhs: (LayoutShape, ShapeItemKind),
+            _ rhs: (LayoutShape, ShapeItemKind),
+            file: String, system: Int,
+        ) -> Collision? {
+            let (sa, ka) = lhs
+            let (sb, kb) = rhs
+            guard let ia = sa.rects.first?.item,
+                  let ib = sb.rects.first?.item,
+                  !ignoreForReporting(ia, ib),
+                  let d = overlapDepth(sa, sb)
+            else { return nil }
+            return Collision(
+                file: file, system: system, staff: 0,
+                a: "\(ka)", b: "\(kb)", overlap: d,
+            )
         }
 
         /// Reporting policy, which is deliberately NOT the autoplace

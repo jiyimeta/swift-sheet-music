@@ -139,6 +139,17 @@ public final class LayoutCache: @unchecked Sendable {
         let drumLineMaps: [[Int: Int]?]
         let totalMeasures: Int
         let options: ScoreViewOptions
+        /// Every spanner anchor overlapping this range, since
+        /// `buildSystem` lays the line spanners out itself.
+        ///
+        /// `measuresPerStaff` cannot stand in for this: a spanner that
+        /// STARTS in an earlier system and continues into this one is
+        /// drawn here but is not in any of this range's measures.
+        /// Without it, editing a long hairpin would leave every
+        /// downstream system serving stale cached geometry.
+        let overlappingSpannerAnchors: [LayoutEngine.SpannerAnchor]
+        /// Read by `synthesizeLineSpanners` for the ottava label.
+        let ottavaNumbersOnly: Bool
     }
 
     /// All inputs to `placeMeasureElements` for one (measure, staff).
@@ -164,7 +175,6 @@ public final class LayoutCache: @unchecked Sendable {
         let graceNoteMag: CGFloat
         /// Whether a visible below-staff spanner (hairpin/pedal) covers
         /// this measure for this staff. Affects lyric Y placement.
-        let coversBelowStaffSpanner: Bool
         /// System-level elements (tempo / rehearsal / system or staff
         /// text / swing) routed to this staff for this measure. The
         /// caller pre-filters `Score.systemMeasures` by staff address;

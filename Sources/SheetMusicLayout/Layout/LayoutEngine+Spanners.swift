@@ -48,43 +48,6 @@ extension LayoutEngine {
         let ottavaNumbersOnly: Bool?
     }
 
-    /// Per-staff set of measure indices covered by a visible
-    /// below-staff spanner (hairpin, pedal). Used by lyric placement
-    /// to push the verse-0 baseline below the spanner band so a
-    /// hairpin can sit between the staff and the lyric row — the
-    /// MuseScore convention. Crescendo / decrescendo direction and
-    /// in-measure tick offsets are irrelevant here; the question is
-    /// purely "does this measure host a below-staff spanner glyph?" —
-    /// which an authored `<placement>` can answer either way, so a
-    /// hairpin flipped above the staff must stop reserving the band.
-    static func belowStaffSpannerCoverage(score: Score) -> [Int: Set<Int>] {
-        var out: [Int: Set<Int>] = [:]
-        for (staffIdx, entry) in score.allStaves.enumerated() {
-            let staff = entry.staff
-            var covered: Set<Int> = []
-            for (measureIdx, measure) in staff.measures.enumerated() {
-                for voice in measure.voices {
-                    for el in voice.elements {
-                        guard case let .spanner(sp) = el,
-                              sp.visible,
-                              sp.placement.map({ $0 == .below })
-                              ?? isBelowStaff(kind: sp.kind)
-                        else { continue }
-                        let lastIdx = min(
-                            staff.measures.count - 1,
-                            measureIdx + max(0, sp.nextMeasuresOffset),
-                        )
-                        for m in measureIdx ... lastIdx {
-                            covered.insert(m)
-                        }
-                    }
-                }
-            }
-            if !covered.isEmpty { out[staffIdx] = covered }
-        }
-        return out
-    }
-
     /// Walk every staff / measure / voice and collect Spanner anchors.
     /// `endTick` carries the in-measure offset of the end anchor when
     /// the source provided `<next><fractions>` (partial-measure span);
@@ -206,6 +169,12 @@ extension LayoutEngine {
                 anchor: anchor,
                 ottavaNumbersOnly: score.style.ottavaNumbersOnly,
             )
+            // Line spanners are laid out in pass 1 of `buildSystem`
+            // instead, so `SkylineAutoplacePass` can place them and
+            // everything later in the category order can clear them.
+            // What is left here is the set with no skyline shape
+            // (slur, vibrato, trill) plus voltas.
+            if isPassPlacedSpanner(kind: kind) { continue }
             let label = layoutLabel(anchor: anchor)
 
             if startSys == endSys {
@@ -213,21 +182,21 @@ extension LayoutEngine {
                 let fromX = snappedHairpinStartX(
                     startX(
                         anchor: anchor,
-                        measure: system.measures[startLocal],
+                        measure: SpannerMeasureGeometry(system.measures[startLocal]),
                         metrics: metrics,
                     ),
                     anchor: anchor,
-                    measure: system.measures[startLocal],
+                    measure: SpannerMeasureGeometry(system.measures[startLocal]),
                     metrics: metrics,
                 )
                 let toX = snappedHairpinEndX(
                     endX(
                         anchor: anchor,
-                        measure: system.measures[endLocal],
+                        measure: SpannerMeasureGeometry(system.measures[endLocal]),
                         metrics: metrics,
                     ),
                     anchor: anchor,
-                    measure: system.measures[endLocal],
+                    measure: SpannerMeasureGeometry(system.measures[endLocal]),
                     metrics: metrics,
                     notBefore: fromX,
                 )
@@ -257,11 +226,11 @@ extension LayoutEngine {
                 let fromX = snappedHairpinStartX(
                     startX(
                         anchor: anchor,
-                        measure: startSystem.measures[startLocal],
+                        measure: SpannerMeasureGeometry(startSystem.measures[startLocal]),
                         metrics: metrics,
                     ),
                     anchor: anchor,
-                    measure: startSystem.measures[startLocal],
+                    measure: SpannerMeasureGeometry(startSystem.measures[startLocal]),
                     metrics: metrics,
                 )
                 let toXStart = startSystem.size.width - metrics.sp * 2
@@ -324,11 +293,11 @@ extension LayoutEngine {
                 let toXEnd = snappedHairpinEndX(
                     endX(
                         anchor: anchor,
-                        measure: endSystem.measures[endLocal],
+                        measure: SpannerMeasureGeometry(endSystem.measures[endLocal]),
                         metrics: metrics,
                     ),
                     anchor: anchor,
-                    measure: endSystem.measures[endLocal],
+                    measure: SpannerMeasureGeometry(endSystem.measures[endLocal]),
                     metrics: metrics,
                     notBefore: fromXEnd,
                 )
@@ -391,12 +360,12 @@ extension LayoutEngine {
     /// this lookup can't disturb a continued line's left end.
     static func startX(
         anchor: SpannerAnchor,
-        measure: LayoutMeasure,
+        measure: SpannerMeasureGeometry,
         metrics: StaffMetrics,
     ) -> CGFloat {
-        let inset = measure.origin.x + metrics.sp * 2
+        let inset = measure.originX + metrics.sp * 2
         if let local = measure.tickColumns[anchor.startTick] {
-            return max(measure.origin.x + local, inset)
+            return max(measure.originX + local, inset)
         }
         return inset
     }
@@ -410,19 +379,19 @@ extension LayoutEngine {
     /// right edge with the historical 2-sp inset.
     static func endX(
         anchor: SpannerAnchor,
-        measure: LayoutMeasure,
+        measure: SpannerMeasureGeometry,
         metrics: StaffMetrics,
     ) -> CGFloat {
         if anchor.endTick > 0,
            let local = measure.tickColumns[anchor.endTick]
         {
-            let baseX = measure.origin.x + local
+            let baseX = measure.originX + local
             // Mirror MuseScore trill.cpp:333: a vibrato ends 1 sp before its
             // end note so adjacent partial-measure vibratos keep a 1 sp gap
             // (otherwise consecutive vibratos touch / visually overlap).
             return anchor.kind == .vibrato ? baseX - metrics.sp : baseX
         }
-        return measure.origin.x + measure.width - metrics.sp * 2
+        return measure.originX + measure.width - metrics.sp * 2
     }
 
     /// `Sid::autoplaceHairpinDynamicsDistance` = 0.5 sp — the clearance
@@ -450,7 +419,7 @@ extension LayoutEngine {
     static func snappedHairpinStartX(
         _ x: CGFloat,
         anchor: SpannerAnchor,
-        measure: LayoutMeasure,
+        measure: SpannerMeasureGeometry,
         metrics: StaffMetrics,
     ) -> CGFloat {
         guard anchor.kind == .hairpin,
@@ -462,7 +431,7 @@ extension LayoutEngine {
         else { return x }
         return max(
             x,
-            measure.origin.x + extent.maxX
+            measure.originX + extent.maxX
                 + metrics.sp * hairpinDynamicsDistanceSp,
         )
     }
@@ -480,7 +449,7 @@ extension LayoutEngine {
     static func snappedHairpinEndX(
         _ x: CGFloat,
         anchor: SpannerAnchor,
-        measure: LayoutMeasure,
+        measure: SpannerMeasureGeometry,
         metrics: StaffMetrics,
         notBefore: CGFloat,
     ) -> CGFloat {
@@ -491,7 +460,7 @@ extension LayoutEngine {
                   tick: anchor.endTick,
               )
         else { return x }
-        let trimmed = measure.origin.x + extent.minX
+        let trimmed = measure.originX + extent.minX
             - metrics.sp * hairpinDynamicsDistanceSp
         return max(min(x, trimmed), notBefore)
     }
@@ -501,7 +470,7 @@ extension LayoutEngine {
     /// carry more than one (e.g. `p` in voice 1 and `f` in voice 2);
     /// the hairpin has to clear all of them.
     private static func dynamicExtent(
-        in measure: LayoutMeasure, staffIndex: Int, tick: Int,
+        in measure: SpannerMeasureGeometry, staffIndex: Int, tick: Int,
     ) -> (minX: CGFloat, maxX: CGFloat)? {
         var minX = CGFloat.greatestFiniteMagnitude
         var maxX = -CGFloat.greatestFiniteMagnitude
@@ -685,12 +654,9 @@ extension LayoutEngine {
         let origin = origins.indices.contains(clamped)
             ? origins[clamped] : CGPoint(x: 0, y: 0)
         if belowStaff {
-            // MuseScore convention: hairpin sits in the band just below
-            // the staff, between staff bottom and any lyric row. Lyric
-            // placement (`voiceMaxLyricCenterY`) is hairpin-aware and
-            // pushes itself further down when a hairpin covers the
-            // measure, so we keep the spanner Y at a stable offset.
-            return origin.y + metrics.staffHeight + metrics.sp * 3
+            return origin.y + defaultBandOffsetY(
+                belowStaff: true, metrics: metrics,
+            )
         }
         // Vibrato: MuseScore `vibratoPosAbove` default is −1 sp, so the
         // line sits much closer to the staff top than ottava/textLine.
@@ -720,7 +686,33 @@ extension LayoutEngine {
             let clearanceY = minNorthY - metrics.sp * 1.0 - halfH
             return min(defaultY, clearanceY)
         }
-        return origin.y - metrics.sp * 4
+        return origin.y + defaultBandOffsetY(
+            belowStaff: false, metrics: metrics,
+        )
+    }
+
+    /// Where a spanner segment's anchor line starts out, measured from
+    /// the staff's TOP line. This is the styled default before any
+    /// autoplace; `SkylineAutoplacePass` only ever moves a segment
+    /// further from the staff, never toward it.
+    ///
+    /// MuseScore's own defaults are closer in — `hairpinPosBelow` 1.75
+    /// sp, `ottavaPosBelow` 2.0 sp, `pedalPosBelow` 2.5 sp
+    /// (`styledef.cpp:283,318,672`) — measured from the staff BOTTOM.
+    /// Ours is a single 3 sp band below the bottom line, which is
+    /// looser than all three. Adopting the styled values moves every
+    /// score and is deliberately a separate change.
+    ///
+    /// Kept as one function because two callers must agree on it:
+    /// `anchorY` (system coords, for the kinds still placed in the
+    /// `attachSpanners` post-pass) and `synthesizeLineSpanners`
+    /// (staff-local coords, pass 1).
+    static func defaultBandOffsetY(
+        belowStaff: Bool, metrics: StaffMetrics,
+    ) -> CGFloat {
+        belowStaff
+            ? metrics.staffHeight + metrics.sp * 3
+            : -metrics.sp * 4
     }
 
     /// Minimum (highest) notehead Y across all chords in the given

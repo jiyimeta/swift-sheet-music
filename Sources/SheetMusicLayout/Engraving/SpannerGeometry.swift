@@ -27,6 +27,38 @@ public enum SpannerGeometry {
     /// TextLine label point size (`sp * 2.2`).
     public static let textLineLabelSizeSp: CGFloat = 2.2
 
+    /// Vertical ink extent of a laid-out segment, centred on its anchor
+    /// line. Single-sourced here because two consumers must agree on
+    /// it: `LayoutElementShape.spannerRect` builds the rect the skyline
+    /// collides against, and `LayoutEngine.elementYPoints` reserves the
+    /// system height the segment is drawn into. If they drift apart, a
+    /// segment the skyline pushed down gets clipped by a system that
+    /// never grew to hold it.
+    ///
+    /// A wedge is `1.4 sp` tall (the aperture at its open end) and a
+    /// pedal `1.5 sp` (the bracket plus its hook); every other kind is
+    /// as tall as its label.
+    public static func segmentThickness(
+        kind: LayoutElement.SpannerKind, sp: CGFloat,
+    ) -> CGFloat {
+        switch kind {
+        case .hairpinOpen, .hairpinClose:
+            sp * 1.4
+        case .hairpinLine:
+            sp * hairpinLineLabelSizeSp
+        case .volta:
+            sp * voltaLabelSizeSp
+        case .ottava:
+            sp * ottavaLabelSizeSp
+        case .textLine, .palmMute, .letRing:
+            sp * textLineLabelSizeSp
+        case .pedal:
+            sp * 1.5
+        case .slur, .vibrato, .trill:
+            sp
+        }
+    }
+
     // MARK: - Slur
 
     /// Quadratic Bezier control point for a single-segment slur arc.
