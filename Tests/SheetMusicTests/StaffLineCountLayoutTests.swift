@@ -1,5 +1,6 @@
 #if os(macOS)
     import CoreGraphics
+    @testable import SheetMusicAndroidJNI
     import SheetMusicCore
     @testable import SheetMusicLayout
     @testable import SheetMusicUI
@@ -123,6 +124,66 @@
             let subSystem = try #require(sub.systems.first)
             #expect(subSystem.geometry(atFlatIndex: 0).lineCount == 3)
             #expect(subSystem.geometry(atFlatIndex: 1).lineCount == 5)
+        }
+
+        /// One staff, one measure, one quarter note sitting ON the top
+        /// staff line (F5 in treble clef, `step` 4). The top line's
+        /// position is fixed for every line count, so this note draws no
+        /// ledger line at either count — the staff lines are then the
+        /// only stroke population that moves with `lineCount`, which is
+        /// what makes an absolute stroke count meaningful here.
+        private func oneStaffScore(lineCount: Int) -> Score {
+            let f5 = Note(pitch: 77, tpc: 13)
+            let measure = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: .quarter, notes: [f5])),
+            ])])
+            let part = Part(
+                id: "P1",
+                trackName: "Percussion",
+                instrument: Instrument(
+                    id: "perc", longName: "Percussion", shortName: "Perc.",
+                ),
+                staves: [Staff(lineCount: lineCount, measures: [measure])],
+            )
+            return Score(division: 480, parts: [part])
+        }
+
+        private func bridgeStrokeCount(lineCount: Int) throws -> Int {
+            let encoded = LayoutBridge.compute(
+                score: oneStaffScore(lineCount: lineCount),
+                pageWidthMM: 210,
+                pageHeightMM: 297,
+            )
+            let pages = try DrawProgramCodec.decode(encoded)
+            #expect(!pages.isEmpty)
+            var strokes = 0
+            for page in pages {
+                for cmd in page.commands {
+                    if case .stroke = cmd { strokes += 1 }
+                }
+            }
+            return strokes
+        }
+
+        /// The Android bridge is the one renderer whose output is
+        /// inspectable as data, so it stands in for all three here.
+        ///
+        /// Five-line baseline: 5 staff lines + 2 barlines (the left
+        /// system line and the terminal barline) + 1 stem = 8 strokes.
+        /// Nothing but the staff lines changes when `lineCount` drops
+        /// to 3, so the three-line render must be exactly 2 fewer.
+        /// Both absolutes are asserted, not just the delta: a renderer
+        /// that still hardcodes five lines produces 8 in both cases, so
+        /// the delta alone would pass on a fixture whose other strokes
+        /// happened to differ by 2.
+        @Test("The bridge strokes one line per drawn staff line")
+        func bridgeStrokesEachDrawnStaffLine() throws {
+            guard #available(macOS 15.0, *) else { return }
+            #expect(try bridgeStrokeCount(lineCount: 5) == 8)
+            #expect(try bridgeStrokeCount(lineCount: 3) == 6)
+            #expect(try bridgeStrokeCount(lineCount: 1) == 4)
         }
     }
 #endif

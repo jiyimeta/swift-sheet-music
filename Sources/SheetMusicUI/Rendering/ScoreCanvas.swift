@@ -89,7 +89,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
     ) {
         // Staves
         let staffEndX = StaffRenderer.endX(for: system)
-        for origin in system.staffOrigins {
+        for (index, origin) in system.staffOrigins.enumerated() {
             StaffRenderer.draw(
                 context: &context,
                 origin: CGPoint(
@@ -97,6 +97,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     y: system.origin.y + origin.y,
                 ),
                 width: staffEndX - origin.x,
+                geometry: system.geometry(atFlatIndex: index),
                 metrics: metrics,
             )
         }

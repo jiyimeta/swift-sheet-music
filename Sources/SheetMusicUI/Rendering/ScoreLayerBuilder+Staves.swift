@@ -19,11 +19,12 @@ extension ScoreLayerBuilder {
         into parent: CALayer,
     ) {
         let staffEndX = StaffRenderer.endX(for: system)
-        for origin in system.staffOrigins {
+        for (index, origin) in system.staffOrigins.enumerated() {
             let path = CGMutablePath()
             let width = staffEndX - origin.x
-            for i in 0 ..< 5 {
-                let y = origin.y + CGFloat(i) * metrics.sp
+            let geometry = system.geometry(atFlatIndex: index)
+            for i in 0 ..< geometry.lineCount {
+                let y = origin.y + geometry.lineY(i, sp: metrics.sp)
                 path.move(to: CGPoint(x: origin.x, y: y))
                 path.addLine(
                     to: CGPoint(x: origin.x + width, y: y),

@@ -4,10 +4,12 @@ import SheetMusicCore
 import SheetMusicLayout
 
 #if !canImport(CoreGraphics)
-    /// On Android, Foundation's CoreGraphics shims also export `CGPoint`,
-    /// clashing with SheetMusicLayout's stub. Anchor to the Layout definition
-    /// so that `LayoutElement` associated values match the parameter type.
+    /// On Android, Foundation's CoreGraphics shims also export `CGPoint`
+    /// and `CGFloat`, clashing with SheetMusicLayout's stubs. Anchor to the
+    /// Layout definitions so that `LayoutElement` associated values and
+    /// `StaffLineGeometry`'s arguments match the parameter types.
     private typealias CGPoint = SheetMusicLayout.CGPoint
+    private typealias CGFloat = SheetMusicLayout.CGFloat
 #endif
 
 /// Converts a `Score` into a binary draw-program payload for the Android
@@ -29,7 +31,8 @@ import SheetMusicLayout
 ///
 /// ### Draw commands emitted
 /// For each `LayoutSystem` the bridge emits:
-/// 1. Five staff lines per staff origin (moveTo + lineTo + stroke triples).
+/// 1. Each staff's own lines — `StaffLineGeometry.lineCount` of them, which
+///    is five only for a standard staff (moveTo + lineTo + stroke triples).
 /// 2. Per `LayoutMeasure`: its elements — clef glyphs, time-sig glyphs,
 ///    note-head glyphs, rest glyphs, and barline strokes. Unknown/unhandled
 ///    element types fall back to a small `fillRect` placeholder.
@@ -93,12 +96,15 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             let endX = Double(BarLineGeometry.staffLineEndX(for: system))
 
             // ── 1. Staff lines ──────────────────────────────────────────────
-            for staffOrigin in system.staffOrigins {
+            for (staffIndex, staffOrigin) in system.staffOrigins.enumerated() {
                 let ox = Double(staffOrigin.x) + sysOriginX
                 let oy = Double(staffOrigin.y) + sysOriginY
                 let rightX = endX + sysOriginX
-                for line in 0 ..< 5 {
-                    let y = oy + Double(line) * context.sp
+                let geometry = system.geometry(atFlatIndex: staffIndex)
+                for line in 0 ..< geometry.lineCount {
+                    let y = oy + Double(
+                        geometry.lineY(line, sp: CGFloat(context.sp)),
+                    )
                     out.append(.moveTo(
                         x: ox * ptToMM,
                         y: y * ptToMM,
