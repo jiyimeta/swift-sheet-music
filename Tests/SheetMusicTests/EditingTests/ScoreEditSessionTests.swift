@@ -277,4 +277,74 @@ struct ScoreEditSessionTests {
         #expect(session.apply(.removeTuplet(at: tupletTarget)))
         #expect(session.score.parts[0].staves[0].measures[0].voices[0].tuplets.isEmpty)
     }
+
+    // MARK: - SP2: re-timing a chord across the barline
+
+    /// A quarter on the last beat of a 4/4 bar, asked for a half. `SetChordDuration` alone is refused — the engine
+    /// has no room to lengthen inside the bar — so without the cross-bar interception a host's length key reads as
+    /// dead at every barline, the same hole `CrossBarInputPlanner` closed on the input side.
+    @Test func `a chord re-timed past the barline is spelled as a tied chain`() {
+        var score = EditingFixtures.twoMeasuresOfQuarterRests()
+        let slot = VoiceElementID(EditingFixtures.restID(element: 4))
+        score[slot] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let session = ScoreEditSession(score: score)
+
+        #expect(session.apply(.setChordDuration(at: slot, duration: .half)))
+
+        guard case let .chord(head) = session.score[slot] else { Issue.record("expected a chord"); return }
+        #expect(head.duration == .quarter)
+        #expect(head.notes.first?.tieForward != nil)
+
+        let tailSlot = VoiceElementID(EditingFixtures.restID(measure: 1, element: 0))
+        guard case let .chord(tail) = session.score[tailSlot] else { Issue.record("expected a chord"); return }
+        #expect(tail.duration == .quarter)
+        #expect(tail.notes.first?.pitch == 60)
+        #expect(tail.notes.first?.tieBack != nil)
+    }
+
+    /// Every note of the chord crosses, not just the lowest — the chain is planned from the chord that is actually
+    /// in the slot, so a three-note chord arrives on the far side as the same three notes.
+    @Test func `a re-timed chord carries all of its notes across`() {
+        var score = EditingFixtures.twoMeasuresOfQuarterRests()
+        let slot = VoiceElementID(EditingFixtures.restID(element: 4))
+        score[slot] = .chord(Chord(duration: .quarter, notes: [
+            Note(pitch: 60, tpc: 14), Note(pitch: 64, tpc: 18), Note(pitch: 67, tpc: 15),
+        ]))
+        let session = ScoreEditSession(score: score)
+
+        #expect(session.apply(.setChordDuration(at: slot, duration: .half)))
+
+        let tailSlot = VoiceElementID(EditingFixtures.restID(measure: 1, element: 0))
+        guard case let .chord(tail) = session.score[tailSlot] else { Issue.record("expected a chord"); return }
+        #expect(tail.notes.map(\.pitch) == [60, 64, 67])
+    }
+
+    /// The common case has to keep taking the ordinary single-slot path, so the addition above cannot have changed
+    /// what already worked. `CrossBarInputPlanner.plan` returns nil for a length that fits, which is what makes this
+    /// hold.
+    @Test func `a chord re-timed within its bar is untouched by the cross-bar path`() {
+        let session = ScoreEditSession(score: EditingFixtures.chordAtIndex1())
+        let slot = VoiceElementID(EditingFixtures.restID(element: 1))
+
+        #expect(session.apply(.setChordDuration(at: slot, duration: .half)))
+
+        guard case let .chord(chord) = session.score[slot] else { Issue.record("expected a chord"); return }
+        #expect(chord.duration == .half)
+        #expect(chord.notes.first?.tieForward == nil)
+    }
+
+    /// The whole chain is one undo step, like every other intent.
+    @Test func `undoing a cross-barline re-time puts both bars back`() {
+        var score = EditingFixtures.twoMeasuresOfQuarterRests()
+        let slot = VoiceElementID(EditingFixtures.restID(element: 4))
+        score[slot] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let session = ScoreEditSession(score: score)
+        let before = session.score.stableFingerprint
+
+        #expect(session.apply(.setChordDuration(at: slot, duration: .half)))
+        #expect(session.undo())
+
+        #expect(session.score.stableFingerprint == before)
+        #expect(session.canUndo == false)
+    }
 }

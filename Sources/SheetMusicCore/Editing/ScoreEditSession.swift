@@ -152,6 +152,22 @@ public final class ScoreEditSession {
                 at: location, duration: RestDurationPromotion.promoted(duration, at: location, in: score),
             )
         case let .setChordDuration(location, duration):
+            // The same cross-bar hole `.setRestDuration` has just above: the engine refuses any single-slot
+            // lengthening that would cross a barline, so without this a host's length key reads as dead at every
+            // barline — the very thing `CrossBarInputPlanner` was written to fix on the input side. Mirrors Folino's
+            // `EditorViewModel+Input.swift`'s `retimeCrossingBarline`, which asks the same planner first.
+            //
+            // Planned from the chord ALREADY in the slot, not from a fresh one: `CrossBarInputPlanner.piece` clones
+            // the content it is handed into every link, so passing anything else would drop the chord's other notes
+            // (and its articulations, grace notes and ties) on the far side of the barline.
+            //
+            // No `.measure` promotion, unlike the rest case: `.measure` is a rest-only spelling — `MSCXEncoder` traps
+            // rather than emit one on a chord (see `InputNote`'s doc comment).
+            if case let .chord(current)? = score[location], !current.notes.isEmpty,
+               let plan = CrossBarInputPlanner.plan(.chord(current), duration: duration, at: location, in: score)
+            {
+                return CompositeEditCommand(commands: plan.commands, location: plan.head)
+            }
             return SetChordDuration(at: location, duration: duration)
         case let .delete(location):
             // A delete that empties its bar leaves ONE measure rest, not a hole — the same rule the write side
