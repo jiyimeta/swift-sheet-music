@@ -83,15 +83,60 @@
             #expect(abs(OMRSeamMetrics.staffSpacing(page: labels) - 8.0) < 0.5)
         }
 
-        @Test func beamEdgeErrorIsZeroOnIdenticalBeams() {
-            let beam = OMRPageLabels.Beam(
-                rectPt: [100, 440, 160, 445], lineWidthPt: 0,
-                x0: 100, x1: 160, topSlope: 0.05, topIntercept: 440.5,
-                botSlope: 0.05, botIntercept: 438.5,
+        static func beam(
+            x0: Double, x1: Double, topY: Double, thickness: Double, slope: Double = 0,
+        ) -> OMRPageLabels.Beam {
+            OMRPageLabels.Beam(
+                rectPt: [x0, topY - thickness, x1, topY], lineWidthPt: 0,
+                x0: x0, x1: x1,
+                topSlope: slope, topIntercept: topY - slope * x0,
+                botSlope: slope, botIntercept: topY - thickness - slope * x0,
             )
-            let errs = OMRSeamMetrics.beamEdgeError(predicted: [beam], truth: [beam])
-            #expect(!errs.isEmpty)
-            #expect(errs.allSatisfy { $0 == 0 })
+        }
+
+        @Test func beamEdgeErrorIsZeroOnIdenticalBeams() {
+            let beam = Self.beam(x0: 100, x1: 160, topY: 440.5, thickness: 2, slope: 0.05)
+            let r = OMRSeamMetrics.beamEdgeError(predicted: [beam], truth: [beam])
+            #expect(!r.errs.isEmpty)
+            #expect(r.errs.allSatisfy { $0 == 0 })
+            #expect(r.unmatchedTruth == 0)
+        }
+
+        @Test func emptyPredictionsAreAMissNotAPerfectScore() {
+            let truth = [Self.beam(x0: 100, x1: 160, topY: 440, thickness: 2)]
+            let r = OMRSeamMetrics.beamEdgeError(predicted: [], truth: truth)
+            #expect(r.errs.isEmpty)
+            #expect(r.unmatchedTruth == 1)
+
+            let pr = OMRSeamMetrics.beamPR(predicted: [], truth: truth, staffSpacingPt: 8)
+            #expect(pr.tp == 0)
+            #expect(pr.fn == 1)
+            #expect(pr.fp == 0)
+        }
+
+        @Test func oneFusedBeamCannotSatisfyTwoTruthBeams() {
+            // Two stacked beams 3pt apart; a single fused slab is predicted.
+            let truth = [
+                Self.beam(x0: 100, x1: 160, topY: 440, thickness: 2),
+                Self.beam(x0: 100, x1: 160, topY: 437, thickness: 2),
+            ]
+            let fused = [Self.beam(x0: 100, x1: 160, topY: 440, thickness: 5)]
+            let pr = OMRSeamMetrics.beamPR(predicted: fused, truth: truth, staffSpacingPt: 8)
+            #expect(pr.tp == 1)
+            #expect(pr.fn == 1)
+            #expect(pr.fp == 0)
+
+            let r = OMRSeamMetrics.beamEdgeError(predicted: fused, truth: truth)
+            #expect(r.unmatchedTruth == 1)
+        }
+
+        @Test func beamPRCountsAnExtraPredictionAsAFalsePositive() {
+            let truth = [Self.beam(x0: 100, x1: 160, topY: 440, thickness: 2)]
+            let predicted = truth + [Self.beam(x0: 300, x1: 360, topY: 500, thickness: 2)]
+            let pr = OMRSeamMetrics.beamPR(predicted: predicted, truth: truth, staffSpacingPt: 8)
+            #expect(pr.tp == 1)
+            #expect(pr.fp == 1)
+            #expect(pr.fn == 0)
         }
 
         @Test func staffLineRecallAndBarlinePROnIdenticalPaths() {
@@ -210,6 +255,9 @@
                     predicted: page.paths, truth: page.paths, staffSpacingPt: spacing,
                 )
                 let beams = OMRSeamMetrics.beamEdgeError(predicted: page.beams, truth: page.beams)
+                let beamPR = OMRSeamMetrics.beamPR(
+                    predicted: page.beams, truth: page.beams, staffSpacingPt: spacing,
+                )
                 let curves = OMRSeamMetrics.curveRecall(
                     predicted: page.curves, truth: page.curves, staffSpacingPt: spacing,
                 )
@@ -218,7 +266,9 @@
                         + "staffSpacing=\(String(format: "%.3f", spacing)) "
                         + "staffLines=\(lines.matched)/\(lines.total) "
                         + "barlines tp=\(bars.tp) fp=\(bars.fp) fn=\(bars.fn) "
-                        + "beamEdgeMax=\(String(format: "%.3f", beams.max() ?? 0)) "
+                        + "beamEdgeMax=\(String(format: "%.3f", beams.errs.max() ?? 0)) "
+                        + "beamPR tp=\(beamPR.tp) fp=\(beamPR.fp) fn=\(beamPR.fn) "
+                        + "beamUnmatched=\(beams.unmatchedTruth) "
                         + "curves=\(curves.matched)/\(curves.total) "
                         + "texts=\(page.census.texts)",
                 )

@@ -182,15 +182,75 @@
             return (tp, pBars.count - used.count, tBars.count - tp)
         }
 
-        /// |top-edge y error| sampled at 5 x positions per truth beam
-        /// against its nearest (by x0) predicted beam.
+        /// Greedy one-to-one beam match: a predicted beam may satisfy at
+        /// most ONE truth beam. Candidate pairs need x-overlap and a
+        /// top-edge distance within 0.5 × staff spacing at the overlap
+        /// midpoint; the closest pairs are accepted first.
+        ///
+        /// The `used` set is load-bearing. Stacked 16th / 32nd beams sit
+        /// ~0.25–0.5 staff spaces apart, and the failure mode a raster
+        /// beam detector is most likely to have is FUSING them into one
+        /// double-thickness slab under erosion or blur. Without the set,
+        /// that one slab would satisfy both truth beams and the metric
+        /// would report the fusion — which silently turns every 16th into
+        /// an 8th downstream — as a perfect score.
+        static func beamPR(
+            predicted: [OMRPageLabels.Beam], truth: [OMRPageLabels.Beam],
+            staffSpacingPt: Double,
+        ) -> (tp: Int, fp: Int, fn: Int) {
+            var pairs: [(score: Double, pi: Int, ti: Int)] = []
+            for (pi, p) in predicted.enumerated() {
+                for (ti, t) in truth.enumerated() {
+                    let lo = max(p.x0, t.x0)
+                    let hi = min(p.x1, t.x1)
+                    guard hi > lo else { continue }
+                    let mid = (lo + hi) / 2
+                    let d = abs(
+                        (p.topSlope * mid + p.topIntercept)
+                            - (t.topSlope * mid + t.topIntercept),
+                    )
+                    if d <= 0.5 * staffSpacingPt { pairs.append((-d, pi, ti)) }
+                }
+            }
+            pairs.sort { ($0.score, $0.pi, $0.ti) > ($1.score, $1.pi, $1.ti) }
+            var usedP = Set<Int>()
+            var usedT = Set<Int>()
+            for pair in pairs where !usedP.contains(pair.pi) && !usedT.contains(pair.ti) {
+                usedP.insert(pair.pi)
+                usedT.insert(pair.ti)
+            }
+            return (usedT.count, predicted.count - usedP.count, truth.count - usedT.count)
+        }
+
+        /// |top-edge y error| sampled at 5 x positions per MATCHED truth
+        /// beam, plus the number of truth beams that matched nothing.
+        ///
+        /// Returning `unmatchedTruth` is the whole point of this
+        /// signature. The previous version returned only the error list
+        /// and skipped a truth beam that found no partner, so a
+        /// front-end predicting NO BEAMS AT ALL produced an empty list —
+        /// which every caller read as "no error", i.e. as a perfect
+        /// score. An empty list must be distinguishable from a perfect
+        /// match, because for a raster detector those are the two most
+        /// likely outcomes.
         static func beamEdgeError(
             predicted: [OMRPageLabels.Beam], truth: [OMRPageLabels.Beam],
-        ) -> [Double] {
+        ) -> (errs: [Double], unmatchedTruth: Int) {
             var errs: [Double] = []
+            var used = Set<Int>()
+            var unmatched = 0
             for t in truth {
-                guard let p = predicted.min(by: { abs($0.x0 - t.x0) < abs($1.x0 - t.x0) })
-                else { continue }
+                var best: (idx: Int, d: Double)?
+                for (i, p) in predicted.enumerated() where !used.contains(i) {
+                    let d = abs(p.x0 - t.x0)
+                    if best == nil || d < best?.d ?? .infinity { best = (i, d) }
+                }
+                guard let best else {
+                    unmatched += 1
+                    continue
+                }
+                used.insert(best.idx)
+                let p = predicted[best.idx]
                 for k in 0 ..< 5 {
                     let x = t.x0 + (t.x1 - t.x0) * Double(k) / 4
                     let ty = t.topSlope * x + t.topIntercept
@@ -198,7 +258,7 @@
                     errs.append(abs(py - ty))
                 }
             }
-            return errs
+            return (errs, unmatched)
         }
 
         static func curveRecall(
