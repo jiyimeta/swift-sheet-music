@@ -47,8 +47,8 @@
         @Test("Grace chords put ink on the exported page")
         func graceChordsRenderInPDFExport() throws {
             guard #available(macOS 15.0, *) else { return }
-            let plain = try Self.ink(of: Self.score(withGraces: false))
-            let withGraces = try Self.ink(of: Self.score(withGraces: true))
+            let plain = try CanvasInkProbe.ink(of: Self.score(withGraces: false))
+            let withGraces = try CanvasInkProbe.ink(of: Self.score(withGraces: true))
             #expect(plain > 0, "the plain score should render some ink")
             #expect(
                 withGraces - plain > Self.minimumGraceInk,
@@ -91,56 +91,6 @@
                     staves: [Staff(measures: [measure])],
                 )],
             )
-        }
-
-        // MARK: - Rasterization
-
-        /// Export `score` to PDF and count the dark pixels on page 1.
-        @MainActor
-        @available(macOS 15.0, *)
-        private static func ink(of score: Score) throws -> Int {
-            let pdf = try PDFExporter.export(score: score)
-            let provider = try #require(CGDataProvider(data: pdf as CFData))
-            let document = try #require(CGPDFDocument(provider))
-            let page = try #require(document.page(at: 1))
-            return try darkPixels(of: page, scale: 3)
-        }
-
-        private static func darkPixels(
-            of page: CGPDFPage, scale: CGFloat,
-        ) throws -> Int {
-            let box = page.getBoxRect(.mediaBox)
-            let width = Int(box.width * scale)
-            let height = Int(box.height * scale)
-            let bytesPerRow = width * 4
-            let context = try #require(CGContext(
-                data: nil,
-                width: width, height: height,
-                bitsPerComponent: 8,
-                bytesPerRow: bytesPerRow,
-                space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue,
-            ))
-            // Opaque white ground so "dark" means ink, not transparency.
-            context.setFillColor(
-                CGColor(red: 1, green: 1, blue: 1, alpha: 1),
-            )
-            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-            context.scaleBy(x: scale, y: scale)
-            context.drawPDFPage(page)
-            let raw = try #require(context.data)
-            let bytes = raw.bindMemory(
-                to: UInt8.self, capacity: bytesPerRow * height,
-            )
-            var count = 0
-            for offset in stride(from: 0, to: bytesPerRow * height, by: 4)
-                where bytes[offset] < 128
-                && bytes[offset + 1] < 128
-                && bytes[offset + 2] < 128
-            {
-                count += 1
-            }
-            return count
         }
     }
 #endif

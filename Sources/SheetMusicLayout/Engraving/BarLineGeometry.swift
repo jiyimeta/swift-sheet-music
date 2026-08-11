@@ -22,7 +22,7 @@ public enum BarLineGeometry {
     /// final / repeat barline.
     public static let thickThicknessSp: CGFloat = 0.4
 
-    /// Right edge of the five staff lines for `system`, in
+    /// Right edge of the staff lines for `system`, in
     /// system-local coordinates. Anchored to the rightmost stroke of
     /// the last measure's terminal barline so the staff passes through
     /// every component of a double / end / end-repeat pair, instead of
