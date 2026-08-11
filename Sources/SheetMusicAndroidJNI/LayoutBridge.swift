@@ -375,12 +375,20 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 width: Double(BarLineGeometry.thinThicknessSp) * sp * ptToMM,
             ))
 
-        case .ledgerLine:
-            // Emitted on every score since Task 3 wired `LedgerLinePass`
-            // into chord placement, but not drawn here yet — this bridge
-            // silently drops it. Android has never drawn ledger lines;
-            // Task 5 wires this case up.
-            break
+        case let .ledgerLine(from, to, thickness):
+            // `LedgerLinePass` owns the geometry (it is the only place
+            // that can see the staff's line count), so the bridge just
+            // strokes the segment it was handed — the same
+            // moveTo / lineTo / stroke triple used for staff lines.
+            out.append(.moveTo(
+                x: (mox + Double(from.x)) * ptToMM,
+                y: (moy + Double(from.y)) * ptToMM,
+            ))
+            out.append(.lineTo(
+                x: (mox + Double(to.x)) * ptToMM,
+                y: (moy + Double(to.y)) * ptToMM,
+            ))
+            out.append(.stroke(width: Double(thickness) * ptToMM))
 
         case let .beam(fromOrigin, toOrigin, direction, level, color):
             // Each beam emit at a given level: shift Y by the level
