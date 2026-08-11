@@ -295,133 +295,15 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             let chordMetrics = mag == 1.0
                 ? metrics
                 : StaffMetrics(staffSize: metrics.staffHeight * mag)
-            let (baseDur, dots) = DurationInterpretation.split(dur)
-            let shiftedNotes = notes.map {
-                LayoutChordNote(
-                    noteID: $0.noteID,
-                    step: $0.step,
-                    accidental: $0.accidental,
-                    origin: shift($0.origin),
-                    tieForward: $0.tieForward,
-                    tieBack: $0.tieBack,
-                    hasGlissando: $0.hasGlissando,
-                    headType: $0.headType,
-                    mirror: $0.mirror,
-                    isInvisible: $0.isInvisible,
-                    color: $0.color,
-                    accidentalBracket: $0.accidentalBracket,
-                    parentheses: $0.parentheses,
-                )
-            }
-            // Stem / flag inherit the chord's notehead color (the first
-            // colored note wins) — MuseScore stores `<Stem>/<Hook>`
-            // color separately but in practice it matches the note.
-            let stemColor: Color = shiftedNotes
-                .compactMap(\.color).first
-                .map { Color(scoreColor: $0) } ?? .primary
-            // Ledger lines are no longer drawn here: `LedgerLinePass`
-            // emits them as `.ledgerLine` elements immediately before
-            // this chord, so they still render behind the chord's ink
-            // while the geometry lives in one place.
-            for n in shiftedNotes {
-                let mirrorDx = n.mirrorDx(stem: stem, sp: chordMetrics.sp)
-                let visualOrigin = CGPoint(
-                    x: n.origin.x + mirrorDx, y: n.origin.y,
-                )
-                if n.isInvisible {
-                    // Toggle off + per-note hidden: skip the head /
-                    // accidental / dots entirely (stem geometry still
-                    // sees the note via shiftedNotes below). Slot is
-                    // preserved by the chord's natural origin.
-                    guard showsInvisibleElements else { continue }
-                    // MuseScore invisibleColor() = #808080; 50% black on the
-                    // white score background is the exact equivalent.
-                    var gray = context
-                    gray.opacity = 0.5
-                    NoteheadRenderer.drawHead(
-                        context: &gray, at: visualOrigin,
-                        duration: baseDur, headType: n.headType,
-                        stemUp: stem == .up,
-                        metrics: chordMetrics,
-                    )
-                    NoteheadParenthesisRenderer.draw(
-                        context: &gray, parentheses: n.parentheses,
-                        origin: visualOrigin, metrics: chordMetrics,
-                    )
-                    if let acc = n.accidental {
-                        AccidentalRenderer.draw(
-                            context: &gray, accidental: acc,
-                            bracket: n.accidentalBracket,
-                            origin: visualOrigin, metrics: chordMetrics,
-                        )
-                    }
-                    DotRenderer.draw(
-                        context: &gray,
-                        after: visualOrigin,
-                        count: dots,
-                        onStaffLine: n.step.isMultiple(of: 2),
-                        metrics: chordMetrics,
-                    )
-                } else {
-                    let headColor: Color = n.color
-                        .map { Color(scoreColor: $0) } ?? .primary
-                    NoteheadRenderer.drawHead(
-                        context: &context, at: visualOrigin,
-                        duration: baseDur, headType: n.headType,
-                        stemUp: stem == .up,
-                        color: headColor,
-                        metrics: chordMetrics,
-                    )
-                    NoteheadParenthesisRenderer.draw(
-                        context: &context, parentheses: n.parentheses,
-                        origin: visualOrigin, color: headColor,
-                        metrics: chordMetrics,
-                    )
-                    if let acc = n.accidental {
-                        AccidentalRenderer.draw(
-                            context: &context, accidental: acc,
-                            bracket: n.accidentalBracket,
-                            origin: visualOrigin, metrics: chordMetrics,
-                        )
-                    }
-                    DotRenderer.draw(
-                        context: &context,
-                        after: visualOrigin,
-                        count: dots,
-                        onStaffLine: n.step.isMultiple(of: 2),
-                        color: headColor,
-                        metrics: chordMetrics,
-                    )
-                }
-            }
-            let beamY: CGFloat? = isBeamed ? shift(stemOrigin).y : nil
-            // Stem visibility (MSCX `<Stem><visible>`) is independent of
-            // notehead visibility. When the stem is hidden:
-            //   * toggle off → skip stem + flag entirely.
-            //   * toggle on  → gray both at 50%.
-            // Beam suppression on hidden-stem chords is a separate
-            // concern (would require `<Beam><visible>`).
-            if stemIsInvisible {
-                if showsInvisibleElements {
-                    var gray = context
-                    gray.opacity = 0.5
-                    StemRenderer.draw(
-                        context: &gray, notes: shiftedNotes,
-                        direction: stem, duration: baseDur,
-                        isBeamed: isBeamed, beamY: beamY,
-                        stemExtension: stemExt, color: stemColor,
-                        metrics: chordMetrics,
-                    )
-                }
-            } else {
-                StemRenderer.draw(
-                    context: &context, notes: shiftedNotes,
-                    direction: stem, duration: baseDur,
-                    isBeamed: isBeamed, beamY: beamY,
-                    stemExtension: stemExt, color: stemColor,
-                    metrics: chordMetrics,
-                )
-            }
+            drawChord(
+                notes: notes, duration: dur, stem: stem,
+                stemOrigin: stemOrigin, isBeamed: isBeamed,
+                stemExtension: stemExt,
+                stemIsInvisible: stemIsInvisible,
+                base: base, metrics: chordMetrics,
+                showsInvisibleElements: showsInvisibleElements,
+                into: &context,
+            )
         case let .textMark(.dynamic, text, p):
             TextMarkRenderer.drawDynamic(
                 context: &context, text: text,
@@ -608,7 +490,28 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, anchor: shiftedAnchor,
                 barCount: barCount, metrics: metrics,
             )
-        case .note, .graceChord:
+        case let .graceChord(
+            notes,
+            dur,
+            stem,
+            stemOrigin,
+            // `relativeX` is NOT applied here: the grace notes were
+            // already placed at `chordX + relativeX`
+            // (`LayoutEngine+Placement`), so their origins are absolute
+            // in measure space. Adding it again would shift every grace.
+            _,
+            hasSlash,
+            mag,
+            _,
+        ):
+            drawGraceChord(
+                notes: notes, duration: dur, stem: stem,
+                stemOrigin: stemOrigin, hasSlash: hasSlash, mag: mag,
+                base: base, metrics: metrics,
+                showsInvisibleElements: showsInvisibleElements,
+                into: &context,
+            )
+        case .note:
             break
         }
     }
