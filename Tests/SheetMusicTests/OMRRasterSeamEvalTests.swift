@@ -83,8 +83,14 @@
             let spacing = analysis.staffSpacingPt > 0
                 ? analysis.staffSpacingPt : OMRSeamMetrics.staffSpacing(page: page)
 
+            // Both sides through the same merge: the labels carry one
+            // staff line as up to ten segments and the raster emits one,
+            // and a one-to-one match between those two representations
+            // scores a perfect detector at one over the fragment count.
             let lines = OMRSeamMetrics.staffLineRecall(
-                predicted: predicted.paths, truth: page.paths, staffSpacingPt: spacing,
+                predicted: OMRSeamMetrics.mergedHorizontals(predicted.paths),
+                truth: OMRSeamMetrics.mergedHorizontals(page.paths),
+                staffSpacingPt: spacing,
             )
             totals.lineMatched += lines.matched
             totals.lineTotal += lines.total

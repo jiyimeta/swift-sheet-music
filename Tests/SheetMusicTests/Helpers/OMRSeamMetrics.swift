@@ -127,6 +127,41 @@
             return gaps.sorted()[gaps.count / 2]
         }
 
+        /// Co-linear horizontal paths unioned into one span per line.
+        ///
+        /// The vector front-end emits ONE STAFF LINE AS 1 TO 10 SEGMENTS
+        /// (measured on this dataset), while a raster front-end emits one
+        /// merged segment per line. `staffLineRecall` matches one-to-one,
+        /// so comparing the two representations directly scores a perfect
+        /// detector at roughly one over the fragment count — the first
+        /// raster sweep read 0.176 for exactly this reason, and none of
+        /// it was detector error. Spec §8.1 says "per line"; this is what
+        /// makes both sides lines.
+        ///
+        /// Applied to BOTH sides, so the oracle self-check is unaffected.
+        /// The tolerance mirrors the importer's own `lineMergeTolerance`.
+        static func mergedHorizontals(
+            _ paths: [OMRPageLabels.Path], tolerancePt: Double = 2.0,
+        ) -> [OMRPageLabels.Path] {
+            let lines = paths.filter { $0.kind == "horizontal" }
+                .sorted { ($0.rectPt[1], $0.rectPt[0]) < ($1.rectPt[1], $1.rectPt[0]) }
+            var out: [OMRPageLabels.Path] = []
+            for line in lines {
+                guard var last = out.last,
+                      abs(last.rectPt[1] - line.rectPt[1]) <= tolerancePt
+                else {
+                    out.append(line)
+                    continue
+                }
+                last.rectPt[0] = min(last.rectPt[0], line.rectPt[0])
+                last.rectPt[2] = max(last.rectPt[2], line.rectPt[2])
+                last.rectPt[3] = max(last.rectPt[3], line.rectPt[3])
+                last.lineWidthPt = max(last.lineWidthPt, line.lineWidthPt)
+                out[out.count - 1] = last
+            }
+            return out + paths.filter { $0.kind != "horizontal" }
+        }
+
         static func staffLineRecall(
             predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
             staffSpacingPt: Double,

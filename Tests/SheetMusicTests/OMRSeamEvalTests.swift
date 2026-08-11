@@ -164,6 +164,50 @@
             #expect(pr.fn == 0)
         }
 
+        /// The labels carry one staff line as several co-linear segments
+        /// (1 to 10, measured), while a raster front-end emits one merged
+        /// segment per line. Matching those two representations
+        /// one-to-one scores a perfect detector at roughly one over the
+        /// fragment count — the first raster sweep read 0.176 recall for
+        /// exactly this and none of it was detector error.
+        @Test func collinearFragmentsMergeIntoOneLine() {
+            let fragments = [
+                OMRPageLabels.Path(
+                    kind: "horizontal", rectPt: [0, 100, 60, 100], lineWidthPt: 1,
+                ),
+                OMRPageLabels.Path(
+                    kind: "horizontal", rectPt: [60, 100.4, 120, 100.4], lineWidthPt: 1,
+                ),
+                OMRPageLabels.Path(
+                    kind: "horizontal", rectPt: [0, 108, 120, 108], lineWidthPt: 1,
+                ),
+                OMRPageLabels.Path(
+                    kind: "vertical", rectPt: [0, 90, 0, 130], lineWidthPt: 1,
+                ),
+            ]
+            let merged = OMRSeamMetrics.mergedHorizontals(fragments)
+            let lines = merged.filter { $0.kind == "horizontal" }
+            #expect(lines.count == 2)
+            #expect(lines[0].rectPt[0] == 0)
+            #expect(lines[0].rectPt[2] == 120)
+            // Verticals pass through untouched — the merge is about the
+            // staff-line representation, not about paths in general.
+            #expect(merged.contains { $0.kind == "vertical" })
+        }
+
+        /// Lines further apart than the tolerance must stay separate, or
+        /// the merge would fuse the five lines of one staff into one.
+        @Test func linesFurtherApartThanTheToleranceStaySeparate() {
+            let lines = (0 ..< 5).map {
+                OMRPageLabels.Path(
+                    kind: "horizontal",
+                    rectPt: [0, 100 + Double($0) * 8, 400, 100 + Double($0) * 8],
+                    lineWidthPt: 1,
+                )
+            }
+            #expect(OMRSeamMetrics.mergedHorizontals(lines).count == 5)
+        }
+
         @Test func curveRecallOnIdenticalCurves() {
             let curve = OMRPageLabels.Curve(
                 bboxPt: [100, 400, 140, 410], leftPt: [100, 400], rightPt: [140, 400],
