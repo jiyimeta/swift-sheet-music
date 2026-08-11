@@ -47,4 +47,57 @@
             #expect(!mask.bits.contains(true))
         }
     }
+
+    struct RasterDeskewTests {
+        static func skewedStaff(degrees: Double) -> GrayBitmap {
+            let bmp = RasterTestBitmaps.staff(
+                widthPx: 600, heightPx: 300, dpi: 300, topY: 120, spacingPx: 12,
+            )
+            return degrees == 0 ? bmp : RasterTestBitmaps.rotated(bmp, degrees: degrees)
+        }
+
+        @Test func anUprightPageEstimatesZeroSkew() {
+            let mask = RasterPage.binarize(Self.skewedStaff(degrees: 0))
+            #expect(abs(RasterPage.estimateSkewDegrees(mask)) <= 0.1)
+        }
+
+        @Test(arguments: [-2.0, -1.25, 0.75, 1.5])
+        func aSkewedPageRecoversItsAngle(applied: Double) {
+            let mask = RasterPage.binarize(Self.skewedStaff(degrees: applied))
+            #expect(abs(RasterPage.estimateSkewDegrees(mask) - applied) <= 0.15)
+        }
+
+        /// The property the whole stage rests on. At 1.75° across 600px a
+        /// staff line's y moves 18px — one and a half staff spaces — so
+        /// before deskew the five lines of one staff smear into a single
+        /// band and no row-projection detector can separate them.
+        @Test func deskewingRestoresFiveDistinctStaffRows() {
+            let skewed = Self.skewedStaff(degrees: 1.75)
+            let angle = RasterPage.estimateSkewDegrees(RasterPage.binarize(skewed))
+            let mask = RasterPage.binarize(RasterPage.rotate(skewed, degrees: -angle))
+
+            var rows: [Int] = []
+            for y in 0 ..< mask.height {
+                var count = 0
+                for x in 0 ..< mask.width where mask[x, y] {
+                    count += 1
+                }
+                rows.append(count)
+            }
+            let peak = rows.max() ?? 0
+            var bands = 0
+            var inBand = false
+            for count in rows {
+                let hot = count >= peak / 2
+                if hot, !inBand { bands += 1 }
+                inBand = hot
+            }
+            #expect(bands == 5)
+        }
+
+        @Test func rotatingByZeroIsTheIdentity() {
+            let bmp = Self.skewedStaff(degrees: 0)
+            #expect(RasterPage.rotate(bmp, degrees: 0).pixels == bmp.pixels)
+        }
+    }
 #endif
