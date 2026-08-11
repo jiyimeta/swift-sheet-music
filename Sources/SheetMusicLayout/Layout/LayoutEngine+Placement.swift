@@ -82,6 +82,29 @@ extension LayoutEngine {
             metrics.sp * 2 + (barLineSpan.top + barLineSpan.bottom) / 2
         let barLineHalfHeight =
             (barLineSpan.bottom - barLineSpan.top) / 2
+        /// Y for a clef glyph's reference line. Only the percussion
+        /// clefs move with the line count — see
+        /// `ClefGlyph.staffCenteringOffsetSp`.
+        func clefY(rawType: String) -> CGFloat {
+            staffMidY + metrics.sp * ClefGlyph.staffCenteringOffsetSp(
+                for: NotatedClef(rawType: rawType),
+                lineGeometry: lineGeometry,
+            )
+        }
+        // MuseScore centers the time signature on the staff's own
+        // height, exactly like the percussion clefs
+        // (`TLayout`, `tlayout.cpp:6095`:
+        // `yoff = spatium * (numOfLines - 1) * .5 * lineDist`), so a
+        // one-line staff's C sits 2 sp above the five-line reference
+        // middle rather than stranded below the single line.
+        let timeSigY = staffMidY
+            + metrics.sp * lineGeometry.centerOffsetSp
+        // The line a rest centers on, before the voice and whole-rest
+        // adjustments below. C++: `RestLayout::computeNaturalLine`
+        // via `StaffLineGeometry.naturalRestLine`; `setPosY` measures
+        // it down from the TOP line, which sits at `sp * 2` here.
+        let restNaturalY = metrics.sp * 2
+            + CGFloat(lineGeometry.naturalRestLine) * metrics.sp
         var out: [LayoutElement] = []
         // Parallel accumulator for hidden annotations that are still
         // laid out (because `options.showsInvisibleElements` is on) but
@@ -400,7 +423,8 @@ extension LayoutEngine {
                 out.append(.clef(
                     rawType: rawType,
                     origin: CGPoint(
-                        x: headerSchedule.clefX, y: staffMidY,
+                        x: headerSchedule.clefX,
+                        y: clefY(rawType: rawType),
                     ),
                     anchor: synthAnchor,
                 ))
@@ -455,7 +479,10 @@ extension LayoutEngine {
                     )
                     let element = LayoutElement.clef(
                         rawType: clef.concertClefType,
-                        origin: CGPoint(x: clefX, y: staffMidY),
+                        origin: CGPoint(
+                            x: clefX,
+                            y: clefY(rawType: clef.concertClefType),
+                        ),
                         anchor: .explicit(veID),
                     )
                     if clef.visible {
@@ -488,7 +515,7 @@ extension LayoutEngine {
                     let element = LayoutElement.timeSignature(
                         numerator: ts.numerator,
                         denominator: ts.denominator,
-                        origin: CGPoint(x: tsX, y: staffMidY),
+                        origin: CGPoint(x: tsX, y: timeSigY),
                     )
                     if ts.visible {
                         out.append(element)
@@ -532,17 +559,18 @@ extension LayoutEngine {
                     let (restBase, _) = DurationInterpretation.split(
                         r.duration,
                     )
-                    // Whole rest hangs from the 2nd line from the top
-                    // (step +2). Half rest sits on the middle line
-                    // (step 0 = staffMidY). Others center on the
-                    // middle line. In multi-voice mode, offset by
-                    // restVoiceOffset so voices don't overlap.
+                    // Rests sit on the staff's NATURAL line
+                    // (`restNaturalY`): the middle line of a five-line
+                    // staff, the single line of a one-line one. A whole
+                    // rest hangs one line above that. In multi-voice
+                    // mode, offset by restVoiceOffset so voices don't
+                    // overlap.
                     let restY: CGFloat
                     switch restBase {
                     case .whole:
-                        restY = staffMidY - metrics.sp + restVoiceOffset
+                        restY = restNaturalY - metrics.sp + restVoiceOffset
                     default:
-                        restY = staffMidY + restVoiceOffset
+                        restY = restNaturalY + restVoiceOffset
                     }
                     // Center only true measure-fill markers
                     // (`NoteDuration.measure`). Typed `.whole`
@@ -783,6 +811,7 @@ extension LayoutEngine {
                         noteYs: chordNotes.map(\.origin.y),
                         chordX: chordX,
                         staffMidY: staffMidY,
+                        lineGeometry: lineGeometry,
                         metrics: metrics,
                     ))
                     for (gIdx, g) in chord.graceNotesAfter.enumerated() {
@@ -1588,6 +1617,7 @@ extension LayoutEngine {
                             noteYs: n.map(\.origin.y),
                             chordX: so.x,
                             staffMidY: staffMidY,
+                            lineGeometry: lineGeometry,
                             metrics: metrics,
                         )
                         var j = outIdx + 1
@@ -2232,12 +2262,18 @@ extension LayoutEngine {
         noteYs: [CGFloat],
         chordX: CGFloat,
         staffMidY: CGFloat,
+        lineGeometry: StaffLineGeometry = .standard,
         metrics: StaffMetrics,
     ) -> [LayoutElement] {
         let staffTopY = staffMidY - metrics.sp * 2
         let staffBottomY = staffMidY + metrics.sp * 2
         let topLineY = staffMidY - metrics.sp * 2
-        let lastStaffLine = 8 // (5 staff lines − 1) × 2, in half-spaces
+        // Bottom drawn line, as MuseScore's half-space index down from
+        // the top line (lines even, spaces odd) — 8 for five lines, 4
+        // for three, 0 for one, where the top line IS the bottom line.
+        // `step` runs the other way from the same fixed top line, so
+        // the two differ only by sign and origin.
+        let lastStaffLine = 4 - lineGeometry.bottomStep
         var aboveCount = 0
         var belowCount = 0
         var result: [LayoutElement] = []

@@ -88,6 +88,41 @@ public struct StaffLineGeometry: Sendable, Equatable {
         bottomStep - 2
     }
 
+    /// This staff's own vertical center, relative to the REFERENCE
+    /// five-line middle line, in staff spaces. Zero for five lines;
+    /// −1 sp for three; −2 sp for one.
+    ///
+    /// MuseScore centers exactly two header glyphs on the staff's own
+    /// height rather than on the five-line frame: the percussion clefs
+    /// (`TLayout`, `tlayout.cpp:1706-1710`,
+    /// `yoff = lineDist * (lines - 1) * 0.5`) and the time signature
+    /// (`tlayout.cpp:6095`, `yoff = spatium * (numOfLines - 1) * .5 *
+    /// lineDist`). Both measure `yoff` from the TOP line; placement
+    /// expresses their origins against the reference middle line, which
+    /// sits 2 sp below the top line, so this is that `yoff` re-based.
+    ///
+    /// Pitched clefs and key signatures deliberately do NOT use this —
+    /// `tlayout.cpp:1687` hardcodes `5 - ClefInfo::line(...)`, so a G
+    /// clef on a three-line staff stays anchored where a five-line
+    /// staff would put it, exactly like `topStep`.
+    public var centerOffsetSp: CGFloat {
+        CGFloat(lineCount - 1) / 2 - 2
+    }
+
+    /// The line a rest centers on before the voice-offset and
+    /// whole/breve adjustments, counted in 1 sp steps down from the top
+    /// line. 5 → 2 (the middle line), 3 → 1, 1 → 0.
+    ///
+    /// C++: `RestLayout::computeNaturalLine`
+    /// (`rendering/score/restlayout.cpp:688-692`):
+    /// `(lines % 2) ? floor(lines / 2) : ceil(lines / 2)`. Both branches
+    /// collapse to integer `lines / 2` — floor is exact for odd counts,
+    /// ceil for even — so the single expression below reproduces it for
+    /// every line count.
+    public var naturalRestLine: Int {
+        lineCount / 2
+    }
+
     /// Vertical span of a barline on this staff, relative to the staff
     /// origin. A one-line staff is a special case: MuseScore spans it
     /// ±4 half-spaces (±2 `sp`) instead of over its (zero) height —

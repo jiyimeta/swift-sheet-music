@@ -180,12 +180,25 @@
 
         @Test func staffRectSpansTheStaffHeight() {
             let r = LayoutElementShape.staffRect(
-                xMin: 0, xMax: 500, staffMidY: 28, metrics: metrics,
+                xMin: 0, xMax: 500, staffTop: 14, staffBottom: 42,
             )
             #expect(r.item.kind == .staff)
-            #expect(r.rect.minY == 14) // staffMidY − 2 sp
-            #expect(r.rect.maxY == 42) // staffMidY + 2 sp
+            #expect(r.rect.minY == 14)
+            #expect(r.rect.maxY == 42)
             #expect(r.rect.width == 500)
+        }
+
+        /// A one-line staff's top and bottom line are the same line, so
+        /// the rect is degenerate rather than the 4 sp band the retired
+        /// `staffMidY ∓ 2 sp` derivation produced. That band was
+        /// anchored 2 sp above the only drawn line, which is what made
+        /// every autoplaced annotation clear the wrong edge.
+        @Test func staffRectCollapsesOnAOneLineStaff() {
+            let r = LayoutElementShape.staffRect(
+                xMin: 0, xMax: 500, staffTop: 14, staffBottom: 14,
+            )
+            #expect(r.rect.minY == 14)
+            #expect(r.rect.height == 0)
         }
     }
 

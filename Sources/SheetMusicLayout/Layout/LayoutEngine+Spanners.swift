@@ -656,7 +656,9 @@ extension LayoutEngine {
             ? origins[clamped] : CGPoint(x: 0, y: 0)
         if belowStaff {
             return origin.y + defaultBandOffsetY(
-                belowStaff: true, metrics: metrics,
+                belowStaff: true,
+                lineGeometry: system.geometry(atFlatIndex: clamped),
+                metrics: metrics,
             )
         }
         // Vibrato: MuseScore `vibratoPosAbove` default is −1 sp, so the
@@ -688,7 +690,9 @@ extension LayoutEngine {
             return min(defaultY, clearanceY)
         }
         return origin.y + defaultBandOffsetY(
-            belowStaff: false, metrics: metrics,
+            belowStaff: false,
+            lineGeometry: system.geometry(atFlatIndex: clamped),
+            metrics: metrics,
         )
     }
 
@@ -708,11 +712,21 @@ extension LayoutEngine {
     /// `anchorY` (system coords, for the kinds still placed in the
     /// `attachSpanners` post-pass) and `synthesizeLineSpanners`
     /// (staff-local coords, pass 1).
+    ///
+    /// The below-staff band is measured from the staff's OWN bottom
+    /// line (`lineGeometry.height`), not from `metrics.staffHeight` —
+    /// that is the five-line REFERENCE height, and on a one-line staff
+    /// it would park a hairpin 4 sp below the ink it belongs to. The
+    /// above-staff band hangs off the top line, which is fixed for every
+    /// line count (`StaffLineGeometry.topStep`), so it takes no
+    /// geometry.
     static func defaultBandOffsetY(
-        belowStaff: Bool, metrics: StaffMetrics,
+        belowStaff: Bool,
+        lineGeometry: StaffLineGeometry = .standard,
+        metrics: StaffMetrics,
     ) -> CGFloat {
         belowStaff
-            ? metrics.staffHeight + metrics.sp * 3
+            ? lineGeometry.height(sp: metrics.sp) + metrics.sp * 3
             : -metrics.sp * 4
     }
 

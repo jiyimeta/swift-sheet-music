@@ -73,15 +73,23 @@ public enum LayoutElementShape {
     /// Synthetic rect for the staff itself, spanning the system's
     /// horizontal extent. Registered first so `Skyline.add`'s filter
     /// has its reference edges.
+    ///
+    /// `staffTop` / `staffBottom` are the staff's OWN drawn top and
+    /// bottom lines, not `staffMidY ∓ 2 sp`: a one-line staff's phantom
+    /// rect used to span 4 sp centered on a line the renderer draws at
+    /// its top edge, so every autoplaced annotation cleared a band 2 sp
+    /// away from where the ink actually is. The rect is degenerate
+    /// (zero height) for a one-line staff, which is correct — its top
+    /// and bottom line are the same line.
     static func staffRect(
         xMin: CGFloat, xMax: CGFloat,
-        staffMidY: CGFloat, metrics: StaffMetrics,
+        staffTop: CGFloat, staffBottom: CGFloat,
     ) -> ShapeRect {
         ShapeRect(
             rect: CGRect(
-                x: xMin, y: staffMidY - metrics.sp * 2,
+                x: xMin, y: staffTop,
                 width: max(0, xMax - xMin),
-                height: metrics.staffHeight,
+                height: max(0, staffBottom - staffTop),
             ),
             item: ShapeItem(kind: .staff, id: -1),
         )

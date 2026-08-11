@@ -95,6 +95,10 @@ extension LayoutEngine {
         anchors: [SpannerAnchor],
         measureRange: Range<Int>,
         staffCount: Int,
+        // Per-staff line geometry, parallel to the staff index used by
+        // `SpannerAnchor.startStaff`. A short entry (or an out-of-range
+        // staff) falls back to five lines.
+        staffGeometries: [StaffLineGeometry] = [],
         xOffsets: [CGFloat],
         systemWidth: CGFloat,
         ottavaNumbersOnly: Bool,
@@ -147,6 +151,7 @@ extension LayoutEngine {
             )
             let y = staffTopLocal + defaultBandOffsetY(
                 belowStaff: isBelowStaff(anchor: anchor),
+                lineGeometry: geometry(staffGeometries, anchor.startStaff),
                 metrics: metrics,
             )
             // Back into the start measure's own frame — the pass and
@@ -165,6 +170,19 @@ extension LayoutEngine {
                     text: layoutLabel(anchor: anchor),
                 ))
         }
+    }
+
+    /// Line geometry for `staffIndex`, falling back to five lines when
+    /// the caller supplied none (or a shorter array than the staff
+    /// count) — the same tolerance `LayoutSystem.geometry(atFlatIndex:)`
+    /// gives, so a caller that has not been taught about line counts
+    /// keeps its old behavior instead of trapping.
+    private static func geometry(
+        _ staffGeometries: [StaffLineGeometry], _ staffIndex: Int,
+    ) -> StaffLineGeometry {
+        staffGeometries.indices.contains(staffIndex)
+            ? staffGeometries[staffIndex]
+            : .standard
     }
 
     /// The segment's two edges in SYSTEM-local X. A clipped end uses

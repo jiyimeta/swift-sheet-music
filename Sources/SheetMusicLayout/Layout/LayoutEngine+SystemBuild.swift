@@ -468,6 +468,7 @@ extension LayoutEngine {
             anchors: context.spannerAnchors,
             measureRange: measureRange,
             staffCount: staves.count,
+            staffGeometries: staffGeometries,
             xOffsets: xOffsets,
             systemWidth: contentWidth,
             ottavaNumbersOnly: context.score.style.ottavaNumbersOnly,
@@ -476,11 +477,14 @@ extension LayoutEngine {
 
         do {
             for staffIdx in 0 ..< staves.count {
-                // The staff's OWN vertical center: placement puts the
-                // top line at `sp * 2`, so the center of a staff that
-                // draws `n` lines sits half its own height below that.
-                let staffMidYLocal = metrics.sp * 2
-                    + staffHeights[staffIdx] / 2
+                // The staff's OWN drawn band: placement puts the top
+                // line at `sp * 2`, and a staff that draws `n` lines
+                // ends its own height below that (zero for one line).
+                // `metrics.staffHeight` is the five-line REFERENCE
+                // height and would overshoot.
+                let staffTopLocal = metrics.sp * 2
+                let staffBottomLocal = staffTopLocal
+                    + staffHeights[staffIdx]
                 var perStaff: [[LayoutElement]] = untranslated.map {
                     $0.perStaffElements[staffIdx] ?? []
                 }
@@ -500,7 +504,8 @@ extension LayoutEngine {
                     measures: &perStaff,
                     xOffsets: xOffsets,
                     systemRightX: contentWidth,
-                    staffMidY: staffMidYLocal,
+                    staffTop: staffTopLocal,
+                    staffBottom: staffBottomLocal,
                     metrics: metrics,
                 )
                 for (mIdx, els) in perStaff.enumerated()
@@ -932,9 +937,17 @@ extension LayoutEngine {
             // top staff to match engraving convention.
             if let m = um.staff0Measure {
                 let staffTopY = staffOrigins[0].y
-                // Jump text hangs below staff 0, so it follows staff
-                // 0's own drawn height.
-                let staffBottomY = staffTopY + (staffHeights.first ?? 0)
+                // Jump text hangs 1 sp below staff 0. It has to clear
+                // the staff's INK, and noteheads keep occupying the
+                // five-line reference band no matter how many lines are
+                // drawn (`StaffLineGeometry.topStep`) — so on a
+                // one-line staff, whose drawn height is 0, the jump
+                // would land 1 sp above `step` 0 and collide with the
+                // notes. Take whichever band is taller: the drawn staff
+                // (for counts above five) or the reference one.
+                let staffBottomY = staffTopY + max(
+                    staffHeights.first ?? 0, metrics.staffHeight,
+                )
                 for marker in m.markers {
                     let labelText = marker.text.isEmpty
                         ? marker.label : marker.text
