@@ -65,6 +65,13 @@ and this project adheres to
   from the lead notehead, so a flagged chord lost its flag at any staff
   size.
 
+- PDF import decides which note an augmentation dot belongs to by the
+  notehead's own width rather than a fixed 12pt. Measured over the
+  reference corpus, a note's own dot sits 0.8–1.2 notehead-advances to its
+  right and nothing at all sits at 1.3–1.4, so the bound is now 1.35
+  advances; 12pt was 1.0 advance on the largest staves (clipping real
+  dots) and 2.5 on the smallest (admitting the following note's dot).
+
 - PDF import reads a rest that sits outside the staff, recognizes the
   repeat dot MuseScore actually draws (`repeatDot` U+E044, never the
   combined `repeatDots` U+E043), and classifies seven glyph families the
