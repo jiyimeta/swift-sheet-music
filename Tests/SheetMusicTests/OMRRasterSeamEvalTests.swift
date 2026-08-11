@@ -38,7 +38,11 @@
                 return
             }
             var totals = Totals()
-            for dir in try OMRHarnessDirectoryWalk.renderDirectories(root: root) {
+            // Frozen too: the degraded eval set marks itself with
+            // `frozen.json` rather than `render.json`, and a
+            // `render.json`-only walk over it sweeps nothing while
+            // printing a plausible-looking zero.
+            for dir in try OMRHarnessDirectoryWalk.renderOrFrozenDirectories(root: root) {
                 for name in try OMRHarnessDirectoryWalk.labelFiles(in: dir) {
                     try evaluate(dir: dir, labelFile: name, into: &totals)
                 }
@@ -77,6 +81,17 @@
             let predicted = OMRLabelSchema.pathLabels(
                 analysis.paths, pageIndex: page.page.index,
             )
+            // …and the TRUTH is brought into the front-end's frame. On a
+            // clean raster this is the identity; on a degraded one,
+            // skipping it measures the frame mismatch instead of the
+            // detector — the first degraded sweep read 0.20 staff-line
+            // recall for exactly that reason.
+            let truthPaths = OMRHybridFrontEnd.reframe(
+                page.paths, page: page, transform: analysis.transform,
+            )
+            let truthBeams = OMRHybridFrontEnd.reframe(
+                page.beams, page: page, transform: analysis.transform,
+            )
             // Prefer the front-end's own measured spacing: the label-side
             // fallback runs the vector staff detector, which is exactly
             // the thing under test on the prediction side.
@@ -89,21 +104,21 @@
             // scores a perfect detector at one over the fragment count.
             let lines = OMRSeamMetrics.staffLineRecall(
                 predicted: OMRSeamMetrics.mergedHorizontals(predicted.paths),
-                truth: OMRSeamMetrics.mergedHorizontals(page.paths),
+                truth: OMRSeamMetrics.mergedHorizontals(truthPaths),
                 staffSpacingPt: spacing,
             )
             totals.lineMatched += lines.matched
             totals.lineTotal += lines.total
 
             let bars = OMRSeamMetrics.barlinePR(
-                predicted: predicted.paths, truth: page.paths, staffSpacingPt: spacing,
+                predicted: predicted.paths, truth: truthPaths, staffSpacingPt: spacing,
             )
             totals.barTp += bars.tp
             totals.barFp += bars.fp
             totals.barFn += bars.fn
 
             let beams = OMRSeamMetrics.beamPR(
-                predicted: predicted.beams, truth: page.beams, staffSpacingPt: spacing,
+                predicted: predicted.beams, truth: truthBeams, staffSpacingPt: spacing,
             )
             totals.beamTp += beams.tp
             totals.beamFp += beams.fp

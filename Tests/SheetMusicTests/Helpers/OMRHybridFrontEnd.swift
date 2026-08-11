@@ -87,21 +87,104 @@
         static func reframe(
             _ glyphs: [ClassifiedGlyph], page: OMRPageLabels, transform: PageTransform,
         ) -> [ClassifiedGlyph] {
+            guard let context = frameContext(page: page, transform: transform)
+            else { return glyphs }
+            return glyphs.map { glyph in
+                var out = glyph
+                out.geometry.origin = context(glyph.geometry.origin)
+                return out
+            }
+        }
+
+        /// The same composition, for label PATHS.
+        ///
+        /// The seam harness compares the front-end's paths against these,
+        /// and needs them in the front-end's frame for the same reason
+        /// the hybrid needs the glyphs there. Skipping it is not a small
+        /// error: the first degraded seam sweep read 0.20 staff-line
+        /// recall against 0.77 clean, while a Python probe of the same
+        /// pipeline measured 0.91 — the whole gap was the unmapped
+        /// truth, not the detector.
+        static func reframe(
+            _ paths: [OMRPageLabels.Path], page: OMRPageLabels, transform: PageTransform,
+        ) -> [OMRPageLabels.Path] {
+            guard let context = frameContext(page: page, transform: transform)
+            else { return paths }
+            return paths.map { path in
+                var out = path
+                let a = context(CGPoint(x: path.rectPt[0], y: path.rectPt[1]))
+                let b = context(CGPoint(x: path.rectPt[2], y: path.rectPt[3]))
+                out.rectPt = [
+                    min(Double(a.x), Double(b.x)), min(Double(a.y), Double(b.y)),
+                    max(Double(a.x), Double(b.x)), max(Double(a.y), Double(b.y)),
+                ]
+                return out
+            }
+        }
+
+        /// The same composition, for label BEAMS: both edges are mapped
+        /// at their two endpoints and refitted, since a rotation changes
+        /// a line's slope as well as its position.
+        static func reframe(
+            _ beams: [OMRPageLabels.Beam], page: OMRPageLabels, transform: PageTransform,
+        ) -> [OMRPageLabels.Beam] {
+            guard let context = frameContext(page: page, transform: transform)
+            else { return beams }
+            return beams.map { beam in
+                var out = beam
+                let top = fit(
+                    context,
+                    x0: beam.x0,
+                    x1: beam.x1,
+                    slope: beam.topSlope,
+                    intercept: beam.topIntercept,
+                )
+                let bottom = fit(
+                    context,
+                    x0: beam.x0,
+                    x1: beam.x1,
+                    slope: beam.botSlope,
+                    intercept: beam.botIntercept,
+                )
+                out.x0 = top.x0
+                out.x1 = top.x1
+                out.topSlope = top.slope
+                out.topIntercept = top.intercept
+                out.botSlope = bottom.slope
+                out.botIntercept = bottom.intercept
+                return out
+            }
+        }
+
+        private static func fit(
+            _ map: (CGPoint) -> CGPoint, x0: Double, x1: Double,
+            slope: Double, intercept: Double,
+        ) -> (x0: Double, x1: Double, slope: Double, intercept: Double) {
+            let a = map(CGPoint(x: x0, y: slope * x0 + intercept))
+            let b = map(CGPoint(x: x1, y: slope * x1 + intercept))
+            let dx = Double(b.x - a.x)
+            let m = abs(dx) < 1e-9 ? 0 : Double(b.y - a.y) / dx
+            return (Double(a.x), Double(b.x), m, Double(a.y) - m * Double(a.x))
+        }
+
+        /// The clean-page-point → front-end-page-point map for this page,
+        /// or nil when it is the identity.
+        private static func frameContext(
+            page: OMRPageLabels, transform: PageTransform,
+        ) -> ((CGPoint) -> CGPoint)? {
             let h = page.image.labelTransform
             let identity = h == [1, 0, 0, 0, 1, 0, 0, 0, 1]
-            guard !identity || transform.deskewDegrees != 0 else { return glyphs }
+            guard !identity || transform.deskewDegrees != 0 else { return nil }
             let dpi = Double(page.image.dpi)
             let cleanHeightPx = Double(
                 page.image.sourceSizePx?[1]
                     ?? Int((page.page.heightPt * dpi / 72.0).rounded()),
             )
-            return glyphs.map { glyph in
-                var out = glyph
-                out.geometry.origin = mapped(
-                    glyph.geometry.origin, h: h, dpi: dpi,
+            return { point in
+                mapped(
+                    point, h: h, dpi: dpi,
                     cleanHeightPx: cleanHeightPx, transform: transform,
                 )
-                return out
             }
         }
 
