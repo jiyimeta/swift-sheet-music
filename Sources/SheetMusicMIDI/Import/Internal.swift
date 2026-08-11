@@ -35,6 +35,10 @@ struct CarriedNote: Equatable {
     var sourceMeasureIndex: Int
     var noteOnTick: Int
     var noteOffTick: Int
+    /// Velocity of the originating noteOn, so the measures this note
+    /// is carried into can stamp the same per-note velocity as the
+    /// measure that started it.
+    var velocity = 0
 }
 
 /// Output of Pass 5 for a single measure: voice elements plus tuplet

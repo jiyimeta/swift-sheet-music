@@ -64,34 +64,55 @@ extension MidiImporter {
         (division * 4 * sig.numerator) / sig.denominator
     }
 
-    static func segment(
-        track: ImportTrack, timeline: BarTimeline,
-    ) -> [ImportMeasure] {
-        // Pair noteOn with noteOff (per channel/pitch) so we can
-        // detect bar-crossing notes.
-        struct OpenNote { var pitch: Int; var channel: Int; var onTick: Int }
+    /// One sounding note recovered from a track's event stream.
+    struct NoteSpan {
+        var on: Int
+        var off: Int
+        var pitch: Int
+        var channel: Int
+        /// Velocity of the noteOn, carried so bar-crossing notes can
+        /// stamp it on every measure they reach.
+        var velocity: Int
+    }
+
+    /// Pair each noteOn with its noteOff (per channel / pitch) so
+    /// `segment` can detect bar-crossing notes. Anything still open at
+    /// the end is force-closed at the track's last event tick.
+    static func noteSpans(in track: ImportTrack) -> [NoteSpan] {
+        struct OpenNote { var pitch: Int; var channel: Int; var onTick: Int; var velocity: Int }
         var open: [OpenNote] = []
-        var pairs: [(on: Int, off: Int, pitch: Int, channel: Int)] = []
+        var spans: [NoteSpan] = []
         for ev in track.events {
             switch ev.event {
             case let .noteOn(c, p, v) where v > 0:
-                open.append(OpenNote(pitch: p, channel: c, onTick: ev.tick))
+                open.append(OpenNote(pitch: p, channel: c, onTick: ev.tick, velocity: v))
             case let .noteOn(c, p, _),
                  let .noteOff(c, p, _):
                 if let idx = open.firstIndex(where: { $0.pitch == p && $0.channel == c }) {
                     let n = open.remove(at: idx)
-                    pairs.append((on: n.onTick, off: ev.tick, pitch: p, channel: c))
+                    spans.append(NoteSpan(
+                        on: n.onTick, off: ev.tick, pitch: p,
+                        channel: c, velocity: n.velocity,
+                    ))
                 }
             default:
                 break
             }
         }
-        // Force-close anything still open at the last event tick.
         let lastTick = track.events.map(\.tick).max() ?? 0
         for n in open {
-            pairs.append((on: n.onTick, off: lastTick, pitch: n.pitch, channel: n.channel))
+            spans.append(NoteSpan(
+                on: n.onTick, off: lastTick, pitch: n.pitch,
+                channel: n.channel, velocity: n.velocity,
+            ))
         }
+        return spans
+    }
 
+    static func segment(
+        track: ImportTrack, timeline: BarTimeline,
+    ) -> [ImportMeasure] {
+        let pairs = noteSpans(in: track)
         var measures: [ImportMeasure] = []
         for bar in timeline.bars {
             var slice = ImportMeasure(
@@ -112,6 +133,7 @@ extension MidiImporter {
                             pitch: p.pitch, channel: p.channel,
                             sourceMeasureIndex: onBar,
                             noteOnTick: p.on, noteOffTick: p.off,
+                            velocity: p.velocity,
                         ))
                     }
                     if onBar < bar.index && bar.index <= offBar {
@@ -119,6 +141,7 @@ extension MidiImporter {
                             pitch: p.pitch, channel: p.channel,
                             sourceMeasureIndex: onBar,
                             noteOnTick: p.on, noteOffTick: p.off,
+                            velocity: p.velocity,
                         ))
                     }
                 }
