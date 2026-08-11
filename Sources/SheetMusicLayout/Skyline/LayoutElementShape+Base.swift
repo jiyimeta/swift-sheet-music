@@ -43,6 +43,15 @@ extension LayoutElementShape {
         case .articulation, .fermata, .breath, .tieArc, .tupletLabel,
              .glissandoLine, .arpeggioWiggle, .chordLine, .tremoloBars:
             return decorationRects(for: element, sp: sp)
+        case .ledgerLine:
+            // `LayoutElementShape.kind(of:)` already returns `nil` for
+            // `.ledgerLine`, so `shape(for:)` never calls this far — the
+            // ledger line's ink is part of its chord's skyline entry, not
+            // its own. Kept explicit rather than falling through the
+            // `default` below, which is for staff-internal elements
+            // (clef / key / time / bar line / …) that `.ledgerLine` is
+            // unrelated to.
+            return []
         default:
             return staffInternalRects(
                 element: element, kind: kind, metrics: metrics,

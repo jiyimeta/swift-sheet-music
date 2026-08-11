@@ -257,6 +257,12 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, subtype: s,
                 origin: shift(p), metrics: metrics,
             )
+        case .ledgerLine:
+            // Not emitted yet — `LedgerLinePass` (Task 2) has no caller
+            // until Task 3 wires it into chord placement. The two
+            // `drawLedgerLines` duplicates below remain the only ledger
+            // renderers until then.
+            break
         case let .rest(d, p, _, _, hll):
             let (baseDur, dots) = DurationInterpretation.split(d)
             RestRenderer.draw(

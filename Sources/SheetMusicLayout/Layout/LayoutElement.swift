@@ -32,6 +32,15 @@ public enum LayoutElement: Sendable, Equatable {
     case keySignature(sharps: Int, flats: Int, origin: CGPoint)
     case timeSignature(numerator: Int, denominator: Int, origin: CGPoint)
     case barLine(subtype: String?, origin: CGPoint)
+    /// One ledger-line stroke, fully resolved by `LedgerLinePass`.
+    /// Endpoints are in the same coordinate space as the chord the
+    /// stroke belongs to, and `thickness` already carries that chord's
+    /// `mag` scaling. Inserted immediately BEFORE its chord so it
+    /// renders behind the chord's ink, matching MuseScore's
+    /// `LedgerLine` z-order.
+    ///
+    /// C++: `mu::engraving::LedgerLine`.
+    case ledgerLine(from: CGPoint, to: CGPoint, thickness: CGFloat)
     case note(
         step: Int,
         duration: NoteDuration,

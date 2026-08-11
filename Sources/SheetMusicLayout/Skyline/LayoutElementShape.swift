@@ -30,6 +30,7 @@ public enum LayoutElementShape {
         case .tieArc: .tie
         case .tupletLabel: .tupletLabel
         case .barLine: .barLine
+        case .ledgerLine: nil
         case .clef: .clef
         case .keySignature: .keySignature
         case .timeSignature: .timeSignature

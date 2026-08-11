@@ -24,6 +24,10 @@ extension LayoutEngine {
             )
         case let .barLine(s, p):
             return .barLine(subtype: s, origin: shift(p))
+        case let .ledgerLine(from, to, thickness):
+            return .ledgerLine(
+                from: shift(from), to: shift(to), thickness: thickness,
+            )
         case let .rest(d, p, vi, rid, hll):
             return .rest(
                 duration: d, origin: shift(p),

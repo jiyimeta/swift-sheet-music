@@ -375,6 +375,13 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 width: Double(BarLineGeometry.thinThicknessSp) * sp * ptToMM,
             ))
 
+        case .ledgerLine:
+            // Not emitted yet — `LedgerLinePass` (Task 2) has no caller
+            // until Task 3 wires it into chord placement. Android draws
+            // no ledger lines at all today (the geometry never existed
+            // on this bridge); Task 3 is what gives it one.
+            break
+
         case let .beam(fromOrigin, toOrigin, direction, level, color):
             // Each beam emit at a given level: shift Y by the level
             // offset so secondaries stack inward from the primary,
