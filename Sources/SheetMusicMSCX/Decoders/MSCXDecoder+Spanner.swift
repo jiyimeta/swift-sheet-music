@@ -30,6 +30,7 @@ extension Spanner {
             let subtypeText = ot.first("subtype")?.text ?? "8va"
             ottava = Spanner.OttavaPayload(
                 subtype: Spanner.OttavaPayload.Subtype(rawValue: subtypeText),
+                numbersOnly: ot.first("numbersOnly").map { $0.text != "0" },
             )
         }
 
@@ -60,6 +61,7 @@ extension Spanner {
             voltaEndings: voltaEndings,
             visible: decodeVisible(node),
             beginText: decodeBeginText(node),
+            placement: decodePlacement(node),
             hairpin: hairpin,
             ottava: ottava,
             vibrato: vibrato,
@@ -79,6 +81,31 @@ extension Spanner {
             if let text = child.first("beginText")?.text, !text.isEmpty {
                 return text
             }
+        }
+        return nil
+    }
+
+    /// `<placement>` is a generic element property and, like
+    /// `<beginText>`, rides on the payload child. MuseScore emits it
+    /// only once the user has flipped the element off its styled side,
+    /// so an absent element means "inherit the style" — represented
+    /// here as `nil`, NOT as a guessed default. An unrecognized token
+    /// is treated the same way, since the styled side is a safer
+    /// fallback than picking one arbitrarily.
+    private static func decodePlacement(
+        _ node: XMLTreeNode,
+    ) -> Spanner.Placement? {
+        for child in node.children
+            where child.name != "next" && child.name != "prev"
+        {
+            guard let text = child.first("placement")?.text else { continue }
+            if let placement = Spanner.Placement(rawValue: text) {
+                return placement
+            }
+            mscxDecoderWarn(
+                code: "mscx.spanner.unknownPlacement",
+                message: "Unknown placement '\(text)'; keeping the styled side",
+            )
         }
         return nil
     }

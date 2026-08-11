@@ -40,6 +40,12 @@ extension LayoutEngine {
         let beginText: String?
         /// Trill subtype. Meaningful only when `kind == .trill`.
         let trillType: TrillType?
+        /// Authored `<placement>` override, or `nil` to keep the side
+        /// this spanner's kind / subtype is styled to.
+        let placement: Spanner.Placement?
+        /// Authored `<numbersOnly>` override, or `nil` to inherit
+        /// `ScoreStyle.ottavaNumbersOnly`. Ottava only.
+        let ottavaNumbersOnly: Bool?
     }
 
     /// Per-staff set of measure indices covered by a visible
@@ -48,7 +54,9 @@ extension LayoutEngine {
     /// hairpin can sit between the staff and the lyric row — the
     /// MuseScore convention. Crescendo / decrescendo direction and
     /// in-measure tick offsets are irrelevant here; the question is
-    /// purely "does this measure host a below-staff spanner glyph?"
+    /// purely "does this measure host a below-staff spanner glyph?" —
+    /// which an authored `<placement>` can answer either way, so a
+    /// hairpin flipped above the staff must stop reserving the band.
     static func belowStaffSpannerCoverage(score: Score) -> [Int: Set<Int>] {
         var out: [Int: Set<Int>] = [:]
         for (staffIdx, entry) in score.allStaves.enumerated() {
@@ -59,7 +67,8 @@ extension LayoutEngine {
                     for el in voice.elements {
                         guard case let .spanner(sp) = el,
                               sp.visible,
-                              isBelowStaff(kind: sp.kind)
+                              sp.placement.map({ $0 == .below })
+                              ?? isBelowStaff(kind: sp.kind)
                         else { continue }
                         let lastIdx = min(
                             staff.measures.count - 1,
@@ -129,6 +138,8 @@ extension LayoutEngine {
                                 ottavaSubtype: sp.ottava?.subtype,
                                 beginText: sp.beginText,
                                 trillType: sp.trill?.type,
+                                placement: sp.placement,
+                                ottavaNumbersOnly: sp.ottava?.numbersOnly,
                             ))
                         }
                         switch el {
@@ -514,12 +525,18 @@ extension LayoutEngine {
         }
     }
 
-    /// Placement for a concrete anchor. Identical to
-    /// `isBelowStaff(kind:)` except for ottavas, whose side depends on
-    /// the subtype: MuseScore's style defaults put `8va` / `15ma` /
-    /// `22ma` ABOVE and `8vb` / `15mb` / `22mb` BELOW
-    /// (`styledef.cpp:638-643`, `ottava8V*Placement`).
+    /// Placement for a concrete anchor.
+    ///
+    /// An authored `<placement>` wins outright — that is exactly what
+    /// MuseScore writing the tag means (the property stopped being
+    /// styled). Otherwise the styled side applies, which for ottavas
+    /// depends on the subtype: `8va` / `15ma` / `22ma` are ABOVE and
+    /// `8vb` / `15mb` / `22mb` BELOW (`styledef.cpp:638-643`,
+    /// `ottava8V*Placement`).
     static func isBelowStaff(anchor: SpannerAnchor) -> Bool {
+        if let placement = anchor.placement {
+            return placement == .below
+        }
         if anchor.kind == .ottava {
             return (anchor.ottavaSubtype ?? .eightVA).semitones < 0
         }
@@ -784,7 +801,9 @@ extension LayoutEngine {
         case .ottava:
             return .ottava(
                 subtype: anchor.ottavaSubtype ?? .eightVA,
-                numbersOnly: ottavaNumbersOnly,
+                // The element's own `<numbersOnly>` beats the score
+                // style, same rule as `<placement>`.
+                numbersOnly: anchor.ottavaNumbersOnly ?? ottavaNumbersOnly,
             )
         case .textLine: return .textLine
         case .vibrato: return .vibrato(anchor.vibratoType ?? .guitarVibrato)

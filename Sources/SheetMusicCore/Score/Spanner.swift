@@ -20,6 +20,14 @@ public struct Spanner: Sendable, Equatable {
         case other
     }
 
+    /// Which side of the staff an element sits on.
+    /// C++: `mu::engraving::PlacementV`; MSCX tokens "above" / "below"
+    /// (`typesconv.cpp:2183-2184`).
+    public enum Placement: String, Sendable, Equatable {
+        case above
+        case below
+    }
+
     public var kind: Kind
     public var rawType: String // original "type" attribute
     public var nextMeasuresOffset: Int // distance to the spanner end in measures
@@ -62,6 +70,12 @@ public struct Spanner: Sendable, Equatable {
     /// default. `nil` = "use whatever this spanner kind defaults to".
     /// C++: `mu::engraving::TextLineBase::beginText`.
     public var beginText: String?
+    /// MuseScore `<placement>` — an author override of the side of the
+    /// staff this spanner sits on. `nil` means "use the styled side for
+    /// this kind / subtype", which is what MuseScore's absence of the
+    /// element means: it writes the tag only once the property stops
+    /// being styled (`TWrite::writeItemProperties`, twrite.cpp:578).
+    public var placement: Placement?
 
     public var hairpin: HairpinPayload?
     /// MuseScore `<Ottava><subtype>8va</subtype></Ottava>` payload.
@@ -85,6 +99,7 @@ public struct Spanner: Sendable, Equatable {
         voltaEndings: [Int] = [],
         visible: Bool = true,
         beginText: String? = nil,
+        placement: Placement? = nil,
         hairpin: HairpinPayload? = nil,
         ottava: OttavaPayload? = nil,
         vibrato: VibratoPayload? = nil,
@@ -97,6 +112,7 @@ public struct Spanner: Sendable, Equatable {
         self.voltaEndings = voltaEndings
         elementProperties = ElementProperties(visible: visible)
         self.beginText = beginText
+        self.placement = placement
         self.hairpin = hairpin
         self.ottava = ottava
         self.vibrato = vibrato
@@ -225,9 +241,15 @@ public struct Spanner: Sendable, Equatable {
         }
 
         public var subtype: Subtype
+        /// MuseScore `<numbersOnly>` — a per-element override of
+        /// `ScoreStyle.ottavaNumbersOnly`. `nil` = inherit the style.
+        /// C++: `Pid::NUMBERS_ONLY`, written unconditionally by
+        /// `TWrite::write(const Ottava*)` (twrite.cpp:2445).
+        public var numbersOnly: Bool?
 
-        public init(subtype: Subtype) {
+        public init(subtype: Subtype, numbersOnly: Bool? = nil) {
             self.subtype = subtype
+            self.numbersOnly = numbersOnly
         }
     }
 
