@@ -176,7 +176,7 @@ extension PDFImporter {
         } else {
             withBeamsOrFlags = applyFlags(
                 base: base, glyphs: glyphs, stem: cluster.stem, lead: lead,
-                flagBand: flagBand,
+                flagBand: flagBand, spatium: spatium,
             )
             // A flag actually fired only when the result is shorter than the
             // base — i.e. this group-size-1 note's value HINGES on a flag
@@ -530,12 +530,35 @@ extension PDFImporter {
     /// The x-gate (`< 5`pt of the stem x, well under ~10pt note spacing)
     /// keeps an adjacent note's flag from matching. A combined flag glyph
     /// carries its whole level, so we take the MAX matched level.
+    /// How far, in STAFF SPACES, a flag glyph may sit from the stem's bare
+    /// end (in x and in y) and still be that stem's flag.
+    ///
+    /// A flag attaches at the bare end of the stem — the end away from the
+    /// noteheads — and MuseScore anchors the glyph exactly there. Measured
+    /// over the 135-score real corpus, of the ~54,000 flag glyphs sharing a
+    /// stem's x column, **53,058 sit within 0.04 sp of that end** (up-flags
+    /// and down-flags alike) and the next population is **3.1 sp** away — a
+    /// different note's flag in the same column. In x the own flag is within
+    /// 0.1 sp and the nearest neighbour is 1.1 sp. 0.5 sp is an order of
+    /// magnitude above the observed spread and well inside both gaps.
+    ///
+    /// This replaces a `4 ... 22` pt window measured from the LEAD NOTEHEAD,
+    /// which was wrong twice over: it was a fixed number of points for a
+    /// distance that scales with the staff (an engraving-correct 3.5 sp stem
+    /// is 28pt at an 8pt staff space — outside the window, so the eighth read
+    /// as a QUARTER), and the lead notehead is not where the flag is. On a
+    /// CHORD the stem's bare end is a chord-height farther off, so a flagged
+    /// chord lost its flag even at the staff size the old window was tuned
+    /// for.
+    static let flagAttachToleranceInSpaces: CGFloat = 0.5
+
     private static func applyFlags(
         base: NoteDuration,
         glyphs: [ClassifiedGlyph],
         stem: PathSegment?,
         lead: ClassifiedGlyph,
         flagBand: ClosedRange<CGFloat>?,
+        spatium: CGFloat,
     ) -> NoteDuration {
         guard let stem else { return base }
         let stemX = stem.rect.midX
@@ -548,9 +571,10 @@ extension PDFImporter {
         // is rejected (the 君と kick 8→16 flag theft).
         let stemPointsUp =
             abs(stem.rect.maxY - noteY) >= abs(stem.rect.minY - noteY)
-        // On-correct-side vertical window from the notehead. Up-flags sit
-        // above (positive Δ), down-flags below (negative Δ); |Δ| ≈ 10–14pt.
-        let near: ClosedRange<CGFloat> = 4 ... 22
+        // A flag attaches AT the stem's bare end, so that end — not the lead
+        // notehead — is what a flag is matched against.
+        let bareEnd = stemPointsUp ? stem.rect.maxY : stem.rect.minY
+        let attachTol = flagAttachToleranceInSpaces * spatium
         var level = 0
         for g in glyphs {
             // Staff-scope the flag match: a vertically-aligned adjacent-staff
@@ -559,21 +583,22 @@ extension PDFImporter {
             // q→8 over-read).
             if let flagBand, !flagBand.contains(g.geometry.origin.y) { continue }
             // Tight x-gate: MuseScore anchors a flag glyph at its stem's x, so
-            // a note's own flag sits within ~0.3pt of the stem; the nearest
-            // neighbour flag is ≥ ~5pt away. A ≤2pt window keeps every own flag
-            // and rejects a neighbour's (the 君と cross-note flag theft).
-            guard abs(g.geometry.origin.x - stemX) <= 2,
+            // a note's own flag sits within ~0.1 sp of the stem; the nearest
+            // neighbour flag measured on the corpus is 1.1 sp away.
+            guard abs(g.geometry.origin.x - stemX) <= attachTol,
                   let lvl = flagLevel(g.semantic) else { continue }
-            let dy = g.geometry.origin.y - noteY
             let isUp: Bool
             switch g.semantic {
             case .flag8thUp, .flag16thUp, .flag32ndUp, .flag64thUp: isUp = true
             default: isUp = false
             }
-            // Flag orientation must match the stem's pointing direction.
+            // Flag orientation must match the stem's pointing direction; a
+            // neighbour's flag that lands at the right height but hangs off an
+            // oppositely-stemmed note is rejected (the 君と kick 8→16 theft).
             guard isUp == stemPointsUp else { continue }
-            let onSide = isUp ? near.contains(dy) : near.contains(-dy)
-            if onSide { level = max(level, lvl) }
+            // …and it must sit AT this stem's bare end.
+            guard abs(g.geometry.origin.y - bareEnd) <= attachTol else { continue }
+            level = max(level, lvl)
         }
         var d = base
         for _ in 0 ..< level {
