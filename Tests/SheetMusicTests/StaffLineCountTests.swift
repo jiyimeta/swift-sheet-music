@@ -138,6 +138,27 @@ struct MusicXMLStaffLinesTests {
         return parsed.parts[0].staves.map(\.lineCount)
     }
 
+    /// One measure rest on each staff of a two-staff part — enough for
+    /// the walker to build both staves.
+    private static let twoStaffRests = """
+    <note><rest measure="yes"/><duration>4</duration><staff>1</staff></note>
+    <note><rest measure="yes"/><duration>4</duration><staff>2</staff></note>
+    """
+
+    /// Full-document escape hatch for the lifetime cases the
+    /// single-measure / single-part `score(attributes:notes:)` helper
+    /// cannot express.
+    private func parse(partList: String, parts: String) throws -> Score {
+        let xml = Data("""
+        <?xml version="1.0"?>
+        <score-partwise version="4.0">
+          <part-list>\(partList)</part-list>
+        \(parts)
+        </score-partwise>
+        """.utf8)
+        return try MusicXMLParser.parse(xml)
+    }
+
     @Test func readsAOneLineStaff() throws {
         #expect(try lineCounts(
             attributes: "<staff-details><staff-lines>1</staff-lines></staff-details>",
@@ -187,10 +208,7 @@ struct MusicXMLStaffLinesTests {
                     <staves>2</staves>
                     <staff-details number="2"><staff-lines>3</staff-lines></staff-details>
             """,
-            notes: """
-            <note><rest measure="yes"/><duration>4</duration><staff>1</staff></note>
-            <note><rest measure="yes"/><duration>4</duration><staff>2</staff></note>
-            """,
+            notes: Self.twoStaffRests,
         ) == [5, 3])
     }
 
@@ -202,10 +220,7 @@ struct MusicXMLStaffLinesTests {
                     <staves>2</staves>
                     <staff-details><staff-lines>1</staff-lines></staff-details>
             """,
-            notes: """
-            <note><rest measure="yes"/><duration>4</duration><staff>1</staff></note>
-            <note><rest measure="yes"/><duration>4</duration><staff>2</staff></note>
-            """,
+            notes: Self.twoStaffRests,
         ) == [1, 5])
     }
 
@@ -217,10 +232,107 @@ struct MusicXMLStaffLinesTests {
                     <staff-details number="1"><staff-lines>1</staff-lines></staff-details>
                     <staff-details number="2"><staff-lines>3</staff-lines></staff-details>
             """,
-            notes: """
-            <note><rest measure="yes"/><duration>4</duration><staff>1</staff></note>
-            <note><rest measure="yes"/><duration>4</duration><staff>2</staff></note>
-            """,
+            notes: Self.twoStaffRests,
         ) == [1, 3])
+    }
+
+    /// MuseScore's `MusicXmlParserPass2::staffDetails` resets an
+    /// out-of-range `number` to index 0 rather than clamping it to the
+    /// last staff (`importmusicxmlpass2.cpp:3141-3149` — it logs
+    /// "invalid staff-details number" and sets `n = 0`). So `number="3"`
+    /// on a two-staff part converts the TOP staff, not the bottom one.
+    @Test func outOfRangeNumberFallsBackToTheFirstStaff() throws {
+        #expect(try lineCounts(
+            attributes: """
+                    <staves>2</staves>
+                    <staff-details number="3"><staff-lines>1</staff-lines></staff-details>
+            """,
+            notes: Self.twoStaffRests,
+        ) == [1, 5])
+    }
+
+    /// Lifetime property 1a: the value must SURVIVE the measures after
+    /// the one that declared it. Declared in measure 1 of a two-measure
+    /// part, so a refactor that rebuilt `MusicXMLAttributesSnapshot`
+    /// per measure would let measure 2 wipe it.
+    ///
+    /// This is the direction that pins stickiness. The measure-2 case
+    /// below does NOT: the walker reads the snapshot after the loop, so
+    /// a value written by the LAST measure survives a per-measure reset
+    /// and that test would stay green under the bug.
+    @Test func staffDetailsSurvivesSubsequentMeasures() throws {
+        let score = try parse(
+            partList: #"<score-part id="P1"><part-name>T</part-name></score-part>"#,
+            parts: """
+            <part id="P1">
+              <measure number="1">
+                <attributes><divisions>1</divisions>
+                  <staff-details><staff-lines>3</staff-lines></staff-details>
+                </attributes>
+                <note><rest measure="yes"/><duration>4</duration></note>
+              </measure>
+              <measure number="2">
+                <attributes><divisions>1</divisions></attributes>
+                <note><rest measure="yes"/><duration>4</duration></note>
+              </measure>
+            </part>
+            """,
+        )
+        #expect(score.parts[0].staves.map(\.lineCount) == [3])
+    }
+
+    /// Lifetime property 1b: the line count is staff-level, not
+    /// measure-level, so a `<staff-details>` first seen in measure 2
+    /// still reaches the `Staff` build rather than being ignored because
+    /// it missed the opening attributes.
+    @Test func staffDetailsInALaterMeasureStillApplies() throws {
+        let score = try parse(
+            partList: #"<score-part id="P1"><part-name>T</part-name></score-part>"#,
+            parts: """
+            <part id="P1">
+              <measure number="1">
+                <attributes><divisions>1</divisions></attributes>
+                <note><rest measure="yes"/><duration>4</duration></note>
+              </measure>
+              <measure number="2">
+                <attributes>
+                  <staff-details><staff-lines>3</staff-lines></staff-details>
+                </attributes>
+                <note><rest measure="yes"/><duration>4</duration></note>
+              </measure>
+            </part>
+            """,
+        )
+        #expect(score.parts[0].staves.map(\.lineCount) == [3])
+    }
+
+    /// Lifetime property 2: the snapshot is constructed fresh inside
+    /// `MusicXMLMeasureWalker.decode`, which runs once per `<part>`, so
+    /// one part's line count must not bleed into the next. A refactor
+    /// that hoisted the snapshot to score scope would break this.
+    @Test func lineCountsDoNotLeakBetweenParts() throws {
+        let score = try parse(
+            partList: """
+            <score-part id="P1"><part-name>A</part-name></score-part>
+            <score-part id="P2"><part-name>B</part-name></score-part>
+            """,
+            parts: """
+            <part id="P1">
+              <measure number="1">
+                <attributes><divisions>1</divisions>
+                  <staff-details><staff-lines>3</staff-lines></staff-details>
+                </attributes>
+                <note><rest measure="yes"/><duration>4</duration></note>
+              </measure>
+            </part>
+            <part id="P2">
+              <measure number="1">
+                <attributes><divisions>1</divisions></attributes>
+                <note><rest measure="yes"/><duration>4</duration></note>
+              </measure>
+            </part>
+            """,
+        )
+        #expect(score.parts.map { $0.staves.map(\.lineCount) } == [[3], [5]])
     }
 }

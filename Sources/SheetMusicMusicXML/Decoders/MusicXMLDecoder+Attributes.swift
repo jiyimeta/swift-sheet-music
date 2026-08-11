@@ -118,8 +118,15 @@ enum AttributesDecoder {
     /// `Emission` — it rides the snapshot up to the part decoder, which
     /// stamps it onto the `Staff` values it builds.
     ///
-    /// `number` is the same 1-based staff selector `<clef>` uses and is
-    /// clamped the same way; an absent `number` means staff 1.
+    /// `number` is a 1-based staff selector; an absent `number` means
+    /// staff 1. An out-of-range `number` falls back to the FIRST staff
+    /// rather than being clamped to the last, mirroring
+    /// `MusicXmlParserPass2::staffDetails`
+    /// (`importmusicxmlpass2.cpp:3141-3149`), which logs
+    /// "invalid staff-details number" and resets its index to 0.
+    /// Note this deliberately differs from `decodeClefs` above, which
+    /// clamps; changing clef targeting is a separate behavioral change.
+    ///
     /// `SheetMusicMusicXML` has no `mscxDecoderWarn` equivalent, so an
     /// out-of-range or non-numeric value is corrected silently rather
     /// than diagnosed — matching the target policy (clamp to `1...16`,
@@ -134,7 +141,7 @@ enum AttributesDecoder {
                   let parsed = Int(raw)
             else { continue }
             let number = detailsNode.attributes["number"].flatMap { Int($0) } ?? 1
-            let staffIndex = max(0, min(staffCount - 1, number - 1))
+            let staffIndex = (1 ... max(1, staffCount)).contains(number) ? number - 1 : 0
             previous.lineCountByStaff[staffIndex] = min(max(parsed, 1), 16)
         }
     }
