@@ -171,6 +171,30 @@
                 })
             }
 
+            /// A host that groups its strips by part needs the two halves of the label separately, so the engine
+            /// publishes them beside the composed `name` rather than leaving the host to re-split it — which would
+            /// fail on exactly the strips whose suffix is deliberately suppressed.
+            @Test("mixerChannels carries the part and instrument labels apart from the composed name")
+            func mixerChannelsCarrySplitLabels() throws {
+                let score = try InstrumentChangeMixerTests.fixtureScore()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: RecordingBackend())
+                try engine.prepare(score: score)
+
+                let strips = engine.mixerChannels.filter { $0.id != .metronome }
+                #expect(strips.count == 2)
+                // Same part, so one group title covers both rows.
+                #expect(Set(strips.map(\.partName)).count == 1)
+                #expect(strips.map(\.instrumentName) == ["Piano", "Accordion"])
+                // The composed form is unchanged, and only the second strip wears the suffix.
+                #expect(strips[0].name == strips[0].partName)
+                #expect(strips[1].name == "\(strips[1].partName) (Accordion)")
+
+                // The metronome belongs to no part and has no instrument, which is how a host drops it.
+                let metronome = try #require(engine.mixerChannels.first { $0.id == .metronome })
+                #expect(metronome.partName.isEmpty)
+                #expect(metronome.instrumentName == nil)
+            }
+
             /// The headline Apple feature of Task 12: `midiChannel(forStaff:
             /// atTick:)` must audition the instrument ACTIVE AT THE CURSOR,
             /// not the part's opening (ordinal-0) instrument. Drives a real

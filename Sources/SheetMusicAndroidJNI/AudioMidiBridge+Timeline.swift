@@ -74,33 +74,14 @@ extension AudioMidiBridge {
     /// One entry per deduped (part × instrument) mixer strip — the
     /// Android mirror of `PlaybackEngine.rebuildMixerChannels`.
     ///
-    /// Naming mirrors `PlaybackEngine+Mixer.stripName` exactly: gate the
-    /// parenthesised suffix on the DEDUPED strip count for the part
-    /// (`plan.strips`, filtered to `strip.partIndex`), not the raw
-    /// `instrumentTimeline(forPart:).count` — a part whose two timeline
-    /// entries dedup onto ONE live channel must show no suffix even
-    /// though its timeline has two entries. Also suppress the suffix
-    /// when the instrument name equals the part label — the primary
-    /// strip's own instrument name always equals `partName` by
-    /// construction, which would otherwise render "Piano (Piano)" for
-    /// `instrument-change.mscx`.
+    /// Naming comes from `LiveChannelPlan.labels(for:in:)`, the same call
+    /// the Apple engine makes when it fills `MixerChannel`. It used to be
+    /// a second copy of that rule here, under a comment promising the two
+    /// matched; sharing the function is what actually holds them together.
     static func instrumentParams(score: Score) -> Data {
         let plan = LiveChannelPlan.build(score: score)
         let entries = plan.strips.map { strip -> InstrumentParams in
-            let address = StaffAddress(
-                partIndex: strip.partIndex, staffIndexInPart: 0,
-            )
-            let partName = score.staffDisplayName(at: address)
-            let instrumentName = strip.instrument.longName
-                ?? strip.instrument.trackName ?? strip.instrument.id
-            let distinctStripsForPart = plan.strips
-                .count { $0.partIndex == strip.partIndex }
-            let showsSuffix = distinctStripsForPart > 1
-                && !instrumentName.isEmpty
-                && instrumentName != partName
-            let name = showsSuffix
-                ? "\(partName) (\(instrumentName))"
-                : partName
+            let name = plan.labels(for: strip, in: score).displayName
             return InstrumentParams(
                 partIndex: strip.partIndex,
                 ordinal: strip.ordinal,

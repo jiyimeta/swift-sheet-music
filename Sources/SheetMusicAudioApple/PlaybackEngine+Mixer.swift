@@ -19,8 +19,15 @@ extension PlaybackEngine {
     /// Set a channel's solo button state. Multiple channels can solo
     /// simultaneously; non-soloed channels are silenced whenever any
     /// channel is soloed.
+    ///
+    /// No-op for a channel that isn't on the solo bus (the metronome —
+    /// see `MixerChannel.isSoloable`), so its `isSoloed` can never read
+    /// back `true` and no caller has to special-case the click.
     public func setSoloed(forChannel id: MixerChannel.Kind, to soloed: Bool) {
-        mutate(channel: id) { $0.isSoloed = soloed }
+        mutate(channel: id) { channel in
+            guard channel.isSoloable else { return }
+            channel.isSoloed = soloed
+        }
     }
 
     /// Swap the GM program (sound) on an instrument strip. No-op for
@@ -63,11 +70,14 @@ extension PlaybackEngine {
         var channels: [MixerChannel] = []
         channels.reserveCapacity(plan.strips.count + 1)
         for strip in plan.strips {
+            let labels = plan.labels(for: strip, in: score)
             channels.append(MixerChannel(
                 id: .instrument(
                     partIndex: strip.partIndex, ordinal: strip.ordinal,
                 ),
-                name: stripName(for: strip, in: score, plan: plan),
+                name: labels.displayName,
+                partName: labels.partName,
+                instrumentName: labels.instrumentName,
                 volume: Float(max(0, min(127, strip.instrument.channel.volume))) / 127,
                 program: strip.instrument.useDrumset
                     ? nil
@@ -81,50 +91,6 @@ extension PlaybackEngine {
         replaceMixerChannels(channels)
     }
 
-    /// "Guitar" / "Guitar (Banjo)" — the part's display name, plus the
-    /// instrument in parens ONLY when that reads as a genuinely distinct
-    /// second (or later) instrument. Two guards keep this from
-    /// stuttering:
-    ///
-    /// - **Suppress a duplicate.** `score.staffDisplayName(at:)` (what
-    ///   `partName` is) resolves to the PART's tick-0 instrument's own
-    ///   `longName` first. The strip AT ordinal 0 is by construction
-    ///   that same tick-0 instrument, so its `instrumentName` always
-    ///   equals `partName` — for `instrument-change.mscx`
-    ///   (`<longName>Piano</longName>` then `<longName>Accordion</longName>`)
-    ///   that would otherwise render "Piano (Piano)". Comparing the two
-    ///   strings and dropping the suffix when they match fixes this for
-    ///   any strip, not just ordinal 0, in case two DIFFERENT instrument
-    ///   objects happen to share a name.
-    /// - **Gate on the DEDUPED strip count for this part**
-    ///   (`plan.strips`, filtered to `strip.partIndex`), not
-    ///   `score.instrumentTimeline(forPart:).count`. A part whose two
-    ///   timeline entries collapse onto ONE live channel (identical
-    ///   `InstrumentChannel` flavour — see `LiveChannelPlan`'s dedup
-    ///   rule) has exactly one STRIP even though it has two TIMELINE
-    ///   entries; counting the timeline would show a suffix for a part
-    ///   that the mixer never actually splits into two strips.
-    ///
-    /// Instrument name falls back longName → trackName → id.
-    private func stripName(
-        for strip: LiveChannelPlan.Strip, in score: Score, plan: LiveChannelPlan,
-    ) -> String {
-        let address = StaffAddress(
-            partIndex: strip.partIndex, staffIndexInPart: 0,
-        )
-        let partName = score.staffDisplayName(at: address)
-        let instrumentName = strip.instrument.longName
-            ?? strip.instrument.trackName
-            ?? strip.instrument.id
-        let distinctStripsForPart = plan.strips
-            .count { $0.partIndex == strip.partIndex }
-        guard distinctStripsForPart > 1,
-              !instrumentName.isEmpty,
-              instrumentName != partName
-        else { return partName }
-        return "\(partName) (\(instrumentName))"
-    }
-
     /// Push the current mixer state into the live audio graph. Mute /
     /// volume are sent as CC 7 (Channel Volume) on each strip's
     /// renderer-assigned MIDI channel of its owning synth unit (melodic
@@ -134,22 +100,35 @@ extension PlaybackEngine {
     /// `PlaybackEngine.postProcessForMIDISynth`, so a seek / loop-wrap
     /// rewind can no longer chase-fire it and clobber the user's choice.
     ///
-    /// Solo overrides everything else — when any channel is soloed,
-    /// non-soloed channels go silent.
+    /// Solo overrides everything else — when any instrument channel is
+    /// soloed, non-soloed instrument channels go silent. The metronome
+    /// is off the solo bus (`MixerChannel.isSoloable`) and answers to
+    /// its own mute alone: soloing a part to practise against the click
+    /// used to take the click with it.
     func applyMixerState() {
-        let anySoloed = mixerChannels.contains(where: \.isSoloed)
+        let soloing = isSoloing
         for channel in mixerChannels {
-            let effectivelyMuted = channel.isMuted
-                || (anySoloed && !channel.isSoloed)
-            let gain: Float = effectivelyMuted ? 0 : channel.volume
             switch channel.id {
             case .instrument:
-                applyInstrumentGain(forChannel: channel.id, gain: gain)
+                let effectivelyMuted = channel.isMuted
+                    || (soloing && !channel.isSoloed)
+                applyInstrumentGain(
+                    forChannel: channel.id,
+                    gain: effectivelyMuted ? 0 : channel.volume,
+                )
             case .metronome:
-                setMetronomeEnabled(!effectivelyMuted)
+                setMetronomeEnabled(!channel.isMuted)
                 setMetronomeVolume(channel.volume)
             }
         }
+    }
+
+    /// Whether the solo bus is engaged — i.e. at least one channel that
+    /// is *on* that bus is soloed. The one place the rule is expressed;
+    /// `applyMixerState`, `reassertBackendChannelState` and the export
+    /// snapshot all read it so they can't drift apart.
+    var isSoloing: Bool {
+        mixerChannels.contains { $0.isSoloable && $0.isSoloed }
     }
 
     /// Re-assert EVERY mixer-managed instrument channel's program +
@@ -168,7 +147,7 @@ extension PlaybackEngine {
     /// re-assert).
     func reassertBackendChannelState() {
         guard let backend else { return }
-        let anySoloed = mixerChannels.contains(where: \.isSoloed)
+        let soloing = isSoloing
         for channel in mixerChannels {
             guard case .instrument = channel.id,
                   let midiCh = midiChannel(forChannel: channel.id)
@@ -177,7 +156,7 @@ extension PlaybackEngine {
                 backend.setProgram(channel: midiCh, program: program)
             }
             let effectivelyMuted = channel.isMuted
-                || (anySoloed && !channel.isSoloed)
+                || (soloing && !channel.isSoloed)
             let gain: Float = effectivelyMuted ? 0 : channel.volume
             backend.sendVolume(
                 channel: midiCh, cc7: UInt8(clamping: Int((gain * 127).rounded())),

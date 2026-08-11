@@ -166,11 +166,8 @@ extension PlaybackEngine {
             score: score, plan: plan, snapshot: snapshot, resolver: resolver,
             engine: engine, output: scoreGainMixer,
         )
-        let soloedExists = snapshot.mixerChannels.contains { $0.isSoloed }
         applyMixerSnapshot(
-            scoreSynth: exportSynth,
-            channels: snapshot.mixerChannels,
-            soloedExists: soloedExists,
+            scoreSynth: exportSynth, channels: snapshot.mixerChannels,
         )
 
         // 2. Optional metronome synth / track.
@@ -402,14 +399,16 @@ extension PlaybackEngine {
     /// Push the mixer snapshot's volume / mute / solo onto the export
     /// synth's per-strip CC 7 state — every deduped (part × instrument)
     /// channel, not just each staff's primary. Effective audibility
-    /// mirrors the live mixer rules: if any channel is soloed, only
-    /// soloed channels are audible; otherwise muted channels are
-    /// silenced.
+    /// mirrors the live mixer rules: if any solo-bus channel is soloed,
+    /// only soloed channels are audible; otherwise muted channels are
+    /// silenced. "Any" is scoped to `MixerChannel.isSoloable` members —
+    /// the metronome is off the solo bus, and whether the click renders
+    /// is carried by the snapshot's own `metronomeEnabled`.
     private static func applyMixerSnapshot(
         scoreSynth: ScoreSynth,
         channels: [MixerChannel],
-        soloedExists: Bool,
     ) {
+        let soloedExists = channels.contains { $0.isSoloable && $0.isSoloed }
         for chan in channels {
             guard case .instrument = chan.id,
                   let midiCh = scoreSynth.instrumentMIDIChannels[chan.id]
