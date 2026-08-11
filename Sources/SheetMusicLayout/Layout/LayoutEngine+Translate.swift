@@ -222,8 +222,21 @@ extension LayoutEngine {
             // convention as `.staffText` / `.rehearsalMark` above —
             // shift onto the system's actual top-staff y.
             return .measureNumber(text: text, origin: shift(p))
-        case .note, .marker, .jump, .staffName,
-             .spannerSegment, .tieArc:
+        case let .spannerSegment(
+            kind, from, to, continuesLeft, continuesRight, text,
+        ):
+            // Both endpoints share one anchor Y, but shifting them
+            // independently is what keeps this correct if a sloped
+            // segment ever appears.
+            return .spannerSegment(
+                kind: kind,
+                fromOrigin: shift(from),
+                toOrigin: shift(to),
+                continuesLeft: continuesLeft,
+                continuesRight: continuesRight,
+                text: text,
+            )
+        case .note, .marker, .jump, .staffName, .tieArc:
             return element
         }
     }

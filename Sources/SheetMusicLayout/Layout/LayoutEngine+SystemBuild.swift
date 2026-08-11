@@ -500,7 +500,7 @@ extension LayoutEngine {
         for um in untranslated {
             for (staffIdx, els) in um.perStaffElements {
                 for el in els {
-                    for y in elementYPoints(el) {
+                    for y in elementYPoints(el, sp: metrics.sp) {
                         if y < staffMinY[staffIdx] {
                             staffMinY[staffIdx] = y
                         }

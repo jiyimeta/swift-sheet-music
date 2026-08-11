@@ -26,9 +26,9 @@ import SheetMusicCore
 /// of them ever land in the per-staff pass-1 buffer this operates on.
 /// They are listed so the ordering is complete when those emissions
 /// move. **Before routing any of them into the buffer, teach
-/// `LayoutEngine.translate` to shift them**: `.spannerSegment`,
-/// `.marker` and `.jump` are in its no-op case list, so the writeback
-/// below would silently drop their `dy`.
+/// `LayoutEngine.translate` to shift them**, or the writeback below
+/// silently drops their `dy`. `.spannerSegment` is done; `.marker` and
+/// `.jump` are still in its no-op case list.
 ///
 /// Being inert is also what makes the ordering unverifiable by test or
 /// corpus, so it has to be read off the C++ rather than inferred — see
