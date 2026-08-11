@@ -20,21 +20,45 @@ extension PDFImporter {
     /// (delta ≈ 0), a stem-up stem ~4–8pt to its right (delta ≥ +4); measured
     /// across the 6-score corpus, no legit attachment (up or down, any font)
     /// falls below −0.5. A stem more than this far left of the origin is
-    /// geometrically a NEIGHBOUR's stem the ±7pt x-window happened to reach.
+    /// geometrically a NEIGHBOUR's stem that `stemAttachWindow` reached.
     static let stemLegalityLeftSlop: CGFloat = 1.5
 
     /// Large additive cost for a geometrically-illegal (too-far-left) stem
     /// candidate — deprioritizes it below ANY legal stem while (unlike a hard
     /// veto) still letting a note whose ONLY candidate is such a stem fall
     /// back to it. Far larger than any real in-cell geometric cost (x-offset
-    /// ≤ 7pt + y-distance ≤ ~2 staff-heights).
+    /// ≤ `stemAttachWindow` + y-distance ≤ ~2 staff-heights).
     static let stemIllegalPenalty: CGFloat = 1000
 
+    /// Half-width of the x-window in which a vertical may be a notehead's
+    /// OWN stem, in STAFF SPACES.
+    ///
+    /// A stem abuts its notehead's right edge (stem-up) or left edge
+    /// (stem-down), and that offset is a property of the music font — it
+    /// scales with the staff, it is not a fixed number of points. Measured
+    /// over the 135-score real corpus (293,418 notehead-to-nearest-vertical
+    /// offsets), the legitimate offsets form two tight clusters:
+    ///
+    ///     0.0 – 0.1 sp   stem-down (stem on the notehead's left edge)
+    ///     1.2 – 1.3 sp   stem-up   (stem on the notehead's right edge)
+    ///
+    /// with nothing legitimate past 1.5 sp. Over the same corpus the staff
+    /// space itself spans 2.4pt … 6.0pt, so the fixed ±7pt window this
+    /// replaces meant 2.9 sp on the smallest staves — wide enough to reach a
+    /// NEIGHBOUR's stem — and 1.18 sp on the largest, too narrow to reach the
+    /// note's own. 1.4 sp both clears the 1.3 cluster and reproduces the old
+    /// constant exactly at 5.0pt, the corpus's most common staff space (and
+    /// the size the 7pt was tuned at), so the common case is unchanged.
+    static let stemAttachWindowInSpaces: CGFloat = 1.4
+
+    /// The x-window (pt) for stem attachment at a given staff space.
+    static func stemAttachWindow(spatium: CGFloat) -> CGFloat {
+        stemAttachWindowInSpaces * spatium
+    }
+
     /// The stem abutting a notehead at (`x`, `noteY`), with its index in
-    /// `stems`. A stem sits ~4–6pt to the side of the notehead (its right
-    /// edge for stem-up, left for stem-down), so candidates are verticals
-    /// within ~7pt in x — under the ~10pt note-to-note spacing, so a
-    /// neighbour can't be grabbed.
+    /// `stems`. Candidates are verticals within `stemAttachWindow` in x —
+    /// under the ~2 sp note-to-note spacing, so a neighbour can't be grabbed.
     ///
     /// Among the x-candidates, pick the stem minimizing a COMBINED distance
     /// (`stemCost`): x-offset + the notehead's distance from the stem's
@@ -49,10 +73,11 @@ extension PDFImporter {
     /// off its own (x-abutting) stem onto a y-overlapping neighbour
     /// (trailing note over-read as a sixteenth).
     static func nearestStem(
-        toX x: CGFloat, noteY: CGFloat, stems: [PathSegment],
+        toX x: CGFloat, noteY: CGFloat, stems: [PathSegment], spatium: CGFloat,
     ) -> (stem: PathSegment, index: Int)? {
+        let window = stemAttachWindow(spatium: spatium)
         let candidates = stems.enumerated().filter {
-            abs($0.element.rect.midX - x) <= 7
+            abs($0.element.rect.midX - x) <= window
         }
         guard let best = candidates.min(by: { a, b in
             stemCost(a.element, x: x, noteY: noteY)

@@ -308,6 +308,7 @@ extension PDFImporter {
                 beamedEndY: beamedEnd(
                     loY: stem.rect.minY, hiY: stem.rect.maxY,
                     stemX: stem.rect.midX, noteheads: noteheadOrigins,
+                    spatium: spatium,
                 ),
             )
         }
@@ -315,14 +316,16 @@ extension PDFImporter {
     }
 
     /// The stem end where beams attach: the end farther from the notehead the
-    /// stem abuts (within ~7pt in x, y nearest either stem end). `nil` when no
-    /// notehead abuts the stem.
+    /// stem abuts (within `stemAttachWindow` in x, y nearest either stem
+    /// end). `nil` when no notehead abuts the stem.
     private static func beamedEnd(
         loY: CGFloat, hiY: CGFloat, stemX: CGFloat, noteheads: [CGPoint],
+        spatium: CGFloat,
     ) -> CGFloat? {
         var bestY: CGFloat?
         var bestDist = CGFloat.greatestFiniteMagnitude
-        for nh in noteheads where abs(nh.x - stemX) <= 7 {
+        let window = stemAttachWindow(spatium: spatium)
+        for nh in noteheads where abs(nh.x - stemX) <= window {
             let d = min(abs(nh.y - loY), abs(nh.y - hiY))
             if d < bestDist { bestDist = d; bestY = nh.y }
         }
