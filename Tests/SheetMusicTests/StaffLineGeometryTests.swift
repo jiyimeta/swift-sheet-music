@@ -10,13 +10,24 @@
             #expect(StaffLineGeometry.standard.lineCount == 5)
         }
 
-        @Test(arguments: [(1, 0), (3, 2), (5, 4), (6, 5)])
+        // `topStep` must stay pinned at 4 for every line count: MuseScore
+        // anchors note positions to the top line regardless of how many
+        // lines are drawn (`Note::updateRelLine` never consults
+        // `StaffType::lines()`), so this must never become a function of
+        // `lineCount` — that would silently break the plan's central
+        // invariant while every other computed value stayed green.
+        @Test(arguments: [1, 3, 5, 6, 16])
+        func topStepIsAlwaysFour(lineCount: Int) {
+            #expect(StaffLineGeometry(lineCount: lineCount).topStep == 4)
+        }
+
+        @Test(arguments: [(1, 0), (3, 2), (5, 4), (6, 5), (16, 15)])
         func heightIsOneLessThanTheLineCount(lineCount: Int, spaces: Int) {
             let g = StaffLineGeometry(lineCount: lineCount)
             #expect(g.height(sp: sp) == CGFloat(spaces) * sp)
         }
 
-        @Test(arguments: [(1, 4), (3, 0), (5, -4), (6, -6)])
+        @Test(arguments: [(1, 4), (3, 0), (5, -4), (6, -6), (16, -26)])
         func bottomStep(lineCount: Int, expected: Int) {
             #expect(StaffLineGeometry(lineCount: lineCount).bottomStep == expected)
         }

@@ -10,10 +10,13 @@
 /// where its ledger lines begin.
 ///
 /// Every line-count-dependent constant lives here. Adding MuseScore's
-/// `stepOffset` or `lineDistance` later — or a TAB staff, which changes
-/// both the line spacing and what a "line" even represents — means
-/// changing `lineY` and the step→Y conversion, and nothing else; every
-/// caller that goes through this type keeps working unchanged.
+/// `stepOffset` or `lineDistance` later means changing `lineY` and the
+/// step→Y conversion, and nothing else — every caller that goes
+/// through this type keeps working unchanged. A TAB staff is a bigger
+/// change than that: it drops ledger lines and largely drops the
+/// notehead/step concept this type is built around, and can affect
+/// barline spans too, so later tasks should not assume it slots in
+/// here as cheaply as `stepOffset`/`lineDistance` do.
 ///
 /// C++: the line-related slice of `mu::engraving::StaffType`.
 public struct StaffLineGeometry: Sendable, Equatable {
