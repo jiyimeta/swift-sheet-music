@@ -416,6 +416,52 @@
             )
         }
 
+        // MARK: - 30 rest-only and rest-tailed tuplets
+
+        /// Two triplets that carry no beam to hang a number on: one made
+        /// entirely of rests, one whose head is a note and whose tail is
+        /// silence. Both must print "3" over a bracket — the marking is the
+        /// only thing distinguishing them from plain quarter values.
+        static var restTuplet: Score {
+            let c4 = Note(pitch: 60, tpc: 14)
+            // Triplet quarter = quarter × 2/3 = Fraction(1/6)
+            let third = NoteDuration.fraction(
+                Fraction(numerator: 1, denominator: 6),
+            )
+            let halfNote = Chord(duration: .half, notes: [c4])
+            let allRests: [VoiceElement] = [
+                .clef(Clef(concertClefType: "G")), // 0
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                // 1
+                .rest(duration: third), // 2
+                .rest(duration: third), // 3
+                .rest(duration: third), // 4
+                .chord(halfNote), // 5
+            ]
+            let noteThenRests: [VoiceElement] = [
+                .chord(Chord(duration: third, notes: [c4])), // 0
+                .rest(duration: third), // 1
+                .rest(duration: third), // 2
+                .chord(halfNote), // 3
+            ]
+            let tuplet = { (start: Int) in
+                [Tuplet(
+                    normalNotes: 2,
+                    actualNotes: 3,
+                    startIndex: start,
+                    endIndex: start + 2,
+                )]
+            }
+            return Score(division: 480, parts: [treblePart(measures: [
+                Measure(voices: [
+                    Voice(elements: allRests, tuplets: tuplet(2)),
+                ]),
+                Measure(voices: [
+                    Voice(elements: noteThenRests, tuplets: tuplet(0)),
+                ]),
+            ])])
+        }
+
         // MARK: - 13 mixed-duration beam groups
 
         static var mixedBeams: Score {

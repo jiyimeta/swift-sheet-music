@@ -24,7 +24,6 @@ extension LayoutEngine {
         // bracket span so a rest at the start or end of the
         // tuplet doesn't visually exclude itself from the bracket.
         var memberSpanXs: [CGFloat] = []
-        var chordStemXs: [CGFloat] = []
         var chordAnchorYs: [CGFloat] = [] // beam-side note y (outer note)
         var chordStemsUp = 0
         var chordCount = 0
@@ -50,7 +49,6 @@ extension LayoutEngine {
                       ) = out[outIdx]
                 else { continue }
                 memberSpanXs.append(so.x)
-                chordStemXs.append(so.x)
                 if stem == .up { chordStemsUp += 1 }
                 let anchorY: CGFloat
                 if stem == .up {
@@ -70,9 +68,14 @@ extension LayoutEngine {
                 continue
             }
         }
+        // A tuplet made only of rests is still a tuplet: the number and
+        // bracket are the ONLY thing saying three-in-the-time-of-two, so
+        // dropping them for want of a chord to anchor against leaves an
+        // unreadable bar. Rests carry the span, and the Y fallbacks below
+        // resolve to the middle line — the same place a middle-line note
+        // would have put it.
         guard let fromX = memberSpanXs.first,
-              let toX = memberSpanXs.last,
-              !chordStemXs.isEmpty
+              let toX = memberSpanXs.last
         else { return }
 
         // MuseScore's bracket rule (Tuplet::calcHasBracket): hide the

@@ -93,6 +93,7 @@
             ("26-harmony-high-chord", Samples.harmonyHighChord),
             ("27-harmony-high-chord-tied", Samples.harmonyHighChordTied),
             ("28-multi-measure-rest", Samples.multiMeasureRest),
+            ("30-rest-tuplet", Samples.restTuplet),
         ]
 
         for (name, score) in samples {
