@@ -7,6 +7,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- PDF import reads chords and note values correctly on scores engraved at
+  a larger-than-typical staff size. The importer matched a notehead to its
+  stem within a fixed ±7pt window, but a stem abuts its notehead's edge at
+  a distance set by the music font — 1.2–1.3 staff spaces, measured over
+  the whole reference corpus — so the window is only correct at one page
+  scale. On a piano score engraved at a 5.95pt staff space every stem-up
+  stem sat 7.41pt away, 0.41pt outside the window: 577 noteheads found no
+  stem at all, each becoming its own one-note chord, and every value that
+  depended on beam attachment collapsed to a quarter. The window is now
+  1.4 staff spaces, which reproduces the old constant exactly at the
+  corpus's most common staff space.
+
 ## [1.10.0] - 2026-08-11
 
 ### Added

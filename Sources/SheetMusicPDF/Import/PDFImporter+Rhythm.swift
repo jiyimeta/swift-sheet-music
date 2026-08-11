@@ -25,9 +25,11 @@ extension PDFImporter {
         let glyphs = measure.glyphs.sorted {
             $0.geometry.origin.x < $1.geometry.origin.x
         }
-        // Staff space (sp) for sizing geometry rects; derived from this
-        // staff's five line y-coordinates. Only consumed by the geometry
-        // side-car (noteRects / onsetRect); the value path ignores it.
+        // Staff space (sp), derived from this staff's five line
+        // y-coordinates. Sizes the geometry side-car (noteRects /
+        // onsetRect) AND the stem-attachment x-window, which is a fraction
+        // of the staff space in every music font (see
+        // `stemAttachWindowInSpaces`).
         let spatium = staffSpatium(measure.staffYLines)
         // Stems and beams from OTHER staves stack at the same x as this
         // staff's notes (the systems are vertically aligned), so an x-only
@@ -38,7 +40,7 @@ extension PDFImporter {
         // neighbouring staff (~3 staff-heights away centre-to-centre).
         let yBand = staffBeamBand(measure.staffYLines)
         let stems = paths.filter {
-            isStem(in: measure, $0, noteheads: glyphs)
+            isStem(in: measure, $0, noteheads: glyphs, spatium: spatium)
                 && segmentOverlapsBand($0, yBand)
         }
         // Beam segments overlapping this measure cell (page-filtered
@@ -144,7 +146,7 @@ extension PDFImporter {
     ) -> RhythmElement {
         let lead = glyphs[leadIndex]
         let cluster = stemCluster(
-            startingAt: leadIndex, in: glyphs, stems: stems,
+            startingAt: leadIndex, in: glyphs, stems: stems, spatium: spatium,
         )
         consumed.formUnion(cluster.indices)
         let (notes, noteRects) = buildChordNotes(
@@ -319,12 +321,14 @@ extension PDFImporter {
     /// barlines at the same `w` (here ~3.57pt), so a width gate either
     /// rejected every stem (observed: 0 stems → no chord clustering, no
     /// beam attachment) or admitted barlines. We instead require a
-    /// notehead within ~3.5pt of the vertical's x and exclude verticals
-    /// sitting on the cell's left / right edge (where barlines live).
+    /// notehead within `stemAttachWindow` of the vertical's x and exclude
+    /// verticals sitting on the cell's left / right edge (where barlines
+    /// live).
     private static func isStem(
         in measure: ImportMeasure,
         _ path: PathSegment,
         noteheads: [ClassifiedGlyph],
+        spatium: CGFloat,
     ) -> Bool {
         guard path.kind == .vertical,
               measure.xRange.contains(path.rect.midX)
@@ -342,10 +346,12 @@ extension PDFImporter {
             return false
         }
         // A stem abuts a notehead's right edge (stem-up) or left edge
-        // (stem-down), offset by roughly the notehead width (~4–6pt here).
+        // (stem-down), offset by roughly the notehead width — which is a
+        // fraction of the STAFF SPACE, not a fixed number of points.
+        let window = stemAttachWindow(spatium: spatium)
         return noteheads.contains { g in
             isNoteheadSemantic(g.semantic)
-                && abs(g.geometry.origin.x - x) <= 7
+                && abs(g.geometry.origin.x - x) <= window
         }
     }
 
@@ -375,10 +381,12 @@ extension PDFImporter {
         startingAt i: Int,
         in glyphs: [ClassifiedGlyph],
         stems: [PathSegment],
+        spatium: CGFloat,
     ) -> Cluster {
         let lead = glyphs[i]
         guard let chosen = nearestStem(
-            toX: lead.geometry.origin.x, noteY: lead.geometry.origin.y, stems: stems,
+            toX: lead.geometry.origin.x, noteY: lead.geometry.origin.y,
+            stems: stems, spatium: spatium,
         )
         else {
             return Cluster(indices: [i], stem: nil, stemIndex: nil)
@@ -399,7 +407,8 @@ extension PDFImporter {
             // Single-voice chords share one stem (mates still cluster); a
             // notehead with no detected stem still joins.
             let gStem = nearestStem(
-                toX: g.geometry.origin.x, noteY: g.geometry.origin.y, stems: stems,
+                toX: g.geometry.origin.x, noteY: g.geometry.origin.y,
+                stems: stems, spatium: spatium,
             )
             if let gStem, gStem.index != chosen.index { continue }
             indices.append(j)
