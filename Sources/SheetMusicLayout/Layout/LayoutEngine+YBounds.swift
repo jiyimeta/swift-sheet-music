@@ -7,8 +7,13 @@ extension LayoutEngine {
     /// Compute the y extent (min/max) of every placed element across all
     /// measures of a system. Used to size the system so notes on far
     /// ledger lines, tempo glyphs, dynamics, etc. don't clip.
+    /// - Parameter extraElements: system-scoped elements that are not
+    ///   held by any measure — the line spanners `buildSystem` lifts
+    ///   into `LayoutSystem.spanners` — in the same coordinate space as
+    ///   `measures`.
     static func elementYBounds(
         in measures: [LayoutMeasure],
+        extraElements: [LayoutElement] = [],
         metrics: StaffMetrics,
     ) -> (min: CGFloat, max: CGFloat) {
         var minY = CGFloat.infinity
@@ -17,13 +22,19 @@ extension LayoutEngine {
         // in every direction so the reported bounds cover the rendered
         // pixels, not just the anchor point.
         let glyphPad = metrics.sp
+        func accumulate(_ el: LayoutElement) {
+            for p in elementYPoints(el, sp: metrics.sp) {
+                minY = min(minY, p - glyphPad)
+                maxY = max(maxY, p + glyphPad)
+            }
+        }
         for measure in measures {
             for el in measure.elements + measure.markers + measure.jumps {
-                for p in elementYPoints(el, sp: metrics.sp) {
-                    minY = min(minY, p - glyphPad)
-                    maxY = max(maxY, p + glyphPad)
-                }
+                accumulate(el)
             }
+        }
+        for el in extraElements {
+            accumulate(el)
         }
         if !minY.isFinite { minY = 0 }
         if !maxY.isFinite { maxY = 0 }

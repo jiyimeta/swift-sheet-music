@@ -374,9 +374,11 @@ extension SkylineAutoplacePass {
         return dy
     }
 
-    /// Side of the staff this item is pushed toward. Kinds MuseScore
-    /// allows on either side (`.ottava`, `.textLine`) are decided by
-    /// where the element already sits.
+    /// Side of the staff this item is pushed toward. The spanner kinds
+    /// are decided by where the element already sits, because that is
+    /// where MuseScore gets it from too — `autoplaceSpannerSegment`
+    /// reads `spanner()->placeAbove()`, and an authored `<placement>`
+    /// is already baked into the segment's Y.
     private static func resolveSide(
         kind: ShapeItemKind, shape: LayoutShape, staffMidY: CGFloat,
     ) -> AutoplaceSide {

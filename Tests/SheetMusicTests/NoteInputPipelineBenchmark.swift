@@ -203,6 +203,7 @@
                 effectiveMelismaTicks: effTicks,
                 cache: cache,
                 belowStaffSpannerCoverage: coverage,
+                spannerAnchors: LayoutEngine.collectSpanners(score: score),
                 multiMeasureRestPlan: mmr,
                 measureDurations: measureDurations,
                 staffMeasureDurations: staffMeasureDurations,
