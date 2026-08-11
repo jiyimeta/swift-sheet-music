@@ -205,9 +205,6 @@ extension LayoutEngine {
                     .indices.contains(measureIdx)
                     ? context.melismaContinuations[staffIdx][measureIdx]
                     : []
-                let coversBelowStaffSpanner = context
-                    .belowStaffSpannerCoverage[staffIdx]?
-                    .contains(measureIdx) ?? false
                 let canonicalStaff = StaffAddress(
                     partIndex: 0, staffIndexInPart: 0,
                 )
@@ -239,7 +236,6 @@ extension LayoutEngine {
                     incomingMelismas: incomingMelismas,
                     effectiveMelismaTicks: context.effectiveMelismaTicks,
                     graceNoteMag: context.options.graceNoteMag,
-                    coversBelowStaffSpanner: coversBelowStaffSpanner,
                     systemElements: systemElementsForStaff,
                     showsInvisibleElements: context.options.showsInvisibleElements,
                     measureDuration: measDuration,
@@ -278,7 +274,6 @@ extension LayoutEngine {
                         isFirstSystem: isFirstSystem,
                         incomingMelismas: incomingMelismas,
                         effectiveMelismaTicks: context.effectiveMelismaTicks,
-                        coversBelowStaffSpanner: coversBelowStaffSpanner,
                         systemElements: systemElementsForStaff,
                     )
                     els = result.elements

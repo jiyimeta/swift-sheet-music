@@ -61,7 +61,6 @@ extension LayoutEngine {
         isFirstSystem: Bool = false,
         incomingMelismas: [MelismaContinuation] = [],
         effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
-        coversBelowStaffSpanner: Bool = false,
         systemElements: [PositionedSystemElement] = [],
     ) -> (
         elements: [LayoutElement],
@@ -355,14 +354,15 @@ extension LayoutEngine {
             // value than later ones and the in-measure lyric row
             // is jagged.
             let voiceMaxLyricCenterY: CGFloat = {
-                // Default 2 sp below staff; bumped further when a
-                // below-staff spanner (hairpin, pedal) shares the
-                // measure, so the spanner glyph sits between staff
-                // and lyric (the MuseScore convention).
-                var maxY = lyricBaseFloor(
-                    staffMidY: staffMidY, metrics: metrics,
-                    coversBelowStaffSpanner: coversBelowStaffSpanner,
-                )
+                // Default floor, 2 sp below the staff. A below-staff
+                // spanner sharing the measure used to bump this to
+                // 7.4 sp so the glyph could sit between staff and
+                // lyric; `SkylineAutoplacePass` now does that job
+                // properly — hairpins, pedals and ottavas are placed
+                // and added to the skyline BEFORE the lyric category,
+                // so a lyric clears the segment's actual position
+                // instead of a constant guess at where it might be.
+                var maxY = staffMidY + metrics.sp * 4
                 for el in voice.elements {
                     guard case let .chord(chord) = el else { continue }
                     guard let avoidY = chordLyricAvoidY(
@@ -2127,18 +2127,6 @@ extension LayoutEngine {
             }
         }
         return avoidY
-    }
-
-    private static func lyricBaseFloor(
-        staffMidY: CGFloat,
-        metrics: StaffMetrics,
-        coversBelowStaffSpanner: Bool,
-    ) -> CGFloat {
-        let base = staffMidY + metrics.sp * 4
-        if coversBelowStaffSpanner {
-            return max(base, staffMidY + metrics.sp * 7.4)
-        }
-        return base
     }
 
     /// Map a `ChordArticulation.Kind` to the renderable layout-local

@@ -432,6 +432,13 @@ extension LayoutEngine {
             return part.instrument.useDrumset
                 ? part.instrument.drumLineMap : nil
         }
+        // Anchors that reach into `[measureStart, lastMeasure]` from
+        // anywhere, including from before it.
+        let lastMeasure = measureStart + measureCount - 1
+        let overlappingAnchors = context.spannerAnchors.filter {
+            $0.startMeasure <= lastMeasure
+                && max($0.startMeasure, $0.endMeasure) >= measureStart
+        }
         return LayoutCache.SystemInputs(
             measureStart: measureStart,
             measureCount: measureCount,
@@ -448,6 +455,8 @@ extension LayoutEngine {
             drumLineMaps: drumLineMaps,
             totalMeasures: staves.first?.measures.count ?? 0,
             options: context.options,
+            overlappingSpannerAnchors: overlappingAnchors,
+            ottavaNumbersOnly: context.score.style.ottavaNumbersOnly,
         )
     }
 

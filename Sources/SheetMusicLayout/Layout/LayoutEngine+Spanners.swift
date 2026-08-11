@@ -48,43 +48,6 @@ extension LayoutEngine {
         let ottavaNumbersOnly: Bool?
     }
 
-    /// Per-staff set of measure indices covered by a visible
-    /// below-staff spanner (hairpin, pedal). Used by lyric placement
-    /// to push the verse-0 baseline below the spanner band so a
-    /// hairpin can sit between the staff and the lyric row — the
-    /// MuseScore convention. Crescendo / decrescendo direction and
-    /// in-measure tick offsets are irrelevant here; the question is
-    /// purely "does this measure host a below-staff spanner glyph?" —
-    /// which an authored `<placement>` can answer either way, so a
-    /// hairpin flipped above the staff must stop reserving the band.
-    static func belowStaffSpannerCoverage(score: Score) -> [Int: Set<Int>] {
-        var out: [Int: Set<Int>] = [:]
-        for (staffIdx, entry) in score.allStaves.enumerated() {
-            let staff = entry.staff
-            var covered: Set<Int> = []
-            for (measureIdx, measure) in staff.measures.enumerated() {
-                for voice in measure.voices {
-                    for el in voice.elements {
-                        guard case let .spanner(sp) = el,
-                              sp.visible,
-                              sp.placement.map({ $0 == .below })
-                              ?? isBelowStaff(kind: sp.kind)
-                        else { continue }
-                        let lastIdx = min(
-                            staff.measures.count - 1,
-                            measureIdx + max(0, sp.nextMeasuresOffset),
-                        )
-                        for m in measureIdx ... lastIdx {
-                            covered.insert(m)
-                        }
-                    }
-                }
-            }
-            if !covered.isEmpty { out[staffIdx] = covered }
-        }
-        return out
-    }
-
     /// Walk every staff / measure / voice and collect Spanner anchors.
     /// `endTick` carries the in-measure offset of the end anchor when
     /// the source provided `<next><fractions>` (partial-measure span);

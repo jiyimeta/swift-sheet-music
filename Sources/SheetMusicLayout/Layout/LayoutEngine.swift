@@ -103,7 +103,6 @@ public enum LayoutEngine {
             melismaContinuations: melismas,
             effectiveMelismaTicks: effectiveMelismaTicks,
             cache: cache,
-            belowStaffSpannerCoverage: belowStaffSpannerCoverage(score: score),
             spannerAnchors: anchors,
             multiMeasureRestPlan: multiMeasureRestPlan,
             measureDurations: measureDurations,
@@ -409,12 +408,6 @@ public enum LayoutEngine {
         /// rebuilds it in place with this call's results. See
         /// `LayoutCache`.
         let cache: LayoutCache?
-        /// Per-staff set of measure indices that fall under a visible
-        /// below-staff spanner (today: hairpin / pedal). Lyric placement
-        /// reads this to push its baseline below the spanner band so
-        /// the spanner glyph and lyric row don't overlap. Computed
-        /// once at layout entry — cheap walk across spanners.
-        let belowStaffSpannerCoverage: [Int: Set<Int>]
         /// Every spanner anchor in the score, collected once at layout
         /// entry. `buildSystem` reads this to synthesize the line
         /// spanners (hairpin / pedal / ottava / text line) into its
