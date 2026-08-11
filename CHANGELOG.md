@@ -7,6 +7,28 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Soloing a part no longer silences the metronome. The mixer built a
+  metronome strip alongside the instrument strips and then applied one
+  rule to all of them — "while any channel is soloed, every non-soloed
+  channel is silent" — but nothing ever solos the click, so the moment a
+  user soloed a part to practise it the click went with it, with the
+  host's metronome toggle still reading "on". The metronome is now off
+  the solo bus, the way a DAW's click is: it answers to its own mute
+  alone, and it can't silence the instruments either. Solo between
+  instruments is unchanged. This also settles a split inside this
+  package — the Android engine never put the click in `mixerChannels`,
+  so only the Apple engine had the bug.
+
+### Added
+
+- `MixerChannel.isSoloable`, `false` for the metronome. Hosts hide the
+  solo control on a strip that reports `false`, the same way a `nil`
+  `program` hides the program picker. `PlaybackEngine.setSoloed` ignores
+  a channel that isn't on the solo bus, so `isSoloed` can never read back
+  `true` there whatever the host sends.
+
 ## [1.10.1] - 2026-08-12
 
 ### Fixed
