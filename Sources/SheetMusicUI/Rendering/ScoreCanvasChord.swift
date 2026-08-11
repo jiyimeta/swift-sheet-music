@@ -17,6 +17,20 @@ extension ScoreCanvasDrawing {
         stem: StemDirection,
         stemOrigin: CGPoint,
         isBeamed: Bool,
+        // KNOWN DEFECT, inherited — NOT introduced by the `.graceChord`
+        // case this file was extracted for. This is the whole of Canvas's
+        // stem extension: whatever the `.chord` element carries (currently
+        // only tremolo bars on flagged notes). The CALayer renderer adds
+        // one more term the Canvas path has never had —
+        // `ScoreLayerBuilder+Chord.swift:144`'s `dotOnLineExtension`,
+        // +0.5 sp for a stem-up FLAGGED DOTTED chord whose stem-side outer
+        // note sits on a staff line, which moves the flag clear of the dot
+        // that `drawDots` raised to clear the same line. Canvas therefore
+        // draws such chords with a shorter stem, and its flag can overlap
+        // the raised dot. It applies to ordinary chords as much as to
+        // grace chords, so adding it here alone would be inconsistent, and
+        // adding it everywhere is a deliberate pixel change that needs its
+        // own before/after gate.
         stemExtension: CGFloat = 0,
         stemIsInvisible: Bool = false,
         base: CGPoint,
