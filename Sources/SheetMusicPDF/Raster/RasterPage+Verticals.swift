@@ -18,6 +18,18 @@ extension RasterPage {
     /// be strictly worse.
     static let verticalMinLengthInSpaces = 2.0
 
+    /// Widest run still emitted as a `.vertical`, in staff spaces.
+    ///
+    /// Without this, BEAMS come out as verticals. A stack of three or
+    /// four fused beams is 2.00 or 2.75 staff spaces thick — above
+    /// `verticalMinLengthInSpaces` — and its columns all overlap in y, so
+    /// the whole beam group would group into one blob and be emitted as a
+    /// vertical the width of the beam. A real vertical is a stem
+    /// (~0.15 sp wide) or a barline or bracket (up to ~0.6 sp); the
+    /// narrowest beam measured on this dataset is 1.30 sp long, so 1.0 sp
+    /// separates the two classes with margin on both sides.
+    static let verticalMaxWidthInSpaces = 1.0
+
     /// Inked stretches of one column, top to bottom.
     static func columnRuns(_ mask: InkMask, x: Int) -> [(y0: Int, y1: Int)] {
         var out: [(y0: Int, y1: Int)] = []
@@ -78,7 +90,9 @@ extension RasterPage {
         }
         closed.append(contentsOf: open)
 
+        let maxWidthPx = max(1, Int((verticalMaxWidthInSpaces * spacingPx).rounded()))
         return closed
+            .filter { $0.x1 - $0.x0 + 1 <= maxWidthPx }
             .sorted { ($0.x0, $0.y0) < ($1.x0, $1.y0) }
             .map { segment(from: $0, transform: transform, pageIndex: pageIndex) }
     }

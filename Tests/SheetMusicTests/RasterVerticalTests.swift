@@ -56,6 +56,25 @@
             #expect(abs(Double(segs[0].lineWidth) - 5 * 72.0 / 300.0) < 0.05)
         }
 
+        /// A stack of three fused beams is 2.0 staff spaces thick, which
+        /// clears the length floor, and all of its columns overlap in y —
+        /// so without a width gate the whole beam group would be emitted
+        /// as one vertical as wide as the beam is long.
+        @Test func aThickBeamStackIsNotMistakenForAVertical() {
+            var bmp = RasterTestBitmaps.blank(widthPx: 400, heightPx: 200, dpi: 300)
+            // 24px tall (2.0 sp at spacing 12), 200px long.
+            RasterTestBitmaps.hLine(&bmp, y: 80, x0: 100, x1: 300, thickness: 24)
+            #expect(Self.verticals(bmp).isEmpty)
+        }
+
+        /// …but a thick FINAL barline, which is genuinely a vertical, must
+        /// still survive the same gate.
+        @Test func aThickBarlineIsStillAVertical() {
+            var bmp = RasterTestBitmaps.blank(widthPx: 300, heightPx: 200, dpi: 300)
+            RasterTestBitmaps.vLine(&bmp, x: 200, y0: 40, y1: 88, thickness: 7)
+            #expect(Self.verticals(bmp).count == 1)
+        }
+
         @Test func verticalsAreEmittedLeftToRight() {
             var bmp = RasterTestBitmaps.blank(widthPx: 400, heightPx: 200, dpi: 300)
             for x in [300, 100, 200] {
