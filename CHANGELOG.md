@@ -9,6 +9,16 @@ and this project adheres to
 
 ### Fixed
 
+- A tuplet whose members are all rests engraves its number and bracket.
+  The emitter required at least one chord to anchor the marking against
+  and returned early otherwise, so a triplet of rests printed as three
+  plain rests with nothing saying three-in-the-time-of-two — the marking
+  is the only thing that distinguishes them. Rests already widened the
+  bracket's span; now they can carry it alone, and the vertical anchor
+  falls back to the middle line, placing the bracket where a middle-line
+  note would have put it. Sample `30-rest-tuplet` covers both the
+  all-rest tuplet and the note-then-rests one.
+
 - PDF import reads chords and note values correctly on scores engraved at
   a larger-than-typical staff size. The importer matched a notehead to its
   stem within a fixed ±7pt window, but a stem abuts its notehead's edge at
