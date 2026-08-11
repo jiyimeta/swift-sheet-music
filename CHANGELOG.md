@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-08-12
+
 ### Fixed
 
 - A tuplet whose members are all rests engraves its number and bracket.
