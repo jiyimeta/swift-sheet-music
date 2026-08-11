@@ -227,7 +227,7 @@ of them is enough to flip its whole face to `font-mismatch` on P3c-G4.
 | **P0-G1** oracle replay is exact | `OMR_DATA_ROOT=$R OMR_ORACLE_REPLAY=1 swift test 2>&1 \| grep '\[SUMMARY\]'` | every render prints `exact=Y`; the closing line reads `[gate][SUMMARY] P0-G1 exact=N/N inexact=0 skipped=0 failed=0 pass=Y` **and `N > 0`**. Read `pass=`, not the two numbers: the denominator counts every render directory visited, so a skip (label export never ran for it) or a throw (unopenable PDF) is a miss, and an empty sweep is `exact=0/0 … pass=N`, never a pass. `swift test` itself fails when `pass=N`. Measured `2208/2208 pass=Y` on v2 (2026-08-11), after the order-invariance fix — see "RESOLVED: P0-G1 failed at scale" below |
 | **P0-G2** run twice, byte-identical | rerun any harness command into `…-run2.txt` and `diff` it against run 1; for the label export also `find $R -name '*.labels.json' \| sort \| xargs shasum -a 256` after each run and `diff` those | empty `diff` both times |
 | **P0-G3** back-end ceiling measured | `OMR_DATA_ROOT=$R OMR_SCORE_EVAL=1 swift test 2>&1 \| grep '\[SUMMARY\]' > ceiling.tsv` and `OMR_DATA_ROOT=$R OMR_SEAM_EVAL=1 swift test 2>&1 \| grep '\[SUMMARY\]' > seam.tsv` | not a threshold — the recorded rows **are** the ceiling. Read `measuresA` / `measuresB` before any percentage (see blind spots below) |
-| **P0-G4** vector path untouched | **maintainer step, run in the MAIN checkout, not in this worktree** — the untracked spike harnesses and the copyrighted corpus live there. Curated 6 + real corpus must stay byte-identical | expected trivially (this work changed nothing under `Sources/`); still run it |
+| **P0-G4** vector path untouched | `PDF_REAL_CORPUS=1 swift test --filter "measureCorpusDiff\|measureRealCorpusDiff"`, having copied the untracked `PDFCorpusGroundTruthSpikeTests.swift` in from the MAIN checkout — its corpus paths are absolute, so it runs from anywhere. **Delete it again afterwards; it must never be committed.** | 141 `[SUMMARY]` rows (curated 6 + real 135) — count them, the real half is env-gated and silently prints nothing without the flag. Diff two sorted runs; see "P0-G4 was run" below |
 | **P3c-G1** same seed ⇒ byte-identical | generate a second root with the **same seed**, run steps 2–3 over it, then `Training/.venv/bin/python Training/generate/build_dataset.py compare $R ${R}b` | `[compare][SUMMARY] identical=Y` (exit 0). Labels + manifest only; images are excluded by design. Each `finalize` also prints `[gate][SUMMARY] P3c-G1-selfcheck … pass=Y` — it re-reads the manifest it just wrote and re-hashes every label listed, so a `pass=N` there means comparing the two roots is meaningless until it is fixed (`[verify]` lines name what) |
 | **P3c-G2** export success ≥ 99% | read `finalize`'s output (or `manifest.json` → `gates.P3c-G2`) | `[gate][SUMMARY] P3c-G2 export_success=… denominator=plan … missing=0 pass=Y`. `missing>0` means renders the plan drove that are neither exported nor quarantined — an interrupted `generate`, so rerun it before believing anything else |
 | **P3c-G3** per-class coverage floor | same run; every shortfall prints a `[coverage-below-floor] <class> n/floor` line | `[gate][SUMMARY] P3c-G3 below_floor=0/62 unreachable=2 classes=64 floor=1000 pass=Y`. A first pilot will not pass this — the report tells you which classes to generate more of. **Read the denominator**: it is the *eligible* classes, two fewer than the vocabulary — see below |
@@ -268,27 +268,37 @@ four `WalkedContent` streams once inside `buildScore`
     before: [gate][SUMMARY] P0-G1 exact=1574/2208 inexact=634 pass=N
     after:  [gate][SUMMARY] P0-G1 exact=2208/2208 inexact=0   pass=Y
 
-**Still owed: P0-G4 must be re-blessed.** Where a real PDF's
-content-stream order disagreed with canonical order at a consequential
-tie, the decode now resolves it the other way — narrowly, but really.
-That is a maintainer step in the MAIN checkout, where the corpus and its
-harness live.
+**P0-G4 was run, and it decided the canonical order.** The corpus
+harness is untracked in the MAIN checkout, but its corpus paths are
+absolute, so copying `PDFCorpusGroundTruthSpikeTests.swift` into this
+worktree's `Tests/` is enough to run it here — it compiles against the
+current `Sources/` unmodified. **Delete it again afterwards: it hard-codes
+personal paths and must never be committed.** The real-corpus half is
+env-gated, and without the flag it returns instantly and prints nothing,
+so a run that covers only the curated 6 looks exactly like a full one —
+count the `[SUMMARY]` rows (141, not 6):
 
-How much movement to expect, measured rather than guessed: the whole
-`OMR_SCORE_EVAL` sweep was run over v2 twice, once with the pre-fix
-importer and once with the canonicalizer, and **all 2192 `[SUMMARY]`
-rows are byte-identical** — 2032 scorable renders across 8 faces, 3 dpi
-and both generator families, with every note / rest count and every
-`pitch%` / `dur%` unchanged. So on MuseScore output the DIRECT walk's
-decode did not move at all; what moved was the replay walk, into
-agreement with it. That is evidence, not proof: those rows are derived
-metrics, not `Score` bytes, and the corpus contains engravers other than
-MuseScore. Expect the re-bless to be small, and treat a large diff as a
-signal to investigate rather than to bless.
+    PDF_REAL_CORPUS=1 swift test \
+        --filter "measureCorpusDiff|measureRealCorpusDiff" > out.txt 2>&1
+    grep '\[SUMMARY\]' out.txt | sort > sums.txt   # then diff two of these
 
-    Training/.venv/bin/python — the aggregator used above is throwaway;
-    the reproducible form is `OMR_DATA_ROOT=$R OMR_SCORE_EVAL=1 swift
-    test 2>&1 | grep '\[SUMMARY\]' | sort` into two files and `diff`. The rest of this section is kept because it is the
+Measured against the pre-canonicalization baseline over all 141 scores:
+
+    top-first  (-y):  13 scores moved, 12 of them WORSE (dur% -1..-3)
+    bottom-first(+y):  3 scores moved, ALL BETTER, none worse
+
+so the shipped decode is now strictly better than before the change, and
+there is nothing left to re-bless. The direction was chosen by that
+measurement and by nothing else — see `PDFImporter+Canonical`'s doc
+comment for why the first notehead of a same-x cluster is load-bearing.
+
+**Synthetic data could not have decided this.** The same sweep over v2
+(`OMR_SCORE_EVAL`) gave **2192 byte-identical `[SUMMARY]` rows** across
+both orders and the pre-fix code — 2032 scorable renders, 8 faces, 3 dpi
+— because generated engraving stacks far fewer noteheads at one x than
+real engraving does. And the invariance gate cannot choose either: P0-G1
+reads 2208/2208 for both total orders. Only the real corpus separates
+them. The rest of this section is kept because it is the
 diagnosis, and because the same failure mode will come back the moment a
 new pass reads a stream in arrival order.
 
