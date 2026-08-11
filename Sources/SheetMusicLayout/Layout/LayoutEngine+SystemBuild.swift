@@ -5,6 +5,29 @@
 import SheetMusicCore
 
 extension LayoutEngine {
+    /// One measure of one system, after `placeMeasureElements` and
+    /// before the pass-2 translation into system coordinates: X is
+    /// measure-local, Y is staff-local (staff top at `sp * 2`).
+    ///
+    /// Declared at type level rather than inside `buildSystem` so
+    /// `synthesizeLineSpanners` can insert into the same buffer.
+    struct UntranslatedMeasure {
+        let measureIdx: Int
+        let width: CGFloat
+        var perStaffElements: [Int: [LayoutElement]]
+        /// Hidden annotations laid out under `showsInvisibleElements`,
+        /// kept parallel to `perStaffElements` so the system-wide
+        /// post-passes (lyric/melisma Y align) leave them alone.
+        var perStaffInvisibleElements: [Int: [LayoutElement]]
+        let staff0Measure: Measure?
+        let tickCols: [Int: CGFloat]
+        /// When non-nil, this entry is a multi-measure-rest run-start
+        /// placeholder. Pass 2 emits a single H-bar LayoutMeasure for
+        /// the run instead of the per-staff aggregation. The value is
+        /// the source-measure count covered by the run.
+        let multiMeasureRestCount: Int?
+    }
+
     // MARK: - Per-system layout
 
     static func buildSystem( // swiftlint:disable:this function_body_length
@@ -70,22 +93,6 @@ extension LayoutEngine {
         // where the elements actually landed. Run `placeMeasureElements`
         // first into a per-staff buffer, then derive padding from
         // the resulting Y bounds, then translate in pass 2.
-        struct UntranslatedMeasure {
-            let measureIdx: Int
-            let width: CGFloat
-            var perStaffElements: [Int: [LayoutElement]]
-            /// Hidden annotations laid out under `showsInvisibleElements`,
-            /// kept parallel to `perStaffElements` so the system-wide
-            /// post-passes (lyric/melisma Y align) leave them alone.
-            var perStaffInvisibleElements: [Int: [LayoutElement]]
-            let staff0Measure: Measure?
-            let tickCols: [Int: CGFloat]
-            /// When non-nil, this entry is a multi-measure-rest run-start
-            /// placeholder. Pass 2 emits a single H-bar LayoutMeasure for
-            /// the run instead of the per-staff aggregation. The value is
-            /// the source-measure count covered by the run.
-            let multiMeasureRestCount: Int?
-        }
         // Per-staff effective measure durations so `placeMeasureElements`
         // receives the prevailing time signature (carried forward across
         // measures that contain no explicit `<TimeSignature>` element)
@@ -198,9 +205,6 @@ extension LayoutEngine {
                     .indices.contains(measureIdx)
                     ? context.melismaContinuations[staffIdx][measureIdx]
                     : []
-                let coversBelowStaffSpanner = context
-                    .belowStaffSpannerCoverage[staffIdx]?
-                    .contains(measureIdx) ?? false
                 let canonicalStaff = StaffAddress(
                     partIndex: 0, staffIndexInPart: 0,
                 )
@@ -232,7 +236,6 @@ extension LayoutEngine {
                     incomingMelismas: incomingMelismas,
                     effectiveMelismaTicks: context.effectiveMelismaTicks,
                     graceNoteMag: context.options.graceNoteMag,
-                    coversBelowStaffSpanner: coversBelowStaffSpanner,
                     systemElements: systemElementsForStaff,
                     showsInvisibleElements: context.options.showsInvisibleElements,
                     measureDuration: measDuration,
@@ -271,7 +274,6 @@ extension LayoutEngine {
                         isFirstSystem: isFirstSystem,
                         incomingMelismas: incomingMelismas,
                         effectiveMelismaTicks: context.effectiveMelismaTicks,
-                        coversBelowStaffSpanner: coversBelowStaffSpanner,
                         systemElements: systemElementsForStaff,
                     )
                     els = result.elements
@@ -438,13 +440,30 @@ extension LayoutEngine {
         // `staffBottomPads` measure the POST-autoplace extents).
         // Horizontal coordinates are measure-local here, so the pass
         // receives each measure's accumulated system X.
+        var contentWidth: CGFloat = partLabelWidth
+        var xOffsets: [CGFloat] = []
+        for um in untranslated {
+            xOffsets.append(contentWidth)
+            contentWidth += um.width
+        }
+        // --- Line spanners into the pass-1 buffer ---
+        //
+        // Before the autoplace block below, not after: its writeback
+        // only touches staves that already have a buffer entry, so a
+        // segment inserted later into a staff without one would be
+        // dropped silently.
+        synthesizeLineSpanners(
+            into: &untranslated,
+            anchors: context.spannerAnchors,
+            measureRange: measureRange,
+            staffCount: staves.count,
+            xOffsets: xOffsets,
+            systemWidth: contentWidth,
+            ottavaNumbersOnly: context.score.style.ottavaNumbersOnly,
+            metrics: metrics,
+        )
+
         do {
-            var xCursor: CGFloat = partLabelWidth
-            var xOffsets: [CGFloat] = []
-            for um in untranslated {
-                xOffsets.append(xCursor)
-                xCursor += um.width
-            }
             let staffMidYLocal = metrics.sp * 2 + metrics.staffHeight / 2
             for staffIdx in 0 ..< staves.count {
                 var perStaff: [[LayoutElement]] = untranslated.map {
@@ -459,13 +478,13 @@ extension LayoutEngine {
                     measures: &perStaff,
                     xOffsets: xOffsets,
                     systemLeftX: xOffsets.first ?? 0,
-                    systemRightX: xCursor,
+                    systemRightX: contentWidth,
                     metrics: metrics,
                 )
                 SkylineAutoplacePass.run(
                     measures: &perStaff,
                     xOffsets: xOffsets,
-                    systemRightX: xCursor,
+                    systemRightX: contentWidth,
                     staffMidY: staffMidYLocal,
                     metrics: metrics,
                 )
@@ -500,7 +519,7 @@ extension LayoutEngine {
         for um in untranslated {
             for (staffIdx, els) in um.perStaffElements {
                 for el in els {
-                    for y in elementYPoints(el) {
+                    for y in elementYPoints(el, sp: metrics.sp) {
                         if y < staffMinY[staffIdx] {
                             staffMinY[staffIdx] = y
                         }
@@ -692,6 +711,14 @@ extension LayoutEngine {
             )
         }
 
+        // --- Line spanners out of the pass-1 buffer ---
+        let systemSpanners = extractLineSpanners(
+            from: &untranslated,
+            staffOrigins: staffOrigins,
+            partLabelWidth: partLabelWidth,
+            metrics: metrics,
+        )
+
         // --- Pass 2: translate elements with adjusted origins ---
         var layoutMeasures: [LayoutMeasure] = []
         var xCursor: CGFloat = partLabelWidth
@@ -868,8 +895,13 @@ extension LayoutEngine {
         // nothing clips when e.g. a note lands on the 5th ledger line
         // above the top staff or a dynamic text hangs farther below the
         // bottom staff than the baseline allowed.
+        // Spanner segments left `layoutMeasures` above, so they have to
+        // be handed to the bbox separately — otherwise a hairpin the
+        // skyline pushed below the last staff would not extend the
+        // system that has to contain it.
         let bbox = elementYBounds(
             in: layoutMeasures,
+            extraElements: systemSpanners,
             metrics: metrics,
         )
         let bottomSlack = max(0, bbox.max - baselineHeight) + metrics.sp * 2
@@ -886,6 +918,9 @@ extension LayoutEngine {
         let adjustedStaffOrigins = topShift > 0
             ? staffOrigins.map { CGPoint(x: $0.x, y: $0.y + topShift) }
             : staffOrigins
+        let adjustedSpanners = topShift > 0
+            ? systemSpanners.map { translate(element: $0, dy: topShift) }
+            : systemSpanners
         let adjustedLabels = topShift > 0
             ? labels.map {
                 LayoutPartLabel(
@@ -920,7 +955,7 @@ extension LayoutEngine {
             staffAddresses: allStaves.map(\.address),
             partLabels: adjustedLabels,
             brackets: adjustedBrackets,
-            spanners: [],
+            spanners: adjustedSpanners,
             sp: metrics.sp,
             showsInvisibleElements: context.options.showsInvisibleElements,
         )
@@ -950,7 +985,7 @@ extension LayoutEngine {
     /// measure's first timed element is placed off the header's
     /// `contentStartX` instead, landing left of every column — it
     /// belongs to the first tick at or after its anchor.
-    private static func collectDynamicExtents(
+    static func collectDynamicExtents(
         in elements: [LayoutElement],
         staffIndex: Int,
         tickColumns: [Int: CGFloat],

@@ -7,8 +7,13 @@ extension LayoutEngine {
     /// Compute the y extent (min/max) of every placed element across all
     /// measures of a system. Used to size the system so notes on far
     /// ledger lines, tempo glyphs, dynamics, etc. don't clip.
+    /// - Parameter extraElements: system-scoped elements that are not
+    ///   held by any measure — the line spanners `buildSystem` lifts
+    ///   into `LayoutSystem.spanners` — in the same coordinate space as
+    ///   `measures`.
     static func elementYBounds(
         in measures: [LayoutMeasure],
+        extraElements: [LayoutElement] = [],
         metrics: StaffMetrics,
     ) -> (min: CGFloat, max: CGFloat) {
         var minY = CGFloat.infinity
@@ -17,13 +22,19 @@ extension LayoutEngine {
         // in every direction so the reported bounds cover the rendered
         // pixels, not just the anchor point.
         let glyphPad = metrics.sp
+        func accumulate(_ el: LayoutElement) {
+            for p in elementYPoints(el, sp: metrics.sp) {
+                minY = min(minY, p - glyphPad)
+                maxY = max(maxY, p + glyphPad)
+            }
+        }
         for measure in measures {
             for el in measure.elements + measure.markers + measure.jumps {
-                for p in elementYPoints(el) {
-                    minY = min(minY, p - glyphPad)
-                    maxY = max(maxY, p + glyphPad)
-                }
+                accumulate(el)
             }
+        }
+        for el in extraElements {
+            accumulate(el)
         }
         if !minY.isFinite { minY = 0 }
         if !maxY.isFinite { maxY = 0 }
@@ -31,8 +42,15 @@ extension LayoutEngine {
     }
 
     /// y values contributed by a single LayoutElement.
+    ///
+    /// Pass `sp` to have `.spannerSegment` contribute its full ink band
+    /// instead of just the anchor line. An ottava's label box is 2.5 sp
+    /// tall and a text line's 2.2 sp, so the ±1 sp `glyphPad` in
+    /// `elementYBounds` under-reserves them; a hairpin (1.4 sp) and a
+    /// pedal (1.5 sp) happen to fit inside it. Callers that only want a
+    /// representative Y — verse-row bucketing — leave it nil.
     static func elementYPoints(
-        _ element: LayoutElement,
+        _ element: LayoutElement, sp: CGFloat? = nil,
     ) -> [CGFloat] {
         switch element {
         case let .clef(_, p, _),
@@ -50,11 +68,9 @@ extension LayoutEngine {
              let .measureNumber(_, p),
              let .staffName(_, p),
              let .staffText(_, p, _, _),
-             let .rehearsalMark(_, p, _, _):
-            return [p.y]
-        case let .rest(_, p, _, _, _):
-            return [p.y]
-        case let .note(_, _, _, _, p, _, _, _):
+             let .rehearsalMark(_, p, _, _),
+             let .rest(_, p, _, _, _),
+             let .note(_, _, _, _, p, _, _, _):
             return [p.y]
         case let .chord(notes, _, _, so, _, _, _, _, _, _, _):
             var ys = notes.map(\.origin.y)
@@ -70,9 +86,14 @@ extension LayoutEngine {
             // bars stack a fraction of sp away and are accounted for
             // by the generic glyphPad in elementYBounds.
             return [from.y, to.y]
-        case let .spannerSegment(_, from, to, _, _, _),
-             let .tieArc(from, to, _),
-             let .glissandoLine(from, to, _, _):
+        case let .spannerSegment(kind, from, to, _, _, _):
+            return spannerSegmentYPoints(
+                kind: kind, from: from, to: to, sp: sp,
+            )
+        case let .tieArc(from, to, _),
+             let .glissandoLine(from, to, _, _),
+             let .lyricsMelisma(from, to),
+             let .lyricHyphen(from, to):
             return [from.y, to.y]
         case let .arpeggioWiggle(top, bot, _):
             return [top.y, bot.y]
@@ -95,12 +116,25 @@ extension LayoutEngine {
             }
         case let .tupletLabel(from, to, _, _, _, _):
             return [from.y, to.y]
-        case let .lyricsMelisma(from, to),
-             let .lyricHyphen(from, to):
-            return [from.y, to.y]
         case let .harmony(lh):
             return [CGFloat(lh.y)]
         }
+    }
+
+    /// Y extent of a spanner segment: its full ink band when `sp` is
+    /// known, otherwise just the anchor line.
+    private static func spannerSegmentYPoints(
+        kind: LayoutElement.SpannerKind,
+        from: CGPoint, to: CGPoint, sp: CGFloat?,
+    ) -> [CGFloat] {
+        guard let sp else { return [from.y, to.y] }
+        let half = SpannerGeometry.segmentThickness(
+            kind: kind, sp: sp,
+        ) / 2
+        return [
+            from.y - half, to.y - half,
+            from.y + half, to.y + half,
+        ]
     }
 
     /// Shift lyric text and lyric hyphens by `dy`. Excludes
