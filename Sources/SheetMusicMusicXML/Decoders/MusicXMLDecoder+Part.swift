@@ -11,10 +11,16 @@ extension Part {
     /// Also returns the part's drum-mapping table (empty for non-percussion
     /// parts) so the note decoder can resolve `<unpitched>` notes to GM
     /// percussion pitches.
+    /// `lineCountByStaff` carries `<attributes><staff-details><staff-lines>`
+    /// keyed by 0-based staff index (already clamped to `1...16` by
+    /// `AttributesDecoder`); staves absent from it keep `Staff.lineCount`'s
+    /// default of 5. It can differ per staff, so the staves are built
+    /// index by index rather than with `Array(repeating:count:)`.
     static func decodeMusicXML(
         scorePart: XMLTreeNode,
         partId: String,
         staffCount: Int,
+        lineCountByStaff: [Int: Int] = [:],
     ) throws -> (Part, MusicXMLDrumTable, [String: Instrument]) {
         let name = scorePart.first("part-name")?.text
         let abbrev = scorePart.first("part-abbreviation")?.text
@@ -24,13 +30,13 @@ extension Part {
             useDrumset: drumTable.isDrumset,
         )
         let count = max(1, staffCount)
-        let staves = Array(
-            repeating: Staff(
+        let staves = (0 ..< count).map { staffIndex in
+            Staff(
                 staffType: "stdNormal", group: "pitched",
+                lineCount: lineCountByStaff[staffIndex] ?? 5,
                 defaultClefType: nil, measures: [],
-            ),
-            count: count,
-        )
+            )
+        }
         let part = Part(
             id: partId,
             // MuseScore 5.x stores the track name on Instrument, not Part,

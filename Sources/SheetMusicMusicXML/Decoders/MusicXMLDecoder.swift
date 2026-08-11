@@ -177,14 +177,20 @@ extension Score {
             scorePart: scorePart,
             partId: id,
             staffCount: walker.staffCount,
+            lineCountByStaff: walker.lineCountByStaff,
         )
         // Replace the placeholder empty-measure staves with real content.
-        let populatedStaves: [Staff] = walker.measuresByStaff.map { staffMeasures in
-            Staff(
-                staffType: "stdNormal", group: "pitched",
-                defaultClefType: nil, measures: staffMeasures,
-            )
-        }
+        // `lineCount` is re-read per index rather than copied off the
+        // template, since it can differ from staff to staff.
+        let populatedStaves: [Staff] = walker.measuresByStaff
+            .enumerated()
+            .map { staffIndex, staffMeasures in
+                Staff(
+                    staffType: "stdNormal", group: "pitched",
+                    lineCount: walker.lineCountByStaff[staffIndex] ?? 5,
+                    defaultClefType: nil, measures: staffMeasures,
+                )
+            }
         let part = Part(
             id: partTemplate.id,
             trackName: partTemplate.trackName,

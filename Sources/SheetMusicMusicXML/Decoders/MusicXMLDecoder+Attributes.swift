@@ -30,6 +30,8 @@ enum AttributesDecoder {
             divisions.perQuarter = div
         }
 
+        decodeStaffLines(node, previous: &previous, staffCount: staffCount)
+
         var output: [Emission] = []
         output.append(contentsOf: decodeClefs(
             node,
@@ -110,6 +112,33 @@ enum AttributesDecoder {
         return output
     }
 
+    /// Record every `<staff-details><staff-lines>N</staff-lines>` into
+    /// `previous.lineCountByStaff`. Unlike clef / key / time this is a
+    /// *staff-level* property, not a `VoiceElement`, so it has no
+    /// `Emission` — it rides the snapshot up to the part decoder, which
+    /// stamps it onto the `Staff` values it builds.
+    ///
+    /// `number` is the same 1-based staff selector `<clef>` uses and is
+    /// clamped the same way; an absent `number` means staff 1.
+    /// `SheetMusicMusicXML` has no `mscxDecoderWarn` equivalent, so an
+    /// out-of-range or non-numeric value is corrected silently rather
+    /// than diagnosed — matching the target policy (clamp to `1...16`,
+    /// fall back to 5) without inventing a diagnostic channel.
+    private static func decodeStaffLines(
+        _ node: XMLTreeNode,
+        previous: inout MusicXMLAttributesSnapshot,
+        staffCount: Int,
+    ) {
+        for detailsNode in node.all("staff-details") {
+            guard let raw = detailsNode.first("staff-lines")?.text,
+                  let parsed = Int(raw)
+            else { continue }
+            let number = detailsNode.attributes["number"].flatMap { Int($0) } ?? 1
+            let staffIndex = max(0, min(staffCount - 1, number - 1))
+            previous.lineCountByStaff[staffIndex] = min(max(parsed, 1), 16)
+        }
+    }
+
     private static func decodeKeyFifths(_ node: XMLTreeNode) -> Int? {
         guard let keyNode = node.first("key") else {
             return nil
@@ -152,10 +181,14 @@ enum AttributesDecoder {
 
 /// Snapshot of the most recent `<attributes>` values. Lives outside the enum so
 /// `MusicXMLDecoder+Measure.swift` can hold an `inout` across loop iterations
-/// without an unnecessary nesting trip. `clefByStaff` is keyed by 0-based
-/// staff index.
+/// without an unnecessary nesting trip. `clefByStaff` and
+/// `lineCountByStaff` are keyed by 0-based staff index.
 struct MusicXMLAttributesSnapshot {
     var clefByStaff: [Int: String] = [:]
+    /// `<staff-details><staff-lines>` per staff, already clamped to
+    /// `1...16`. A staff absent from the map keeps `Staff.lineCount`'s
+    /// default of 5.
+    var lineCountByStaff: [Int: Int] = [:]
     var keyFifths: Int?
     var timeN: Int?
     var timeD: Int?

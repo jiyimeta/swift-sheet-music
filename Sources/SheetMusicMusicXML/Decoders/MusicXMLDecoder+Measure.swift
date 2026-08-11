@@ -22,6 +22,13 @@ enum MusicXMLMeasureWalker {
         /// the score-level `[SystemMeasure]` once the staff address is
         /// known.
         let systemElementsByStaffMeasure: [[[PositionedSystemElement]]]
+        /// `<attributes><staff-details><staff-lines>` per 0-based staff
+        /// index, already clamped to `1...16`. Staff-level rather than
+        /// measure-level, so it is collected during the walk and handed
+        /// to the `Staff` construction sites instead of being emitted
+        /// into the measure stream. Staves absent from the map keep
+        /// `Staff.lineCount`'s default of 5.
+        let lineCountByStaff: [Int: Int]
     }
 
     static func decode(
@@ -69,6 +76,7 @@ enum MusicXMLMeasureWalker {
             staffCount: staffCount,
             measuresByStaff: dropped,
             systemElementsByStaffMeasure: perStaffSystemElements,
+            lineCountByStaff: previousAttributes.lineCountByStaff,
         )
     }
 
