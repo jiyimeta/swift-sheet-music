@@ -29,6 +29,70 @@
             )
         }
 
+        private func notehead(x: CGFloat, y: CGFloat) -> ClassifiedGlyph {
+            ClassifiedGlyph(
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: x, y: y), advance: 5,
+                    pageIndex: 0, fontSize: 20,
+                ),
+                semantic: .noteheadBlack,
+            )
+        }
+
+        private func capturedYs(
+            staves: [Staff], glyphs: [ClassifiedGlyph], staffIndex: Int,
+        ) -> [CGFloat] {
+            let systems = PDFImporter.layoutSystems(
+                staves: staves, paths: [], classified: glyphs, pageIndex: 0,
+            )
+            let all = systems.flatMap { $0.parts.flatMap(\.staves) }
+            guard staffIndex < all.count else { return [] }
+            return all[staffIndex].measures
+                .flatMap { $0.glyphs.map(\.geometry.origin.y) }
+                .sorted()
+        }
+
+        /// A DEEP LEDGER note still belongs to its staff.
+        ///
+        /// The pitch-bearing capture band used to stop 3 staff spaces past
+        /// the outer line, which is inside the range real music writes. On a
+        /// piano bass staff the lower note of an octave sits further out, and
+        /// nothing claimed it: measured on `疑事無功_piano` page 1, 25 of 271
+        /// noteheads were captured by NO staff, all of them 3.0–4.5 spaces
+        /// beyond the nearest band. The visible symptom was octave dyads
+        /// arriving as single notes — `[35, 47]` decoding as `[47]` — which
+        /// looks like a chord-clustering bug and is not one.
+        ///
+        /// The band could be narrow because nothing else stopped a staff from
+        /// reaching into its neighbour. The midpoint clamp does that now, so
+        /// the band only has to be wide enough for real ledgers.
+        @Test func aDeepLedgerNoteheadIsCapturedByItsOwnStaff() {
+            let s = staff(yMid: 500, xRange: 50 ... 550, barlineXs: [550])
+            // yLines are 490…510, so the staff's own spacing is 5pt.
+            let deep = notehead(x: 200, y: 490 - 4 * 5) // 4 spaces below
+            let ys = capturedYs(staves: [s], glyphs: [deep], staffIndex: 0)
+            #expect(ys == [470], "\(ys)")
+        }
+
+        /// …but not past the midpoint to a neighbour. The clamp is what makes
+        /// the wider band safe, so it is pinned here: a glyph in the gap
+        /// between two staves goes to the nearer one and to that one only.
+        @Test func theMidpointClampStillSplitsTwoCloseStaves() {
+            let upper = staff(yMid: 540, xRange: 50 ... 550, barlineXs: [550])
+            let lower = staff(yMid: 500, xRange: 50 ... 550, barlineXs: [550])
+            // Upper spans 530…550, lower 490…510; midpoint of the gap is 520.
+            let nearUpper = notehead(x: 200, y: 526)
+            let nearLower = notehead(x: 200, y: 514)
+            let upperYs = capturedYs(
+                staves: [upper, lower], glyphs: [nearUpper, nearLower], staffIndex: 0,
+            )
+            let lowerYs = capturedYs(
+                staves: [upper, lower], glyphs: [nearUpper, nearLower], staffIndex: 1,
+            )
+            #expect(upperYs == [526], "\(upperYs)")
+            #expect(lowerYs == [514], "\(lowerYs)")
+        }
+
         @Test func twoNearStavesFormOneSystem() {
             let s1 = staff(yMid: 700, xRange: 50 ... 550, barlineXs: [200, 400, 550])
             let s2 = staff(yMid: 660, xRange: 50 ... 550, barlineXs: [200, 400, 550])
