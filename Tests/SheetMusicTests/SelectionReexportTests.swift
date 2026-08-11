@@ -4,7 +4,7 @@
     import Testing
 
     /// `SheetMusicUI.swift`'s whole-module `@_exported import SheetMusicLayout` is what surfaces the selection
-    /// model and hit-test ladder — which moved down into `SheetMusicLayout` in 1.10.0 — to a consumer that
+    /// model and hit-test ladder — which moved down into `SheetMusicLayout` in 1.11.0 — to a consumer that
     /// imports only `SheetMusicUI`, never `SheetMusicLayout` directly. That is exactly Folino's shape until
     /// SP2's cutover, so this suite proves the path stays open: it must still see `ScoreHitTester`, its
     /// `itemIDs(in:)` marquee extension member (declared in a *different* file, `ScoreHitTester+Marquee.swift`,

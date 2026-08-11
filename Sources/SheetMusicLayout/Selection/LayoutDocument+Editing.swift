@@ -7,7 +7,7 @@ import SheetMusicCore
 
 /// The editing hit-test policy that sits on top of `ScoreHitTester`'s raw ladder — which targets are
 /// selectable, how much slop a fingertip gets, and when a near miss should be rescued versus treated as a tap on
-/// empty paper. Moved into this library in 1.10.0 so iOS and Android run one policy instead of each platform
+/// empty paper. Moved into this library in 1.11.0 so iOS and Android run one policy instead of each platform
 /// reimplementing it.
 @available(macOS 15.0, *)
 extension LayoutDocument {

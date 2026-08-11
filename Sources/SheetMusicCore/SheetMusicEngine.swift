@@ -14,7 +14,7 @@ public enum SheetMusicEngine {
     /// Both images compute `versionStamp` from this same source constant, so the mismatch gate only fires when the
     /// two builds carry different version *strings*. A stale `.so` left over from a local rebuild at an unchanged
     /// version is exactly the case this is blind to — the historical failure this mechanism was added to catch.
-    public static let version = "1.10.0"
+    public static let version = "1.11.0"
 
     /// `version` as a fixed 64-bit number — FNV-1a, so both images agree without a seed.
     public static var versionStamp: Int64 {
