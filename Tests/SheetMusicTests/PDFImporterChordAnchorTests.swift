@@ -174,15 +174,40 @@
         /// tolerance does not see them as simultaneous either, so they do
         /// not even become two voices.
         ///
-        /// Left as a known issue rather than fixed here: widening the
-        /// cluster window is a change to chord and voice assembly, and it
-        /// needs its own evidence first — a census of how many seconds the
-        /// corpus actually contains — because three dot "fixes" in a row
-        /// were rejected by that corpus for want of exactly that discipline.
-        /// Note also that once mirrored heads DO join a cluster, the dot
-        /// anchor starts to matter for dotted seconds (the two halves' dot
-        /// dx straddle the `minDX` floor and the 12pt cap), so the anchor
-        /// question reopens then — with real geometry to design against.
+        /// LEFT UNFIXED DELIBERATELY, and the census that decided it is the
+        /// point of this comment. Widening the cluster window is a change to
+        /// chord and voice assembly on shipped code, so the upper bound on
+        /// what it could buy was measured first — over the ground-truth
+        /// (`.mscz`) side of the whole corpus, 137 scores:
+        ///
+        ///     chords                 418,963
+        ///     multi-note chords        3,192   (0.76% — these parts are
+        ///                                       overwhelmingly monophonic)
+        ///     chords with a SECOND       429   (0.10% of all chords)
+        ///     with a unison               19
+        ///     dotted seconds              18
+        ///     scores containing any       21 of 137
+        ///
+        /// And the 429 are concentrated where they cannot pay: 113 are in a
+        /// score with no PDF in the corpus, so it is never scored at all;
+        /// 200 more are in `ファンファーレ`, which already reads
+        /// `pitch%=99% dur%=99%` with most of its notes hidden from scoring
+        /// anyway. What remains is roughly a hundred chords spread over
+        /// nineteen scores, several already near-perfect and one
+        /// (`疑事無功_piano`, 8%) broken for structural reasons a chord fix
+        /// would not touch.
+        ///
+        /// So the ceiling is a fraction of a percentage point, against a
+        /// change that has to relax a window whose narrowness was itself
+        /// tuned on measured drum-voice failures. Not worth it — and this
+        /// census is exactly the step whose absence cost three rejected
+        /// `applyDots` attempts.
+        ///
+        /// If it is ever revisited: once mirrored heads DO join a cluster,
+        /// the dot anchor starts to matter for dotted seconds (the two
+        /// halves' dot dx straddle the `minDX` floor and the 12pt cap), so
+        /// the anchor question reopens then — with real geometry to design
+        /// against.
         @Test func aSecondSplitsIntoTwoChords() {
             // Two heads a staff step apart, the upper mirrored to the right
             // of the shared stem by about one notehead width.
