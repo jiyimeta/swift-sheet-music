@@ -28,7 +28,23 @@ public struct MixerChannel: Sendable, Equatable, Identifiable {
     }
 
     public let id: Kind
+    /// Self-sufficient label for a flat list of strips: the part, plus
+    /// the instrument in parentheses when the part has more than one.
+    /// `LiveChannelPlan.labels(for:in:)` composes it.
     public let name: String
+    /// The part this strip belongs to, for a host that groups its strips
+    /// and titles each group. Empty for the metronome, which belongs to
+    /// no part.
+    public let partName: String
+    /// The instrument driving this strip, unqualified by the part — the
+    /// row label under such a group title. `nil` for the metronome,
+    /// whose sound is fixed.
+    ///
+    /// Reported even when `name` suppresses it (a part named after its
+    /// own instrument): what a host draws is its own decision, and
+    /// re-splitting `name` on its parentheses would fail on exactly
+    /// those strips.
+    public let instrumentName: String?
     /// Linear gain. 0 = silent, 1 = unity. The slider passes this
     /// straight to `AVAudioUnit.volume`, which is also linear.
     public var volume: Float
@@ -45,6 +61,8 @@ public struct MixerChannel: Sendable, Equatable, Identifiable {
     public init(
         id: Kind,
         name: String,
+        partName: String = "",
+        instrumentName: String? = nil,
         volume: Float = 1.0,
         isMuted: Bool = false,
         isSoloed: Bool = false,
@@ -52,6 +70,8 @@ public struct MixerChannel: Sendable, Equatable, Identifiable {
     ) {
         self.id = id
         self.name = name
+        self.partName = partName
+        self.instrumentName = instrumentName
         self.volume = volume
         self.isMuted = isMuted
         self.isSoloed = isSoloed

@@ -70,11 +70,14 @@ extension PlaybackEngine {
         var channels: [MixerChannel] = []
         channels.reserveCapacity(plan.strips.count + 1)
         for strip in plan.strips {
+            let labels = plan.labels(for: strip, in: score)
             channels.append(MixerChannel(
                 id: .instrument(
                     partIndex: strip.partIndex, ordinal: strip.ordinal,
                 ),
-                name: stripName(for: strip, in: score, plan: plan),
+                name: labels.displayName,
+                partName: labels.partName,
+                instrumentName: labels.instrumentName,
                 volume: Float(max(0, min(127, strip.instrument.channel.volume))) / 127,
                 program: strip.instrument.useDrumset
                     ? nil
@@ -86,50 +89,6 @@ extension PlaybackEngine {
             name: "Metronome",
         ))
         replaceMixerChannels(channels)
-    }
-
-    /// "Guitar" / "Guitar (Banjo)" — the part's display name, plus the
-    /// instrument in parens ONLY when that reads as a genuinely distinct
-    /// second (or later) instrument. Two guards keep this from
-    /// stuttering:
-    ///
-    /// - **Suppress a duplicate.** `score.staffDisplayName(at:)` (what
-    ///   `partName` is) resolves to the PART's tick-0 instrument's own
-    ///   `longName` first. The strip AT ordinal 0 is by construction
-    ///   that same tick-0 instrument, so its `instrumentName` always
-    ///   equals `partName` — for `instrument-change.mscx`
-    ///   (`<longName>Piano</longName>` then `<longName>Accordion</longName>`)
-    ///   that would otherwise render "Piano (Piano)". Comparing the two
-    ///   strings and dropping the suffix when they match fixes this for
-    ///   any strip, not just ordinal 0, in case two DIFFERENT instrument
-    ///   objects happen to share a name.
-    /// - **Gate on the DEDUPED strip count for this part**
-    ///   (`plan.strips`, filtered to `strip.partIndex`), not
-    ///   `score.instrumentTimeline(forPart:).count`. A part whose two
-    ///   timeline entries collapse onto ONE live channel (identical
-    ///   `InstrumentChannel` flavour — see `LiveChannelPlan`'s dedup
-    ///   rule) has exactly one STRIP even though it has two TIMELINE
-    ///   entries; counting the timeline would show a suffix for a part
-    ///   that the mixer never actually splits into two strips.
-    ///
-    /// Instrument name falls back longName → trackName → id.
-    private func stripName(
-        for strip: LiveChannelPlan.Strip, in score: Score, plan: LiveChannelPlan,
-    ) -> String {
-        let address = StaffAddress(
-            partIndex: strip.partIndex, staffIndexInPart: 0,
-        )
-        let partName = score.staffDisplayName(at: address)
-        let instrumentName = strip.instrument.longName
-            ?? strip.instrument.trackName
-            ?? strip.instrument.id
-        let distinctStripsForPart = plan.strips
-            .count { $0.partIndex == strip.partIndex }
-        guard distinctStripsForPart > 1,
-              !instrumentName.isEmpty,
-              instrumentName != partName
-        else { return partName }
-        return "\(partName) (\(instrumentName))"
     }
 
     /// Push the current mixer state into the live audio graph. Mute /

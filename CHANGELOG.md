@@ -29,6 +29,24 @@ and this project adheres to
   a channel that isn't on the solo bus, so `isSoloed` can never read back
   `true` there whatever the host sends.
 
+- `MixerChannel.partName` and `MixerChannel.instrumentName`, beside the
+  composed `name`. A mixer laid out in groups titles the group with the
+  part and labels the row with the instrument, and neither is recoverable
+  from `name`: it drops the instrument entirely for a part that has one,
+  so a host splitting on the parentheses would get nothing back for
+  exactly those strips. Both halves are reported whatever `name` shows.
+  `partName` is empty and `instrumentName` is `nil` on the metronome,
+  which belongs to no part.
+
+- `LiveChannelPlan.labels(for:in:)` returns those three as a
+  `StripLabels`, and is now the single implementation of the naming rule.
+  It was written twice — `PlaybackEngine+Mixer.stripName` and
+  `AudioMidiBridge.instrumentParams`, the latter carrying a comment
+  promising it "mirrors stripName exactly". Both call the shared function
+  now, so the Apple mixer and the Android wire cannot drift apart; the
+  committed `instrumentParams-v1.bin` golden holds the wire byte-identical
+  across the lift.
+
 ## [1.10.1] - 2026-08-12
 
 ### Fixed
