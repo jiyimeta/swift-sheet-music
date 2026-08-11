@@ -21,6 +21,45 @@ and this project adheres to
   1.4 staff spaces, which reproduces the old constant exactly at the
   corpus's most common staff space.
 
+- PDF import produces the same `Score` for the same page regardless of
+  the order the PDF's content stream happened to emit its glyphs.
+  `buildScore` was sensitive to that order in about thirty places — not
+  only comparators, but first-minimum scans, greedy consume-in-arrival
+  loops, and readers that break at the first content glyph — so an
+  identical glyph multiset in a different order could decode to a
+  different score. The four glyph/path streams are now canonicalized once
+  on entry (`WalkedContent.canonicalized()`), which makes every
+  downstream array a function of the content; the order chosen (page,
+  then bottom-up, then left-to-right, then a total order over the
+  semantic and every remaining field) was decided by measuring both
+  directions against the reference corpus.
+
+- PDF import no longer drops noteheads on deep ledger lines. The
+  capture band around a staff was exactly three staff spaces, and a piano
+  bass routinely writes 3.0–4.5 spaces out; on one page 25 of 271
+  noteheads were captured by no staff at all, which read as chords
+  losing their lower notes. The band is now five spaces, the neighbouring
+  staff still being excluded by the midpoint clamp that was added after
+  the band was first narrowed.
+
+- PDF import reads a chord that contains a SECOND as one chord. The
+  engraver has to mirror one head of a second across the stem, so the two
+  heads never share an x column, and the cluster rule demanded one within
+  a fixed 2.5pt. The window is now 1.35 staff spaces — measured to sit
+  between the mirror offset (1.2 sp) and the minimum note-to-note
+  spacing (~1.5 sp) — and a mirrored head must also be at a different
+  staff position, since merging a unison would delete a note.
+
+- PDF import reads a chord's stem direction from the whole chord rather
+  than from its lowest notehead, so a wide chord whose stem barely clears
+  the near head is no longer read as pointing the other way (which put it
+  in the wrong voice).
+
+- PDF import reads a rest that sits outside the staff, recognizes the
+  repeat dot MuseScore actually draws (`repeatDot` U+E044, never the
+  combined `repeatDots` U+E043), and classifies seven glyph families the
+  importer had names for but never produced.
+
 ## [1.10.0] - 2026-08-11
 
 ### Added
