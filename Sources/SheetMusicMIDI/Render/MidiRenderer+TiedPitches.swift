@@ -10,7 +10,7 @@ extension MidiRenderer {
     /// the whole tied span; the tied-into notes are never re-attacked
     /// (`Note::tieBack()` is skipped in `CompatMidiRender`, and
     /// `Note::playTicksFraction()` reports the combined duration on the
-    /// head). Our per-note emit (`emitNoteEvents`) splits that into "head
+    /// head). Our per-note emit (`emitNoteEventsForGrace`) splits that into "head
     /// emits the note-on, tail emits the note-off", which only balances
     /// when the two endpoints share a pitch.
     ///

@@ -147,7 +147,34 @@ extension MidiRenderer {
     /// unhonored tie cascades through `resolveUnisonOverlap`'s FIFO
     /// note-on/off pairing and stretches a later same-pitch note across
     /// a rest gap into a stuck note. This mirrors the tie contract that
-    /// `emitNoteEvents` enforces on the standard chord path.
+    /// `emitNoteEventsForGrace` enforces on the standard chord path.
+    /// Per-note velocity overrides for the start chord's pitches,
+    /// resolved against the chord's dynamic-derived velocity.
+    ///
+    /// Segments carry bare pitches rather than notes, so the lookup is
+    /// pitch-keyed — the same shape as the tie sets in
+    /// `emitTremoloSegments`. A chord holding one pitch twice with
+    /// differing overrides keeps the first; no engraved score produces
+    /// that.
+    ///
+    /// Residual divergence from MuseScore, deliberately left: it pairs
+    /// start and follower notes *by index* (`ell[k]`, falling back to
+    /// `ell[0]`), so in a two-note tremolo between two multi-note chords
+    /// a follower-only pitch takes the velocity of the start chord's
+    /// note at the same index. Here it takes the start chord's first
+    /// note. The two agree whenever either chord has a single note,
+    /// which covers every two-note tremolo outside deliberate
+    /// per-note-velocity editing of stacked ones.
+    private static func tremoloVelocities(
+        chord: Chord, baseVelocity: Int,
+    ) -> [Int: Int] {
+        var result: [Int: Int] = [:]
+        for note in chord.notes where result[note.pitch] == nil {
+            result[note.pitch] = note.customizedVelocity(baseVelocity)
+        }
+        return result
+    }
+
     private static func emitTremoloSegments(
         _ segments: [TremoloSegment],
         chord: Chord,
@@ -158,17 +185,22 @@ extension MidiRenderer {
         velocity: Int,
         events: inout [TimedMidiEvent],
     ) {
-        // Segments carry bare pitches, so per-note velocity overrides
-        // are keyed by pitch — the same approximation the tie sets
-        // below already rely on. A chord holding the same pitch twice
-        // with different overrides collapses to the first, which no
-        // engraved score produces.
-        var velocityByPitch: [Int: Int] = [:]
-        for note in chord.notes + (followerChord.map { Array($0.notes) } ?? [])
-            where velocityByPitch[note.pitch] == nil
-        {
-            velocityByPitch[note.pitch] = note.customizedVelocity(velocity)
-        }
+        let velocityByPitch = tremoloVelocities(
+            chord: chord, baseVelocity: velocity,
+        )
+        // Every stroke of a two-note tremolo — including the ones
+        // sounding the follower's pitches — takes its velocity from the
+        // *start* chord. That is not an approximation: MuseScore builds
+        // the whole alternation as `NoteEvent`s on the start chord's
+        // notes (pitch-shifted by `dpitch`) and clears the follower's
+        // own event list outright, so the follower's velocity override
+        // never reaches playback.
+        // C++: `CompatMidiRender::renderTremolo`, the
+        //      `TremoloChordType::TremoloFirstChord` branch and the
+        //      `TremoloSecondChord` `events->clear()` beside it.
+        let followerFallback = chord.notes.first.map {
+            $0.customizedVelocity(velocity)
+        } ?? velocity
         let tiedBackPitches = Set(
             chord.notes.filter { $0.tieBack != nil }.map(\.pitch),
         )
@@ -199,7 +231,7 @@ extension MidiRenderer {
                         tick: cursor,
                         event: .noteOn(
                             channel: channel, pitch: shifted,
-                            velocity: velocityByPitch[pitch] ?? velocity,
+                            velocity: velocityByPitch[pitch] ?? followerFallback,
                         ),
                     ))
                 }

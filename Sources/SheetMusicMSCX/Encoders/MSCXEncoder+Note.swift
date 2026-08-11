@@ -82,13 +82,14 @@ extension Note {
         } else if let drumDefaultHead {
             children.append(XMLTreeNode(name: "head", text: drumDefaultHead))
         }
-        appendVelocity(into: &children, targetVersion: options.targetVersion)
+        appendUserVelocity(into: &children)
         // MuseScore omits `<play>` for the default (true); emit only
         // the muted form. Element order mirrors the writer: after
         // `<head>`. C++: `TWrite::write(const Note*, …)`.
         if !play {
             children.append(XMLTreeNode(name: "play", text: "0"))
         }
+        appendVelocityType(into: &children, targetVersion: options.targetVersion)
         for chordLine in chordLines {
             children.append(chordLine.encode(options: options))
         }
@@ -96,33 +97,45 @@ extension Note {
         return XMLTreeNode(name: "Note", children: children)
     }
 
-    /// Append the per-note velocity override. MuseScore's writer emits
-    /// `USER_VELOCITY` between `HEAD_GROUP` (`<head>`) and `PLAY`
-    /// (`<play>`), and skips it at the default of 0.
+    /// Append `<velocity>`, skipped at the default of 0.
     ///
-    /// `<veloType>` rides along only when there *is* an override — the
-    /// type is meaningless without a value, and emitting it
-    /// unconditionally would stamp `<veloType>offset</veloType>` onto
-    /// every note of a score that came from a 3.x file. It is likewise
-    /// omitted when it already matches the target generation's default
-    /// (`offset` for `.v3`, `user` for `.v4`), which keeps round-tripped
-    /// MuseScore 4 files byte-identical.
-    private func appendVelocity(
+    /// Both generations write it in the same slot — between
+    /// `HEAD_GROUP` (`<head>`) and `PLAY` (`<play>`) — under different
+    /// `Pid` names.
+    /// C++: `Note::write` (3.6.2 `libmscore/note.cpp`, `Pid::VELO_OFFSET`)
+    ///      and `TWrite::write(const Note*, …)` (`Pid::USER_VELOCITY`).
+    private func appendUserVelocity(into children: inout [XMLTreeNode]) {
+        guard userVelocity != 0 else { return }
+        children.append(XMLTreeNode(name: "velocity", text: String(userVelocity)))
+    }
+
+    /// Append `<veloType>`, which both generations write far later than
+    /// `<velocity>` — MuseScore 3 emits `Pid::VELO_TYPE` after
+    /// `Pid::HEAD_TYPE`, near the tail of the property list, and
+    /// MuseScore 4 dropped it from its writer entirely. Hence the split
+    /// from `appendUserVelocity`: the two elements are not adjacent.
+    ///
+    /// Emitted only when there *is* an override — the type is
+    /// meaningless without a value, and emitting it unconditionally
+    /// would stamp `<veloType>offset</veloType>` onto every note of a
+    /// score that came from a 3.x file. It is likewise omitted when it
+    /// already matches the target generation's default (`offset` for
+    /// `.v3`, `user` for `.v4`), which keeps round-tripped MuseScore 4
+    /// files byte-identical.
+    private func appendVelocityType(
         into children: inout [XMLTreeNode],
         targetVersion: MSCXVersion,
     ) {
         guard userVelocity != 0 else { return }
-        children.append(XMLTreeNode(name: "velocity", text: String(userVelocity)))
         let versionDefault: NoteVelocityType =
             switch targetVersion {
             case .v2, .v3: .offset
             case .v4: .user
             }
-        if velocityType != versionDefault {
-            children.append(XMLTreeNode(
-                name: "veloType", text: velocityType.mscxToken,
-            ))
-        }
+        guard velocityType != versionDefault else { return }
+        children.append(XMLTreeNode(
+            name: "veloType", text: velocityType.mscxToken,
+        ))
     }
 
     private func tieSpanner(side: String, location: TieLocation?) -> XMLTreeNode {

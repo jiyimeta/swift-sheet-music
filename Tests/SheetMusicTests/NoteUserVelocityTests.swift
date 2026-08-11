@@ -116,13 +116,18 @@ struct NoteUserVelocityTests {
         #expect(absoluteV3.children.first { $0.name == "veloType" }?.text == "user")
     }
 
-    @Test func velocityIsWrittenBetweenHeadAndPlay() {
-        let note = Note(pitch: 60, tpc: 14, headType: "cross", play: false, userVelocity: 96)
-        let names = note.encode().children.map(\.name)
-        #expect(
-            names.filter { ["head", "velocity", "play"].contains($0) }
-                == ["head", "velocity", "play"],
+    /// MuseScore writes the two elements in different parts of the
+    /// property list — `velocity` between `head` and `play`, `veloType`
+    /// near the tail — rather than adjacent.
+    /// C++: `Note::write` (3.6.2) `Pid` list order.
+    @Test func velocityAndVeloTypeSitInMuseScoresWriteOrder() {
+        let note = Note(
+            pitch: 60, tpc: 14, headType: "cross", play: false,
+            userVelocity: -20, velocityType: .offset,
         )
+        let names = note.encode().children.map(\.name)
+        let tracked = ["head", "velocity", "play", "veloType"]
+        #expect(names.filter { tracked.contains($0) } == tracked)
     }
 
     @Test func offsetVelocitySurvivesAMuseScore3ToMuseScore4RoundTrip() throws {
@@ -176,6 +181,91 @@ struct NoteUserVelocityTests {
         #expect(velocities[60] == MidiRenderer.defaultDynamicVelocity)
     }
 
+    @Test func graceNotesAfterCarryTheirOwnVelocityOverride() throws {
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            graceNotesAfter: [GraceChord(
+                graceType: .grace16after,
+                duration: .sixteenth,
+                notes: ChordNotes([
+                    Note(pitch: 62, tpc: 16, userVelocity: 30, velocityType: .user),
+                ]),
+            )],
+        )
+        let velocities = try renderNoteOnVelocities(elements: [.chord(chord)])
+        #expect(velocities[62] == 30)
+    }
+
+    @Test func arpeggiatedChordNotesKeepTheirIndividualOverrides() throws {
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([
+                Note(pitch: 60, tpc: 14, userVelocity: 20, velocityType: .user),
+                Note(pitch: 67, tpc: 15, userVelocity: 110, velocityType: .user),
+            ]),
+            arpeggio: Arpeggio(subtype: 0),
+        )
+        let velocities = try renderNoteOnVelocities(elements: [.chord(chord)])
+        #expect(velocities[60] == 20)
+        #expect(velocities[67] == 110)
+    }
+
+    /// The sweep is one sounding gesture, so every intermediate pitch
+    /// takes the start note's velocity.
+    @Test func glissandoSweepInheritsTheStartNoteVelocity() throws {
+        let start = Chord(duration: .quarter, notes: ChordNotes([
+            Note(
+                pitch: 60, tpc: 14,
+                glissando: Glissando(style: .chromatic),
+                userVelocity: 25, velocityType: .user,
+            ),
+        ]))
+        let end = Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 64, tpc: 18)]))
+        let velocities = try renderNoteOnVelocities(elements: [.chord(start), .chord(end)])
+        for pitch in 60 ... 63 {
+            #expect(velocities[pitch] == 25)
+        }
+        // The target note is the following chord and keeps its own.
+        #expect(velocities[64] == MidiRenderer.defaultDynamicVelocity)
+    }
+
+    @Test func singleNoteTremoloStrokesInheritTheNoteVelocity() throws {
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([
+                Note(pitch: 60, tpc: 14, userVelocity: 40, velocityType: .user),
+            ]),
+            tremolo: Tremolo(subtype: .r16),
+        )
+        let events = try renderNoteOnEvents(elements: [.chord(chord)])
+        let strokes = events.filter { $0.pitch == 60 }
+        #expect(strokes.count == 4) // r16 → 1 << 2 strokes
+        #expect(strokes.allSatisfy { $0.velocity == 40 })
+    }
+
+    /// MuseScore renders a two-note tremolo as `NoteEvent`s on the *start*
+    /// chord's notes and clears the follower's own event list, so the
+    /// follower's override never reaches playback — every stroke, on
+    /// either pitch, sounds at the start note's velocity.
+    /// C++: `CompatMidiRender::renderTremolo`.
+    @Test func twoNoteTremoloTakesEveryStrokeFromTheStartChord() throws {
+        let start = Chord(
+            duration: .quarter,
+            notes: ChordNotes([
+                Note(pitch: 60, tpc: 14, userVelocity: 40, velocityType: .user),
+            ]),
+            tremolo: Tremolo(subtype: .r8, span: .between),
+        )
+        let follower = Chord(duration: .quarter, notes: ChordNotes([
+            Note(pitch: 67, tpc: 15, userVelocity: 120, velocityType: .user),
+        ]))
+        let events = try renderNoteOnEvents(elements: [.chord(start), .chord(follower)])
+        #expect(!events.isEmpty)
+        #expect(events.allSatisfy { $0.velocity == 40 })
+        #expect(Set(events.map(\.pitch)) == [60, 67])
+    }
+
     // MARK: - MusicXML
 
     /// MusicXML's `dynamics` attribute is a percentage of the default
@@ -219,18 +309,27 @@ struct NoteUserVelocityTests {
         return []
     }
 
-    private func renderNoteOnVelocities(elements: [VoiceElement]) throws -> [Int: Int] {
+    private func renderNoteOnEvents(
+        elements: [VoiceElement],
+    ) throws -> [(pitch: Int, velocity: Int)] {
         let score = Score(division: 480, parts: [Part(
             id: "1",
             instrument: Instrument(id: "x", longName: "Piano"),
             staves: [Staff(measures: [Measure(voices: [Voice(elements: elements)])])],
         )])
         let file = try MidiRenderer.render(score: score)
-        var result: [Int: Int] = [:]
-        for event in file.tracks.flatMap(\.events) {
-            if case let .noteOn(_, pitch, velocity) = event.event, velocity > 0 {
-                result[pitch] = velocity
+        return file.tracks.flatMap(\.events).compactMap { event in
+            guard case let .noteOn(_, pitch, velocity) = event.event, velocity > 0 else {
+                return nil
             }
+            return (pitch: pitch, velocity: velocity)
+        }
+    }
+
+    private func renderNoteOnVelocities(elements: [VoiceElement]) throws -> [Int: Int] {
+        var result: [Int: Int] = [:]
+        for event in try renderNoteOnEvents(elements: elements) {
+            result[event.pitch] = event.velocity
         }
         return result
     }
