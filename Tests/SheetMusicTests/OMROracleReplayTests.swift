@@ -339,20 +339,26 @@
             let renderDirs = try OMRHarnessDirectoryWalk.renderDirectories(root: root)
             var tally = Tally()
             for dir in renderDirs {
-                let renderID = (dir as NSString).lastPathComponent
-                let tag = "[\(renderID)]"
-                let outcome = Self.evaluateOneRender(dir: dir)
-                tally.record(outcome)
-                switch outcome {
-                case .skippedNoLabels:
-                    print("\(tag)[SUMMARY] SKIP-NO-LABELS")
-                case .exact:
-                    print("\(tag)[SUMMARY] exact=Y")
-                case let .inexact(diff):
-                    print("\(tag)[SUMMARY] exact=N")
-                    print("\(tag)[diff] \(diff)")
-                case let .failed(message):
-                    print("\(tag)[SUMMARY] FAIL-THREW \(message)")
+                // One pool per render — see the note in
+                // `OMRLabelExportHarness`. A full-dataset sweep opens a PDF
+                // per directory and would otherwise hold every render's
+                // autoreleased temporaries until the test returns.
+                autoreleasepool {
+                    let renderID = (dir as NSString).lastPathComponent
+                    let tag = "[\(renderID)]"
+                    let outcome = Self.evaluateOneRender(dir: dir)
+                    tally.record(outcome)
+                    switch outcome {
+                    case .skippedNoLabels:
+                        print("\(tag)[SUMMARY] SKIP-NO-LABELS")
+                    case .exact:
+                        print("\(tag)[SUMMARY] exact=Y")
+                    case let .inexact(diff):
+                        print("\(tag)[SUMMARY] exact=N")
+                        print("\(tag)[diff] \(diff)")
+                    case let .failed(message):
+                        print("\(tag)[SUMMARY] FAIL-THREW \(message)")
+                    }
                 }
             }
             print(Self.summaryLine(tally))

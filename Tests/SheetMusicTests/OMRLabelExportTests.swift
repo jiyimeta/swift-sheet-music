@@ -256,19 +256,28 @@
             let renderDirs = try OMRHarnessDirectoryWalk.renderDirectories(root: root)
             print("[export] \(renderDirs.count) render dirs under \(root)")
             for dir in renderDirs {
-                let tag = "[\((dir as NSString).lastPathComponent)]"
-                switch Self.evaluateOneRender(dir: dir) {
-                case .badRenderJSON:
-                    print("\(tag)[SUMMARY] FAIL-BAD-RENDER-JSON")
-                case let .quarantined(problems):
-                    print("\(tag)[SUMMARY] QUARANTINE " + problems.joined(separator: " | "))
-                case let .wrote(pages, glyphs, bboxMissing, tier1Missing):
-                    print(
-                        "\(tag)[SUMMARY] pages=\(pages) glyphs=\(glyphs) "
-                            + "bboxMissing=\(bboxMissing) tier1Missing=\(tier1Missing)",
-                    )
-                case let .failed(message):
-                    print("\(tag)[SUMMARY] FAIL-THREW \(message)")
+                // ONE POOL PER RENDER. This loop opens a PDF through PDFKit
+                // and CoreText for every directory, and both hand back
+                // autoreleased objects. With no pool inside the loop they are
+                // released only when this test returns, so a full v2 sweep
+                // (2,208 renders) accumulates every temporary of every render
+                // at once — measured as a multi-gigabyte climb that took the
+                // whole machine down, not as a leak in any one render.
+                autoreleasepool {
+                    let tag = "[\((dir as NSString).lastPathComponent)]"
+                    switch Self.evaluateOneRender(dir: dir) {
+                    case .badRenderJSON:
+                        print("\(tag)[SUMMARY] FAIL-BAD-RENDER-JSON")
+                    case let .quarantined(problems):
+                        print("\(tag)[SUMMARY] QUARANTINE " + problems.joined(separator: " | "))
+                    case let .wrote(pages, glyphs, bboxMissing, tier1Missing):
+                        print(
+                            "\(tag)[SUMMARY] pages=\(pages) glyphs=\(glyphs) "
+                                + "bboxMissing=\(bboxMissing) tier1Missing=\(tier1Missing)",
+                        )
+                    case let .failed(message):
+                        print("\(tag)[SUMMARY] FAIL-THREW \(message)")
+                    }
                 }
             }
         }

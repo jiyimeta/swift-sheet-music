@@ -106,18 +106,22 @@
             }
             let renderDirs = try OMRHarnessDirectoryWalk.renderDirectories(root: root)
             for dir in renderDirs {
-                let renderID = (dir as NSString).lastPathComponent
-                let tag = "[\(renderID)]"
-                switch Self.evaluateOneRender(dir: dir, tag: tag) {
-                case .skippedNoSourceOrLabels:
-                    print("\(tag)[SUMMARY] SKIP-NO-SOURCE-OR-LABELS")
-                case let .processed(summary, diverge):
-                    print(summary)
-                    if let diverge {
-                        print("\(tag)[diverge] \(diverge)")
+                // One pool per render — see the note in
+                // `OMRLabelExportHarness`.
+                autoreleasepool {
+                    let renderID = (dir as NSString).lastPathComponent
+                    let tag = "[\(renderID)]"
+                    switch Self.evaluateOneRender(dir: dir, tag: tag) {
+                    case .skippedNoSourceOrLabels:
+                        print("\(tag)[SUMMARY] SKIP-NO-SOURCE-OR-LABELS")
+                    case let .processed(summary, diverge):
+                        print(summary)
+                        if let diverge {
+                            print("\(tag)[diverge] \(diverge)")
+                        }
+                    case let .failed(message):
+                        print("\(tag)[SUMMARY] FAIL-THREW \(message)")
                     }
-                case let .failed(message):
-                    print("\(tag)[SUMMARY] FAIL-THREW \(message)")
                 }
             }
         }

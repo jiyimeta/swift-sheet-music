@@ -145,7 +145,11 @@
             let renderDirs = try OMRHarnessDirectoryWalk.renderDirectories(root: root)
             var aggregate: [String: OMRSeamMetrics.ClassCounts] = [:]
             for dir in renderDirs {
-                try evaluate(dir: dir, aggregate: &aggregate)
+                // One pool per render — see the note in
+                // `OMRLabelExportHarness`.
+                try autoreleasepool {
+                    try evaluate(dir: dir, aggregate: &aggregate)
+                }
             }
             for cls in aggregate.keys.sorted() {
                 guard let c = aggregate[cls] else { continue }
