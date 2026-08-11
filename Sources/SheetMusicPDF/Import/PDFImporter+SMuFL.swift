@@ -8,7 +8,15 @@ extension PDFImporter {
         switch cp {
         case 0xE000: return .brace
         case 0xE003: return .staff5Lines
-        case 0xE043: return .repeatBarlineDots
+        // Both spellings of a repeat barline's dots. U+E043 `repeatDots`
+        // is the pair as one glyph; U+E044 `repeatDot` is a single dot,
+        // and MuseScore draws the pair as TWO of those at the same x
+        // (upstream rendering/score/tdraw.cpp:683-684) — so no
+        // MuseScore-engraved repeat barline contains U+E043 at all, and
+        // mapping only it recognized none of them. They collapse to one
+        // semantic because nothing downstream counts the dots
+        // (PDFImporter+Structure's repeatDotsCount is read through > 0).
+        case 0xE043, 0xE044: return .repeatBarlineDots
         // The two jump words SMuFL draws as glyphs. There is no `fine`
         // and no `toCoda` glyph in the specification — only `coda`
         // U+E048 and `codaSquare` U+E049 — so those two markers are

@@ -99,6 +99,28 @@
         /// U+E049), so those two detector classes are recovered from the
         /// TEXT stream instead — see `PDFImporter+Structure`'s marker
         /// text mapping.
+        /// Both spellings of a repeat barline's dots.
+        ///
+        /// SMuFL has `repeatDots` U+E043 — the pair as one glyph — and
+        /// `repeatDot` U+E044, a single dot. MuseScore draws the pair as
+        /// TWO `repeatDot` glyphs at the same x, one per staff position
+        /// (upstream `rendering/score/tdraw.cpp:683-684`), so a
+        /// MuseScore-engraved repeat barline contains no U+E043 at all
+        /// and mapping only that codepoint recognized none of them.
+        /// Measured: a probe over MuseScore output labelled 140 glyphs
+        /// `unknownE044`, exactly two per repeat barline, and the
+        /// `repeatBarlineDots` class finished at zero.
+        ///
+        /// Both collapse to one semantic on purpose. Nothing downstream
+        /// counts the dots — `PDFImporter+Structure`'s `repeatDotsCount`
+        /// is read through `> 0` — and a separate class would leave
+        /// `repeatBarlineDots` permanently empty in MuseScore-derived
+        /// training data while not being honestly unreachable either.
+        @Test func classifiesBothSpellingsOfRepeatDots() {
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE043) == .repeatBarlineDots)
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE044) == .repeatBarlineDots)
+        }
+
         @Test func classifiesDalSegnoAndDaCapoGlyphs() {
             #expect(PDFImporter.smuflSemantic(codepoint: 0xE043) == .repeatBarlineDots)
             #expect(PDFImporter.smuflSemantic(codepoint: 0xE045) == .dalSegno)
