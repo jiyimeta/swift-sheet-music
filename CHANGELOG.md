@@ -55,6 +55,16 @@ and this project adheres to
   the near head is no longer read as pointing the other way (which put it
   in the wrong voice).
 
+- PDF import matches a flag to the stem it hangs from. A flag attaches at
+  the stem's bare end — measured over the reference corpus, 53,058 of the
+  ~54,000 flags sharing a stem's x column sit within 0.04 staff spaces of
+  that end — but the importer looked for it in a fixed 4–22pt window
+  measured from the lead notehead. An engraving-correct stem is 28pt long
+  at an 8pt staff space, outside that window, so the eighth read as a
+  quarter; and on a CHORD the stem's bare end is a chord-height farther
+  from the lead notehead, so a flagged chord lost its flag at any staff
+  size.
+
 - PDF import reads a rest that sits outside the staff, recognizes the
   repeat dot MuseScore actually draws (`repeatDot` U+E044, never the
   combined `repeatDots` U+E043), and classifies seven glyph families the
