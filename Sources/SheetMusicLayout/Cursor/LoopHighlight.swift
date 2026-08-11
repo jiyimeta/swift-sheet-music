@@ -28,9 +28,10 @@ extension LayoutDocument {
                   let lastM = inRange.last else { continue }
             let topY = system.origin.y
                 + (system.staffOrigins.first?.y ?? 0)
-            let bottomY = system.origin.y
-                + (system.staffOrigins.last?.y ?? 0)
-                + metrics.staffHeight
+            // The band ends at the LAST staff's own bottom line, not at
+            // the five-line reference height — over a one-line
+            // percussion staff the reference overshoots by 4 sp.
+            let bottomY = system.origin.y + system.staffStackBottomY
             let xStart = system.origin.x + firstM.origin.x
             let xEnd = system.origin.x + lastM.origin.x + lastM.width
             rects.append(CGRect(

@@ -101,6 +101,46 @@ public struct LayoutSystem: Sendable, Equatable {
             : .standard
     }
 
+    /// System-local Y of the BOTTOM LINE of the last staff — where the
+    /// stack of drawn staves ends.
+    ///
+    /// Not `staffOrigins.last!.y + metrics.staffHeight`:
+    /// `StaffMetrics.staffHeight` is the five-line REFERENCE height that
+    /// step→Y placement is expressed in, and a staff that draws fewer
+    /// lines ends higher than that. Zero extra for a one-line staff,
+    /// whose single line IS its origin.
+    public var staffStackBottomY: CGFloat {
+        guard let last = staffOrigins.last else { return 0 }
+        return last.y
+            + geometry(atFlatIndex: staffOrigins.count - 1).height(sp: sp)
+    }
+
+    /// System-local X and Y span of the vertical stroke every renderer
+    /// draws at a system's left edge — MuseScore's system-begin barline
+    /// (`MeasureLayout::createSystemBeginBarLine`,
+    /// `rendering/score/measurelayout.cpp:2843`). `nil` when the system
+    /// has no staves.
+    ///
+    /// MuseScore builds it out of ordinary `BarLine` elements — one per
+    /// staff, each laid out by `TLayout::layoutBarLine` — so its two
+    /// ends obey the same per-staff rule `LayoutElement.barLine` already
+    /// does: the top staff's top line, the bottom staff's bottom line,
+    /// each replaced by ±2 sp about the single line when that staff
+    /// draws only one (`dom/barline.cpp:256-291`,
+    /// `BARLINE_SPAN_1LINESTAFF_FROM`/`_TO`). Deriving the bottom from
+    /// `StaffMetrics.staffHeight` instead leaves the stroke hanging 4 sp
+    /// past a one-line bottom staff; deriving it from that staff's
+    /// (zero) height alone would collapse a single one-line staff's
+    /// stroke to a dot.
+    public var systemStartBarLine: (x: CGFloat, top: CGFloat, bottom: CGFloat)? {
+        guard let first = staffOrigins.first,
+              let last = staffOrigins.last else { return nil }
+        let topSpan = geometry(atFlatIndex: 0).barLineSpanY(sp: sp)
+        let bottomSpan = geometry(atFlatIndex: staffOrigins.count - 1)
+            .barLineSpanY(sp: sp)
+        return (first.x, first.y + topSpan.top, last.y + bottomSpan.bottom)
+    }
+
     /// Subtype + system-local origin X of the rightmost barline in the
     /// last measure. Returned to renderers that need to know where the
     /// system's terminal barline lives — e.g. to clip staff lines so

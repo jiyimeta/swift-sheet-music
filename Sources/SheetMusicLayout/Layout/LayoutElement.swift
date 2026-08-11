@@ -27,6 +27,17 @@ public enum TremoloAnchor: Sendable, Equatable {
 /// `origin` is measured from the measure's top-left corner where
 /// y increases downward (screen convention). Staff step 0 (middle
 /// line) corresponds to a y equal to `staffHeight / 2` within the measure.
+///
+/// That holds for EVERY staff, whatever its line count, because
+/// `StaffMetrics.staffHeight` is the five-line REFERENCE height rather
+/// than the staff's drawn one: `step` is anchored to the reference
+/// staff's top line and never consults `lines()` (MuseScore's
+/// `Note::updateRelLine` — see `StaffLineGeometry.topStep`). On a
+/// one-line staff, step 0 is therefore 2 sp BELOW the only drawn line,
+/// and "middle line" names the reference staff's middle, not any line
+/// that gets painted. Anything that needs the staff's real extent —
+/// where its lines stop, how far a barline spans, how tall the cursor
+/// is — must go through `StaffLineGeometry`, not through `staffHeight`.
 public enum LayoutElement: Sendable, Equatable {
     case clef(rawType: String, origin: CGPoint, anchor: ClefAnchor?)
     case keySignature(sharps: Int, flats: Int, origin: CGPoint)

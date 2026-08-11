@@ -102,16 +102,15 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             )
         }
         // System barline — vertical line at the system's left edge
-        // joining all staves.
-        if let first = system.staffOrigins.first,
-           let last = system.staffOrigins.last
-        {
-            let x = system.origin.x + first.x
+        // joining all staves. Both ends come from `systemStartBarLine`,
+        // which spans the END staves by their own line counts.
+        if let span = system.systemStartBarLine {
+            let x = system.origin.x + span.x
             var bar = Path()
-            bar.move(to: CGPoint(x: x, y: system.origin.y + first.y))
+            bar.move(to: CGPoint(x: x, y: system.origin.y + span.top))
             bar.addLine(to: CGPoint(
                 x: x,
-                y: system.origin.y + last.y + metrics.staffHeight,
+                y: system.origin.y + span.bottom,
             ))
             context.stroke(
                 bar,

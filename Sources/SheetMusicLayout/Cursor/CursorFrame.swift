@@ -67,9 +67,10 @@ extension LayoutDocument {
         for system in systems {
             let topY = system.origin.y
                 + (system.staffOrigins.first?.y ?? 0)
-            let bottomY = system.origin.y
-                + (system.staffOrigins.last?.y ?? 0)
-                + metrics.staffHeight
+            // Bottom of the LAST staff by its own drawn height: a
+            // one-line staff ends 4 sp above where the five-line
+            // reference `metrics.staffHeight` would put it.
+            let bottomY = system.origin.y + system.staffStackBottomY
             for measure in system.measures {
                 if let x = itemX(id, in: measure) {
                     let absX = system.origin.x + measure.origin.x + x
@@ -94,9 +95,8 @@ extension LayoutDocument {
         for system in systems {
             let topY = system.origin.y
                 + (system.staffOrigins.first?.y ?? 0)
-            let bottomY = system.origin.y
-                + (system.staffOrigins.last?.y ?? 0)
-                + metrics.staffHeight
+            // Same per-staff bottom as `itemFrame`; see the note there.
+            let bottomY = system.origin.y + system.staffStackBottomY
             for measure in system.measures {
                 let xInMeasure: CGFloat?
                 if let span = measure.multiMeasureRest,

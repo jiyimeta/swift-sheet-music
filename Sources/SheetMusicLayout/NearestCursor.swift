@@ -52,17 +52,22 @@ private func verticalDistance(y: CGFloat, system: LayoutSystem) -> CGFloat {
     return 0
 }
 
-/// Returns the index (into `staffOrigins` / `staffAddresses`) of the staff whose centerline is closest to `y`. A
-/// 5-line staff is 4 sp tall, so the centerline sits 2 sp below `staffOrigins[i].y`.
+/// Returns the index (into `staffOrigins` / `staffAddresses`) of the staff whose centerline is closest to `y`. The
+/// centerline sits half the staff's OWN drawn height below `staffOrigins[i].y` — 2 sp for the five-line case, but 1 sp
+/// on a three-line staff and 0 on a one-line one, where the single drawn line IS the centerline. Snapping every staff
+/// to a fixed 2 sp would bias taps on a mixed system toward whichever neighbor the phantom center drifted into.
 @available(macOS 15.0, iOS 16.0, *)
 private func chooseStaffIndex(
     forY y: CGFloat, system: LayoutSystem, sp: CGFloat,
 ) -> Int? {
     guard !system.staffOrigins.isEmpty else { return nil }
+    func centerY(_ index: Int) -> CGFloat {
+        system.origin.y
+            + system.staffOrigins[index].y
+            + system.geometry(atFlatIndex: index).height(sp: sp) / 2
+    }
     return system.staffOrigins.indices.min { lhs, rhs in
-        let midL = system.origin.y + system.staffOrigins[lhs].y + 2 * sp
-        let midR = system.origin.y + system.staffOrigins[rhs].y + 2 * sp
-        return abs(y - midL) < abs(y - midR)
+        abs(y - centerY(lhs)) < abs(y - centerY(rhs))
     }
 }
 

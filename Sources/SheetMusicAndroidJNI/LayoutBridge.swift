@@ -77,7 +77,6 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             stemThickness: Double(metrics.stemThickness),
         )
         let staffLineThickness = Double(metrics.staffLineThickness)
-        let staffHeight = Double(metrics.staffHeight)
 
         // ── 0. Title block ──────────────────────────────────────────────────
         // The leading `<VBox>` (title / subtitle / composer / lyricist) sits at
@@ -176,7 +175,6 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 sysOriginY: sysOriginY,
                 sp: context.sp,
                 staffLineThickness: staffLineThickness,
-                staffHeight: staffHeight,
                 into: &out,
             )
 
