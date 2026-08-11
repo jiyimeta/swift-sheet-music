@@ -14,6 +14,9 @@ public struct Spanner: Sendable, Equatable {
         case textLine = "TextLine"
         case glissando = "Glissando"
         case vibrato = "Vibrato"
+        case trill = "Trill"
+        case palmMute = "PalmMute"
+        case letRing = "LetRing"
         case other
     }
 
@@ -52,6 +55,14 @@ public struct Spanner: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
+    /// MuseScore `<beginText>` — the label a line spanner prints at
+    /// its left end. A `TextLineBase` property, so it can appear on
+    /// any line-shaped spanner (`TextLine`, `PalmMute`, `LetRing`, …),
+    /// and MuseScore only writes it when it differs from the style
+    /// default. `nil` = "use whatever this spanner kind defaults to".
+    /// C++: `mu::engraving::TextLineBase::beginText`.
+    public var beginText: String?
+
     public var hairpin: HairpinPayload?
     /// MuseScore `<Ottava><subtype>8va</subtype></Ottava>` payload.
     /// Meaningful only when `kind == .ottava`. Drives MIDI pitch
@@ -61,6 +72,10 @@ public struct Spanner: Sendable, Equatable {
     /// Meaningful only when `kind == .vibrato`. Controls which SMuFL
     /// wiggle glyph is repeated along the line during rendering.
     public var vibrato: VibratoPayload?
+    /// MuseScore `<Trill><subtype>…</subtype></Trill>` payload.
+    /// Meaningful only when `kind == .trill`. Selects the SMuFL glyph
+    /// pair repeated along the line during rendering.
+    public var trill: TrillPayload?
 
     public init(
         kind: Kind,
@@ -69,9 +84,11 @@ public struct Spanner: Sendable, Equatable {
         nextFractionsOffset: Fraction? = nil,
         voltaEndings: [Int] = [],
         visible: Bool = true,
+        beginText: String? = nil,
         hairpin: HairpinPayload? = nil,
         ottava: OttavaPayload? = nil,
         vibrato: VibratoPayload? = nil,
+        trill: TrillPayload? = nil,
     ) {
         self.kind = kind
         self.rawType = rawType
@@ -79,18 +96,49 @@ public struct Spanner: Sendable, Equatable {
         self.nextFractionsOffset = nextFractionsOffset
         self.voltaEndings = voltaEndings
         elementProperties = ElementProperties(visible: visible)
+        self.beginText = beginText
         self.hairpin = hairpin
         self.ottava = ottava
         self.vibrato = vibrato
+        self.trill = trill
+    }
+
+    /// MuseScore `<Trill>` payload.
+    /// C++: `mu::engraving::Trill`.
+    public struct TrillPayload: Sendable, Equatable {
+        public var type: TrillType
+
+        public init(type: TrillType) {
+            self.type = type
+        }
     }
 
     /// MuseScore `<HairPin>` payload needed for MIDI playback.
     /// Meaningful only when `kind == .hairpin`. Nil for other kinds.
     /// C++: `mu::engraving::Hairpin`.
     public struct HairpinPayload: Sendable, Equatable {
+        /// C++: `mu::engraving::HairpinType` (`hairpin.h:32`). The two
+        /// `*Line` members print MuseScore's "cresc." / "dim." text
+        /// with a dashed continuation line instead of a wedge, but
+        /// they drive playback exactly like the wedge forms.
         public enum Subtype: Int, Sendable {
             case crescendo = 0
             case decrescendo = 1
+            case crescLine = 2
+            case dimLine = 3
+
+            /// C++: `Hairpin::isCrescendo` (`hairpin.h:141-144`).
+            /// Playback and wedge direction must both branch on this,
+            /// never on `== .crescendo`.
+            public var isCrescendo: Bool {
+                self == .crescendo || self == .crescLine
+            }
+
+            /// C++: `Hairpin::isLineType` (`hairpin.h:156-159`).
+            /// True for the two text-line forms.
+            public var isLineType: Bool {
+                self == .crescLine || self == .dimLine
+            }
         }
 
         /// Linear / ease curve. v1 implements `.normal` (linear) only;
