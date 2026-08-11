@@ -23,40 +23,29 @@ extension LayoutEngine {
         let voltaEndings: [Int]
         /// Vibrato subtype. Meaningful only when `kind == .vibrato`.
         let vibratoType: VibratoType?
-    }
-
-    /// Per-staff set of measure indices covered by a visible
-    /// below-staff spanner (hairpin, pedal). Used by lyric placement
-    /// to push the verse-0 baseline below the spanner band so a
-    /// hairpin can sit between the staff and the lyric row — the
-    /// MuseScore convention. Crescendo / decrescendo direction and
-    /// in-measure tick offsets are irrelevant here; the question is
-    /// purely "does this measure host a below-staff spanner glyph?"
-    static func belowStaffSpannerCoverage(score: Score) -> [Int: Set<Int>] {
-        var out: [Int: Set<Int>] = [:]
-        for (staffIdx, entry) in score.allStaves.enumerated() {
-            let staff = entry.staff
-            var covered: Set<Int> = []
-            for (measureIdx, measure) in staff.measures.enumerated() {
-                for voice in measure.voices {
-                    for el in voice.elements {
-                        guard case let .spanner(sp) = el,
-                              sp.visible,
-                              isBelowStaff(kind: sp.kind)
-                        else { continue }
-                        let lastIdx = min(
-                            staff.measures.count - 1,
-                            measureIdx + max(0, sp.nextMeasuresOffset),
-                        )
-                        for m in measureIdx ... lastIdx {
-                            covered.insert(m)
-                        }
-                    }
-                }
-            }
-            if !covered.isEmpty { out[staffIdx] = covered }
-        }
-        return out
+        /// Hairpin direction. Meaningful only when `kind == .hairpin`.
+        /// MuseScore keeps this in `<HairPin><subtype>` — the
+        /// `<Spanner type="…">` attribute is the literal string
+        /// `HairPin` for both directions, so `rawType` cannot carry it.
+        let hairpinSubtype: Spanner.HairpinPayload.Subtype?
+        /// Ottava transposition. Meaningful only when
+        /// `kind == .ottava`. Same story as `hairpinSubtype`:
+        /// `<Spanner type="…">` is the literal string `Ottava` for
+        /// every variant, and the 8va / 8vb / 15ma / … distinction —
+        /// which drives both the label and above/below placement —
+        /// lives in `<Ottava><subtype>`.
+        let ottavaSubtype: Spanner.OttavaPayload.Subtype?
+        /// Authored `<beginText>`, when the source overrode the style
+        /// default for this spanner's left-hand label.
+        let beginText: String?
+        /// Trill subtype. Meaningful only when `kind == .trill`.
+        let trillType: TrillType?
+        /// Authored `<placement>` override, or `nil` to keep the side
+        /// this spanner's kind / subtype is styled to.
+        let placement: Spanner.Placement?
+        /// Authored `<numbersOnly>` override, or `nil` to inherit
+        /// `ScoreStyle.ottavaNumbersOnly`. Ottava only.
+        let ottavaNumbersOnly: Bool?
     }
 
     /// Walk every staff / measure / voice and collect Spanner anchors.
@@ -108,6 +97,12 @@ extension LayoutEngine {
                                 endTick: endTick,
                                 voltaEndings: sp.voltaEndings,
                                 vibratoType: sp.vibrato?.type,
+                                hairpinSubtype: sp.hairpin?.subtype,
+                                ottavaSubtype: sp.ottava?.subtype,
+                                beginText: sp.beginText,
+                                trillType: sp.trill?.type,
+                                placement: sp.placement,
+                                ottavaNumbersOnly: sp.ottava?.numbersOnly,
                             ))
                         }
                         switch el {
@@ -169,29 +164,39 @@ extension LayoutEngine {
             guard let (endSys, endLocal) = measureLocation[endGlobal]
             else { continue }
 
-            let belowStaff = isBelowStaff(kind: anchor.kind)
-            let kind = layoutKind(anchor: anchor)
+            let belowStaff = isBelowStaff(anchor: anchor)
+            let kind = layoutKind(
+                anchor: anchor,
+                ottavaNumbersOnly: score.style.ottavaNumbersOnly,
+            )
+            // Line spanners are laid out in pass 1 of `buildSystem`
+            // instead, so `SkylineAutoplacePass` can place them and
+            // everything later in the category order can clear them.
+            // What is left here is the set with no skyline shape
+            // (slur, vibrato, trill) plus voltas.
+            if isPassPlacedSpanner(kind: kind) { continue }
+            let label = layoutLabel(anchor: anchor)
 
             if startSys == endSys {
                 let system = systems[startSys]
                 let fromX = snappedHairpinStartX(
                     startX(
                         anchor: anchor,
-                        measure: system.measures[startLocal],
+                        measure: SpannerMeasureGeometry(system.measures[startLocal]),
                         metrics: metrics,
                     ),
                     anchor: anchor,
-                    measure: system.measures[startLocal],
+                    measure: SpannerMeasureGeometry(system.measures[startLocal]),
                     metrics: metrics,
                 )
                 let toX = snappedHairpinEndX(
                     endX(
                         anchor: anchor,
-                        measure: system.measures[endLocal],
+                        measure: SpannerMeasureGeometry(system.measures[endLocal]),
                         metrics: metrics,
                     ),
                     anchor: anchor,
-                    measure: system.measures[endLocal],
+                    measure: SpannerMeasureGeometry(system.measures[endLocal]),
                     metrics: metrics,
                     notBefore: fromX,
                 )
@@ -214,18 +219,18 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toX, y: y),
                     continuesLeft: false,
                     continuesRight: false,
-                    text: anchor.rawType,
+                    text: label,
                 ))
             } else {
                 let startSystem = systems[startSys]
                 let fromX = snappedHairpinStartX(
                     startX(
                         anchor: anchor,
-                        measure: startSystem.measures[startLocal],
+                        measure: SpannerMeasureGeometry(startSystem.measures[startLocal]),
                         metrics: metrics,
                     ),
                     anchor: anchor,
-                    measure: startSystem.measures[startLocal],
+                    measure: SpannerMeasureGeometry(startSystem.measures[startLocal]),
                     metrics: metrics,
                 )
                 let toXStart = startSystem.size.width - metrics.sp * 2
@@ -249,7 +254,7 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toXStart, y: yStart),
                     continuesLeft: false,
                     continuesRight: true,
-                    text: anchor.rawType,
+                    text: label,
                 ))
                 if endSys > startSys + 1 {
                     for mid in (startSys + 1) ..< endSys {
@@ -279,7 +284,7 @@ extension LayoutEngine {
                             ),
                             continuesLeft: true,
                             continuesRight: true,
-                            text: anchor.rawType,
+                            text: label,
                         ))
                     }
                 }
@@ -288,11 +293,11 @@ extension LayoutEngine {
                 let toXEnd = snappedHairpinEndX(
                     endX(
                         anchor: anchor,
-                        measure: endSystem.measures[endLocal],
+                        measure: SpannerMeasureGeometry(endSystem.measures[endLocal]),
                         metrics: metrics,
                     ),
                     anchor: anchor,
-                    measure: endSystem.measures[endLocal],
+                    measure: SpannerMeasureGeometry(endSystem.measures[endLocal]),
                     metrics: metrics,
                     notBefore: fromXEnd,
                 )
@@ -315,7 +320,7 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toXEnd, y: yEnd),
                     continuesLeft: true,
                     continuesRight: false,
-                    text: anchor.rawType,
+                    text: label,
                 ))
             }
         }
@@ -355,12 +360,12 @@ extension LayoutEngine {
     /// this lookup can't disturb a continued line's left end.
     static func startX(
         anchor: SpannerAnchor,
-        measure: LayoutMeasure,
+        measure: SpannerMeasureGeometry,
         metrics: StaffMetrics,
     ) -> CGFloat {
-        let inset = measure.origin.x + metrics.sp * 2
+        let inset = measure.originX + metrics.sp * 2
         if let local = measure.tickColumns[anchor.startTick] {
-            return max(measure.origin.x + local, inset)
+            return max(measure.originX + local, inset)
         }
         return inset
     }
@@ -374,19 +379,19 @@ extension LayoutEngine {
     /// right edge with the historical 2-sp inset.
     static func endX(
         anchor: SpannerAnchor,
-        measure: LayoutMeasure,
+        measure: SpannerMeasureGeometry,
         metrics: StaffMetrics,
     ) -> CGFloat {
         if anchor.endTick > 0,
            let local = measure.tickColumns[anchor.endTick]
         {
-            let baseX = measure.origin.x + local
+            let baseX = measure.originX + local
             // Mirror MuseScore trill.cpp:333: a vibrato ends 1 sp before its
             // end note so adjacent partial-measure vibratos keep a 1 sp gap
             // (otherwise consecutive vibratos touch / visually overlap).
             return anchor.kind == .vibrato ? baseX - metrics.sp : baseX
         }
-        return measure.origin.x + measure.width - metrics.sp * 2
+        return measure.originX + measure.width - metrics.sp * 2
     }
 
     /// `Sid::autoplaceHairpinDynamicsDistance` = 0.5 sp — the clearance
@@ -414,7 +419,7 @@ extension LayoutEngine {
     static func snappedHairpinStartX(
         _ x: CGFloat,
         anchor: SpannerAnchor,
-        measure: LayoutMeasure,
+        measure: SpannerMeasureGeometry,
         metrics: StaffMetrics,
     ) -> CGFloat {
         guard anchor.kind == .hairpin,
@@ -426,7 +431,7 @@ extension LayoutEngine {
         else { return x }
         return max(
             x,
-            measure.origin.x + extent.maxX
+            measure.originX + extent.maxX
                 + metrics.sp * hairpinDynamicsDistanceSp,
         )
     }
@@ -444,7 +449,7 @@ extension LayoutEngine {
     static func snappedHairpinEndX(
         _ x: CGFloat,
         anchor: SpannerAnchor,
-        measure: LayoutMeasure,
+        measure: SpannerMeasureGeometry,
         metrics: StaffMetrics,
         notBefore: CGFloat,
     ) -> CGFloat {
@@ -455,7 +460,7 @@ extension LayoutEngine {
                   tick: anchor.endTick,
               )
         else { return x }
-        let trimmed = measure.origin.x + extent.minX
+        let trimmed = measure.originX + extent.minX
             - metrics.sp * hairpinDynamicsDistanceSp
         return max(min(x, trimmed), notBefore)
     }
@@ -465,7 +470,7 @@ extension LayoutEngine {
     /// carry more than one (e.g. `p` in voice 1 and `f` in voice 2);
     /// the hairpin has to clear all of them.
     private static func dynamicExtent(
-        in measure: LayoutMeasure, staffIndex: Int, tick: Int,
+        in measure: SpannerMeasureGeometry, staffIndex: Int, tick: Int,
     ) -> (minX: CGFloat, maxX: CGFloat)? {
         var minX = CGFloat.greatestFiniteMagnitude
         var maxX = -CGFloat.greatestFiniteMagnitude
@@ -480,9 +485,31 @@ extension LayoutEngine {
 
     static func isBelowStaff(kind: Spanner.Kind) -> Bool {
         switch kind {
-        case .hairpin, .pedal: true
-        case .volta, .slur, .ottava, .textLine, .glissando, .vibrato, .other: false
+        // MuseScore style defaults: `palmMutePlacement` /
+        // `letRingPlacement` = BELOW (`styledef.cpp:1884,1936`),
+        // `trillPlacement` = ABOVE (`styledef.cpp:348`).
+        case .hairpin, .pedal, .palmMute, .letRing: true
+        case .volta, .slur, .ottava, .textLine, .glissando, .vibrato,
+             .trill, .other: false
         }
+    }
+
+    /// Placement for a concrete anchor.
+    ///
+    /// An authored `<placement>` wins outright — that is exactly what
+    /// MuseScore writing the tag means (the property stopped being
+    /// styled). Otherwise the styled side applies, which for ottavas
+    /// depends on the subtype: `8va` / `15ma` / `22ma` are ABOVE and
+    /// `8vb` / `15mb` / `22mb` BELOW (`styledef.cpp:638-643`,
+    /// `ottava8V*Placement`).
+    static func isBelowStaff(anchor: SpannerAnchor) -> Bool {
+        if let placement = anchor.placement {
+            return placement == .below
+        }
+        if anchor.kind == .ottava {
+            return (anchor.ottavaSubtype ?? .eightVA).semitones < 0
+        }
+        return isBelowStaff(kind: anchor.kind)
     }
 
     /// Y baseline for a spanner segment. Above-staff spanners (slur,
@@ -627,12 +654,9 @@ extension LayoutEngine {
         let origin = origins.indices.contains(clamped)
             ? origins[clamped] : CGPoint(x: 0, y: 0)
         if belowStaff {
-            // MuseScore convention: hairpin sits in the band just below
-            // the staff, between staff bottom and any lyric row. Lyric
-            // placement (`voiceMaxLyricCenterY`) is hairpin-aware and
-            // pushes itself further down when a hairpin covers the
-            // measure, so we keep the spanner Y at a stable offset.
-            return origin.y + metrics.staffHeight + metrics.sp * 3
+            return origin.y + defaultBandOffsetY(
+                belowStaff: true, metrics: metrics,
+            )
         }
         // Vibrato: MuseScore `vibratoPosAbove` default is −1 sp, so the
         // line sits much closer to the staff top than ottava/textLine.
@@ -662,7 +686,33 @@ extension LayoutEngine {
             let clearanceY = minNorthY - metrics.sp * 1.0 - halfH
             return min(defaultY, clearanceY)
         }
-        return origin.y - metrics.sp * 4
+        return origin.y + defaultBandOffsetY(
+            belowStaff: false, metrics: metrics,
+        )
+    }
+
+    /// Where a spanner segment's anchor line starts out, measured from
+    /// the staff's TOP line. This is the styled default before any
+    /// autoplace; `SkylineAutoplacePass` only ever moves a segment
+    /// further from the staff, never toward it.
+    ///
+    /// MuseScore's own defaults are closer in — `hairpinPosBelow` 1.75
+    /// sp, `ottavaPosBelow` 2.0 sp, `pedalPosBelow` 2.5 sp
+    /// (`styledef.cpp:283,318,672`) — measured from the staff BOTTOM.
+    /// Ours is a single 3 sp band below the bottom line, which is
+    /// looser than all three. Adopting the styled values moves every
+    /// score and is deliberately a separate change.
+    ///
+    /// Kept as one function because two callers must agree on it:
+    /// `anchorY` (system coords, for the kinds still placed in the
+    /// `attachSpanners` post-pass) and `synthesizeLineSpanners`
+    /// (staff-local coords, pass 1).
+    static func defaultBandOffsetY(
+        belowStaff: Bool, metrics: StaffMetrics,
+    ) -> CGFloat {
+        belowStaff
+            ? metrics.staffHeight + metrics.sp * 3
+            : -metrics.sp * 4
     }
 
     /// Minimum (highest) notehead Y across all chords in the given
@@ -716,21 +766,69 @@ extension LayoutEngine {
 
     static func layoutKind(
         anchor: SpannerAnchor,
+        ottavaNumbersOnly: Bool = true,
     ) -> LayoutElement.SpannerKind {
         switch anchor.kind {
         case .slur: return .slur
         case .volta: return .volta(endings: anchor.voltaEndings)
         case .hairpin:
+            // Direction and wedge-vs-line form both live in the
+            // decoded `<HairPin><subtype>` payload (MuseScore
+            // `HairpinType`: 0 cresc wedge, 1 dim wedge, 2 cresc line,
+            // 3 dim line). MuseScore writes `type="HairPin"` for all
+            // four, so the raw string is only a fallback for importers
+            // that name the direction in the type itself.
+            if let subtype = anchor.hairpinSubtype {
+                if subtype.isLineType {
+                    return .hairpinLine(crescendo: subtype.isCrescendo)
+                }
+                return subtype.isCrescendo ? .hairpinOpen : .hairpinClose
+            }
             let raw = anchor.rawType.lowercased()
             if raw.contains("decr") || raw.contains("dim") {
                 return .hairpinClose
             }
             return .hairpinOpen
         case .pedal: return .pedal
-        case .ottava: return .ottava(raw: anchor.rawType)
+        case .ottava:
+            return .ottava(
+                subtype: anchor.ottavaSubtype ?? .eightVA,
+                // The element's own `<numbersOnly>` beats the score
+                // style, same rule as `<placement>`.
+                numbersOnly: anchor.ottavaNumbersOnly ?? ottavaNumbersOnly,
+            )
         case .textLine: return .textLine
         case .vibrato: return .vibrato(anchor.vibratoType ?? .guitarVibrato)
+        case .trill: return .trill(anchor.trillType ?? .trill)
+        case .palmMute: return .palmMute
+        case .letRing: return .letRing
         case .glissando, .other: return .textLine
+        }
+    }
+
+    /// Label drawn at the segment's left edge, or `""` when this
+    /// spanner has none.
+    ///
+    /// This used to pass `anchor.rawType` straight through, which
+    /// printed MuseScore's internal element name onto the score — a
+    /// `<Spanner type="Trill">` engraved the literal word "Trill".
+    /// Kinds whose label is derived from their own payload (volta,
+    /// ottava, hairpin line) build it in `SpannerGeometry`; the
+    /// line-shaped kinds take the authored `<beginText>` when the
+    /// source overrode the style default, and otherwise fall back to
+    /// MuseScore's own default text for that kind.
+    static func layoutLabel(anchor: SpannerAnchor) -> String {
+        switch anchor.kind {
+        case .textLine, .glissando, .other:
+            return anchor.beginText ?? ""
+        // `Sid::palmMuteText` / `Sid::letRingText`
+        // (`styledef.cpp:1943,1891`).
+        case .palmMute:
+            return anchor.beginText ?? "P.M."
+        case .letRing:
+            return anchor.beginText ?? "let ring"
+        case .hairpin, .volta, .slur, .pedal, .ottava, .vibrato, .trill:
+            return ""
         }
     }
 }

@@ -84,6 +84,7 @@ enum MusicXMLNoteDecoder {
             tieForward: tieForward,
             tieBack: tieBack,
             parentheses: parentheses,
+            userVelocity: decodeUserVelocity(node),
         )
 
         if isChord {
@@ -98,6 +99,24 @@ enum MusicXMLNoteDecoder {
         )
         _ = existingVoiceElements // reserved for future use (e.g. tie backrefs)
         return .new(prefix + [.chord(chord)] + suffix)
+    }
+
+    /// Decode `<note dynamics="…">` into an absolute per-note MIDI
+    /// velocity. MusicXML expresses the attribute as a percentage where
+    /// 100 means "the default forte level", which the spec pins at MIDI
+    /// velocity 90 — hence the ×0.9. Absent, unparsable, or
+    /// non-positive values mean "no override" (0).
+    ///
+    /// Mirrors MuseScore's MusicXML importer
+    /// (`importmusicxmlpass2.cpp`: `round(doubleAttribute("dynamics") * 0.9)`
+    /// guarded by `if (velocity > 0)`), which likewise leaves the note's
+    /// velocity type at the absolute `.user` default.
+    private static func decodeUserVelocity(_ node: XMLTreeNode) -> Int {
+        guard let raw = node.attributes["dynamics"], let percent = Double(raw) else {
+            return 0
+        }
+        let velocity = Int((percent * 0.9).rounded())
+        return velocity > 0 ? velocity : 0
     }
 
     /// MusicXML encodes breath marks and caesuras under

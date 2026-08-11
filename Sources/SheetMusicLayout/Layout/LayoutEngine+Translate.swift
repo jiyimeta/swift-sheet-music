@@ -156,17 +156,17 @@ extension LayoutEngine {
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
             )
-        case let .staffText(text, p, color, isSystem):
-            // Emitted by `placeMeasureElements` in staff-local
-            // coords (relative to a virtual staff with top at
-            // sp * 2), so the per-staff `dy` must be applied for
-            // the text to land above its OWN staff. Without this
-            // shift every staff's text rendered above staff 0.
+        case let .staffText(text, p, color, style):
+            // Emitted by `placeMeasureElements` in staff-local coords
+            // (relative to a virtual staff with top at sp * 2), so the
+            // per-staff `dy` must be applied for the text to land above
+            // its OWN staff. Without this shift every staff's text
+            // rendered above staff 0.
             return .staffText(
                 text: text,
                 origin: shift(p),
                 color: color,
-                isSystemText: isSystem,
+                style: style,
             )
         case let .rehearsalMark(text, p, frame, color):
             // Same staff-local origin convention as `.staffText`;
@@ -222,8 +222,21 @@ extension LayoutEngine {
             // convention as `.staffText` / `.rehearsalMark` above —
             // shift onto the system's actual top-staff y.
             return .measureNumber(text: text, origin: shift(p))
-        case .note, .marker, .jump, .staffName,
-             .spannerSegment, .tieArc:
+        case let .spannerSegment(
+            kind, from, to, continuesLeft, continuesRight, text,
+        ):
+            // Both endpoints share one anchor Y, but shifting them
+            // independently is what keeps this correct if a sloped
+            // segment ever appears.
+            return .spannerSegment(
+                kind: kind,
+                fromOrigin: shift(from),
+                toOrigin: shift(to),
+                continuesLeft: continuesLeft,
+                continuesRight: continuesRight,
+                text: text,
+            )
+        case .note, .marker, .jump, .staffName, .tieArc:
             return element
         }
     }
@@ -243,10 +256,10 @@ extension LayoutEngine {
             CGPoint(x: p.x + dx, y: p.y)
         }
         switch element {
-        case let .staffText(text, p, color, isSystem):
+        case let .staffText(text, p, color, style):
             return .staffText(
                 text: text, origin: shift(p),
-                color: color, isSystemText: isSystem,
+                color: color, style: style,
             )
         case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))

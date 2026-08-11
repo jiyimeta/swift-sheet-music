@@ -261,6 +261,10 @@ extension Voice {
                 try lifted(.rehearsalMark(
                     RehearsalMark.decode(child),
                 ))
+            case "InstrumentChange":
+                try lifted(.instrumentChange(
+                    InstrumentChange.decode(child),
+                ))
             case "location":
                 // Voice-level cursor shift. MuseScore uses
                 // `<location><fractions>N/D</fractions></location>`

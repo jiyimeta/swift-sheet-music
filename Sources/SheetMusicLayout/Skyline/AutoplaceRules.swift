@@ -65,20 +65,30 @@ public enum AutoplaceRules {
     /// True for the kinds the skyline pass is allowed to move.
     public static func isAutoplaced(_ kind: ShapeItemKind) -> Bool {
         if defaultSide(for: kind) != nil { return true }
-        // Kinds MuseScore places on either side — the pass derives
-        // their side from the element's own Y.
-        return kind == .ottava || kind == .textLine
+        return sideFollowsPosition.contains(kind)
     }
 
+    /// Spanner kinds whose side is read off the element rather than
+    /// fixed by the kind.
+    ///
+    /// `Autoplace::autoplaceSpannerSegment` takes it from the spanner
+    /// itself — `bool above = item->spanner()->placeAbove()`
+    /// (`autoplace.cpp:223`) — never from a per-kind table. An authored
+    /// `<placement>` is already baked into the segment's Y by the time
+    /// the pass sees it, so the Y IS `placeAbove()`. Fixing a side per
+    /// kind would push a hairpin flipped above the staff back down
+    /// through it.
+    private static let sideFollowsPosition: Set<ShapeItemKind> = [
+        .hairpin, .pedal, .ottava, .textLine,
+    ]
+
     /// Side of the staff `kind` is pushed toward, or `nil` when the
-    /// element's own Y decides (spanners that MuseScore places on
-    /// either side).
+    /// element's own Y decides — see `sideFollowsPosition`.
     public static func defaultSide(
         for kind: ShapeItemKind,
     ) -> AutoplaceSide? {
         switch kind {
-        case .dynamics, .lyrics, .lyricsMelisma, .lyricHyphen,
-             .hairpin, .pedal:
+        case .dynamics, .lyrics, .lyricsMelisma, .lyricHyphen:
             .below
         case .tempo, .measureNumber, .harmony, .staffText, .systemText,
              .rehearsalMark, .marker, .jump, .volta:

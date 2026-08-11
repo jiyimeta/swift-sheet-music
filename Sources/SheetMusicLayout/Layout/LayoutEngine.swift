@@ -91,6 +91,10 @@ public enum LayoutEngine {
         let staffMeasureDurations: [[Fraction]] = staves.map {
             $0.measures.effectiveMeasureDurations()
         }
+        // Collected before `packSystems`, not after: `buildSystem`
+        // lays the line spanners out itself so they reach the skyline
+        // pass. The post-pass below reuses the same list.
+        let anchors = collectSpanners(score: score)
         let context = RenderContext(
             score: score,
             options: options,
@@ -99,7 +103,7 @@ public enum LayoutEngine {
             melismaContinuations: melismas,
             effectiveMelismaTicks: effectiveMelismaTicks,
             cache: cache,
-            belowStaffSpannerCoverage: belowStaffSpannerCoverage(score: score),
+            spannerAnchors: anchors,
             multiMeasureRestPlan: multiMeasureRestPlan,
             measureDurations: measureDurations,
             staffMeasureDurations: staffMeasureDurations,
@@ -135,7 +139,6 @@ public enum LayoutEngine {
         let totalHeight = systems.reduce(CGFloat(0)) { acc, system in
             max(acc, system.origin.y + system.size.height)
         }
-        let anchors = collectSpanners(score: score)
         let systemsWithSpanners = attachSpanners(
             to: systems,
             anchors: anchors,
@@ -405,12 +408,13 @@ public enum LayoutEngine {
         /// rebuilds it in place with this call's results. See
         /// `LayoutCache`.
         let cache: LayoutCache?
-        /// Per-staff set of measure indices that fall under a visible
-        /// below-staff spanner (today: hairpin / pedal). Lyric placement
-        /// reads this to push its baseline below the spanner band so
-        /// the spanner glyph and lyric row don't overlap. Computed
-        /// once at layout entry — cheap walk across spanners.
-        let belowStaffSpannerCoverage: [Int: Set<Int>]
+        /// Every spanner anchor in the score, collected once at layout
+        /// entry. `buildSystem` reads this to synthesize the line
+        /// spanners (hairpin / pedal / ottava / text line) into its
+        /// pass-1 buffer, where `SkylineAutoplacePass` can place them;
+        /// `attachSpanners` reads the same list afterwards for the
+        /// kinds that stay in the post-pass.
+        let spannerAnchors: [SpannerAnchor]
         /// Run plan for the multi-measure-rest collapse pass. Empty when
         /// `options.multiMeasureRest == .disabled` (every rest measure
         /// renders individually). Tasks 6 and 7 read this to override

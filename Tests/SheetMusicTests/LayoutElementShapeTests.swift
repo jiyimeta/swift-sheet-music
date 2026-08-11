@@ -236,7 +236,7 @@
         @Test func bottomLeadingAnchorPlacesRectAboveOrigin() throws {
             let el = LayoutElement.staffText(
                 text: "dolce", origin: CGPoint(x: 30, y: 10),
-                color: nil, isSystemText: false,
+                color: nil, style: .staffText,
             )
             let shape = try #require(LayoutElementShape.shape(
                 for: el, id: 0, xOffset: 0, metrics: metrics,

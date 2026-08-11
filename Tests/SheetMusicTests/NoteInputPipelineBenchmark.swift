@@ -180,8 +180,8 @@
                     effectiveTicks: effTicks,
                 )
             }
-            let coverage = time("belowStaffSpannerCoverage") {
-                LayoutEngine.belowStaffSpannerCoverage(score: suppressed)
+            let anchors = time("collectSpanners") {
+                LayoutEngine.collectSpanners(score: suppressed)
             }
             let mmr = time("MultiMeasureRestPlanner.plan") {
                 MultiMeasureRestPlanner.plan(
@@ -202,7 +202,7 @@
                 melismaContinuations: melismas,
                 effectiveMelismaTicks: effTicks,
                 cache: cache,
-                belowStaffSpannerCoverage: coverage,
+                spannerAnchors: anchors,
                 multiMeasureRestPlan: mmr,
                 measureDurations: measureDurations,
                 staffMeasureDurations: staffMeasureDurations,
@@ -222,9 +222,6 @@
                     + "\(cache.widthMisses - widthMisses0)  "
                     + "system hits/misses: \(cache.systemHits)/\(cache.systemMisses)",
             )
-            let anchors = time("collectSpanners") {
-                LayoutEngine.collectSpanners(score: suppressed)
-            }
             let withSpanners = time("attachSpanners") {
                 LayoutEngine.attachSpanners(
                     to: systems, anchors: anchors,

@@ -28,7 +28,19 @@ class AssetSoundfontResolver(private val context: Context) : SoundfontResolver {
     private val cachedFile: File? by lazy {
         try {
             val out = File(context.cacheDir, "gm.sf2")
-            if (!out.exists()) {
+            // Refresh whenever the APK is newer than the extracted copy.
+            // Extracting only when the file was absent meant a rebuild that
+            // swapped gm.sf2 for a different SoundFont kept serving the old
+            // one forever — the cache outlived every reinstall, because
+            // nothing about the asset's identity is in the cache key.
+            val apkTime = try {
+                context.packageManager
+                    .getPackageInfo(context.packageName, 0)
+                    .lastUpdateTime
+            } catch (_: Exception) {
+                0L
+            }
+            if (!out.exists() || out.length() == 0L || out.lastModified() < apkTime) {
                 context.assets.open("gm.sf2").use { input ->
                     out.outputStream().use { input.copyTo(it) }
                 }

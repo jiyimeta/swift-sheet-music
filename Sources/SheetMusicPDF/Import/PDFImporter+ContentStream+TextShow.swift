@@ -98,15 +98,35 @@ private func classifyCID(
     _ cid: UInt32, codepoint: UInt32, state: State,
 ) -> SMuFLSemantic {
     #if canImport(CoreGraphics)
-        state.activeClassifier.map {
+        let cascaded = state.activeClassifier.map {
             $0.classify(
                 codepoint: codepoint, characterCode: nil,
                 glyphID: CGGlyph(truncatingIfNeeded: cid),
             )
         } ?? PDFImporter.smuflSemantic(codepoint: codepoint)
     #else
-        PDFImporter.smuflSemantic(codepoint: codepoint)
+        let cascaded = PDFImporter.smuflSemantic(codepoint: codepoint)
     #endif
+    return optionalRangeFallback(cascaded, codepoint: codepoint, state: state)
+}
+
+/// Tier 1b — see `PDFImporter+SMuFLOptionalRange.swift`. Applied here, at
+/// the one place both the CoreGraphics cascade and the Foundation-only
+/// Android path converge, so a single site fixes both; the classifier
+/// itself is CoreText-based and does not exist on Android.
+///
+/// Only ever *rescues* a glyph the cascade left `.unknown`, so it cannot
+/// override a tier that answered, and only for a font that carried
+/// standard-SMuFL evidence in its own CMap.
+private func optionalRangeFallback(
+    _ cascaded: SMuFLSemantic, codepoint: UInt32, state: State,
+) -> SMuFLSemantic {
+    guard case .unknown = cascaded,
+          !state.disableSMuFLCodepointTier,
+          state.activeCMapHasStandardSMuFLEvidence,
+          let aliased = PDFImporter.smuflOptionalRangeSemantic(codepoint: codepoint)
+    else { return cascaded }
+    return aliased
 }
 
 /// Route a decoded scalar to the music stream or the text stream.

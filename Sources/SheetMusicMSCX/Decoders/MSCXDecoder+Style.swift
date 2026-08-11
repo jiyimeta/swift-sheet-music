@@ -20,7 +20,19 @@ extension ScoreStyle {
         decodeChrome(node, into: &s.pageChrome)
         decodeSwing(node, into: &s)
         decodeTitleBlockAlign(node, into: &s)
+        decodeOttava(node, into: &s)
         return s
+    }
+}
+
+/// Parse `<ottavaNumbersOnly>`. MuseScore writes the flag only when
+/// the score overrides the default (`true`), so an absent element
+/// keeps the bare-number labels.
+private func decodeOttava(
+    _ node: XMLTreeNode, into s: inout ScoreStyle,
+) {
+    if let raw = node.first("ottavaNumbersOnly")?.text {
+        s.ottavaNumbersOnly = raw != "0"
     }
 }
 

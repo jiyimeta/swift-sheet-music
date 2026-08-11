@@ -30,24 +30,72 @@ enum SpannerRenderer {
                 context: &context, from: from, to: to,
                 open: kind == .hairpinOpen, metrics: metrics,
             )
+        case let .hairpinLine(crescendo):
+            drawHairpinLine(
+                context: &context, from: from, to: to,
+                crescendo: crescendo, metrics: metrics,
+            )
         case .pedal:
             drawPedal(
                 context: &context, from: from, to: to, metrics: metrics,
             )
-        case .ottava:
+        case let .ottava(subtype, numbersOnly):
             drawOttava(
                 context: &context, from: from, to: to,
+                subtype: subtype, numbersOnly: numbersOnly,
                 metrics: metrics,
             )
         case .textLine:
             drawTextLine(
                 context: &context, from: from, to: to,
-                text: text, metrics: metrics,
+                text: text, dashed: false, metrics: metrics,
+            )
+        case .palmMute, .letRing:
+            drawTextLine(
+                context: &context, from: from, to: to,
+                text: text, dashed: true, metrics: metrics,
             )
         case let .vibrato(type):
             drawVibrato(
                 context: &context, from: from, to: to,
                 type: type, metrics: metrics,
+            )
+        case let .trill(type):
+            drawTrill(
+                context: &context, from: from, to: to,
+                type: type, continuesLeft: continuesLeft,
+                metrics: metrics,
+            )
+        }
+    }
+
+    private static func drawTrill(
+        context: inout GraphicsContext, from: CGPoint, to: CGPoint,
+        type: TrillType, continuesLeft: Bool, metrics: StaffMetrics,
+    ) {
+        let symbols = SpannerGeometry.trillSymbols(
+            type: type, continuesLeft: continuesLeft,
+        )
+        let font = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: metrics.glyphFontSize,
+        )
+        func advance(_ codepoint: UInt32) -> CGFloat {
+            guard let scalar = UnicodeScalar(codepoint) else { return 0 }
+            return FontMetrics.provider.typographicWidth(
+                text: String(Character(scalar)), font: font,
+            )
+        }
+        let run = SpannerGeometry.trillGlyphRun(
+            from: from, to: to, symbols: symbols,
+            startAdvance: advance(symbols.start),
+            fillAdvance: advance(symbols.fill),
+            endAdvance: symbols.end.map(advance) ?? 0,
+        )
+        for (codepoint, origin) in run {
+            guard let scalar = UnicodeScalar(codepoint) else { continue }
+            context.drawGlyph(
+                Character(scalar), at: origin,
+                size: metrics.glyphFontSize, anchor: .leading,
             )
         }
     }
@@ -122,6 +170,30 @@ enum SpannerRenderer {
         )
     }
 
+    private static func drawHairpinLine(
+        context: inout GraphicsContext, from: CGPoint, to: CGPoint,
+        crescendo: Bool, metrics: StaffMetrics,
+    ) {
+        let parts = SpannerGeometry.hairpinLine(
+            from: from, to: to, crescendo: crescendo, sp: metrics.sp,
+        )
+        context.drawExpressionText(
+            parts.label, at: parts.labelOrigin,
+            size: metrics.sp * parts.labelSizeSp, italic: true,
+        )
+        guard parts.lineEnd.x > parts.lineStart.x else { return }
+        var p = Path()
+        p.move(to: parts.lineStart)
+        p.addLine(to: parts.lineEnd)
+        context.stroke(
+            p, with: .color(.primary),
+            style: StrokeStyle(
+                lineWidth: metrics.sp * parts.lineThicknessSp,
+                dash: parts.dashPattern,
+            ),
+        )
+    }
+
     private static func drawPedal(
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
         metrics: StaffMetrics,
@@ -147,15 +219,20 @@ enum SpannerRenderer {
 
     private static func drawOttava(
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
+        subtype: Spanner.OttavaPayload.Subtype,
+        numbersOnly: Bool,
         metrics: StaffMetrics,
     ) {
         let parts = SpannerGeometry.ottava(
-            from: from, to: to, sp: metrics.sp,
+            from: from, to: to, sp: metrics.sp, subtype: subtype,
+            numbersOnly: numbersOnly,
         )
-        context.drawExpressionText(
-            parts.label, at: parts.labelOrigin,
-            size: metrics.sp * parts.labelSizeSp, italic: true,
-        )
+        if let scalar = UnicodeScalar(parts.labelCodepoint) {
+            context.drawGlyph(
+                Character(scalar), at: parts.labelOrigin,
+                size: metrics.glyphFontSize, anchor: .leading,
+            )
+        }
         var p = Path()
         p.move(to: parts.lineStart)
         p.addLine(to: parts.lineEnd)
@@ -195,10 +272,11 @@ enum SpannerRenderer {
 
     private static func drawTextLine(
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
-        text: String, metrics: StaffMetrics,
+        text: String, dashed: Bool, metrics: StaffMetrics,
     ) {
         let parts = SpannerGeometry.textLine(
             from: from, to: to, text: text, sp: metrics.sp,
+            dashed: dashed,
         )
         if !parts.label.isEmpty {
             context.drawExpressionText(
@@ -206,12 +284,16 @@ enum SpannerRenderer {
                 size: metrics.sp * parts.labelSizeSp, italic: true,
             )
         }
+        guard parts.lineEnd.x > parts.lineStart.x else { return }
         var p = Path()
         p.move(to: parts.lineStart)
         p.addLine(to: parts.lineEnd)
         context.stroke(
             p, with: .color(.primary),
-            lineWidth: metrics.sp * parts.lineThicknessSp,
+            style: StrokeStyle(
+                lineWidth: metrics.sp * parts.lineThicknessSp,
+                dash: parts.dashPattern,
+            ),
         )
     }
 }

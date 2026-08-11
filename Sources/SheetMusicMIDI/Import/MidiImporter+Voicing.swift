@@ -1,18 +1,8 @@
 import Foundation
 import SheetMusicCore
 
-// MARK: - VoiceNote
-
-/// Minimal note span used internally by the voicing pass.
-private struct VoiceNote {
-    var onTick: Int
-    var offTick: Int
-    var pitch: Int
-    /// True when the note is a continuation from a prior bar (carryIn).
-    var startsTied = false
-    /// True when the note continues into the next bar (carryOut).
-    var endsTied = false
-}
+// `VoiceNote` and the passes that gather / merge / snap them live in
+// `MidiImporter+VoiceNotes.swift`.
 
 // MARK: - voice()
 
@@ -101,91 +91,6 @@ extension MidiImporter {
 // MARK: - Private helpers
 
 extension MidiImporter {
-    /// Collect `(onTick, offTick, pitch)` triples from the measure's event stream.
-    private static func collectNotes(from measure: ImportMeasure) -> [VoiceNote] {
-        var open: [(channel: Int, pitch: Int, onTick: Int)] = []
-        var notes: [VoiceNote] = []
-        for ev in measure.events {
-            switch ev.event {
-            case let .noteOn(c, p, v) where v > 0:
-                open.append((c, p, ev.tick))
-            case let .noteOn(c, p, _),
-                 let .noteOff(c, p, _):
-                if let i = open.firstIndex(where: { $0.channel == c && $0.pitch == p }) {
-                    let n = open.remove(at: i)
-                    notes.append(VoiceNote(onTick: n.onTick, offTick: ev.tick, pitch: p))
-                }
-            default: break
-            }
-        }
-        for n in open {
-            notes.append(VoiceNote(onTick: n.onTick, offTick: measure.endTick, pitch: n.pitch))
-        }
-        return notes
-    }
-
-    /// Snap each VoiceNote's on/off ticks to the same grid the
-    /// quantizer chose (binary or tuplet) so chord gaps land on
-    /// standard note values. Without this voice() would walk raw
-    /// event ticks, and any drift from the grid (typical in
-    /// DAW-exported MIDI) would produce `.fraction` durations that
-    /// downstream layout can't render as notation.
-    /// After snapping, drops any zero-length notes (where on == off).
-    private static func snapVoiceNotesToGrid(
-        _ notes: [VoiceNote],
-        quantized: QuantizedMeasure,
-    ) -> [VoiceNote] {
-        notes.map { n in
-            VoiceNote(
-                onTick: snapToQuantizedGrid(
-                    n.onTick,
-                    assignments: quantized.assignments,
-                    fallbackGrid: quantized.binaryGrid,
-                ),
-                offTick: snapToQuantizedGrid(
-                    n.offTick,
-                    assignments: quantized.assignments,
-                    fallbackGrid: quantized.binaryGrid,
-                ),
-                pitch: n.pitch,
-                startsTied: n.startsTied,
-                endsTied: n.endsTied,
-            )
-        }
-        .filter { $0.onTick < $0.offTick }
-    }
-
-    /// Synthesise a `startsTied` VoiceNote at the measure head for each carryIn.
-    private static func mergeCarryIns(into notes: inout [VoiceNote], measure: ImportMeasure) {
-        for carried in measure.carryIns {
-            notes.append(VoiceNote(
-                onTick: measure.startTick,
-                offTick: min(carried.noteOffTick, measure.endTick),
-                pitch: carried.pitch,
-                startsTied: true,
-            ))
-        }
-    }
-
-    /// Mark the matching VoiceNote `endsTied` for each carryOut, synthesising
-    /// one if the noteOn did not fall within this measure.
-    private static func mergeCarryOuts(into notes: inout [VoiceNote], measure: ImportMeasure) {
-        for carried in measure.carryOuts {
-            let onTick = max(carried.noteOnTick, measure.startTick)
-            if let idx = notes.firstIndex(where: { $0.pitch == carried.pitch && $0.onTick == onTick }) {
-                notes[idx].endsTied = true
-                notes[idx].offTick = measure.endTick
-            } else {
-                notes.append(VoiceNote(
-                    onTick: onTick,
-                    offTick: measure.endTick,
-                    pitch: carried.pitch,
-                    endsTied: true,
-                ))
-            }
-        }
-    }
-
     /// Emit one or more chord elements for the gap [from, until)
     /// in the voicing's grid walk: build per-pitch notes, stamp
     /// accidentals if needed, choose duration(s) (single
@@ -338,9 +243,10 @@ extension MidiImporter {
         let activeNotes = notes.filter { $0.onTick <= prev && $0.offTick > prev }
         let willContinue = notes.filter { $0.onTick <= prev && $0.offTick > tick }.map(\.pitch)
         let comesFromPrior = notes.filter { $0.onTick < prev && $0.offTick > prev }.map(\.pitch)
-        return activeNotes.map(\.pitch).map { pitch in
+        return activeNotes.map { active in
             buildNote(
-                pitch: pitch,
+                pitch: active.pitch,
+                velocity: active.velocity,
                 prev: prev,
                 tick: tick,
                 activeNotes: activeNotes,
@@ -354,8 +260,17 @@ extension MidiImporter {
 
     /// Stamp tie flags (and, for drum tracks, a notehead shape) on a
     /// single note within the chord-emission loop.
-    private static func buildNote(
+    ///
+    /// The recorded noteOn velocity becomes an absolute per-note
+    /// override (`Note.userVelocity` with the default `.user` type),
+    /// mirroring `setMusicNotesFromMidi` in MuseScore's MIDI importer.
+    /// The import path emits no `Dynamic`s, so without this every note
+    /// of an imported performance would flatten to the score's default
+    /// mezzo-forte. A velocity of 0 never reaches here — that spelling
+    /// of noteOn is a release, and `collectNotes` treats it as one.
+    private static func buildNote( // swiftlint:disable:this function_parameter_count
         pitch: Int,
+        velocity: Int,
         prev: Int,
         tick: Int,
         activeNotes: [VoiceNote],
@@ -367,6 +282,7 @@ extension MidiImporter {
         var n = SheetMusicCore.Note(
             pitch: pitch,
             tpc: tpc(forMidiPitch: pitch, concertKey: concertKey),
+            userVelocity: velocity,
         )
         if comesFromPrior.contains(pitch) { n.tieBack = 1 }
         if activeNotes.contains(where: { $0.pitch == pitch && $0.startsTied && $0.onTick == prev }) {

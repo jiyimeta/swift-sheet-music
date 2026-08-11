@@ -7,7 +7,7 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [1.10.0] - 2026-08-07
+## [1.11.0] - 2026-08-11
 
 ### Added
 
@@ -87,8 +87,239 @@ and this project adheres to
   resulting commands (rather than treating them as opaque) is the only thing that could observe a difference.
 - **Every `Score.stableFingerprint` value changes** as a consequence of the widened walk above — this is not a
   bug, it is the point (the walk previously blind to a planner's own repairs now sees them). A host comparing a
-  fingerprint it computed and stored under 1.9.0 or earlier against one computed under 1.10.0 will see them
+  fingerprint it computed and stored under 1.10.0 or earlier against one computed under 1.11.0 will see them
   disagree even for an unedited score, and must re-baseline rather than treat the mismatch as drift.
+
+## [1.10.0] - 2026-08-11
+
+### Added
+
+- Mid-score instrument changes are read, engraved, played and written
+  back. `SheetMusicCore.InstrumentChange` models the instruction text
+  plus the `Instrument` that takes over from that position, stored as a
+  `SystemElement` on `Score.systemMeasures` — the same lift `<StaffText>`
+  and `<RehearsalMark>` already take, so no tick map lives on `Part`.
+  `Score.instrumentTimeline(forPart:)` derives the time-keyed view,
+  mirroring how `Tempo` is stored as a system element and read through
+  `TempoTimeline`. Both the MSCX and the MusicXML importers produce it:
+  MSCX from `<InstrumentChange>` (and the encoder writes it back in
+  MuseScore's own element order), MusicXML by synthesizing a change
+  wherever consecutive notes reference a different `<score-instrument>`.
+  A change whose instrument is unusable still engraves its text and
+  contributes no timeline point, so a malformed reference can never
+  silently re-instrument a part.
+
+- Playback follows the score. `MidiRenderer` allocates one MIDI channel
+  per change INSTANCE rather than per distinct instrument — that is what
+  keeps the exported SMF MuseScore-exact, since three separate "to Piano"
+  changes each embed their own `<Channel>` — and every note is emitted on
+  the channel in force at its own tick. A tie chain sounds entirely on
+  the channel in force at its head, so a change landing between a tie's
+  head and tail cannot leave a stuck note. Every program change still
+  sits at tick 0; nothing is emitted mid-stream.
+
+- `SheetMusicMIDI.LiveChannelPlan` collapses the rendered multi-port
+  channel set onto the 16 channels a live synth has. Within a part, two
+  instruments share one live channel when their `InstrumentChannel`s
+  agree on the six sounding fields; instances MuseScore gave different
+  channel numbers to still merge, and an instance the author retuned in
+  the mixer keeps its own. `MidiChannelRemap` applies the plan to a
+  rendered `MidiFile`, and `SheetMusicAudioCore.InstrumentChannel` is now
+  `Hashable`.
+
+- The mixer has one strip per instrument. A part that changes instrument
+  mid-score shows a strip for each, named after the instrument rather
+  than the staff, on both Apple and Android. Auditioning a program from
+  the mixer previews the instrument at the playback cursor.
+
+- Line spanners are placed by the skyline autoplace pass instead of a
+  fixed band under the staff. `buildSystem` now draws the segments
+  itself, so a hairpin, ottava, pedal or text line enters the staff
+  skyline before the lyric category the way MuseScore orders it
+  (`systemlayout.cpp:1276-1297`) — a lyric clears the segment's actual
+  position rather than a guessed reservation, and a segment pushed down
+  by a collision reserves its own height so the system grows to hold it.
+  The old `belowStaffSpannerCoverage` walk and the flat 7.4 sp verse-0
+  floor it fed are gone; the corpus is byte-identical across the
+  change, so the skyline subsumes the hack exactly.
+
+- Trill, palm mute and let ring are modelled rather than falling
+  through to a text line printing their own type name.
+  `Spanner.Kind.trill` carries a `TrillPayload` whose `TrillType`
+  (`trill`, `upprall`, `downprall`, `prallprall`) drives a symbol line
+  — start sigil, fill copies sized off the real glyph advances, and an
+  optional right-end cap — matching `TrillSegment::symbolLine`.
+  `Spanner.Kind.palmMute` and `.letRing` take their style-default
+  labels ("P.M." / "let ring") over a dashed line, overridable by an
+  authored `<beginText>`. Placement follows MuseScore: trill above the
+  staff, the other two below.
+
+- `Spanner.beginText` and `Spanner.placement` carry MuseScore's
+  `<beginText>` and `<placement>`. Both are `nil` when the author left
+  the property styled, which is exactly what the absence of the element
+  means upstream — MuseScore writes the tag only once the property
+  stops being styled (`twrite.cpp:578`) — so a round trip no longer
+  invents an override the file did not contain.
+
+- `ScoreStyle.ottavaNumbersOnly` (MSCX `<ottavaNumbersOnly>`, C++
+  `Sid::ottavaNumbersOnly`). When true — MuseScore's default — an
+  octave line is labelled with the bare number rather than the full
+  `8va` / `15ma` form, the alta/bassa distinction being carried by the
+  line's side of the staff.
+
+- Per-note velocity overrides. `Note.userVelocity` and
+  `Note.velocityType` model MuseScore's `<velocity>` / `<veloType>`,
+  and `Note.customizedVelocity(_:)` resolves the sounding velocity the
+  way `Note::customizeVelocity` does: `0` means "no override",
+  `.offset` applies a signed percentage to the dynamic's velocity, and
+  `.user` replaces it outright. The decoder resolves an absent
+  `<veloType>` from the file's own generation rather than from a single
+  default, because MuseScore 3 defaulted to `.offset` and wrote the tag
+  explicitly while MuseScore 4 defaults to `.user` and stops writing it.
+  The MSCX encoder writes both back, and the MIDI renderer honours them.
+
+- The MIDI importer preserves recorded noteOn velocities. It previously
+  read a velocity only to tell an attack from a release and then
+  discarded it, so — the import path emitting no `Dynamic`s — a
+  dynamically shaped take came back uniformly mezzo-forte. The velocity
+  now survives the pairing, voicing and cross-barline carry passes and
+  is stamped on the note as an absolute override, as
+  `setMusicNotesFromMidi` does upstream.
+
+- The master output stage is selectable. `MasterOutputStage` offers
+  `.none` (the new default), `.softClip` and `.peakLimiter`, and
+  `PlaybackEngine` applies the chosen one after the master gain.
+  `.none` is the default because it is the only setting under which the
+  master gain behaves like a volume control the whole way up; the
+  limiter this engine used to apply unconditionally holds its ceiling
+  by *reducing* gain, so above unity the control runs backwards —
+  measured on a steady sine, 8× drive lands 2.4 dB quieter than 1×.
+  `.softClip` bends the peaks instead, trading a hard edge for
+  progressive harmonic distortion.
+
+- Level metering. `PlaybackEngine` can report a `MixLevel` per captured
+  buffer, carrying `peak` and `rms` so a host can see both what clips
+  and what sounds loud — their ratio is the crest factor, which is why
+  a mix can sit at the ceiling and still feel quiet. The tap sits after
+  the master gain and the metronome sum but *before* the output stage,
+  so the reported level is the true pre-limiting one, and `peak` is
+  unclamped so real overshoot past full scale is visible.
+
+### Changed
+
+- **Breaking.** `SheetMusicAudioCore.MixerChannel.Kind.staff(Int)` is
+  replaced by `.instrument(partIndex:ordinal:)`. A mixer strip is a
+  (part × distinct instrument) pair now, not a staff, so a grand staff
+  still has one strip while a clarinet doubling on saxophone has two.
+  `ordinal` indexes the part's deduped instruments in first-appearance
+  order and is stable for a given score.
+
+- **Breaking.** `SheetMusicCore.SystemElement` gains
+  `case instrumentChange` and `SheetMusicCore.TextStyleType` gains
+  `case instrumentChange`. Both break exhaustive switches in consuming
+  code, and the latter also changes `allCases`' order.
+
+- **Breaking.** `SheetMusicLayout.LayoutElement.staffText`'s
+  `isSystemText: Bool` becomes `style: TextStyleType`. The flag could
+  only say "staff or system"; a third text style needed a third value,
+  and carrying the style type means the renderer reads its font and
+  placement defaults from one table instead of inferring them.
+
+- **Breaking (Android).** `MixerChannel.staffIndex` is gone, and
+  `AndroidPlaybackEngine.setStaffMuted` / `setStaffSoloed` /
+  `setStaffVolume` / `setStaffProgram` take `(partIndex, ordinal)` in
+  place of `staffIndex` — the Kotlin mirror of the `MixerChannel.Kind`
+  change above.
+
+- `MidiRenderer.staffChannels(score:)` now explicitly reports each
+  staff's part's ORDINAL-0 (tick-0) strip. It always meant "the channel
+  this staff's track starts on"; with instrument changes that is one of
+  several channels the track uses, so the accessor's contract is stated
+  rather than implied.
+
+### Fixed
+
+- A hairpin's direction is read from its `<subtype>` rather than from
+  the `type` attribute, and a spanner's variant is resolved from its
+  payload rather than from the type string. The string form could not
+  distinguish the variants MuseScore spells in the subtype, so a
+  decrescendo could engrave as a crescendo.
+
+- The autoplace category order matches MuseScore's. Ottavas and pedals
+  are laid out and put into the skyline before lyrics
+  (`systemlayout.cpp:1294-1295`); with the order inverted a pedal was
+  pushed below the lyric rows instead of the lyrics clearing it. Text
+  lines move up to just after hairpins, and a hairpin leaves the
+  dynamics group to be placed individually — the pair is exempt from
+  each other in the skyline, so sharing the group's single offset let
+  one ledger-line note under a hairpin drag every dynamic on the staff
+  down with it. The categories were inert placeholders until spanner
+  segments began reaching the pass, which is why the error survived.
+
+- A spanner's per-element `<placement>` and `numbersOnly` survive an
+  MSCX round trip.
+
+- A harmony's parentheses and root/bass case are engraved.
+  `<leftParen/>`, `<rightParen/>`, `<rootCase>` and `<baseCase>` were
+  decoded and round-tripped, but the renderer only ever read
+  `harmony.name`, so `(C7)` engraved as `C7`. The re-casing touches the
+  root and bass *letter* only, leaving the accidental markers alone, so
+  `Bb` lowercases to `bb` — B flat — rather than reading as a double
+  flat, and a wrapping paren is transparent to slice parsing so
+  `(bVII)` keeps its leading accidental.
+
+- A `<Spanner type="TextLine">` gets its label back. `<beginText>` is a
+  `TextLineBase` property riding on the payload child of any
+  line-shaped spanner, and the decoder dropped it, so an authored text
+  line engraved with no text at all.
+
+- An ottava's label is drawn as SMuFL glyphs rather than as text,
+  which is what MuseScore does.
+
+- **Android:** a part whose instrument declares one of MuseScore's
+  "expressive" banks no longer plays silently. Those presets implement
+  single-note dynamics by putting roughly 80 dB of attenuation under
+  CC2 control; MuseScore streams CC2 while playing, this engine never
+  sent it, and a MIDI channel starts at CC2 = 0 — so the preset sat at
+  the fully attenuated end with no error reported anywhere. Android is
+  the only backend that honours the score's declared bank, which is why
+  Apple was unaffected.
+
+- **Android:** both SoundFont caches notice when the bytes behind a URI
+  change. They were keyed on identity that never changes when the file
+  does, and refreshed only when their copy was missing, so a host that
+  ships its SoundFont as an asset served the first copy it ever made
+  forever — observed as a device playing a 215 MB font two months after
+  a 32 MB one had been staged in its place. The driver now compares
+  lengths, and the asset resolver re-extracts whenever the APK is newer
+  than the copy; a provider that reports no length keeps the previous
+  behavior rather than paying a multi-hundred-megabyte copy per launch.
+
+- **PDF import:** a grand staff's two staves form a barline quorum. The
+  consensus that rejects a vertical only one staff sees was gated to
+  systems of three staves or more, so a piano grand staff — which is
+  exactly two — always fell back to the raw union and any single-staff
+  stray became a system-wide measure boundary. Upstream creates a
+  barline on every staff of a real boundary
+  (`measurelayout.cpp:1559-1583`), so two staves are a quorum. On the
+  corpus's worst-scoring entry this took the measure count from 57 to
+  the ground truth's 55 and positional pitch from 8% to 37%, and it is
+  the only score in the 141-score gate that moved.
+
+- **PDF import:** a chord's notes are ordered by pitch rather than by
+  glyph arrival, so the same page yields the same `Score` whatever
+  order its content stream happens to emit the noteheads in. Content
+  order carries no musical convention to preserve, and ascending pitch
+  is what MuseScore itself sorts a chord into (`Chord::add`).
+
+- **PDF import:** noteheads drawn from the SMuFL optional range are
+  recovered rather than dropped.
+
+- **Android example:** the example app compiles again — its
+  `ScoreViewModel` call site was never updated when `transposeSemitones`
+  was added to `LayoutOptionsWire`. Nothing caught it: `swift test`
+  does not build `Examples/`, and both the preflight script and CI stop
+  at the library's `assembleRelease`.
 
 ## [1.9.0] - 2026-08-06
 

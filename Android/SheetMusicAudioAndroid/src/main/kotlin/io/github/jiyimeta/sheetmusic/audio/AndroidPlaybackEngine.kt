@@ -9,16 +9,19 @@ import io.github.jiyimeta.sheetmusic.audio.export.ExportEngineSnapshot
 import io.github.jiyimeta.sheetmusic.audio.jni.SheetMusicAudioJNI
 import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
+import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
 import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
+import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 import io.github.jiyimeta.sheetmusic.audio.serialization.AudioExportRangeCodec
 import io.github.jiyimeta.wirelet.BinaryReader
 import io.github.jiyimeta.wirelet.BinaryWriter
 import io.github.jiyimeta.sheetmusic.audio.serialization.FrameCodec
+import io.github.jiyimeta.sheetmusic.audio.serialization.InstrumentParamsCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.MetronomeBeatCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
@@ -135,6 +138,14 @@ class AndroidPlaybackEngine internal constructor(
         fun staffParams(scoreHandle: Long): ByteArray
 
         /**
+         * Returns a serialized instrument-params array — one entry per
+         * deduped (part × instrument) mixer strip. Empty on an older
+         * native bridge that predates this call; [prepare] falls back to
+         * one strip per staff in that case.
+         */
+        fun instrumentParams(scoreHandle: Long): ByteArray
+
+        /**
          * Returns `(pitch << 32) | staffIndex` for [noteIdBytes],
          * or -1 if not found.
          */
@@ -179,6 +190,7 @@ class AndroidPlaybackEngine internal constructor(
                 SheetMusicAudioJNI.nativeFrameForCursor(h, c)
             override fun countIn(h: Long, c: ByteArray) = SheetMusicAudioJNI.nativeCountIn(h, c)
             override fun staffParams(h: Long) = SheetMusicAudioJNI.nativeStaffParams(h)
+            override fun instrumentParams(h: Long) = SheetMusicAudioJNI.nativeInstrumentParams(h)
             override fun pitchAndStaffOfNote(h: Long, n: ByteArray) =
                 SheetMusicAudioJNI.nativePitchAndStaffOfNote(h, n)
             override fun earliestOf(h: Long, i: ByteArray) = SheetMusicAudioJNI.nativeEarliestOf(h, i)
@@ -282,6 +294,13 @@ class AndroidPlaybackEngine internal constructor(
     private var unrolledTotalTicks: Long = 0
     /** Ticks-per-beat from the prepared score's timeline; required by export. */
     private var ticksPerBeat: Int = 480
+    /**
+     * Live MIDI channel per flat staff index — the staff's part's PRIMARY
+     * (ordinal-0) strip, for auditioning a [playPreview] note on the
+     * instrument actually configured on the synth. Populated in [prepare];
+     * empty otherwise. Not staff-index-identity (see [MixerChannel]).
+     */
+    private var staffLiveChannel: IntArray = IntArray(0)
     private var fluidSynthEngine: FluidSynthEngine? = null
     private var playerDriver: PlayerDriver? = null
     private var oboeStream: OboeStream? = null
@@ -364,7 +383,7 @@ class AndroidPlaybackEngine internal constructor(
             val staffBytes = jniBridge.staffParams(scoreHandle)
             val staves = run {
                 val r = BinaryReader(staffBytes)
-                val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.StaffParams>()
+                val out = ArrayList<StaffParams>()
                 r.readLengthPrefixed { inner ->
                     while (inner.remaining > 0) {
                         out.add(inner.readLengthPrefixed { StaffParamsCodec.decodePayload(it) })
@@ -375,6 +394,35 @@ class AndroidPlaybackEngine internal constructor(
             if (staves.isEmpty()) throw AudioBackendException.EmptyScore()
             if (staves.size > 16) throw AudioBackendException.TooManyStaves(staves.size)
 
+            // One entry per deduped (part × instrument) mixer strip — the
+            // Android mirror of Apple's `LiveChannelPlan`.
+            val decodedStrips = decodeInstrumentParams(scoreHandle)
+            val strips = stripsOrFallback(decodedStrips, staves)
+            // `strips.size` — NOT `staves.size` — is what actually gets
+            // handed to `FluidSynthEngine.setupStaves` below (one entry
+            // per live channel, not per staff), so it is the quantity that
+            // must stay within the single-synth 16-channel limit.
+            // `FluidSynthEngine.setupStaves` has its own `require(...)` for
+            // this, but that throws a raw `IllegalArgumentException`
+            // instead of this method's documented `TooManyStaves` — check
+            // here first so the typed exception wins.
+            if (strips.size > 16) throw AudioBackendException.TooManyStaves(strips.size)
+            // Per-staff live channel for `playPreview`: the staff's PART's
+            // primary (ordinal-0) strip. Only meaningful when the real
+            // `instrumentParams` bridge populated `strips` with genuine
+            // `StaffParams.partIndex`-keyed data — the synthetic fallback
+            // above already used `staffIndex` as its own liveChannel, so
+            // reading it back through the same join is equivalent there too.
+            val partToPrimaryChannel = strips.filter { it.ordinal == 0 }
+                .associate { it.partIndex to it.liveChannel }
+            this@AndroidPlaybackEngine.staffLiveChannel = IntArray(staves.size) { i ->
+                if (decodedStrips.isNotEmpty()) {
+                    partToPrimaryChannel[staves[i].partIndex] ?: staves[i].staffIndex
+                } else {
+                    staves[i].staffIndex
+                }
+            }
+
             val metronomeSmfBytes = jniBridge.renderMetronomeMidi(scoreHandle)
 
             val smfBytes = jniBridge.renderMidi(scoreHandle)
@@ -383,21 +431,36 @@ class AndroidPlaybackEngine internal constructor(
             // Tear down any prior prepared state before recreating.
             teardownInternalNoCancelScopes()
 
-            // Single fluid_synth_t — channels 0..N-1 map to staves 0..N-1.
+            // Single fluid_synth_t, one channel per STRIP (not per staff) —
+            // keyed on each strip's live MIDI channel, which is what the
+            // rendered SMF (remapped via `LiveChannelPlan` on the Swift
+            // side) actually addresses. `StaffParams` is reused here purely
+            // as a generic (channel, bank, program, isDrums) load spec —
+            // `FluidSynthEngine` never interprets the "staffIndex" field as
+            // anything but a raw MIDI channel number.
             val engine = FluidSynthEngine(synthFactory)
-            engine.setupStaves(staves, soundfontResolver, context)
+            val channelLoadParams = strips.map { s ->
+                StaffParams(
+                    staffIndex = s.liveChannel,
+                    bankLSB = s.bankLSB,
+                    program = s.program,
+                    isDrums = s.isDrums,
+                    partAddressHash = 0L,
+                )
+            }
+            engine.setupStaves(channelLoadParams, soundfontResolver, context)
             // Re-apply the combined calibration + transpose offset: a fresh synth starts at concert
             // pitch, so a score opened while either is non-zero would otherwise play untransposed.
             if (effectiveTuningCents != 0.0) engine.setMasterTuning(effectiveTuningCents)
             this@AndroidPlaybackEngine.fluidSynthEngine = engine
-            // Seed each staff's channel volume into the synth from the score's CC 7. The rendered SMF
-            // no longer carries CC 7 on staff channels (stripped in the shared MidiSynthPostProcess so
-            // the live mixer is the sole authority), so the synth must be told the score's volume here;
-            // otherwise every staff would play at FluidSynth's default. Because no tick-0 CC 7 fires
-            // when the player starts, a volume the user sets *before* the first play now survives —
-            // matching iOS, where applyMixerState owns CC 7 and the SMF's is stripped.
-            staves.forEachIndexed { i, p ->
-                engine.setChannelVolume(i, p.channelVolume.toInt().coerceIn(0, 127) / 127f)
+            // Seed each strip's channel volume into the synth from the score's CC 7. The rendered SMF
+            // no longer carries CC 7 on mixer-managed channels (stripped in the shared
+            // MidiSynthPostProcess so the live mixer is the sole authority), so the synth must be told
+            // the score's volume here; otherwise every strip would play at FluidSynth's default. Because
+            // no tick-0 CC 7 fires when the player starts, a volume the user sets *before* the first play
+            // now survives — matching iOS, where applyMixerState owns CC 7 and the SMF's is stripped.
+            strips.forEach { s ->
+                engine.setChannelVolume(s.liveChannel, s.channelVolume.toInt().coerceIn(0, 127) / 127f)
             }
 
             // Dedicated metronome synth on a separate fluid_synth_t. The
@@ -422,8 +485,10 @@ class AndroidPlaybackEngine internal constructor(
 
             // PlayerDriver wired to the real fluid_synth_t handle.
             // fluid_player's default routing uses event.channel directly —
-            // the Swift bridge already relabels SMF channels to track indices
-            // (AudioMidiBridge.relabelChannelsToTrackIndex), so per-staff
+            // the Swift bridge already remaps SMF channels onto the live
+            // single-port channel set (`AudioMidiBridge.renderMidi`, via
+            // `LiveChannelPlan` + `MidiChannelRemap`), which is exactly the
+            // channel set `channelLoadParams` above programs, so per-strip
             // routing works without a playback-callback shim.
             val player = playerFactory(engine.synthHandle)
             player.load(smfBytes)
@@ -457,25 +522,28 @@ class AndroidPlaybackEngine internal constructor(
             oboeStream = oboe
 
             this@AndroidPlaybackEngine.scoreHandle = scoreHandle
-            _mixerChannels.value = staves.mapIndexed { i, p ->
+            _mixerChannels.value = strips.map { s ->
                 // Seed the slider from the score's authored channel volume (CC7 → 0..1),
                 // matching iOS where the mixer opens at the part's notated volume rather
                 // than a flat 100%. The SMF stream already carries these CC7 values, so
                 // this only aligns the displayed/reset value with what actually plays.
-                val initialVolume = p.channelVolume.toInt().coerceIn(0, 127) / 127f
+                val initialVolume = s.channelVolume.toInt().coerceIn(0, 127) / 127f
                 MixerChannel(
-                    staffIndex = i,
-                    // Shared Swift derivation (track name → instrument long name →
-                    // "Staff N"), matching the iOS mixer. Falls back to "Staff N"
-                    // if an older bridge sent an empty name.
-                    displayName = p.displayName.ifEmpty { "Staff ${i + 1}" },
+                    partIndex = s.partIndex,
+                    ordinal = s.ordinal,
+                    liveChannel = s.liveChannel,
+                    // Shared Swift derivation (part label, plus the instrument in
+                    // parens for a genuine secondary instrument), matching the
+                    // iOS mixer. Falls back to a generic label if an older
+                    // bridge / the synthesized fallback left it empty.
+                    displayName = s.displayName.ifEmpty { "Part ${s.partIndex + 1}" },
                     volume = initialVolume,
                     defaultVolume = initialVolume,
-                    // Drum staves carry their program too — there it is the percussion-bank kit
+                    // Drum strips carry their program too — there it is the percussion-bank kit
                     // number, which a host needs in order to show the kit picker. `isDrums` is
                     // what distinguishes the two catalogs now.
-                    program = p.program.toInt(),
-                    isDrums = p.isDrums,
+                    program = s.program.toInt(),
+                    isDrums = s.isDrums,
                 )
             }
             _totalTimeSeconds.value = totalSecs
@@ -877,6 +945,12 @@ class AndroidPlaybackEngine internal constructor(
         if (packed == -1L || packed.toULong() == 0xFFFF_FFFF_FFFF_FFFFuL) return
         val pitch = ((packed.toULong() shr 32) and 0xFFFF_FFFFu).toInt()
         val staffIndex = (packed.toULong() and 0xFFFF_FFFFu).toInt()
+        // Audition the instrument actually configured on the synth for this
+        // staff's part — its PRIMARY (ordinal-0) live channel — not the raw
+        // staffIndex, which is no longer the same as a channel number once a
+        // score has a drum part, a grand staff, or a mid-score instrument
+        // change (see `staffLiveChannel`, populated in `prepare`).
+        val liveChannel = staffLiveChannel.getOrElse(staffIndex) { staffIndex }
         // The Oboe output driver pulls samples only while it's running — it is
         // started in play() and stopped in pause() / stop(). When we're idle or
         // paused the stream is open but not running, so previewNoteOn() would
@@ -889,10 +963,10 @@ class AndroidPlaybackEngine internal constructor(
             previewStreamHolders.incrementAndGet()
             oboeStream?.play()
         }
-        engine.previewNoteOn(staffIndex, pitch, velocity)
+        engine.previewNoteOn(liveChannel, pitch, velocity)
         previewScope.launch {
             delay(durationMillis)
-            engine.previewNoteOff(staffIndex, pitch)
+            engine.previewNoteOff(liveChannel, pitch)
             if (startedStreamForPreview &&
                 previewStreamHolders.decrementAndGet() == 0 &&
                 _state.value != PlaybackState.PLAYING
@@ -934,54 +1008,69 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * Mutes or un-mutes staff [staffIndex].
+     * Mutes or un-mutes the strip identified by [partIndex] + [ordinal].
      * Recomputes [MixerChannel.effectiveMute] for all channels and
-     * propagates audibility changes to the synth via MIDI CC7.
+     * propagates audibility changes to the synth via MIDI CC7, routed
+     * through the strip's own [MixerChannel.liveChannel] — NOT its
+     * position in [mixerChannels], which is no longer the same as a MIDI
+     * channel number once a part changes instrument mid-score.
      */
-    fun setStaffMuted(staffIndex: Int, muted: Boolean) {
-        updateChannel(staffIndex) { it.copy(isMuted = muted) }
-        reapplyChannelAudibility(staffIndex)
-        // Solo precedence may have changed effectiveMute on other staves too.
-        for (i in _mixerChannels.value.indices) if (i != staffIndex) reapplyChannelAudibility(i)
+    fun setStaffMuted(partIndex: Int, ordinal: Int, muted: Boolean) {
+        val idx = channelIndex(partIndex, ordinal)
+        if (idx < 0) return
+        updateChannel(idx) { it.copy(isMuted = muted) }
+        reapplyChannelAudibility(idx)
+        // Solo precedence may have changed effectiveMute on other strips too.
+        for (i in _mixerChannels.value.indices) if (i != idx) reapplyChannelAudibility(i)
     }
 
     /**
-     * Solos or un-solos staff [staffIndex].
-     * When any staff is soloed, un-soloed staves are effectively muted.
+     * Solos or un-solos the strip identified by [partIndex] + [ordinal].
+     * When any strip is soloed, un-soloed strips are effectively muted.
      * Recomputes [MixerChannel.effectiveMute] for all channels and
      * propagates audibility changes to the synth via MIDI CC7.
      */
-    fun setStaffSoloed(staffIndex: Int, soloed: Boolean) {
-        updateChannel(staffIndex) { it.copy(isSoloed = soloed) }
+    fun setStaffSoloed(partIndex: Int, ordinal: Int, soloed: Boolean) {
+        val idx = channelIndex(partIndex, ordinal)
+        if (idx < 0) return
+        updateChannel(idx) { it.copy(isSoloed = soloed) }
         for (i in _mixerChannels.value.indices) reapplyChannelAudibility(i)
     }
 
     /**
-     * Sets the volume for staff [staffIndex] (range 0..1).
-     * Propagates to the synth via MIDI CC7. If the channel is currently muted,
-     * the new volume is recorded for restoration on unmute but not written to
-     * the synth now (mute must keep CC7 = 0).
+     * Sets the volume for the strip identified by [partIndex] + [ordinal]
+     * (range 0..1). Propagates to the synth via MIDI CC7 on the strip's own
+     * [MixerChannel.liveChannel]. If the channel is currently muted, the new
+     * volume is recorded for restoration on unmute but not written to the
+     * synth now (mute must keep CC7 = 0).
      */
-    fun setStaffVolume(staffIndex: Int, volume: Float) {
-        updateChannel(staffIndex) { it.copy(volume = volume) }
+    fun setStaffVolume(partIndex: Int, ordinal: Int, volume: Float) {
+        val idx = channelIndex(partIndex, ordinal)
+        if (idx < 0) return
+        val liveChannel = _mixerChannels.value[idx].liveChannel
+        updateChannel(idx) { it.copy(volume = volume) }
         // Use setChannelVolume (not reapplyChannelAudibility) so the new CC7 is
         // recorded in rememberedCC7 and applied only when the channel is unmuted.
-        fluidSynthEngine?.setChannelVolume(staffIndex, volume)
+        fluidSynthEngine?.setChannelVolume(liveChannel, volume)
     }
 
     /**
-     * Swaps the program (sound) for staff [staffIndex].
-     * The change is applied immediately to the synth and to the
-     * mixer state. No-op when [state] is [PlaybackState.EXPORTING].
+     * Swaps the program (sound) for the strip identified by [partIndex] +
+     * [ordinal]. The change is applied immediately to the synth (on the
+     * strip's own [MixerChannel.liveChannel]) and to the mixer state.
+     * No-op when [state] is [PlaybackState.EXPORTING].
      *
-     * Works for drum staves as well as melodic ones: [FluidSynthEngine.setStaffProgram] keeps the
-     * staff on its own bank, so on a percussion staff this selects a kit within bank 128 rather than
+     * Works for drum strips as well as melodic ones: [FluidSynthEngine.setStaffProgram] keeps the
+     * channel on its own bank, so on a percussion strip this selects a kit within bank 128 rather than
      * a melodic patch. Hosts pick which catalog to offer from `MixerChannel.isDrums`.
      */
-    fun setStaffProgram(staffIndex: Int, program: Int) {
+    fun setStaffProgram(partIndex: Int, ordinal: Int, program: Int) {
         if (_state.value == PlaybackState.EXPORTING) return
-        fluidSynthEngine?.setStaffProgram(staffIndex, program)
-        updateChannel(staffIndex) { it.copy(program = program) }
+        val idx = channelIndex(partIndex, ordinal)
+        if (idx < 0) return
+        val liveChannel = _mixerChannels.value[idx].liveChannel
+        fluidSynthEngine?.setStaffProgram(liveChannel, program)
+        updateChannel(idx) { it.copy(program = program) }
     }
 
     /**
@@ -1158,7 +1247,7 @@ class AndroidPlaybackEngine internal constructor(
         val staffParams = run {
             val spBytes = jniBridge.staffParams(scoreHandle)
             val r = BinaryReader(spBytes)
-            val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.StaffParams>()
+            val out = ArrayList<StaffParams>()
             r.readLengthPrefixed { inner ->
                 while (inner.remaining > 0) {
                     out.add(inner.readLengthPrefixed { StaffParamsCodec.decodePayload(it) })
@@ -1166,6 +1255,7 @@ class AndroidPlaybackEngine internal constructor(
             }
             out
         }
+        val strips = stripsOrFallback(decodeInstrumentParams(scoreHandle), staffParams)
 
         // Synth and encoder MUST share the same sample rate; otherwise the file
         // header advertises one rate while the samples were produced at another,
@@ -1182,7 +1272,7 @@ class AndroidPlaybackEngine internal constructor(
             exporterFactory().run(
                 outputFd = outputFd,
                 smfBytes = smfBytes,
-                staffParams = staffParams,
+                strips = strips,
                 snapshot = snapshot,
                 startTick = startTick,
                 endTick = endTick,
@@ -1219,6 +1309,7 @@ class AndroidPlaybackEngine internal constructor(
         fluidSynthEngine = null
         metronomeMixer?.close()
         metronomeMixer = null
+        staffLiveChannel = IntArray(0)
         _state.value = PlaybackState.STOPPED
     }
 
@@ -1269,7 +1360,61 @@ class AndroidPlaybackEngine internal constructor(
         pollJob = null
     }
 
+    // ── Instrument-params decoding (shared by prepare + export) ────────
+
+    /**
+     * Decodes the raw `[InstrumentParams]` bridge payload; empty when the
+     * bridge is older (a 0-byte payload has no outer length prefix to
+     * read, unlike an ENCODED empty array — `BinaryReader` would underflow
+     * on it, so this is checked before constructing the reader).
+     */
+    private fun decodeInstrumentParams(scoreHandle: Long): List<InstrumentParams> {
+        val bytes = jniBridge.instrumentParams(scoreHandle)
+        if (bytes.isEmpty()) return emptyList()
+        val r = BinaryReader(bytes)
+        val out = ArrayList<InstrumentParams>()
+        r.readLengthPrefixed { inner ->
+            while (inner.remaining > 0) {
+                out.add(inner.readLengthPrefixed { InstrumentParamsCodec.decodePayload(it) })
+            }
+        }
+        return out
+    }
+
+    /**
+     * [decoded] as-is when non-empty (the real per-(part × instrument)
+     * strip list). Otherwise falls back to one strip per staff in [staves],
+     * addressed by a SYNTHETIC per-staff partIndex (`i`, not the real
+     * `StaffParams.partIndex`, which multiple unrelated staves may share —
+     * e.g. every fixture in the test suite defaults it to 0) so
+     * `(partIndex, ordinal)` stays uniquely addressable, and
+     * `liveChannel = staffIndex` reproduces the pre-strip routing exactly.
+     * Triggers for an older native bridge, or a test double that only
+     * stubs `staffParams`.
+     */
+    private fun stripsOrFallback(
+        decoded: List<InstrumentParams>,
+        staves: List<StaffParams>,
+    ): List<InstrumentParams> = decoded.ifEmpty {
+        staves.mapIndexed { i, p ->
+            InstrumentParams(
+                partIndex = i,
+                ordinal = 0,
+                liveChannel = p.staffIndex,
+                bankLSB = p.bankLSB,
+                program = p.program,
+                isDrums = p.isDrums,
+                displayName = p.displayName.ifEmpty { "Staff ${i + 1}" },
+                channelVolume = p.channelVolume,
+            )
+        }
+    }
+
     // ── Mixer helpers ─────────────────────────────────────────────────
+
+    /** Position of the strip identified by [partIndex] + [ordinal] in [mixerChannels], or -1. */
+    private fun channelIndex(partIndex: Int, ordinal: Int): Int =
+        _mixerChannels.value.indexOfFirst { it.partIndex == partIndex && it.ordinal == ordinal }
 
     private inline fun updateChannel(idx: Int, mutate: (MixerChannel) -> MixerChannel) {
         _mixerChannels.update { list ->
@@ -1289,8 +1434,11 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * Reads the current [MixerChannel.effectiveMute] for [staffIndex] and
-     * propagates the mute/unmute transition to the synth via MIDI CC7.
+     * Reads the current [MixerChannel.effectiveMute] for the strip at
+     * position [idx] in [mixerChannels] and propagates the mute/unmute
+     * transition to the synth via MIDI CC7 — routed through the strip's
+     * own [MixerChannel.liveChannel], NOT [idx] itself (no longer the same
+     * as a MIDI channel number; see [setStaffMuted]).
      *
      * On unmute, calls [FluidSynthEngine.unmuteChannel] which restores the
      * last-captured CC7 value (SMF-emitted or user-set) rather than writing
@@ -1301,12 +1449,12 @@ class AndroidPlaybackEngine internal constructor(
      * Must be called *after* [updateChannel] so the [_mixerChannels] state
      * already reflects the latest [MixerChannel.effectiveMute] value.
      */
-    private fun reapplyChannelAudibility(staffIndex: Int) {
-        val ch = _mixerChannels.value.getOrNull(staffIndex) ?: return
+    private fun reapplyChannelAudibility(idx: Int) {
+        val ch = _mixerChannels.value.getOrNull(idx) ?: return
         if (ch.effectiveMute) {
-            fluidSynthEngine?.muteChannel(staffIndex)
+            fluidSynthEngine?.muteChannel(ch.liveChannel)
         } else {
-            fluidSynthEngine?.unmuteChannel(staffIndex)
+            fluidSynthEngine?.unmuteChannel(ch.liveChannel)
         }
     }
 

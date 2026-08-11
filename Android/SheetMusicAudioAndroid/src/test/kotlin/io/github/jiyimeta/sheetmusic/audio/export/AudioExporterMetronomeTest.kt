@@ -6,8 +6,8 @@ import io.github.jiyimeta.sheetmusic.audio.export.fakes.FakeAudioFileEncoder
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakePlayerDriver
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
+import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
-import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 import io.github.jiyimeta.sheetmusic.audio.synth.AndroidMetronomeClickResolver
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
@@ -32,14 +32,19 @@ class AudioExporterMetronomeTest {
 
     // ── Fixtures ─────────────────────────────────────────────────────────────
 
-    private val staffParams = listOf(
-        StaffParams(staffIndex = 0, bankLSB = 0, program = 0, isDrums = false, partAddressHash = 0L),
+    private val strips = listOf(
+        InstrumentParams(
+            partIndex = 0, ordinal = 0, liveChannel = 0,
+            bankLSB = 0, program = 0, isDrums = false, displayName = "Staff 1",
+        ),
     )
 
     private val metronomeSmf = byteArrayOf(1, 2, 3, 4)
 
     private fun snapshot(metronomeEnabled: Boolean, smf: ByteArray = metronomeSmf) = ExportEngineSnapshot(
-        mixerChannels = listOf(MixerChannel(staffIndex = 0, displayName = "Staff 1", program = 0)),
+        mixerChannels = listOf(
+            MixerChannel(partIndex = 0, ordinal = 0, liveChannel = 0, displayName = "Staff 1", program = 0),
+        ),
         metronomeEnabled = metronomeEnabled,
         metronomeVolume = 1.0f,
         metronomeSmfBytes = smf,
@@ -81,7 +86,7 @@ class AudioExporterMetronomeTest {
         ).run(
             outputFd = null,
             smfBytes = ByteArray(16),
-            staffParams = staffParams,
+            strips = strips,
             snapshot = snapshot,
             startTick = 0L,
             endTick = 960L,

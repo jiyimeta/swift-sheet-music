@@ -61,7 +61,6 @@ extension LayoutEngine {
         isFirstSystem: Bool = false,
         incomingMelismas: [MelismaContinuation] = [],
         effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
-        coversBelowStaffSpanner: Bool = false,
         systemElements: [PositionedSystemElement] = [],
     ) -> (
         elements: [LayoutElement],
@@ -355,14 +354,15 @@ extension LayoutEngine {
             // value than later ones and the in-measure lyric row
             // is jagged.
             let voiceMaxLyricCenterY: CGFloat = {
-                // Default 2 sp below staff; bumped further when a
-                // below-staff spanner (hairpin, pedal) shares the
-                // measure, so the spanner glyph sits between staff
-                // and lyric (the MuseScore convention).
-                var maxY = lyricBaseFloor(
-                    staffMidY: staffMidY, metrics: metrics,
-                    coversBelowStaffSpanner: coversBelowStaffSpanner,
-                )
+                // Default floor, 2 sp below the staff. A below-staff
+                // spanner sharing the measure used to bump this to
+                // 7.4 sp so the glyph could sit between staff and
+                // lyric; `SkylineAutoplacePass` now does that job
+                // properly — hairpins, pedals and ottavas are placed
+                // and added to the skyline BEFORE the lyric category,
+                // so a lyric clears the segment's actual position
+                // instead of a constant guess at where it might be.
+                var maxY = staffMidY + metrics.sp * 4
                 for el in voice.elements {
                     guard case let .chord(chord) = el else { continue }
                     guard let avoidY = chordLyricAvoidY(
@@ -1873,7 +1873,7 @@ extension LayoutEngine {
                             + CGFloat(st.offsetY) * metrics.sp,
                     ),
                     color: st.color,
-                    isSystemText: st.isSystemText,
+                    style: st.styleType,
                 )
                 if st.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .swing(s):
@@ -1887,9 +1887,27 @@ extension LayoutEngine {
                             + CGFloat(s.offsetY) * metrics.sp,
                     ),
                     color: s.color,
-                    isSystemText: s.isSystemText,
+                    style: s.isSystemText ? .systemText : .staffText,
                 )
                 if s.visible { out.append(element) } else { invisibleOut.append(element) }
+            case let .instrumentChange(ic):
+                guard ic.visible || options.showsInvisibleElements else { break }
+                // MuseScore's `instrumentChangePosAbove` is (0, -2 sp)
+                // from the staff top (styledef.cpp:1622) — one spatium
+                // higher than staff text, so the instruction clears a
+                // "pizz."-style directive at the same tick.
+                let element = LayoutElement.staffText(
+                    text: ic.text,
+                    origin: CGPoint(
+                        x: xAtTick
+                            + CGFloat(ic.offsetX) * metrics.sp,
+                        y: staffMidY - metrics.sp * 4
+                            + CGFloat(ic.offsetY) * metrics.sp,
+                    ),
+                    color: ic.color,
+                    style: .instrumentChange,
+                )
+                if ic.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .rehearsalMark(rm):
                 guard rm.visible || options.showsInvisibleElements else { break }
                 let originX = metrics.sp * 0.5
@@ -2127,18 +2145,6 @@ extension LayoutEngine {
             }
         }
         return avoidY
-    }
-
-    private static func lyricBaseFloor(
-        staffMidY: CGFloat,
-        metrics: StaffMetrics,
-        coversBelowStaffSpanner: Bool,
-    ) -> CGFloat {
-        let base = staffMidY + metrics.sp * 4
-        if coversBelowStaffSpanner {
-            return max(base, staffMidY + metrics.sp * 7.4)
-        }
-        return base
     }
 
     /// Map a `ChordArticulation.Kind` to the renderable layout-local

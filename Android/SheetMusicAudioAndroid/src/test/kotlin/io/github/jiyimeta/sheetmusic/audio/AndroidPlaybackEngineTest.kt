@@ -12,6 +12,7 @@ import io.github.jiyimeta.sheetmusic.audio.fakes.FakePlayerDriver
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
+import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
@@ -21,6 +22,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 import io.github.jiyimeta.wirelet.BinaryWriter
 import io.github.jiyimeta.sheetmusic.audio.model.Frame
 import io.github.jiyimeta.sheetmusic.audio.serialization.FrameCodec
+import io.github.jiyimeta.sheetmusic.audio.serialization.InstrumentParamsCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
@@ -80,6 +82,45 @@ private fun twoStavesPayload(): ByteArray = encodeStaffParamsArray(
 
 private fun oneStaffPayload(): ByteArray = encodeStaffParamsArray(
     listOf(StaffParams(0, 0, 0, false, 1L)),
+)
+
+/**
+ * Encodes a real (non-empty) `[InstrumentParams]` payload — the wirelet
+ * mirror of [encodeStaffParamsArray]. Setting `FakeJniBridge
+ * .instrumentParamsResult` to this (instead of leaving it at its default
+ * empty value) takes `AndroidPlaybackEngine.prepare` OFF the
+ * `stripsOrFallback` synthetic path and onto the REAL per-strip routing
+ * this task exists to exercise — every other test in this file leaves
+ * `instrumentParamsResult` empty and therefore never exercises it.
+ */
+private fun encodeInstrumentParamsArray(params: List<InstrumentParams>): ByteArray {
+    val w = BinaryWriter()
+    w.writeLengthPrefixed {
+        for (p in params) writeLengthPrefixed { InstrumentParamsCodec.encodePayload(p, this) }
+    }
+    return w.toByteArray()
+}
+
+/**
+ * Two strips on the SAME part (partIndex 0, ordinals 0 / 1 — a mid-score
+ * instrument change) whose live channels are DELIBERATELY NOT equal to
+ * their row index in `mixerChannels` or to `staffIndex`: ordinal 0 sounds
+ * on channel 5, ordinal 1 (a drum kit) sounds on channel 9. Any code that
+ * dispatches by row index / staffIndex instead of `liveChannel` sends
+ * CC7 / program to the wrong (or a silently no-op) channel against this
+ * fixture.
+ */
+private fun twoStripsSamePartDivergentChannelsPayload(): ByteArray = encodeInstrumentParamsArray(
+    listOf(
+        InstrumentParams(
+            partIndex = 0, ordinal = 0, liveChannel = 5,
+            bankLSB = 0, program = 40, isDrums = false, displayName = "Violin",
+        ),
+        InstrumentParams(
+            partIndex = 0, ordinal = 1, liveChannel = 9,
+            bankLSB = 0, program = 0, isDrums = true, displayName = "Violin (Drums)",
+        ),
+    ),
 )
 
 /** A minimal 14-byte SMF with zero tracks — non-empty so prepare() won't throw. */
@@ -272,6 +313,31 @@ class AndroidPlaybackEngineTest {
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = encodeStaffParamsArray(
                 (0..16).map { StaffParams(it, 0, 0, false, it.toLong()) },
+            ),
+            renderMidiResult = minimalSmf,
+        )
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(1L)
+    }
+
+    @Test(expected = AudioBackendException.TooManyStaves::class)
+    fun `prepare throws TooManyStaves when more than 16 STRIPS, even with few staves`() = runTest {
+        // The quantity `FluidSynthEngine.setupStaves` actually bounds is
+        // `strips.size` (one entry per live channel), not `staves.size` —
+        // a single staff can carry far more than 16 distinct instrument
+        // strips over the course of a score. This fixture has ONE staff
+        // but 17 strips, so only the strips-count guard (not the
+        // pre-existing staves-count one) can catch it.
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            instrumentParamsResult = encodeInstrumentParamsArray(
+                (0..16).map { i ->
+                    InstrumentParams(
+                        partIndex = 0, ordinal = i, liveChannel = i % 16,
+                        bankLSB = 0, program = 0, isDrums = false, displayName = "Strip $i",
+                    )
+                },
             ),
             renderMidiResult = minimalSmf,
         )
@@ -621,7 +687,7 @@ class AndroidPlaybackEngineTest {
     @Test
     fun `setStaffMuted marks channel effectiveMute`() = runTest {
         val engine = preparedEngine(staffCount = 2)
-        engine.setStaffMuted(0, true)
+        engine.setStaffMuted(0, 0, true)
         assertTrue(engine.mixerChannels.value[0].effectiveMute)
         assertTrue(engine.mixerChannels.value[0].isMuted)
     }
@@ -629,14 +695,14 @@ class AndroidPlaybackEngineTest {
     @Test
     fun `setStaffMuted does not affect other channels`() = runTest {
         val engine = preparedEngine(staffCount = 2)
-        engine.setStaffMuted(0, true)
+        engine.setStaffMuted(0, 0, true)
         assertEquals(false, engine.mixerChannels.value[1].effectiveMute)
     }
 
     @Test
     fun `setStaffSoloed makes non-soloed staves effectively muted`() = runTest {
         val engine = preparedEngine(staffCount = 2)
-        engine.setStaffSoloed(0, true)
+        engine.setStaffSoloed(0, 0, true)
         assertEquals(false, engine.mixerChannels.value[0].effectiveMute)
         assertEquals(true, engine.mixerChannels.value[1].effectiveMute)
     }
@@ -644,8 +710,8 @@ class AndroidPlaybackEngineTest {
     @Test
     fun `mute wins over solo on same staff`() = runTest {
         val engine = preparedEngine(staffCount = 2)
-        engine.setStaffSoloed(0, true)
-        engine.setStaffMuted(0, true)
+        engine.setStaffSoloed(0, 0, true)
+        engine.setStaffMuted(0, 0, true)
         // Staff 0 is both muted AND soloed — mute wins.
         assertTrue(engine.mixerChannels.value[0].effectiveMute)
     }
@@ -661,7 +727,7 @@ class AndroidPlaybackEngineTest {
     @Test
     fun `setStaffVolume updates channel volume`() = runTest {
         val engine = preparedEngine(staffCount = 2)
-        engine.setStaffVolume(1, 0.3f)
+        engine.setStaffVolume(1, 0, 0.3f)
         assertEquals(0.3f, engine.mixerChannels.value[1].volume, 0.001f)
     }
 
@@ -675,9 +741,9 @@ class AndroidPlaybackEngineTest {
         staffSynth.calls.clear()
 
         // Mute then unmute staff 0.
-        engine.setStaffMuted(0, true)
+        engine.setStaffMuted(0, 0, true)
         staffSynth.calls.clear()
-        engine.setStaffMuted(0, false)
+        engine.setStaffMuted(0, 0, false)
 
         // Unmute should NOT write CC7=127 (the slider default).
         assertFalse(
@@ -693,12 +759,12 @@ class AndroidPlaybackEngineTest {
         val staffSynth = synths.first()
 
         // User moves slider to 0.5 → CC7 = 63
-        engine.setStaffVolume(0, 0.5f)
+        engine.setStaffVolume(0, 0, 0.5f)
         staffSynth.calls.clear()
 
-        engine.setStaffMuted(0, true)
+        engine.setStaffMuted(0, 0, true)
         staffSynth.calls.clear()
-        engine.setStaffMuted(0, false)
+        engine.setStaffMuted(0, 0, false)
 
         assertTrue(
             "unmute after slider set to 0.5 should restore CC7=63",
@@ -715,10 +781,10 @@ class AndroidPlaybackEngineTest {
         staffSynth.calls.clear()
 
         // Solo staff 1 — staff 0 becomes effectively muted, then un-solo — staff 0 unmuted.
-        engine.setStaffSoloed(1, true)
+        engine.setStaffSoloed(1, 0, true)
         val ccAfterSolo = staffSynth.calls.filter { it.startsWith("cc(0,7,") }
         staffSynth.calls.clear()
-        engine.setStaffSoloed(1, false)
+        engine.setStaffSoloed(1, 0, false)
         val ccAfterUnSolo = staffSynth.calls.filter { it.startsWith("cc(0,7,") }
 
         // Staff 0 must not receive CC7=127 when un-soloing staff 1.
@@ -730,6 +796,193 @@ class AndroidPlaybackEngineTest {
         assertTrue(
             "un-solo of another staff should restore CC7=100 on this staff",
             ccAfterUnSolo.isNotEmpty() && ccAfterUnSolo.last() == "cc(0,7,100)",
+        )
+    }
+
+    // T43 — instrument-params re-key: REAL (non-fallback) strip data.
+    //
+    // Every test above leaves `instrumentParamsResult` at its default empty
+    // value, so `prepare` always takes the `stripsOrFallback` synthetic
+    // path where `liveChannel == staffIndex` — precisely the identity this
+    // task exists to break. These tests set `instrumentParamsResult`
+    // explicitly to exercise `decodeInstrumentParams`'s non-empty branch,
+    // the `partToPrimaryChannel` join, `channelIndex(partIndex, ordinal)`
+    // resolving two strips of the SAME part, and `setStaffVolume/Muted
+    // /Program` dispatching to a `liveChannel` that differs from both the
+    // row index and `staffIndex`.
+
+    @Test
+    fun `prepare with real instrument-params builds strips keyed on (partIndex, ordinal), not row index`() =
+        runTest {
+            val bridge = FakeJniBridge(
+                timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+                staffParamsResult = oneStaffPayload(),
+                instrumentParamsResult = twoStripsSamePartDivergentChannelsPayload(),
+                renderMidiResult = minimalSmf,
+            )
+            val engine = tracked(bridge = bridge)
+            engine.prepare(1L)
+
+            val channels = engine.mixerChannels.value
+            assertEquals(2, channels.size)
+            assertEquals(0, channels[0].partIndex)
+            assertEquals(0, channels[0].ordinal)
+            assertEquals(5, channels[0].liveChannel)
+            assertEquals(0, channels[1].partIndex)
+            assertEquals(1, channels[1].ordinal)
+            assertEquals(9, channels[1].liveChannel)
+            assertTrue(channels[1].isDrums)
+        }
+
+    @Test
+    fun `setStaffVolume on the SECOND strip of a part dispatches to ITS OWN liveChannel, not the row index`() =
+        runTest {
+            val synths = mutableListOf<FakeSynthDriver>()
+            val bridge = FakeJniBridge(
+                timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+                staffParamsResult = oneStaffPayload(),
+                instrumentParamsResult = twoStripsSamePartDivergentChannelsPayload(),
+                renderMidiResult = minimalSmf,
+            )
+            val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
+            engine.prepare(1L)
+            val synth = synths.first()
+            synth.calls.clear()
+
+            // Row index 1 in mixerChannels is (partIndex=0, ordinal=1) —
+            // its liveChannel is 9, NOT 1. A regression that dispatches by
+            // row index would send this to channel 1 (silently affecting
+            // nothing, since channel 1 was never configured) instead of
+            // channel 9. This is the exact `ch.liveChannel` → `idx` revert
+            // finding 2 asks to be mutation-checked.
+            engine.setStaffVolume(0, 1, 0.5f)
+
+            assertTrue(
+                "setStaffVolume on ordinal 1 should send CC7 on channel 9 (its liveChannel), got ${synth.calls}",
+                synth.calls.contains("cc(9,7,63)"),
+            )
+            assertFalse(
+                "must NOT dispatch to channel 1 (the row index)",
+                synth.calls.any { it.startsWith("cc(1,7,") },
+            )
+        }
+
+    @Test
+    fun `setStaffMuted on the FIRST strip does not touch the second strip's channel`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            instrumentParamsResult = twoStripsSamePartDivergentChannelsPayload(),
+            renderMidiResult = minimalSmf,
+        )
+        val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
+        engine.prepare(1L)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        engine.setStaffMuted(0, 0, true)
+
+        assertTrue("mute of ordinal 0 should silence channel 5", synth.calls.contains("cc(5,7,0)"))
+        // `setStaffMuted` re-applies audibility to every OTHER strip too
+        // (solo precedence may have changed), so channel 9 legitimately
+        // gets a `cc` call restoring ITS OWN unmuted volume — the bug this
+        // test guards against is that call carrying value 0 (a SILENCE),
+        // which would mean the mute leaked onto the wrong channel.
+        assertFalse(
+            "must not SILENCE channel 9 (ordinal 1's channel) — a legitimate audibility re-apply is fine",
+            synth.calls.contains("cc(9,7,0)"),
+        )
+        assertTrue(engine.mixerChannels.value[0].effectiveMute)
+        assertFalse(engine.mixerChannels.value[1].effectiveMute)
+    }
+
+    @Test
+    fun `setStaffProgram on the drum strip issues programSelect on its own channel with bank 128`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            instrumentParamsResult = twoStripsSamePartDivergentChannelsPayload(),
+            renderMidiResult = minimalSmf,
+        )
+        val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
+        engine.prepare(1L)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        engine.setStaffProgram(0, 1, 8)
+
+        assertTrue(
+            "programSelect for ordinal 1 (drum) should target channel 9 with bank 128, got ${synth.calls}",
+            synth.calls.any { it.startsWith("programSelect(") && it.contains(",9,128,8)") },
+        )
+        assertEquals(8, engine.mixerChannels.value[1].program)
+    }
+
+    @Test
+    fun `channelIndex resolves two strips of the SAME part independently (golden fixture)`() = runTest {
+        // Loaded from the committed golden fixture — the SAME bytes the
+        // Swift encoder produces for instrument-change.mscx (piano
+        // ordinal 0, accordion ordinal 1, both partIndex 0). Regression
+        // guard for the `channelIndex(partIndex, ordinal)` lookup
+        // specifically: both strips share partIndex, so a lookup keyed on
+        // partIndex alone (dropping ordinal) would find the wrong one —
+        // or always the first — for ordinal 1.
+        val goldenBytes = javaClass.classLoader!!
+            .getResourceAsStream("golden/instrumentParams-v1.bin")!!.readBytes()
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            instrumentParamsResult = goldenBytes,
+            renderMidiResult = minimalSmf,
+        )
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        val channels = engine.mixerChannels.value
+        assertEquals(2, channels.size)
+        assertEquals("Piano", channels[0].displayName)
+        assertEquals("Piano (Accordion)", channels[1].displayName)
+
+        engine.setStaffMuted(0, 1, true)
+        assertTrue(engine.mixerChannels.value[1].effectiveMute)
+        assertFalse(
+            "muting the accordion (ordinal 1) must not mute the piano (ordinal 0), which shares its partIndex",
+            engine.mixerChannels.value[0].effectiveMute,
+        )
+    }
+
+    @Test
+    fun `playPreview routes through the staff's part's PRIMARY strip liveChannel, not staffIndex`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            instrumentParamsResult = twoStripsSamePartDivergentChannelsPayload(),
+            renderMidiResult = minimalSmf,
+            // Valid packed value: pitch 67 in high 32 bits, staffIndex 0 in low.
+            pitchAndStaffOfNoteResult = (67L shl 32) or 0L,
+        )
+        val engine = tracked(bridge = bridge, fakeSynthDrivers = synths)
+        engine.prepare(1L)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        val noteID = NoteID(StaffAddress(0, 0), 0, 0, 0, 0)
+        engine.playPreview(noteID)
+
+        // staffIndex 0's part is partIndex 0 (oneStaffPayload); its
+        // PRIMARY (ordinal 0) strip's liveChannel is 5 — proving
+        // `partToPrimaryChannel` is actually consulted rather than
+        // falling back to the raw staffIndex (0).
+        assertTrue(
+            "preview should fire noteOn on channel 5 (the part's primary liveChannel), got ${synth.calls}",
+            synth.calls.contains("noteOn(5,67,96)"),
+        )
+        assertFalse(
+            "must not fire on channel 0 (the raw staffIndex)",
+            synth.calls.any { it.startsWith("noteOn(0,") },
         )
     }
 
@@ -1324,7 +1577,7 @@ class AndroidPlaybackEngineTest {
         val staffSynth = synthDrivers.first()
         staffSynth.calls.clear()
 
-        engine.setStaffProgram(0, 40)  // violin
+        engine.setStaffProgram(0, 0, 40)  // violin
 
         assertEquals(40, engine.mixerChannels.value[0].program)
         // The setStaffProgram path calls programSelect on the synth.

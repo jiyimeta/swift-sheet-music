@@ -97,27 +97,40 @@
         @Test func defaultSideTable() {
             #expect(AutoplaceRules.defaultSide(for: .dynamics) == .below)
             #expect(AutoplaceRules.defaultSide(for: .lyrics) == .below)
-            #expect(AutoplaceRules.defaultSide(for: .hairpin) == .below)
-            #expect(AutoplaceRules.defaultSide(for: .pedal) == .below)
             #expect(AutoplaceRules.defaultSide(for: .tempo) == .above)
             #expect(AutoplaceRules.defaultSide(for: .volta) == .above)
             #expect(AutoplaceRules.defaultSide(for: .rehearsalMark) == .above)
-            #expect(AutoplaceRules.defaultSide(for: .ottava) == nil)
-            #expect(AutoplaceRules.defaultSide(for: .textLine) == nil)
+        }
+
+        /// The four spanner kinds take their side from the element's
+        /// own Y, not from a per-kind table. `autoplaceSpannerSegment`
+        /// reads `spanner()->placeAbove()` (`autoplace.cpp:223`), and an
+        /// authored `<placement>` is already baked into the segment's Y
+        /// by the time the pass runs — so a fixed side here would push
+        /// a hairpin flipped above the staff back down through it.
+        @Test func spannerSidesFollowTheElement() {
+            for kind: ShapeItemKind in [
+                .hairpin, .pedal, .ottava, .textLine,
+            ] {
+                #expect(AutoplaceRules.defaultSide(for: kind) == nil)
+                #expect(AutoplaceRules.isAutoplaced(kind))
+            }
         }
 
         /// Coverage invariant: every autoplaced kind must resolve to a
-        /// side — either a fixed one from the table, or one of the two
-        /// kinds the pass derives from the element's own Y. Without
-        /// this, a new kind added to one switch and not the other would
-        /// compile and silently mis-place.
+        /// side — either a fixed one from the table, or by position.
+        /// Without this, a new kind added to one switch and not the
+        /// other would compile and silently mis-place.
         @Test func everyAutoplacedKindResolvesToASide() {
+            let byPosition: Set<ShapeItemKind> = [
+                .hairpin, .pedal, .ottava, .textLine,
+            ]
             for kind in ShapeItemKind.allCases
                 where AutoplaceRules.isAutoplaced(kind)
             {
                 #expect(
                     AutoplaceRules.defaultSide(for: kind) != nil
-                        || kind == .ottava || kind == .textLine,
+                        || byPosition.contains(kind),
                     "\(kind) is autoplaced but has no side rule",
                 )
             }

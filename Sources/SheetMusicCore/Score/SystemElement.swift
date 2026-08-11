@@ -25,4 +25,9 @@ public enum SystemElement: Sendable, Equatable {
     /// Swing-rhythm directive. `Swing.isSystemText` similarly
     /// distinguishes system swing from per-staff swing.
     case swing(Swing)
+    /// Mid-score instrument change. Lifted out of the voice like the
+    /// text cases above; `PositionedSystemElement.originalStaff` records
+    /// the staff it was written on, and every consumer keys the change
+    /// on `originalStaff.partIndex` because playback scope is the PART.
+    case instrumentChange(InstrumentChange)
 }
