@@ -158,18 +158,25 @@ private struct MixerStrip: View {
                 .background(channel.isMuted ? Color.red.opacity(0.3) : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 
-                Button {
-                    engine.setSoloed(
-                        forChannel: channel.id, to: !channel.isSoloed,
-                    )
-                } label: {
-                    Text("S")
-                        .font(.caption.bold())
-                        .frame(width: 22, height: 22)
+                // The metronome is off the solo bus, so it gets no S
+                // button — same reasoning as the program picker below,
+                // which a `nil` program hides on that strip.
+                if channel.isSoloable {
+                    Button {
+                        engine.setSoloed(
+                            forChannel: channel.id, to: !channel.isSoloed,
+                        )
+                    } label: {
+                        Text("S")
+                            .font(.caption.bold())
+                            .frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.borderless)
+                    .background(channel.isSoloed ? Color.yellow.opacity(0.4) : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                } else {
+                    Color.clear.frame(width: 22, height: 22)
                 }
-                .buttonStyle(.borderless)
-                .background(channel.isSoloed ? Color.yellow.opacity(0.4) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
 
                 Slider(
                     value: Binding<Float>(
