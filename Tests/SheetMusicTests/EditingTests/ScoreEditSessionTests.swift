@@ -430,4 +430,96 @@ struct ScoreEditSessionTests {
         #expect(session.score.stableFingerprint == before)
         #expect(session.canUndo == false)
     }
+
+    // MARK: - SP2: setNotePitch addresses the whole tie chain
+
+    /// A tie says these noteheads are one sounding note. Retuning the named one alone leaves two pitches joined by a
+    /// tie — unperformable, and `MidiRenderer` carries the head's pitch through the chain, so it would go on sounding
+    /// at the old pitch under a score showing the new one.
+    @Test func `setNotePitch retunes every member of the tie chain`() {
+        let session = ScoreEditSession(score: EditingFixtures.tiedC4Chain(length: 3))
+
+        #expect(session.apply(.setNotePitch(
+            at: EditingFixtures.noteID(element: 2),
+            pitch: 62,
+            tpc: 16,
+            accidental: nil,
+        )))
+
+        for element in 1 ... 3 {
+            let note = session.score[EditingFixtures.noteID(element: element)]
+            #expect(note?.pitch == 62)
+            #expect(note?.tpc == 16)
+        }
+    }
+
+    /// The chain is walked from whichever member the host named — the head, the tail, or anything between — so the
+    /// result cannot depend on where the caret happened to be. Element 4 is a same-pitch neighbour the chain does not
+    /// reach, and it stays put; that is what tells a chain-wide write apart from a blanket one.
+    @Test func `the chain is the same whichever member is named, and stops at its own end`() {
+        for named in 1 ... 3 {
+            let session = ScoreEditSession(score: EditingFixtures.tiedC4Chain(length: 3))
+
+            #expect(session.apply(.setNotePitch(
+                at: EditingFixtures.noteID(element: named),
+                pitch: 67,
+                tpc: 15,
+                accidental: nil,
+            )))
+
+            for element in 1 ... 3 {
+                #expect(session.score[EditingFixtures.noteID(element: element)]?.pitch == 67)
+            }
+            #expect(session.score[EditingFixtures.noteID(element: 4)]?.pitch == 60)
+        }
+    }
+
+    /// MuseScore prints no accidental on the far side of a tie, and `MeasureAccidentals` deliberately skips tied-back
+    /// notes when it renotates a measure — so a glyph written on one here would be nobody's left to remove.
+    @Test func `the accidental lands on the chain's head alone`() {
+        let session = ScoreEditSession(score: EditingFixtures.tiedC4Chain(length: 3))
+
+        #expect(session.apply(.setNotePitch(
+            at: EditingFixtures.noteID(element: 3),
+            pitch: 61,
+            tpc: 21,
+            accidental: .sharp,
+        )))
+
+        #expect(session.score[EditingFixtures.noteID(element: 1)]?.accidental == .sharp)
+        #expect(session.score[EditingFixtures.noteID(element: 2)]?.accidental == nil)
+        #expect(session.score[EditingFixtures.noteID(element: 3)]?.accidental == nil)
+    }
+
+    /// However many bars the chain crosses, it is one undo step — and an untied note still plans to a bare
+    /// `SetNotePitch`, so the overwhelmingly common case is unchanged down to the command produced.
+    @Test func `a chain-wide retune is one undo step`() {
+        let session = ScoreEditSession(score: EditingFixtures.tiedC4Chain(length: 3))
+        let before = session.score.stableFingerprint
+
+        #expect(session.apply(.setNotePitch(
+            at: EditingFixtures.noteID(element: 1),
+            pitch: 62,
+            tpc: 16,
+            accidental: nil,
+        )))
+        #expect(session.undo())
+
+        #expect(session.score.stableFingerprint == before)
+        #expect(session.canUndo == false)
+    }
+
+    @Test func `setNotePitch on a slot holding no note is refused`() {
+        let score = EditingFixtures.fourQuarterRests()
+        let session = ScoreEditSession(score: score)
+
+        #expect(!session.apply(.setNotePitch(
+            at: EditingFixtures.noteID(element: 1),
+            pitch: 62,
+            tpc: 16,
+            accidental: nil,
+        )))
+
+        #expect(session.score == score)
+    }
 }

@@ -200,9 +200,10 @@ public final class ScoreEditSession {
             return CompositeEditCommand(commands: commands, location: first.affectedLocation)
         case let .writeNote(location, pitch, tpc, duration):
             return try writeNoteCommand(at: location, pitch: pitch, tpc: tpc, duration: duration, in: score)
-        case .setNotePitch, .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet,
-             .removeTuplet:
-            // These seven note-editing intents each map straight onto their `EditCommand`, with no cross-bar or
+        case let .setNotePitch(location, pitch, tpc, accidental):
+            return retuneCommand(at: location, pitch: pitch, tpc: tpc, accidental: accidental, in: score)
+        case .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet, .removeTuplet:
+            // These six note-editing intents each map straight onto their `EditCommand`, with no cross-bar or
             // collapse planning involved — unlike `.inputNote` / `.setRestDuration` / `.delete` above, which route
             // through planners. Factored into `directNoteEditCommand` to keep this switch under SwiftLint's line
             // budget, not because they belong to a different subsystem.
@@ -210,13 +211,44 @@ public final class ScoreEditSession {
         }
     }
 
-    /// The seven intents that map directly onto an `EditCommand` with no planning step. Reached only via
-    /// `command(for:in:depth:)`'s combined case above, so the `if case` chain below never needs to handle the five
+    /// `.setNotePitch`: write the pitch onto `location` AND onto every note it is tied to, as one command.
+    ///
+    /// A tie chain is one sounding note written across several slots — that is what the curve tells a player, and what
+    /// `MidiRenderer` already assumes when it carries the head's pitch through the chain. Retuning only the notehead
+    /// the host named therefore produces something unplayable: two different pitches joined by a tie, sounding as the
+    /// original pitch held. So the intent addresses the chain, however long it is and whichever member is named.
+    ///
+    /// The chain walk belongs HERE rather than in the host: an Android host would otherwise have to re-derive it in
+    /// Kotlin against a score it only mirrors, which is the divergent second implementation this whole relay exists
+    /// to avoid.
+    ///
+    /// The accidental goes on the chain's head alone. MuseScore prints none on the far side of a tie, and
+    /// `MeasureAccidentals` deliberately skips tied-back notes when it renotates a measure — so a glyph written on one
+    /// here would be nobody's left to remove.
+    ///
+    /// An untied note is a chain of one and comes back as a bare `SetNotePitch`, not a one-member composite, so the
+    /// overwhelmingly common case is unchanged down to the command it produces.
+    private static func retuneCommand(
+        at location: NoteID, pitch: Int, tpc: Int, accidental: Accidental?, in score: Score,
+    ) -> (any EditCommand)? {
+        let chain = TiePlanner.tieChain(containing: location, in: score)
+        // Empty means there is no note at `location` at all. Returning `nil` rather than a doomed command lets
+        // `apply` report the refusal the same way it reports every other "nothing to do".
+        guard !chain.isEmpty else { return nil }
+        let commands: [any EditCommand] = chain.map { member in
+            SetNotePitch(
+                at: member, pitch: pitch, tpc: tpc,
+                accidental: score[member]?.tieBack == nil ? accidental : nil,
+            )
+        }
+        guard commands.count > 1 else { return commands[0] }
+        return CompositeEditCommand(commands: commands, location: VoiceElementID(location))
+    }
+
+    /// The six intents that map directly onto an `EditCommand` with no planning step. Reached only via
+    /// `command(for:in:depth:)`'s combined case above, so the `if case` chain below never needs to handle the six
     /// intents that function keeps for itself — an exhaustive `switch` here would have to fake-handle those too.
     private static func directNoteEditCommand(for intent: EditIntent) throws -> (any EditCommand)? {
-        if case let .setNotePitch(location, pitch, tpc, accidental) = intent {
-            return SetNotePitch(at: location, pitch: pitch, tpc: tpc, accidental: accidental)
-        }
         if case let .setAccidental(location, accidental) = intent {
             return SetAccidental(at: location, accidental: accidental)
         }

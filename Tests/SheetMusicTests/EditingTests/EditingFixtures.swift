@@ -96,6 +96,23 @@ enum EditingFixtures {
         return score
     }
 
+    /// `length` consecutive C4 quarters starting at element index 1, joined into one tie chain, with the remaining
+    /// slots left as rests. Element index `1 + length` is a plain C4 quarter that the chain does NOT reach — the
+    /// neighbour a chain-wide edit must leave alone.
+    static func tiedC4Chain(length: Int) -> Score {
+        var score = fourQuarterRests()
+        for offset in 0 ..< length {
+            var note = Note(pitch: 60, tpc: 14)
+            note.tieBack = offset > 0 ? 1 : nil
+            note.tieForward = offset < length - 1 ? 1 : nil
+            score[VoiceElementID(staff: staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1 + offset)] =
+                .chord(Chord(duration: .quarter, notes: [note]))
+        }
+        score[VoiceElementID(staff: staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1 + length)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        return score
+    }
+
     /// Element index 1 is C4, element index 2 is D4 — same rhythm as `twoConsecutiveC4Chords`, but not a tie
     /// candidate (different pitch).
     static func c4ThenD4Chords() -> Score {
