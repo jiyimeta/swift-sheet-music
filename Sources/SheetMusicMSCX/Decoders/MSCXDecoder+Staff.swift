@@ -11,6 +11,30 @@ extension Staff {
         let staffTypeNode = node.first("StaffType")
         let staffType = staffTypeNode?.first("name")?.text ?? "stdNormal"
         let group = staffTypeNode?.attributes["group"] ?? "pitched"
+        // `<lines>` is an embellishment-tier field: an out-of-range
+        // value degrades the rendering but must not fail the load.
+        let lineCount: Int
+        if let raw = staffTypeNode?.first("lines")?.text {
+            if let parsed = Int(raw) {
+                lineCount = min(max(parsed, 1), 16)
+                if lineCount != parsed {
+                    mscxDecoderWarn(
+                        code: "mscx.staffType.linesOutOfRange",
+                        message: "<StaffType><lines>\(parsed)</lines>"
+                            + " out of range; clamped to \(lineCount)",
+                    )
+                }
+            } else {
+                lineCount = 5
+                mscxDecoderWarn(
+                    code: "mscx.staffType.linesNotANumber",
+                    message: "<StaffType><lines> is not a number:"
+                        + " '\(raw)'; using 5",
+                )
+            }
+        } else {
+            lineCount = 5
+        }
         // Default clef. MuseScore writes one of three forms (see
         // engraving/rw/read460/tread.cpp:3948-3955):
         //   * `<defaultClef>X</defaultClef>` — sets BOTH concert &
@@ -56,6 +80,7 @@ extension Staff {
         return (mscxID, Staff(
             staffType: staffType,
             group: group,
+            lineCount: lineCount,
             defaultClefType: defaultClef,
             brackets: brackets,
             measures: [],
