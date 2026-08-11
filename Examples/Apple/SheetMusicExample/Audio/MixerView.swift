@@ -1,11 +1,11 @@
 import SheetMusicAudio
 import SwiftUI
 
-/// Mixer panel: one strip per channel, each with mute, solo, a
-/// volume slider, and (for staff channels) a GM program picker.
-/// Bound directly to `PlaybackEngine.mixerChannels` so changes
-/// from any other UI (toolbar, scripts, …) reflect here and vice
-/// versa.
+/// Mixer panel: one strip per (part × distinct instrument), each
+/// with mute, solo, a volume slider, and (for pitched instrument
+/// channels) a GM program picker. Bound directly to
+/// `PlaybackEngine.mixerChannels` so changes from any other UI
+/// (toolbar, scripts, …) reflect here and vice versa.
 struct MixerView: View {
     let engine: PlaybackEngine
 

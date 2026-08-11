@@ -23,6 +23,29 @@ extension LayoutEngine {
         let voltaEndings: [Int]
         /// Vibrato subtype. Meaningful only when `kind == .vibrato`.
         let vibratoType: VibratoType?
+        /// Hairpin direction. Meaningful only when `kind == .hairpin`.
+        /// MuseScore keeps this in `<HairPin><subtype>` — the
+        /// `<Spanner type="…">` attribute is the literal string
+        /// `HairPin` for both directions, so `rawType` cannot carry it.
+        let hairpinSubtype: Spanner.HairpinPayload.Subtype?
+        /// Ottava transposition. Meaningful only when
+        /// `kind == .ottava`. Same story as `hairpinSubtype`:
+        /// `<Spanner type="…">` is the literal string `Ottava` for
+        /// every variant, and the 8va / 8vb / 15ma / … distinction —
+        /// which drives both the label and above/below placement —
+        /// lives in `<Ottava><subtype>`.
+        let ottavaSubtype: Spanner.OttavaPayload.Subtype?
+        /// Authored `<beginText>`, when the source overrode the style
+        /// default for this spanner's left-hand label.
+        let beginText: String?
+        /// Trill subtype. Meaningful only when `kind == .trill`.
+        let trillType: TrillType?
+        /// Authored `<placement>` override, or `nil` to keep the side
+        /// this spanner's kind / subtype is styled to.
+        let placement: Spanner.Placement?
+        /// Authored `<numbersOnly>` override, or `nil` to inherit
+        /// `ScoreStyle.ottavaNumbersOnly`. Ottava only.
+        let ottavaNumbersOnly: Bool?
     }
 
     /// Per-staff set of measure indices covered by a visible
@@ -31,7 +54,9 @@ extension LayoutEngine {
     /// hairpin can sit between the staff and the lyric row — the
     /// MuseScore convention. Crescendo / decrescendo direction and
     /// in-measure tick offsets are irrelevant here; the question is
-    /// purely "does this measure host a below-staff spanner glyph?"
+    /// purely "does this measure host a below-staff spanner glyph?" —
+    /// which an authored `<placement>` can answer either way, so a
+    /// hairpin flipped above the staff must stop reserving the band.
     static func belowStaffSpannerCoverage(score: Score) -> [Int: Set<Int>] {
         var out: [Int: Set<Int>] = [:]
         for (staffIdx, entry) in score.allStaves.enumerated() {
@@ -42,7 +67,8 @@ extension LayoutEngine {
                     for el in voice.elements {
                         guard case let .spanner(sp) = el,
                               sp.visible,
-                              isBelowStaff(kind: sp.kind)
+                              sp.placement.map({ $0 == .below })
+                              ?? isBelowStaff(kind: sp.kind)
                         else { continue }
                         let lastIdx = min(
                             staff.measures.count - 1,
@@ -108,6 +134,12 @@ extension LayoutEngine {
                                 endTick: endTick,
                                 voltaEndings: sp.voltaEndings,
                                 vibratoType: sp.vibrato?.type,
+                                hairpinSubtype: sp.hairpin?.subtype,
+                                ottavaSubtype: sp.ottava?.subtype,
+                                beginText: sp.beginText,
+                                trillType: sp.trill?.type,
+                                placement: sp.placement,
+                                ottavaNumbersOnly: sp.ottava?.numbersOnly,
                             ))
                         }
                         switch el {
@@ -169,8 +201,12 @@ extension LayoutEngine {
             guard let (endSys, endLocal) = measureLocation[endGlobal]
             else { continue }
 
-            let belowStaff = isBelowStaff(kind: anchor.kind)
-            let kind = layoutKind(anchor: anchor)
+            let belowStaff = isBelowStaff(anchor: anchor)
+            let kind = layoutKind(
+                anchor: anchor,
+                ottavaNumbersOnly: score.style.ottavaNumbersOnly,
+            )
+            let label = layoutLabel(anchor: anchor)
 
             if startSys == endSys {
                 let system = systems[startSys]
@@ -214,7 +250,7 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toX, y: y),
                     continuesLeft: false,
                     continuesRight: false,
-                    text: anchor.rawType,
+                    text: label,
                 ))
             } else {
                 let startSystem = systems[startSys]
@@ -249,7 +285,7 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toXStart, y: yStart),
                     continuesLeft: false,
                     continuesRight: true,
-                    text: anchor.rawType,
+                    text: label,
                 ))
                 if endSys > startSys + 1 {
                     for mid in (startSys + 1) ..< endSys {
@@ -279,7 +315,7 @@ extension LayoutEngine {
                             ),
                             continuesLeft: true,
                             continuesRight: true,
-                            text: anchor.rawType,
+                            text: label,
                         ))
                     }
                 }
@@ -315,7 +351,7 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toXEnd, y: yEnd),
                     continuesLeft: true,
                     continuesRight: false,
-                    text: anchor.rawType,
+                    text: label,
                 ))
             }
         }
@@ -480,9 +516,31 @@ extension LayoutEngine {
 
     static func isBelowStaff(kind: Spanner.Kind) -> Bool {
         switch kind {
-        case .hairpin, .pedal: true
-        case .volta, .slur, .ottava, .textLine, .glissando, .vibrato, .other: false
+        // MuseScore style defaults: `palmMutePlacement` /
+        // `letRingPlacement` = BELOW (`styledef.cpp:1884,1936`),
+        // `trillPlacement` = ABOVE (`styledef.cpp:348`).
+        case .hairpin, .pedal, .palmMute, .letRing: true
+        case .volta, .slur, .ottava, .textLine, .glissando, .vibrato,
+             .trill, .other: false
         }
+    }
+
+    /// Placement for a concrete anchor.
+    ///
+    /// An authored `<placement>` wins outright — that is exactly what
+    /// MuseScore writing the tag means (the property stopped being
+    /// styled). Otherwise the styled side applies, which for ottavas
+    /// depends on the subtype: `8va` / `15ma` / `22ma` are ABOVE and
+    /// `8vb` / `15mb` / `22mb` BELOW (`styledef.cpp:638-643`,
+    /// `ottava8V*Placement`).
+    static func isBelowStaff(anchor: SpannerAnchor) -> Bool {
+        if let placement = anchor.placement {
+            return placement == .below
+        }
+        if anchor.kind == .ottava {
+            return (anchor.ottavaSubtype ?? .eightVA).semitones < 0
+        }
+        return isBelowStaff(kind: anchor.kind)
     }
 
     /// Y baseline for a spanner segment. Above-staff spanners (slur,
@@ -716,21 +774,69 @@ extension LayoutEngine {
 
     static func layoutKind(
         anchor: SpannerAnchor,
+        ottavaNumbersOnly: Bool = true,
     ) -> LayoutElement.SpannerKind {
         switch anchor.kind {
         case .slur: return .slur
         case .volta: return .volta(endings: anchor.voltaEndings)
         case .hairpin:
+            // Direction and wedge-vs-line form both live in the
+            // decoded `<HairPin><subtype>` payload (MuseScore
+            // `HairpinType`: 0 cresc wedge, 1 dim wedge, 2 cresc line,
+            // 3 dim line). MuseScore writes `type="HairPin"` for all
+            // four, so the raw string is only a fallback for importers
+            // that name the direction in the type itself.
+            if let subtype = anchor.hairpinSubtype {
+                if subtype.isLineType {
+                    return .hairpinLine(crescendo: subtype.isCrescendo)
+                }
+                return subtype.isCrescendo ? .hairpinOpen : .hairpinClose
+            }
             let raw = anchor.rawType.lowercased()
             if raw.contains("decr") || raw.contains("dim") {
                 return .hairpinClose
             }
             return .hairpinOpen
         case .pedal: return .pedal
-        case .ottava: return .ottava(raw: anchor.rawType)
+        case .ottava:
+            return .ottava(
+                subtype: anchor.ottavaSubtype ?? .eightVA,
+                // The element's own `<numbersOnly>` beats the score
+                // style, same rule as `<placement>`.
+                numbersOnly: anchor.ottavaNumbersOnly ?? ottavaNumbersOnly,
+            )
         case .textLine: return .textLine
         case .vibrato: return .vibrato(anchor.vibratoType ?? .guitarVibrato)
+        case .trill: return .trill(anchor.trillType ?? .trill)
+        case .palmMute: return .palmMute
+        case .letRing: return .letRing
         case .glissando, .other: return .textLine
+        }
+    }
+
+    /// Label drawn at the segment's left edge, or `""` when this
+    /// spanner has none.
+    ///
+    /// This used to pass `anchor.rawType` straight through, which
+    /// printed MuseScore's internal element name onto the score — a
+    /// `<Spanner type="Trill">` engraved the literal word "Trill".
+    /// Kinds whose label is derived from their own payload (volta,
+    /// ottava, hairpin line) build it in `SpannerGeometry`; the
+    /// line-shaped kinds take the authored `<beginText>` when the
+    /// source overrode the style default, and otherwise fall back to
+    /// MuseScore's own default text for that kind.
+    static func layoutLabel(anchor: SpannerAnchor) -> String {
+        switch anchor.kind {
+        case .textLine, .glissando, .other:
+            return anchor.beginText ?? ""
+        // `Sid::palmMuteText` / `Sid::letRingText`
+        // (`styledef.cpp:1943,1891`).
+        case .palmMute:
+            return anchor.beginText ?? "P.M."
+        case .letRing:
+            return anchor.beginText ?? "let ring"
+        case .hairpin, .volta, .slur, .pedal, .ottava, .vibrato, .trill:
+            return ""
         }
     }
 }

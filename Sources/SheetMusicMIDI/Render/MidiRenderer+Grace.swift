@@ -163,7 +163,7 @@ extension MidiRenderer {
                     event: .noteOn(
                         channel: channel,
                         pitch: note.pitch,
-                        velocity: velocity,
+                        velocity: note.customizedVelocity(velocity),
                     ),
                 ))
                 events.append(TimedMidiEvent(
@@ -237,7 +237,8 @@ extension MidiRenderer {
                 events.append(TimedMidiEvent(
                     tick: afterCursor,
                     event: .noteOn(
-                        channel: channel, pitch: note.pitch, velocity: velocity,
+                        channel: channel, pitch: note.pitch,
+                        velocity: note.customizedVelocity(velocity),
                     ),
                 ))
                 events.append(TimedMidiEvent(
@@ -297,9 +298,14 @@ extension MidiRenderer {
         return map
     }
 
-    /// Same tie-aware emit as `MidiRenderer.emitNoteEvents` (private
-    /// in `+Voice.swift`). Re-implemented here to avoid widening
-    /// access on the original.
+    /// Emit note-on/off for a single note, respecting tie flags. For a
+    /// tied chain we want ONE combined event pair:
+    ///   - A note with `tieBack` set must not re-trigger: its note-on is
+    ///     suppressed because the preceding chord's note-on still sounds.
+    ///   - A note with `tieForward` set must not release: its note-off is
+    ///     suppressed because the sound continues into the next chord.
+    /// Mirrors MuseScore's `Note::playTicksFraction()`, which reports the
+    /// full tied span as the single sounding event.
     private static func emitNoteEventsForGrace(
         note: Note,
         channel: Int,
@@ -311,6 +317,7 @@ extension MidiRenderer {
         // A muted note (`<play>0</play>`) emits no MIDI. Mirrors the
         // `if (!note->play()) return;` guard in CompatMidiRender::collectNote.
         guard note.play else { return }
+        let velocity = note.customizedVelocity(velocity)
         if note.tieBack == nil {
             events.append(TimedMidiEvent(
                 tick: onTick,

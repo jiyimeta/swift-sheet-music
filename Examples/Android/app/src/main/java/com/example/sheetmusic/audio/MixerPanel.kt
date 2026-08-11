@@ -91,13 +91,23 @@ fun MixerPanel(viewModel: AudioViewModel, modifier: Modifier = Modifier) {
                 val listHeight = rowHeight * channels.size.coerceAtMost(maxVisible)
 
                 LazyColumn(modifier = Modifier.height(listHeight)) {
-                    itemsIndexed(channels) { index, channel ->
+                    itemsIndexed(channels) { _, channel ->
                         StaffRow(
                             channel = channel,
-                            onVolumeChange = { v -> viewModel.engine.value?.setStaffVolume(index, v) },
-                            onMuteToggle = { viewModel.engine.value?.setStaffMuted(index, !channel.isMuted) },
-                            onSoloToggle = { viewModel.engine.value?.setStaffSoloed(index, !channel.isSoloed) },
-                            onProgramChange = { p -> viewModel.engine.value?.setStaffProgram(index, p) },
+                            onVolumeChange = { v ->
+                                viewModel.engine.value?.setStaffVolume(channel.partIndex, channel.ordinal, v)
+                            },
+                            onMuteToggle = {
+                                viewModel.engine.value
+                                    ?.setStaffMuted(channel.partIndex, channel.ordinal, !channel.isMuted)
+                            },
+                            onSoloToggle = {
+                                viewModel.engine.value
+                                    ?.setStaffSoloed(channel.partIndex, channel.ordinal, !channel.isSoloed)
+                            },
+                            onProgramChange = { p ->
+                                viewModel.engine.value?.setStaffProgram(channel.partIndex, channel.ordinal, p)
+                            },
                         )
                     }
                 }

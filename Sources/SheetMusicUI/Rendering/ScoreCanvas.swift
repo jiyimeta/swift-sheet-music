@@ -564,11 +564,12 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .staffText(text, p, color, _):
+        case let .staffText(text, p, color, style):
             StaffTextRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p),
                 color: color,
+                style: style,
                 metrics: metrics,
             )
         case let .harmony(lh):

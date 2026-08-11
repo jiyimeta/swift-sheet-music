@@ -1,7 +1,7 @@
 import Foundation
 
-/// One strip in the mixer — a per-staff channel or the metronome.
-/// The host app reads the array to render UI and calls
+/// One strip in the mixer — a per-(part × instrument) channel or the
+/// metronome. The host app reads the array to render UI and calls
 /// `PlaybackEngine.setVolume / setMuted / setSoloed` to mutate.
 ///
 /// "Effective" mute follows standard mixer convention: when *any*
@@ -10,7 +10,13 @@ import Foundation
 /// they'll all be heard, while non-soloed channels go quiet.
 public struct MixerChannel: Sendable, Equatable, Identifiable {
     public enum Kind: Sendable, Hashable {
-        case staff(Int)
+        /// `ordinal` indexes the part's DEDUPED instruments in
+        /// first-appearance order (`LiveChannelPlan.Strip.ordinal`), so
+        /// it is stable for a given score and matches the live channel
+        /// set one-to-one. Replaced `case staff(Int)`: a multi-staff
+        /// part shared one channel, so per-staff strips were duplicates,
+        /// and a part that changes instrument needs more than one strip.
+        case instrument(partIndex: Int, ordinal: Int)
         case metronome
     }
 

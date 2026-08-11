@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
@@ -114,15 +115,19 @@ public enum LayoutElement: Sendable, Equatable {
         color: ScoreColor? = nil,
     )
     case textMark(kind: TextMarkKind, text: String, origin: CGPoint)
-    /// Free-form staff or system text imported from MuseScore.
-    /// Distinct from `.textMark` because it carries author-supplied
-    /// color and the placement comes pre-shifted by the user offset
-    /// declared in the source file.
+    /// Free-form staff / system text or an instrument-change
+    /// instruction, imported from MuseScore. Distinct from `.textMark`
+    /// because it carries author-supplied color and the placement comes
+    /// pre-shifted by the user offset declared in the source file.
+    ///
+    /// `style` picks the `TextStyleDefaults` row every renderer resolves
+    /// against. It replaced an `isSystemText: Bool`, which could not
+    /// express the third (`.instrumentChange`) style.
     case staffText(
         text: String,
         origin: CGPoint,
         color: ScoreColor?,
-        isSystemText: Bool,
+        style: TextStyleType,
     )
     /// Pre-typeset chord symbol with a baked-in run list (text +
     /// SMuFL accidental glyphs) and total width. The placement
@@ -284,17 +289,6 @@ public enum LayoutElement: Sendable, Equatable {
         /// `nil` = default ink. Dynamics / tempo inherit their style
         /// color and don't carry a per-element override here.
         case lyrics(color: ScoreColor? = nil)
-    }
-
-    public enum SpannerKind: Sendable, Equatable {
-        case slur
-        case volta(endings: [Int])
-        case hairpinOpen
-        case hairpinClose
-        case pedal
-        case ottava(raw: String)
-        case textLine
-        case vibrato(VibratoType)
     }
 }
 

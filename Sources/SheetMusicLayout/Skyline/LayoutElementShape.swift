@@ -46,8 +46,11 @@ public enum LayoutElementShape {
         case .jump: .jump
         case .lyricsMelisma: .lyricsMelisma
         case .lyricHyphen: .lyricHyphen
-        case let .staffText(_, _, _, isSystemText):
-            isSystemText ? .systemText : .staffText
+        case let .staffText(_, _, _, style):
+            // Instrument-change instructions reuse the staffText skyline
+            // slot — same staff-attached autoplace behaviour, and
+            // `AutoplaceRules` already lists `.staffText`.
+            style == .systemText ? .systemText : .staffText
         case let .textMark(markKind, _, _):
             switch markKind {
             case .dynamic: .dynamics
@@ -56,12 +59,12 @@ public enum LayoutElementShape {
             }
         case let .spannerSegment(spannerKind, _, _, _, _, _):
             switch spannerKind {
-            case .slur, .vibrato: nil
+            case .slur, .vibrato, .trill: nil
             case .volta: .volta
-            case .hairpinOpen, .hairpinClose: .hairpin
+            case .hairpinOpen, .hairpinClose, .hairpinLine: .hairpin
             case .pedal: .pedal
             case .ottava: .ottava
-            case .textLine: .textLine
+            case .textLine, .palmMute, .letRing: .textLine
             }
         }
     }

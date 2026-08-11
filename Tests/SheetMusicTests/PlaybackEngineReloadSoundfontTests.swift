@@ -32,18 +32,20 @@
                 return Score(division: 480, parts: [part])
             }
 
-            private static func twoStaffScore() -> Score {
-                let part = Part(
-                    id: "p",
-                    instrument: Instrument(
-                        id: "i", channels: [InstrumentChannel(program: 0)],
-                    ),
-                    staves: [
-                        Staff(measures: [Measure(voices: [])]),
-                        Staff(measures: [Measure(voices: [])]),
-                    ],
-                )
-                return Score(division: 480, parts: [part])
+            /// Two DISTINCT parts (not a single grand-staff part) — the
+            /// mixer is keyed one strip per (part × distinct instrument),
+            /// so two strips require two parts, not two staves of one.
+            private static func twoPartScore() -> Score {
+                func part(_ id: String) -> Part {
+                    Part(
+                        id: id,
+                        instrument: Instrument(
+                            id: "i-\(id)", channels: [InstrumentChannel(program: 0)],
+                        ),
+                        staves: [Staff(measures: [Measure(voices: [])])],
+                    )
+                }
+                return Score(division: 480, parts: [part("p0"), part("p1")])
             }
 
             private static let urlA = URL(fileURLWithPath: "/tmp/font-a.sf2")
@@ -62,10 +64,12 @@
             func preservesMixer() throws {
                 let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
                 try engine.prepare(score: Self.singleStaffScore())
-                engine.setVolume(forChannel: .staff(0), to: 0.3)
-                engine.setMuted(forChannel: .staff(0), to: true)
+                engine.setVolume(forChannel: .instrument(partIndex: 0, ordinal: 0), to: 0.3)
+                engine.setMuted(forChannel: .instrument(partIndex: 0, ordinal: 0), to: true)
                 engine.reloadSoundfont(resolver: FakeResolver(gmURL: nil))
-                let ch = try #require(engine.mixerChannels.first { $0.id == .staff(0) })
+                let ch = try #require(
+                    engine.mixerChannels.first { $0.id == .instrument(partIndex: 0, ordinal: 0) },
+                )
                 #expect(ch.volume == 0.3)
                 #expect(ch.isMuted == true)
             }
@@ -135,17 +139,21 @@
                 #expect(engine.transposeSemitones == 5)
             }
 
-            @Test("preserves solo state on multiple staves across the reload")
+            @Test("preserves solo state on multiple channels across the reload")
             func preservesMultiSolo() throws {
                 let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
-                try engine.prepare(score: Self.twoStaffScore())
-                engine.setSoloed(forChannel: .staff(0), to: true)
-                engine.setSoloed(forChannel: .staff(1), to: true)
+                try engine.prepare(score: Self.twoPartScore())
+                engine.setSoloed(forChannel: .instrument(partIndex: 0, ordinal: 0), to: true)
+                engine.setSoloed(forChannel: .instrument(partIndex: 1, ordinal: 0), to: true)
                 engine.reloadSoundfont(resolver: FakeResolver(gmURL: nil))
-                let staff0 = try #require(engine.mixerChannels.first { $0.id == .staff(0) })
-                let staff1 = try #require(engine.mixerChannels.first { $0.id == .staff(1) })
-                #expect(staff0.isSoloed == true)
-                #expect(staff1.isSoloed == true)
+                let strip0 = try #require(
+                    engine.mixerChannels.first { $0.id == .instrument(partIndex: 0, ordinal: 0) },
+                )
+                let strip1 = try #require(
+                    engine.mixerChannels.first { $0.id == .instrument(partIndex: 1, ordinal: 0) },
+                )
+                #expect(strip0.isSoloed == true)
+                #expect(strip1.isSoloed == true)
             }
 
             @Test("preserves metronome mute and enabled state across the reload")

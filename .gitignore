@@ -47,3 +47,7 @@ Android/SheetMusicAndroid/src/main/jniLibs/
 # Scripts/android-build-libs.sh from the SwiftPM plugin output.
 Android/SheetMusicAndroid/src/main/java-generated/
 
+
+# Subagent-driven-development scratch (ledger, briefs, review packages).
+# Per-plan workspaces; never checked in.
+.superpowers/

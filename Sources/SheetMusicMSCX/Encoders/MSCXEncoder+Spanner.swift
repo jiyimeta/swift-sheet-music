@@ -35,14 +35,25 @@ extension Spanner {
     /// kinds are emitted as empty placeholders, since the only fields
     /// the decoder recovers from them are positional.
     private func payloadElement(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        // `<beginText>` and `<placement>` are element properties and
+        // ride on the payload child for every line-shaped spanner.
+        // Both are emitted only when authored, mirroring MuseScore's
+        // "write when no longer styled" rule.
+        let beginTextNode: [XMLTreeNode] = beginText.map {
+            [XMLTreeNode(name: "beginText", text: $0)]
+        } ?? []
+        let placementNode: [XMLTreeNode] = placement.map {
+            [XMLTreeNode(name: "placement", text: $0.rawValue)]
+        } ?? []
+        let leading = beginTextNode + placementNode
         if kind == .volta, !voltaEndings.isEmpty {
             let endingsText = voltaEndings.map(String.init).joined(separator: ", ")
-            return XMLTreeNode(name: rawType, children: [
+            return XMLTreeNode(name: rawType, children: leading + [
                 XMLTreeNode(name: "endings", text: endingsText),
             ])
         }
         if kind == .hairpin, let hairpin {
-            var children: [XMLTreeNode] = [
+            var children: [XMLTreeNode] = leading + [
                 XMLTreeNode(name: "subtype", text: String(hairpin.subtype.rawValue)),
             ]
             if let velo = hairpin.veloChange {
@@ -57,11 +68,17 @@ extension Spanner {
             return XMLTreeNode(name: rawType, children: children)
         }
         if kind == .ottava, let ottava {
-            return XMLTreeNode(name: rawType, children: [
+            var children: [XMLTreeNode] = leading + [
                 XMLTreeNode(name: "subtype", text: ottava.subtype.rawValue),
-            ])
+            ]
+            if let numbersOnly = ottava.numbersOnly {
+                children.append(XMLTreeNode(
+                    name: "numbersOnly", text: numbersOnly ? "1" : "0",
+                ))
+            }
+            return XMLTreeNode(name: rawType, children: children)
         }
-        return XMLTreeNode(name: rawType)
+        return XMLTreeNode(name: rawType, children: leading)
     }
 
     /// `<next><location>…</location></next>`. Returns nil when both

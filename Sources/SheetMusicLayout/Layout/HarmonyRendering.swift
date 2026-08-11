@@ -121,6 +121,7 @@ public enum HarmonyRendering {
         case .roman, .nashville: allowsLeadingAccidental = true
         case .standard: allowsLeadingAccidental = false
         }
+        let leadingIndex = chars.first == "(" ? 1 : 0
         while i < chars.count {
             let c = chars[i]
             // Decide whether the current cursor position can start
@@ -128,7 +129,12 @@ public enum HarmonyRendering {
             // character must be alphanumeric; leading rule: i == 0
             // AND the harmony type opted in.
             let canBeAccidental: Bool = {
-                if i == 0 { return allowsLeadingAccidental }
+                // A wrapping `(` from `leftParen` must stay
+                // transparent here, or `(bVII)` would lose its
+                // accidental: the `b` sits at index 1 behind a
+                // non-alphanumeric character.
+                if i == leadingIndex { return allowsLeadingAccidental }
+                guard i > 0 else { return false }
                 let prev = chars[i - 1]
                 return prev.isLetter || prev.isNumber
             }()
@@ -211,17 +217,43 @@ public enum HarmonyRendering {
     /// `/` + bass letter + accidental. The `b` / `#` characters
     /// produced here flow back through `parseSlices`'s normal
     /// substitution path and end up as Bravura glyphs in the runs.
+    /// `<rootCase>` / `<baseCase>` re-case the note LETTER only, and
+    /// `<leftParen/>` / `<rightParen/>` wrap the finished symbol —
+    /// MuseScore draws both (`harmony.cpp:202,261`).
     static func displayedName(for harmony: Harmony) -> String {
-        guard let rootTpc = harmony.rootTpc else {
-            return harmony.name
+        var s: String
+        if let rootTpc = harmony.rootTpc {
+            s = cased(tpcToText(rootTpc), as: harmony.rootCase)
+            s += harmony.name
+            if let bassTpc = harmony.bassTpc {
+                s += "/"
+                s += cased(tpcToText(bassTpc), as: harmony.bassCase)
+            }
+        } else {
+            s = harmony.name
         }
-        var s = tpcToText(rootTpc)
-        s += harmony.name
-        if let bassTpc = harmony.bassTpc {
-            s += "/"
-            s += tpcToText(bassTpc)
-        }
+        if harmony.leftParen { s = "(" + s }
+        if harmony.rightParen { s += ")" }
         return s
+    }
+
+    /// Apply a `NoteCase` to a `letter + ASCII accidental` spelling.
+    /// Only the leading letter is re-cased: the trailing `b` / `#`
+    /// characters are accidental markers that `parseSlices` turns into
+    /// glyphs, so lowercasing them would spell `Bb` as a B double-flat.
+    /// `.capitalize` / `.auto` are no-ops because `tpcToText` already
+    /// emits the capitalized form — mirrors `tpc2name`'s switch
+    /// (`pitchspelling.cpp:372-381`).
+    private static func cased(
+        _ spelling: String, as noteCase: NoteCase,
+    ) -> String {
+        guard let letter = spelling.first else { return spelling }
+        let accidentals = spelling.dropFirst()
+        switch noteCase {
+        case .lower: return letter.lowercased() + accidentals
+        case .upper: return letter.uppercased() + accidentals
+        case .auto, .capitalize: return spelling
+        }
     }
 
     /// MuseScore TPC → letter + ASCII accidental (`b` / `#`).

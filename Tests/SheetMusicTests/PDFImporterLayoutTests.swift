@@ -94,6 +94,19 @@
             #expect(measures[2].glyphs.isEmpty)
         }
 
+        /// Staves of one system must always end up with the SAME measure
+        /// count — that is what this test is for, and it holds however the
+        /// disagreement is resolved.
+        ///
+        /// The resolution itself changed. When one staff sees a barline the
+        /// other does not, the layout used to adopt it (union) and this
+        /// fixture produced `[3, 3]`; it now DROPS it, giving `[2, 2]`,
+        /// because a real barline runs through every staff of a system and a
+        /// single-staff vertical is a stray. The number here was never
+        /// motivated by a score — this test predates the barline consensus
+        /// entirely — whereas the change is: see
+        /// `PDFImporterBarlineConsensusTests` and the `疑事無功_piano`
+        /// measurement in `systemBarlineUnion`'s doc comment.
         @Test func crossStaffAlignmentUnifiesBarlines() {
             let s1 = staff(yMid: 700, xRange: 50 ... 550, barlineXs: [200, 400, 550])
             let s2 = staff(yMid: 660, xRange: 50 ... 550, barlineXs: [400, 550])
@@ -101,7 +114,9 @@
                 staves: [s1, s2], paths: [], classified: [], pageIndex: 0,
             )
             let counts = systems.first?.parts.flatMap { $0.staves.map(\.measures.count) }
-            #expect(counts == [3, 3])
+            #expect(counts == [2, 2])
+            // The alignment invariant, stated independently of the number.
+            #expect(Set(counts ?? []).count == 1, "\(counts ?? [])")
         }
     }
 #endif

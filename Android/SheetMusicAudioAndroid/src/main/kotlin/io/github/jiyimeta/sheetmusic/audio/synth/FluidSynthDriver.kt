@@ -1,6 +1,7 @@
 package io.github.jiyimeta.sheetmusic.audio.synth
 
 import android.content.Context
+import android.content.res.AssetFileDescriptor
 import android.net.Uri
 import io.github.jiyimeta.sheetmusic.audio.AudioBackendException
 import io.github.jiyimeta.sheetmusic.audio.native.FluidSynthNative
@@ -86,17 +87,54 @@ internal class FluidSynthDriver private constructor(
     private fun materializeUriToCache(uri: Uri, context: Context): String? {
         // Content URI → app cacheDir/sf2-cache/<hash>.sf2
         return try {
-            val inStream = context.contentResolver.openInputStream(uri) ?: return null
             val cacheDir = java.io.File(context.cacheDir, "sf2-cache")
             cacheDir.mkdirs()
             val target = java.io.File(cacheDir, "sf-${uri.hashCode()}.sf2")
-            if (!target.exists() || target.length() == 0L) {
-                target.outputStream().use { out -> inStream.copyTo(out) }
+            // The cache key is the URI, but the bytes behind a URI can change
+            // — a host restages its SoundFont and the URI stays identical.
+            // Compare lengths so a swap is actually noticed; see
+            // `soundFontCacheIsStale`.
+            val sourceLength = try {
+                context.contentResolver.openAssetFileDescriptor(uri, "r").use {
+                    it?.length ?: AssetFileDescriptor.UNKNOWN_LENGTH
+                }
+            } catch (_: Exception) {
+                AssetFileDescriptor.UNKNOWN_LENGTH
             }
-            inStream.close()
+            if (soundFontCacheIsStale(target.exists(), target.length(), sourceLength)) {
+                val inStream = context.contentResolver.openInputStream(uri) ?: return null
+                inStream.use { input ->
+                    target.outputStream().use { out -> input.copyTo(out) }
+                }
+            }
             target.absolutePath
         } catch (e: Exception) {
             null
         }
     }
+}
+
+/**
+ * Whether the cached SoundFont copy must be re-materialized from its source.
+ *
+ * `materializeUriToCache` keys its cache on the URI alone. A URI does not
+ * change when the host swaps the file behind it — an app that ships its
+ * SoundFont as an asset hands out the same `file://…/gm.sf2` every run — so
+ * refreshing only when the copy was missing or empty served stale bytes
+ * forever, surviving every reinstall. Comparing lengths is what makes a
+ * swap visible.
+ *
+ * [sourceLength] is [AssetFileDescriptor.UNKNOWN_LENGTH] when the provider
+ * does not report one. In that case the existing copy is kept: re-copying
+ * on every launch would make each start pay a multi-hundred-megabyte copy,
+ * and the length check still covers every provider that does report one.
+ */
+internal fun soundFontCacheIsStale(
+    targetExists: Boolean,
+    targetLength: Long,
+    sourceLength: Long,
+): Boolean {
+    if (!targetExists || targetLength == 0L) return true
+    if (sourceLength == AssetFileDescriptor.UNKNOWN_LENGTH) return false
+    return targetLength != sourceLength
 }
