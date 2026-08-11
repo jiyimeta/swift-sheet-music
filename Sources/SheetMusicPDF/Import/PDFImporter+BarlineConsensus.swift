@@ -18,13 +18,55 @@ extension PDFImporter {
     /// dragging positional pitch to 51% though the note decode was ~100%).
     ///
     /// Fix: cluster the candidates by x (≈ one staff space) and keep a
-    /// cluster only when ≥ 2 distinct staves vote for it. Consensus needs a
-    /// quorum, so it engages only for systems of ≥ 3 staves; 1-2 staff
-    /// systems fall back to the raw union (a barline there legitimately
-    /// appears in just one or two staves, and there aren't enough votes to
-    /// tell a stray vertical from a real bar). The opening / closing
-    /// system barlines appear in every staff, so they always clear the
-    /// quorum.
+    /// cluster only when ≥ 2 distinct staves vote for it. The opening /
+    /// closing system barlines appear in every staff, so they always clear
+    /// the quorum.
+    ///
+    /// TWO staves are a quorum. This used to require three, on the reasoning
+    /// that a barline "legitimately appears in just one or two staves" when
+    /// there are only two — but a GRAND STAFF is exactly two staves, so every
+    /// piano score fell back to the raw union and any single-staff vertical
+    /// became a system-wide measure boundary. Measured on `疑事無功_piano`
+    /// (55 measures of ground truth): the score contains exactly two
+    /// single-staff verticals, `x=238 y=530..583 w=3.27` on one system's
+    /// treble and `x=175 y=526..566 w=3.27` on another's bass, against real
+    /// barlines that are `w=5.36` and span both staves. Those two carved two
+    /// extra cells and shifted every later measure by one — positional pitch
+    /// read 8% while the decode itself was correct, the shifted measures
+    /// matching the ground truth exactly one index over. Every one of that
+    /// score's real barlines appeared on BOTH staves.
+    ///
+    /// A SOLO staff still falls back to the raw union: there is nobody to
+    /// agree with, and requiring a second vote would delete every barline it
+    /// has.
+    ///
+    /// Upstream settles the two-staff question. `barLinesSetSpan`
+    /// (`rendering/score/measurelayout.cpp:1559-1583`) walks every staff and
+    /// CREATES a generated `BarLine` for any that lacks one; `barLineSpan`
+    /// only decides whether the stroke visually joins down to the next
+    /// staff, not whether the staff has a barline at all. So in
+    /// MuseScore-derived output every real measure boundary strokes a
+    /// vertical on both staves of a grand staff, `barLineSpan` 0 or 1 alike
+    /// — and likewise for two separate one-staff parts, whose boundaries are
+    /// system-aligned.
+    ///
+    /// WHAT THIS TRADES INTO, so the next diagnosis starts in the right
+    /// place. A quorum can also delete a REAL barline, if one staff's vote
+    /// is lost — and on two staves a single lost vote is now enough, where
+    /// on three it takes two. The realistic way to lose one is the
+    /// notehead veto in `PDFImporter+StaffLines` (a notehead within ~2sp to
+    /// the left suppresses the candidate on that staff alone). Never
+    /// observed: the 141-score corpus moved exactly one score when this gate
+    /// dropped from 3 to 2, and that one improved. If a piano score ever
+    /// shows MERGED measures, look there first.
+    ///
+    /// Genuinely unhandled either way, and unhandled before this too: per-
+    /// staff invisible barlines, cutaway staves, an ossia detected as a
+    /// second staff, and local (per-staff) time signatures. `addingMeasures`
+    /// applies ONE union to every staff of the system, so the importer has
+    /// no way to represent a staff with its own measure grid; the quorum
+    /// only changes whether such a score comes out with extra measures or
+    /// with merged ones.
     static func systemBarlineUnion(_ system: ImportSystem) -> [CGFloat] {
         var tagged: [(staff: Int, x: CGFloat)] = []
         var staffIndex = 0
@@ -38,9 +80,8 @@ extension PDFImporter {
         }
         guard !tagged.isEmpty else { return [] }
         let rawUnion = dedupSorted(tagged.map(\.x))
-        // Too few staves to form a quorum — keep the raw union (no
-        // regression risk for solo / 2-staff systems).
-        guard staffIndex >= 3 else { return rawUnion }
+        // A solo staff has nobody to agree with — keep the raw union.
+        guard staffIndex >= 2 else { return rawUnion }
         let tol = barlineClusterTolerance(system)
         tagged.sort { $0.x < $1.x }
         var kept: [CGFloat] = []
