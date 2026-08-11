@@ -44,9 +44,9 @@ extension ScoreLayerBuilder {
                 numerator: n, denominator: d, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .barLine(s, p):
+        case let .barLine(s, p, halfHeight):
             drawBarLine(
-                subtype: s, origin: shift(p),
+                subtype: s, origin: shift(p), halfHeight: halfHeight,
                 metrics: metrics, height: height, into: parent,
             )
         case let .ledgerLine(from, to, thickness):

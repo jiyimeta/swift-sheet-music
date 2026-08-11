@@ -367,12 +367,15 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .barLine(_, origin):
-            // Barline origin sits at the staff middle; strokes extend
-            // ±2 sp from that point. Width = 0.15 sp (the thin-stroke
-            // engraving default). Subtype-specific extras (double,
-            // end, repeat dots) are a follow-up.
-            let halfHeight = Double(BarLineGeometry.halfHeightSp) * sp
+        case let .barLine(_, origin, halfHeightPt):
+            // Barline origin sits at the middle of its own stroke, and
+            // the engine hands over the half-height so the span follows
+            // the staff's line count (4 sp tall on five lines, 2 sp on
+            // three, and 4 sp centered on the line for one). Width =
+            // 0.15 sp (the thin-stroke engraving default).
+            // Subtype-specific extras (double, end, repeat dots) are a
+            // follow-up.
+            let halfHeight = Double(halfHeightPt)
             let bx = (mox + Double(origin.x)) * ptToMM
             let byMid = (moy + Double(origin.y)) * ptToMM
             out.append(.moveTo(x: bx, y: byMid - halfHeight * ptToMM))

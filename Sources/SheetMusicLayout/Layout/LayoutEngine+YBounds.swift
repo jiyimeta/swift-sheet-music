@@ -56,7 +56,7 @@ extension LayoutEngine {
         case let .clef(_, p, _),
              let .keySignature(_, _, p),
              let .timeSignature(_, _, p),
-             let .barLine(_, p),
+             let .barLine(_, p, _),
              let .textMark(_, _, p),
              let .fermata(_, p),
              let .breath(_, p),

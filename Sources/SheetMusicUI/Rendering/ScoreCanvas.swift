@@ -253,10 +253,11 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, numerator: n, denominator: d,
                 origin: shift(p), metrics: metrics,
             )
-        case let .barLine(s, p):
+        case let .barLine(s, p, halfHeight):
             BarLineRenderer.draw(
                 context: &context, subtype: s,
-                origin: shift(p), metrics: metrics,
+                origin: shift(p), halfHeight: halfHeight,
+                metrics: metrics,
             )
         case let .ledgerLine(from, to, thickness):
             var p = Path()

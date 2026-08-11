@@ -234,6 +234,7 @@ extension LayoutEngine {
                     metricsSp: metrics.sp,
                     activeClef: clefs[staffIdx],
                     activeKey: keys[staffIdx],
+                    lineCount: staffGeometries[staffIdx].lineCount,
                     initialClefRawType: synthClef,
                     initialKeyForSynth: synthKey,
                     headerSchedule: schedule,
@@ -272,6 +273,7 @@ extension LayoutEngine {
                         options: context.options,
                         activeClef: clefs[staffIdx],
                         activeKey: keys[staffIdx],
+                        lineGeometry: staffGeometries[staffIdx],
                         initialClefRawType: synthClef,
                         initialKeyForSynth: synthKey,
                         headerSchedule: schedule,
@@ -797,12 +799,18 @@ extension LayoutEngine {
                     // measures bypass placeMeasureElements, so we add it
                     // here directly. The subtype from the run's last source
                     // measure carries through (e.g. final / double barlines).
-                    // drawBarLine treats origin.y as the staff's vertical
-                    // center (line spans origin.y ± 2 sp), so anchor to
-                    // staffCenterY, not the staff top.
+                    // The renderers stroke `origin.y ± halfHeight`, so
+                    // anchor to staffCenterY, not the staff top.
+                    // `staffCenterY` already equals the midpoint of
+                    // `barLineSpanY` for every line count (both are 0
+                    // for a one-line staff), so only the half-height
+                    // needs the geometry.
+                    let barSpan = staffGeometries[staffIdx]
+                        .barLineSpanY(sp: metrics.sp)
                     elements.append(.barLine(
                         subtype: barSubtype,
                         origin: CGPoint(x: um.width, y: staffCenterY),
+                        halfHeight: (barSpan.bottom - barSpan.top) / 2,
                     ))
                 }
                 let sourceMeasure = um.staff0Measure

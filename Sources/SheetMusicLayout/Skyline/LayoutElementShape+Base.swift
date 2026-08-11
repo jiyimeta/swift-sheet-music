@@ -272,19 +272,27 @@ extension LayoutElementShape {
     ) -> [CGRect] {
         let sp = metrics.sp
         let p: CGPoint
+        // A barline reports the span the engine gave it, so the
+        // autoplace box tracks a one- or three-line staff's shorter
+        // stroke instead of a fixed 4 sp. Everything else keeps the
+        // five-line approximation.
+        var barLineHalfHeight: CGFloat?
         switch element {
         case let .clef(_, origin, _),
              let .keySignature(_, _, origin),
              let .timeSignature(_, _, origin),
-             let .barLine(_, origin),
              let .measureRepeat(_, origin),
              let .multiMeasureRest(_, origin):
             p = origin
+        case let .barLine(_, origin, half):
+            p = origin
+            barLineHalfHeight = half
         default:
             return []
         }
         let halfWidth: CGFloat = kind == .barLine ? sp * 0.2 : sp * 1.5
-        let halfHeight: CGFloat = kind == .clef ? sp * 3 : sp * 2
+        let halfHeight: CGFloat = barLineHalfHeight
+            ?? (kind == .clef ? sp * 3 : sp * 2)
         return [CGRect(
             x: p.x - halfWidth, y: p.y - halfHeight,
             width: halfWidth * 2, height: halfHeight * 2,

@@ -31,7 +31,19 @@ public enum LayoutElement: Sendable, Equatable {
     case clef(rawType: String, origin: CGPoint, anchor: ClefAnchor?)
     case keySignature(sharps: Int, flats: Int, origin: CGPoint)
     case timeSignature(numerator: Int, denominator: Int, origin: CGPoint)
-    case barLine(subtype: String?, origin: CGPoint)
+    /// `origin.y` is the vertical center of the barline's stroke — for
+    /// a staff with more than one line that is the staff's own center,
+    /// midway between its top and bottom lines. `halfHeight` is the
+    /// distance from there to each end of the stroke: normally half the
+    /// staff's drawn height, but 2 sp on a one-line staff, whose height
+    /// is zero.
+    ///
+    /// Both come from `StaffLineGeometry.barLineSpanY(sp:)`, so the
+    /// engine owns the rule (including the one-line special case) and
+    /// every renderer just strokes `origin.y ± halfHeight`.
+    /// C++: `dom/barline.cpp:253-266`,
+    /// `BARLINE_SPAN_1LINESTAFF_FROM` / `_TO` (`dom/barline.h:37-38`).
+    case barLine(subtype: String?, origin: CGPoint, halfHeight: CGFloat)
     /// One ledger-line stroke, fully resolved by `LedgerLinePass`.
     /// Endpoints are in the same coordinate space as the chord the
     /// stroke belongs to, and `thickness` already carries that chord's

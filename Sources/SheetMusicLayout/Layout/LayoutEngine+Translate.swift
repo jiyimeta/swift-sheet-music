@@ -22,8 +22,10 @@ extension LayoutEngine {
             return .timeSignature(
                 numerator: n, denominator: d, origin: shift(p),
             )
-        case let .barLine(s, p):
-            return .barLine(subtype: s, origin: shift(p))
+        case let .barLine(s, p, halfHeight):
+            return .barLine(
+                subtype: s, origin: shift(p), halfHeight: halfHeight,
+            )
         case let .ledgerLine(from, to, thickness):
             return .ledgerLine(
                 from: shift(from), to: shift(to), thickness: thickness,

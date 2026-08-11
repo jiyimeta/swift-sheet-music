@@ -133,13 +133,18 @@ extension ScoreLayerBuilder {
 
     // MARK: - Bar line
 
+    /// `halfHeight` is the distance from `origin.y` to each end of the
+    /// stroke, carried on `LayoutElement.barLine` — half the staff's
+    /// drawn height, or 2 sp on a one-line staff. Do not re-derive it
+    /// from `metrics`: `metrics` describes the five-line reference
+    /// staff and knows nothing about this staff's line count.
     static func drawBarLine(
-        subtype: String?, origin: CGPoint,
+        subtype: String?, origin: CGPoint, halfHeight: CGFloat,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        let topY = origin.y - metrics.sp * 2
-        let botY = origin.y + metrics.sp * 2
+        let topY = origin.y - halfHeight
+        let botY = origin.y + halfHeight
         func line(dx: CGFloat, width: CGFloat) {
             let path = CGMutablePath()
             path.move(to: CGPoint(x: origin.x + dx, y: topY))

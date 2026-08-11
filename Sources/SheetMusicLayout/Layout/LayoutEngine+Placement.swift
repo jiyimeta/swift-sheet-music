@@ -50,6 +50,7 @@ extension LayoutEngine {
         options: ScoreViewOptions = ScoreViewOptions(),
         activeClef: NotatedClef,
         activeKey: Int = 0,
+        lineGeometry: StaffLineGeometry = .standard,
         initialClefRawType: String? = nil,
         initialKeyForSynth: Int? = nil,
         headerSchedule: HeaderSchedule,
@@ -69,6 +70,18 @@ extension LayoutEngine {
         key: Int,
     ) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
+        // Barlines are the one thing here measured against the staff's
+        // OWN lines rather than the five-line reference frame
+        // `staffMidY` establishes. `barLineSpanY` is relative to the
+        // staff's top line, which in these coordinates sits at `sp * 2`.
+        // For five lines this reduces to `staffMidY` ± 2 sp, i.e. the
+        // former hardcoded span; a one-line staff instead gets ±2 sp
+        // centered ON its single line, 2 sp higher than `staffMidY`.
+        let barLineSpan = lineGeometry.barLineSpanY(sp: metrics.sp)
+        let barLineMidY =
+            metrics.sp * 2 + (barLineSpan.top + barLineSpan.bottom) / 2
+        let barLineHalfHeight =
+            (barLineSpan.bottom - barLineSpan.top) / 2
         var out: [LayoutElement] = []
         // Parallel accumulator for hidden annotations that are still
         // laid out (because `options.showsInvisibleElements` is on) but
@@ -506,7 +519,8 @@ extension LayoutEngine {
                     }
                     let element = LayoutElement.barLine(
                         subtype: b.subtype,
-                        origin: CGPoint(x: barX, y: staffMidY),
+                        origin: CGPoint(x: barX, y: barLineMidY),
+                        halfHeight: barLineHalfHeight,
                     )
                     if b.visible {
                         out.append(element)
@@ -1818,8 +1832,9 @@ extension LayoutEngine {
                 subtype: isLastMeasure ? "end" : nil,
                 origin: CGPoint(
                     x: width - metrics.sp / 2,
-                    y: staffMidY,
+                    y: barLineMidY,
                 ),
+                halfHeight: barLineHalfHeight,
             ))
         }
         for continuation in incomingMelismas {

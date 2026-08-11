@@ -185,5 +185,187 @@
             #expect(try bridgeStrokeCount(lineCount: 3) == 6)
             #expect(try bridgeStrokeCount(lineCount: 1) == 4)
         }
+
+        // MARK: - Barline span
+
+        /// Every `.barLine` in the laid-out document, expressed as its
+        /// stroke's top and bottom edge measured DOWN FROM the staff's
+        /// top line (`staffOrigins[0].y`, where `StaffRenderer` starts
+        /// drawing). Elements carry system-local Y, so subtracting the
+        /// staff origin makes the numbers independent of where the
+        /// system landed on the page — which matters, because shrinking
+        /// a staff also moves the system.
+        private func barLineSpans(
+            lineCount: Int,
+        ) throws -> (spans: [(top: CGFloat, bottom: CGFloat)], sp: CGFloat) {
+            guard #available(macOS 15.0, *) else { return ([], 0) }
+            let doc = LayoutEngine.layout(
+                score: oneStaffScore(lineCount: lineCount),
+                options: .init(wrapToViewWidth: false),
+                availableWidth: 900,
+            )
+            let system = try #require(doc.systems.first)
+            let topLineY = try #require(system.staffOrigins.first).y
+            var spans: [(top: CGFloat, bottom: CGFloat)] = []
+            for measure in system.measures {
+                for element in measure.elements {
+                    guard case let .barLine(_, origin, halfHeight) = element
+                    else { continue }
+                    spans.append((
+                        origin.y - halfHeight - topLineY,
+                        origin.y + halfHeight - topLineY,
+                    ))
+                }
+            }
+            return (spans, system.sp)
+        }
+
+        /// The rule, from `dom/barline.cpp:253-266`: a barline spans its
+        /// staff, top line to bottom line — except on a ONE-line staff,
+        /// where MuseScore uses `BARLINE_SPAN_1LINESTAFF_FROM/TO`
+        /// (±4 half-spaces = ±2 sp) about the single line rather than
+        /// collapsing to that staff's zero height.
+        ///
+        /// Both edges are asserted, not just the height: before this
+        /// change a one-line staff's barline was 4 sp tall too — it just
+        /// hung entirely BELOW the line, from +0 to +4 sp, because the
+        /// origin sat at the five-line reference center. A
+        /// height-only assertion passes on that bug unchanged.
+        @Test("A barline spans its own staff, with the one-line case")
+        func barLinesSpanTheirOwnStaff() throws {
+            guard #available(macOS 15.0, *) else { return }
+
+            let five = try barLineSpans(lineCount: 5)
+            #expect(!five.spans.isEmpty)
+            for span in five.spans {
+                #expect(abs(span.top) < 0.001)
+                #expect(abs(span.bottom - five.sp * 4) < 0.001)
+            }
+
+            // Three lines: top line to bottom line, 2 sp tall.
+            let three = try barLineSpans(lineCount: 3)
+            #expect(three.spans.count == five.spans.count)
+            for span in three.spans {
+                #expect(abs(span.top) < 0.001)
+                #expect(abs(span.bottom - three.sp * 2) < 0.001)
+            }
+
+            // One line: ±2 sp ABOUT the single line, which is at 0.
+            let one = try barLineSpans(lineCount: 1)
+            #expect(one.spans.count == five.spans.count)
+            for span in one.spans {
+                #expect(abs(span.top + one.sp * 2) < 0.001)
+                #expect(abs(span.bottom - one.sp * 2) < 0.001)
+            }
+        }
+
+        /// One line segment the Android bridge stroked, in mm.
+        private struct BridgeSegment {
+            let x0, y0, x1, y1: Double
+            var isVertical: Bool {
+                abs(x1 - x0) < 0.0001
+            }
+
+            var isHorizontal: Bool {
+                abs(y1 - y0) < 0.0001
+            }
+        }
+
+        /// Every stroked segment in `lineCount`'s bridge render.
+        ///
+        /// The engine owning the span is only half the fix — each
+        /// renderer computes its own stroke from `origin` and had the
+        /// ±2 sp written down separately, and none of them is reached by
+        /// the layout assertion above. The bridge is the one renderer
+        /// whose output is inspectable as data, so it stands in for the
+        /// three the way `bridgeStrokesEachDrawnStaffLine` does.
+        private func bridgeSegments(
+            lineCount: Int,
+        ) throws -> [BridgeSegment] {
+            let encoded = LayoutBridge.compute(
+                score: oneStaffScore(lineCount: lineCount),
+                pageWidthMM: 210,
+                pageHeightMM: 297,
+            )
+            let pages = try DrawProgramCodec.decode(encoded)
+            var segments: [BridgeSegment] = []
+            var from: (x: Double, y: Double)?
+            var to: (x: Double, y: Double)?
+            for page in pages {
+                for cmd in page.commands {
+                    switch cmd {
+                    case let .moveTo(x, y):
+                        from = (x, y)
+                        to = nil
+                    case let .lineTo(x, y):
+                        to = (x, y)
+                    case .stroke:
+                        if let a = from, let b = to {
+                            segments.append(BridgeSegment(
+                                x0: a.x, y0: a.y, x1: b.x, y1: b.y,
+                            ))
+                        }
+                        from = nil
+                        to = nil
+                    default:
+                        continue
+                    }
+                }
+            }
+            return segments
+        }
+
+        /// The terminal barline's top and bottom edge measured down from
+        /// the staff's TOP line, plus one sp — all in mm, all read back
+        /// out of the bridge's own draw program.
+        ///
+        /// The staff lines are the horizontal segments, so their minimum
+        /// Y is the top line and (on the five-line render) their spread
+        /// over four spaces gives sp. The terminal barline is the
+        /// RIGHTMOST vertical segment: the other two verticals in this
+        /// fixture are the system's left-edge line and the note stem,
+        /// both further left.
+        private func bridgeBarLineSpan(
+            lineCount: Int,
+        ) throws -> (top: Double, bottom: Double) {
+            let segments = try bridgeSegments(lineCount: lineCount)
+            let horizontals = segments.filter(\.isHorizontal)
+            #expect(horizontals.count == lineCount)
+            let topLineY = try #require(horizontals.map(\.y0).min())
+            let bar = try #require(
+                segments.filter(\.isVertical).max { $0.x0 < $1.x0 },
+            )
+            return (
+                min(bar.y0, bar.y1) - topLineY,
+                max(bar.y0, bar.y1) - topLineY,
+            )
+        }
+
+        @Test("The bridge strokes each barline over its own staff")
+        func bridgeBarLineSpanFollowsLineCount() throws {
+            guard #available(macOS 15.0, *) else { return }
+            // Derive sp in mm from the five-line render itself: its five
+            // staff lines span exactly four spaces.
+            let fiveHorizontals = try bridgeSegments(lineCount: 5)
+                .filter(\.isHorizontal).map(\.y0)
+            let lowest = try #require(fiveHorizontals.max())
+            let highest = try #require(fiveHorizontals.min())
+            let spMM = (lowest - highest) / 4
+            #expect(spMM > 0)
+
+            let five = try bridgeBarLineSpan(lineCount: 5)
+            #expect(abs(five.top) < 0.01)
+            #expect(abs(five.bottom - spMM * 4) < 0.01)
+
+            let three = try bridgeBarLineSpan(lineCount: 3)
+            #expect(abs(three.top) < 0.01)
+            #expect(abs(three.bottom - spMM * 2) < 0.01)
+
+            // The one-line special case: still 4 sp tall, but centered
+            // ON the line rather than hanging below it.
+            let one = try bridgeBarLineSpan(lineCount: 1)
+            #expect(abs(one.top + spMM * 2) < 0.01)
+            #expect(abs(one.bottom - spMM * 2) < 0.01)
+        }
     }
 #endif
