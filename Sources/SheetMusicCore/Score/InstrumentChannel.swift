@@ -2,7 +2,7 @@ import Foundation
 
 /// A MIDI channel assignment for one playback flavor of an instrument
 /// ("normal", "pizzicato", etc.). C++: `mu::engraving::InstrChannel` (subset).
-public struct InstrumentChannel: Sendable, Equatable {
+public struct InstrumentChannel: Sendable, Equatable, Hashable {
     public var name: String?
     public var program: Int
     public var bank: Int

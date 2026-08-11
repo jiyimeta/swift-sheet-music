@@ -156,8 +156,8 @@
                 // audition — which drives the synth directly, not via the sequencer —
                 // must re-push the mixer's program + volume before sounding. Choose
                 // non-default values, then drop the calls `prepare` / the setters emit.
-                engine.setProgram(forChannel: .staff(0), to: 42)
-                engine.setVolume(forChannel: .staff(0), to: 0.5)
+                engine.setProgram(forChannel: .instrument(partIndex: 0, ordinal: 0), to: 42)
+                engine.setVolume(forChannel: .instrument(partIndex: 0, ordinal: 0), to: 0.5)
                 backend.resetRecording()
 
                 engine.playPreview(noteID: firstNoteID, in: score, duration: 0.05)
@@ -175,8 +175,8 @@
                 try engine.prepare(score: score)
                 let channel = try #require(engine.midiChannel(forStaff: 0))
 
-                engine.setProgram(forChannel: .staff(0), to: 42)
-                engine.setVolume(forChannel: .staff(0), to: 0.5)
+                engine.setProgram(forChannel: .instrument(partIndex: 0, ordinal: 0), to: 42)
+                engine.setVolume(forChannel: .instrument(partIndex: 0, ordinal: 0), to: 0.5)
                 backend.resetRecording()
 
                 engine.previewNoteOn(pitch: 60, onStaff: 0)

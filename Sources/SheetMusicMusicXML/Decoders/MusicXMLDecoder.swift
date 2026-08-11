@@ -113,52 +113,17 @@ extension Score {
         // measure index with originalStaff stamped.
         var perStaffSystemElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])] = []
         for (index, partNode) in root.all("part").enumerated() {
-            let id = partNode.attributes["id"] ?? ""
-            guard let scorePart = scoreParts.first(where: { $0.attributes["id"] == id })
-                ?? (index < scoreParts.count ? scoreParts[index] : nil)
-            else {
-                throw SheetMusicError.malformedScore(
-                    reason: "MusicXML: <part id='\(id)'> has no matching <score-part>",
-                )
-            }
-            // Build the percussion table from the score-part header BEFORE
-            // walking measures — the walker must hand it to the note decoder
-            // so <unpitched> notes resolve to GM drum pitches.
-            let prelimDrumTable = MusicXMLDrumTable.build(scorePart: scorePart)
-            let walker = try MusicXMLMeasureWalker.decode(
+            let (part, staffElements) = try decodeOnePart(
                 partNode: partNode,
-                drumTable: prelimDrumTable,
+                scoreParts: scoreParts,
+                index: index,
+                partIndex: parts.count,
             )
-            let (partTemplate, _) = try Part.decodeMusicXML(
-                scorePart: scorePart,
-                partId: id,
-                staffCount: walker.staffCount,
-            )
-            // Replace the placeholder empty-measure staves with real content.
-            let populatedStaves: [Staff] = walker.measuresByStaff.map { staffMeasures in
-                Staff(
-                    staffType: "stdNormal", group: "pitched",
-                    defaultClefType: nil, measures: staffMeasures,
-                )
-            }
-            let part = Part(
-                id: partTemplate.id,
-                trackName: partTemplate.trackName,
-                instrument: partTemplate.instrument,
-                staves: populatedStaves,
-            )
-            let partIndex = parts.count
             parts.append(part)
-            for (staffIndex, perMeasure) in walker.systemElementsByStaffMeasure.enumerated() {
-                let address = StaffAddress(
-                    partIndex: partIndex,
-                    staffIndexInPart: staffIndex,
-                )
-                perStaffSystemElements.append((address, perMeasure))
-            }
+            perStaffSystemElements.append(contentsOf: staffElements)
         }
         let measureCount = perStaffSystemElements
-            .map { $0.perMeasure.count }
+            .map(\.perMeasure.count)
             .max() ?? 0
         var systemMeasures = Array(
             repeating: SystemMeasure(),
@@ -179,5 +144,71 @@ extension Score {
             }
         }
         return (parts: parts, systemMeasures: systemMeasures)
+    }
+
+    /// Decode a single top-level `<part>` into its `Part` plus the
+    /// per-staff system elements it contributes (rehearsal marks and the
+    /// like, one entry per real staff, and mid-score instrument changes
+    /// lifted onto staff 0 — see `MusicXMLInstrumentChangeDecoder`).
+    /// Split out of `decodeParts` to keep that function's loop body short.
+    private static func decodeOnePart(
+        partNode: XMLTreeNode,
+        scoreParts: [XMLTreeNode],
+        index: Int,
+        partIndex: Int,
+    ) throws -> (part: Part, staffElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])]) {
+        let id = partNode.attributes["id"] ?? ""
+        guard let scorePart = scoreParts.first(where: { $0.attributes["id"] == id })
+            ?? (index < scoreParts.count ? scoreParts[index] : nil)
+        else {
+            throw SheetMusicError.malformedScore(
+                reason: "MusicXML: <part id='\(id)'> has no matching <score-part>",
+            )
+        }
+        // Build the percussion table from the score-part header BEFORE
+        // walking measures — the walker must hand it to the note decoder
+        // so <unpitched> notes resolve to GM drum pitches.
+        let prelimDrumTable = MusicXMLDrumTable.build(scorePart: scorePart)
+        let walker = try MusicXMLMeasureWalker.decode(
+            partNode: partNode,
+            drumTable: prelimDrumTable,
+        )
+        let (partTemplate, _, instrumentByID) = try Part.decodeMusicXML(
+            scorePart: scorePart,
+            partId: id,
+            staffCount: walker.staffCount,
+        )
+        // Replace the placeholder empty-measure staves with real content.
+        let populatedStaves: [Staff] = walker.measuresByStaff.map { staffMeasures in
+            Staff(
+                staffType: "stdNormal", group: "pitched",
+                defaultClefType: nil, measures: staffMeasures,
+            )
+        }
+        let part = Part(
+            id: partTemplate.id,
+            trackName: partTemplate.trackName,
+            instrument: partTemplate.instrument,
+            staves: populatedStaves,
+        )
+        var staffElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])] = []
+        for (staffIndex, perMeasure) in walker.systemElementsByStaffMeasure.enumerated() {
+            let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
+            staffElements.append((address, perMeasure))
+        }
+        // Mid-score instrument changes have no per-staff home in
+        // MusicXML (they're a part-wide playback concept) — lift them
+        // onto staff 0, matching where rehearsal marks and other
+        // system-flagged elements already land.
+        let instrumentChangesByMeasure = MusicXMLInstrumentChangeDecoder.decode(
+            partNode: partNode,
+            instrumentByID: instrumentByID,
+            seedInstrumentID: scorePart.first("score-instrument")?.attributes["id"],
+        )
+        staffElements.append((
+            StaffAddress(partIndex: partIndex, staffIndexInPart: 0),
+            instrumentChangesByMeasure,
+        ))
+        return (part, staffElements)
     }
 }

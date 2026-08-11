@@ -40,8 +40,9 @@ public enum MidiRenderer {
         let plan = RepeatUnwinder.plan(navigation: navigation)
         for (partIndex, part) in score.parts.enumerated() {
             let channels = channelAssignments[partIndex]
-            let primaryChannel = channels.first?.channel ?? partIndex
-            let port = part.instrument.channel.midiPort ?? 0
+            let route = PartChannelRoute.build(
+                score: score, partIndex: partIndex, assignments: channels,
+            )
             for (s, staff) in part.staves.enumerated() {
                 let address = StaffAddress(
                     partIndex: partIndex,
@@ -54,9 +55,8 @@ public enum MidiRenderer {
                     staff: staff,
                     part: part,
                     plan: plan,
-                    primaryChannel: primaryChannel,
+                    route: route,
                     channels: channels,
-                    port: port,
                     isFirstTrack: trackIndex == 0,
                     isTopOfPart: s == 0,
                     division: score.division,
@@ -87,19 +87,116 @@ public enum MidiRenderer {
         }
     }
 
-    /// One MIDI channel allocated to a particular `<Channel>` flavour of a part.
+    /// One MIDI channel allocated to a particular `<Channel>` flavour of
+    /// one instrument in force somewhere in a part.
     struct ChannelAssignment {
         var channel: Int
+        /// Declared `<midiPort>` (0 when absent). Part of the channel's
+        /// identity — see `MidiChannelKey`.
+        var port: Int
         var flavour: InstrumentChannel
+        /// Index into `Score.instrumentTimeline(forPart:)`: 0 = the
+        /// tick-0 instrument, 1... = one per change instance.
+        var instrumentOrdinal: Int
+
+        var key: MidiChannelKey {
+            MidiChannelKey(port: port, channel: channel)
+        }
+    }
+
+    /// Ordered channel switches for one part, expressed in the SAME
+    /// measure-relative space `Score.instrumentTimeline` returns.
+    ///
+    /// Kept measure-relative until the last moment: the absolute tick is
+    /// resolved against the STAFF'S OWN `measureBases`, so this walker
+    /// cannot drift from the voice walker that consumes it (breath
+    /// pauses count toward a bar's budget in `measureTicks`, and a
+    /// second independent derivation would disagree).
+    struct PartChannelRoute {
+        let defaultChannel: Int
+        /// Declared `<midiPort>` of the tick-0 instrument. The port a
+        /// track's events sit under until the first switch onto a
+        /// different one — see `MidiRenderer.portSwitchEvents`.
+        let defaultPort: Int
+        /// Sorted by `measureIndex` then `position`.
+        let switches: [Switch]
+
+        /// One instrument-change channel switch, measure-relative.
+        struct Switch {
+            let measureIndex: Int
+            let position: MeasurePosition
+            let channel: Int
+            /// Declared `<midiPort>` of the instrument switched TO.
+            /// A channel number alone is not an address: port 1's
+            /// channel 0 is a different destination from port 0's.
+            let port: Int
+        }
+
+        /// True when every instrument in force in this part declares the
+        /// same `<midiPort>`. Such a part needs no mid-track `portChange`,
+        /// so its rendered track is unchanged from a portless renderer.
+        var isSinglePort: Bool {
+            switches.allSatisfy { $0.port == defaultPort }
+        }
+
+        /// Build from the part's timeline plus its channel assignments.
+        /// Assignment `ordinal` indexes the timeline one-to-one, and the
+        /// FIRST flavour of each instrument is the sounding one (the
+        /// later flavours are pizz / tremolo variants nothing selects yet).
+        static func build(
+            score: Score, partIndex: Int, assignments: [ChannelAssignment],
+        ) -> PartChannelRoute {
+            let timeline = score.instrumentTimeline(forPart: partIndex)
+            var routeByOrdinal: [Int: (channel: Int, port: Int)] = [:]
+            for assignment in assignments
+                where routeByOrdinal[assignment.instrumentOrdinal] == nil
+            {
+                routeByOrdinal[assignment.instrumentOrdinal] =
+                    (assignment.channel, assignment.port)
+            }
+            var switches: [Switch] = []
+            for (ordinal, point) in timeline.enumerated() where ordinal > 0 {
+                guard let entry = routeByOrdinal[ordinal] else { continue }
+                switches.append(Switch(
+                    measureIndex: point.measureIndex,
+                    position: point.position,
+                    channel: entry.channel,
+                    port: entry.port,
+                ))
+            }
+            return PartChannelRoute(
+                defaultChannel: routeByOrdinal[0]?.channel ?? partIndex,
+                defaultPort: routeByOrdinal[0]?.port ?? 0,
+                switches: switches,
+            )
+        }
+
+        /// Flatten to `(originalTick, channel, port)` triples against a
+        /// staff's own measure bases, sorted ascending. Switches whose
+        /// measure index is out of range for a ragged staff are dropped.
+        func routeByOriginalTick(
+            measureBases: [Int], division: Int,
+        ) -> [(tick: Int, channel: Int, port: Int)] {
+            switches.compactMap { entry in
+                guard measureBases.indices.contains(entry.measureIndex)
+                else { return nil }
+                return (
+                    measureBases[entry.measureIndex]
+                        + entry.position.ticks(division: division),
+                    entry.channel,
+                    entry.port,
+                )
+            }
+            .sorted { $0.tick < $1.tick }
+        }
     }
 
     private static func renderTrack(
         staff: Staff,
         part: Part,
         plan: [PlaybackEntry],
-        primaryChannel: Int,
+        route: PartChannelRoute,
         channels: [ChannelAssignment],
-        port: Int,
         isFirstTrack: Bool,
         isTopOfPart: Bool,
         division: Int,
@@ -110,7 +207,7 @@ public enum MidiRenderer {
             staff: staff,
             part: part,
             channels: channels,
-            port: port,
+            defaultPort: route.defaultPort,
             isFirstTrack: isFirstTrack,
             isTopOfPart: isTopOfPart,
         )
@@ -127,31 +224,35 @@ public enum MidiRenderer {
         // iteration re-fires its own pair. Without this projection a
         // fermata inside `<startRepeat>...<endRepeat>` would hold
         // only on the first take.
-        let fermataRanges = FermataRanges.collect(from: staff, division: division)
-        let staffSystemMeasures = systemElementsByMeasure.map {
-            SystemMeasure(elements: $0)
-        }
-        let timeline = TempoTimeline.build(
-            measures: staff.measures,
-            systemMeasures: staffSystemMeasures,
-            division: division,
-        )
         let bookends = FermataRanges.tempoEvents(
-            ranges: fermataRanges, timeline: timeline,
+            ranges: FermataRanges.collect(from: staff, division: division),
+            timeline: TempoTimeline.build(
+                measures: staff.measures,
+                systemMeasures: systemElementsByMeasure.map {
+                    SystemMeasure(elements: $0)
+                },
+                division: division,
+            ),
         )
         let (measureBases, measureSpans) = measureBaseLayout(
             measures: staff.measures, division: division,
         )
         let projectedClose = projectBookends(
-            bookends.closeEvents, plan: plan,
-            measureBases: measureBases, measureSpans: measureSpans,
+            bookends.closeEvents, plan: plan, measureBases: measureBases, measureSpans: measureSpans,
         )
         let projectedOpen = projectBookends(
-            bookends.openEvents, plan: plan,
-            measureBases: measureBases, measureSpans: measureSpans,
+            bookends.openEvents, plan: plan, measureBases: measureBases, measureSpans: measureSpans,
         )
 
         events.append(contentsOf: projectedClose)
+
+        // Mid-track `portChange` metas for a part that spans two ports.
+        // Appended BEFORE the voice walks so the stable sort below puts
+        // each meta ahead of the same-tick notes it governs. A no-op for
+        // every single-port part.
+        events.append(contentsOf: portSwitchEvents(
+            route: route, plan: plan, measureBases: measureBases, division: division,
+        ))
 
         var voiceEventBuckets: [[TimedMidiEvent]] = []
         var lyricAnchors: [LyricMidiCodec.Anchor] = []
@@ -161,7 +262,7 @@ public enum MidiRenderer {
                 voiceIndex: voiceIndex,
                 staff: staff,
                 part: part,
-                channel: primaryChannel,
+                route: route,
                 division: division,
                 plan: plan,
                 swingMap: swingMap,

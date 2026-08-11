@@ -13,7 +13,7 @@ extension MidiRenderer {
         voiceIndex: Int,
         staff: Staff,
         part: Part,
-        channel: Int,
+        route: PartChannelRoute,
         division: Int,
         plan: [PlaybackEntry],
         swingMap: SwingMap = .empty,
@@ -57,6 +57,36 @@ extension MidiRenderer {
                 )
             }
         }
+
+        // Instrument-change channel switches, flattened against THIS
+        // staff's measure bases so the two walkers cannot disagree.
+        let channelSwitches = route.routeByOriginalTick(
+            measureBases: originalMeasureBase, division: division,
+        )
+        /// Channel in force at `originalTick`. Linear scan: a part has
+        /// at most a handful of changes, and the loop below queries it
+        /// once per voice element.
+        func channel(atOriginalTick tick: Int) -> Int {
+            var result = route.defaultChannel
+            for entry in channelSwitches {
+                if entry.tick <= tick { result = entry.channel } else { break }
+            }
+            return result
+        }
+
+        // A tie chain must sound entirely on the channel that was in
+        // force at its HEAD: `resolveTiedPitches` treats an
+        // `.instrumentChange` like any other non-temporal element, so
+        // a change CAN land between a tie's head and tail chord.
+        // `emitNoteEvents` emits the note-on from the head element
+        // and the note-off from the tail element — two independent
+        // per-element channel resolutions — so without this, the
+        // on/off pair could split across channels and leave a stuck
+        // note on the old channel plus an orphan note-off on the new
+        // one. Scoped to the whole voice walk (not reset per measure
+        // or per plan entry) because a tie chain routinely spans a
+        // bar line.
+        var sustainedChannel: Int?
 
         // The unrolled `plan` is computed ONCE, score-globally, from
         // staff 0's measure count (see `render(score:)`), then applied
@@ -142,9 +172,13 @@ extension MidiRenderer {
                                 event: .meta(.marker(rm.text)),
                             ))
                         }
-                    case .staffText, .swing:
-                        // Staff text doesn't render to MIDI; swing
-                        // state is pre-collected into `swingMap`.
+                    case .staffText, .swing, .instrumentChange:
+                        // Staff text doesn't render to MIDI; swing state
+                        // is pre-collected into `swingMap`; instrument
+                        // changes are resolved into `channelSwitches`
+                        // before the walk — deliberately NOT emitted as
+                        // a mid-stream program change (MuseScore puts
+                        // every header at tick 0, exportmidi.cpp:247).
                         break
                     }
                 }
@@ -159,6 +193,9 @@ extension MidiRenderer {
             // follower.
             var consumedByTremolo: Set<Int> = []
             for (elementIndex, element) in effectiveVoice.elements.enumerated() {
+                var channel = channel(
+                    atOriginalTick: localTick + originalTickDelta,
+                )
                 if case let .keySignature(k) = element { currentKey = k.concertKey }
                 if consumedByTremolo.contains(elementIndex) {
                     consumedByTremolo.remove(elementIndex)
@@ -168,6 +205,22 @@ extension MidiRenderer {
                             .ticks(division: division)
                     }
                     continue
+                }
+                // A chord continuing a tie (`tieBack != nil`) sounds on
+                // whatever channel its head used, not the channel in
+                // force at its own tick. A chord continuing the tie
+                // FORWARD (`tieForward != nil`) publishes the channel
+                // it just resolved to for the next link in the chain;
+                // a chord with no forward tie ends any open chain.
+                if case let .chord(chord) = element {
+                    if chord.notes.contains(where: { $0.tieBack != nil }),
+                       let sustained = sustainedChannel
+                    {
+                        channel = sustained
+                    }
+                    sustainedChannel = chord.notes.contains(where: { $0.tieForward != nil })
+                        ? channel
+                        : nil
                 }
                 // Tremolo branch: when a chord carries a `Tremolo`,
                 // expand to per-stroke note events via the
