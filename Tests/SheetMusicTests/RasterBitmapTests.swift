@@ -22,16 +22,32 @@
         /// page's TOP, i.e. its LARGEST y. Getting this backwards is
         /// silent — every layout still looks plausible, upside down.
         @Test func theTopPixelRowMapsToTheTopOfThePage() {
-            let t = PageTransform(dpi: 300, heightPx: 3300, deskewDegrees: 0)
+            let t = PageTransform(
+                dpi: 300, widthPx: 2550, heightPx: 3300, deskewDegrees: 0,
+            )
             #expect(abs(t.point(x: 0, y: 0).y - 792) < 1e-9)
             #expect(abs(t.point(x: 0, y: 3300).y) < 1e-9)
         }
 
         @Test func pageSizeIsPixelsScaledByDpi() {
-            let t = PageTransform(dpi: 300, heightPx: 3300, deskewDegrees: 0)
-            let size = t.pageSizePt(widthPx: 2550)
-            #expect(abs(size.width - 612) < 1e-9)
-            #expect(abs(size.height - 792) < 1e-9)
+            let t = PageTransform(
+                dpi: 300, widthPx: 2550, heightPx: 3300, deskewDegrees: 0,
+            )
+            #expect(abs(t.pageSize.width - 612) < 1e-9)
+            #expect(abs(t.pageSize.height - 792) < 1e-9)
+        }
+
+        /// With no deskew, the source-pixel entry point must agree with
+        /// the deskewed-pixel one — otherwise every clean measurement
+        /// would be reading the reframe's own error.
+        @Test func sourcePixelsMatchDeskewedPixelsWhenThereIsNoSkew() {
+            let t = PageTransform(
+                dpi: 300, widthPx: 2550, heightPx: 3300, deskewDegrees: 0,
+            )
+            let direct = t.point(x: 800, y: 1200)
+            let viaSource = t.pagePoint(fromSourcePixelX: 800, y: 1200)
+            #expect(abs(direct.x - viaSource.x) < 1e-9)
+            #expect(abs(direct.y - viaSource.y) < 1e-9)
         }
 
         @Test func aDrawnHorizontalLineIsInkAcrossItsWholeSpan() {

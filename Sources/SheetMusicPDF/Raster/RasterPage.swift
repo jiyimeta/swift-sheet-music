@@ -14,11 +14,21 @@ import Foundation
 /// measurement and then presents as "the detector is bad".
 struct RasterPageAnalysis {
     var paths: [PathSegment]
+    /// The frame `paths` are in — and the only sanctioned way to bring
+    /// anything else into it. A degraded page has been resampled, so its
+    /// pixel size is NOT the clean page size times dpi/72; a consumer
+    /// that reconstructed it from a label's page size would hand
+    /// `buildScore` a page that disagrees with the paths on it.
     var transform: PageTransform
     /// Measured staff spacing in points; 0 when the page has no staff.
     var staffSpacingPt: Double
     /// Rotation removed by deskew, in degrees, positive counter-clockwise.
     var deskewDegrees: Double
+
+    /// The page size `buildScore` must be given for these paths.
+    var pageSizePt: CGSize {
+        transform.pageSize
+    }
 }
 
 extension RasterPage {
@@ -39,11 +49,13 @@ extension RasterPage {
         let straight = rotate(bitmap, degrees: -angle)
         let mask = binarize(straight)
         let transform = PageTransform(
-            dpi: straight.dpi, heightPx: straight.height, deskewDegrees: angle,
+            dpi: straight.dpi, widthPx: straight.width, heightPx: straight.height,
+            deskewDegrees: angle,
         )
         guard let spacingPx = estimateStaffSpacingPx(mask) else {
             return RasterPageAnalysis(
-                paths: [], transform: transform, staffSpacingPt: 0, deskewDegrees: angle,
+                paths: [], transform: transform,
+                staffSpacingPt: 0, deskewDegrees: angle,
             )
         }
         var paths = staffLineSegments(

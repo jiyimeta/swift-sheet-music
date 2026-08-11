@@ -8,7 +8,10 @@
         static let spacing = 12.0
 
         static func transform(_ bmp: GrayBitmap) -> PageTransform {
-            PageTransform(dpi: bmp.dpi, heightPx: bmp.height, deskewDegrees: 0)
+            PageTransform(
+                dpi: bmp.dpi, widthPx: bmp.width, heightPx: bmp.height,
+                deskewDegrees: 0,
+            )
         }
 
         static func beams(_ bmp: GrayBitmap) -> [PathSegment] {

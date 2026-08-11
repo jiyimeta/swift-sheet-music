@@ -233,6 +233,47 @@ of them is enough to flip its whole face to `font-mismatch` on P3c-G4.
 | **P3c-G3** per-class coverage floor | same run; every shortfall prints a `[coverage-below-floor] <class> n/floor` line | `[gate][SUMMARY] P3c-G3 below_floor=0/62 unreachable=2 classes=64 floor=1000 pass=Y`. A first pilot will not pass this — the report tells you which classes to generate more of. **Read the denominator**: it is the *eligible* classes, two fewer than the vocabulary — see below |
 | **P3c-G4** face actually applied | `Training/.venv/bin/python Training/generate/build_dataset.py faces --root $R` | `[gate][SUMMARY] P3c-G4 applied=N/N pass=Y` (exit 0). The count is over `confirmed=`, i.e. geometry **and** embedded font name together — see below |
 
+### Raster front-end (P3a / P3b) — measurement probes and sweeps
+
+The raster stage's thresholds are all measured rather than chosen, and
+these are the commands that measure them. **Run every sweep in RELEASE**
+(`swift test -c release`): `RasterPage.analyze` is pixel-loop-bound and a
+debug build is roughly two orders of magnitude slower, which turns a
+half-hour sweep into a multi-day one.
+
+| what | command | read |
+|---|---|---|
+| staff-line ink continuity, and the merge tolerance it implies | `OMR_DATA_ROOT=$R Training/.venv/bin/python Training/probes/measure_staff_ink.py 30 [degraded]` | the `survival` line — the fraction of lines that stay ONE piece covering 80% of their span at each candidate tolerance. The gap percentiles above it are context, not the decision |
+| stacked-beam fusion rate | `OMR_DATA_ROOT=$R Training/.venv/bin/python Training/probes/measure_beam_fusion.py 60 [degraded]` | `fusionRate`. Above ~2% the beam detector needs de-fusion — and note a fused pair is 1.25 sp, above a single-beam window, so without it the group loses EVERY level, not one |
+| seam level: raster paths vs labels | `OMR_DATA_ROOT=$R OMR_RASTER_SEAM=1 swift test -c release --no-parallel --filter OMRRasterSeamEvalHarness` | one `[raster-seam][SUMMARY]` line. **Read `pages=` before any ratio** — `pages=0` means the sweep ran over nothing |
+| score level: hybrid vs `source.mscx` | `OMR_DATA_ROOT=$R OMR_HYBRID_EVAL=1 swift test -c release --no-parallel --filter OMRHybridEvalHarness` | per-render rows plus `[hybrid][SUMMARY]`. **Read `measuresA`/`measuresB` before any percentage** (§8.2's blind spots apply) |
+
+The hybrid harness takes glyphs from the labels — a perfect detector,
+restricted to the frozen detector vocabulary — and paths from the real
+raster pipeline, so its delta against the P0-G3 oracle ceiling is this
+stage's contribution and nothing else's. Two env vars vary it:
+
+- `OMR_HYBRID_MODE` = `full` (default) | `noStaffLines` | `noVerticals` |
+  `noBeams` | `nullFrontEnd`. The last three are the **lobotomy** checks:
+  dropping one primitive must crater one specific metric (staff lines →
+  pitch, verticals → measure counts, beams → duration). A mode that
+  changes nothing means that primitive never reached `buildScore`.
+- `OMR_HYBRID_JITTER_SP` — displaces every glyph origin by this many
+  staff spaces. The hybrid otherwise feeds PERFECT origins while a real
+  detector will not, and `barlineCandidates`' 2.0 / 0.6 sp windows were
+  calibrated against vector geometry; sweeping σ ∈ {0.1, 0.25, 0.5}
+  turns that into the detector's origin-error budget. Reported, not
+  gated.
+
+**`nullFrontEnd` is not optional.** It is the floor: if the `full`
+numbers are not far above it, the harness is measuring nothing, and the
+same run also catches truth paths leaking into the hybrid plumbing.
+
+Memory: every sweep prints `peakRSS`, and page bitmaps are only ever
+touched through `OMRPageBitmapLoader.withPageBitmap`, which owns the
+`autoreleasepool` so a call site cannot forget it. Run under
+`~/.claude/bin/run-with-memcap.sh <cap-mb> <log> …`.
+
 **Frozen eval set** (spec §6.5), after the manifest exists — degrades
 every page once, with a recorded seed, into `$R/eval_frozen/`:
 

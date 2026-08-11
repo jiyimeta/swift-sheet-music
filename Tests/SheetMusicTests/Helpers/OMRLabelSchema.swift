@@ -127,6 +127,7 @@
                 image: OMRPageLabels.Image(
                     file: imageFile, dpi: dpi,
                     labelTransform: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+                    sourceSizePx: nil,
                 ),
                 glyphs: glyphs, paths: paths, beams: beams,
                 curves: curves, texts: texts,
@@ -169,7 +170,14 @@
         /// Path stream, with `.beam` segments split off into the beam
         /// stream (only when a fitted quad is present; a quad-less beam
         /// stays a plain `.beam`-kind path).
-        private static func pathLabels(
+        /// `PathSegment`s → label path / beam records.
+        ///
+        /// Not `private`: the raster seam harness projects a REAL
+        /// front-end's paths through this same conversion so that
+        /// `OMRSeamMetrics` compares like with like. Converting a
+        /// prediction any other way would make the comparison a test of
+        /// two converters rather than of the detector.
+        static func pathLabels(
             _ source: [PathSegment], pageIndex: Int,
         ) -> (paths: [OMRPageLabels.Path], beams: [OMRPageLabels.Beam]) {
             var paths: [OMRPageLabels.Path] = []

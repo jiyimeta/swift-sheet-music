@@ -33,9 +33,17 @@
             /// degraded-image pixel space. Identity for clean rasters;
             /// the frozen eval set (degrade.py) writes the composition.
             var labelTransform: [Double]
+            /// `[width, height]` of the CLEAN raster, in pixels. Written
+            /// only by the frozen eval set, where the degraded image has
+            /// been resampled and is a different size — the y-flip that
+            /// takes a label from page points to clean pixels has to be
+            /// anchored to the clean raster, not to the degraded one.
+            /// Absent (nil) on clean labels, where the two coincide.
+            var sourceSizePx: [Int]?
             enum CodingKeys: String, CodingKey {
                 case file, dpi
                 case labelTransform = "label_transform"
+                case sourceSizePx = "source_size_px"
             }
         }
 

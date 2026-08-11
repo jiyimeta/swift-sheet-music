@@ -1,0 +1,185 @@
+#if !os(Android)
+    import CoreGraphics
+    import Foundation
+    @testable import SheetMusicPDF
+
+    /// Glyphs from the labels — a perfect detector, restricted to the
+    /// frozen detector vocabulary — plus paths from the REAL raster
+    /// pipeline, composed into one `WalkedContent` for `buildScore`.
+    ///
+    /// This is what isolates P3a/P3b's contribution. The denominator is
+    /// the already-measured oracle-replay back-end ceiling (gate P0-G3),
+    /// so the reported delta is this stage's cost and nothing else's.
+    enum OMRHybridFrontEnd {
+        /// Which primitives the raster front-end is allowed to contribute.
+        ///
+        /// The lobotomy modes exist so the harness can be shown to be
+        /// capable of failing: dropping one primitive must crater one
+        /// specific metric, and `nullFrontEnd` establishes the floor the
+        /// real numbers have to sit far above. A harness whose floor is
+        /// near its ceiling is measuring nothing.
+        enum Mode: String {
+            case full
+            case noStaffLines
+            case noVerticals
+            case noBeams
+            case nullFrontEnd
+        }
+
+        static func filter(_ paths: [PathSegment], mode: Mode) -> [PathSegment] {
+            switch mode {
+            case .full: paths
+            case .noStaffLines: paths.filter { $0.kind != .horizontal }
+            case .noVerticals: paths.filter { $0.kind != .vertical }
+            case .noBeams: paths.filter { $0.kind != .beam }
+            case .nullFrontEnd: []
+            }
+        }
+
+        /// Label glyphs a detector could actually emit.
+        ///
+        /// `unknown*` classes really occur in these labels
+        /// (`unknownE500`, `unknownECA5` in the `extz_` renders) and a
+        /// detector trained on a frozen vocabulary has no such class.
+        /// `stem` and `staff5Lines` are excluded by the parent design's
+        /// §7.1 — stems are this stage's own classical CV, and
+        /// `staff5Lines` is a vector-only rendering artifact whose
+        /// survival here would let `appendGlyphDetectedStaves` paper over
+        /// a raster staff-detection failure outright.
+        ///
+        /// `fontSize` is zeroed to match the raster contract: the
+        /// `staff5Lines` code path is unreachable from a front-end that
+        /// detects staff lines directly.
+        static func detectorVocabularyGlyphs(
+            _ glyphs: [ClassifiedGlyph],
+        ) -> [ClassifiedGlyph] {
+            glyphs.compactMap { glyph in
+                let name = OMRLabelClassNames.className(for: glyph.semantic)
+                guard !name.hasPrefix("unknown"),
+                      !excludedClasses.contains(name) else { return nil }
+                var out = glyph
+                out.geometry.fontSize = 0
+                return out
+            }
+        }
+
+        static let excludedClasses: Set = ["stem", "staff5Lines"]
+
+        /// Bring label glyphs — which live in CLEAN page space — into the
+        /// frame the raster front-end emitted its paths in.
+        ///
+        /// The composition, and why each step is there:
+        ///
+        ///     clean pt  --(y-flip on the CLEAN raster height)-->  clean px
+        ///     clean px  --(image.label_transform)-->              source px
+        ///     source px --(the front-end's own deskew + flip)-->  page pt
+        ///
+        /// On a clean raster every step is the identity, which is exactly
+        /// why getting this wrong stays invisible until the first
+        /// degraded sweep and then reads as "the detector is bad". The
+        /// y-flip has to be anchored to `image.source_size_px` — the
+        /// CLEAN raster's height — because the degraded image has been
+        /// resampled and is a different size.
+        ///
+        /// Composed this way, whatever deskew error remains moves glyphs
+        /// and paths TOGETHER, so the relative geometry the back-end
+        /// actually reasons about stays consistent.
+        static func reframe(
+            _ glyphs: [ClassifiedGlyph], page: OMRPageLabels, transform: PageTransform,
+        ) -> [ClassifiedGlyph] {
+            let h = page.image.labelTransform
+            let identity = h == [1, 0, 0, 0, 1, 0, 0, 0, 1]
+            guard !identity || transform.deskewDegrees != 0 else { return glyphs }
+            let dpi = Double(page.image.dpi)
+            let cleanHeightPx = Double(
+                page.image.sourceSizePx?[1]
+                    ?? Int((page.page.heightPt * dpi / 72.0).rounded()),
+            )
+            return glyphs.map { glyph in
+                var out = glyph
+                out.geometry.origin = mapped(
+                    glyph.geometry.origin, h: h, dpi: dpi,
+                    cleanHeightPx: cleanHeightPx, transform: transform,
+                )
+                return out
+            }
+        }
+
+        private static func mapped(
+            _ point: CGPoint, h: [Double], dpi: Double,
+            cleanHeightPx: Double, transform: PageTransform,
+        ) -> CGPoint {
+            let cleanX = Double(point.x) * dpi / 72.0
+            let cleanY = cleanHeightPx - Double(point.y) * dpi / 72.0
+            let w = h[6] * cleanX + h[7] * cleanY + h[8]
+            let denominator = w == 0 ? 1 : w
+            let sourceX = (h[0] * cleanX + h[1] * cleanY + h[2]) / denominator
+            let sourceY = (h[3] * cleanX + h[4] * cleanY + h[5]) / denominator
+            return transform.pagePoint(fromSourcePixelX: sourceX, y: sourceY)
+        }
+
+        /// Displace every glyph origin by a fixed offset in staff spaces,
+        /// deterministically per glyph index.
+        ///
+        /// The hybrid otherwise feeds PERFECT origins, while a real
+        /// detector will feed noisy ones — and `barlineCandidates`'
+        /// 2.0 / 0.6 staff-space windows, which decide whether a vertical
+        /// is a stem or a barline, were calibrated against vector
+        /// geometry rather than detector jitter. Running the sweep at a
+        /// few sigmas turns that into a number: the detector's
+        /// origin-error budget, obtained a stage early instead of as a
+        /// surprise. Reported, never gated.
+        ///
+        /// Deterministic (a fixed function of the index, not a PRNG draw)
+        /// so the run-twice gate still holds with jitter enabled.
+        static func jitter(
+            _ glyphs: [ClassifiedGlyph], sigmaInSpaces: Double, staffSpacingPt: Double,
+        ) -> [ClassifiedGlyph] {
+            guard sigmaInSpaces > 0, staffSpacingPt > 0 else { return glyphs }
+            let amplitude = sigmaInSpaces * staffSpacingPt
+            return glyphs.enumerated().map { index, glyph in
+                var out = glyph
+                let phase = Double(index)
+                out.geometry.origin.x += CGFloat(sin(phase * 1.7) * amplitude)
+                out.geometry.origin.y += CGFloat(cos(phase * 2.3) * amplitude)
+                return out
+            }
+        }
+
+        /// One render's pages → the `buildScore` input tuple.
+        ///
+        /// `pageSizes` comes from the FRONT-END's own frame (its deskewed
+        /// pixels × 72/dpi), never from the label's clean page size. On a
+        /// degraded page those differ, and mixing them shifts every path
+        /// relative to every glyph — silently, because on a clean raster
+        /// the two frames coincide.
+        static func compose(
+            pages: [OMRPageLabels], analyses: [Int: RasterPageAnalysis], mode: Mode,
+            originJitterInSpaces: Double = 0,
+        ) throws -> (walked: WalkedContent, pageSizes: [Int: CGSize], pageCount: Int) {
+            let oracle = try OMROracleFrontEnd.replay(pages: pages)
+            var walked = WalkedContent(glyphs: [], texts: [], paths: [], curves: [])
+            var sizes: [Int: CGSize] = [:]
+            for page in pages.sorted(by: { $0.page.index < $1.page.index }) {
+                let index = page.page.index
+                let vocabulary = detectorVocabularyGlyphs(
+                    oracle.walked.glyphs.filter { $0.geometry.pageIndex == index },
+                )
+                walked.texts += oracle.walked.texts.filter { $0.pageIndex == index }
+                guard let analysis = analyses[index] else {
+                    walked.glyphs += vocabulary
+                    sizes[index] = oracle.pageSizes[index] ?? .zero
+                    continue
+                }
+                walked.glyphs += jitter(
+                    reframe(vocabulary, page: page, transform: analysis.transform),
+                    sigmaInSpaces: originJitterInSpaces,
+                    staffSpacingPt: analysis.staffSpacingPt,
+                )
+                walked.paths += filter(analysis.paths, mode: mode)
+                sizes[index] = analysis.pageSizePt
+            }
+            return (walked, sizes, oracle.pageCount)
+        }
+    }
+#endif
