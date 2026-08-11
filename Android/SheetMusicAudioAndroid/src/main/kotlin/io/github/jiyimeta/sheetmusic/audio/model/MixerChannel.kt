@@ -1,8 +1,22 @@
 package io.github.jiyimeta.sheetmusic.audio.model
 
-/** Mirrors SheetMusicAudioCore.MixerChannel. */
+/**
+ * Mirrors SheetMusicAudioCore.MixerChannel.
+ *
+ * Identity is [partIndex] + [ordinal] — one strip per deduped (part ×
+ * instrument), matching Apple's `MixerChannel.Kind.instrument(partIndex:
+ * ordinal:)`. Replaced a bare `staffIndex: Int`: a multi-staff (grand-staff)
+ * part shared one channel, so per-staff strips were duplicates, and a part
+ * that changes instrument needs more than one strip.
+ */
 data class MixerChannel(
-    val staffIndex: Int,
+    val partIndex: Int,
+    val ordinal: Int,
+    /**
+     * The live single-port MIDI channel (`0...15`) this strip's program /
+     * volume / mute is routed through on the shared FluidSynth engine.
+     */
+    val liveChannel: Int,
     val displayName: String,
     val volume: Float = 1.0f,
     /**

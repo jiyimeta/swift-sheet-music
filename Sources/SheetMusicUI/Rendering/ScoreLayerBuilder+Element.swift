@@ -308,22 +308,22 @@ extension ScoreLayerBuilder {
             {
                 parent.addSublayer(layer)
             }
-        case let .staffText(text, p, color, isSystem):
+        case let .staffText(text, p, color, style):
             // Author-supplied staff/system text. Color and offset
             // (already baked into `p` by placement) come from the
             // source `.mscx`. Bottom-leading anchor at `p` matches
             // the placement convention used for dynamics/tempo.
-            let style = ResolvedTextStyle.resolve(
-                isSystem ? .systemText : .staffText, metrics: metrics,
+            let resolvedStyle = ResolvedTextStyle.resolve(
+                style, metrics: metrics,
             )
             if !text.isEmpty,
                let layer = textLayer(
                    text: text, at: shift(p),
-                   size: style.pointSize, italic: style.isItalic,
+                   size: resolvedStyle.pointSize, italic: resolvedStyle.isItalic,
                    anchor: CGPoint(x: 0, y: 1),
                    color: color.map(scoreColorToCGColor)
                        ?? Self.inkColor,
-                   font: style.ctFont,
+                   font: resolvedStyle.ctFont,
                    height: height,
                )
             {

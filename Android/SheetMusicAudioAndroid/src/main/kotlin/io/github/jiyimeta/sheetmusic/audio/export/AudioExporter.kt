@@ -5,7 +5,7 @@ import android.os.ParcelFileDescriptor
 import io.github.jiyimeta.sheetmusic.audio.AudioBackendException
 import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
-import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
+import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
 import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeMixer
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeSf2Loader
@@ -38,7 +38,7 @@ internal class AudioExporter(
     suspend fun run(
         outputFd: ParcelFileDescriptor?,
         smfBytes: ByteArray,
-        staffParams: List<StaffParams>,
+        strips: List<InstrumentParams>,
         snapshot: ExportEngineSnapshot,
         startTick: Long,
         endTick: Long,
@@ -66,7 +66,7 @@ internal class AudioExporter(
             }
         var lastProgressEmitMs = 0L
         try {
-            applyStaffProgramsAndMixer(synth, staffParams, snapshot)
+            applyStripProgramsAndMixer(synth, strips, snapshot)
             if (player.load(smfBytes) != 0) {
                 throw AudioBackendException.EngineSetupFailed("player.load returned non-zero")
             }
@@ -125,34 +125,54 @@ internal class AudioExporter(
 
     /**
      * Resolves a default soundfont, loads it on [synth], and applies
-     * per-staff program / drum-channel / CC7 (volume + mute/solo) state
-     * derived from [snapshot]. Mirrors the staff setup logic in
+     * per-strip program / drum-channel / CC7 (volume + mute/solo) state.
+     * Mirrors the channel setup logic in
      * [io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthEngine.setupStaves]
      * but tailored for one-shot offline export.
+     *
+     * Two sources, joined on [InstrumentParams.liveChannel] /
+     * [io.github.jiyimeta.sheetmusic.audio.model.MixerChannel.liveChannel] —
+     * the channel the rendered SMF ([AudioMidiBridge.renderMidi]) actually
+     * addresses once a score has a drum part, a grand staff, or a mid-score
+     * instrument change (no longer the same as a staff index):
+     * - [strips] (score-authored): bank + drum flag, and the fallback
+     *   program/soundfont-URI resolution.
+     * - [snapshot]'s `mixerChannels` (live/user state): the CURRENT
+     *   program (post any `setStaffProgram` override) + volume/mute/solo.
      */
-    private fun applyStaffProgramsAndMixer(
+    private fun applyStripProgramsAndMixer(
         synth: SynthDriver,
-        staffParams: List<StaffParams>,
+        strips: List<InstrumentParams>,
         snapshot: ExportEngineSnapshot,
     ) {
         val uri = resolver.defaultGmSoundfontUri
-            ?: staffParams.firstOrNull()?.let {
+            ?: strips.firstOrNull()?.let {
                 resolver.soundfontUriFor(it.bankLSB.toInt(), it.program.toInt(), it.isDrums)
             }
         val sfid = uri?.let { synth.loadSoundFont(it, context) } ?: -1
         if (sfid >= 0) {
-            for (p in staffParams) {
-                if (p.isDrums) synth.setChannelType(p.staffIndex, isDrum = true)
-                val effectiveBank = if (p.isDrums) 128 else p.bankLSB.toInt()
-                val mixerProgram = snapshot.mixerChannels
-                    .firstOrNull { it.staffIndex == p.staffIndex }?.program ?: p.program.toInt()
-                synth.programSelect(sfid, p.staffIndex, effectiveBank, mixerProgram.coerceIn(0, 127))
+            val bankByChannel = strips.associate {
+                it.liveChannel to (if (it.isDrums) 128 else it.bankLSB.toInt())
+            }
+            // MixerChannel.program is null whenever the host never overrode
+            // the score's authored program (it defaults to null — pinned by
+            // MixerChannelTest.mixerChannelDefaultsProgramToNull). Falling
+            // back to a bare `0` there would export every un-touched strip
+            // as GM piano instead of its own authored program; fall back to
+            // the STRIP's own program instead, keyed the same way as bank.
+            val programByChannel = strips.associate { it.liveChannel to it.program.toInt() }
+            for (chan in snapshot.mixerChannels) {
+                if (chan.isDrums) synth.setChannelType(chan.liveChannel, isDrum = true)
+                val effectiveBank = bankByChannel[chan.liveChannel]
+                    ?: if (chan.isDrums) 128 else 0
+                val program = chan.program ?: programByChannel[chan.liveChannel] ?: 0
+                synth.programSelect(sfid, chan.liveChannel, effectiveBank, program.coerceIn(0, 127))
             }
             val soloed = snapshot.mixerChannels.any { it.isSoloed }
             for (chan in snapshot.mixerChannels) {
                 val audible = if (soloed) chan.isSoloed else !chan.isMuted
                 val gain = if (audible) chan.volume else 0f
-                synth.cc(chan.staffIndex, 7, (gain * 127).toInt().coerceIn(0, 127))
+                synth.cc(chan.liveChannel, 7, (gain * 127).toInt().coerceIn(0, 127))
             }
         }
     }

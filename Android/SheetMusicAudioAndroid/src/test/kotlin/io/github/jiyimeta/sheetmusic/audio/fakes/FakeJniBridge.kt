@@ -20,6 +20,8 @@ internal open class FakeJniBridge(
     /** Empty by default — an undecodable payload, which the engine reads as "no count-in". */
     var countInResult: ByteArray = byteArrayOf(),
     var staffParamsResult: ByteArray = byteArrayOf(),
+    /** Empty by default — triggers `AndroidPlaybackEngine`'s per-staff fallback. */
+    var instrumentParamsResult: ByteArray = byteArrayOf(),
     var pitchAndStaffOfNoteResult: Long = -1L,
     var earliestOfResult: ByteArray = byteArrayOf(),
     var itemEndTickResult: Long = -1L,
@@ -49,6 +51,7 @@ internal open class FakeJniBridge(
     }
     override fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray = countInResult
     override fun staffParams(scoreHandle: Long): ByteArray = staffParamsResult
+    override fun instrumentParams(scoreHandle: Long): ByteArray = instrumentParamsResult
     override fun pitchAndStaffOfNote(scoreHandle: Long, noteIdBytes: ByteArray): Long {
         pitchAndStaffCalls += noteIdBytes
         return pitchAndStaffOfNoteResult

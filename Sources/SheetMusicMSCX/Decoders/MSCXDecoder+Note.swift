@@ -50,6 +50,7 @@ extension Note {
         // muted; the element is absent (→ true) for normal notes.
         let play = node.first("play")?.text != "0"
         let parentheses = decodeParentheses(node)
+        let (userVelocity, velocityType) = decodeVelocity(node)
         var note = Note(
             pitch: pitch,
             tpc: tpc,
@@ -63,9 +64,63 @@ extension Note {
             parentheses: parentheses,
             isSmall: isSmall,
             play: play,
+            userVelocity: userVelocity,
+            velocityType: velocityType,
         )
         note.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return note
+    }
+
+    /// Decode the per-note velocity override: `<velocity>` (the value)
+    /// plus `<veloType>` (how to apply it).
+    ///
+    /// The default for an absent `<veloType>` is *version-dependent*,
+    /// which is why this reads `MSCXParserContext.version`:
+    ///
+    /// * MuseScore 3 defaulted to `offset`
+    ///   (`Note::propertyDefault(Pid::VELO_TYPE)` returns
+    ///   `ValueType::OFFSET_VAL` in 3.6.2's `libmscore/note.cpp`) and so
+    ///   wrote `<veloType>user</veloType>` explicitly. A bare
+    ///   `<velocity>-20</velocity>` in a 3.x file therefore means "20%
+    ///   quieter than the dynamic".
+    /// * MuseScore 4 dropped the property from its writer entirely and
+    ///   defaults to `user`, so a bare `<velocity>96</velocity>` in a
+    ///   4.x file is "sound this note at MIDI velocity 96".
+    ///
+    /// Note this diverges from MuseScore 4's *reader*, which discards
+    /// pre-4.0 `<velocity>` values outright (`read400::TRead::readProperties`
+    /// has an explicit "converting is non-trivial, so ignore" branch).
+    /// Honoring them costs nothing here because the offset form is
+    /// resolved at render time, when the dynamic's velocity is known —
+    /// exactly where MuseScore 3 resolved it.
+    ///
+    /// Velocity type is normalized to the model default (`.user`) when
+    /// there is no override, so a v3 file without note velocities
+    /// decodes to exactly the same `Note` values as a v4 one. That also
+    /// declines to reproduce one MuseScore 3 misfeature: 3.6.2's
+    /// `playNote` called `customizeVelocity` unguarded, so a note
+    /// carrying `<veloType>user</veloType>` with no `<velocity>` (type
+    /// off default, value at it) resolved to `limit(0, 1, 127)` = 1 and
+    /// was effectively silent. MuseScore 4 added the
+    /// `userVelocity() != 0` guard and drops such values on read anyway;
+    /// muting a note over it would be strictly worse.
+    private static func decodeVelocity(
+        _ node: XMLTreeNode,
+    ) -> (userVelocity: Int, velocityType: NoteVelocityType) {
+        guard let text = node.first("velocity")?.text,
+              let userVelocity = Int(text),
+              userVelocity != 0
+        else {
+            return (0, .user)
+        }
+        let versionDefault: NoteVelocityType =
+            switch MSCXParserContext.version ?? .v4 {
+            case .v2, .v3: .offset
+            case .v4: .user
+            }
+        let velocityType = (node.first("veloType")?.text)
+            .flatMap(NoteVelocityType.init(mscxToken:)) ?? versionDefault
+        return (userVelocity, velocityType)
     }
 
     /// Decode the `<Accidental>` child of a `<Note>` element.

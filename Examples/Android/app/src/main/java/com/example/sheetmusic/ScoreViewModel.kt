@@ -81,6 +81,10 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
                     showsInvisibleElements = 0u,
                     hiddenStaves = emptyList(),
                     clefOverrides = emptyList(),
+                    // Notation transpose only; 0 = as authored. Playback
+                    // transpose is a separate tuning shift
+                    // (AndroidPlaybackEngine.setTranspose), never a re-render.
+                    transposeSemitones = 0,
                 ),
             )
             val programBytes = withContext(Dispatchers.Default) {

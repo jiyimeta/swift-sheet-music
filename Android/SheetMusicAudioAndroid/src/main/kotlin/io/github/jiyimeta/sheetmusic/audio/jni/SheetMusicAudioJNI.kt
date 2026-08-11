@@ -92,6 +92,11 @@ internal object SheetMusicAudioJNI {
         return SwiftJavaJNI.nativeStaffParams(scoreHandle, arena).toByteArray()
     }
 
+    fun nativeInstrumentParams(scoreHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeInstrumentParams(scoreHandle, arena).toByteArray()
+    }
+
     fun nativeEarliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeEarliestOf(

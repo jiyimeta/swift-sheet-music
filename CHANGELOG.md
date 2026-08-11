@@ -7,6 +7,78 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- Mid-score instrument changes are read, engraved, played and written
+  back. `SheetMusicCore.InstrumentChange` models the instruction text
+  plus the `Instrument` that takes over from that position, stored as a
+  `SystemElement` on `Score.systemMeasures` — the same lift `<StaffText>`
+  and `<RehearsalMark>` already take, so no tick map lives on `Part`.
+  `Score.instrumentTimeline(forPart:)` derives the time-keyed view,
+  mirroring how `Tempo` is stored as a system element and read through
+  `TempoTimeline`. Both the MSCX and the MusicXML importers produce it:
+  MSCX from `<InstrumentChange>` (and the encoder writes it back in
+  MuseScore's own element order), MusicXML by synthesizing a change
+  wherever consecutive notes reference a different `<score-instrument>`.
+  A change whose instrument is unusable still engraves its text and
+  contributes no timeline point, so a malformed reference can never
+  silently re-instrument a part.
+
+- Playback follows the score. `MidiRenderer` allocates one MIDI channel
+  per change INSTANCE rather than per distinct instrument — that is what
+  keeps the exported SMF MuseScore-exact, since three separate "to Piano"
+  changes each embed their own `<Channel>` — and every note is emitted on
+  the channel in force at its own tick. A tie chain sounds entirely on
+  the channel in force at its head, so a change landing between a tie's
+  head and tail cannot leave a stuck note. Every program change still
+  sits at tick 0; nothing is emitted mid-stream.
+
+- `SheetMusicMIDI.LiveChannelPlan` collapses the rendered multi-port
+  channel set onto the 16 channels a live synth has. Within a part, two
+  instruments share one live channel when their `InstrumentChannel`s
+  agree on the six sounding fields; instances MuseScore gave different
+  channel numbers to still merge, and an instance the author retuned in
+  the mixer keeps its own. `MidiChannelRemap` applies the plan to a
+  rendered `MidiFile`, and `SheetMusicAudioCore.InstrumentChannel` is now
+  `Hashable`.
+
+- The mixer has one strip per instrument. A part that changes instrument
+  mid-score shows a strip for each, named after the instrument rather
+  than the staff, on both Apple and Android. Auditioning a program from
+  the mixer previews the instrument at the playback cursor.
+
+### Changed
+
+- **Breaking.** `SheetMusicAudioCore.MixerChannel.Kind.staff(Int)` is
+  replaced by `.instrument(partIndex:ordinal:)`. A mixer strip is a
+  (part × distinct instrument) pair now, not a staff, so a grand staff
+  still has one strip while a clarinet doubling on saxophone has two.
+  `ordinal` indexes the part's deduped instruments in first-appearance
+  order and is stable for a given score.
+
+- **Breaking.** `SheetMusicCore.SystemElement` gains
+  `case instrumentChange` and `SheetMusicCore.TextStyleType` gains
+  `case instrumentChange`. Both break exhaustive switches in consuming
+  code, and the latter also changes `allCases`' order.
+
+- **Breaking.** `SheetMusicLayout.LayoutElement.staffText`'s
+  `isSystemText: Bool` becomes `style: TextStyleType`. The flag could
+  only say "staff or system"; a third text style needed a third value,
+  and carrying the style type means the renderer reads its font and
+  placement defaults from one table instead of inferring them.
+
+- **Breaking (Android).** `MixerChannel.staffIndex` is gone, and
+  `AndroidPlaybackEngine.setStaffMuted` / `setStaffSoloed` /
+  `setStaffVolume` / `setStaffProgram` take `(partIndex, ordinal)` in
+  place of `staffIndex` — the Kotlin mirror of the `MixerChannel.Kind`
+  change above.
+
+- `MidiRenderer.staffChannels(score:)` now explicitly reports each
+  staff's part's ORDINAL-0 (tick-0) strip. It always meant "the channel
+  this staff's track starts on"; with instrument changes that is one of
+  several channels the track uses, so the accessor's contract is stated
+  rather than implied.
+
 ## [1.9.0] - 2026-08-06
 
 ### Added

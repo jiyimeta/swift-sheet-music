@@ -26,6 +26,10 @@ extension MidiRenderer {
         // A muted note (`<play>0</play>`) emits no MIDI. Mirrors the
         // `if (!note->play()) return;` guard in CompatMidiRender::collectNote.
         guard note.play else { return }
+        // The whole sweep inherits the start note's velocity override,
+        // as in MuseScore where every event the glissando expands into
+        // funnels through the same `playNote` with the note attached.
+        let velocity = note.customizedVelocity(velocity)
         let suppressStartOn = note.tieBack != nil
         let suppressFinalOff = note.tieForward != nil
         switch glissando.style {

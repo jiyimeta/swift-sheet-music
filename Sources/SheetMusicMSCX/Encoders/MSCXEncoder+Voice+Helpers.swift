@@ -25,10 +25,11 @@ extension Voice {
         from start: Int,
         cursor: Fraction,
         into children: inout [XMLTreeNode],
+        options: MSCXEncoderOptions = .init(),
     ) -> Int {
         var i = start
         while i < sorted.count, sorted[i].position.offset == cursor {
-            children.append(Self.encodeSystem(sorted[i].element))
+            children.append(Self.encodeSystem(sorted[i].element, options: options))
             i += 1
         }
         return i
@@ -45,6 +46,7 @@ extension Voice {
         from start: Int,
         cursor: inout Fraction,
         into children: inout [XMLTreeNode],
+        options: MSCXEncoderOptions = .init(),
     ) -> Int {
         var i = start
         while i < sorted.count {
@@ -53,7 +55,7 @@ extension Voice {
             if delta.numerator != 0 {
                 children.append(locationNode(delta))
             }
-            children.append(Self.encodeSystem(sorted[i].element))
+            children.append(Self.encodeSystem(sorted[i].element, options: options))
             cursor = target
             i += 1
         }

@@ -428,12 +428,12 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .staffText(text, origin, color, isSystemText):
+        case let .staffText(text, origin, color, style):
             let argb = color.flatMap(LayoutBridge.argb(from:))
             if let argb { out.append(.setColor(argb: argb)) }
             emitText(
                 text: text,
-                style: isSystemText ? .systemText : .staffText,
+                style: style,
                 originX: mox + Double(origin.x),
                 originY: moy + Double(origin.y),
                 sp: sp,
