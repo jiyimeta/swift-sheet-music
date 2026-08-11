@@ -29,6 +29,10 @@ import SheetMusicCore
 /// `LayoutEngine.translate` to shift them**: `.spannerSegment`,
 /// `.marker` and `.jump` are in its no-op case list, so the writeback
 /// below would silently drop their `dy`.
+///
+/// Being inert is also what makes the ordering unverifiable by test or
+/// corpus, so it has to be read off the C++ rather than inferred — see
+/// the citation table on `categories`.
 enum SkylineAutoplacePass {
     /// Address of one element inside the per-staff measure buffer.
     private struct Address {
@@ -51,15 +55,47 @@ enum SkylineAutoplacePass {
         case lyricVerses
     }
 
+    /// MuseScore's order, read off `SystemLayout::layoutSystemElements`
+    /// (`systemlayout.cpp`):
+    ///
+    ///     dynamics + hairpins  :1276   (layoutDynamicExpressionAndHairpins)
+    ///     all other spanners   :1278   → .textLine / palmMute / letRing
+    ///     measure numbers      :1280
+    ///     ottavas              :1294
+    ///     pedals               :1295   (processLines align = true)
+    ///     lyrics               :1297
+    ///     harmonies            :1305
+    ///     staff text           :1308
+    ///     system text          :1324
+    ///     voltas               :1328
+    ///     rehearsal marks      :1330
+    ///     tempo text           :1335
+    ///
+    /// Two deliberate departures, both pre-existing: `.staffText` and
+    /// `.systemText` share one entry (MuseScore separates them, and
+    /// splitting would reorder skyline accumulation for reasons
+    /// unrelated to any known defect), and `.dynamics` is `.wholeStaff`
+    /// where MuseScore aligns per snapping chain
+    /// (`alignmentlayout.cpp:94`).
+    ///
+    /// `.hairpin` is `.individual` and separate from `.dynamics`: the
+    /// pair is exempt in `shouldIgnoreEachOther`, so a hairpin never
+    /// sees a dynamic in the skyline anyway, and sharing the group's
+    /// single `dy` would let one ledger-line note under a hairpin drag
+    /// every dynamic on the staff down with it.
     private static let categories: [Category] = [
-        Category(kinds: [.dynamics, .hairpin], grouping: .wholeStaff),
+        Category(kinds: [.dynamics], grouping: .wholeStaff),
+        Category(kinds: [.hairpin], grouping: .individual),
+        Category(kinds: [.textLine], grouping: .individual),
         Category(kinds: [.measureNumber], grouping: .individual),
+        Category(kinds: [.ottava], grouping: .individual),
+        // MuseScore equalizes pedal Y across a staff after autoplacing
+        // each segment (`processLines(..., align: true)`); the
+        // max-over-group `dy` reproduces that.
+        Category(kinds: [.pedal], grouping: .wholeStaff),
         Category(
             kinds: [.lyrics, .lyricsMelisma, .lyricHyphen],
             grouping: .lyricVerses,
-        ),
-        Category(
-            kinds: [.pedal, .ottava, .textLine], grouping: .individual,
         ),
         Category(kinds: [.harmony], grouping: .individual),
         Category(
