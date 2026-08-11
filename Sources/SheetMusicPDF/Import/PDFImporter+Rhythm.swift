@@ -379,6 +379,59 @@ extension PDFImporter {
         var stemIndex: Int?
     }
 
+    /// Half-width of the x-window in which a notehead may be a chord-mate of
+    /// the cluster's lead, in STAFF SPACES.
+    ///
+    /// A chord's heads do NOT all share an x. Whenever two of them are a
+    /// SECOND apart the engraver has to mirror one to the other side of the
+    /// stem — `conflict = (std::abs(prevLine - line) < 2)` →
+    /// `mirror.set_value(...)`, offset `headWidth - stemWidth`
+    /// (`rendering/score/chordlayout.cpp:2368, 2404, 2733-2741`) — so a rule
+    /// that demands a shared x can never join a second's two heads.
+    ///
+    /// The window has to sit between two measured quantities:
+    ///
+    ///   * the MIRROR OFFSET, `headWidth - stemWidth` — 1.2 sp on the corpus
+    ///     (980 of the 1,312 same-stem candidates outside the old window);
+    ///   * the MINIMUM NOTE-TO-NOTE SPACING, ~1.5 sp on a dense small-staff
+    ///     score.
+    ///
+    /// Those two are close, and the corpus says so sharply. Admitting the
+    /// 1.5 sp population as well was measured and REJECTED: it is not a
+    /// wider font's mirror, it is the next note. `bacon_epi` (staff space
+    /// 3.67pt, a dense engraving) took in 58 mates at 1.5 sp and lost 14
+    /// metric points, while `mimicopy_ベーコンエピ` — the same music
+    /// engraved at 4.96pt — took in 24 at 1.2 sp and gained 44. Both files
+    /// use the same font (notehead advance 2.00 sp in each), so a real
+    /// mirror cannot be 1.2 sp in one and 1.5 sp in the other.
+    ///
+    /// This window is only a cheap pre-filter. What actually separates a
+    /// chord-mate from a second VOICE stacked at the same x (a drum crash
+    /// over a kick) is the same-stem test below, not this number: over the
+    /// same corpus 237,751 out-of-window candidates resolve to a different
+    /// stem and stay rejected.
+    static let chordMateWindowInSpaces: CGFloat = 1.35
+
+    /// How far off the lead's x a head may sit and still count as sharing its
+    /// COLUMN, in staff spaces (the old fixed 2.5pt at the corpus's most
+    /// common 5pt staff space). Beyond this a head is mirrored, and the
+    /// mirror rule below applies.
+    static let chordColumnToleranceInSpaces: CGFloat = 0.5
+
+    /// Smallest vertical separation, in staff spaces, that a MIRRORED head
+    /// must have from the lead. Half a staff step — well under a second's
+    /// 0.5 sp, well over engraving noise.
+    ///
+    /// WHY A MIRRORED HEAD MUST BE AT A DIFFERENT STAFF POSITION. The
+    /// engraver mirrors a head across the stem to resolve a VERTICAL
+    /// collision, and `conflict = (std::abs(prevLine - line) < 2)` fires for
+    /// a unison (difference 0) as well as a second (difference 1). But a
+    /// unison cannot survive being merged into one chord here: `ChordNotes`
+    /// dedups by pitch, so folding a same-position head into the lead's
+    /// chord DELETES a note. Measured on `Alive`, admitting them cost
+    /// exactly the 10 notes the 10 same-position mates carried.
+    static let chordMirrorMinDYInSpaces: CGFloat = 0.25
+
     fileprivate static func stemCluster(
         startingAt i: Int,
         in glyphs: [ClassifiedGlyph],
@@ -394,12 +447,24 @@ extension PDFImporter {
             return Cluster(indices: [i], stem: nil, stemIndex: nil)
         }
         var indices = [i]
+        let mateWindow = chordMateWindowInSpaces * spatium
         for (j, g) in glyphs.enumerated() where j != i {
             guard isNoteheadSemantic(g.semantic) else { continue }
-            // Chord noteheads share the lead's x. Match the lead's x (not the
-            // stem midX) so a stem-down note's left-side stem doesn't widen
-            // the window into the neighbour to its right.
-            guard abs(g.geometry.origin.x - lead.geometry.origin.x) <= 2.5 else { continue }
+            // A chord's heads sit at the lead's x, or one notehead width off
+            // it when the engraver had to mirror a second across the stem
+            // (see `chordMateWindowInSpaces`). Measure from the lead's x (not
+            // the stem midX) so a stem-down note's left-side stem doesn't
+            // slide the window into the neighbour to its right.
+            let dx = abs(g.geometry.origin.x - lead.geometry.origin.x)
+            guard dx <= mateWindow else { continue }
+            // A head OFF the lead's column is there because the engraver
+            // mirrored it across the stem, which it only does to resolve a
+            // vertical collision — so it must be at a different staff
+            // position. A same-position (unison) head would be deleted by
+            // `ChordNotes`' pitch dedup if it were folded in here.
+            if dx > chordColumnToleranceInSpaces * spatium,
+               abs(g.geometry.origin.y - lead.geometry.origin.y)
+               < chordMirrorMinDYInSpaces * spatium { continue }
             // …but a shared x is NOT sufficient: a drum downbeat stacks two
             // VOICES at one x — a crash (stem-up) over a kick (stem-down), each
             // on its OWN stem — and the old x-only rule fused them into one
