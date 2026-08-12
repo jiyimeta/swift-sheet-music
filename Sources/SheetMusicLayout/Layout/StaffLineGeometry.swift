@@ -163,11 +163,9 @@ public struct StaffLineGeometry: Sendable, Equatable {
         // everything but a one-line staff keeps hanging the rest from
         // the line above.
         guard lineCount == 1 else { return -1 }
-        let moveToLineAbove = (
-            voiceOffsetLines == -1 || voiceOffsetLines == 2,
-        )
-            && !(voiceOffsetLines == -2 || voiceOffsetLines == 1)
-        return moveToLineAbove ? -1 : 0
+        let voiceAllowsMove = voiceOffsetLines == -1 || voiceOffsetLines == 2
+        let voiceBlocksMove = voiceOffsetLines == -2 || voiceOffsetLines == 1
+        return voiceAllowsMove && !voiceBlocksMove ? -1 : 0
     }
 
     /// Vertical span of a barline on this staff, relative to the staff

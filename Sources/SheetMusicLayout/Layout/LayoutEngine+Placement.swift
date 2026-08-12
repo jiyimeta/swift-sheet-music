@@ -610,10 +610,9 @@ extension LayoutEngine {
                         // otherwise the rest drifts off-center
                         // whenever those constants are tuned.
                         let trailingPad = metrics.sp * 1
-                        restX = (
-                            headerSchedule.contentStartX
-                                + width - trailingPad,
-                        ) / 2
+                        let edgeSum = headerSchedule.contentStartX
+                            + width - trailingPad
+                        restX = edgeSum / 2
                     } else {
                         restX = timedX(atTick: tickCursor)
                     }
@@ -632,14 +631,11 @@ extension LayoutEngine {
                     let staffTopLocal = metrics.sp * 2
                     let staffBottomLocal = metrics.sp * 2
                         + metrics.staffHeight
-                    let needsLeger = (
-                        restBase == .whole
-                            || restBase == .half,
-                    )
-                        && (
-                            restY < staffTopLocal
-                                || restY > staffBottomLocal
-                        )
+                    let isWholeOrHalf = restBase == .whole
+                        || restBase == .half
+                    let isOutsideStaff = restY < staffTopLocal
+                        || restY > staffBottomLocal
+                    let needsLeger = isWholeOrHalf && isOutsideStaff
                     let restElement = LayoutElement.rest(
                         duration: r.duration,
                         origin: CGPoint(x: restX, y: restY),
