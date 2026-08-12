@@ -6,17 +6,53 @@ import Foundation
 extension RasterPage {
     /// Shortest column run emitted as a `.vertical`, in staff spaces.
     ///
-    /// Below this lies notehead-interior and staff-line-crossing ink,
-    /// which would otherwise emit thousands of micro-verticals per page.
-    /// Above it, stems (~3.5 sp) and barlines (4.0 sp) BOTH pass —
-    /// deliberately. Measured on this dataset the two populations peak at
-    /// 3.0 sp (8,036 samples) and 4.0 sp (7,848) and overlap, so nothing
-    /// here could separate them; and `barlineCandidates` in
-    /// `PDFImporter+StaffLines.swift` already separates them using
-    /// notehead abutment, which this stage does not have and P3d will
-    /// supply. Duplicating that test with strictly less information would
-    /// be strictly worse.
-    static let verticalMinLengthInSpaces = 2.0
+    /// This sits exactly at the length of the shortest REAL vertical — a
+    /// stem — and that is not a coincidence, it is the whole mechanism.
+    /// Below it is glyph ink: the strokes inside clefs, accidentals and
+    /// time signatures, which the vector path never emits as paths at all
+    /// because MuseScore draws them as glyphs. Above it, stems (~3.5 sp)
+    /// and barlines (4.0 sp) both pass, deliberately — they overlap in
+    /// length, so nothing here could separate them, and
+    /// `barlineCandidates` already separates them downstream using
+    /// notehead abutment, which this stage does not have.
+    ///
+    /// The value was 2.0 for most of this stage's life, chosen by
+    /// reasoning ("below this is notehead-interior noise") rather than
+    /// measured — the only major constant in the raster front-end that
+    /// was. Profiling predicted verticals against the labels over 493
+    /// pages showed 85% of all false positives sitting under 3.5 sp,
+    /// 7,845 of them in the 2.0 bucket alone at 3% purity. Swept through
+    /// the hybrid on 177 renders:
+    ///
+    ///     floor    pitch p50   pitch mean   dur p50   dur mean
+    ///     2.0      52          46.6         38        42.0
+    ///     2.5      66          54.0         51        48.5
+    ///     3.0      66          54.1         52        48.6
+    ///     3.5      98          65.4         55        50.3
+    ///     4.0      93          64.5         38        40.7
+    ///
+    /// The peak is bracketed on both sides: 4.0 starts cutting the stems
+    /// themselves and duration collapses with them. Exact measure counts
+    /// stay at 130/177 across the whole sweep, so this is pure gain and
+    /// not a structure trade.
+    static let verticalMinLengthInSpaces = 3.5
+
+    // NO UPPER LENGTH LIMIT, and the reason is worth keeping.
+    //
+    // A profile of predicted verticals said heights of 12 staff spaces
+    // and above were 17 genuine against 476 spurious, which looked like
+    // an easy win. Capping at 11 sp cost pitch median 52 -> 23 and exact
+    // measure counts 130 -> 76.
+    //
+    // The profile's labels were wrong, not the detector. The vector path
+    // emits a barline as ONE SEGMENT PER STAFF — nine 4.0 sp segments
+    // stacked at the same x — while the raster merges the whole column
+    // into one tall run, so a genuine system-spanning barline matches no
+    // single truth segment by centre distance and is counted spurious.
+    // It is the same representation-granularity trap as the staff-line
+    // fragments, in a third disguise: whenever truth splits something
+    // the raster merges, a one-to-one metric scores a correct answer as
+    // a false positive.
 
     /// Widest run still emitted as a `.vertical`, in staff spaces.
     ///

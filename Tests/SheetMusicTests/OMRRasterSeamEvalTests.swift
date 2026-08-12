@@ -30,6 +30,8 @@
             var beamFp = 0
             var beamFn = 0
             var skewAbsSum = 0.0
+            var vTrue: [String: Int] = [:]
+            var vFalse: [String: Int] = [:]
         }
 
         @Test func rasterPathsAgainstLabels() throws {
@@ -59,6 +61,11 @@
                     + String(format: "%.3f", totals.skewAbsSum / Double(max(1, totals.pages)))
                     + " peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB",
             )
+            for key in Set(totals.vTrue.keys).union(totals.vFalse.keys).sorted() {
+                let t = totals.vTrue[key] ?? 0
+                let f = totals.vFalse[key] ?? 0
+                print("[vprofile] hw=\(key) true=\(t) false=\(f)")
+            }
         }
 
         /// One page. Split out of the `@Test` body to stay under the
@@ -123,6 +130,45 @@
             totals.beamTp += beams.tp
             totals.beamFp += beams.fp
             totals.beamFn += beams.fn
+
+            if ProcessInfo.processInfo.environment["OMR_VERTICAL_PROBE"] == "1" {
+                profileVerticals(
+                    predicted: predicted.paths, truth: truthPaths,
+                    spacing: spacing, into: &totals,
+                )
+            }
+        }
+
+        /// Bucket every predicted vertical by height and width in staff
+        /// spaces, split by whether it matched a truth vertical.
+        ///
+        /// The question this answers is whether a geometric discriminator
+        /// for the false positives EXISTS at all — the raster cannot tell
+        /// a clef's stroke from a barline by construction, so before
+        /// designing a filter, the two populations have to be shown to
+        /// separate on something the front-end can actually see.
+        func profileVerticals(
+            predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
+            spacing: Double, into totals: inout Totals,
+        ) {
+            let tBars = truth.filter { $0.kind == "vertical" }
+            for p in predicted where p.kind == "vertical" {
+                let px = (p.rectPt[0] + p.rectPt[2]) / 2
+                let py = (p.rectPt[1] + p.rectPt[3]) / 2
+                let matched = tBars.contains { t in
+                    let dx = (t.rectPt[0] + t.rectPt[2]) / 2 - px
+                    let dy = (t.rectPt[1] + t.rectPt[3]) / 2 - py
+                    return (dx * dx + dy * dy).squareRoot() <= 0.5 * spacing
+                }
+                let h = (p.rectPt[3] - p.rectPt[1]) / spacing
+                let w = p.lineWidthPt / spacing
+                let key = "\(Int((h * 2).rounded()))|\(Int((w * 10).rounded()))"
+                if matched {
+                    totals.vTrue[key, default: 0] += 1
+                } else {
+                    totals.vFalse[key, default: 0] += 1
+                }
+            }
         }
     }
 #endif
