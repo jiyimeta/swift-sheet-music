@@ -27,9 +27,8 @@
         static let beamTopY = 40
         /// One beam: 0.5 staff spaces.
         static let beamThicknessPx = 10
-        /// Blob length lands in [3.0, 3.5) staff spaces — the band where
-        /// `verticalBeamedMinLengthInSpaces` admits a vertical only by
-        /// asking a beam whether it touches one.
+        /// Blob length lands in [3.0, 3.5) staff spaces — the band that
+        /// the old 3.5 floor cut and that only a beam-touch could rescue.
         static let stemBottomY = 105
 
         static func beamedGroupPage() -> GrayBitmap {
@@ -63,34 +62,37 @@
             #expect(analysis.staffSpacingPt > 0)
         }
 
-        /// CHARACTERIZATION, and the mechanism it pins is a real defect —
-        /// measured, and measured SMALL.
+        /// Every stem of the group survives — including the outermost
+        /// two, which is the part that used to fail.
         ///
-        /// Only the two INTERIOR stems survive. The outer two are dropped,
-        /// because a short vertical is admitted only when
-        /// `touchesBeam` finds its x inside some `quad.xRange`, and that
-        /// range structurally cannot reach them (see the test below).
+        /// While the length floor sat at 3.5 staff spaces, a stem this
+        /// short was admitted only if `touchesBeam` found its x inside
+        /// some `quad.xRange`, and that range structurally cannot reach
+        /// the group's own outer stems (the test below still pins that
+        /// geometry). So the outer two were deleted and their notes
+        /// reached the rhythm pass stemless — read as quarters.
         ///
-        /// Why this is pinned rather than fixed: profiling every truth
-        /// vertical on 299 pages by length AND by position relative to the
-        /// detected beams, the miss rate is 0.45 inside a beam, 0.50 at a
-        /// beam edge and 0.51 with no beam near — i.e. the beam relation
-        /// is NOT the discriminator, length is, and the cliff sits exactly
-        /// at `verticalMinLengthInSpaces`. This pathway is worth tens of
-        /// stems; the length floor is worth ~6,200. Fixing it is
-        /// worthwhile and is not where the duration gap lives.
-        @Test func onlyTheInteriorStemsOfABeamedGroupSurvive() {
+        /// What fixed it was not a pad on that containment test. Profiled
+        /// over 299 pages, the truth-vertical miss rate was 0.45 inside a
+        /// beam, 0.50 at a beam edge and 0.51 with no beam near: the beam
+        /// relation was never the discriminator, the floor was. With the
+        /// floor at 2.5 these stems clear it outright, and the precision
+        /// the floor used to provide comes from `isStem`'s notehead-end
+        /// test instead.
+        @Test func everyStemOfABeamedGroupSurvives() {
             let analysis = RasterPage.analyze(Self.beamedGroupPage(), pageIndex: 0)
             let xs = analysis.paths.filter { $0.kind == .vertical }
                 .map { Double($0.rect.midX) }.sorted()
             let expected = Self.stemXs.map {
                 Self.pageX(Double($0) + Double(Self.stemWidthPx) / 2)
             }
-            #expect(xs.count == 2)
-            #expect(xs.contains { abs($0 - expected[1]) < 1.0 })
-            #expect(xs.contains { abs($0 - expected[2]) < 1.0 })
-            #expect(!xs.contains { abs($0 - expected[0]) < 1.0 })
-            #expect(!xs.contains { abs($0 - expected[3]) < 1.0 })
+            #expect(xs.count == Self.stemXs.count)
+            for want in expected {
+                #expect(
+                    xs.contains { abs($0 - want) < 1.0 },
+                    "no stem near x=\(want)pt; got \(xs)",
+                )
+            }
         }
 
         /// …and the reason, stated on the beam: at every stem column the

@@ -41,6 +41,10 @@
             /// `<halfSpaces>|<beamRelation>`.
             var stemHit: [String: Int] = [:]
             var stemMiss: [String: Int] = [:]
+            /// Predicted verticals bucketed by quarter-staff-space of
+            /// head-to-nearer-end distance, split by whether they are real.
+            var endReal: [Int: Int] = [:]
+            var endFalse: [Int: Int] = [:]
         }
 
         @Test func rasterPathsAgainstLabels() throws {
@@ -71,6 +75,13 @@
                     + " peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB",
             )
             printBeamCoverage(totals.beamCoverageBuckets)
+            for key in Set(totals.endReal.keys).union(totals.endFalse.keys).sorted() {
+                print(
+                    "[endprofile] sp=\(Double(key) / 4) "
+                        + "real=\(totals.endReal[key] ?? 0) "
+                        + "false=\(totals.endFalse[key] ?? 0)",
+                )
+            }
             for key in Set(totals.stemHit.keys).union(totals.stemMiss.keys).sorted() {
                 print(
                     "[stemprofile] key=\(key) "
@@ -192,15 +203,37 @@
                 totals.beamCoverageBuckets[Int((c * 20).rounded(.down)), default: 0] += 1
             }
 
-            if ProcessInfo.processInfo.environment["OMR_VERTICAL_PROBE"] == "1" {
+            runProbes(
+                predicted: predicted.paths, truth: truthPaths,
+                analysis: analysis, page: page, spacing: spacing, into: &totals,
+            )
+        }
+
+        /// The env-gated profiles. Off by default and factored out of
+        /// `evaluate` so adding one never pushes that function over the
+        /// body-length cap.
+        func runProbes(
+            predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
+            analysis: RasterPageAnalysis, page: OMRPageLabels,
+            spacing: Double, into totals: inout Totals,
+        ) {
+            let env = ProcessInfo.processInfo.environment
+            if env["OMR_VERTICAL_PROBE"] == "1" {
                 profileVerticals(
-                    predicted: predicted.paths, truth: truthPaths,
+                    predicted: predicted, truth: truth,
                     spacing: spacing, into: &totals,
                 )
             }
-            if ProcessInfo.processInfo.environment["OMR_STEM_MISS_PROBE"] == "1" {
+            if env["OMR_STEM_END_PROBE"] == "1" {
+                profileHeadEndDistance(
+                    predicted: predicted, truth: truth,
+                    page: page, transform: analysis.transform,
+                    spacing: spacing, into: &totals,
+                )
+            }
+            if env["OMR_STEM_MISS_PROBE"] == "1" {
                 profileMissedVerticals(
-                    predicted: predicted.paths, truth: truthPaths,
+                    predicted: predicted, truth: truth,
                     beams: analysis.paths.filter { $0.kind == .beam },
                     spacing: spacing, into: &totals,
                 )
@@ -248,6 +281,80 @@
                     totals.stemHit[key, default: 0] += 1
                 } else {
                     totals.stemMiss[key, default: 0] += 1
+                }
+            }
+        }
+
+        /// Every predicted vertical, bucketed by the distance from its
+        /// NEARER END to the notehead that would certify it as a stem,
+        /// split by whether the vertical is real.
+        ///
+        /// This is the histogram that has to exist before `isStem` grows
+        /// a y-term. `isStem` today accepts a vertical when ANY notehead
+        /// in the measure cell is within 1.4 staff spaces of it IN X, with
+        /// no y condition at all — an assumption that holds for a vector
+        /// PDF, where MuseScore strokes stems and draws accidentals as
+        /// glyphs, so paths and glyphs are disjoint ink. A raster sees
+        /// only ink, and an accidental's vertical stroke sits at the
+        /// note's own y, on the legal side, inside the x-window.
+        ///
+        /// The end distance is the discriminating quantity because a
+        /// notehead sits at ONE END of its stem, whereas a glyph stroke
+        /// that shares an x is centred on the note. `beamedEnd` already
+        /// uses this same `min(|y − loY|, |y − hiY|)` to find a stem's
+        /// beam-attaching end, so the two stay consistent.
+        ///
+        /// Read the two populations' overlap and put the threshold in the
+        /// gap's MIDDLE, not at either edge — this stage has already been
+        /// bitten twice by taking the edge of a plateau.
+        func profileHeadEndDistance(
+            predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
+            page: OMRPageLabels, transform: PageTransform,
+            spacing: Double, into totals: inout Totals,
+        ) {
+            guard spacing > 0,
+                  let replay = try? OMROracleFrontEnd.replay(pages: [page])
+            else { return }
+            // Through the oracle replay and the SAME reframe the hybrid
+            // uses, rather than reading label origins directly: on a clean
+            // raster the two agree, which is exactly why reading them
+            // directly would stay wrong in silence on a degraded one.
+            let heads = OMRHybridFrontEnd.reframe(
+                replay.walked.glyphs.filter {
+                    $0.geometry.pageIndex == page.page.index
+                        && OMRLabelClassNames.className(for: $0.semantic)
+                        .hasPrefix("notehead")
+                },
+                page: page, transform: transform,
+            )
+            let tBars = truth.filter { $0.kind == "vertical" }
+            let window = 1.4 * spacing
+            for p in predicted where p.kind == "vertical" {
+                let px = (p.rectPt[0] + p.rectPt[2]) / 2
+                let py = (p.rectPt[1] + p.rectPt[3]) / 2
+                let real = tBars.contains { t in
+                    let dx = (t.rectPt[0] + t.rectPt[2]) / 2 - px
+                    let dy = (t.rectPt[1] + t.rectPt[3]) / 2 - py
+                    return (dx * dx + dy * dy).squareRoot() <= 0.5 * spacing
+                }
+                var best = Double.greatestFiniteMagnitude
+                for head in heads {
+                    let hx = Double(head.geometry.origin.x)
+                    guard abs(hx - px) <= window else { continue }
+                    let hy = Double(head.geometry.origin.y)
+                    best = min(
+                        best,
+                        min(abs(hy - p.rectPt[1]), abs(hy - p.rectPt[3])),
+                    )
+                }
+                // No notehead in the x-window at all: `isStem` already
+                // rejects it, so it is not part of this decision.
+                guard best < .greatestFiniteMagnitude else { continue }
+                let key = Int((best / spacing * 4).rounded(.down))
+                if real {
+                    totals.endReal[key, default: 0] += 1
+                } else {
+                    totals.endFalse[key, default: 0] += 1
                 }
             }
         }

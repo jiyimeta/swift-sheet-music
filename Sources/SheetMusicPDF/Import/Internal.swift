@@ -53,6 +53,22 @@ struct PathSegment: Equatable {
     /// quad keeps the true ~2pt-thick parallelogram so membership can be
     /// tested against the interpolated top / bottom edge at a stem's own x.
     var quad: BeamQuad?
+    /// True when this segment was recovered from PIXELS rather than read
+    /// from a PDF content stream.
+    ///
+    /// The distinction is not cosmetic — it says whether the seam's
+    /// disjoint-ink assumption holds. A vector PDF strokes barlines and
+    /// stems as paths and draws clefs, accidentals and time signatures as
+    /// GLYPHS, so `paths` and `glyphs` never describe the same ink, and a
+    /// consumer may treat any vertical as a stroke the engraver drew as a
+    /// stroke. A raster front-end sees only ink: an accidental's vertical
+    /// stroke arrives as a `.vertical` indistinguishable, by geometry
+    /// alone, from a note stem.
+    ///
+    /// Consumers that need the stricter reading gate on this flag, so the
+    /// vector path — where it is always false — keeps its behavior
+    /// exactly. See `PDFImporter.isStem`.
+    var detectedFromRaster = false
 }
 
 /// One beam line captured as a thin sloped parallelogram, preserving its

@@ -92,6 +92,20 @@
                 let diverge = ScoreSemanticMetrics.firstDivergenceReport(
                     scoreA: aligned.scoreA, scoreB: aligned.scoreB, window: 2,
                 )
+                // The same per-duration histogram the hybrid prints, so
+                // the two are subtractable. Without it the ceiling is one
+                // number and a claim like "tuplets are lost by the raster
+                // stage" cannot be checked against what the back-end
+                // recovers with PERFECT paths — which, for tuplets, turns
+                // out to be the question that matters.
+                if ProcessInfo.processInfo.environment["OMR_HYBRID_DURHIST"] == "1" {
+                    let a = ScoreSemanticMetrics.durHistogram(scoreA)
+                    let c = ScoreSemanticMetrics.durHistogram(scoreC)
+                    let keys = Set(a.keys).union(c.keys).sorted()
+                    let text = keys.map { "\($0):\(a[$0] ?? 0)->\(c[$0] ?? 0)" }
+                        .joined(separator: " ")
+                    print("[durhist] \((dir as NSString).lastPathComponent) \(text)")
+                }
                 return .processed(summary: summary, diverge: diverge)
             } catch {
                 return .failed("\(error)")

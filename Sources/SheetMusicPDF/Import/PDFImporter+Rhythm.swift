@@ -326,7 +326,7 @@ extension PDFImporter {
     /// notehead within `stemAttachWindow` of the vertical's x and exclude
     /// verticals sitting on the cell's left / right edge (where barlines
     /// live).
-    private static func isStem(
+    static func isStem(
         in measure: ImportMeasure,
         _ path: PathSegment,
         noteheads: [ClassifiedGlyph],
@@ -351,11 +351,61 @@ extension PDFImporter {
         // (stem-down), offset by roughly the notehead width — which is a
         // fraction of the STAFF SPACE, not a fixed number of points.
         let window = stemAttachWindow(spatium: spatium)
+        // A RASTER-detected vertical must also abut the notehead in Y.
+        //
+        // The x-only test above is a VECTOR-path assumption: MuseScore
+        // strokes stems and barlines as paths and draws clefs,
+        // accidentals and time signatures as glyphs, so a `.vertical`
+        // that shares a notehead's x IS that note's stem. A raster
+        // front-end sees only ink, and an accidental's vertical stroke
+        // sits at the note's own y, inside the x-window, on the side the
+        // stem-legality penalty calls legal. Admitted, it competes for
+        // the notehead in `nearestStem`, and when it wins, `stemCluster`
+        // ejects the mate whose stem index no longer matches the lead's —
+        // splitting the chord, flipping the measure to two voices, and
+        // zeroing a voice-0-aligned pitch comparison without losing a
+        // single note. Measured: lowering the raster length floor to
+        // admit ~6,200 real short verticals recovered the eighths exactly
+        // as well as substituting the ORACLE's verticals did (990 lost vs
+        // 970) and cost pitch p50 97 -> 71, with note and measure counts
+        // byte-identical.
+        //
+        // The discriminating fact is that a notehead sits at ONE END of
+        // its stem, while a glyph stroke sharing its x is centred on it.
+        // Profiling every predicted vertical over 299 pages by the
+        // distance from its nearer end to such a notehead:
+        //
+        //     threshold   real kept   false admitted
+        //     0.25 sp     83.3%       2.6%
+        //     0.50 sp     90.3%       13.2%
+        //     0.75 sp     91.1%       54.5%
+        //
+        // The false population's knee is between 0.50 and 0.75 — a
+        // quarter of a staff space wide — so the threshold sits at 0.50,
+        // below the knee rather than on it.
+        //
+        // Gated on provenance, so this is unreachable on the vector path
+        // and byte-identity there is a property of the code rather than a
+        // measurement. Tuplet-bracket hooks, phantom verticals from thin
+        // filled quads and stem fragments would all change verdict under
+        // it, and each deserves its own corpus run before the gate goes.
         return noteheads.contains { g in
-            isNoteheadSemantic(g.semantic)
-                && abs(g.geometry.origin.x - x) <= window
+            guard isNoteheadSemantic(g.semantic),
+                  abs(g.geometry.origin.x - x) <= window
+            else { return false }
+            guard path.detectedFromRaster else { return true }
+            let toEnd = min(
+                abs(g.geometry.origin.y - path.rect.minY),
+                abs(g.geometry.origin.y - path.rect.maxY),
+            )
+            return toEnd <= stemHeadEndToleranceInSpaces * spatium
         }
     }
+
+    /// How close a notehead must sit to one END of a RASTER-detected
+    /// vertical for that vertical to be that note's stem, in staff
+    /// spaces. See the measurement table in `isStem`.
+    static let stemHeadEndToleranceInSpaces: CGFloat = 0.25
 
     /// Whether `path`'s y-span reaches BOTH outer staff lines (within ~1.5pt)
     /// — the signature of a barline as opposed to a note stem. With no usable

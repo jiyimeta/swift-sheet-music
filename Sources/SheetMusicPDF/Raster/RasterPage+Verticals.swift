@@ -6,23 +6,14 @@ import Foundation
 extension RasterPage {
     /// Shortest column run emitted as a `.vertical`, in staff spaces.
     ///
-    /// This sits exactly at the length of the shortest REAL vertical — a
-    /// stem — and that is not a coincidence, it is the whole mechanism.
-    /// Below it is glyph ink: the strokes inside clefs, accidentals and
-    /// time signatures, which the vector path never emits as paths at all
-    /// because MuseScore draws them as glyphs. Above it, stems (~3.5 sp)
-    /// and barlines (4.0 sp) both pass, deliberately — they overlap in
-    /// length, so nothing here could separate them, and
-    /// `barlineCandidates` already separates them downstream using
-    /// notehead abutment, which this stage does not have.
-    ///
-    /// The value was 2.0 for most of this stage's life, chosen by
-    /// reasoning ("below this is notehead-interior noise") rather than
-    /// measured — the only major constant in the raster front-end that
-    /// was. Profiling predicted verticals against the labels over 493
-    /// pages showed 85% of all false positives sitting under 3.5 sp,
-    /// 7,845 of them in the 2.0 bucket alone at 3% purity. Swept through
-    /// the hybrid on 177 renders:
+    /// **This floor stopped being a classifier.** For most of this
+    /// stage's life it was the only thing separating stems from the
+    /// strokes inside clefs, accidentals and time signatures — ink the
+    /// vector path never emits as paths at all, because MuseScore draws
+    /// those as glyphs. Length cannot actually make that separation: the
+    /// two populations overlap, and every value traded one against the
+    /// other. Swept through the hybrid on 177 renders, back when it was
+    /// the sole discriminator:
     ///
     ///     floor    pitch p50   pitch mean   dur p50   dur mean
     ///     2.0      52          46.6         38        42.0
@@ -31,11 +22,32 @@ extension RasterPage {
     ///     3.5      98          65.4         55        50.3
     ///     4.0      93          64.5         38        40.7
     ///
-    /// The peak is bracketed on both sides: 4.0 starts cutting the stems
-    /// themselves and duration collapses with them. Exact measure counts
-    /// stay at 130/177 across the whole sweep, so this is pure gain and
-    /// not a structure trade.
-    static let verticalMinLengthInSpaces = 3.5
+    /// 3.5 won that trade, and it cost about 6,200 real verticals —
+    /// measured directly by profiling every truth vertical over 299
+    /// pages: 100% missed at 2.0 sp, 90% at 2.5, 47% at 3.0, 0.3% at 3.5.
+    /// Those missing stems were the largest single item in the duration
+    /// gap; substituting the ORACLE's verticals moved duration p50 from
+    /// 59 to 75 against a ceiling of 82, while substituting its beams
+    /// moved it to 62.
+    ///
+    /// The separation now happens where it can actually be made —
+    /// downstream in `PDFImporter.isStem`, which has the noteheads and
+    /// can ask whether one sits at an END of the vertical. With that in
+    /// place the floor's job is only to keep notehead-interior ink and
+    /// pure noise out, and it can drop to admit the real stems. Swept
+    /// again, at `stemHeadEndToleranceInSpaces` = 0.25:
+    ///
+    ///     floor         pitch p50   pitch mean   dur p50   dur mean
+    ///     2.0           94          72.4         74        63.3
+    ///     2.5           94          72.6         74        63.4
+    ///     3.0           94          72.3         73        63.0
+    ///     3.5 (+ rescue) 96         72.8         60        55.7
+    ///
+    /// 2.0 and 2.5 are identical, so 2.5 is chosen for the same result on
+    /// less admitted ink. Exact measure counts are 142/198 at every value
+    /// including the old 3.5 — structure never moved, which is the
+    /// signature of a change confined to the stem consumer.
+    static let verticalMinLengthInSpaces = 2.5
 
     /// Shortest column run kept when it TOUCHES A DETECTED BEAM, in staff
     /// spaces.
@@ -67,7 +79,26 @@ extension RasterPage {
     /// At 1.5 the rule starts pulling in notehead-interior ink, which
     /// sits directly under a beam in a beamed chord, and costs 15 points
     /// of pitch to buy the same 3 points of duration.
-    static let verticalBeamedMinLengthInSpaces = 3.0
+    ///
+    /// **SUPERSEDED, and now equal to the plain floor, which makes the
+    /// beam-touch branch below unreachable.** The rule was a proxy for
+    /// the question `isStem` can now ask directly — is this vertical a
+    /// note's stem? — and the proxy is strictly worse. Measured at
+    /// `stemHeadEndToleranceInSpaces` = 0.25:
+    ///
+    ///     plain / beamed   pitch p50   dur p50
+    ///     3.5 / 2.5        96          60      <- rescue live
+    ///     3.0 / 2.5        94          73
+    ///     2.5 / 2.5        94          74      <- rescue unreachable
+    ///
+    /// Keeping the plain floor high enough to leave the rescue reachable
+    /// costs 14 duration points to buy 2 of pitch, because the rescue
+    /// only ever reaches BEAMED stems while the notehead-end predicate
+    /// reaches every stem. Left in place rather than deleted: it is the
+    /// only discriminator here that survives on a page whose noteheads
+    /// were missed, and this value is still live as the column-run filter
+    /// (`minLengthPx`) even while the branch is not.
+    static let verticalBeamedMinLengthInSpaces = 2.5
 
     // NO UPPER LENGTH LIMIT, and the reason is worth keeping.
     //
@@ -210,6 +241,7 @@ extension RasterPage {
             lineWidth: CGFloat(widthPt),
             pageIndex: pageIndex,
             quad: nil,
+            detectedFromRaster: true,
         )
     }
 }
