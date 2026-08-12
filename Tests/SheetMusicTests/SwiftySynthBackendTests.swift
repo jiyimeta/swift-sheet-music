@@ -39,6 +39,7 @@
                 let backend = SwiftySynthBackend(sampleRate: sampleRate)
                 backend.prepare(
                     soundfontURL: URL(fileURLWithPath: swiftySynthSoundfontPath),
+                    metronomeSoundfontURL: nil,
                     drumChannels: [],
                 )
                 try await awaitReady(backend)
@@ -118,6 +119,7 @@
                 let backend = SwiftySynthBackend(sampleRate: sampleRate)
                 backend.prepare(
                     soundfontURL: URL(fileURLWithPath: swiftySynthSoundfontPath),
+                    metronomeSoundfontURL: nil,
                     drumChannels: [],
                 )
                 try await awaitReady(backend)

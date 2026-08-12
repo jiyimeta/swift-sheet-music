@@ -39,7 +39,9 @@
                     engine.attach(outputNode)
                 }
 
-                func prepare(soundfontURL _: URL?, drumChannels _: Set<UInt8>) {}
+                func prepare(
+                    soundfontURL _: URL?, metronomeSoundfontURL _: URL?, drumChannels _: Set<UInt8>,
+                ) {}
                 func loadSequence(_: MidiFile, timeline: PlaybackTimeline) {
                     self.timeline = timeline
                 }

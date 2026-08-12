@@ -7,6 +7,32 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-08-12
+
+### Fixed
+
+- A host-supplied metronome click (`MetronomeClickProvider.clickSamples` /
+  `.soundFont`) is heard during playback on an injected `SynthBackend`. Such a
+  backend renders the metronome on a synth of its own, and `SwiftySynthBackend`
+  built that synth from the SCORE's SoundFont — so the resolved click SF2 only
+  ever reached the AUMIDISynth `MetronomeController`, which never sounds on the
+  backend path, and playback clicked with the score font's GM notes 76 / 77
+  (Hi / Low Wood Block) instead of the host's samples. Offline export, still on
+  AUMIDISynth, used the custom click all along, so the two disagreed. Present
+  since v1.1.0, which decoupled the metronome onto its own transport.
+
+  The click SoundFont now travels with the score's: `SynthBackend.prepare`
+  takes a `metronomeSoundfontURL` (**source-breaking** for out-of-tree
+  conformers — pass `nil` to keep the old sharing), `PlaybackEngine` fills it
+  from the same `MetronomeClickResolver` the AUMIDISynth path uses, and
+  `SwiftySynthBackend` loads it into the metronome synth. `nil` — a
+  `.defaultGM` host, or none at all — still shares the score font, so the GM
+  wood block remains the fallback.
+
+  The metronome tests that covered this asserted `peak > 0`, which a wood block
+  satisfies as readily as a click sample; the new coverage discriminates by
+  duration instead.
+
 ## [1.12.0] - 2026-08-12
 
 ### Fixed

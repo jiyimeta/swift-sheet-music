@@ -107,16 +107,22 @@ public final class SwiftySynthBackend: SynthBackend {
         engine.attach(sourceNode)
     }
 
-    public func prepare(soundfontURL: URL?, drumChannels _: Set<UInt8>) {
+    public func prepare(
+        soundfontURL: URL?, metronomeSoundfontURL: URL?, drumChannels _: Set<UInt8>,
+    ) {
         // SwiftySynth resolves percussion on MIDI channel 9 automatically
         // (`Synthesizer.percussionChannel`), so `drumChannels` is unused.
-        // The metronome plays GM wood blocks (76 / 77) on channel 9 through a
-        // second synth SHARING the score's SoundFont, so its sound matches the
-        // score's percussion exactly at no extra load cost. That synth runs
-        // reverb/chorus OFF with a tiny voice pool — clicks need neither — so
-        // it adds almost no per-block DSP, which matters on CPU-tight
-        // lightweight SoundFonts where the constant cost of an always-on
-        // effects chain could otherwise miss the render deadline.
+        // The metronome plays notes 76 / 77 on channel 9 through a second synth.
+        // That synth loads `metronomeSoundfontURL` — the host's click sound,
+        // resolved by `MetronomeClickResolver` — and only falls back to SHARING
+        // the score's SoundFont (GM wood blocks) when the host supplies none.
+        // Sharing unconditionally is what made a host-supplied click inaudible
+        // during playback while offline export, which renders the metronome on
+        // AUMIDISynth, still used it. That synth runs reverb/chorus OFF with a
+        // tiny voice pool — clicks need neither — so it adds almost no per-block
+        // DSP, which matters on CPU-tight lightweight SoundFonts where the
+        // constant cost of an always-on effects chain could otherwise miss the
+        // render deadline.
         //
         // The SoundFont read + parse + synth build runs OFF the main actor: a
         // General-MIDI font is tens of MB (the high-quality one is ~200 MB), and
@@ -149,9 +155,19 @@ public final class SwiftySynthBackend: SynthBackend {
         // synths back to the main actor via `install`, boxed as `LoadedSynths`.
         loadTask = Task.detached(priority: .userInitiated) { [weak self] in
             if Task.isCancelled { return }
-            let soundFont = soundfontURL
-                .flatMap { try? Data(contentsOf: $0, options: .mappedIfSafe) }
-                .flatMap { try? SoundFont(data: $0) }
+            func read(_ url: URL?) -> SoundFont? {
+                url.flatMap { try? Data(contentsOf: $0, options: .mappedIfSafe) }
+                    .flatMap { try? SoundFont(data: $0) }
+            }
+            let soundFont = read(soundfontURL)
+            if Task.isCancelled { return }
+            // A generated click SF2 is a few tens of KB, so the extra parse is
+            // negligible next to the score font. Falling back to `soundFont`
+            // keeps the shared-font behavior for `.defaultGM` hosts and for a
+            // click font that fails to parse.
+            let clickFont = metronomeSoundfontURL == soundfontURL
+                ? soundFont
+                : (read(metronomeSoundfontURL) ?? soundFont)
             if Task.isCancelled { return }
             let loaded = LoadedSynths(
                 score: Self.makeSynth(
@@ -159,7 +175,7 @@ public final class SwiftySynthBackend: SynthBackend {
                     maximumPolyphony: 256, enableReverbAndChorus: true,
                 ),
                 metronome: Self.makeSynth(
-                    soundFont: soundFont, sampleRate: sampleRate,
+                    soundFont: clickFont, sampleRate: sampleRate,
                     maximumPolyphony: 8, enableReverbAndChorus: false,
                 ),
             )

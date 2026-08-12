@@ -900,7 +900,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                     self?.handleBackendReady(ready)
                 }
             }
-            backend.prepare(soundfontURL: url, drumChannels: drumChannels)
+            // The backend renders the metronome on its own synth, so it needs the
+            // resolved click sound too — the AUMIDISynth `MetronomeController`
+            // prepared above never sounds on the backend path. The resolver
+            // caches its generated SF2, so asking twice costs nothing.
+            backend.prepare(
+                soundfontURL: url,
+                metronomeSoundfontURL: clickResolver.resolvedSoundFontURL(),
+                drumChannels: drumChannels,
+            )
             // The fresh synth resets tuning/rate; push the engine's persisted
             // A4 calibration, transpose, and playback rate back onto it.
             backend.setTuning(

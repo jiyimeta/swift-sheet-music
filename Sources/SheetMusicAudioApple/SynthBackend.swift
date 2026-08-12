@@ -34,6 +34,15 @@ public protocol SynthBackend: AnyObject {
     /// that should render as percussion. Called from `prepare(score:)` and
     /// again from `reloadSoundfont(...)` (with a new URL).
     ///
+    /// `metronomeSoundfontURL` is the click sound resolved from the host's
+    /// `MetronomeClickProvider` (a generated click SF2, a host SF2, or `nil` for
+    /// the GM drum-kit fallback). A backend that renders the metronome on its own
+    /// synth MUST load it there when non-`nil`; passing only `soundfontURL` would
+    /// click with the score font's GM wood blocks (notes 76 / 77) and silently
+    /// ignore the host's click samples. It arrives here rather than through a
+    /// second call so one `prepare` remains one atomic (possibly asynchronous)
+    /// load.
+    ///
     /// May load the SoundFont asynchronously (off the main actor) — a large
     /// General-MIDI font is tens of MB and parsing it on the main actor would
     /// freeze the UI. A backend that loads asynchronously reports `isReady ==
@@ -46,7 +55,9 @@ public protocol SynthBackend: AnyObject {
     /// this by deferring play until ready and re-asserting mixer + tuning state on
     /// the next `backendPlay`; a direct caller must await readiness before driving
     /// the transport.
-    func prepare(soundfontURL: URL?, drumChannels: Set<UInt8>)
+    func prepare(
+        soundfontURL: URL?, metronomeSoundfontURL: URL?, drumChannels: Set<UInt8>,
+    )
 
     /// `false` while an asynchronous SoundFont load kicked by `prepare` is still
     /// in flight; `true` once the synth is playable. A synchronously-loading

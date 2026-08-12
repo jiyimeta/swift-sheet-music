@@ -65,7 +65,9 @@
                     engine.attach(outputNode)
                 }
 
-                func prepare(soundfontURL _: URL?, drumChannels _: Set<UInt8>) {}
+                func prepare(
+                    soundfontURL _: URL?, metronomeSoundfontURL _: URL?, drumChannels _: Set<UInt8>,
+                ) {}
                 func loadSequence(_: MidiFile, timeline _: PlaybackTimeline) {}
                 func loadMetronomeSequence(_: MidiFile) {}
                 func setMetronomeMuted(_: Bool) {}
