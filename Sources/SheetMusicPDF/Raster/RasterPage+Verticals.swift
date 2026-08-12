@@ -37,6 +37,38 @@ extension RasterPage {
     /// not a structure trade.
     static let verticalMinLengthInSpaces = 3.5
 
+    /// Shortest column run kept when it TOUCHES A DETECTED BEAM, in staff
+    /// spaces.
+    ///
+    /// A beamed note's stem is shortened — the beam comes to meet it — so
+    /// the plain floor above, which sits at a free stem's length, cuts
+    /// exactly the stems that carry beam membership. Measured, that is
+    /// what caps duration: on `tex_0028` the note values collapse
+    /// `16:14->8 8:9->3 q:13->32`, i.e. beamed notes arriving as quarters
+    /// because their stems never reached the rhythm pass. The profile
+    /// says ~8,400 genuine verticals live below 3.5 sp.
+    ///
+    /// Length alone cannot separate those from the clef and accidental
+    /// strokes the floor exists to reject — but a beam can. This stage
+    /// detects beams before verticals, and a clef stroke does not touch
+    /// one while a shortened stem always does.
+    ///
+    /// Swept on 177 renders (the plain floor stays at 3.5 throughout):
+    ///
+    ///     beamed floor   pitch p50   pitch mean   dur p50   measures exact
+    ///     (no rule)      98          65.4         55        130
+    ///     1.5            83          61.4         58        127
+    ///     2.5            97          65.2         58        130
+    ///     3.0            97          65.2         58        130
+    ///
+    /// 2.5 and 3.0 are identical, so the whole gain comes from the
+    /// [3.0, 3.5) band — a beamed stem is only slightly shorter than a
+    /// free one. 3.0 is chosen for the same result on less admitted ink.
+    /// At 1.5 the rule starts pulling in notehead-interior ink, which
+    /// sits directly under a beam in a beamed chord, and costs 15 points
+    /// of pitch to buy the same 3 points of duration.
+    static let verticalBeamedMinLengthInSpaces = 3.0
+
     // NO UPPER LENGTH LIMIT, and the reason is worth keeping.
     //
     // A profile of predicted verticals said heights of 12 staff spaces
@@ -98,8 +130,9 @@ extension RasterPage {
     /// alone.
     static func verticalSegments(
         _ mask: InkMask, spacingPx: Double, transform: PageTransform, pageIndex: Int,
+        beams: [PathSegment] = [],
     ) -> [PathSegment] {
-        let minLengthPx = Int((verticalMinLengthInSpaces * spacingPx).rounded())
+        let minLengthPx = Int((verticalBeamedMinLengthInSpaces * spacingPx).rounded())
         var open: [VerticalBlob] = []
         var closed: [VerticalBlob] = []
         for x in 0 ..< mask.width {
@@ -127,10 +160,39 @@ extension RasterPage {
         closed.append(contentsOf: open)
 
         let maxWidthPx = max(1, Int((verticalMaxWidthInSpaces * spacingPx).rounded()))
+        let freeLengthPx = Int((verticalMinLengthInSpaces * spacingPx).rounded())
+        let spacingPt = spacingPx * 72.0 / transform.dpi
+        // Length is judged in PIXELS, on the blob, and never by
+        // converting a finished segment back: the round trip through
+        // points reintroduces rounding right at the threshold, and a stem
+        // exactly at the floor came back as 41.999… pixels and vanished.
         return closed
             .filter { $0.x1 - $0.x0 + 1 <= maxWidthPx }
             .sorted { ($0.x0, $0.y0) < ($1.x0, $1.y0) }
-            .map { segment(from: $0, transform: transform, pageIndex: pageIndex) }
+            .compactMap { blob -> PathSegment? in
+                let seg = segment(from: blob, transform: transform, pageIndex: pageIndex)
+                if blob.y1 - blob.y0 + 1 >= freeLengthPx { return seg }
+                return touchesBeam(seg, beams: beams, spacingPt: spacingPt) ? seg : nil
+            }
+    }
+
+    /// Whether a vertical's x sits within a beam's x-range and its y-span
+    /// reaches that beam's edges there — i.e. it is a stem the beam
+    /// arrives at, rather than a stroke that merely happens to be short.
+    private static func touchesBeam(
+        _ seg: PathSegment, beams: [PathSegment], spacingPt: Double,
+    ) -> Bool {
+        let x = seg.rect.midX
+        let slack = CGFloat(0.5 * spacingPt)
+        for beam in beams {
+            guard let quad = beam.quad, quad.xRange.contains(x) else { continue }
+            let top = quad.topY(at: x)
+            let bottom = quad.botY(at: x)
+            if seg.rect.maxY >= bottom - slack, seg.rect.minY <= top + slack {
+                return true
+            }
+        }
+        return false
     }
 
     private static func segment(

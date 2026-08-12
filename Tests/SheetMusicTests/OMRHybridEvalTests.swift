@@ -250,6 +250,14 @@
                     pageSizes: hybrid.pageSizes, documentAttributes: nil,
                     options: PDFImportOptions(),
                 )
+                if ProcessInfo.processInfo.environment["OMR_HYBRID_DURHIST"] == "1" {
+                    let a = ScoreSemanticMetrics.durHistogram(scoreA)
+                    let b = ScoreSemanticMetrics.durHistogram(scoreB)
+                    let keys = Set(a.keys).union(b.keys).sorted()
+                    let text = keys.map { "\($0):\(a[$0] ?? 0)->\(b[$0] ?? 0)" }
+                        .joined(separator: " ")
+                    print("[durhist] \((dir as NSString).lastPathComponent) \(text)")
+                }
                 return .row(ScoreSemanticMetrics.summaryRow(
                     tag: "[\((dir as NSString).lastPathComponent)]",
                     scoreA: scoreA, scoreB: scoreB, pdfRecovered: true,

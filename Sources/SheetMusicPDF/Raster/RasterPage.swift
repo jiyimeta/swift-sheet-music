@@ -61,12 +61,17 @@ extension RasterPage {
         var paths = staffLineSegments(
             mask, spacingPx: spacingPx, transform: transform, pageIndex: pageIndex,
         )
+        // Beams FIRST: a beamed note's stem is shortened to meet its
+        // beam, so the vertical pass needs the beams to tell such a stem
+        // from a clef stroke of the same length.
+        let beams = beamSegments(
+            mask, spacingPx: spacingPx, transform: transform, pageIndex: pageIndex,
+        )
         paths += verticalSegments(
             mask, spacingPx: spacingPx, transform: transform, pageIndex: pageIndex,
+            beams: beams,
         )
-        paths += beamSegments(
-            mask, spacingPx: spacingPx, transform: transform, pageIndex: pageIndex,
-        )
+        paths += beams
         return RasterPageAnalysis(
             paths: paths, transform: transform,
             staffSpacingPt: spacingPx * 72.0 / straight.dpi,
