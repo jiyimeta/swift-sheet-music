@@ -117,6 +117,9 @@ struct EditIntentCodecTests {
             // and a real duration has to survive alongside it.
             .writeNote(at: slot, pitch: 62, tpc: 16, duration: .eighth),
             .writeNote(at: slot, pitch: 62, tpc: 16, duration: nil),
+            // Shares `SlotDurationIntentWire` with `.setRestDuration` / `.setChordDuration`, so the round trip is
+            // really checking that the DISCRIMINATOR carries the difference — the payload bytes are identical.
+            .writeRest(at: slot, duration: .half),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -140,6 +143,11 @@ struct EditIntentCodecTests {
         #expect(EditIntentCodec.encode(.inputNote(at: rest, pitch: 60, tpc: 14, duration: nil))[1] == 0)
         #expect(EditIntentCodec.encode(.removeTuplet(at: slot))[1] == 11)
         #expect(EditIntentCodec.encode(.writeNote(at: slot, pitch: 60, tpc: 14, duration: nil))[1] == 12)
+        #expect(EditIntentCodec.encode(.writeRest(at: slot, duration: .half))[1] == 13)
+        // `.writeRest` and `.setRestDuration` encode the SAME payload, so the discriminator is the only thing
+        // telling them apart on the wire — and confusing them would silently turn "make this slot a rest of this
+        // length" into "re-time the rest already here", which over a note does nothing at all.
+        #expect(EditIntentCodec.encode(.setRestDuration(at: slot, duration: .half))[1] == 1)
     }
 
     /// An accidental spelling this build does not know must fail the decode, not decode as "no accidental" —
