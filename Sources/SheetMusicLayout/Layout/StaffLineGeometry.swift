@@ -123,6 +123,53 @@ public struct StaffLineGeometry: Sendable, Equatable {
         lineCount / 2
     }
 
+    /// Lines a WHOLE rest moves on top of `naturalRestLine`, given the
+    /// multi-voice offset already applied to it (also in lines:
+    /// −2 for an "up" voice, +2 for a "down" one, 0 when the measure
+    /// has a single voice).
+    ///
+    /// C++: `RestLayout::computeWholeOrBreveRestOffset`
+    /// (`rendering/score/restlayout.cpp:766-780`). The predicate is
+    /// reproduced verbatim because it is not decomposable: it reads
+    /// `lines` AND the voice offset together, and on a ONE-line staff
+    /// with no voice offset it evaluates false — MuseScore leaves the
+    /// whole rest ON the single line rather than hanging it from the
+    /// line above, which is the five-line convention. Getting that
+    /// wrong also changes which GLYPH is drawn, because
+    /// `Rest::getSymbol` (`dom/rest.cpp:258-259`) picks the
+    /// leger-line variant from `line < 0 || line >= lines`.
+    ///
+    /// The breve branch (`lineMove = +1` when `lines == 1`) is absent
+    /// on purpose: `NoteDuration` has no breve case, so no input can
+    /// reach it. Add it here — not at the call site — if one appears.
+    /// **Scope.** MuseScore's predicate reads in full:
+    ///
+    ///     moveToLineAbove = (lines > 5)
+    ///         || ((lines > 1 || vo == -1 || vo == 2)
+    ///             && !(vo == -2 || vo == 1))
+    ///
+    /// The `!(vo == -2 || vo == 1)` exception also fires on staves that
+    /// draw MORE than one line — an "up" voice's whole rest in a
+    /// multi-voice measure should stay on the natural line — and we
+    /// diverge from it there. That divergence is real but it is a
+    /// FIVE-line behavior change with nothing to do with line counts:
+    /// adopting it moves 31 of the 139 corpus renders instead of the 8
+    /// that declare a non-five-line staff, i.e. 23 five-line scores.
+    /// This task must leave five-line staves byte-identical, so only
+    /// the `lines` half is adopted here. Tracked as a follow-up.
+    public func wholeRestLineMove(voiceOffsetLines: Int) -> Int {
+        // `lines > 5` moves unconditionally, and for 2...5 lines the
+        // only case we diverge on is the one scoped out above, so
+        // everything but a one-line staff keeps hanging the rest from
+        // the line above.
+        guard lineCount == 1 else { return -1 }
+        let moveToLineAbove = (
+            voiceOffsetLines == -1 || voiceOffsetLines == 2,
+        )
+            && !(voiceOffsetLines == -2 || voiceOffsetLines == 1)
+        return moveToLineAbove ? -1 : 0
+    }
+
     /// Vertical span of a barline on this staff, relative to the staff
     /// origin. A one-line staff is a special case: MuseScore spans it
     /// ±4 half-spaces (±2 `sp`) instead of over its (zero) height —

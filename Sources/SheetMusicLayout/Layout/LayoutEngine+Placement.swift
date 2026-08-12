@@ -50,7 +50,7 @@ extension LayoutEngine {
         options: ScoreViewOptions = ScoreViewOptions(),
         activeClef: NotatedClef,
         activeKey: Int = 0,
-        lineGeometry: StaffLineGeometry = .standard,
+        lineGeometry: StaffLineGeometry,
         initialClefRawType: String? = nil,
         initialKeyForSynth: Int? = nil,
         headerSchedule: HeaderSchedule,
@@ -561,14 +561,29 @@ extension LayoutEngine {
                     )
                     // Rests sit on the staff's NATURAL line
                     // (`restNaturalY`): the middle line of a five-line
-                    // staff, the single line of a one-line one. A whole
-                    // rest hangs one line above that. In multi-voice
-                    // mode, offset by restVoiceOffset so voices don't
-                    // overlap.
+                    // staff, the single line of a one-line one. In
+                    // multi-voice mode, offset by restVoiceOffset so
+                    // voices don't overlap.
+                    //
+                    // A whole rest additionally hangs one line above —
+                    // but only where MuseScore says so. That rule reads
+                    // the line count and the voice offset together
+                    // (`wholeRestLineMove`), and on a one-line staff it
+                    // does NOT apply: the rest stays on the single
+                    // line, which is also what keeps `needsLeger` below
+                    // false and so draws `restWhole` rather than
+                    // `restWholeLegerLine`.
                     let restY: CGFloat
                     switch restBase {
                     case .whole:
-                        restY = restNaturalY - metrics.sp + restVoiceOffset
+                        let move = lineGeometry.wholeRestLineMove(
+                            voiceOffsetLines: Int(
+                                (restVoiceOffset / metrics.sp).rounded(),
+                            ),
+                        )
+                        restY = restNaturalY
+                            + CGFloat(move) * metrics.sp
+                            + restVoiceOffset
                     default:
                         restY = restNaturalY + restVoiceOffset
                     }
@@ -2262,7 +2277,7 @@ extension LayoutEngine {
         noteYs: [CGFloat],
         chordX: CGFloat,
         staffMidY: CGFloat,
-        lineGeometry: StaffLineGeometry = .standard,
+        lineGeometry: StaffLineGeometry,
         metrics: StaffMetrics,
     ) -> [LayoutElement] {
         let staffTopY = staffMidY - metrics.sp * 2

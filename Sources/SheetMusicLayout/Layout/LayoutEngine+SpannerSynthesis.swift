@@ -98,7 +98,7 @@ extension LayoutEngine {
         // Per-staff line geometry, parallel to the staff index used by
         // `SpannerAnchor.startStaff`. A short entry (or an out-of-range
         // staff) falls back to five lines.
-        staffGeometries: [StaffLineGeometry] = [],
+        staffGeometries: [StaffLineGeometry],
         xOffsets: [CGFloat],
         systemWidth: CGFloat,
         ottavaNumbersOnly: Bool,

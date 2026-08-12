@@ -722,7 +722,7 @@ extension LayoutEngine {
     /// geometry.
     static func defaultBandOffsetY(
         belowStaff: Bool,
-        lineGeometry: StaffLineGeometry = .standard,
+        lineGeometry: StaffLineGeometry,
         metrics: StaffMetrics,
     ) -> CGFloat {
         belowStaff

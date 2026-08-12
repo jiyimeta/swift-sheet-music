@@ -162,6 +162,65 @@
             #expect(abs(dy - CGFloat(expected)) < 0.001)
         }
 
+        /// A WHOLE rest normally hangs one line above the natural line,
+        /// but `RestLayout::computeWholeOrBreveRestOffset`
+        /// (`restlayout.cpp:766-780`) reads `lines`, and on a one-line
+        /// staff with no voice offset the predicate is false — the rest
+        /// stays ON the single line.
+        ///
+        /// The Y is only half of it. `Rest::getSymbol`
+        /// (`dom/rest.cpp:258-259`) picks the leger-line variant from
+        /// `line < 0 || line >= lines`, so a rest hung a line too high
+        /// on a one-line staff is also drawn as `restWholeLegerLine`
+        /// instead of `restWhole` — visible in the corpus render as a
+        /// wide stroke through every empty drumset bar. Both are
+        /// asserted: a Y-only check passes on a fixture whose glyph is
+        /// still wrong, and the glyph flag is what a reader actually
+        /// notices.
+        @Test(
+            "A whole rest takes MuseScore's line move, glyph included",
+            arguments: [
+                (lineCount: 5, dy: 1.0, leger: false),
+                (3, 0.0, false),
+                (1, 0.0, false),
+            ],
+        )
+        func wholeRestFollowsTheLineCountRule(
+            lineCount: Int, dy expected: Double, leger: Bool,
+        ) throws {
+            guard #available(macOS 15.0, *) else { return }
+            let measure = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "PERC")),
+                .chord(Chord(duration: .whole, notes: [])),
+            ])])
+            let score = Score(division: 480, parts: [Part(
+                id: "P1",
+                instrument: Instrument(id: "perc"),
+                staves: [Staff(lineCount: lineCount, measures: [measure])],
+            )])
+            let doc = LayoutEngine.layout(
+                score: score,
+                options: .init(wrapToViewWidth: false),
+                availableWidth: 900,
+            )
+            let system = try #require(doc.systems.first)
+            let origin = try #require(system.staffOrigins.first).y
+            func probe(_ element: LayoutElement) -> (y: CGFloat, leger: Bool)? {
+                if case let .rest(_, p, _, _, hasLeger) = element {
+                    return (p.y, hasLeger)
+                }
+                return nil
+            }
+            let rest = try #require(
+                system.measures.flatMap(\.elements).compactMap(probe).first,
+            )
+            #expect(
+                abs((rest.y - origin) / system.sp - CGFloat(expected))
+                    < 0.001,
+            )
+            #expect(rest.leger == leger)
+        }
+
         // MARK: - Articulations
 
         /// `articulationElements`'s `lastStaffLine` is the half-space
@@ -189,6 +248,59 @@
                 abs((five - three) - 0.5) < 0.001,
                 "five-line \(five) sp vs three-line \(three) sp",
             )
+        }
+
+        // MARK: - Sticky header
+
+        /// `stickyHeaderSystem` re-emits the clef / key / time column
+        /// into a frozen pane, and it does so from its own copy of the
+        /// placement math — the score body's centering does not reach
+        /// it. The pane is a runtime overlay, so the corpus pixel gate
+        /// cannot reach it either, and the only other test that touches
+        /// `stickyHeaderSystem` asserts `anchor == nil` and nothing
+        /// about Y. Delete both offsets in `LayoutEngine+Contexts` and
+        /// every other assertion in the suite stays green while a
+        /// drumset score's sticky header shows an uncentered clef and
+        /// time signature over a body that centers them.
+        @Test(
+            "The sticky header centers the same glyphs the body does",
+            arguments: [(lineCount: 5, dy: 2.0), (3, 1.0), (1, 0.0)],
+        )
+        func stickyHeaderCentersTheSameGlyphs(
+            lineCount: Int, dy expected: Double,
+        ) throws {
+            guard #available(macOS 15.0, *) else { return }
+            let score = Self.score(lineCount: lineCount, clef: "PERC")
+            let doc = LayoutEngine.layout(
+                score: score,
+                options: .init(wrapToViewWidth: false),
+                availableWidth: 900,
+            )
+            let template = try #require(doc.systems.first)
+            let context = try #require(
+                LayoutEngine.measureContexts(for: score).first,
+            )
+            let sticky = LayoutEngine.stickyHeaderSystem(
+                for: context,
+                templateSystem: template,
+                metrics: doc.metrics,
+            )
+            let measure = try #require(sticky.measures.first)
+            let origin = try #require(sticky.staffOrigins.first).y
+            let sp = doc.metrics.sp
+            var clefY: CGFloat?
+            var timeSigY: CGFloat?
+            for element in measure.elements {
+                switch element {
+                case let .clef(_, p, _): clefY = clefY ?? p.y
+                case let .timeSignature(_, _, p): timeSigY = timeSigY ?? p.y
+                default: continue
+                }
+            }
+            let clef = try #require(clefY)
+            let timeSig = try #require(timeSigY)
+            #expect(abs((clef - origin) / sp - CGFloat(expected)) < 0.001)
+            #expect(abs((timeSig - origin) / sp - CGFloat(expected)) < 0.001)
         }
 
         // MARK: - Jump text
