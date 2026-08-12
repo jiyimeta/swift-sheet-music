@@ -79,7 +79,7 @@ import Wirelet
 ///
 /// `delete` reuses `VoiceElementIDWire` directly as its payload — no wrapper struct.
 ///
-/// `RestIDWire` and `VoiceElementIDWire` (`Sources/SheetMusicEditWire/PathIDCodecs.swift`) share this field
+/// `RestIDWire` and `VoiceElementIDWire` (`Sources/SheetMusicEditWire/Path/PathIDCodecs.swift`) share this field
 /// layout — inlined here for convenience rather than only cross-referenced:
 /// ```
 /// tag 1: staff         StaffAddressWire, see layout below
@@ -88,7 +88,7 @@ import Wirelet
 /// tag 4: elementIndex  i32, zig-zag varint
 /// ```
 ///
-/// `StaffAddressWire` (`Sources/SheetMusicEditWire/StaffAddressCodec.swift`; the canonical `(partIndex: 0,
+/// `StaffAddressWire` (`Sources/SheetMusicEditWire/Path/StaffAddressCodec.swift`; the canonical `(partIndex: 0,
 /// staffIndexInPart: 0)` value encodes to 5 bytes total once the varint length prefix and two 1-byte zig-zag
 /// zeros are counted):
 /// ```
@@ -119,8 +119,8 @@ import Wirelet
 /// This numbering is deliberately identical to `Score.stableFingerprint`'s duration walk (`ScoreFingerprint.swift`)
 /// so the two never disagree about what a number means.
 ///
-/// `NoteIDWire` (`Sources/SheetMusicEditWire/PathIDCodecs.swift` — same layout as `RestIDWire`/`VoiceElementIDWire`
-/// above, plus one field):
+/// `NoteIDWire` (`Sources/SheetMusicEditWire/Path/PathIDCodecs.swift` — same layout as
+/// `RestIDWire`/`VoiceElementIDWire` above, plus one field):
 /// ```
 /// tag 1: staff             StaffAddressWire, see layout above
 /// tag 2: measureIndex      i32, zig-zag varint

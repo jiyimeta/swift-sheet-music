@@ -116,6 +116,13 @@ var targets: [Target] = [
     // Android and non-Android shapes, and SheetMusicAndroidJNI's own sources import it unconditionally.
     // Only its *product* (below, in the `if isAndroid` block) is Android-gated — the same split
     // SheetMusicAndroidJNI's target/product pair already uses.
+    //
+    // The `Path/` and `Intent/` subdirectories are load-bearing for the Kotlin side, not just tidiness:
+    // wirelet's Gradle codegen scans exactly one directory per source set, and `:SheetMusicAudioAndroid`
+    // scans `Path/` to emit the ScoreItemID / NoteID / StaffAddress / ClefAnchor codecs its playback engine
+    // needs. Adding an `@WireFormat` type to `Path/` therefore emits a Kotlin codec into
+    // `io.github.jiyimeta.sheetmusic.audio.serialization` that expects a hand-written model class of the same
+    // name; put anything the audio module does not need in `Intent/`.
     .target(
         name: "SheetMusicEditWire",
         dependencies: [
