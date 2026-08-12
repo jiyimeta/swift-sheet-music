@@ -18,6 +18,12 @@ public struct LayoutSystem: Sendable, Equatable {
     /// Per-staff line geometry, parallel to `staffOrigins`. Empty means
     /// "every staff is standard five-line" — kept defaultable so the
     /// initializer stays source-compatible.
+    ///
+    /// That default is not neutral, so a rebuild that forgets this
+    /// field silently reverts the system to five-line geometry rather
+    /// than failing. Rebuild an existing system with
+    /// `addingSpanners(_:)` / `movedBy(dy:)` instead of re-invoking
+    /// `init` — see `LayoutSystem+Rebuild.swift`.
     public let staffGeometries: [StaffLineGeometry]
     /// Part labels at the left edge of this system (empty on continuation
     /// systems per MuseScore convention).

@@ -32,22 +32,7 @@ extension LayoutDocument {
     /// the shifted content bound; `titleFrame` is dropped because only the first
     /// page carries it (and that page uses `yOffset == 0`).
     public func subdocument(systems range: Range<Int>, yOffset: CGFloat) -> LayoutDocument {
-        let slice = systems[range].map { sys in
-            LayoutSystem(
-                origin: CGPoint(x: sys.origin.x, y: sys.origin.y + yOffset),
-                size: sys.size,
-                measures: sys.measures,
-                staffOrigins: sys.staffOrigins,
-                staffAddresses: sys.staffAddresses,
-                staffGeometries: sys.staffGeometries,
-                partLabels: sys.partLabels,
-                brackets: sys.brackets,
-                spanners: sys.spanners,
-                sp: sys.sp,
-                invisibleSpanners: sys.invisibleSpanners,
-                showsInvisibleElements: sys.showsInvisibleElements,
-            )
-        }
+        let slice = systems[range].map { $0.movedBy(dy: yOffset) }
         let height = slice.map { $0.origin.y + $0.size.height }.max() ?? 0
         return LayoutDocument(
             size: CGSize(width: size.width, height: height),
