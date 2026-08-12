@@ -65,6 +65,68 @@
 
         static let excludedClasses: Set = ["stem", "staff5Lines"]
 
+        /// EXPERIMENT, **MEASURED AND REJECTED**
+        /// (`OMR_HYBRID_DROP_GLYPH_VERTICALS=1`): drop raster verticals
+        /// whose ink sits inside a non-notehead glyph.
+        ///
+        /// The diagnosis it was built to test is sound. The seam assumes
+        /// `paths` and `glyphs` are DISJOINT ink, which holds for a
+        /// vector PDF — MuseScore draws barlines and stems as strokes and
+        /// clefs as glyphs — and fails for a raster, which sees only ink.
+        /// Measured on `cov_wholes`, the raster emits eleven extra
+        /// verticals at x = 49…106, the clef / key / time region, some of
+        /// them 30pt tall against a 25pt staff; one survives as a
+        /// barline, the score gains one measure, and the measure-aligned
+        /// pitch comparison then reads 0% on a render the oracle scores
+        /// 100%.
+        ///
+        /// The REMEDY is what failed. Over 177 renders:
+        ///
+        ///                        pitch p50   pitch mean   dur p50   measures exact
+        ///     unchanged          52          46.6         38        130
+        ///     drop-in-glyph      48          45.5         33        113
+        ///
+        /// Every column moves the wrong way: the filter also removes real
+        /// barlines, which at a system start sit right beside the clef it
+        /// is trying to reject. Kept here, env-gated and unused, so the
+        /// next reader does not spend another round rediscovering that a
+        /// correct diagnosis does not make this remedy correct — and
+        /// above all does NOT take it into `barlineCandidates`, where it
+        /// would have been measured only after shipping.
+        ///
+        /// Glyph boxes are available here only because the hybrid feeds
+        /// label glyphs; the front-end itself has none, which is why any
+        /// real fix has to live downstream.
+        static func dropVerticalsInsideGlyphs(
+            _ paths: [PathSegment], glyphs: [ClassifiedGlyph], spacingPt: Double,
+        ) -> [PathSegment] {
+            guard spacingPt > 0 else { return paths }
+            let blockers = glyphs.filter { !isNoteheadLike($0.semantic) }.map {
+                (
+                    x: Double($0.geometry.origin.x),
+                    y: Double($0.geometry.origin.y),
+                    w: Double($0.geometry.advance),
+                    h: Double($0.geometry.renderedSize),
+                )
+            }
+            guard !blockers.isEmpty else { return paths }
+            return paths.filter { path in
+                guard path.kind == .vertical else { return true }
+                let x = Double(path.rect.midX)
+                let y = Double(path.rect.midY)
+                return !blockers.contains { block in
+                    x >= block.x - 0.2 * spacingPt
+                        && x <= block.x + block.w + 0.2 * spacingPt
+                        && y >= block.y - block.h
+                        && y <= block.y + block.h
+                }
+            }
+        }
+
+        private static func isNoteheadLike(_ semantic: SMuFLSemantic) -> Bool {
+            OMRLabelClassNames.className(for: semantic).hasPrefix("notehead")
+        }
+
         /// Bring label glyphs — which live in CLEAN page space — into the
         /// frame the raster front-end emitted its paths in.
         ///
@@ -259,7 +321,16 @@
                     sigmaInSpaces: originJitterInSpaces,
                     staffSpacingPt: analysis.staffSpacingPt,
                 )
-                walked.paths += filter(analysis.paths, mode: mode)
+                var pagePaths = filter(analysis.paths, mode: mode)
+                if ProcessInfo.processInfo
+                    .environment["OMR_HYBRID_DROP_GLYPH_VERTICALS"] == "1"
+                {
+                    pagePaths = dropVerticalsInsideGlyphs(
+                        pagePaths, glyphs: vocabulary,
+                        spacingPt: analysis.staffSpacingPt,
+                    )
+                }
+                walked.paths += pagePaths
                 sizes[index] = analysis.pageSizePt
             }
             return (walked, sizes, oracle.pageCount)
