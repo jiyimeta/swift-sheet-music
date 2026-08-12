@@ -177,11 +177,11 @@ extension Score {
             scorePart: scorePart,
             partId: id,
             staffCount: walker.staffCount,
-            lineCountByStaff: walker.lineCountByStaff,
         )
         // Replace the placeholder empty-measure staves with real content.
-        // `lineCount` is re-read per index rather than copied off the
-        // template, since it can differ from staff to staff.
+        // This is the ONLY place `lineCount` is decided for a MusicXML
+        // part: `partTemplate.staves` is discarded wholesale, so the
+        // walker's per-staff table is read here and nowhere else.
         let populatedStaves: [Staff] = walker.measuresByStaff
             .enumerated()
             .map { staffIndex, staffMeasures in

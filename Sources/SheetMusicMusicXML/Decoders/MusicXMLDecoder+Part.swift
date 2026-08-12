@@ -11,16 +11,17 @@ extension Part {
     /// Also returns the part's drum-mapping table (empty for non-percussion
     /// parts) so the note decoder can resolve `<unpitched>` notes to GM
     /// percussion pitches.
-    /// `lineCountByStaff` carries `<attributes><staff-details><staff-lines>`
-    /// keyed by 0-based staff index (already clamped to `1...16` by
-    /// `AttributesDecoder`); staves absent from it keep `Staff.lineCount`'s
-    /// default of 5. It can differ per staff, so the staves are built
-    /// index by index rather than with `Array(repeating:count:)`.
+    /// The staves this builds are placeholders in every respect,
+    /// `lineCount` included: `MusicXMLDecoder.decodePart` throws the
+    /// whole `staves` array away and rebuilds it from
+    /// `walker.lineCountByStaff` and `walker.measuresByStaff`. Reading
+    /// `<staff-details><staff-lines>` here as well would be a second
+    /// derivation of a value that is already single-sourced there, and
+    /// only one of the two could ever be observed.
     static func decodeMusicXML(
         scorePart: XMLTreeNode,
         partId: String,
         staffCount: Int,
-        lineCountByStaff: [Int: Int] = [:],
     ) throws -> (Part, MusicXMLDrumTable, [String: Instrument]) {
         let name = scorePart.first("part-name")?.text
         let abbrev = scorePart.first("part-abbreviation")?.text
@@ -30,13 +31,13 @@ extension Part {
             useDrumset: drumTable.isDrumset,
         )
         let count = max(1, staffCount)
-        let staves = (0 ..< count).map { staffIndex in
-            Staff(
+        let staves = Array(
+            repeating: Staff(
                 staffType: "stdNormal", group: "pitched",
-                lineCount: lineCountByStaff[staffIndex] ?? 5,
                 defaultClefType: nil, measures: [],
-            )
-        }
+            ),
+            count: count,
+        )
         let part = Part(
             id: partId,
             // MuseScore 5.x stores the track name on Instrument, not Part,
