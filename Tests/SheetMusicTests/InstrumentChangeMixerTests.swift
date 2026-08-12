@@ -350,17 +350,22 @@
             /// PRIMARY strip's name is always suppressed to the bare part
             /// label (see `suppressedWhenDuplicatesPartLabel`) and so can
             /// never show its own fallback tier.
-            @Test("instrument-name fallback order is longName → trackName → id")
+            /// `trackName` first, because that is the name MuseScore means as the INSTRUMENT's: `longName` is what it
+            /// prints at the left of the staff, i.e. the part's label, and an arranger routinely sets it to the voice
+            /// while leaving `trackName` as the instrument. Reading `longName` first made a strip answer "which
+            /// instrument" with the part's own name — which then matched `partName` and got suppressed as a stutter,
+            /// so a part that changed instrument showed a row that never said what it was.
+            @Test("instrument-name fallback order is trackName → longName → id")
             func fallbackOrder() {
                 let tick0 = Instrument(
                     id: "p0", longName: "Guitar", channels: [InstrumentChannel(program: 0)],
                 )
-                let viaLongName = Instrument(
-                    id: "inst-a", longName: "Banjo", trackName: "ignored-a",
+                let viaTrackNameOverLongName = Instrument(
+                    id: "inst-a", longName: "ignored-a", trackName: "Banjo",
                     channels: [InstrumentChannel(program: 10)],
                 )
-                let viaTrackName = Instrument(
-                    id: "inst-b", trackName: "Mandolin",
+                let viaLongName = Instrument(
+                    id: "inst-b", longName: "Mandolin",
                     channels: [InstrumentChannel(program: 20)],
                 )
                 let viaID = Instrument(
@@ -381,8 +386,8 @@
                         staves: [Staff(measures: [Measure(voices: [])])],
                     )],
                     systemMeasures: [SystemMeasure(elements: [
-                        change(at: 1, viaLongName),
-                        change(at: 2, viaTrackName),
+                        change(at: 1, viaTrackNameOverLongName),
+                        change(at: 2, viaLongName),
                         change(at: 3, viaID),
                     ])],
                 )

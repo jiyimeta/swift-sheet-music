@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-08-12
+
 ### Fixed
 
 - Soloing a part no longer silences the metronome. The mixer built a
@@ -20,6 +22,19 @@ and this project adheres to
   instruments is unchanged. This also settles a split inside this
   package — the Android engine never put the click in `mixerChannels`,
   so only the Apple engine had the bug.
+
+- A mixer strip reports the instrument that drives it, rather than the
+  part's own label. The instrument name read `<longName>` first, but
+  MuseScore prints `longName` at the left of the staff — it is the PART's
+  label, and an arranger routinely sets it to the voice ("Soprano 1", or
+  just "S") while `<trackName>` keeps the instrument ("ボーカル",
+  "ピアノ"). So a strip answered "which instrument is this" with the part's
+  own name; that then equalled the part label, the parenthesised suffix
+  was suppressed as a stutter, and a part which genuinely changed
+  instrument mid-score showed a row that never said what it was. The
+  order is now `trackName` → `longName` → `id`. Scores whose two names
+  agree — including the `instrument-change` fixture, so the committed
+  `instrumentParams-v1.bin` golden is unmoved — are unaffected.
 
 ### Added
 
@@ -46,10 +61,6 @@ and this project adheres to
   now, so the Apple mixer and the Android wire cannot drift apart; the
   committed `instrumentParams-v1.bin` golden holds the wire byte-identical
   across the lift.
-
-## [1.11.0] - 2026-08-12
-
-### Added
 
 - `EditIntent` and `ScoreEditSession` let a host relay a scalar edit — a note write, a duration change, a delete,
   or several bundled into one undo step — to a second copy of the score, so an Android host can keep a mirror
