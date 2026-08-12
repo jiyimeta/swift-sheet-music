@@ -25,6 +25,13 @@ and this project adheres to
   (`dom/barline.cpp:256-291`), which is what keeps the caret a visible
   column there. Five-line staves are unchanged.
 
+- The range-selection box's two edges follow the end staves' line counts
+  too, for the same reason and through the same span. Measured with
+  `StaffMetrics.staffHeight` the box overshot a three-line bottom staff
+  by 2 sp, and around a one-line staff it enclosed the paper below the
+  single line rather than the line itself. Five-line staves are
+  unchanged.
+
 ## [1.11.0] - 2026-08-12
 
 ### Fixed

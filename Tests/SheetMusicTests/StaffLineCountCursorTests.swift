@@ -188,6 +188,61 @@
             #expect(noteID.staff.staffIndexInPart == 1)
         }
 
+        // MARK: - Range box
+
+        /// The range-selection box's two edges come from the end staves' own barline spans, like the system bar
+        /// above. Asserted as edges rather than height because the one-line case is right by accident on height
+        /// alone — 4 sp of span either way — while the box itself hung entirely below the single line.
+        ///
+        /// Coordinates are system-local (`drawRangeBoxes` never adds `system.origin`), and the path is flipped
+        /// around `height` on macOS, so `height: 0` makes the flip a plain negation to undo here.
+        @Test(
+            "The range box's edges follow the end staves' line counts",
+            arguments: [
+                (lineCount: 5, top: -1.0, bottom: 5.0),
+                (3, -1.0, 3.0),
+                (1, -3.0, 3.0),
+            ],
+        )
+        func rangeBoxEdgesFollowLineCount(
+            lineCount: Int, top: Double, bottom: Double,
+        ) throws {
+            guard #available(macOS 15.0, *) else { return }
+            let doc = Self.document(lineCount: lineCount)
+            let system = try #require(doc.systems.first)
+            let sp = system.sp
+            let staffTop = try #require(system.staffOrigins.first).y
+            let noteID = try #require(
+                system.eventColumns.compactMap { column -> NoteID? in
+                    if case let .note(id) = column.id { return id }
+                    return nil
+                }.first,
+            )
+
+            let parent = CALayer()
+            ScoreLayerBuilder.drawRangeBoxes(
+                system: system,
+                selection: SelectionRenderState(
+                    selectedIDs: [.note(noteID)], voiceColors: [:],
+                    drawRangeBox: true,
+                    rangeBoxColor: SelectionRenderState.defaultBoxColor,
+                ),
+                metrics: StaffMetrics(staffSize: sp * 4),
+                height: 0,
+                into: parent,
+            )
+            let shape = try #require(
+                parent.sublayers?.compactMap { $0 as? CAShapeLayer }.first,
+            )
+            let box = try #require(shape.path?.boundingBox)
+            // Undo the macOS Y-flip taken about `height: 0`.
+            let boxTop = -box.maxY
+            let boxBottom = -box.minY
+
+            #expect(abs((boxTop - staffTop) - CGFloat(top) * sp) < 0.001)
+            #expect(abs((boxBottom - staffTop) - CGFloat(bottom) * sp) < 0.001)
+        }
+
         // MARK: - System-start bar line
 
         /// MuseScore builds the system's left-edge vertical out of

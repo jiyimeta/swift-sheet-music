@@ -13,6 +13,13 @@ extension ScoreLayerBuilder {
     /// and the full vertical span of the involved staves (topmost
     /// staff top → bottommost staff bottom), with a small pad so it
     /// does not clip glyphs that overflow slightly.
+    ///
+    /// Both vertical edges come from the end staves' own
+    /// `StaffLineGeometry.barLineSpanY(sp:)`, the way the system's
+    /// left-edge barline does. `StaffMetrics.staffHeight` is the
+    /// five-line reference height every staff reports, so measuring the
+    /// bottom with it overshot a three-line staff by 2 sp and left a
+    /// one-line staff's box hanging entirely below its single line.
     static func drawRangeBoxes(
         system: LayoutSystem,
         selection: SelectionRenderState,
@@ -48,21 +55,25 @@ extension ScoreLayerBuilder {
         }
         guard !staffAddressSet.isEmpty else { return }
 
-        let staffYs = staffAddressSet.compactMap { address -> CGFloat? in
+        // Each involved staff's own origin AND line geometry: the end staves' spans are what the box's two edges
+        // are measured from, so the flat index has to survive the min/max rather than being discarded with it.
+        let staves = staffAddressSet.compactMap { address -> (y: CGFloat, geometry: StaffLineGeometry)? in
             guard let idx = system.flatIndex(for: address) else { return nil }
-            return system.staffOrigins[idx].y
+            return (system.staffOrigins[idx].y, system.geometry(atFlatIndex: idx))
         }
-        guard let topY = staffYs.min(),
-              let botY = staffYs.max()
+        guard let top = staves.min(by: { $0.y < $1.y }),
+              let bottom = staves.max(by: { $0.y < $1.y })
         else { return }
 
         let xPad = metrics.sp * 1.4
         let yPad = metrics.sp
+        let topEdge = top.y + top.geometry.barLineSpanY(sp: metrics.sp).top - yPad
+        let bottomEdge = bottom.y + bottom.geometry.barLineSpanY(sp: metrics.sp).bottom + yPad
         let rect = CGRect(
             x: minX - xPad,
-            y: topY - yPad,
+            y: topEdge,
             width: max(0, maxX - minX) + xPad * 2,
-            height: (botY - topY) + metrics.staffHeight + yPad * 2,
+            height: bottomEdge - topEdge,
         )
 
         let path = CGPath(rect: rect, transform: nil)
