@@ -32,6 +32,26 @@
             )
         }
 
+        /// The same shape as `singleVoiceSample` on a staff that draws `lineCount` lines, and pitched at the treble
+        /// staff's top line (F5, `step` 4) — which is fixed for every line count, so the note itself doesn't move
+        /// between the arguments and only the band under test does.
+        private func percussionSample(lineCount: Int) -> Score {
+            let measure = Measure(voices: [
+                Voice(elements: [
+                    .clef(Clef(concertClefType: "G")),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 77, tpc: 13)])),
+                ]),
+            ])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "perc"),
+                    staves: [Staff(lineCount: lineCount, measures: [measure])],
+                )],
+            )
+        }
+
         private func layout(_ score: Score, staffSize: CGFloat = 28) -> LayoutDocument {
             var options = ScoreViewOptions()
             options.staffSize = staffSize
@@ -61,6 +81,33 @@
 
             #expect(rect.minY == staffTop - sp)
             #expect(rect.height == 6 * sp)
+        }
+
+        /// The band is the staff's own barline span with 1 sp clear on each side, so it tracks the staff the caret is
+        /// actually in: 6 sp at five lines (as above), 4 sp at three, and — a one-line staff having zero height of
+        /// its own — the ±2 sp MuseScore gives its barline, which keeps the caret a column rather than a sliver.
+        ///
+        /// Three lines is what discriminates a per-staff span from the score-global `StaffMetrics.staffHeight` the
+        /// band used to be measured with: it is the only count where the answer is neither the five-line height nor
+        /// the one-line special case. One line pins the CENTERING, which a height-only check can't see — measured
+        /// from `staffHeight` the band was the right 6 sp there but hung 2 sp too low, straddling nothing.
+        @Test(
+            "The band spans the staff's own barline span, one sp clear on each side",
+            arguments: [(lineCount: 5, top: -1.0, height: 6.0), (3, -1.0, 4.0), (1, -3.0, 6.0)],
+        )
+        func bandFollowsLineCount(lineCount: Int, top: Double, height: Double) throws {
+            let score = percussionSample(lineCount: lineCount)
+            let doc = layout(score)
+            let item = noteItem()
+            let system = try #require(doc.systems.first)
+            let flatIndex = try #require(system.flatIndex(for: item.staff))
+            let sp = doc.metrics.sp
+            let staffTop = system.origin.y + system.staffOrigins[flatIndex].y
+
+            let rect = try #require(doc.editingCaretRect(for: item, in: score))
+
+            #expect(abs(rect.minY - (staffTop + CGFloat(top) * sp)) < 0.001)
+            #expect(abs(rect.height - CGFloat(height) * sp) < 0.001)
         }
 
         @Test("The rect's X range matches the engine's cursor frame")

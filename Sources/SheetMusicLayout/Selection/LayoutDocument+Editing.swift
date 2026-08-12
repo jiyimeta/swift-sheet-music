@@ -49,21 +49,26 @@ extension LayoutDocument {
         return item
     }
 
-    /// Whether `point` is close enough to a staff for the near-miss rescue to mean anything: inside the five lines,
-    /// or within the same slop the rescue itself reaches, so ledger-line notes and stems still count. Anything
-    /// further out — page margins, the gap between systems — is empty paper, where a tap means "nothing" rather than
-    /// "whatever note is nearest".
+    /// Whether `point` is close enough to a staff for the near-miss rescue to mean anything: inside the staff's own
+    /// drawn lines, or within the same slop the rescue itself reaches, so ledger-line notes and stems still count.
+    /// Anything further out — page margins, the gap between systems — is empty paper, where a tap means "nothing"
+    /// rather than "whatever note is nearest".
+    ///
+    /// Measured per staff, through `StaffLineGeometry.barLineSpanY(sp:)`. The score-global
+    /// `StaffMetrics.staffHeight` is 4 sp for every staff, which is the height of a FIVE-line one: against a 3-line
+    /// staff that band reached 2 sp past the bottom line, and since staves now stack by their own line count, that
+    /// overshoot lands on the next staff's paper and lets a tap there be rescued to a note in it.
     ///
     /// Deliberately measured with `editingSlopHalfExtent`, the same number the box uses: a gate tighter than the box
     /// it guards would refuse rescues the box was built to make, and a looser one would let the rescue reach where
     /// the box can't.
     private func isOnStaff(_ point: CGPoint) -> Bool {
-        let staffHeight = metrics.staffHeight
         for system in systems {
-            for origin in system.staffOrigins {
-                let top = system.origin.y + origin.y
-                if point.y >= top - Self.editingSlopHalfExtent,
-                   point.y <= top + staffHeight + Self.editingSlopHalfExtent
+            for (flatIndex, origin) in system.staffOrigins.enumerated() {
+                let span = system.geometry(atFlatIndex: flatIndex).barLineSpanY(sp: metrics.sp)
+                let staffTop = system.origin.y + origin.y
+                if point.y >= staffTop + span.top - Self.editingSlopHalfExtent,
+                   point.y <= staffTop + span.bottom + Self.editingSlopHalfExtent
                 {
                     return true
                 }
@@ -122,14 +127,20 @@ extension LayoutDocument {
         return CGRect(x: frame.minX, y: band.top, width: max(frame.width, minimumWidth), height: band.height)
     }
 
-    /// Vertical band (document coords) spanning `staff`'s five lines, one `sp` clear on each side, within the
+    /// Vertical band (document coords) spanning `staff`'s own drawn lines, one `sp` clear on each side, within the
     /// `LayoutSystem` that contains `measureIndex`. `nil` when the staff/measure can't be located.
+    ///
+    /// The span comes from `StaffLineGeometry.barLineSpanY(sp:)` rather than a fixed 4 sp, so the band tracks the
+    /// staff a caret is actually in: 6 sp about the top line for five lines (unchanged), 4 sp for three, and — since
+    /// a one-line staff's own height is zero — the ±2 sp MuseScore gives its barline, which keeps the caret a
+    /// visible column instead of collapsing it to a 2 sp sliver a notehead pokes out of on both sides.
     private func staffBand(for staff: StaffAddress, measureIndex: Int) -> (top: CGFloat, height: CGFloat)? {
         guard let system = systems.first(where: { candidate in
             candidate.measures.contains { $0.measureIndex == measureIndex }
         }), let flatIndex = system.flatIndex(for: staff) else { return nil }
         let sp = metrics.sp
         let staffTop = system.origin.y + system.staffOrigins[flatIndex].y
-        return (top: staffTop - sp, height: 6 * sp)
+        let span = system.geometry(atFlatIndex: flatIndex).barLineSpanY(sp: sp)
+        return (top: staffTop + span.top - sp, height: span.bottom - span.top + 2 * sp)
     }
 }

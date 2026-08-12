@@ -89,6 +89,27 @@
             )
         }
 
+        /// One voice on a staff that draws `lineCount` lines: a G clef and a whole note BELOW the staff (E4, `step`
+        /// −4, where a five-line staff's bottom line would be). The mirror of `sampleWithNoteAboveStaff`, for probing
+        /// the gate's bottom edge — the one that moves with the line count. A whole note so the probe below it can't
+        /// land on a stem.
+        private func sampleWithNoteBelowStaff(lineCount: Int) -> Score {
+            let measure = Measure(voices: [
+                Voice(elements: [
+                    .clef(Clef(concertClefType: "G")),
+                    .chord(Chord(duration: .whole, notes: [Note(pitch: 64, tpc: 18)])),
+                ]),
+            ])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "perc"),
+                    staves: [Staff(lineCount: lineCount, measures: [measure])],
+                )],
+            )
+        }
+
         private func layout(_ score: Score, staffSize: CGFloat = 28) -> LayoutDocument {
             var options = ScoreViewOptions()
             options.staffSize = staffSize
@@ -319,6 +340,59 @@
             )
             // The rescue has something to find — so a `nil` result below can only be the on-staff gate at work, not
             // an empty slop box.
+            #expect(tester.itemIDs(in: slop).contains(.note(id)))
+
+            #expect(doc.editingHitTest(at: probe, activeVoice: 0) == nil)
+        }
+
+        /// The gate's bottom edge follows the staff's own line count, not the score-global 4 sp
+        /// `StaffMetrics.staffHeight` reports for every staff. Three lines is the discriminating count: the band ends
+        /// 2 sp above where the retired rule put it, and since 1.11.0 stacks staves by their own line count, that
+        /// overshoot is another staff's paper — a tap there was rescued to a note in THIS staff.
+        ///
+        /// Built as the mirror of `offStaffGateRefusesEvenWhenSlopBoxIsNotEmpty`: the probe sits one point past the
+        /// correct band's bottom edge with the below-staff note inside its slop box, so only the gate can refuse it.
+        /// The assertion that the probe is still inside the RETIRED band is what makes this fail on the old rule
+        /// rather than merely pass on the new one.
+        @Test("A tap below a three-line staff's own band returns nil even with a note in its slop box")
+        func offStaffGateBottomEdgeFollowsLineCount() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let doc = layout(sampleWithNoteBelowStaff(lineCount: 3))
+            let tester = ScoreHitTester(document: doc)
+            let system = try #require(doc.systems.first)
+            let measure = try #require(system.measures.first)
+            let base = CGPoint(x: system.origin.x + measure.origin.x, y: system.origin.y + measure.origin.y)
+            let sp = system.sp
+            let staffTop = system.origin.y + system.staffOrigins[0].y
+
+            var noteID: NoteID?
+            var noteAnchor: CGPoint?
+            for el in measure.elements {
+                guard case let .chord(notes, _, stem, _, _, _, _, _, _, _, _) = el, let n = notes.first
+                else { continue }
+                noteID = n.noteID
+                noteAnchor = CGPoint(
+                    x: base.x + n.origin.x + n.mirrorDx(stem: stem, sp: sp), y: base.y + n.origin.y,
+                )
+            }
+            let id = try #require(noteID)
+            let anchor = try #require(noteAnchor)
+
+            // Three lines span 2 sp from the top line, so that is where the band ends and the gate's slop begins.
+            let bandBottom = staffTop + 2 * sp
+            // The note must sit below the band for this probe to mean anything.
+            #expect(anchor.y > bandBottom)
+            let probe = CGPoint(x: anchor.x, y: bandBottom + LayoutDocument.editingSlopHalfExtent + 1)
+            // Still inside the band the retired 4 sp rule drew, so the old code accepts this probe and rescues.
+            #expect(probe.y < staffTop + 4 * sp + LayoutDocument.editingSlopHalfExtent)
+
+            // A near miss, not an on-target hit.
+            #expect(tester.hitTest(at: probe) == nil)
+            let slop = CGRect(
+                x: probe.x - LayoutDocument.editingSlopHalfExtent, y: probe.y - LayoutDocument.editingSlopHalfExtent,
+                width: LayoutDocument.editingSlopHalfExtent * 2, height: LayoutDocument.editingSlopHalfExtent * 2,
+            )
+            // The rescue has something to find, so a nil below can only be the gate.
             #expect(tester.itemIDs(in: slop).contains(.note(id)))
 
             #expect(doc.editingHitTest(at: probe, activeVoice: 0) == nil)

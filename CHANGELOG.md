@@ -7,6 +7,24 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- The editing caret's band and the editing hit-test's on-staff gate
+  follow the staff's own line count. Both were written against
+  `StaffMetrics.staffHeight`, which is 4 sp for every staff — the height
+  of a FIVE-line one — and 1.11.0 is the release that made that false:
+  it reads `Staff.lineCount`, draws each staff its own number of lines,
+  and stacks staves by their own height. So on a 3-line staff the caret
+  ran 2 sp past the bottom line and the gate reached into the next
+  staff's paper, where a tap was rescued to a note in the staff above
+  it; on a 1-line staff, whose own height is zero, the band was the
+  right 6 sp but hung 2 sp too low, straddling nothing. Both now measure
+  through `StaffLineGeometry.barLineSpanY(sp:)` — the same per-staff
+  span the barline, the playback cursor and the loop highlight already
+  use, including MuseScore's ±2 sp special case for a single line
+  (`dom/barline.cpp:256-291`), which is what keeps the caret a visible
+  column there. Five-line staves are unchanged.
+
 ## [1.11.0] - 2026-08-12
 
 ### Fixed
