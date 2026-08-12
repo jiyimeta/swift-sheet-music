@@ -54,16 +54,19 @@
         // MARK: - Playback cursor
 
         /// The cursor rect spans the staves it covers, so on a single
-        /// staff its height IS that staff's drawn height: 4 sp at five
-        /// lines, 2 sp at three, and zero at one — where the top and
-        /// bottom line are the same line.
+        /// staff its height is that staff's own barline span: 4 sp at
+        /// five lines, 2 sp at three, and 4 sp again at one — the ±2 sp
+        /// about the single line that keeps a one-line staff's stroke
+        /// from collapsing (`dom/barline.cpp:256-291`). Sizing it by the
+        /// staff's DRAWN height instead would be 0 there, i.e. an
+        /// invisible cursor on a drumset-only score.
         ///
-        /// Asserted at all three counts rather than as a 5-vs-1 delta:
-        /// a renderer that halved the height, or one that subtracted a
-        /// fixed 4 sp, reproduces the delta but not the middle case.
+        /// Three lines is what discriminates: it is the only count where
+        /// the answer is neither the five-line reference height nor the
+        /// one-line special case.
         @Test(
-            "The playback cursor is as tall as the staff's drawn height",
-            arguments: [(lineCount: 5, spans: 4.0), (3, 2.0), (1, 0.0)],
+            "The playback cursor is as tall as the staff's barline span",
+            arguments: [(lineCount: 5, spans: 4.0), (3, 2.0), (1, 4.0)],
         )
         func cursorHeightFollowsLineCount(
             lineCount: Int, spans: Double,
@@ -102,17 +105,19 @@
                     for: .beat(measureIndex: 0, tickInMeasure: 0), in: score,
                 ))
                 #expect(abs(byItem.height - byBeat.height) < 0.001)
-                let expected = system.geometry(atFlatIndex: 0)
-                    .height(sp: system.sp)
-                #expect(abs(byItem.height - expected) < 0.001)
+                let span = try #require(system.systemStartBarLine)
+                #expect(
+                    abs(byItem.height - (span.bottom - span.top)) < 0.001,
+                )
             }
         }
 
         // MARK: - Loop highlight
 
+        /// Same span as the cursor; see `cursorHeightFollowsLineCount`.
         @Test(
-            "The loop highlight band is as tall as the drawn staff",
-            arguments: [(lineCount: 5, spans: 4.0), (3, 2.0), (1, 0.0)],
+            "The loop highlight band is as tall as the barline span",
+            arguments: [(lineCount: 5, spans: 4.0), (3, 2.0), (1, 4.0)],
         )
         func loopHighlightHeightFollowsLineCount(
             lineCount: Int, spans: Double,

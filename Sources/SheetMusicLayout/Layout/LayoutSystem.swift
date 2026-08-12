@@ -101,20 +101,6 @@ public struct LayoutSystem: Sendable, Equatable {
             : .standard
     }
 
-    /// System-local Y of the BOTTOM LINE of the last staff — where the
-    /// stack of drawn staves ends.
-    ///
-    /// Not `staffOrigins.last!.y + metrics.staffHeight`:
-    /// `StaffMetrics.staffHeight` is the five-line REFERENCE height that
-    /// step→Y placement is expressed in, and a staff that draws fewer
-    /// lines ends higher than that. Zero extra for a one-line staff,
-    /// whose single line IS its origin.
-    public var staffStackBottomY: CGFloat {
-        guard let last = staffOrigins.last else { return 0 }
-        return last.y
-            + geometry(atFlatIndex: staffOrigins.count - 1).height(sp: sp)
-    }
-
     /// System-local X and Y span of the vertical stroke every renderer
     /// draws at a system's left edge — MuseScore's system-begin barline
     /// (`MeasureLayout::createSystemBeginBarLine`,
@@ -132,6 +118,13 @@ public struct LayoutSystem: Sendable, Equatable {
     /// past a one-line bottom staff; deriving it from that staff's
     /// (zero) height alone would collapse a single one-line staff's
     /// stroke to a dot.
+    ///
+    /// The playback cursor and the loop highlight take their vertical
+    /// span from here too. They want "the system's staves, top to
+    /// bottom", which is the same question — and the same one-line
+    /// answer keeps them visible: a rect sized by that staff's (zero)
+    /// drawn height would have no height at all on a score whose
+    /// systems are a single one-line staff.
     public var systemStartBarLine: (x: CGFloat, top: CGFloat, bottom: CGFloat)? {
         guard let first = staffOrigins.first,
               let last = staffOrigins.last else { return nil }
