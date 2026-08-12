@@ -564,7 +564,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// No-op if the engine isn't prepared, or for drum staves (the
     /// program byte is ignored on MIDI channel 9).
     func loadProgram(forStaff idx: Int, program: UInt8) {
-        guard let midiCh = staffMIDIChannels[idx], midiCh != 9 else { return }
+        guard let midiCh = staffMIDIChannels[idx] else { return }
         loadProgram(onMIDIChannel: midiCh, program: program)
     }
 
@@ -573,24 +573,35 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// instrument) strip, which for a multi-instrument part is not the
     /// same thing as any one staff.
     func loadProgram(forChannel id: MixerChannel.Kind, program: UInt8) {
-        guard let midiCh = instrumentMIDIChannels[id], midiCh != 9 else { return }
+        guard let midiCh = instrumentMIDIChannels[id] else { return }
         loadProgram(onMIDIChannel: midiCh, program: program)
     }
 
+    /// A program change on the GM drum channel selects the KIT, so it is
+    /// routed to the percussion unit's bank 128 rather than to a melodic
+    /// preset in bank 0. Both this and its callers used to refuse
+    /// channel 9 outright, which had two consequences: a host's drum-kit
+    /// picker changed nothing, and the score's OWN authored kit never
+    /// arrived either — `postProcessForMIDISynth` strips the SMF's
+    /// tick-0 program for every mixer-managed channel, and the drum
+    /// channel is one, so nothing was left to send it.
     private func loadProgram(onMIDIChannel midiCh: UInt8, program: UInt8) {
         if let backend {
             backend.setProgram(channel: midiCh, program: program)
             return
         }
-        guard let melodicSynth else { return }
+        // 9 is the GM drum channel. Named locally rather than reaching for
+        // `MidiRenderer.drumChannel`, which is internal to SheetMusicMIDI.
+        let isDrum = midiCh == 9
+        guard let unit = isDrum ? percussionSynth : melodicSynth else { return }
         MIDISynthBuilder.preloadPreset(
-            into: melodicSynth,
-            bankMSB: 0, bankLSB: 0, program: program,
+            into: unit,
+            bankMSB: isDrum ? 128 : 0, bankLSB: 0, program: program,
             onChannel: midiCh,
         )
         let pcStatus = UInt32(0xC0) | UInt32(midiCh & 0x0F)
         _ = MusicDeviceMIDIEvent(
-            melodicSynth.audioUnit, pcStatus, UInt32(program), 0, 0,
+            unit.audioUnit, pcStatus, UInt32(program), 0, 0,
         )
     }
 

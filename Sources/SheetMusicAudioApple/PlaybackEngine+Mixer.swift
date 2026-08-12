@@ -79,9 +79,8 @@ extension PlaybackEngine {
                 partName: labels.partName,
                 instrumentName: labels.instrumentName,
                 volume: Float(max(0, min(127, strip.instrument.channel.volume))) / 127,
-                program: strip.instrument.useDrumset
-                    ? nil
-                    : UInt8(clamping: strip.instrument.channel.program),
+                program: UInt8(clamping: strip.instrument.channel.program),
+                isDrums: strip.instrument.useDrumset,
             ))
         }
         channels.append(MixerChannel(

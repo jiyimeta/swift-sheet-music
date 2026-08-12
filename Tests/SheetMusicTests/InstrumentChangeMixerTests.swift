@@ -171,6 +171,41 @@
                 })
             }
 
+            /// A drum strip's program is its KIT, and it is selectable — so the strip reports it and a program
+            /// change reaches the synth. Both used to be refused: `rebuildMixerChannels` reported `nil` for a
+            /// `useDrumset` strip and `loadProgram` bailed out on channel 9, which left a host's kit picker
+            /// changing nothing AND the score's own authored kit never arriving, since
+            /// `postProcessForMIDISynth` strips the SMF's tick-0 program for every mixer-managed channel and the
+            /// drum channel is one.
+            @Test("a drum strip reports its kit, and a kit change reaches the drum channel")
+            func drumStripProgramIsReportedAndSent() throws {
+                let drums = Instrument(
+                    id: "drumset", longName: "Drums",
+                    channels: [InstrumentChannel(program: 8)], useDrumset: true,
+                )
+                let score = Score(
+                    division: 480,
+                    parts: [Part(
+                        id: "P1", instrument: drums,
+                        staves: [Staff(measures: [Measure(voices: [Voice(elements: [])])])],
+                    )],
+                    systemMeasures: [SystemMeasure()],
+                )
+                let backend = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                try engine.prepare(score: score)
+
+                let strip = try #require(engine.mixerChannels.first { $0.id != .metronome })
+                #expect(strip.isDrums)
+                #expect(strip.program == 8)
+
+                backend.clearRecordings()
+                engine.setProgram(forChannel: strip.id, to: 25)
+                // 9 is the GM drum channel, which every drum strip lands on.
+                #expect(backend.programSends.contains { $0.channel == 9 && $0.program == 25 })
+                #expect(engine.mixerChannels.first { $0.id == strip.id }?.program == 25)
+            }
+
             /// A host that groups its strips by part needs the two halves of the label separately, so the engine
             /// publishes them beside the composed `name` rather than leaving the host to re-split it — which would
             /// fail on exactly the strips whose suffix is deliberately suppressed.

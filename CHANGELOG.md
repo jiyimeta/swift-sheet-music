@@ -84,6 +84,22 @@ and this project adheres to
   package — the Android engine never put the click in `mixerChannels`,
   so only the Apple engine had the bug.
 
+- A drum strip's kit can be changed, and the score's authored kit is
+  applied at all. A program change on the GM drum channel selects the
+  KIT, but `loadProgram` refused channel 9 outright and
+  `rebuildMixerChannels` reported `program: nil` for a `useDrumset`
+  strip — so a host's kit picker changed nothing, and, because
+  `postProcessForMIDISynth` strips the SMF's tick-0 program for every
+  mixer-managed channel and the drum channel is one, the kit the score
+  asked for never arrived either: every drum part played whatever the
+  SoundFont's default kit happened to be. The strip now reports its
+  program, the change reaches the synth (bank 128 on the percussion unit
+  for the AUMIDISynth path; a plain program change for the SwiftySynth
+  backend, whose percussion channel already interprets it as the kit),
+  and the new `MixerChannel.isDrums` tells a host to offer the drum
+  catalog rather than the melodic one. `program == nil` now means the
+  metronome and nothing else.
+
 - A mixer strip reports the instrument that drives it, rather than the
   part's own label. The instrument name read `<longName>` first, but
   MuseScore prints `longName` at the left of the staff — it is the PART's
@@ -104,6 +120,11 @@ and this project adheres to
   `program` hides the program picker. `PlaybackEngine.setSoloed` ignores
   a channel that isn't on the solo bus, so `isSoloed` can never read back
   `true` there whatever the host sends.
+
+- `MixerChannel.isDrums`, so a host offers the drum-kit catalog rather
+  than the melodic one on a strip whose program is a kit. Distinct from
+  the `program == nil` test it replaces, which now identifies only the
+  metronome — see the drum-kit fix above.
 
 - `MixerChannel.partName` and `MixerChannel.instrumentName`, beside the
   composed `name`. A mixer laid out in groups titles the group with the

@@ -53,10 +53,17 @@ public struct MixerChannel: Sendable, Equatable, Identifiable {
     /// to raise it on a strip that isn't on the solo bus, so it stays
     /// `false` on the metronome however a host drives the engine.
     public var isSoloed: Bool
-    /// GM program (0...127) currently driving the staff sampler.
-    /// `nil` for the metronome strip — its sound is fixed (Hi/Low
-    /// Wood Block) and the picker is hidden in the UI.
+    /// GM program (0...127) currently driving the strip. On a drum strip
+    /// this is the KIT — a program number in bank 128 — which is why it
+    /// is reported rather than hidden: the kit is selectable, and a host
+    /// that offers a picker needs to know which one is loaded.
+    /// `nil` only for the metronome, whose sound is fixed (Hi/Low Wood
+    /// Block) and whose picker stays hidden.
     public var program: UInt8?
+    /// Whether this strip plays a drum kit, so a host offers the drum
+    /// catalog rather than the melodic one. `false` for the metronome,
+    /// which offers neither.
+    public let isDrums: Bool
 
     public init(
         id: Kind,
@@ -67,11 +74,13 @@ public struct MixerChannel: Sendable, Equatable, Identifiable {
         isMuted: Bool = false,
         isSoloed: Bool = false,
         program: UInt8? = nil,
+        isDrums: Bool = false,
     ) {
         self.id = id
         self.name = name
         self.partName = partName
         self.instrumentName = instrumentName
+        self.isDrums = isDrums
         self.volume = volume
         self.isMuted = isMuted
         self.isSoloed = isSoloed
