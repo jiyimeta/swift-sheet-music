@@ -306,6 +306,9 @@ semantic-equivalence comparison: `midi01`–`midi03`, `midiPortExport`,
 Major features supported by the renderer:
 
 - multi-staff / multi-part scores, with per-instrument MIDI channel/port
+- per-staff line counts (`<StaffType><lines>`), e.g. 1- and 3-line
+  percussion staves, with line-count-aware barline spans, ledger-line
+  bounds, rest placement and percussion-clef / time-signature centering
 - multiple `<Channel>` flavours per instrument (normal, pizzicato, …)
 - multi-voice measures with same-pitch overlap resolution ("muted unison")
 - `<startRepeat>` / `<endRepeat>` expansion + Volta-aware playback filtering

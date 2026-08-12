@@ -47,6 +47,7 @@ were hand-authored specifically for the swift-sheet-music test suite:
 
   multiPartMixedStaves.mscx
   harmony-basic.mscx
+  staff-line-count.mscx
 
 This file is contributed under the same MIT license that applies to
 `Sources/` in this repository. The full MIT license text is in the
