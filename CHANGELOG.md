@@ -7,6 +7,24 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- A ninth `EditIntent` case, `.writeRest(at:duration:)`, wire discriminator 13 — the rest key's own meaning: make
+  this timed slot a rest of THIS length, whatever is in it now. Over a rest that is the re-time `.setRestDuration`
+  already did; over a note it is the delete paired with the re-time, as one undo step. A length outrunning the bar
+  is spelled as a run of rests across the barline, and one filling the bar from beat one is promoted to `.measure`,
+  both from the same planners `.setRestDuration` uses.
+
+  Not expressible as `.composite([.delete, .setRestDuration])`, which is what makes it a case rather than a
+  convenience: `.delete` collapses a bar it empties into a single measure rest, so the re-time would then be
+  splicing a bar that had already lost the subdivision — throwing away the very length the caller was stating.
+  `.delete` keeps its collapse, because a delete key means "empty this" while this means "make it this long", and
+  the two want opposite spellings of the same underlying edit.
+
+  The payload is the existing `SlotDurationIntentWire`, shared with `.setRestDuration` and `.setChordDuration`: the
+  three really do carry the same two scalars, and the discriminator is the only thing telling them apart on the
+  wire.
+
 ## [1.11.0] - 2026-08-12
 
 ### Fixed

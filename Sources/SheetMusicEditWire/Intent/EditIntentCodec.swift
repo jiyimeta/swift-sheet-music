@@ -44,9 +44,10 @@ import Wirelet
 /// 10 = createTuplet(CreateTupletIntentWire)
 /// 11 = removeTuplet(VoiceElementIDWire)
 /// 12 = writeNote(WriteNoteIntentWire)
+/// 13 = writeRest(SlotDurationIntentWire)
 /// ```
 ///
-/// Cases 5…11 were appended in SP1 and 12 in SP2; 0…4 predate them and must keep their indices and byte layout.
+/// Cases 5…11 were appended in SP1 and 12…13 in SP2; 0…4 predate them and must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -302,6 +303,9 @@ public enum EditIntentWire {
     case removeTuplet(VoiceElementIDWire)
     /// Appended in SP2 — index 12. Never renumber anything above it.
     case writeNote(WriteNoteIntentWire)
+    /// Appended in SP2 — index 13. Shares `SlotDurationIntentWire` with `setRestDuration` / `setChordDuration`:
+    /// the payload really is the same two scalars, and the discriminator is what tells the three apart.
+    case writeRest(SlotDurationIntentWire)
 
     public init(from intent: EditIntent) {
         switch intent {
@@ -342,6 +346,8 @@ public enum EditIntentWire {
             self = .removeTuplet(VoiceElementIDWire(from: location))
         case let .writeNote(location, pitch, tpc, duration):
             self = .writeNote(WriteNoteIntentWire(location: location, pitch: pitch, tpc: tpc, duration: duration))
+        case let .writeRest(location, duration):
+            self = .writeRest(SlotDurationIntentWire(location: location, duration: duration))
         }
     }
 
@@ -394,6 +400,9 @@ public enum EditIntentWire {
         case let .writeNote(wire):
             let decoded = try wire.decoded()
             return .writeNote(at: decoded.at, pitch: decoded.pitch, tpc: decoded.tpc, duration: decoded.duration)
+        case let .writeRest(wire):
+            let decoded = try wire.decoded()
+            return .writeRest(at: decoded.at, duration: decoded.duration)
         }
     }
 }

@@ -118,26 +118,7 @@ public final class ScoreEditSession {
     private static func command(for intent: EditIntent, in score: Score, depth: Int) throws -> (any EditCommand)? {
         switch intent {
         case let .inputNote(location, pitch, tpc, duration):
-            let write = InputNote(at: location, pitch: pitch, tpc: tpc)
-            guard let duration else { return write }
-            let slot = VoiceElementID(location)
-            // A length change inside a tuplet is refused by the engine, and the refusal takes the note write down
-            // with it — the second and later notes of a triplet simply never appear. Inside a tuplet the note is
-            // written at whatever length the slot already has.
-            guard !isInTuplet(slot, in: score) else { return write }
-            // The armed length may overrun the barline. Ask the cross-bar planner FIRST: SetRestDuration refuses
-            // for four reasons besides tuplets, and every one of those refusals would take the note write with it.
-            // iOS only escapes the common case because this interception runs before the composite is built.
-            if let plan = CrossBarInputPlanner.plan(
-                .chord(Chord(duration: duration, notes: [Note(pitch: pitch, tpc: tpc)])),
-                duration: duration, at: slot, in: score,
-            ) {
-                return CompositeEditCommand(commands: plan.commands, location: plan.head)
-            }
-            return CompositeEditCommand(
-                commands: [SetRestDuration(at: slot, duration: duration), write],
-                location: slot,
-            )
+            return inputNoteCommand(at: location, pitch: pitch, tpc: tpc, duration: duration, in: score)
         case let .setRestDuration(location, duration):
             // The rest key has the same cross-bar hole the note key does — mirrors Folino's
             // `EditorViewModel+Input.swift`'s `writeRest(over:in:)`, which asks the same planner before falling back
@@ -200,6 +181,8 @@ public final class ScoreEditSession {
             return CompositeEditCommand(commands: commands, location: first.affectedLocation)
         case let .writeNote(location, pitch, tpc, duration):
             return try writeNoteCommand(at: location, pitch: pitch, tpc: tpc, duration: duration, in: score)
+        case let .writeRest(location, duration):
+            return writeRestCommand(at: location, duration: duration, in: score)
         case let .setNotePitch(location, pitch, tpc, accidental):
             return retuneCommand(at: location, pitch: pitch, tpc: tpc, accidental: accidental, in: score)
         case .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet, .removeTuplet:
@@ -209,6 +192,69 @@ public final class ScoreEditSession {
             // budget, not because they belong to a different subsystem.
             return try directNoteEditCommand(for: intent)
         }
+    }
+
+    /// `.inputNote`: write a note into a rest slot, re-timing the slot to `duration` in the same undo step.
+    ///
+    /// Inside a tuplet the length change is refused by the engine, and a composite is all-or-nothing, so that
+    /// refusal would take the note write down with it — the second and later notes of a triplet would simply never
+    /// appear. There the note is written at whatever length the slot already has.
+    ///
+    /// The cross-bar planner is asked FIRST, before the composite is built: `SetRestDuration` refuses for four
+    /// reasons besides tuplets, and every one of those refusals would otherwise take the note write with it.
+    private static func inputNoteCommand(
+        at location: RestID, pitch: Int, tpc: Int, duration: NoteDuration?, in score: Score,
+    ) -> any EditCommand {
+        let write = InputNote(at: location, pitch: pitch, tpc: tpc)
+        guard let duration else { return write }
+        let slot = VoiceElementID(location)
+        guard !isInTuplet(slot, in: score) else { return write }
+        if let plan = CrossBarInputPlanner.plan(
+            .chord(Chord(duration: duration, notes: [Note(pitch: pitch, tpc: tpc)])),
+            duration: duration, at: slot, in: score,
+        ) {
+            return CompositeEditCommand(commands: plan.commands, location: plan.head)
+        }
+        return CompositeEditCommand(
+            commands: [SetRestDuration(at: slot, duration: duration), write],
+            location: slot,
+        )
+    }
+
+    /// `.writeRest`: make the slot a rest of `duration`, whatever is in it now.
+    ///
+    /// Three shapes:
+    ///
+    /// 1. The length outruns the bar — a run of rests across the barline, spelled by the same planner a note uses
+    ///    (minus the ties, which rests don't take). The plan REPLACES the slot's contents, so it subsumes the
+    ///    delete: issuing a separate one would re-splice what the plan just laid down.
+    /// 2. The slot already holds a rest — the re-time alone, which is exactly `.setRestDuration`.
+    /// 3. The slot holds a note — the delete paired with the re-time, as one composite so it is one undo step.
+    ///
+    /// That delete is the PLAIN one. Routing it through `FullMeasureRestCollapse` — what `.delete` does — would
+    /// collapse a bar this empties into a single measure rest, throwing away both the length the caller just stated
+    /// and the bar's remaining subdivision. `.delete` keeps the collapse because ⌫ means "empty this"; this intent
+    /// means "make it this long", and the two want opposite spellings.
+    ///
+    /// A bar-filling length still lands as `.measure`, via `RestDurationPromotion` — the same rule reached from the
+    /// other direction. The promotion is computed against the pre-delete score, which gives the same answer: it asks
+    /// whether any chord PRECEDES the slot, and the slot itself is not among those.
+    ///
+    /// `nil` when the slot holds no timed element at all — a clef or a time signature is not something to rest over.
+    private static func writeRestCommand(
+        at location: VoiceElementID, duration: NoteDuration, in score: Score,
+    ) -> (any EditCommand)? {
+        guard case let .chord(current)? = score[location] else { return nil }
+        if let plan = CrossBarInputPlanner.plan(.rest, duration: duration, at: location, in: score) {
+            return CompositeEditCommand(commands: plan.commands, location: plan.head)
+        }
+        let retime = SetRestDuration(
+            at: location, duration: RestDurationPromotion.promoted(duration, at: location, in: score),
+        )
+        guard !current.notes.isEmpty else { return retime }
+        return CompositeEditCommand(
+            commands: [DeleteVoiceElement(at: location), retime], location: location,
+        )
     }
 
     /// `.setNotePitch`: write the pitch onto `location` AND onto every note it is tied to, as one command.

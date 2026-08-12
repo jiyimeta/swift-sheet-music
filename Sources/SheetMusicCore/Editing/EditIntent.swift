@@ -45,4 +45,14 @@ public enum EditIntent: Sendable, Equatable {
     /// `.setChordDuration` followed by `.setNotePitch` cannot express. The chain is planned by cloning a chord, so
     /// the second intent would retune only the chain's head and leave its tail tied to it at the old pitch.
     case writeNote(at: VoiceElementID, pitch: Int, tpc: Int, duration: NoteDuration?)
+
+    /// Make the timed slot at `at` a rest of `duration`, whatever is in it now — the rest key's own meaning, over a
+    /// note as much as over a rest.
+    ///
+    /// Distinct from `.setRestDuration`, which only re-times a rest, and NOT expressible as
+    /// `.composite([.delete, .setRestDuration])`: `.delete` collapses a bar it empties into one measure rest, which
+    /// would throw away the very length this intent is stating and take the bar's remaining subdivision with it.
+    /// The delete here is the plain one, on purpose. `.delete` keeps its collapse — that is right for ⌫, which is
+    /// emptying the bar rather than stating a length.
+    case writeRest(at: VoiceElementID, duration: NoteDuration)
 }
