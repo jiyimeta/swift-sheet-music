@@ -165,6 +165,37 @@
             #expect(OMRHybridFrontEnd.filter(paths, mode: .noBeams).count == 2)
             #expect(OMRHybridFrontEnd.filter(paths, mode: .nullFrontEnd).isEmpty)
         }
+
+        /// A `truth*` mode must remove exactly the primitive it is going
+        /// to substitute — if it removed nothing, `compose` would hand
+        /// `buildScore` the raster's beams AND the oracle's, and the
+        /// bisect would measure a doubled primitive rather than a
+        /// replaced one.
+        @Test func everyTruthModeRemovesTheKindItSubstitutes() {
+            #expect(OMRHybridFrontEnd.Mode.truthBeams.substituted == .beam)
+            #expect(OMRHybridFrontEnd.Mode.truthVerticals.substituted == .vertical)
+            #expect(OMRHybridFrontEnd.Mode.truthStaffLines.substituted == .horizontal)
+            #expect(OMRHybridFrontEnd.Mode.full.substituted == nil)
+            #expect(OMRHybridFrontEnd.Mode.noBeams.substituted == nil)
+
+            let paths = [
+                PathSegment(
+                    kind: .horizontal,
+                    rect: CGRect(x: 0, y: 100, width: 400, height: 0),
+                    lineWidth: 0.6, pageIndex: 0, quad: nil,
+                ),
+                PathSegment(
+                    kind: .beam,
+                    rect: CGRect(x: 100, y: 140, width: 60, height: 2),
+                    lineWidth: 2, pageIndex: 0, quad: nil,
+                ),
+            ]
+            #expect(
+                OMRHybridFrontEnd.filter(paths, mode: .truthBeams)
+                    .allSatisfy { $0.kind != .beam },
+            )
+            #expect(OMRHybridFrontEnd.filter(paths, mode: .truthBeams).count == 1)
+        }
     }
 
     /// Score-level evaluation of the hybrid front-end against

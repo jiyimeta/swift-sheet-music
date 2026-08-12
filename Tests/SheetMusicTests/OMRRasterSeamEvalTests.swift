@@ -29,9 +29,18 @@
             var beamTp = 0
             var beamFp = 0
             var beamFn = 0
+            /// One entry per MATCHED truth beam: the fraction of its
+            /// x-range the prediction covers. Bucketed at 5% rather than
+            /// kept whole — 22,725 beams across the sweep is a list worth
+            /// tens of megabytes, and percentiles are all this reports.
+            var beamCoverageBuckets: [Int: Int] = [:]
             var skewAbsSum = 0.0
             var vTrue: [String: Int] = [:]
             var vFalse: [String: Int] = [:]
+            /// Truth verticals the front-end DID / did not emit, keyed by
+            /// `<halfSpaces>|<beamRelation>`.
+            var stemHit: [String: Int] = [:]
+            var stemMiss: [String: Int] = [:]
         }
 
         @Test func rasterPathsAgainstLabels() throws {
@@ -61,10 +70,59 @@
                     + String(format: "%.3f", totals.skewAbsSum / Double(max(1, totals.pages)))
                     + " peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB",
             )
+            printBeamCoverage(totals.beamCoverageBuckets)
+            for key in Set(totals.stemHit.keys).union(totals.stemMiss.keys).sorted() {
+                print(
+                    "[stemprofile] key=\(key) "
+                        + "hit=\(totals.stemHit[key] ?? 0) "
+                        + "miss=\(totals.stemMiss[key] ?? 0)",
+                )
+            }
             for key in Set(totals.vTrue.keys).union(totals.vFalse.keys).sorted() {
                 let t = totals.vTrue[key] ?? 0
                 let f = totals.vFalse[key] ?? 0
                 print("[vprofile] hw=\(key) true=\(t) false=\(f)")
+            }
+        }
+
+        /// Percentiles of the matched beams' x-coverage, plus how many
+        /// matches would survive candidate coverage gates.
+        ///
+        /// The counts at 0.5 / 0.8 / 0.95 are what a gated `beamPR` would
+        /// report at each threshold. Printing all three, rather than
+        /// picking one now, is deliberate: the shortfall a correct
+        /// detector still shows (its slab stops at the outermost stem's
+        /// ink) has never been measured, and a threshold chosen above it
+        /// would rediagnose correct beams as truncated ones.
+        func printBeamCoverage(_ buckets: [Int: Int]) {
+            let total = buckets.values.reduce(0, +)
+            guard total > 0 else {
+                print("[beamcov][SUMMARY] matched=0")
+                return
+            }
+            func percentile(_ q: Double) -> Double {
+                var seen = 0
+                let target = Int((Double(total) * q).rounded(.down))
+                for bucket in buckets.keys.sorted() {
+                    seen += buckets[bucket] ?? 0
+                    if seen > target { return Double(bucket) / 20 }
+                }
+                return 1
+            }
+            func atLeast(_ threshold: Double) -> Int {
+                buckets.filter { Double($0.key) / 20 >= threshold - 1e-9 }
+                    .values.reduce(0, +)
+            }
+            print(
+                "[beamcov][SUMMARY] matched=\(total) "
+                    + "p01=\(String(format: "%.2f", percentile(0.01))) "
+                    + "p05=\(String(format: "%.2f", percentile(0.05))) "
+                    + "p25=\(String(format: "%.2f", percentile(0.25))) "
+                    + "p50=\(String(format: "%.2f", percentile(0.50))) "
+                    + "ge0.5=\(atLeast(0.5)) ge0.8=\(atLeast(0.8)) ge0.95=\(atLeast(0.95))",
+            )
+            for bucket in buckets.keys.sorted() {
+                print("[beamcov] cov=\(Double(bucket) / 20) n=\(buckets[bucket] ?? 0)")
             }
         }
 
@@ -130,6 +188,9 @@
             totals.beamTp += beams.tp
             totals.beamFp += beams.fp
             totals.beamFn += beams.fn
+            for c in beams.coverage {
+                totals.beamCoverageBuckets[Int((c * 20).rounded(.down)), default: 0] += 1
+            }
 
             if ProcessInfo.processInfo.environment["OMR_VERTICAL_PROBE"] == "1" {
                 profileVerticals(
@@ -137,6 +198,77 @@
                     spacing: spacing, into: &totals,
                 )
             }
+            if ProcessInfo.processInfo.environment["OMR_STEM_MISS_PROBE"] == "1" {
+                profileMissedVerticals(
+                    predicted: predicted.paths, truth: truthPaths,
+                    beams: analysis.paths.filter { $0.kind == .beam },
+                    spacing: spacing, into: &totals,
+                )
+            }
+        }
+
+        /// Every TRUTH vertical, bucketed by its length and by where it
+        /// sits relative to the beams this page's front-end found, split
+        /// by whether the front-end emitted it at all.
+        ///
+        /// This is the apportionment the eighth→quarter defect needs. The
+        /// bisect says verticals carry the loss (substituting the oracle's
+        /// verticals moves duration p50 59 → 75 while substituting its
+        /// beams moves it 59 → 62), so the question is no longer WHICH
+        /// primitive but WHICH STEMS, and the two candidate answers make
+        /// different pictures here:
+        ///
+        ///   * `touchesBeam` uses a strict `quad.xRange.contains(x)`, and
+        ///     a beam's fitted x-range structurally stops at the ink of
+        ///     its own outermost stems (every stem column merges beam and
+        ///     stem into one run that lands on no ladder rung). If that is
+        ///     the mechanism, the misses pile up in `edge` — just outside
+        ///     a beam's span — while `inside` stays clean.
+        ///   * If instead the floors are simply too high for real stems,
+        ///     the misses spread across the short buckets regardless of
+        ///     any beam, i.e. mostly in `none`.
+        func profileMissedVerticals(
+            predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
+            beams: [PathSegment], spacing: Double, into totals: inout Totals,
+        ) {
+            guard spacing > 0 else { return }
+            let pBars = predicted.filter { $0.kind == "vertical" }
+            for t in truth where t.kind == "vertical" {
+                let tx = (t.rectPt[0] + t.rectPt[2]) / 2
+                let ty = (t.rectPt[1] + t.rectPt[3]) / 2
+                let found = pBars.contains { p in
+                    let dx = (p.rectPt[0] + p.rectPt[2]) / 2 - tx
+                    let dy = (p.rectPt[1] + p.rectPt[3]) / 2 - ty
+                    return (dx * dx + dy * dy).squareRoot() <= 0.5 * spacing
+                }
+                let lengthSp = (t.rectPt[3] - t.rectPt[1]) / spacing
+                let key = "\(Int((lengthSp * 2).rounded()))|"
+                    + Self.beamRelation(x: tx, beams: beams, spacing: spacing)
+                if found {
+                    totals.stemHit[key, default: 0] += 1
+                } else {
+                    totals.stemMiss[key, default: 0] += 1
+                }
+            }
+        }
+
+        /// Where `x` sits relative to the page's detected beams:
+        /// `in` (inside some beam's fitted x-range), `edge` (outside every
+        /// range but within half a staff space of one — the band a beam
+        /// cannot cover because its own outer stem's ink lives there), or
+        /// `none`.
+        static func beamRelation(
+            x: Double, beams: [PathSegment], spacing: Double,
+        ) -> String {
+            var nearest = Double.greatestFiniteMagnitude
+            for beam in beams {
+                guard let q = beam.quad else { continue }
+                let lo = Double(q.xRange.lowerBound)
+                let hi = Double(q.xRange.upperBound)
+                if x >= lo, x <= hi { return "in" }
+                nearest = min(nearest, min(abs(x - lo), abs(x - hi)))
+            }
+            return nearest <= 0.5 * spacing ? "edge" : "none"
         }
 
         /// Bucket every predicted vertical by height and width in staff

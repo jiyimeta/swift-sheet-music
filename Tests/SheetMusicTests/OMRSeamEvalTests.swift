@@ -139,6 +139,47 @@
             #expect(pr.fn == 0)
         }
 
+        /// The exact blind spot `coverage` was added for: a beam detected
+        /// at the right height but covering a third of its span is scored
+        /// a clean true positive by the vertical-only match criterion.
+        /// The tp/fp/fn half of this test is the DEFECT, asserted so it
+        /// cannot be mistaken for a metric that catches truncation; the
+        /// coverage half is what makes the defect visible.
+        @Test func aTruncatedBeamStillScoresAsATruePositiveButLowCoverage() {
+            let truth = [Self.beam(x0: 100, x1: 160, topY: 440, thickness: 2)]
+            let truncated = [Self.beam(x0: 100, x1: 120, topY: 440, thickness: 2)]
+            let pr = OMRSeamMetrics.beamPR(
+                predicted: truncated, truth: truth, staffSpacingPt: 8,
+            )
+            #expect(pr.tp == 1)
+            #expect(pr.fp == 0)
+            #expect(pr.fn == 0)
+            #expect(pr.coverage.count == 1)
+            #expect(abs((pr.coverage.first ?? 0) - 1.0 / 3) < 1e-9)
+        }
+
+        /// …and a beam that covers its truth exactly reports 1.0, or the
+        /// test above would pass for a coverage that always read low.
+        @Test func anExactBeamReportsFullCoverage() {
+            let truth = [Self.beam(x0: 100, x1: 160, topY: 440, thickness: 2)]
+            let pr = OMRSeamMetrics.beamPR(
+                predicted: truth, truth: truth, staffSpacingPt: 8,
+            )
+            #expect(pr.coverage == [1.0])
+        }
+
+        /// A prediction that OVERHANGS its truth is fully covering, not
+        /// more than fully: the ratio is clamped, so an over-long beam
+        /// cannot inflate the percentiles past 1.
+        @Test func anOverhangingBeamIsClampedToFullCoverage() {
+            let truth = [Self.beam(x0: 100, x1: 160, topY: 440, thickness: 2)]
+            let long = [Self.beam(x0: 60, x1: 200, topY: 440, thickness: 2)]
+            let pr = OMRSeamMetrics.beamPR(
+                predicted: long, truth: truth, staffSpacingPt: 8,
+            )
+            #expect(pr.coverage == [1.0])
+        }
+
         @Test func staffLineRecallAndBarlinePROnIdenticalPaths() {
             let lines = (0 ..< 5).map {
                 OMRPageLabels.Path(

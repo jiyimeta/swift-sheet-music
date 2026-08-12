@@ -229,10 +229,23 @@
         /// that one slab would satisfy both truth beams and the metric
         /// would report the fusion — which silently turns every 16th into
         /// an 8th downstream — as a perfect score.
+        ///
+        /// `coverage` exists because the match criterion above is
+        /// PURELY VERTICAL: any x-overlap at all qualifies, so a beam
+        /// detected in the right place but truncated to a fraction of its
+        /// span still scores a clean true positive. Downstream,
+        /// `fullBeamSpans` tests each stem's x against `quad.xRange`, so a
+        /// truncated beam silently drops the stems past its end out of the
+        /// group and turns their eighths into quarters — with beam recall
+        /// still reading 0.97. The fraction of each matched truth beam's
+        /// x-range that its prediction actually covers is the dimension
+        /// that was missing; it is REPORTED rather than gated, because the
+        /// honest shortfall (a slab ends where the outermost stem's ink
+        /// begins) is nonzero and its size is a measurement, not a guess.
         static func beamPR(
             predicted: [OMRPageLabels.Beam], truth: [OMRPageLabels.Beam],
             staffSpacingPt: Double,
-        ) -> (tp: Int, fp: Int, fn: Int) {
+        ) -> (tp: Int, fp: Int, fn: Int, coverage: [Double]) {
             var pairs: [(score: Double, pi: Int, ti: Int)] = []
             for (pi, p) in predicted.enumerated() {
                 for (ti, t) in truth.enumerated() {
@@ -250,11 +263,28 @@
             pairs.sort { ($0.score, $0.pi, $0.ti) > ($1.score, $1.pi, $1.ti) }
             var usedP = Set<Int>()
             var usedT = Set<Int>()
+            var coverage: [Double] = []
             for pair in pairs where !usedP.contains(pair.pi) && !usedT.contains(pair.ti) {
                 usedP.insert(pair.pi)
                 usedT.insert(pair.ti)
+                coverage.append(xCoverage(predicted[pair.pi], of: truth[pair.ti]))
             }
-            return (usedT.count, predicted.count - usedP.count, truth.count - usedT.count)
+            return (
+                usedT.count, predicted.count - usedP.count, truth.count - usedT.count,
+                coverage,
+            )
+        }
+
+        /// Fraction of `truth`'s x-range covered by `predicted`'s. A
+        /// zero-width truth beam (which the labels do not produce, but
+        /// which arithmetic must survive) counts as fully covered.
+        static func xCoverage(
+            _ predicted: OMRPageLabels.Beam, of truth: OMRPageLabels.Beam,
+        ) -> Double {
+            let span = truth.x1 - truth.x0
+            guard span > 0 else { return 1 }
+            let overlap = min(predicted.x1, truth.x1) - max(predicted.x0, truth.x0)
+            return max(0, min(1, overlap / span))
         }
 
         /// |top-edge y error| sampled at 5 x positions per MATCHED truth

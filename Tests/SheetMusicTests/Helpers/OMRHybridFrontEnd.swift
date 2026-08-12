@@ -18,21 +18,47 @@
         /// specific metric, and `nullFrontEnd` establishes the floor the
         /// real numbers have to sit far above. A harness whose floor is
         /// near its ceiling is measuring nothing.
+        /// The `truth*` modes are the BISECT, not an anti-vacuity check.
+        /// Each hands one primitive back to the oracle and leaves the rest
+        /// raster, so the duration a mode recovers is that primitive's
+        /// share of the loss — measured rather than argued. Half the
+        /// eighths on this dataset arrive as quarters, which is a report
+        /// of lost beam membership, and membership needs a beam AND the
+        /// stem whose x it must span: `truthBeams` and `truthVerticals`
+        /// separate those two without touching the front-end.
         enum Mode: String {
             case full
             case noStaffLines
             case noVerticals
             case noBeams
             case nullFrontEnd
+            case truthStaffLines
+            case truthVerticals
+            case truthBeams
+
+            /// The path kind this mode takes from the oracle instead of
+            /// the raster front-end.
+            var substituted: PathSegment.Kind? {
+                switch self {
+                case .truthStaffLines: .horizontal
+                case .truthVerticals: .vertical
+                case .truthBeams: .beam
+                default: nil
+                }
+            }
         }
 
         static func filter(_ paths: [PathSegment], mode: Mode) -> [PathSegment] {
+            if let substituted = mode.substituted {
+                return paths.filter { $0.kind != substituted }
+            }
             switch mode {
-            case .full: paths
-            case .noStaffLines: paths.filter { $0.kind != .horizontal }
-            case .noVerticals: paths.filter { $0.kind != .vertical }
-            case .noBeams: paths.filter { $0.kind != .beam }
-            case .nullFrontEnd: []
+            case .full: return paths
+            case .noStaffLines: return paths.filter { $0.kind != .horizontal }
+            case .noVerticals: return paths.filter { $0.kind != .vertical }
+            case .noBeams: return paths.filter { $0.kind != .beam }
+            case .nullFrontEnd: return []
+            default: return paths
             }
         }
 
@@ -218,6 +244,50 @@
             }
         }
 
+        /// The same composition, for the ORACLE's own `PathSegment`s —
+        /// what the `truth*` bisect modes substitute for a raster
+        /// primitive. A `.beam` carries its quad, so both fitted edges are
+        /// re-fitted through the map exactly as the label-beam overload
+        /// does; every other kind is a degenerate rect and maps as two
+        /// corners.
+        static func reframe(
+            _ paths: [PathSegment], page: OMRPageLabels, transform: PageTransform,
+        ) -> [PathSegment] {
+            guard let context = frameContext(page: page, transform: transform)
+            else { return paths }
+            return paths.map { path in
+                var out = path
+                let a = context(CGPoint(x: path.rect.minX, y: path.rect.minY))
+                let b = context(CGPoint(x: path.rect.maxX, y: path.rect.maxY))
+                out.rect = CGRect(
+                    x: min(a.x, b.x), y: min(a.y, b.y),
+                    width: abs(b.x - a.x), height: abs(b.y - a.y),
+                )
+                if let q = path.quad {
+                    let top = fit(
+                        context, x0: Double(q.xRange.lowerBound),
+                        x1: Double(q.xRange.upperBound),
+                        slope: Double(q.topSlope), intercept: Double(q.topIntercept),
+                    )
+                    let bottom = fit(
+                        context, x0: Double(q.xRange.lowerBound),
+                        x1: Double(q.xRange.upperBound),
+                        slope: Double(q.botSlope), intercept: Double(q.botIntercept),
+                    )
+                    out.quad = BeamQuad(
+                        xRange: CGFloat(min(top.x0, top.x1))
+                            ... CGFloat(max(top.x0, top.x1)),
+                        topSlope: CGFloat(top.slope),
+                        topIntercept: CGFloat(top.intercept),
+                        botSlope: CGFloat(bottom.slope),
+                        botIntercept: CGFloat(bottom.intercept),
+                        pageIndex: q.pageIndex,
+                    )
+                }
+                return out
+            }
+        }
+
         private static func fit(
             _ map: (CGPoint) -> CGPoint, x0: Double, x1: Double,
             slope: Double, intercept: Double,
@@ -322,6 +392,14 @@
                     staffSpacingPt: analysis.staffSpacingPt,
                 )
                 var pagePaths = filter(analysis.paths, mode: mode)
+                if let substituted = mode.substituted {
+                    pagePaths += reframe(
+                        oracle.walked.paths.filter {
+                            $0.pageIndex == index && $0.kind == substituted
+                        },
+                        page: page, transform: analysis.transform,
+                    )
+                }
                 if ProcessInfo.processInfo
                     .environment["OMR_HYBRID_DROP_GLYPH_VERTICALS"] == "1"
                 {
