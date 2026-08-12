@@ -269,49 +269,74 @@ stage's contribution and nothing else's. Two env vars vary it:
 numbers are not far above it, the harness is measuring nothing, and the
 same run also catches truth paths leaking into the hybrid plumbing.
 
-#### Measured 2026-08-12 — the numbers these gates are frozen at
+#### Measured 2026-08-13 — the numbers these gates are frozen at
 
-Seam level, v2, all 4650 pages, run twice byte-identical:
+Score level, hybrid vs `source.mscx`, **all 2028 scorable renders of v2**,
+against the oracle-replay ceiling on the same renders:
+
+| | pitch p50 | pitch mean | dur p50 | dur mean |
+|---|---|---|---|---|
+| oracle ceiling (perfect detector, perfect paths) | 100 | 80.5 | 82 | 72.1 |
+| **hybrid `full`** | **97** | **68.8** | **55** | **52.4** |
+
+Pitch is at 85% of the ceiling and within three points of it at the
+median; **duration is at 73% and 27 points short**. That asymmetry is the
+next lever, not a mystery: duration comes from beams and stems, and of
+the 1428 renders whose duration trails the oracle, 838 have EXACTLY
+matching note counts — so half the loss is mis-read note values rather
+than missing content.
+
+Seam level, all 4650 pages, run twice byte-identical:
 
 | | clean | frozen (degraded) |
 |---|---|---|
-| staff-line recall | **0.7593** | 0.7119 |
+| staff-line recall | 0.7593 | 0.7119 |
 | barline recall / precision | 0.9201 / 0.6740 | 0.8470 / 0.5872 |
 | beam recall / precision | 0.9663 / 0.8175 | 0.6424 / 0.4867 |
 | mean abs deskew angle | 0.002° | 1.004° |
 | peak RSS | 361MB | 624MB |
 
-Barline precision is low **by design** and is not a defect: the raster
-front-end does not separate stems from barlines (they overlap in length —
-measured peaks at 3.0 and 4.0 staff spaces), so it emits every vertical
-and lets `barlineCandidates` separate them downstream using notehead
-abutment. Accidental and clef strokes clear the 2-space floor too. The
-number that matters for verticals is the hybrid's measure-count
-agreement, not this one.
+(Those were measured before the vertical-floor change and are the
+conservative figures; barline precision is low **by design** — the
+front-end does not separate stems from barlines, since they overlap in
+length, and leaves that to `barlineCandidates` downstream.)
 
-Score level, hybrid vs `source.mscx`, 173 renders of a fixed 200-render
-subsample, against the oracle-replay ceiling on the SAME renders:
+**How these numbers moved, and what moved them.** The stage first
+measured pitch p50 = 40 / mean 42.0 on this same sweep. Three defects
+accounted for the difference, none of them in the recognition of
+anything:
 
-| configuration | pitch p50 | pitch mean | dur p50 | dur mean |
-|---|---|---|---|---|
-| oracle ceiling (perfect detector, perfect paths) | 100 | 79.4 | — | — |
-| **hybrid `full`** | **49** | **44.4** | **37** | **40.1** |
-| `noBeams` | 49 | 44.4 | 25 | 31.7 |
-| `noVerticals` | 2 | 4.7 | 4 | 9.2 |
-| `noStaffLines` | *no score at all* — 180 renders throw | | | |
-| `nullFrontEnd` | *no score at all* — 180 renders throw | | | |
+| fix | pitch p50 |
+|---|---|
+| (start) | 40 |
+| stop the gap tolerance bridging ledger lines into a staff line | 49 |
+| reject a dense ledger row on page-relative width | 52 |
+| put the vertical floor at the shortest real vertical (2.0 → 3.5 sp) | **97** |
 
-**So the classical-CV primitives cost about 35 points of pitch against a
-perfect detector.** That is this stage's contribution, and the number
-P3d inherits.
+The last one was the only major constant in the raster front-end that had
+been chosen by reasoning rather than measured, and 85% of all
+false-positive verticals were sitting under it.
+
+Two changes were tried and **reverted on measurement**, both recorded in
+the source so they are not retried: dropping verticals that fall inside a
+glyph's box (pitch p50 52 → 48), and capping vertical length at 11 staff
+spaces (52 → 23, because the vector path emits a barline as one segment
+PER STAFF while the raster merges the column, so genuine system-spanning
+barlines were being counted as false positives).
 
 The lobotomy rows are the evidence that the harness can fail, and each
-craters its own metric and only its own: `noBeams` leaves pitch
-bit-identical while removing 12 points of duration, `noVerticals`
-destroys the measure structure and with it everything, and removing
-staff lines leaves nothing to detect a staff from at all.
+craters its own metric and only its own:
 
-Origin-jitter (P3d's error budget), same renders:
+| configuration | pitch p50 | dur p50 |
+|---|---|---|
+| `full` | 49 | 37 |
+| `noBeams` | 49 (bit-identical) | 25 |
+| `noVerticals` | 2 | 4 |
+| `noStaffLines` / `nullFrontEnd` | *no score at all* — 180 renders throw | |
+
+(Measured at the 2.0 floor; the shape is what matters, not the level.)
+
+Origin-jitter, P3d's error budget:
 
 | σ (staff spaces) | pitch p50 | pitch mean |
 |---|---|---|
@@ -320,14 +345,9 @@ Origin-jitter (P3d's error budget), same renders:
 | 0.25 | 46 | 39.7 |
 | **0.5** | **20** | **16.8** |
 
-Detector origin error up to ~0.25 sp is free; at 0.5 sp pitch halves.
-Duration barely moves (37 → 36), which is consistent — it comes from
-beams and stems, not from glyph origins.
-
-Memory: every sweep prints `peakRSS`, and page bitmaps are only ever
-touched through `OMRPageBitmapLoader.withPageBitmap`, which owns the
-`autoreleasepool` so a call site cannot forget it. Run under
-`~/.claude/bin/run-with-memcap.sh <cap-mb> <log> …`.
+Up to ~0.25 sp of glyph-origin error is free; at 0.5 sp pitch halves.
+Duration barely moves, consistent with it coming from beams and stems
+rather than origins.
 
 **Frozen eval set** (spec §6.5), after the manifest exists — degrades
 every page once, with a recorded seed, into `$R/eval_frozen/`:
