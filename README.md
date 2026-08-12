@@ -335,7 +335,9 @@ design rationale lives in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - **Source code (`Sources/`)**: MIT — see [LICENSE](LICENSE).
 - **Test fixtures (`Tests/SheetMusicTests/Resources/`)**: GPL-3.0, copied
-  from the upstream MuseScore repository — see
+  from the upstream MuseScore repository — except the hand-authored
+  fixtures listed as MIT in that directory's own notice, which is
+  authoritative for the per-file split. See
   [Tests/SheetMusicTests/Resources/LICENSE](Tests/SheetMusicTests/Resources/LICENSE).
 - See [NOTICE](NOTICE) for full provenance and trademark disclosure.
 

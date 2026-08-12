@@ -68,6 +68,10 @@
             let sp = system.sp
             let origins = system.staffOrigins.map(\.y)
             #expect(origins.count == 3)
+            // Pinned, not read off `system`: `expected` is built by
+            // iterating the measures, so a regression that emptied
+            // `measures` would leave both lists empty and pass.
+            #expect(system.measures.count == 2)
 
             var expected: [(top: CGFloat, bottom: CGFloat)] = []
             for _ in 0 ..< system.measures.count {
