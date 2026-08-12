@@ -62,7 +62,9 @@
 
             /// Render one downbeat click through the backend and return the peak
             /// amplitude per 100 ms of the first 1.5 s.
-            private func clickEnvelope(metronomeSoundfontURL: URL?) async throws -> [Float] {
+            private func clickEnvelope(
+                metronomeSoundfontURL: URL?, volume: Float? = nil,
+            ) async throws -> [Float] {
                 let backend = SwiftySynthBackend(sampleRate: Self.sampleRate)
                 backend.prepare(
                     soundfontURL: Self.gmSoundfont,
@@ -92,6 +94,7 @@
                     ),
                 )
                 backend.setMetronomeMuted(false)
+                if let volume { backend.setMetronomeVolume(volume) }
 
                 let engine = AVAudioEngine()
                 let format = try #require(AVAudioFormat(
@@ -146,6 +149,26 @@
                 let message = "the 1.5 s click sample should still be sounding at 0.4-0.9 s; "
                     + "silence there means the GM wood block played instead: \(envelope)"
                 #expect(sustain(envelope) > 0.001, Comment(rawValue: message))
+            }
+
+            /// The metronome's mixer volume reaches the backend's own click mix.
+            /// It used to stop at the AUMIDISynth `MetronomeController`, so on the
+            /// backend path the click always mixed at unity: the mixer's metronome
+            /// strip could mute the click but not make it quieter, while offline
+            /// export (AUMIDISynth) obeyed the same slider.
+            @Test(
+                "the metronome's volume scales the backend's click",
+                .enabled(if: swiftySynthGMSoundfontAvailable),
+            )
+            func metronomeVolumeScalesTheClick() async throws {
+                let click = try writeLongClickSoundFont()
+                defer { try? FileManager.default.removeItem(at: click) }
+                let full = try await clickEnvelope(metronomeSoundfontURL: click, volume: 1)
+                let quiet = try await clickEnvelope(metronomeSoundfontURL: click, volume: 0.25)
+                let message = "full: \(full[2]), quarter volume: \(quiet[2])"
+                #expect(full[2] > 0.001, Comment(rawValue: message))
+                // The click is a square wave, so a gain of 0.25 is 0.25 of the peak.
+                #expect(abs(quiet[2] - full[2] * 0.25) < full[2] * 0.05, Comment(rawValue: message))
             }
 
             /// No host click (`.defaultGM`): the metronome shares the score's

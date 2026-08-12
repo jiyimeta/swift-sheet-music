@@ -7,6 +7,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- The metronome strip's volume reaches an injected `SynthBackend`. Such a
+  backend mixes its own click, and the volume stopped at the AUMIDISynth
+  `MetronomeController` — so on the backend path the click always mixed at
+  unity: the strip could mute the click but not turn it down, while offline
+  export (AUMIDISynth) obeyed the same slider. Measured, not inferred: before
+  this, rendering the same click at volume 1.0 and 0.25 gave a byte-identical
+  peak.
+
+  `SynthBackend` gains `setMetronomeVolume(_:)`, defaulted to a no-op in the
+  protocol extension so existing conformers are source-compatible, and
+  `SwiftySynthBackend` scales its metronome mix by it (skipping the mix
+  entirely at zero gain, as it already does while muted). The host-facing API
+  is unchanged — `PlaybackEngine.setVolume(forChannel: .metronome, to:)`
+  already expressed this.
+
+  Not addressed here: on the backend path the click is mixed into the
+  backend's output and therefore rides `masterGain`, where the AUMIDISynth
+  metronome deliberately joins the master stage after it. Equalizing that
+  needs the backend to expose a second output node, and is a design question
+  (should the click follow the score's gain?) rather than a slip.
+
 ## [1.13.0] - 2026-08-12
 
 ### Fixed

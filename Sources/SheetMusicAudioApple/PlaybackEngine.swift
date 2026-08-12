@@ -539,6 +539,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     func setMetronomeVolume(_ volume: Float) {
         metronome.volume = volume
+        // The injected backend mixes its own click, so the strip's volume has to
+        // reach it too — the AUMIDISynth metronome above is silent on that path.
+        backend?.setMetronomeVolume(volume)
     }
 
     func replaceMixerChannels(_ channels: [MixerChannel]) {

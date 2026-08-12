@@ -62,8 +62,9 @@ extension SwiftySynthBackend {
     }
 
     /// Render the metronome sequencer (or, when paused, its synth) into scratch
-    /// in `scratchCapacity`-frame slices and add it onto `left`/`right`. A no-op
-    /// while muted — the metronome then spends no render-thread CPU at all.
+    /// in `scratchCapacity`-frame slices and add it onto `left`/`right`, scaled
+    /// by the strip's `metronomeGain`. A no-op while muted or at zero gain —
+    /// the metronome then spends no render-thread CPU at all.
     /// Allocation-free: uses the pre-sized `shared.scratch*`.
     nonisolated static func mixMetronome(
         into left: UnsafeMutableBufferPointer<Float>,
@@ -74,6 +75,8 @@ extension SwiftySynthBackend {
         guard !shared.metronomeMuted,
               let metronomeSequencer = shared.metronomeSequencer
         else { return }
+        let gain = shared.metronomeGain
+        guard gain > 0 else { return }
         let count = left.count
         shared.scratchL.withUnsafeMutableBufferPointer { sl in
             shared.scratchR.withUnsafeMutableBufferPointer { sr in
@@ -85,8 +88,8 @@ extension SwiftySynthBackend {
                     let chunkR = UnsafeMutableBufferPointer(rebasing: sr[0 ..< n])
                     render(metronomeSequencer, chunkL, chunkR)
                     for i in 0 ..< n {
-                        left[offset + i] += chunkL[i]
-                        right[offset + i] += chunkR[i]
+                        left[offset + i] += chunkL[i] * gain
+                        right[offset + i] += chunkR[i] * gain
                     }
                     offset += n
                 }

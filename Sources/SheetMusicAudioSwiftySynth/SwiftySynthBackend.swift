@@ -37,6 +37,11 @@ public final class SwiftySynthBackend: SynthBackend {
         var metronomeSynthesizer: Synthesizer?
         var metronomeSequencer: MidiFileSequencer?
         var metronomeMuted = false
+        /// Linear gain applied to the metronome mix. Lives here rather than on
+        /// the class because the render block reads it; it survives a `prepare`
+        /// (which resets only the synth / sequencer fields), so the host's strip
+        /// volume outlives a SoundFont swap without being re-pushed.
+        var metronomeGain: Float = 1
         var isPlaying = false
         /// Pre-allocated render-thread scratch for the metronome mix, so the
         /// render block allocates nothing. Sized in `prepare`.
@@ -274,6 +279,12 @@ public final class SwiftySynthBackend: SynthBackend {
                 shared.metronomeSequencer?.seek(to: pos)
             }
             shared.metronomeMuted = muted
+        }
+    }
+
+    public func setMetronomeVolume(_ volume: Float) {
+        lock.withLockUnchecked { shared in
+            shared.metronomeGain = max(0, volume)
         }
     }
 

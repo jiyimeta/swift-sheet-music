@@ -87,6 +87,12 @@ public protocol SynthBackend: AnyObject {
     /// the beat.
     func setMetronomeMuted(_ muted: Bool)
 
+    /// Linear gain for the backend's own metronome mix (the mixer's metronome
+    /// strip). Separate from `setMetronomeMuted` — a backend that only honors
+    /// the mute can be silenced but not turned down. Persisted by the backend
+    /// across sequence / SoundFont reloads, like `setRate` / `setTuning`.
+    func setMetronomeVolume(_ volume: Float)
+
     /// Transport control. `currentTick` is the SMF-tick clock the cursor timer
     /// polls; `seek` and loop-wrap both move the transport in tick space.
     func play()
@@ -150,6 +156,11 @@ extension SynthBackend {
         get { nil }
         set { _ = newValue } // synchronous backend never fires readiness changes
     }
+
+    /// Default for a backend that renders its metronome at a fixed level: the
+    /// strip's volume is dropped rather than mis-applied. Keeps existing
+    /// conformers — including transport-only test doubles — source-compatible.
+    public func setMetronomeVolume(_: Float) {}
 
     /// Default for a backend with no end-of-sequence signal of its own: never
     /// reports the end, so the engine simply doesn't auto-stop it. Chosen over
