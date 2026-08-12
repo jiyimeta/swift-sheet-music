@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-08-12
+
 ### Added
 
 - A ninth `EditIntent` case, `.writeRest(at:duration:)`, wire discriminator 13 — the rest key's own meaning: make

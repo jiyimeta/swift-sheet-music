@@ -17,6 +17,6 @@ struct SheetMusicEngineTests {
 
     @Test("the version string matches the released version")
     func versionMatchesRelease() {
-        #expect(SheetMusicEngine.version == "1.11.0")
+        #expect(SheetMusicEngine.version == "1.12.0")
     }
 }
