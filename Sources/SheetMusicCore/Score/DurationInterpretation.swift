@@ -1,5 +1,3 @@
-import SheetMusicCore
-
 /// Decompose a `NoteDuration` into its base note length plus augmentation
 /// dots. The MSCX decoder bakes the dot count into `.fraction(...)`
 /// (e.g. a dotted quarter becomes `.fraction(3/8)`) and scales tuplet

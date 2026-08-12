@@ -25,6 +25,17 @@ and this project adheres to
   three really do carry the same two scalars, and the discriminator is the only thing telling them apart on the
   wire.
 
+### Changed
+
+- `DurationInterpretation` moved from `SheetMusicLayout` down into `SheetMusicCore`. Splitting a written duration
+  into a base value plus augmentation dots is arithmetic over `NoteDuration` — the type never touched layout, and
+  its old home put it out of reach of anything that depends on Core without depending on layout, which is exactly
+  what a platform-neutral editing core is. **Not source-breaking:** `SheetMusicLayout` now carries
+  `@_exported import SheetMusicCore`, so every existing `import SheetMusicLayout` call site resolves the name
+  unchanged. That re-export is worth having on its own — `SheetMusicLayout`'s public API is written in Core's
+  vocabulary (`Score`, `ScoreItemID`, `StaffAddress`, `NoteDuration`), so a consumer already needs those names in
+  scope, and `SheetMusicUI` has said so one layer up since before this.
+
 ## [1.11.0] - 2026-08-12
 
 ### Fixed
