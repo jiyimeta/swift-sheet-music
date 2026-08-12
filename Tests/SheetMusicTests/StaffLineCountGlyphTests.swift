@@ -168,25 +168,27 @@
         /// staff with no voice offset the predicate is false — the rest
         /// stays ON the single line.
         ///
-        /// The Y is only half of it. `Rest::getSymbol`
-        /// (`dom/rest.cpp:258-259`) picks the leger-line variant from
-        /// `line < 0 || line >= lines`, so a rest hung a line too high
-        /// on a one-line staff is also drawn as `restWholeLegerLine`
-        /// instead of `restWhole` — visible in the corpus render as a
-        /// wide stroke through every empty drumset bar. Both are
-        /// asserted: a Y-only check passes on a fixture whose glyph is
-        /// still wrong, and the glyph flag is what a reader actually
-        /// notices.
+        /// Only the Y is asserted. `Rest::getSymbol`
+        /// (`dom/rest.cpp:258-259`) also picks the leger-line variant
+        /// from the rest's line against `lines`, and getting the Y right
+        /// is what keeps that flag right here — a rest hung a line too
+        /// high on a one-line staff would be drawn as
+        /// `restWholeLegerLine`, a wide stroke through every empty
+        /// drumset bar. But `hasLegerLine` is computed by `needsLeger`
+        /// (`LayoutEngine+Placement.swift`) against the FIXED five-line
+        /// band, so on these three rows it cannot disagree with the
+        /// line-count rule whatever the Y does, and asserting it would
+        /// only look like coverage. The two rules do diverge for a whole
+        /// rest carrying a "down" multi-voice offset on a one-line
+        /// staff, where MuseScore wants the leger variant and we emit
+        /// the plain one — a known gap, tracked, and out of scope here
+        /// because it is not what this test is about.
         @Test(
-            "A whole rest takes MuseScore's line move, glyph included",
-            arguments: [
-                (lineCount: 5, dy: 1.0, leger: false),
-                (3, 0.0, false),
-                (1, 0.0, false),
-            ],
+            "A whole rest takes MuseScore's line move",
+            arguments: [(lineCount: 5, dy: 1.0), (3, 0.0), (1, 0.0)],
         )
         func wholeRestFollowsTheLineCountRule(
-            lineCount: Int, dy expected: Double, leger: Bool,
+            lineCount: Int, dy expected: Double,
         ) throws {
             guard #available(macOS 15.0, *) else { return }
             let measure = Measure(voices: [Voice(elements: [
@@ -205,20 +207,17 @@
             )
             let system = try #require(doc.systems.first)
             let origin = try #require(system.staffOrigins.first).y
-            func probe(_ element: LayoutElement) -> (y: CGFloat, leger: Bool)? {
-                if case let .rest(_, p, _, _, hasLeger) = element {
-                    return (p.y, hasLeger)
-                }
+            func probe(_ element: LayoutElement) -> CGFloat? {
+                if case let .rest(_, p, _, _, _) = element { return p.y }
                 return nil
             }
-            let rest = try #require(
+            let restY = try #require(
                 system.measures.flatMap(\.elements).compactMap(probe).first,
             )
             #expect(
-                abs((rest.y - origin) / system.sp - CGFloat(expected))
+                abs((restY - origin) / system.sp - CGFloat(expected))
                     < 0.001,
             )
-            #expect(rest.leger == leger)
         }
 
         // MARK: - Articulations
@@ -310,6 +309,14 @@
         /// line count, so unlike the cursor or the barline this distance
         /// must NOT shrink with the drawn height — on a one-line staff it
         /// would otherwise land 1 sp ABOVE `step` 0, inside the notes.
+        ///
+        /// **A forward guard, not a regression test.** The placement is
+        /// `max(0, 4 sp)` against the pre-branch `max(4 sp, 4 sp)`, so
+        /// this passes identically before and after the line-count work
+        /// and caught nothing when it was written. What it is for is the
+        /// next person who sees a `metrics.staffHeight` here, assumes it
+        /// was missed by the sweep that replaced the others, and swaps
+        /// in the drawn height — which is the one edit that breaks it.
         @Test("Jump text keeps clearing the reference band")
         func jumpTextDoesNotFollowTheDrawnHeight() throws {
             guard #available(macOS 15.0, *) else { return }
@@ -358,53 +365,109 @@
     struct StaffLineCountSkylineTests {
         private let _installApple = TestSupport.installApple
 
-        /// Run one autoplaced tempo mark through the pass with the three
-        /// candidate bands and report where it lands.
+        /// Document-space Y of the one autoplaced tempo mark on a staff
+        /// of `lineCount` lines, in staff spaces below that staff's top
+        /// line.
         ///
-        /// The tempo starts 1.5 sp above the top line. Against the staff
-        /// as DRAWN — five lines `[2, 6]` sp or one line `[2, 2]` sp — it
-        /// clears the staff and keeps (almost) its emitted Y. Against the
-        /// phantom `staffMidY ∓ 2 sp` band a one-line staff used to get,
-        /// `[0, 4]` sp, it collides with a staff top 2 sp higher than any
-        /// ink and is shoved a further 2 sp up.
+        /// Every measure holds one stemless whole note on the reference
+        /// middle line and nothing else — no clef, no rest. Noteheads
+        /// keep the same `step` at every line count, so the only ink
+        /// sits 1.5 sp BELOW the top line on all three staves and the
+        /// base skyline's staff rect is the only thing left that can
+        /// push the mark north. A rest cannot serve: on a one- or
+        /// three-line staff it lands on the top line itself and its own
+        /// ink becomes the north skyline.
+        ///
+        /// The tempo goes on the SECOND measure for the same reason.
+        /// Every system head carries a measure number under any
+        /// `MeasureNumberPolicy` (`drawsLabel` returns true for
+        /// `isSystemStart` unconditionally), that number is autoplaced
+        /// too, and it would stand between the staff rect and the tempo
+        /// — leaving the tempo to clear the number rather than the band
+        /// under test.
         @available(macOS 15.0, *)
-        private static func tempoY(
-            staffTop: CGFloat, staffBottom: CGFloat, metrics: StaffMetrics,
-        ) -> CGFloat {
-            var measures: [[LayoutElement]] = [[.textMark(
-                kind: .tempo, text: "Allegro",
-                origin: CGPoint(x: 20, y: metrics.sp * 0.5),
-            )]]
-            SkylineAutoplacePass.run(
-                measures: &measures, xOffsets: [0], systemRightX: 400,
-                staffTop: staffTop, staffBottom: staffBottom,
-                metrics: metrics,
+        private static func tempoDy(lineCount: Int) throws -> CGFloat {
+            let measure = Measure(voices: [Voice(elements: [
+                .chord(Chord(
+                    duration: .whole, notes: [Note(pitch: 71, tpc: 19)],
+                )),
+            ])])
+            let score = Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "perc"),
+                    staves: [Staff(
+                        lineCount: lineCount,
+                        measures: [measure, measure],
+                    )],
+                )],
+                systemMeasures: [
+                    SystemMeasure(),
+                    SystemMeasure(elements: [
+                        PositionedSystemElement(
+                            position: .start,
+                            element: .tempo(Tempo(beatsPerSecond: 2)),
+                        ),
+                    ]),
+                ],
             )
-            guard case let .textMark(_, _, p) = measures[0][0] else { return .nan }
-            return p.y / metrics.sp
+            let doc = LayoutEngine.layout(
+                score: score,
+                options: .init(wrapToViewWidth: false),
+                availableWidth: 900,
+            )
+            let system = try #require(doc.systems.first)
+            let origin = try #require(system.staffOrigins.first).y
+            let y = try #require(
+                system.measures.flatMap { measure in
+                    measure.elements.compactMap {
+                        if case let .textMark(.tempo, _, p) = $0 {
+                            return measure.origin.y + p.y
+                        }
+                        return nil
+                    }
+                }.first,
+            )
+            return (y - origin) / system.sp
         }
 
-        @Test("The skyline band is the staff as drawn, not a phantom one")
-        func skylineBandIsTheDrawnStaff() {
+        /// The band's NORTH edge, end to end — the half
+        /// `belowStaffBandFollowsTheDrawnBottomLine` cannot see.
+        ///
+        /// `buildSystem` is what hands `SkylineAutoplacePass` the staff's
+        /// drawn band (`LayoutEngine+SystemBuild.swift`,
+        /// `staffTopLocal` / `staffBottomLocal`), and the pass turns
+        /// those two numbers into the base skyline's staff rect. Every
+        /// line count draws its top line in the same place, so an
+        /// above-staff autoplaced mark has to land at the same Y on all
+        /// of them.
+        ///
+        /// This is also where the `staffMidY ∓ 2 sp` derivation that the
+        /// old `LayoutElementShape.staffRect(xMin:xMax:staffMidY:metrics:)`
+        /// tests pinned now lives — `staffRect` is handed the two edges
+        /// ready-made, so its own tests can no longer do more than
+        /// restate them.
+        ///
+        /// Measured with the wiring put back on that derivation: all
+        /// three counts sit at −3.2192 sp today; the one-line staff,
+        /// whose phantom band starts a full 2 sp above its only drawn
+        /// line, moves to −3.7192 sp and fails. The three-line row does
+        /// NOT move — its phantom band is only 1 sp off and the mark
+        /// already clears it — so the one-line row is what carries this
+        /// test. The three-line row is kept because it costs nothing and
+        /// pins the equality a future push rule would have to preserve.
+        @Test("An above-staff mark clears the staff's own top line")
+        func skylineTopBandIsTheStaffsOwnTopLine() throws {
             guard #available(macOS 15.0, *) else { return }
-            let metrics = StaffMetrics(staffSize: 28)
-            let sp = metrics.sp
-            let fiveLine = Self.tempoY(
-                staffTop: 2 * sp, staffBottom: 6 * sp, metrics: metrics,
-            )
-            let oneLine = Self.tempoY(
-                staffTop: 2 * sp, staffBottom: 2 * sp, metrics: metrics,
-            )
-            let phantom = Self.tempoY(
-                staffTop: 0, staffBottom: 4 * sp, metrics: metrics,
-            )
-            // A one-line staff's top line is the SAME line a five-line
-            // staff's is, so the north edge — and the tempo — must not
-            // move between them.
-            #expect(abs(oneLine - fiveLine) < 0.001)
-            // The phantom band starts 2 sp higher than any drawn line
-            // and pushes the mark the same 2 sp further away.
-            #expect(abs((fiveLine - phantom) - 2) < 0.001)
+            let five = try Self.tempoDy(lineCount: 5)
+            for lineCount in [3, 1] {
+                let dy = try Self.tempoDy(lineCount: lineCount)
+                #expect(
+                    abs(dy - five) < 0.001,
+                    "\(lineCount) lines put the tempo at \(dy) sp, five at \(five)",
+                )
+            }
         }
 
         /// End-to-end wiring: `buildSystem` has to hand the pass the

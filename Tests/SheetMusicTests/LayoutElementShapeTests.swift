@@ -178,6 +178,14 @@
             )
         }
 
+        /// Mapping only. `staffRect` used to take `staffMidY` and derive
+        /// the band as `staffMidY ∓ 2 sp`, and these two tests pinned
+        /// that arithmetic; it now takes both edges ready-made, so all
+        /// they can do is check that the two numbers reach the rect
+        /// unaltered. The derivation moved to the caller —
+        /// `LayoutEngine+SystemBuild.swift`'s `staffTopLocal` /
+        /// `staffBottomLocal` — and is covered end to end by
+        /// `StaffLineCountSkylineTests`.
         @Test func staffRectSpansTheStaffHeight() {
             let r = LayoutElementShape.staffRect(
                 xMin: 0, xMax: 500, staffTop: 14, staffBottom: 42,
@@ -189,10 +197,10 @@
         }
 
         /// A one-line staff's top and bottom line are the same line, so
-        /// the rect is degenerate rather than the 4 sp band the retired
-        /// `staffMidY ∓ 2 sp` derivation produced. That band was
-        /// anchored 2 sp above the only drawn line, which is what made
-        /// every autoplaced annotation clear the wrong edge.
+        /// equal edges must yield a degenerate rect rather than a
+        /// clamped or inverted one — `staffRect` computes its height
+        /// through `max(0, …)`, and this is the row that reaches that
+        /// branch.
         @Test func staffRectCollapsesOnAOneLineStaff() {
             let r = LayoutElementShape.staffRect(
                 xMin: 0, xMax: 500, staffTop: 14, staffBottom: 14,
