@@ -58,6 +58,47 @@ extension RasterPage {
     /// spaces), while ledger-line rows come out near 0.5.
     static let staffLineMinInkFraction = 0.75
 
+    /// Least width, as a fraction of the widest horizontal run on the
+    /// page, for a run to be a staff-line candidate.
+    ///
+    /// The ink-fraction gate is not enough on its own. Where notes are
+    /// dense, a row of ledger lines is ~1.6-space marks about 2pt apart,
+    /// so the bridged run is genuinely almost solid ink and clears any
+    /// ink-fraction test. Measured on `tex_0064`: eight such rows one
+    /// staff space apart, 91pt wide, between two real staves whose lines
+    /// are 486–510pt wide. `detectStaves` was handed eight equally
+    /// spaced lines to fit a five-line window to and produced FOUR
+    /// staves where the page has three; the extra staff then takes
+    /// content with it, and the score-level metrics read that as lost
+    /// notes and lost measures.
+    ///
+    /// A local rule cannot separate these — measured, the longest
+    /// unbroken stretch of a real degraded staff line has p05 = 0.075 of
+    /// its span, while the ledger row reaches 0.09, so the two
+    /// distributions overlap. What does separate them is CONTEXT: a
+    /// staff line spans its system, and every staff line on a page is
+    /// about as wide as every other. Page-relative rather than absolute
+    /// so a page whose only system is short still keeps its staff.
+    ///
+    /// The cost is that a genuinely narrow staff — an ossia beside
+    /// full-width systems — is discarded. Recorded rather than hidden.
+    ///
+    /// 0.20 is measured, and the window is NARROW at both ends. The
+    /// ledger row this exists to reject sits at 91/500 = 0.182, so
+    /// anything below that stops working; and a higher value starts
+    /// discarding real staff lines. Swept on 177 renders:
+    ///
+    ///     fraction   pitch mean   measures exact   notes exact
+    ///     (none)     44.4         119              92
+    ///     0.20       46.6         130              91
+    ///     0.25       46.6         124              86
+    ///     0.35       46.6         117              83   (one render lost its staff entirely)
+    ///
+    /// Re-run the hybrid sweep before changing it; the pitch column alone
+    /// does not show the damage, which is why the structural columns are
+    /// recorded beside it.
+    static let staffLineMinWidthFractionOfWidest = 0.20
+
     /// Staff-line spacing in pixels, from the row projection's peak
     /// spacing; nil when the page has no staff.
     ///
@@ -132,9 +173,27 @@ extension RasterPage {
                 mask, y: y, gapTolerance: gapTolerance, minWidthPx: minWidthPx,
             ))
         }
-        return blobs(runsByRow).map {
-            segment(from: $0, transform: transform, pageIndex: pageIndex)
-        }
+        let found = blobs(runsByRow)
+        let floor = referenceWidth(found) * staffLineMinWidthFractionOfWidest
+        return found
+            .filter { Double($0.x1 - $0.x0 + 1) >= floor }
+            .map { segment(from: $0, transform: transform, pageIndex: pageIndex) }
+    }
+
+    /// The page's "a staff line is about this wide" reference: the median
+    /// width of the widest quarter of the runs.
+    ///
+    /// NOT the maximum. A single full-page-width run — a page border, a
+    /// frame rule — becomes the maximum and lifts the floor above the
+    /// real staff lines of a small-format score, which measured as nine
+    /// fewer renders with exact note counts. The widest quarter is a
+    /// staff's own lines on any page that has a staff at all, and one
+    /// outlier cannot move its median.
+    private static func referenceWidth(_ found: [LineBlob]) -> Double {
+        let widths = found.map { $0.x1 - $0.x0 + 1 }.sorted(by: >)
+        guard !widths.isEmpty else { return 0 }
+        let top = widths.prefix(max(1, widths.count / 4))
+        return Double(top[top.count / 2])
     }
 
     /// Inked stretches of one row, with gaps up to `gapTolerance`

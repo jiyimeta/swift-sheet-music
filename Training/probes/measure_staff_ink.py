@@ -125,6 +125,7 @@ def main(sample: int, degraded: bool) -> None:
     rng = np.random.default_rng(20260812)
     per_dpi: dict[int, list[float]] = {}
     survived: dict[float, int] = {}
+    longest_fracs: list[float] = []
     lines_total = 0
 
     for d in dirs[:sample]:
@@ -161,6 +162,22 @@ def main(sample: int, degraded: bool) -> None:
                 xb, rb = lg.compose(h_map, x1_pt * scale, row_px)
                 lines_total += 1
                 gaps = gaps_along(mask, xa, ra, xb, rb, band)
+                # Longest UNBROKEN inked stretch, as a fraction of the
+                # line's span. This is what separates a real staff line
+                # from a row of ledger lines that a gap tolerance has
+                # bridged: both can be almost entirely inked, but a staff
+                # line is ONE long stretch while a ledger row is a series
+                # of ~1.6-space marks.
+                span_all = abs(xb - xa)
+                if span_all > 0:
+                    edges = [0] + sorted(
+                        s - min(xa, xb) + length for s, length in gaps
+                    )
+                    starts = [0] + [s - min(xa, xb) + ln for s, ln in sorted(gaps)]
+                    stops = [s - min(xa, xb) for s, _ in sorted(gaps)] + [span_all]
+                    longest = max((b - a for a, b in zip(starts, stops)), default=0)
+                    longest_fracs.append(longest / span_all)
+                    _ = edges
                 for _, length in gaps:
                     bucket.append(length * 72.0 / dpi / sp)
                 lo_x = max(0, int(round(min(xa, xb))))
@@ -188,6 +205,16 @@ def main(sample: int, degraded: bool) -> None:
         print(f"[staff-ink][{tag}] dpi={dpi} lines={lines_total} gaps={len(gaps)} "
               f"p50={q(.5):.3f}sp p95={q(.95):.3f}sp p99={q(.99):.3f}sp "
               f"max={gaps[-1]:.3f}sp")
+
+    if longest_fracs:
+        longest_fracs.sort()
+
+        def lq(f):
+            return longest_fracs[min(len(longest_fracs) - 1, int(len(longest_fracs) * f))]
+
+        print(f"[staff-ink][{tag}] longestStretchFraction n={len(longest_fracs)} "
+              f"min={longest_fracs[0]:.3f} p01={lq(.01):.3f} p05={lq(.05):.3f} "
+              f"p50={lq(.5):.3f}")
 
     # The number the merge tolerance is actually chosen against: with the
     # line broken at every gap wider than the tolerance, does ONE piece

@@ -104,6 +104,42 @@
             #expect(segs.count(where: { $0.rect.width > 50 }) == 1)
         }
 
+        /// A DENSE row of ledger lines defeats the ink-fraction gate —
+        /// the marks nearly touch, so the bridged run really is almost
+        /// solid ink — and is rejected on width instead: a staff line
+        /// spans its system, and every staff line on a page is about as
+        /// wide as every other.
+        ///
+        /// Measured on `tex_0064`: eight such rows a staff space apart,
+        /// 91pt wide, between two real staves whose lines are 486–510pt.
+        /// `detectStaves` fitted a five-line window to eight lines and
+        /// reported FOUR staves on a three-staff page.
+        @Test func aDenseLedgerRowIsRejectedOnWidthNotInk() {
+            var bmp = RasterTestBitmaps.blank(widthPx: 1200, heightPx: 400, dpi: 300)
+            // Real staff: five lines spanning 1000px.
+            for i in 0 ..< 5 {
+                RasterTestBitmaps.hLine(
+                    &bmp, y: 100 + i * 12, x0: 100, x1: 1100, thickness: 1,
+                )
+            }
+            // Dense ledger rows: 19px marks 2px apart — solid enough to
+            // clear the ink-fraction gate — spanning only 190px.
+            for row in 0 ..< 3 {
+                for i in 0 ..< 9 {
+                    let x0 = 300 + i * 21
+                    RasterTestBitmaps.hLine(
+                        &bmp, y: 250 + row * 12, x0: x0, x1: x0 + 19, thickness: 1,
+                    )
+                }
+            }
+            let mask = RasterPage.binarize(bmp)
+            let segs = RasterPage.staffLineSegments(
+                mask, spacingPx: 12, transform: Self.transform(bmp), pageIndex: 0,
+            )
+            #expect(segs.count == 5)
+            #expect(segs.allSatisfy { $0.rect.width > 200 })
+        }
+
         /// A gap WIDER than the tolerance must still break the line —
         /// otherwise the merge would reach across a system and invent a
         /// staff line spanning two of them.

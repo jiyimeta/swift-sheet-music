@@ -11,6 +11,16 @@
     /// against the raster's, per page.
     @Suite(.enabled(if: ProcessInfo.processInfo.environment["OMR_STAFF_PROBE"] == "1"))
     struct RasterStaffProbeHarness {
+        /// Horizontal segments as `y×width` pairs, widest first, so an
+        /// invented staff can be traced back to the ink that produced it.
+        func printLines(_ tag: String, _ pairs: [(Double, Double)]) {
+            let wide = pairs.filter { $0.1 > 40 }.sorted { $0.0 > $1.0 }
+            let text = wide.map {
+                "\(Int($0.0.rounded()))x\(Int($0.1.rounded()))"
+            }.joined(separator: " ")
+            print("[probe]   \(tag) n=\(wide.count) \(text)")
+        }
+
         @Test func compareDetectedStaves() throws {
             guard let root = ProcessInfo.processInfo.environment["OMR_DATA_ROOT"] else {
                 return
@@ -43,11 +53,24 @@
                             + "horiz=\(analysis.paths.count(where: { $0.kind == .horizontal })) "
                             + "vert=\(analysis.paths.count(where: { $0.kind == .vertical }))",
                     )
-                    for (i, staff) in oracle.prefix(2).enumerated() {
+                    for (i, staff) in oracle.enumerated() {
                         print("[probe]   oracle[\(i)] yLines=\(staff.yLines.map { round($0 * 10) / 10 })")
                     }
-                    for (i, staff) in raster.prefix(2).enumerated() {
+                    for (i, staff) in raster.enumerated() {
                         print("[probe]   raster[\(i)] yLines=\(staff.yLines.map { round($0 * 10) / 10 })")
+                    }
+                    if ProcessInfo.processInfo.environment["OMR_STAFF_PROBE_LINES"] == "1" {
+                        let truth = replay.walked.paths.filter {
+                            $0.pageIndex == idx && $0.kind == .horizontal
+                        }
+                        printLines("oracleH", truth.map {
+                            (Double($0.rect.midY), Double($0.rect.width))
+                        })
+                        printLines(
+                            "rasterH",
+                            analysis.paths.filter { $0.kind == .horizontal }
+                                .map { (Double($0.rect.midY), Double($0.rect.width)) },
+                        )
                     }
                 }
             }
