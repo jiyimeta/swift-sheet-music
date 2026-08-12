@@ -266,7 +266,7 @@
             doc.systems.flatMap(\.measures)
                 .flatMap { inInvisible ? $0.invisibleElements : $0.elements }
                 .filter {
-                    if case let .barLine(subtype, _) = $0,
+                    if case let .barLine(subtype, _, _) = $0,
                        subtype == "double"
                     {
                         true
@@ -934,6 +934,113 @@
                     return nil
                 }
             #expect(flags == [false])
+        }
+
+        // MARK: - Ledger lines vs. invisibility
+
+        private func ledgerLines(
+            _ doc: LayoutDocument,
+            inInvisible: Bool,
+        ) -> [LayoutElement] {
+            doc.systems.flatMap(\.measures)
+                .flatMap { inInvisible ? $0.invisibleElements : $0.elements }
+                .filter {
+                    if case .ledgerLine = $0 { true } else { false }
+                }
+        }
+
+        @Test func fullyHiddenChordKeepsItsLedgerLines() {
+            // A `chord.visible == false` chord routes to
+            // `invisibleElements`, but its NOTES stay `isInvisible ==
+            // false` — so the ledger pass must run the VISIBLE subset
+            // over that list. Running the invisible subset instead
+            // yields an empty note set and silently drops the ledger.
+            // Middle C in treble sits one ledger below the staff.
+            var chord = Chord(
+                duration: .quarter,
+                notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            )
+            chord.visible = false
+            let doc = LayoutEngine.layout(
+                score: scoreWithSingleChord(chord),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            #expect(ledgerLines(doc, inInvisible: true).count == 1)
+            #expect(ledgerLines(doc, inInvisible: false).isEmpty)
+        }
+
+        /// Visible chord, one hidden notehead that needs a ledger (C4 in
+        /// treble) plus a visible one that does not (B4 on the middle
+        /// line).
+        private func scoreWithHiddenLedgerNotehead() -> Score {
+            let onStaff = Note(pitch: 71, tpc: 19)
+            var belowStaff = Note(pitch: 60, tpc: 14)
+            belowStaff.visible = false
+            return scoreWithSingleChord(Chord(
+                duration: .quarter,
+                notes: ChordNotes([onStaff, belowStaff]),
+            ))
+        }
+
+        @Test func hiddenNoteheadLedgerFollowsTheNoteheadVisibility() {
+            let off = LayoutEngine.layout(
+                score: scoreWithHiddenLedgerNotehead(),
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 800,
+            )
+            #expect(ledgerLines(off, inInvisible: false).isEmpty)
+            #expect(ledgerLines(off, inInvisible: true).isEmpty)
+
+            let on = LayoutEngine.layout(
+                score: scoreWithHiddenLedgerNotehead(),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            // The visible notehead needs no ledger; the hidden one's
+            // ledger is grayed with the rest of the invisible pass.
+            #expect(ledgerLines(on, inInvisible: false).isEmpty)
+            #expect(ledgerLines(on, inInvisible: true).count == 1)
+
+            // `invisibleElements` must contain *only* that ledger line —
+            // not the rest of the staff (chords, rests, clefs, beams)
+            // redrawn a second time at 50 %. This pins the batch-3
+            // filter in `LayoutEngine+SystemBuild.swift`.
+            #expect(on.systems.flatMap(\.measures).allSatisfy { m in
+                m.invisibleElements.allSatisfy {
+                    if case .ledgerLine = $0 { true } else { false }
+                }
+            })
+        }
+
+        @Test func hiddenNoteheadInsideFullyHiddenChordStillGetsLedger() {
+            // The fourth batch: `chord.visible == false` AND the note
+            // inside it hidden too. The chord routes to
+            // `invisibleElements`, and within that list the note's own
+            // `isInvisible` is true — so only the INVISIBLE subset of the
+            // invisible list reaches it. Before this batch existed such a
+            // notehead got no ledger at all. It renders at the same flat
+            // 50 % as every other invisible element.
+            var note = Note(pitch: 60, tpc: 14) // middle C, one ledger below
+            note.visible = false
+            var chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+            chord.visible = false
+
+            let off = LayoutEngine.layout(
+                score: scoreWithSingleChord(chord),
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 800,
+            )
+            #expect(ledgerLines(off, inInvisible: false).isEmpty)
+            #expect(ledgerLines(off, inInvisible: true).isEmpty)
+
+            let on = LayoutEngine.layout(
+                score: scoreWithSingleChord(chord),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            #expect(ledgerLines(on, inInvisible: false).isEmpty)
+            #expect(ledgerLines(on, inInvisible: true).count == 1)
         }
     }
 #endif

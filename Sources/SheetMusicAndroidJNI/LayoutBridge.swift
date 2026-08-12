@@ -4,10 +4,12 @@ import SheetMusicCore
 import SheetMusicLayout
 
 #if !canImport(CoreGraphics)
-    /// On Android, Foundation's CoreGraphics shims also export `CGPoint`,
-    /// clashing with SheetMusicLayout's stub. Anchor to the Layout definition
-    /// so that `LayoutElement` associated values match the parameter type.
+    /// On Android, Foundation's CoreGraphics shims also export `CGPoint`
+    /// and `CGFloat`, clashing with SheetMusicLayout's stubs. Anchor to the
+    /// Layout definitions so that `LayoutElement` associated values and
+    /// `StaffLineGeometry`'s arguments match the parameter types.
     private typealias CGPoint = SheetMusicLayout.CGPoint
+    private typealias CGFloat = SheetMusicLayout.CGFloat
 #endif
 
 /// Converts a `Score` into a binary draw-program payload for the Android
@@ -29,7 +31,8 @@ import SheetMusicLayout
 ///
 /// ### Draw commands emitted
 /// For each `LayoutSystem` the bridge emits:
-/// 1. Five staff lines per staff origin (moveTo + lineTo + stroke triples).
+/// 1. Each staff's own lines — `StaffLineGeometry.lineCount` of them, which
+///    is five only for a standard staff (moveTo + lineTo + stroke triples).
 /// 2. Per `LayoutMeasure`: its elements — clef glyphs, time-sig glyphs,
 ///    note-head glyphs, rest glyphs, and barline strokes. Unknown/unhandled
 ///    element types fall back to a small `fillRect` placeholder.
@@ -82,7 +85,6 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             stemThickness: Double(metrics.stemThickness),
         )
         let staffLineThickness = Double(metrics.staffLineThickness)
-        let staffHeight = Double(metrics.staffHeight)
 
         // ── 0. Title block ──────────────────────────────────────────────────
         // The leading `<VBox>` (title / subtitle / composer / lyricist) sits at
@@ -101,12 +103,15 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             let endX = Double(BarLineGeometry.staffLineEndX(for: system))
 
             // ── 1. Staff lines ──────────────────────────────────────────────
-            for staffOrigin in system.staffOrigins {
+            for (staffIndex, staffOrigin) in system.staffOrigins.enumerated() {
                 let ox = Double(staffOrigin.x) + sysOriginX
                 let oy = Double(staffOrigin.y) + sysOriginY
                 let rightX = endX + sysOriginX
-                for line in 0 ..< 5 {
-                    let y = oy + Double(line) * context.sp
+                let geometry = system.geometry(atFlatIndex: staffIndex)
+                for line in 0 ..< geometry.lineCount {
+                    let y = oy + Double(
+                        geometry.lineY(line, sp: CGFloat(context.sp)),
+                    )
                     out.append(.moveTo(
                         x: ox * ptToMM,
                         y: y * ptToMM,
@@ -181,7 +186,6 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 sysOriginY: sysOriginY,
                 sp: context.sp,
                 staffLineThickness: staffLineThickness,
-                staffHeight: staffHeight,
                 into: &out,
             )
 
@@ -386,12 +390,15 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .barLine(_, origin):
-            // Barline origin sits at the staff middle; strokes extend
-            // ±2 sp from that point. Width = 0.15 sp (the thin-stroke
-            // engraving default). Subtype-specific extras (double,
-            // end, repeat dots) are a follow-up.
-            let halfHeight = Double(BarLineGeometry.halfHeightSp) * sp
+        case let .barLine(_, origin, halfHeightPt):
+            // Barline origin sits at the middle of its own stroke, and
+            // the engine hands over the half-height so the span follows
+            // the staff's line count (4 sp tall on five lines, 2 sp on
+            // three, and 4 sp centered on the line for one). Width =
+            // 0.15 sp (the thin-stroke engraving default).
+            // Subtype-specific extras (double, end, repeat dots) are a
+            // follow-up.
+            let halfHeight = Double(halfHeightPt)
             let bx = (mox + Double(origin.x)) * ptToMM
             let byMid = (moy + Double(origin.y)) * ptToMM
             out.append(.moveTo(x: bx, y: byMid - halfHeight * ptToMM))
@@ -399,6 +406,21 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             out.append(.stroke(
                 width: Double(BarLineGeometry.thinThicknessSp) * sp * ptToMM,
             ))
+
+        case let .ledgerLine(from, to, thickness):
+            // `LedgerLinePass` owns the geometry (it is the only place
+            // that can see the staff's line count), so the bridge just
+            // strokes the segment it was handed — the same
+            // moveTo / lineTo / stroke triple used for staff lines.
+            out.append(.moveTo(
+                x: (mox + Double(from.x)) * ptToMM,
+                y: (moy + Double(from.y)) * ptToMM,
+            ))
+            out.append(.lineTo(
+                x: (mox + Double(to.x)) * ptToMM,
+                y: (moy + Double(to.y)) * ptToMM,
+            ))
+            out.append(.stroke(width: Double(thickness) * ptToMM))
 
         case let .beam(fromOrigin, toOrigin, direction, level, color):
             // Each beam emit at a given level: shift Y by the level

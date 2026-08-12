@@ -15,6 +15,16 @@ public struct LayoutSystem: Sendable, Equatable {
     /// display order. Enables `StaffAddress → flat-index` conversion
     /// without re-visiting the originating `Score`.
     public let staffAddresses: [StaffAddress]
+    /// Per-staff line geometry, parallel to `staffOrigins`. Empty means
+    /// "every staff is standard five-line" — kept defaultable so the
+    /// initializer stays source-compatible.
+    ///
+    /// That default is not neutral, so a rebuild that forgets this
+    /// field silently reverts the system to five-line geometry rather
+    /// than failing. Rebuild an existing system with
+    /// `addingSpanners(_:)` / `movedBy(dy:)` instead of re-invoking
+    /// `init` — see `LayoutSystem+Rebuild.swift`.
+    public let staffGeometries: [StaffLineGeometry]
     /// Part labels at the left edge of this system (empty on continuation
     /// systems per MuseScore convention).
     public let partLabels: [LayoutPartLabel]
@@ -56,6 +66,7 @@ public struct LayoutSystem: Sendable, Equatable {
         measures: [LayoutMeasure],
         staffOrigins: [CGPoint],
         staffAddresses: [StaffAddress] = [],
+        staffGeometries: [StaffLineGeometry] = [],
         partLabels: [LayoutPartLabel],
         brackets: [LayoutBracket] = [],
         spanners: [LayoutElement],
@@ -68,6 +79,7 @@ public struct LayoutSystem: Sendable, Equatable {
         self.measures = measures
         self.staffOrigins = staffOrigins
         self.staffAddresses = staffAddresses
+        self.staffGeometries = staffGeometries
         self.partLabels = partLabels
         self.brackets = brackets
         self.spanners = spanners
@@ -87,6 +99,47 @@ public struct LayoutSystem: Sendable, Equatable {
         staffAddresses.firstIndex(of: address)
     }
 
+    /// Line geometry for the staff at `index` in `staffOrigins`.
+    /// Falls back to a standard five-line staff.
+    public func geometry(atFlatIndex index: Int) -> StaffLineGeometry {
+        staffGeometries.indices.contains(index)
+            ? staffGeometries[index]
+            : .standard
+    }
+
+    /// System-local X and Y span of the vertical stroke every renderer
+    /// draws at a system's left edge — MuseScore's system-begin barline
+    /// (`MeasureLayout::createSystemBeginBarLine`,
+    /// `rendering/score/measurelayout.cpp:2843`). `nil` when the system
+    /// has no staves.
+    ///
+    /// MuseScore builds it out of ordinary `BarLine` elements — one per
+    /// staff, each laid out by `TLayout::layoutBarLine` — so its two
+    /// ends obey the same per-staff rule `LayoutElement.barLine` already
+    /// does: the top staff's top line, the bottom staff's bottom line,
+    /// each replaced by ±2 sp about the single line when that staff
+    /// draws only one (`dom/barline.cpp:256-291`,
+    /// `BARLINE_SPAN_1LINESTAFF_FROM`/`_TO`). Deriving the bottom from
+    /// `StaffMetrics.staffHeight` instead leaves the stroke hanging 4 sp
+    /// past a one-line bottom staff; deriving it from that staff's
+    /// (zero) height alone would collapse a single one-line staff's
+    /// stroke to a dot.
+    ///
+    /// The playback cursor and the loop highlight take their vertical
+    /// span from here too. They want "the system's staves, top to
+    /// bottom", which is the same question — and the same one-line
+    /// answer keeps them visible: a rect sized by that staff's (zero)
+    /// drawn height would have no height at all on a score whose
+    /// systems are a single one-line staff.
+    public var systemStartBarLine: (x: CGFloat, top: CGFloat, bottom: CGFloat)? {
+        guard let first = staffOrigins.first,
+              let last = staffOrigins.last else { return nil }
+        let topSpan = geometry(atFlatIndex: 0).barLineSpanY(sp: sp)
+        let bottomSpan = geometry(atFlatIndex: staffOrigins.count - 1)
+            .barLineSpanY(sp: sp)
+        return (first.x, first.y + topSpan.top, last.y + bottomSpan.bottom)
+    }
+
     /// Subtype + system-local origin X of the rightmost barline in the
     /// last measure. Returned to renderers that need to know where the
     /// system's terminal barline lives — e.g. to clip staff lines so
@@ -100,7 +153,7 @@ public struct LayoutSystem: Sendable, Equatable {
         var rightmostX: CGFloat = -.infinity
         var rightmostSubtype: String?
         for el in last.elements {
-            if case let .barLine(s, p) = el, p.x > rightmostX {
+            if case let .barLine(s, p, _) = el, p.x > rightmostX {
                 rightmostX = p.x
                 rightmostSubtype = s
             }

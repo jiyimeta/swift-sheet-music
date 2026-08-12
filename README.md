@@ -306,6 +306,9 @@ semantic-equivalence comparison: `midi01`–`midi03`, `midiPortExport`,
 Major features supported by the renderer:
 
 - multi-staff / multi-part scores, with per-instrument MIDI channel/port
+- per-staff line counts (`<StaffType><lines>`), e.g. 1- and 3-line
+  percussion staves, with line-count-aware barline spans, ledger-line
+  bounds, rest placement and percussion-clef / time-signature centering
 - multiple `<Channel>` flavours per instrument (normal, pizzicato, …)
 - multi-voice measures with same-pitch overlap resolution ("muted unison")
 - `<startRepeat>` / `<endRepeat>` expansion + Volta-aware playback filtering
@@ -332,7 +335,9 @@ design rationale lives in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - **Source code (`Sources/`)**: MIT — see [LICENSE](LICENSE).
 - **Test fixtures (`Tests/SheetMusicTests/Resources/`)**: GPL-3.0, copied
-  from the upstream MuseScore repository — see
+  from the upstream MuseScore repository — except the hand-authored
+  fixtures listed as MIT in that directory's own notice, which is
+  authoritative for the per-file split. See
   [Tests/SheetMusicTests/Resources/LICENSE](Tests/SheetMusicTests/Resources/LICENSE).
 - See [NOTICE](NOTICE) for full provenance and trademark disclosure.
 

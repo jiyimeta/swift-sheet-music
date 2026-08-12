@@ -65,11 +65,13 @@ extension LayoutDocument {
 
     private func itemFrame(_ id: ScoreItemID) -> CGRect? {
         for system in systems {
-            let topY = system.origin.y
-                + (system.staffOrigins.first?.y ?? 0)
-            let bottomY = system.origin.y
-                + (system.staffOrigins.last?.y ?? 0)
-                + metrics.staffHeight
+            // Same span as the system's own left-edge vertical: the end
+            // staves' drawn extent, with MuseScore's ±2 sp one-line
+            // case. Not `metrics.staffHeight` (the five-line reference,
+            // 4 sp too tall) nor the drawn height (0 on one line).
+            guard let span = system.systemStartBarLine else { continue }
+            let topY = system.origin.y + span.top
+            let bottomY = system.origin.y + span.bottom
             for measure in system.measures {
                 if let x = itemX(id, in: measure) {
                     let absX = system.origin.x + measure.origin.x + x
@@ -92,11 +94,10 @@ extension LayoutDocument {
         score: Score,
     ) -> CGRect? {
         for system in systems {
-            let topY = system.origin.y
-                + (system.staffOrigins.first?.y ?? 0)
-            let bottomY = system.origin.y
-                + (system.staffOrigins.last?.y ?? 0)
-                + metrics.staffHeight
+            // Same span as `itemFrame`; see the note there.
+            guard let span = system.systemStartBarLine else { continue }
+            let topY = system.origin.y + span.top
+            let bottomY = system.origin.y + span.bottom
             for measure in system.measures {
                 let xInMeasure: CGFloat?
                 if let span = measure.multiMeasureRest,
@@ -317,11 +318,10 @@ extension LayoutDocument {
     /// anchors fallback so the cursor doesn't sit on top of the
     /// leading glyphs in an all-whole-rest measure.
     ///
-    /// Mid-measure clef / key changes also land in `elements` and
-    /// would be picked up here, but they only arise after a chord —
-    /// and a measure with any chord wouldn't reach this fallback in
-    /// the first place, so widening the floor with them is a no-op
-    /// for the cases that actually matter.
+    /// Mid-measure clef / key changes also land in `elements` and would
+    /// be picked up here, but they only arise after a chord — and a
+    /// measure with any chord wouldn't reach this fallback in the first
+    /// place, so widening the floor with them is a no-op.
     private func leadingHeaderRightEdge(in measure: LayoutMeasure) -> CGFloat {
         let sp = metrics.sp
         var rightEdge: CGFloat = sp * 2

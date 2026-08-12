@@ -50,6 +50,7 @@ extension LayoutEngine {
         options: ScoreViewOptions = ScoreViewOptions(),
         activeClef: NotatedClef,
         activeKey: Int = 0,
+        lineGeometry: StaffLineGeometry,
         initialClefRawType: String? = nil,
         initialKeyForSynth: Int? = nil,
         headerSchedule: HeaderSchedule,
@@ -69,6 +70,41 @@ extension LayoutEngine {
         key: Int,
     ) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
+        // Barlines are the one thing here measured against the staff's
+        // OWN lines rather than the five-line reference frame
+        // `staffMidY` establishes. `barLineSpanY` is relative to the
+        // staff's top line, which in these coordinates sits at `sp * 2`.
+        // For five lines this reduces to `staffMidY` ± 2 sp, i.e. the
+        // former hardcoded span; a one-line staff instead gets ±2 sp
+        // centered ON its single line, 2 sp higher than `staffMidY`.
+        let barLineSpan = lineGeometry.barLineSpanY(sp: metrics.sp)
+        let barLineMidY =
+            metrics.sp * 2 + (barLineSpan.top + barLineSpan.bottom) / 2
+        let barLineHalfHeight =
+            (barLineSpan.bottom - barLineSpan.top) / 2
+        /// Y for a clef glyph's reference line. Only the percussion
+        /// clefs move with the line count — see
+        /// `ClefGlyph.staffCenteringOffsetSp`.
+        func clefY(rawType: String) -> CGFloat {
+            staffMidY + metrics.sp * ClefGlyph.staffCenteringOffsetSp(
+                for: NotatedClef(rawType: rawType),
+                lineGeometry: lineGeometry,
+            )
+        }
+        // MuseScore centers the time signature on the staff's own
+        // height, exactly like the percussion clefs
+        // (`TLayout`, `tlayout.cpp:6095`:
+        // `yoff = spatium * (numOfLines - 1) * .5 * lineDist`), so a
+        // one-line staff's C sits 2 sp above the five-line reference
+        // middle rather than stranded below the single line.
+        let timeSigY = staffMidY
+            + metrics.sp * lineGeometry.centerOffsetSp
+        // The line a rest centers on, before the voice and whole-rest
+        // adjustments below. C++: `RestLayout::computeNaturalLine`
+        // via `StaffLineGeometry.naturalRestLine`; `setPosY` measures
+        // it down from the TOP line, which sits at `sp * 2` here.
+        let restNaturalY = metrics.sp * 2
+            + CGFloat(lineGeometry.naturalRestLine) * metrics.sp
         var out: [LayoutElement] = []
         // Parallel accumulator for hidden annotations that are still
         // laid out (because `options.showsInvisibleElements` is on) but
@@ -387,7 +423,8 @@ extension LayoutEngine {
                 out.append(.clef(
                     rawType: rawType,
                     origin: CGPoint(
-                        x: headerSchedule.clefX, y: staffMidY,
+                        x: headerSchedule.clefX,
+                        y: clefY(rawType: rawType),
                     ),
                     anchor: synthAnchor,
                 ))
@@ -442,7 +479,10 @@ extension LayoutEngine {
                     )
                     let element = LayoutElement.clef(
                         rawType: clef.concertClefType,
-                        origin: CGPoint(x: clefX, y: staffMidY),
+                        origin: CGPoint(
+                            x: clefX,
+                            y: clefY(rawType: clef.concertClefType),
+                        ),
                         anchor: .explicit(veID),
                     )
                     if clef.visible {
@@ -475,7 +515,7 @@ extension LayoutEngine {
                     let element = LayoutElement.timeSignature(
                         numerator: ts.numerator,
                         denominator: ts.denominator,
-                        origin: CGPoint(x: tsX, y: staffMidY),
+                        origin: CGPoint(x: tsX, y: timeSigY),
                     )
                     if ts.visible {
                         out.append(element)
@@ -506,7 +546,8 @@ extension LayoutEngine {
                     }
                     let element = LayoutElement.barLine(
                         subtype: b.subtype,
-                        origin: CGPoint(x: barX, y: staffMidY),
+                        origin: CGPoint(x: barX, y: barLineMidY),
+                        halfHeight: barLineHalfHeight,
                     )
                     if b.visible {
                         out.append(element)
@@ -518,17 +559,33 @@ extension LayoutEngine {
                     let (restBase, _) = DurationInterpretation.split(
                         r.duration,
                     )
-                    // Whole rest hangs from the 2nd line from the top
-                    // (step +2). Half rest sits on the middle line
-                    // (step 0 = staffMidY). Others center on the
-                    // middle line. In multi-voice mode, offset by
-                    // restVoiceOffset so voices don't overlap.
+                    // Rests sit on the staff's NATURAL line
+                    // (`restNaturalY`): the middle line of a five-line
+                    // staff, the single line of a one-line one. In
+                    // multi-voice mode, offset by restVoiceOffset so
+                    // voices don't overlap.
+                    //
+                    // A whole rest additionally hangs one line above —
+                    // but only where MuseScore says so. That rule reads
+                    // the line count and the voice offset together
+                    // (`wholeRestLineMove`), and on a one-line staff it
+                    // does NOT apply: the rest stays on the single
+                    // line, which is also what keeps `needsLeger` below
+                    // false and so draws `restWhole` rather than
+                    // `restWholeLegerLine`.
                     let restY: CGFloat
                     switch restBase {
                     case .whole:
-                        restY = staffMidY - metrics.sp + restVoiceOffset
+                        let move = lineGeometry.wholeRestLineMove(
+                            voiceOffsetLines: Int(
+                                (restVoiceOffset / metrics.sp).rounded(),
+                            ),
+                        )
+                        restY = restNaturalY
+                            + CGFloat(move) * metrics.sp
+                            + restVoiceOffset
                     default:
-                        restY = staffMidY + restVoiceOffset
+                        restY = restNaturalY + restVoiceOffset
                     }
                     // Center only true measure-fill markers
                     // (`NoteDuration.measure`). Typed `.whole`
@@ -553,10 +610,9 @@ extension LayoutEngine {
                         // otherwise the rest drifts off-center
                         // whenever those constants are tuned.
                         let trailingPad = metrics.sp * 1
-                        restX = (
-                            headerSchedule.contentStartX
-                                + width - trailingPad,
-                        ) / 2
+                        let edgeSum = headerSchedule.contentStartX
+                            + width - trailingPad
+                        restX = edgeSum / 2
                     } else {
                         restX = timedX(atTick: tickCursor)
                     }
@@ -575,14 +631,11 @@ extension LayoutEngine {
                     let staffTopLocal = metrics.sp * 2
                     let staffBottomLocal = metrics.sp * 2
                         + metrics.staffHeight
-                    let needsLeger = (
-                        restBase == .whole
-                            || restBase == .half,
-                    )
-                        && (
-                            restY < staffTopLocal
-                                || restY > staffBottomLocal
-                        )
+                    let isWholeOrHalf = restBase == .whole
+                        || restBase == .half
+                    let isOutsideStaff = restY < staffTopLocal
+                        || restY > staffBottomLocal
+                    let needsLeger = isWholeOrHalf && isOutsideStaff
                     let restElement = LayoutElement.rest(
                         duration: r.duration,
                         origin: CGPoint(x: restX, y: restY),
@@ -769,6 +822,7 @@ extension LayoutEngine {
                         noteYs: chordNotes.map(\.origin.y),
                         chordX: chordX,
                         staffMidY: staffMidY,
+                        lineGeometry: lineGeometry,
                         metrics: metrics,
                     ))
                     for (gIdx, g) in chord.graceNotesAfter.enumerated() {
@@ -1574,6 +1628,7 @@ extension LayoutEngine {
                             noteYs: n.map(\.origin.y),
                             chordX: so.x,
                             staffMidY: staffMidY,
+                            lineGeometry: lineGeometry,
                             metrics: metrics,
                         )
                         var j = outIdx + 1
@@ -1818,8 +1873,9 @@ extension LayoutEngine {
                 subtype: isLastMeasure ? "end" : nil,
                 origin: CGPoint(
                     x: width - metrics.sp / 2,
-                    y: staffMidY,
+                    y: barLineMidY,
                 ),
+                halfHeight: barLineHalfHeight,
             ))
         }
         for continuation in incomingMelismas {
@@ -2217,12 +2273,18 @@ extension LayoutEngine {
         noteYs: [CGFloat],
         chordX: CGFloat,
         staffMidY: CGFloat,
+        lineGeometry: StaffLineGeometry,
         metrics: StaffMetrics,
     ) -> [LayoutElement] {
         let staffTopY = staffMidY - metrics.sp * 2
         let staffBottomY = staffMidY + metrics.sp * 2
         let topLineY = staffMidY - metrics.sp * 2
-        let lastStaffLine = 8 // (5 staff lines − 1) × 2, in half-spaces
+        // Bottom drawn line, as MuseScore's half-space index down from
+        // the top line (lines even, spaces odd) — 8 for five lines, 4
+        // for three, 0 for one, where the top line IS the bottom line.
+        // `step` runs the other way from the same fixed top line, so
+        // the two differ only by sign and origin.
+        let lastStaffLine = 4 - lineGeometry.bottomStep
         var aboveCount = 0
         var belowCount = 0
         var result: [LayoutElement] = []

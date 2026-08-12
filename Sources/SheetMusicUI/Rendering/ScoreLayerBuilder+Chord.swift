@@ -54,30 +54,10 @@ extension ScoreLayerBuilder {
         // separately but in practice it matches the note.
         let stemColor: CGColor = shifted.compactMap(\.color).first
             .map(scoreColorToCGColor) ?? inkColor
-        // Ledger lines first, so note heads / stems / flags (and the
-        // beams drawn by later elements) render ON TOP of them — the
-        // ledger sits visually behind the chord's ink. A ledger attached
-        // to a hidden notehead follows the notehead's visibility: skip at
-        // toggle-off, gray at 50% at toggle-on.
-        let visibleLedgerNotes = shifted.filter { !$0.isInvisible }
-        let invisibleLedgerNotes = shifted.filter(\.isInvisible)
-        drawLedgerLines(
-            notes: visibleLedgerNotes, stem: stem, metrics: metrics,
-            height: height, into: parent,
-        )
-        if !invisibleLedgerNotes.isEmpty, context.showsInvisibleElements {
-            // MuseScore invisibleColor() = #808080; 50% black on
-            // white is the equivalent.
-            let grayGroup = CALayer()
-            grayGroup.frame = parent.bounds
-            grayGroup.opacity = 0.5
-            grayGroup.masksToBounds = false
-            parent.addSublayer(grayGroup)
-            drawLedgerLines(
-                notes: invisibleLedgerNotes, stem: stem, metrics: metrics,
-                height: height, into: grayGroup,
-            )
-        }
+        // Ledger lines are no longer drawn here: `LedgerLinePass` emits
+        // them as `.ledgerLine` elements immediately before this chord,
+        // so they still render behind the chord's ink while the geometry
+        // lives in one place (and can see the staff's line count).
         for n in shifted {
             let glyph = noteheadGlyph(
                 for: baseDur, headType: n.headType, stemUp: stem == .up,
@@ -375,84 +355,6 @@ extension ScoreLayerBuilder {
                 path: CGPath(ellipseIn: rect, transform: nil),
                 height: height, color: color,
             ))
-        }
-    }
-
-    // MARK: - Ledger lines
-
-    private static func drawLedgerLines(
-        notes: [LayoutChordNote],
-        stem: StemDirection,
-        metrics: StaffMetrics,
-        height: CGFloat,
-        into parent: CALayer,
-    ) {
-        guard let ref = notes.first else { return }
-        let allSteps = notes.map(\.step)
-        let maxStep = allSteps.max() ?? 0
-        let minStep = allSteps.min() ?? 0
-        guard maxStep > 4 || minStep < -4 else { return }
-
-        let staffMidYAbs = ref.origin.y
-            + CGFloat(ref.step) * metrics.sp / 2
-        let chordX = ref.origin.x
-        let halfWidth = metrics.sp * 0.9
-        let lineWidth = metrics.staffLineThickness * 1.5
-
-        /// When a ledger spans a mirrored note, extend its width on
-        /// that side by the notehead-width offset so the stroke still
-        /// reaches the visible head.
-        func bounds(forLedgerStep ledger: Int) -> (CGFloat, CGFloat) {
-            var leftExt: CGFloat = 0
-            var rightExt: CGFloat = 0
-            for n in notes
-                where abs(n.step - ledger) <= 1 && n.mirror
-            {
-                let dx = n.mirrorDx(stem: stem, sp: metrics.sp)
-                if dx > 0 { rightExt = max(rightExt, dx) } else { leftExt = max(leftExt, -dx) }
-            }
-            return (
-                chordX - halfWidth - leftExt,
-                chordX + halfWidth + rightExt,
-            )
-        }
-
-        if maxStep > 4 {
-            let topEven = maxStep.isMultiple(of: 2)
-                ? maxStep : maxStep - 1
-            for ledgerStep in stride(
-                from: 6, through: topEven, by: 2,
-            ) {
-                let y = staffMidYAbs
-                    - CGFloat(ledgerStep) * metrics.sp / 2
-                let (xL, xR) = bounds(forLedgerStep: ledgerStep)
-                let path = CGMutablePath()
-                path.move(to: CGPoint(x: xL, y: y))
-                path.addLine(to: CGPoint(x: xR, y: y))
-                parent.addSublayer(strokeLayer(
-                    path: path, height: height,
-                    lineWidth: lineWidth,
-                ))
-            }
-        }
-
-        if minStep < -4 {
-            let botEven = minStep.isMultiple(of: 2)
-                ? minStep : minStep + 1
-            for ledgerStep in stride(
-                from: -6, through: botEven, by: -2,
-            ) {
-                let y = staffMidYAbs
-                    - CGFloat(ledgerStep) * metrics.sp / 2
-                let (xL, xR) = bounds(forLedgerStep: ledgerStep)
-                let path = CGMutablePath()
-                path.move(to: CGPoint(x: xL, y: y))
-                path.addLine(to: CGPoint(x: xR, y: y))
-                parent.addSublayer(strokeLayer(
-                    path: path, height: height,
-                    lineWidth: lineWidth,
-                ))
-            }
         }
     }
 

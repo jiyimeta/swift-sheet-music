@@ -403,6 +403,15 @@ plugin's `swiftPackagePath` follows along automatically. Run
     `MSCZReader.parseWithDiagnostics(...)`.
   - **Cosmetic** (color, offset, font, stroke style): silent default
     to the model's neutral value.
+
+  `SheetMusicMusicXML` has no diagnostic channel of its own — there is
+  no `mscxDecoderWarn` equivalent and no `parseWithDiagnostics` — so the
+  embellishment-tier corrections MSCX warns about are made silently
+  there (e.g. `<staff-details><staff-lines>` clamps to `1...16` and an
+  out-of-range `number` falls back to staff 0 with nothing reported).
+  Giving the MusicXML importer the same two-result surface is the known
+  follow-up; until then, apply the same correction MSCX would and say so
+  in a doc comment.
 - **Errors via `throws`.** Single error enum `SheetMusicError`; no
   `Result` types; no Optional return for "failed" cases.
 - **`MIDIRenderer` algorithm choices mirror MuseScore.** When you

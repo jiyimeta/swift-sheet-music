@@ -11,6 +11,13 @@ extension Part {
     /// Also returns the part's drum-mapping table (empty for non-percussion
     /// parts) so the note decoder can resolve `<unpitched>` notes to GM
     /// percussion pitches.
+    /// The staves this builds are placeholders in every respect,
+    /// `lineCount` included: `MusicXMLDecoder.decodePart` throws the
+    /// whole `staves` array away and rebuilds it from
+    /// `walker.lineCountByStaff` and `walker.measuresByStaff`. Reading
+    /// `<staff-details><staff-lines>` here as well would be a second
+    /// derivation of a value that is already single-sourced there, and
+    /// only one of the two could ever be observed.
     static func decodeMusicXML(
         scorePart: XMLTreeNode,
         partId: String,

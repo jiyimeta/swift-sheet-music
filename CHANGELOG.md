@@ -7,6 +7,67 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- Per-staff line counts. `SheetMusicCore.Staff.lineCount` carries
+  MuseScore's `<StaffType><lines>`, so a 1-line or 3-line percussion staff
+  keeps its own number of drawn lines end to end: the MSCX reader takes it,
+  the MSCX writer writes it back, the MusicXML importer reads it from
+  `<attributes><staff-details><staff-lines>`, and all three renderers draw
+  it. It defaults to 5, and a five-line staff engraves byte-identically to
+  before.
+
+- `SheetMusicLayout.StaffLineGeometry` owns every line-count-dependent
+  constant: the staff's drawn height, its top and bottom line in `step`
+  units, where its ledger lines begin, its barline span, a rest's natural
+  line, and MuseScore's whole-rest line move.
+  `LayoutSystem.staffGeometries` carries one per staff, parallel to
+  `staffOrigins`, and `LayoutSystem.geometry(atFlatIndex:)` reads it
+  (falling back to `.standard`). Everything that used to derive a vertical
+  from `StaffMetrics.staffHeight` — barline spans, the playback cursor,
+  the loop highlight, the skyline band, ledger lines, the centered
+  percussion clef and time signature — goes through this type now. Notes,
+  pitched clefs and key signatures deliberately do not: MuseScore anchors
+  those to the five-line reference frame however many lines are drawn.
+
+- Ledger lines are engraved once by the layout engine
+  (`SheetMusicLayout.LedgerLinePass`) and emitted as
+  `LayoutElement.ledgerLine`, instead of being re-derived inside each
+  renderer. Bounding a ledger line by the staff's own line count needs the
+  staff identity, which only the engine still has.
+
+### Changed
+
+- **Breaking.** `SheetMusicLayout.LayoutElement.barLine` carries a third
+  associated value, `halfHeight: CGFloat` — the distance from the stroke's
+  center Y to each of its ends — and
+  `SheetMusicLayout.BarLineGeometry.halfHeightSp` is removed. The span is
+  no longer a constant: a three-line staff spans ±1 sp, and a one-line
+  staff spans ±2 sp about its single line rather than collapsing to a dot.
+  Read `halfHeight` off the `.barLine` payload, or call
+  `StaffLineGeometry.barLineSpanY(sp:)` where you have the staff's geometry
+  but not the element.
+
+- **Breaking.** `SheetMusicLayout.LayoutElement` gains `case ledgerLine`,
+  which breaks exhaustive switches in consuming code. A renderer that
+  ignores the new case draws no ledger lines at all — the engine no longer
+  expects renderers to derive them for themselves.
+
+- A `LayoutSystem` rebuilt by hand must forward `staffGeometries`. The
+  parameter is defaulted to `[]` so the initializer stays
+  source-compatible, and `[]` means "every staff is five-line" — so
+  omitting it compiles, passes, and silently reverts that system's staves
+  to five-line geometry. The two copy-shaped rebuilds the library needs
+  are `LayoutSystem.addingSpanners(_:)` and `LayoutSystem.movedBy(dy:)`,
+  which carry every field forward; prefer them to re-invoking `init`.
+
+### Fixed
+
+- The SwiftUI Canvas renderer — which backs PDF export and the paged view
+  — draws grace chords. It had never drawn them at all, so a grace note
+  was simply missing from an exported page while the CALayer renderer on
+  screen showed it.
+
 ## [1.11.0] - 2026-08-12
 
 ### Fixed

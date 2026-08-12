@@ -34,4 +34,35 @@ public enum ClefGlyph {
         case .percussion2: (SMuFLCodepoint.percussionClef2, 0)
         }
     }
+
+    /// Extra Y offset, in staff spaces, that `clef` picks up on a staff
+    /// drawing other than five lines. Added to the emitted clef origin,
+    /// so every renderer inherits it through `LayoutElement.clef`
+    /// without knowing the staff's line count.
+    ///
+    /// Only the percussion clefs move. MuseScore centers them on the
+    /// staff's own height — `TLayout` `tlayout.cpp:1706-1710`,
+    /// `case ClefType::PERC / PERC2: yoff = lineDist * (lines - 1) * 0.5`
+    /// — while every pitched clef keeps `tlayout.cpp:1687`'s
+    /// `yoff = lineDist * (5 - ClefInfo::line(clefType))`, a hardcoded
+    /// 5 that never consults `lines()`. That is the same reference-frame
+    /// rule `StaffLineGeometry.topStep` records for note positions: a G
+    /// clef on a three-line staff stays anchored where a five-line staff
+    /// would put it, and "fixing" it would desynchronize the clef from
+    /// the notes it governs.
+    ///
+    /// Listed case by case rather than defaulted so a clef type added
+    /// later has to state which side of that rule it falls on.
+    public static func staffCenteringOffsetSp(
+        for clef: NotatedClef, lineGeometry: StaffLineGeometry,
+    ) -> CGFloat {
+        switch clef {
+        case .treble, .treble8va, .treble8vb, .treble15ma, .treble15mb,
+             .bass, .bass8va, .bass8vb,
+             .soprano, .alto, .tenor, .baritone:
+            0
+        case .percussion, .percussion2:
+            lineGeometry.centerOffsetSp
+        }
+    }
 }

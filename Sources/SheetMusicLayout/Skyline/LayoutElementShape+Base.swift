@@ -43,6 +43,15 @@ extension LayoutElementShape {
         case .articulation, .fermata, .breath, .tieArc, .tupletLabel,
              .glissandoLine, .arpeggioWiggle, .chordLine, .tremoloBars:
             return decorationRects(for: element, sp: sp)
+        case .ledgerLine:
+            // `LayoutElementShape.kind(of:)` already returns `nil` for
+            // `.ledgerLine`, so `shape(for:)` never calls this far — the
+            // ledger line's ink is part of its chord's skyline entry, not
+            // its own. Kept explicit rather than falling through the
+            // `default` below, which is for staff-internal elements
+            // (clef / key / time / bar line / …) that `.ledgerLine` is
+            // unrelated to.
+            return []
         default:
             return staffInternalRects(
                 element: element, kind: kind, metrics: metrics,
@@ -263,19 +272,27 @@ extension LayoutElementShape {
     ) -> [CGRect] {
         let sp = metrics.sp
         let p: CGPoint
+        // A barline reports the span the engine gave it, so the
+        // autoplace box tracks a one- or three-line staff's shorter
+        // stroke instead of a fixed 4 sp. Everything else keeps the
+        // five-line approximation.
+        var barLineHalfHeight: CGFloat?
         switch element {
         case let .clef(_, origin, _),
              let .keySignature(_, _, origin),
              let .timeSignature(_, _, origin),
-             let .barLine(_, origin),
              let .measureRepeat(_, origin),
              let .multiMeasureRest(_, origin):
             p = origin
+        case let .barLine(_, origin, half):
+            p = origin
+            barLineHalfHeight = half
         default:
             return []
         }
         let halfWidth: CGFloat = kind == .barLine ? sp * 0.2 : sp * 1.5
-        let halfHeight: CGFloat = kind == .clef ? sp * 3 : sp * 2
+        let halfHeight: CGFloat = barLineHalfHeight
+            ?? (kind == .clef ? sp * 3 : sp * 2)
         return [CGRect(
             x: p.x - halfWidth, y: p.y - halfHeight,
             width: halfWidth * 2, height: halfHeight * 2,

@@ -118,18 +118,26 @@ enum SkylineAutoplacePass {
     ///     synthetic staff rect spans the whole system. Deriving it
     ///     from `xOffsets` alone would stop at the LAST measure's left
     ///     edge and leave that measure without a staff to clear.
-    ///   - staffMidY: Y of the middle staff line in the same space.
+    ///   - staffTop: Y of this staff's own TOP drawn line.
+    ///   - staffBottom: Y of its own BOTTOM drawn line — equal to
+    ///     `staffTop` on a one-line staff. `Skyline`'s north / south
+    ///     filter measures "pokes outside the staff" against these, so
+    ///     they must be the DRAWN lines, not `staffMidY ∓ 2 sp`: that
+    ///     is the five-line REFERENCE band `step` is expressed in, and
+    ///     it overshoots any shorter staff.
     static func run(
         measures: inout [[LayoutElement]],
         xOffsets: [CGFloat],
         systemRightX: CGFloat,
-        staffMidY: CGFloat,
+        staffTop: CGFloat,
+        staffBottom: CGFloat,
         metrics: StaffMetrics,
     ) {
         guard measures.count == xOffsets.count, !measures.isEmpty
         else { return }
-        let staffTop = staffMidY - metrics.sp * 2
-        let staffBottom = staffMidY + metrics.sp * 2
+        // `resolveSide` splits at the middle of the same band, so a
+        // shorter staff's above/below test tracks its drawn ink.
+        let staffMidY = (staffTop + staffBottom) / 2
         var skyline = Skyline(staffTop: staffTop, staffBottom: staffBottom)
 
         // Stable per-(staff, system) identity for the ignore rules.
@@ -149,7 +157,7 @@ enum SkylineAutoplacePass {
         let xMin = xOffsets.first ?? 0
         skyline.add(LayoutShape(rects: [LayoutElementShape.staffRect(
             xMin: xMin, xMax: max(xMin, systemRightX),
-            staffMidY: staffMidY, metrics: metrics,
+            staffTop: staffTop, staffBottom: staffBottom,
         )]))
         for (mIdx, elements) in measures.enumerated() {
             for (i, el) in elements.enumerated() {

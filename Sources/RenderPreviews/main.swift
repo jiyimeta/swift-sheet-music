@@ -46,6 +46,12 @@
             try AdHocRender.run()
             return true
         }
+        // Corpus batch render (SM_RENDER_DIR=… swift run render-previews),
+        // the BEFORE/AFTER pixel gate for layout refactors.
+        if CorpusRender.isRequested {
+            try CorpusRender.run()
+            return true
+        }
         return false
     }
 

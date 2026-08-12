@@ -337,19 +337,7 @@ extension LayoutEngine {
         }
 
         return systems.enumerated().map { idx, system in
-            LayoutSystem(
-                origin: system.origin,
-                size: system.size,
-                measures: system.measures,
-                staffOrigins: system.staffOrigins,
-                staffAddresses: system.staffAddresses,
-                partLabels: system.partLabels,
-                brackets: system.brackets,
-                spanners: system.spanners + extraPerSystem[idx],
-                sp: system.sp,
-                invisibleSpanners: system.invisibleSpanners,
-                showsInvisibleElements: system.showsInvisibleElements,
-            )
+            system.addingSpanners(extraPerSystem[idx])
         }
     }
 }

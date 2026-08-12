@@ -56,7 +56,7 @@ extension LayoutEngine {
         case let .clef(_, p, _),
              let .keySignature(_, _, p),
              let .timeSignature(_, _, p),
-             let .barLine(_, p),
+             let .barLine(_, p, _),
              let .textMark(_, _, p),
              let .fermata(_, p),
              let .breath(_, p),
@@ -93,7 +93,11 @@ extension LayoutEngine {
         case let .tieArc(from, to, _),
              let .glissandoLine(from, to, _, _),
              let .lyricsMelisma(from, to),
-             let .lyricHyphen(from, to):
+             let .lyricHyphen(from, to),
+             // Never wider than the note it serves — the outermost
+             // note's own step already dominates this Y (see
+             // `LedgerLinePass`), so folding it in here is harmless.
+             let .ledgerLine(from, to, _):
             return [from.y, to.y]
         case let .arpeggioWiggle(top, bot, _):
             return [top.y, bot.y]

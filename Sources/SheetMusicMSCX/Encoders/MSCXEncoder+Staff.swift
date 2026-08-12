@@ -10,12 +10,20 @@ extension Staff {
         staffID: String, options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        var staffTypeChildren: [XMLTreeNode] = [
+            XMLTreeNode(name: "name", text: staffType),
+        ]
+        // Only non-default line counts are written, so existing
+        // five-line output stays byte-identical.
+        if lineCount != 5 {
+            staffTypeChildren.append(
+                XMLTreeNode(name: "lines", text: String(lineCount)),
+            )
+        }
         children.append(XMLTreeNode(
             name: "StaffType",
             attributes: ["group": group],
-            children: [
-                XMLTreeNode(name: "name", text: staffType),
-            ],
+            children: staffTypeChildren,
         ))
         if let defaultClefType {
             children.append(XMLTreeNode(

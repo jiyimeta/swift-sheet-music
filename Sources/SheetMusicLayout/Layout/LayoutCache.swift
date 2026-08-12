@@ -162,6 +162,12 @@ public final class LayoutCache: @unchecked Sendable {
         let metricsSp: CGFloat
         let activeClef: NotatedClef
         let activeKey: Int
+        /// This staff's drawn line count. Placement reads it through
+        /// `StaffLineGeometry` for the barline span, so a score edit
+        /// that retypes a staff (5-line → 1-line percussion) has to
+        /// invalidate the cached placements even though `measure` and
+        /// every other input is unchanged.
+        let lineCount: Int
         let initialClefRawType: String?
         let initialKeyForSynth: Int?
         let headerSchedule: LayoutEngine.HeaderSchedule

@@ -27,11 +27,43 @@ public enum TremoloAnchor: Sendable, Equatable {
 /// `origin` is measured from the measure's top-left corner where
 /// y increases downward (screen convention). Staff step 0 (middle
 /// line) corresponds to a y equal to `staffHeight / 2` within the measure.
+///
+/// That holds for EVERY staff, whatever its line count, because
+/// `StaffMetrics.staffHeight` is the five-line REFERENCE height rather
+/// than the staff's drawn one: `step` is anchored to the reference
+/// staff's top line and never consults `lines()` (MuseScore's
+/// `Note::updateRelLine` — see `StaffLineGeometry.topStep`). On a
+/// one-line staff, step 0 is therefore 2 sp BELOW the only drawn line,
+/// and "middle line" names the reference staff's middle, not any line
+/// that gets painted. Anything that needs the staff's real extent —
+/// where its lines stop, how far a barline spans, how tall the cursor
+/// is — must go through `StaffLineGeometry`, not through `staffHeight`.
 public enum LayoutElement: Sendable, Equatable {
     case clef(rawType: String, origin: CGPoint, anchor: ClefAnchor?)
     case keySignature(sharps: Int, flats: Int, origin: CGPoint)
     case timeSignature(numerator: Int, denominator: Int, origin: CGPoint)
-    case barLine(subtype: String?, origin: CGPoint)
+    /// `origin.y` is the vertical center of the barline's stroke — for
+    /// a staff with more than one line that is the staff's own center,
+    /// midway between its top and bottom lines. `halfHeight` is the
+    /// distance from there to each end of the stroke: normally half the
+    /// staff's drawn height, but 2 sp on a one-line staff, whose height
+    /// is zero.
+    ///
+    /// Both come from `StaffLineGeometry.barLineSpanY(sp:)`, so the
+    /// engine owns the rule (including the one-line special case) and
+    /// every renderer just strokes `origin.y ± halfHeight`.
+    /// C++: `dom/barline.cpp:253-266`,
+    /// `BARLINE_SPAN_1LINESTAFF_FROM` / `_TO` (`dom/barline.h:37-38`).
+    case barLine(subtype: String?, origin: CGPoint, halfHeight: CGFloat)
+    /// One ledger-line stroke, fully resolved by `LedgerLinePass`.
+    /// Endpoints are in the same coordinate space as the chord the
+    /// stroke belongs to, and `thickness` already carries that chord's
+    /// `mag` scaling. Inserted immediately BEFORE its chord so it
+    /// renders behind the chord's ink, matching MuseScore's
+    /// `LedgerLine` z-order.
+    ///
+    /// C++: `mu::engraving::LedgerLine`.
+    case ledgerLine(from: CGPoint, to: CGPoint, thickness: CGFloat)
     case note(
         step: Int,
         duration: NoteDuration,

@@ -179,12 +179,18 @@ extension Score {
             staffCount: walker.staffCount,
         )
         // Replace the placeholder empty-measure staves with real content.
-        let populatedStaves: [Staff] = walker.measuresByStaff.map { staffMeasures in
-            Staff(
-                staffType: "stdNormal", group: "pitched",
-                defaultClefType: nil, measures: staffMeasures,
-            )
-        }
+        // This is the ONLY place `lineCount` is decided for a MusicXML
+        // part: `partTemplate.staves` is discarded wholesale, so the
+        // walker's per-staff table is read here and nowhere else.
+        let populatedStaves: [Staff] = walker.measuresByStaff
+            .enumerated()
+            .map { staffIndex, staffMeasures in
+                Staff(
+                    staffType: "stdNormal", group: "pitched",
+                    lineCount: walker.lineCountByStaff[staffIndex] ?? 5,
+                    defaultClefType: nil, measures: staffMeasures,
+                )
+            }
         let part = Part(
             id: partTemplate.id,
             trackName: partTemplate.trackName,
