@@ -1,6 +1,7 @@
 import Foundation
 import SheetMusicAudioCore
 import SheetMusicCore
+import SheetMusicEditWire
 import SheetMusicMIDI
 
 // Audio JNI bridge helpers. The testable logic lives in pure helpers so

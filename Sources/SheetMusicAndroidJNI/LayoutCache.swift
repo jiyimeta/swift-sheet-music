@@ -25,11 +25,28 @@ public enum LayoutDocumentCache {
         public let filteredScore: Score
         /// The hidden-staff set used for this layout; drives the full→filtered cursor translation.
         public let hiddenStaves: Set<StaffAddress>
+        /// The exact `LayoutOptionsWire` `nativeComputeLayout` was called with — carries the layout mode
+        /// (`.vertical`/`.horizontal`/`.page`) and the break policy a re-encode needs to reproduce the same
+        /// page assembly `LayoutBridge.encodePages(document:options:pageWidthMM:pageHeightMM:tint:)` used the
+        /// first time, without redoing `LayoutEngine.layout`.
+        public let options: LayoutOptionsWire
+        /// The exact `pageWidthMM`/`pageHeightMM` `nativeComputeLayout` was called with. `.vertical` mode's
+        /// page width is the caller's viewport (not recoverable from `document.size`, which is the — usually
+        /// narrower — rendered content extent), and `.page` mode's fixed per-page size drives its pagination
+        /// cut; both must be replayed verbatim for a re-encode to match byte-for-byte.
+        public let pageWidthMM: Double
+        public let pageHeightMM: Double
 
-        public init(document: LayoutDocument, filteredScore: Score, hiddenStaves: Set<StaffAddress>) {
+        public init(
+            document: LayoutDocument, filteredScore: Score, hiddenStaves: Set<StaffAddress>,
+            options: LayoutOptionsWire, pageWidthMM: Double, pageHeightMM: Double,
+        ) {
             self.document = document
             self.filteredScore = filteredScore
             self.hiddenStaves = hiddenStaves
+            self.options = options
+            self.pageWidthMM = pageWidthMM
+            self.pageHeightMM = pageHeightMM
         }
     }
 
@@ -38,10 +55,19 @@ public enum LayoutDocumentCache {
     )
     private nonisolated(unsafe) static var storage: [Int64: Entry] = [:]
 
+    /// `options`/`pageWidthMM`/`pageHeightMM` default to `nativeComputeLayout`'s own `.verticalDefault` /
+    /// A4 shape so callers that only need `document`/`filteredScore`/`hiddenStaves` (cursor- and
+    /// anchor-frame lookups, which don't re-encode a draw program) don't have to thread values they don't
+    /// use. `nativeComputeLayout` (`JNISymbols.swift`, the one production call site) always passes its real
+    /// values explicitly.
     public static func store(
         handle: Int64, document: LayoutDocument, filteredScore: Score, hiddenStaves: Set<StaffAddress>,
+        options: LayoutOptionsWire = .verticalDefault, pageWidthMM: Double = 210, pageHeightMM: Double = 297,
     ) {
-        let entry = Entry(document: document, filteredScore: filteredScore, hiddenStaves: hiddenStaves)
+        let entry = Entry(
+            document: document, filteredScore: filteredScore, hiddenStaves: hiddenStaves,
+            options: options, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
+        )
         queue.sync { storage[handle] = entry }
     }
 

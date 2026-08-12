@@ -1,7 +1,8 @@
 // swiftlint:disable file_length
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
-import SheetMusicLayout
 
 /// Maps a point in a `ScoreView`'s local coordinate space to the
 /// engraving element underneath it, if any.

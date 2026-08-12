@@ -1,6 +1,7 @@
 import Foundation
 import SheetMusicAudioCore
 import SheetMusicCore
+import SheetMusicEditWire
 import SheetMusicMIDI
 
 // MARK: - T15: Timeline summary

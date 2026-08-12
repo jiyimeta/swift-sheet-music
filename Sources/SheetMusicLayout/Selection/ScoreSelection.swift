@@ -1,5 +1,4 @@
 import SheetMusicCore
-import SheetMusicLayout
 
 /// Current selection state passed to `ScoreView` for highlight rendering.
 ///

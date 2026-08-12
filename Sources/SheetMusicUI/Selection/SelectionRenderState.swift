@@ -44,91 +44,19 @@ struct SelectionRenderState {
         score: Score,
     ) -> SelectionRenderState {
         let cgColors = voiceColors.mapValues(resolveCGColor)
-        switch selection {
-        case .none:
-            return SelectionRenderState(
-                selectedIDs: [],
-                voiceColors: cgColors,
-                drawRangeBox: false,
-                rangeBoxColor: defaultBoxColor,
-            )
-        case let .single(id):
-            // Tuplet selection expands to the set of member IDs
-            // (every note/rest the bracket spans) so the existing
-            // per-element coloring path lights them up; the
-            // bracket itself stays default-colored.
-            let expandedIDs = Self.expand(id, in: score)
-            return SelectionRenderState(
-                selectedIDs: expandedIDs,
-                voiceColors: cgColors,
-                drawRangeBox: false,
-                rangeBoxColor: defaultBoxColor,
-            )
-        case let .range(anchor, target):
-            let ids = Set(score.items(inRangeFrom: anchor, to: target))
-            return SelectionRenderState(
-                selectedIDs: ids,
-                voiceColors: cgColors,
-                drawRangeBox: true,
-                rangeBoxColor: defaultBoxColor,
-            )
-        case let .multi(ids):
-            let expanded = ids.reduce(into: Set<ScoreItemID>()) {
-                $0.formUnion(Self.expand($1, in: score))
-            }
-            return SelectionRenderState(
-                selectedIDs: expanded,
-                voiceColors: cgColors,
-                drawRangeBox: false,
-                rangeBoxColor: defaultBoxColor,
-            )
+        let selectedIDs = SelectionExpansion.selectedIDs(for: selection, in: score)
+        let drawRangeBox: Bool
+        if case .range = selection {
+            drawRangeBox = true
+        } else {
+            drawRangeBox = false
         }
-    }
-
-    /// For non-tuplet IDs returns `[id]`; for a tuplet returns the
-    /// tuplet ID itself plus every member chord/rest the bracket
-    /// spans. Keeping the tuplet ID in the result lets the
-    /// renderer tint the bracket / number, while the member IDs
-    /// drive notehead / rest tinting through the same pipeline.
-    private static func expand(
-        _ id: ScoreItemID, in score: Score,
-    ) -> Set<ScoreItemID> {
-        guard case let .tuplet(tid) = id,
-              let tuplet = score[tid],
-              let staffForTuplet = score[tid.staff]
-        else { return [id] }
-        let measures = staffForTuplet.measures
-        guard measures.indices.contains(tid.measureIndex)
-        else { return [id] }
-        let voices = measures[tid.measureIndex].voices
-        guard voices.indices.contains(tid.voiceIndex)
-        else { return [id] }
-        let elements = voices[tid.voiceIndex].elements
-        var out: Set<ScoreItemID> = [id]
-        for j in tuplet.startIndex ... tuplet.endIndex {
-            guard elements.indices.contains(j),
-                  case let .chord(c) = elements[j]
-            else { continue }
-            if c.notes.isEmpty {
-                out.insert(.rest(RestID(
-                    staff: tid.staff,
-                    measureIndex: tid.measureIndex,
-                    voiceIndex: tid.voiceIndex,
-                    elementIndex: j,
-                )))
-            } else {
-                for ni in c.notes.indices {
-                    out.insert(.note(NoteID(
-                        staff: tid.staff,
-                        measureIndex: tid.measureIndex,
-                        voiceIndex: tid.voiceIndex,
-                        elementIndex: j,
-                        noteIndexInChord: ni,
-                    )))
-                }
-            }
-        }
-        return out
+        return SelectionRenderState(
+            selectedIDs: selectedIDs,
+            voiceColors: cgColors,
+            drawRangeBox: drawRangeBox,
+            rangeBoxColor: defaultBoxColor,
+        )
     }
 
     private static func resolveCGColor(_ color: Color) -> CGColor {

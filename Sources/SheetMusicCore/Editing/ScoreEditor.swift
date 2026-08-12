@@ -7,9 +7,11 @@ import Foundation
 /// it, and moves the *new* inverse onto the redo stack; `redo()` does
 /// the symmetric move back.
 ///
-/// `ScoreEditor` is `@MainActor` and a `final class` so a host app
-/// can keep a stable reference to register with `UndoManager`.
-@MainActor
+/// `ScoreEditor` is a `final class` so a host app can keep a stable reference to register with `UndoManager`.
+///
+/// Deliberately NOT `@MainActor`. The Android JNI process pumps no main runloop, so a main-actor hop from an entry
+/// point is scheduled and never resumed; the editor has to be drivable synchronously from whatever thread calls in.
+/// It is not `Sendable` — hold one per isolation domain, which is what both hosts do.
 public final class ScoreEditor {
     public private(set) var score: Score
     private var undoStack: [any EditCommand] = []

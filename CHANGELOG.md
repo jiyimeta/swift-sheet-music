@@ -47,6 +47,111 @@ and this project adheres to
   committed `instrumentParams-v1.bin` golden holds the wire byte-identical
   across the lift.
 
+## [1.11.0] - 2026-08-12
+
+### Added
+
+- `EditIntent` and `ScoreEditSession` let a host relay a scalar edit — a note write, a duration change, a delete,
+  or several bundled into one undo step — to a second copy of the score, so an Android host can keep a mirror
+  session in step with its own authoritative one. `Score.stableFingerprint` is a deterministic 64-bit digest of
+  the mutable musical content, for confirming two copies agree.
+- `ScoreEditSession.lastRefusalReason` reports why the last `apply` call returned `false` — the only diagnostic
+  available when a mirror session and its authoritative counterpart disagree.
+- Seven JNI entry points expose an edit session to Android: `nativeBeginEditSession`, `nativeApplyEditIntent`,
+  `nativeEditUndo`, `nativeEditRedo`, `nativeEndEditSession`, `nativeScoreFingerprint`, and
+  `nativeEngineVersionStamp`.
+- `HandleTable.replace` swaps the value behind an existing handle and reports whether the write landed, so a
+  handle released mid-edit is told apart from one that isn't.
+- `SheetMusicEngine.version` and `SheetMusicEngine.versionStamp` provide a build identity. On Android two
+  separately linked images of the engine coexist in one process — the host app's and its library's — and a
+  mismatch (a stale `.so`) can cause silent score divergence. `versionStamp` lets a host compare its own
+  compiled-in stamp against the one it reads from the library over JNI before opening an edit session, so it can
+  refuse to open one on a mismatch instead of risking a corrupted score. No host does this comparison yet; that is
+  downstream work this library only makes possible.
+- The note-input planning logic moved into `SheetMusicCore/Editing/Planners/`, `public`, so `ScoreEditSession` can
+  reach it directly instead of Folino's `EditorViewModel` being the only caller: `MeasureAccidentals` (accidental
+  renotation after a pitch/spelling change), `CrossBarInputPlanner` (a note or rest write that overruns its bar
+  chains a tied continuation into the next one instead of refusing), `FullMeasureRestCollapse` (a delete that
+  empties a bar collapses to one `.measure` rest), `NoteInputPlanner`, `TiePlanner`, `IntervalPlanner`,
+  `StaffStepPitch`, `ElementNavigator` (`TiePlanner` depends on its `nextTimedElement`/`previousTimedElement`, so
+  it moved too), and `RestDurationPromotion` (a rest write that exactly fills its bar from beat one is promoted to
+  the `.measure` spelling, matching the rest key's own behavior).
+- Seven new `EditIntent` cases and their `EditIntentWire` discriminators (5…11, appended after the five SP0
+  cases): `.setNotePitch`, `.setAccidental`, `.addNoteToChord`, `.removeNoteFromChord`, `.setTie`,
+  `.createTuplet`, `.removeTuplet`. Together with the five SP0 cases (`.inputNote`, `.setRestDuration`,
+  `.setChordDuration`, `.delete`, `.composite`), every edit `ScoreEditSession` can plan is now reachable from a
+  relayed intent.
+- An eighth new `EditIntent` case, `.writeNote(at:pitch:tpc:duration:)`, wire discriminator 12 — the letter key on a
+  slot that ALREADY holds a note: re-pitch it and re-time it in one undo step. Distinct from `.inputNote`, which
+  targets a rest, and deliberately not expressible as `.setChordDuration` followed by `.setNotePitch`: when the
+  length outruns the bar the note is spelled as a tied chain, the chain is planned by cloning one chord into every
+  link, and the two-intent form would therefore retune only the chain's head and leave its tail tied to it at the
+  old pitch.
+- `TiePlanner.tieChain(containing:in:)` returns every notehead a note is tied to, in voice order, including itself —
+  walked in both directions, so the chain is the same whichever member the caller holds, and an untied note comes
+  back as a chain of one. Within a chord the n-th tie out pairs with the n-th tie in (the rule `MidiRenderer`
+  already resolves tied pitches by), not the n-th in-chord index, which would pair the wrong voices whenever only
+  some of a chord's notes are tied.
+- A new Android-gated `SheetMusicEditWire` library product carries every wire codec Folino's own `FolinoEditorJNI`
+  would otherwise have had to hand-duplicate: `EditIntentCodec`, `PathIDCodecs`, `StaffAddressCodec`,
+  `ScoreItemIDCodec`, `ClefAnchorCodec`, and the new `EditGeometryCodec` (`SelectionTintCodec`,
+  `EditCaretFrameCodec`). It links as its own `.so`-independent target — `SheetMusicAndroidJNI` and a consuming
+  app both statically pull it in, so what has to match between the two images is the wire *schema*, not a shared
+  runtime instance.
+- `LayoutDocument.editingHitTest(at:activeVoice:)` answers "what score item is under this tap" — notehead, stem,
+  or a near-miss rescued through a 44×44-point slop box gated to the tapped staff, with a same-slop-box voice
+  preference — the same policy Folino's `EditorViewModel.displayedItem(at:)` implemented, now available to any
+  `LayoutDocument` including one built on Android. `LayoutDocument.editingCaretRect(for:in:minimumWidth:)`
+  answers the companion question, the rect an edit caret or selection outline should draw for one score item,
+  narrowed to that item's own staff band.
+- `nativeEncodeDrawProgram` re-derives a cached layout's draw program with a selection's notehead/accidental
+  (not the whole chord), rest glyph, or tuplet marking recolored — without relaying out. An empty selection
+  reproduces the untinted bytes exactly.
+- Three new JNI entry points complete the editing surface Android needs: `nativeEditingHitTest`,
+  `nativeEditingCaretFrame`, and `nativeEncodeDrawProgram` (re-tints a cached draw program from a selection,
+  reproducing `nativeComputeLayout`'s page assembly exactly in every layout mode — vertical, horizontal, and
+  paginated).
+- `Score.stableFingerprint`'s walk was widened to see everything a planner's element copy carries: on `Note` —
+  `accidentalBracket`, `accidentalRole`, `glissando`, `headType`, `parentheses`, `isSmall`, `play`, `visible`; on
+  `Chord` — `arpeggio`, `lyrics`, `graceNotesBefore`/`graceNotesAfter` (content, not just count), `articulations`,
+  `tremolo`, `chordLines`, `stemVisible`, `beamVisible`. See "Changed" below for what this means for a fingerprint
+  stored before this release.
+
+### Changed
+
+- `ScoreEditor` is no longer `@MainActor`. **Source-breaking:** a `@MainActor final class` is implicitly
+  `Sendable`, and `ScoreEditor` no longer is, so a consumer storing one in a `Sendable` type, or capturing it in a
+  `@Sendable` closure or a detached `Task`, will now fail to compile. The Android JNI process pumps no main run
+  loop, so a main-actor hop from an entry point would be scheduled and never resumed; the editor has to be
+  drivable synchronously from whatever thread calls in.
+- `Selection/` — `ScoreSelection`, `ScoreHitTarget`, `ScoreHitTester`, `ScoreHitTester+Marquee`, and the newly
+  extracted `SelectionExpansion` — moved from `SheetMusicUI` down to `SheetMusicLayout`, so an Android host (which
+  cannot import `SheetMusicUI`, an Apple-only SwiftUI target) can hit-test and expand a selection too.
+  **Source-breaking only for a consumer that imports `SheetMusicLayout` by name directly**: `SheetMusicUI` already
+  carried (and still carries) a whole-module `@_exported import SheetMusicLayout`, so any existing `import
+  SheetMusicUI` call site keeps compiling and resolving these four types unchanged — nothing to do there.
+- `ScoreEditSession.apply` now plans every intent through the planners above instead of mapping it straight onto
+  one command. **Source-behavior change, not source-breaking:** the same intent can now produce more commands
+  bundled into the same undo step — an out-of-key pitch write may ride in with its own accidental repair, and a
+  note or rest write that overruns its bar may chain a tied continuation across the barline instead of being
+  refused. One `apply` call is still one undo step either way; a host that inspects the *count* or *shape* of the
+  resulting commands (rather than treating them as opaque) is the only thing that could observe a difference.
+- `.setChordDuration` reaches across the barline, as `.setRestDuration` already did. The engine refuses any
+  single-slot lengthening that would cross a barline, so a host's length key read as dead at every barline — the
+  very hole `CrossBarInputPlanner` was written to close on the input side. The chain is planned from the chord
+  ALREADY in the slot, so its other notes, articulations, grace notes and ties survive into the continuation. No
+  `.measure` promotion here, unlike the rest case: `.measure` is a rest-only spelling.
+- `.setNotePitch` retunes the whole tie chain the named note belongs to, not that notehead alone. A tie says these
+  noteheads are one sounding note, and `MidiRenderer` reads it that way — it carries the head's pitch through the
+  chain — so retuning one member left two different pitches joined by a tie, unperformable and still sounding at
+  the old pitch. The accidental lands on the chain's head alone, matching MuseScore and `MeasureAccidentals`, which
+  skips tied-back notes when it renotates a measure. **Source-behavior change, not source-breaking:** an untied note
+  is a chain of one and still plans to a bare `SetNotePitch`.
+- **Every `Score.stableFingerprint` value changes** as a consequence of the widened walk above — this is not a
+  bug, it is the point (the walk previously blind to a planner's own repairs now sees them). A host comparing a
+  fingerprint it computed and stored under 1.10.1 or earlier against one computed under 1.11.0 will see them
+  disagree even for an unedited score, and must re-baseline rather than treat the mismatch as drift.
+
 ## [1.10.1] - 2026-08-12
 
 ### Fixed

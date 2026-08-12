@@ -31,10 +31,17 @@ public func nativeLoadScore(bytes: Data) -> Int64 {
 
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicJNI.nativeReleaseScore(...)` call site. Releases the score
-/// handle and its associated layout document cache entry.
+/// handle, its associated layout document cache entry, and — symmetric with
+/// those two — any edit session still mirroring it (`EditSessionBridge.swift`).
+/// A host that tears down a Reader with an edit session open (back-press,
+/// activity destruction, crash recovery) is not guaranteed to call
+/// `nativeEndEditSession` first, and without this the session (a full mirror
+/// `Score` plus its undo stack) would be retained until process exit, unreachable
+/// once `HandleTable`'s monotonic handles move past it.
 public func nativeReleaseScore(handle: Int64) {
     scoreTable.release(handle)
     LayoutDocumentCache.release(handle)
+    nativeEndEditSession(scoreHandle: handle)
 }
 
 // MARK: - Score metadata (swift-java entry point)
@@ -124,6 +131,9 @@ public func nativeComputeLayout(
         document: result.document,
         filteredScore: result.filteredScore,
         hiddenStaves: optionsWire.hiddenStaffAddresses,
+        options: optionsWire,
+        pageWidthMM: pageWidthMM,
+        pageHeightMM: pageHeightMM,
     )
     return result.encoded
 }

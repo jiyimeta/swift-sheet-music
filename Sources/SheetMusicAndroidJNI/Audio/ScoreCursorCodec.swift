@@ -1,5 +1,6 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicEditWire
 import Wirelet
 
 /// Codec for `ScoreCursor` — a sum-type variable-length payload, plus

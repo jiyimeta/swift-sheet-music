@@ -1,6 +1,7 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
-import SheetMusicLayout
 
 @available(macOS 15.0, *)
 extension ScoreHitTester {
@@ -9,9 +10,12 @@ extension ScoreHitTester {
     /// Result preserves visit order: systems top-to-bottom, then
     /// `EventColumn.centerX` ascending within each system.
     ///
-    /// A zero-size rect (zero width or height) always returns
-    /// empty because `CGRect.intersects` requires a non-degenerate
-    /// intersection. To hit-test a single point use `itemID(at:)`.
+    /// A zero-size (degenerate) `rect` does not always return empty: `CGRect.intersects(_:)`'s real edge
+    /// behavior is three-way, not "requires a non-degenerate intersection" — two non-degenerate operands need
+    /// strict overlap, two degenerate operands need exact coincidence, and when exactly one operand is
+    /// degenerate the rule is contains-style (min-inclusive, max-exclusive) membership of that single
+    /// coordinate in the other's span. So a degenerate query `rect` can still match an item whose bbox spans
+    /// that point. See `CGRect.intersects(_:)`'s own doc comment (`CGTypes+Android.swift`) for the full rule.
     ///
     /// O(systems_intersecting_rect · (log E + k)).
     public func itemIDs(in rect: CGRect) -> [ScoreItemID] {

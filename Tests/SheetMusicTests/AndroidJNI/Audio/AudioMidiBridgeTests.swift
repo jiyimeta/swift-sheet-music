@@ -3,6 +3,7 @@
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicAudioCore
     import SheetMusicCore
+    import SheetMusicEditWire
     @testable import SheetMusicMIDI
     import Testing
 
