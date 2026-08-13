@@ -25,9 +25,11 @@ import SheetMusicXMLTools
 /// * `.graceIndexed(_:)` — emits `<location><grace>N</grace></location>`,
 ///   no `<fractions>`/`<measures>`. MuseScore reads `<grace>` as the
 ///   destination's ordinal within its parent chord's grace series
-///   (`Location::graceIndex`, `dom/location.cpp:199-208`); see its doc
-///   comment for the citation trail confirming this against a genuine
-///   MuseScore Studio fixture.
+///   (`Location::graceIndex`, `dom/location.cpp:199-208`); see this
+///   case's own doc comment below for the exact shape observed in a
+///   genuine MuseScore Studio fixture (on a GuitarBend, not a Tie —
+///   `Location` read/write is spanner-generic, so the shape carries
+///   over) and its citation trail.
 enum TieLocation {
     case sameMeasure(fractions: Fraction)
     case crossMeasure(measures: Int, fractions: Fraction?)
@@ -255,11 +257,19 @@ extension Note {
             // and elided the same way; `<grace>` has no zero-elision —
             // its "no value" sentinel is `INT_MIN`, not `0`
             // (`Location::relative()`, `dom/location.h:51`), so index
-            // `0` is written explicitly. Verified against a genuine
-            // MuseScore Studio fixture: `<next><location><grace>0
-            // </grace></location></next>` —
+            // `0` is written explicitly. The exact shape
+            // `<next><location><grace>0</grace></location></next>` was
+            // directly observed in a genuine MuseScore Studio fixture —
             // `midirenderer_bend_data/bend_release_twice.mscx:135-139`
-            // in the upstream engraving test resources.
+            // in the upstream engraving test resources — on a
+            // `<Spanner type="GuitarBend">`, not a Tie; no Tie-into-
+            // grace fixture was found. The shape generalizes because
+            // `Location` read/write is spanner-generic — one
+            // `TWrite::write(const Location*, …)` (this same function's
+            // caller) and one `TRead::read(Location*, …)`
+            // (`rw/read460/tread.cpp:3130-3153`) serve every connector
+            // type, GuitarBend and Tie alike; neither branches on which
+            // spanner it's serializing.
             children.append(XMLTreeNode(name: "grace", text: String(index)))
         }
         return XMLTreeNode(name: "location", children: children)

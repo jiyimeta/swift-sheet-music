@@ -65,22 +65,38 @@ and this project adheres to
   paragraph, which a chord-shaped regression suite now pins alongside the
   positive cases.
 
+  **Narrower than it may sound: single-note chords only.** MuseScore's
+  endpoint match also compares each side's note index within its own chord
+  (`Location::note`), and neither this fix nor the grace side emits a
+  `<notes>` delta, so the comparison is always `0 - 0`. That is correct
+  exactly when both the tied main note and the tied grace note are the only
+  note in their respective chords — the common case this fix targets. A
+  multi-note main chord whose tied note sits at index ≥ 1 (or a multi-note
+  grace chord likewise) still drops the tie on reload. Not a regression —
+  the pre-fix bare `<prev/>`/`<next/>` failed those cases identically — but
+  a complete fix needs `<notes>` deltas computed on both tie sides, which is
+  a separate, non-trivial change and not done here.
+
   **Known gap, left in place rather than guessed at:** the mirror direction
   — a main note tying forward into its own trailing `graceNotesAfter` note
-  (a tied Nachschlag) — is not fixed. Investigating it surfaced a separate,
-  pre-existing issue: this encoder places a chord's `graceNotesAfter`
-  `<Chord>` elements *after* that chord in the file, but MuseScore's own
-  writer places every grace — before or after type alike — *before* the
-  chord it decorates, with the type tag controlling only rendering and
-  playback timing, not file position. A real MuseScore Studio reader
-  therefore attaches this project's after-graces to the *next* chord in the
-  file, not the one they were meant to decorate, which affects an
-  after-grace's read-time tick independent of any tie. A tie location
-  computed against this project's current placement would look confident
-  and be wrong, so the ordinary (already non-reconnecting) location is left
-  in place for that direction instead. Fixing the underlying placement —
-  which affects every score with an after-grace, independent of ties — is a
-  larger, separate change and needs its own follow-up.
+  (a tied Nachschlag) — is not fixed. Investigating it surfaced an issue in
+  the grace-writing fix above, new with this release rather than
+  pre-existing: this encoder places a chord's `graceNotesAfter` `<Chord>`
+  elements *after* that chord in the file, but MuseScore's own writer places
+  every grace — before or after type alike — *before* the chord it
+  decorates, with the type tag controlling only rendering and playback
+  timing, not file position. MuseScore's reader buffers grace-type chords
+  and attaches the whole run to the *next* normal chord it finds, with no
+  flush at the end of a voice/measure — so an after-grace written where this
+  encoder puts it is either displaced onto the following chord, or, if none
+  follows, silently dropped on reload with nothing to report. Either way
+  this affects an after-grace's read-time attachment independent of any tie.
+  A tie location computed against this project's current placement would
+  look confident and be wrong, so the ordinary (already non-reconnecting)
+  location is left in place for that direction instead. Fixing the
+  underlying placement — which affects every score with an after-grace,
+  independent of ties — is a larger, separate change and needs its own
+  follow-up.
 
 - The engine version stamp (`SheetMusicEngine.version`) is bumped to
   `1.13.1`, matching this release. It had been left at `1.12.0` since that

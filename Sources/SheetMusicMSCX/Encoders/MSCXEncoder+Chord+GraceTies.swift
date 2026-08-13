@@ -28,6 +28,29 @@ extension Chord {
     /// that reaches `encodeAsChord` through this path with no override
     /// produces byte-identical output to before this fix.
     ///
+    /// **Scope: single-note chords only.** MuseScore's endpoint match
+    /// (`ConnectorInfo::connect`, `dom/connector.cpp:91-122`) compares
+    /// full `Location` equality, which includes `m_note`
+    /// (`Location::operator==`, `dom/location.cpp:264-274`) — the tied
+    /// note's own index within its chord (`Location::note`,
+    /// `dom/location.cpp:214-231`), carried through `toAbsolute`
+    /// unchanged as a plain per-endpoint offset (`:65-76`), not a
+    /// delta between the two sides. Neither this override nor the
+    /// grace side's own encoding (`GraceChord.encode`) emits a
+    /// `<notes>` element, so the match MuseScore computes for that
+    /// field is always `0 - 0`. That's correct whenever both the tied
+    /// main note and the tied grace note are the only note in their
+    /// respective chords (`Location::note` itself special-cases
+    /// `notes.size() == 1` to `0` regardless of storage order) — the
+    /// overwhelmingly common case this fix targets. For a multi-note
+    /// main chord whose tied note sits at note-index ≥ 1 (or a
+    /// multi-note grace chord likewise), the real index is nonzero,
+    /// `0 - 0` doesn't match it, and MuseScore still drops the tie —
+    /// not a regression, since the pre-fix bare `<prev/>`/`<next/>`
+    /// failed those cases identically, but a complete fix needs
+    /// `<notes>` deltas computed on both tie sides, which is a
+    /// separate, non-trivial change and not done here.
+    ///
     /// The returned index is the grace chord's position within
     /// `graceNotesBefore` (0-based), which equals MuseScore's own
     /// `<grace>` ordinal (`Location::graceIndex`,
@@ -43,17 +66,18 @@ extension Chord {
     /// of this chord would be counted first in that combined run,
     /// shifting the true index. Not accounted for here: doing so needs
     /// the previous chord's own grace list threaded into this
-    /// function, and the shift only *matters* once a separate,
-    /// pre-existing bug is understood — `Voice.emitElement` places
-    /// `graceNotesAfter` chords *after* their own owner, which is not
-    /// where MuseScore's own writer puts them (confirmed against a
-    /// genuine MuseScore Studio fixture — see `TieLocation
-    /// .graceIndexed`'s doc comment) — so an after-grace's true
-    /// read-time tick doesn't match the chord it was meant to decorate
-    /// in the first place, independent of any tie. That is a larger,
-    /// separate fix; this function's index is correct for the common
-    /// case (no after-grace on the immediately preceding chord) and
-    /// documented as a known gap otherwise — see the release report.
+    /// function, and the shift only *matters* once a separate bug,
+    /// new in this same release's grace-writing commit, is understood
+    /// — `Voice.emitElement` places `graceNotesAfter` chords *after*
+    /// their own owner, which is not where MuseScore's own writer puts
+    /// them (confirmed against a genuine MuseScore Studio fixture —
+    /// see `TieLocation.graceIndexed`'s doc comment) — so an
+    /// after-grace's true read-time tick doesn't match the chord it
+    /// was meant to decorate in the first place, independent of any
+    /// tie. That is a larger, separate fix; this function's index is
+    /// correct for the common case (no after-grace on the immediately
+    /// preceding chord) and documented as a known gap otherwise — see
+    /// the release report.
     ///
     /// There is deliberately no mirror `graceNotesAfter` /
     /// `tieForward` function (a main note tying forward into its own
