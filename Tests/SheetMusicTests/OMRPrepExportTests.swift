@@ -16,8 +16,12 @@
         /// Batch counters. Every summary line built on top of this leads
         /// with a count, so an empty traversal reads as "zero renders",
         /// never as a silently-passing gate. `failed` is set only by a
-        /// caller that catches `exportPage`'s throw (this function never
-        /// touches it itself — see `OMRPrepExportHarness.sweep`).
+        /// caller that catches a failure this function cannot recover
+        /// from itself — either `exportPage`'s own throw for one page,
+        /// or a directory-listing failure that keeps an entire render
+        /// directory from being walked at all (this function never
+        /// touches `failed` itself — see `OMRPrepExportHarness.sweep`,
+        /// which catches both into the SAME counter and warns by name).
         struct Outcome: Equatable {
             var pages = 0
             var glyphs = 0

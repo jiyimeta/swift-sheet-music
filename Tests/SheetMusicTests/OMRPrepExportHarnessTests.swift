@@ -29,6 +29,17 @@
         /// the alternative is losing every count already gathered for
         /// one bad page, because the summary only prints after the loop
         /// completes (Task 6 review, Critical / Important 2).
+        ///
+        /// A directory-LISTING failure (a permission fault or an I/O
+        /// fault on an external mount, a directory disappearing mid-walk)
+        /// goes through the exact same `totals.failed` counter and
+        /// `[prep][WARN]` line, one per unlistable directory — reusing
+        /// `failed` rather than adding a second counter, since both are
+        /// "the sweep could not process this" and the summary line
+        /// already surfaces it (Task 6 review round 2, Important). The
+        /// first cut of this fix used `try?` here, which swallowed the
+        /// failure with no count and no line — exactly the silent-drop
+        /// this counter exists to rule out.
         static func sweep(
             root: String, prepRoot: String, staffSpacePx: Double, tile: Int,
         ) throws -> (renders: Int, totals: OMRPrepExport.Outcome) {
@@ -36,16 +47,21 @@
             var totals = OMRPrepExport.Outcome()
             for dir in renderDirs {
                 autoreleasepool {
-                    for name in (try? OMRHarnessDirectoryWalk.labelFiles(in: dir)) ?? [] {
-                        do {
-                            try OMRPrepExport.exportPage(
-                                dir: dir, labelFile: name, prepRoot: prepRoot,
-                                staffSpacePx: staffSpacePx, tile: tile, into: &totals,
-                            )
-                        } catch {
-                            totals.failed += 1
-                            print("[prep][WARN] \(dir)/\(name) \(error)")
+                    do {
+                        for name in try OMRHarnessDirectoryWalk.labelFiles(in: dir) {
+                            do {
+                                try OMRPrepExport.exportPage(
+                                    dir: dir, labelFile: name, prepRoot: prepRoot,
+                                    staffSpacePx: staffSpacePx, tile: tile, into: &totals,
+                                )
+                            } catch {
+                                totals.failed += 1
+                                print("[prep][WARN] \(dir)/\(name) \(error)")
+                            }
                         }
+                    } catch {
+                        totals.failed += 1
+                        print("[prep][WARN] \(dir) \(error)")
                     }
                 }
             }
@@ -142,6 +158,56 @@
                 at: "\(root)/aaa_broken", markerName: "render.json",
                 markerJSON: ["pdf": "score.pdf", "dpi": 300],
                 labels: PrepFixture.labels(glyphs: []), raster: nil,
+            )
+            try PrepFixture.stage(
+                at: "\(root)/bbb_good", markerName: "render.json",
+                markerJSON: ["pdf": "score.pdf", "dpi": 300],
+                labels: PrepFixture.labels(glyphs: []), raster: PrepFixture.staffBitmap(),
+            )
+            let prepRoot = root + "-prep"
+            defer { try? FileManager.default.removeItem(atPath: prepRoot) }
+
+            let result = try OMRPrepExportHarness.sweep(
+                root: root, prepRoot: prepRoot, staffSpacePx: 12, tile: 384,
+            )
+            #expect(result.renders == 2)
+            #expect(result.totals.failed == 1)
+            #expect(result.totals.pages == 1)
+        }
+
+        /// A directory-listing failure (permission fault, I/O fault on
+        /// an external mount, directory vanishing mid-walk) must be
+        /// counted and warned about, not silently dropped from the
+        /// sweep (Task 6 review round 2). Reproduced portably with a
+        /// POSIX permission split rather than anything Android/Linux
+        /// wouldn't share the exact bits of — this file is already
+        /// `#if !os(Android)`-gated, so that is not a constraint here:
+        /// `chmod 0111` (execute-only, no read) leaves `stat`-by-known-
+        /// name working — so `renderOrFrozenDirectories`'s
+        /// `fileExists(atPath: "<dir>/render.json")` still finds the
+        /// directory and includes it in the walk — while `readdir`
+        /// (what `labelFiles(in:)`'s `contentsOfDirectory` needs) is
+        /// denied. "aaa_unlistable" sorts before "bbb_good" so the walk
+        /// hits the failure first, proving it does not stop the rest of
+        /// the sweep.
+        @Test func anUnlistableDirectoryIsCountedAndDoesNotStopTheWalk() throws {
+            let root = try makeTempRoot()
+            let unlistableDir = "\(root)/aaa_unlistable"
+            defer {
+                // Recursive cleanup needs to read `unlistableDir` to
+                // delete its contents, so undo the restriction first.
+                try? FileManager.default.setAttributes(
+                    [.posixPermissions: 0o755], ofItemAtPath: unlistableDir,
+                )
+                try? FileManager.default.removeItem(atPath: root)
+            }
+            try PrepFixture.stage(
+                at: unlistableDir, markerName: "render.json",
+                markerJSON: ["pdf": "score.pdf", "dpi": 300],
+                labels: PrepFixture.labels(glyphs: []), raster: PrepFixture.staffBitmap(),
+            )
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o111], ofItemAtPath: unlistableDir,
             )
             try PrepFixture.stage(
                 at: "\(root)/bbb_good", markerName: "render.json",
