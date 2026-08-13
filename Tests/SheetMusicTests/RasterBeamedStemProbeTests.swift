@@ -95,37 +95,53 @@
             }
         }
 
-        /// …and the reason, stated on the beam: at every stem column the
-        /// ink run is beam + stem merged, which lands on no ladder rung
-        /// and contributes no column to the slab. Interior stems are
-        /// bridged over; the OUTER ones are the slab's own endpoints, so
-        /// the fitted x-range stops short of them by about half a stem
-        /// width plus a pixel of binarization spread.
+        /// The fitted quad reaches its own outermost stems.
         ///
-        /// The shortfall is asserted as a BOUND, not an equality: what
-        /// matters downstream is its size relative to the consumers'
-        /// tolerances — `fullBeamSpans` pads by 1.5pt and survives it,
-        /// `touchesBeam` pads by nothing and does not. Measured over the
-        /// corpus the same shortfall shows up as beam x-coverage
-        /// p50 = 0.90, p01 = 0.85.
-        @Test func theBeamQuadStopsJustShortOfTheOutermostStems() {
+        /// It does not do so by fitting: at every stem column the ink run
+        /// is beam + stem merged, lands on no ladder rung, and gives the
+        /// slab no column, so the FIT necessarily stops about half a stem
+        /// width inside each end. `extendedSpan` walks outward from there
+        /// across columns whose ink still fills the fitted band, which is
+        /// what the beam's own continuation over its outer stem looks
+        /// like.
+        ///
+        /// The property matters because `beamWindow` uses a beam's
+        /// x-range as a tuplet's member-run window and `fullBeamSpans`
+        /// tests each stem's x against it — both written when the only
+        /// producer was a vector PDF, where a beam quad's endpoints
+        /// coincide with its outer stems by construction.
+        @Test func theBeamQuadReachesTheOutermostStems() {
             let analysis = RasterPage.analyze(Self.beamedGroupPage(), pageIndex: 0)
             guard let quad = analysis.paths.first(where: { $0.kind == .beam })?.quad
             else {
                 Issue.record("no beam detected")
                 return
             }
-            let stemWidthPt = Self.pageX(Double(Self.stemWidthPx))
             let leftStem = Self.pageX(
                 Double(Self.stemXs[0]) + Double(Self.stemWidthPx) / 2,
             )
             let rightStem = Self.pageX(
                 Double(Self.stemXs[3]) + Double(Self.stemWidthPx) / 2,
             )
-            #expect(Double(quad.xRange.lowerBound) > leftStem)
-            #expect(Double(quad.xRange.upperBound) < rightStem)
-            #expect(Double(quad.xRange.lowerBound) - leftStem <= stemWidthPt)
-            #expect(rightStem - Double(quad.xRange.upperBound) <= stemWidthPt)
+            #expect(Double(quad.xRange.lowerBound) <= leftStem)
+            #expect(Double(quad.xRange.upperBound) >= rightStem)
+        }
+
+        /// …and it stops there rather than running on. The bound is what
+        /// keeps a notehead abutting a beam end — which also fills the
+        /// band — from being swallowed into the beam's span.
+        @Test func theBeamQuadDoesNotOverrunTheGroup() {
+            let analysis = RasterPage.analyze(Self.beamedGroupPage(), pageIndex: 0)
+            guard let quad = analysis.paths.first(where: { $0.kind == .beam })?.quad
+            else {
+                Issue.record("no beam detected")
+                return
+            }
+            let inkLeft = Self.pageX(Double(Self.stemXs[0]))
+            let inkRight = Self.pageX(Double(Self.stemXs[3] + Self.stemWidthPx))
+            let slack = Self.pageX(Double(Self.spacingPx) * 0.35)
+            #expect(Double(quad.xRange.lowerBound) >= inkLeft - slack)
+            #expect(Double(quad.xRange.upperBound) <= inkRight + slack)
         }
     }
 #endif

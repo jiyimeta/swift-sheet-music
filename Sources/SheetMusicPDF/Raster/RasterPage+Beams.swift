@@ -89,7 +89,7 @@ extension RasterPage {
                       Double(last.x - first.x + 1) >= minExtentPx
                 else { continue }
                 out += quads(
-                    for: interval, spacingPx: spacingPx,
+                    for: interval, mask: mask, spacingPx: spacingPx,
                     transform: transform, pageIndex: pageIndex,
                 )
             }
