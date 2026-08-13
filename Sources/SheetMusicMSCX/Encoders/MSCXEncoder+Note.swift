@@ -6,9 +6,12 @@ import SheetMusicXMLTools
 /// payload. MuseScore Studio interprets this in two distinct ways
 /// depending on whether `<measures>` is present:
 ///
-/// * `.sameMeasure(fractions:)` — emits `<location><fractions>F</fractions></location>`.
-///   MuseScore reads this as a tick delta from the source position
-///   to the destination position within the same measure.
+/// * `.sameMeasure(fractions:)` — emits `<location><fractions>F</fractions></location>`,
+///   except when `F` is exactly `0/1` (`TieLocation.graceZeroDelta`), where the
+///   `<fractions>` child itself is elided, matching MuseScore's own default-value
+///   elision — see `graceZeroDelta`'s doc comment. MuseScore reads the fraction (present
+///   or implied `0/1`) as a tick delta from the source position to the destination
+///   position within the same measure.
 ///
 /// * `.crossMeasure(measures:fractions:)` — emits
 ///   `<location><measures>M</measures><fractions>F</fractions></location>`
@@ -21,6 +24,48 @@ import SheetMusicXMLTools
 enum TieLocation {
     case sameMeasure(fractions: Fraction)
     case crossMeasure(measures: Int, fractions: Fraction?)
+
+    /// The location for a tie between a grace note and a note of its
+    /// own parent chord (in either direction) — the single most common
+    /// grace tie, e.g. a tied acciaccatura into its main note.
+    ///
+    /// A grace chord shares its parent chord's tick — MuseScore's
+    /// writer never advances the cursor for a grace item
+    /// (`if (!item->isGrace()) { … ctx.incCurTick(t); }`,
+    /// `rw/write/twrite.cpp:1126-1130`) because `EngravingItem::tick()`
+    /// (`dom/engravingitem.cpp:584-596`) resolves through the enclosing
+    /// `Segment`, which a grace chord shares with the chord it
+    /// decorates. So the tie's source and destination ticks are
+    /// identical: zero delta, same measure.
+    ///
+    /// This is `.sameMeasure(fractions: 0/1)` rather than a distinct
+    /// case because MuseScore's own `SpannerWriter` (`dom/connector.cpp`
+    /// `SpannerWriter::SpannerWriter`, `~103-138`) prefers computing a
+    /// tie's `<location>` from its actual start/end elements via
+    /// `Location::fillForElement` (`dom/location.cpp:128-139`) over any
+    /// tie-specific special-casing — reusing the ordinary same-measure
+    /// path is what "prefer this source of information" means in
+    /// practice for a grace tie.
+    ///
+    /// Verified this is not merely a formatting nicety: MuseScore's
+    /// reader treats an *absent* `<location>` under `<next>`/`<prev>`
+    /// as "position unknown" (`ConnectorInfoReader::readEndpointLocation`,
+    /// `rw/read460/connectorinforeader.cpp:120-132`, leaves the
+    /// `Location` at its `measure == INT_MIN` sentinel when no
+    /// `<location>` child is present), and `hasNext()` / `hasPrevious()`
+    /// (`dom/connector.h:69-70`) test exactly that sentinel. A
+    /// location-less `<next/>` therefore makes both `isStart()` and
+    /// `isEnd()` false, so `ConnectorInfoReader::readAddConnector(Note*,
+    /// …)` (`rw/read460/connectorinforeader.cpp:365-425`) never wires
+    /// the parsed `Tie` object to a start/end note at all — the tie is
+    /// silently dropped on reload by MuseScore Studio. Emitting an
+    /// explicit (even all-zero) `<location>` is what keeps `hasNext()`
+    /// true (`Location::relative()` defaults `measure` to `0`, not
+    /// `INT_MIN` — `dom/location.h:51`), so the grace note's tie
+    /// reconnects correctly.
+    static let graceZeroDelta = TieLocation.sameMeasure(
+        fractions: Fraction(numerator: 0, denominator: 1),
+    )
 }
 
 extension Note {
@@ -161,7 +206,19 @@ extension Note {
         var children: [XMLTreeNode] = []
         switch location {
         case let .sameMeasure(fractions):
-            children.append(fractionsNode(fractions))
+            // MuseScore elides `<fractions>` when the value is the
+            // `Location::relative()` default (`0/1`) — `TWrite::write
+            // (const Location*, …)`, `rw/write/twrite.cpp:2238`, calls
+            // `xml.tagFraction("fractions", item->frac().reduced(),
+            // relDefaults.frac())`, and `relDefaults.frac()` is `0/1`.
+            // A same-measure tie's fraction is never actually zero
+            // except `TieLocation.graceZeroDelta`, so this only ever
+            // fires there — matching upstream byte-for-byte for that
+            // case rather than emitting a functionally-equivalent but
+            // needlessly explicit `<fractions>0/1</fractions>`.
+            if fractions.numerator != 0 {
+                children.append(fractionsNode(fractions))
+            }
         case let .crossMeasure(measures, fractions):
             children.append(XMLTreeNode(
                 name: "measures", text: String(measures),

@@ -81,6 +81,79 @@ struct GraceNoteEncoderStructuralTests {
         #expect(chordNodes.prefix(2).map { $0.all("Note").map(\.pitch) } == [[64], [65]])
     }
 
+    /// Pins the fix for the grace-tie `<location>` gap: a grace note's
+    /// `tieForward` must not encode as a bare, location-less `<next/>`.
+    /// Cross-referenced against MuseScore Studio's own C++ source
+    /// (`src/engraving/dom/connector.cpp`, `.../rw/read460/
+    /// connectorinforeader.cpp`, `.../dom/location.cpp`) rather than
+    /// guessed: a grace chord shares its parent chord's tick, so a
+    /// tied acciaccatura into its own main note is a zero-delta,
+    /// same-measure tie — MuseScore's writer represents that as a
+    /// *present but empty* `<location/>` (every field equals its
+    /// default and is elided), not as an absent `<location>`. The
+    /// distinction is load-bearing on reload: `ConnectorInfoReader`
+    /// treats an absent `<location>` as "position unknown"
+    /// (`measure == INT_MIN`), which makes `hasNext()` false and
+    /// silently drops the tie when MuseScore Studio reopens the file —
+    /// see `TieLocation.graceZeroDelta`'s doc comment for the full
+    /// citation trail.
+    @Test("A grace note's forward tie carries an empty <location>, not a bare <next/>")
+    func graceTieForwardCarriesEmptyLocation() {
+        let grace = GraceChord(
+            graceType: .acciaccatura,
+            duration: .sixteenth,
+            notes: ChordNotes([Note(pitch: 59, tpc: 11, tieForward: 1)]),
+        )
+
+        let chordNode = grace.encode()
+        let noteNode = chordNode.first("Note")
+        let spanner = noteNode?.all("Spanner").first { $0.attributes["type"] == "Tie" }
+        #expect(spanner != nil)
+        guard let spanner else { return }
+
+        #expect(spanner.hasChild("Tie"))
+        let next = spanner.first("next")
+        #expect(next != nil)
+        guard let next else { return }
+
+        // The bug: previously `<next>` had no children at all (nil
+        // location). The fix: `<next>` carries a `<location>` element —
+        // present, but with no children, matching MuseScore's own
+        // default-value elision for a zero-delta tie.
+        #expect(next.children.count == 1)
+        let location = next.first("location")
+        #expect(location != nil)
+        #expect(location?.children.isEmpty == true)
+    }
+
+    /// Symmetric with the forward case: a grace note's `tieBack` (e.g.
+    /// a `grace8after` tied back into the main chord it follows) must
+    /// carry the same empty `<location>` under `<prev>`.
+    @Test("A grace note's backward tie carries an empty <location>, not a bare <prev/>")
+    func graceTieBackCarriesEmptyLocation() {
+        let grace = GraceChord(
+            graceType: .grace8after,
+            duration: .eighth,
+            notes: ChordNotes([Note(pitch: 64, tpc: 18, tieBack: 1)]),
+        )
+
+        let chordNode = grace.encode()
+        let noteNode = chordNode.first("Note")
+        let spanner = noteNode?.all("Spanner").first { $0.attributes["type"] == "Tie" }
+        #expect(spanner != nil)
+        guard let spanner else { return }
+
+        #expect(!spanner.hasChild("Tie")) // <Tie/> marks only the forward side
+        let prev = spanner.first("prev")
+        #expect(prev != nil)
+        guard let prev else { return }
+
+        #expect(prev.children.count == 1)
+        let location = prev.first("location")
+        #expect(location != nil)
+        #expect(location?.children.isEmpty == true)
+    }
+
     /// A grace chord's duration is written straight through, never run
     /// past the tuplet un-scaling an ordinary chord's duration gets —
     /// see `GraceChord.encode`'s doc comment. Encode a before-grace

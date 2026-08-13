@@ -25,12 +25,31 @@ extension GraceChord {
     /// (`NoteDuration.appendDurationXML`), then the grace tag, then one
     /// `<Note>` per note, reusing the same note encoder an ordinary
     /// chord's notes go through.
+    ///
+    /// A tie on a grace note always uses `TieLocation.graceZeroDelta`:
+    /// a grace chord shares its parent chord's tick (MuseScore never
+    /// advances the write cursor for a grace item —
+    /// `TWrite::write(const ChordRest*, …)`,
+    /// `rw/write/twrite.cpp:1126-1130`, guards `ctx.incCurTick` with
+    /// `!item->isGrace()` — and `EngravingItem::tick()`,
+    /// `dom/engravingitem.cpp:584-596`, resolves to the tick of the
+    /// enclosing `Segment`, which a grace chord shares with the main
+    /// chord it decorates), so a tied acciaccatura/appoggiatura into
+    /// its own main note is a same-tick, same-measure tie. See
+    /// `TieLocation.graceZeroDelta`'s doc comment for the full
+    /// citation trail, including why an *absent* `<location>` (this
+    /// project's previous output) is not merely imprecise but silently
+    /// drops the tie when MuseScore Studio reloads the file.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         duration.appendDurationXML(to: &children)
         children.append(XMLTreeNode(name: graceType.mscxTag))
         for note in notes {
-            children.append(note.encode(options: options))
+            children.append(note.encode(
+                tieForwardLocation: note.tieForward != nil ? .graceZeroDelta : nil,
+                tieBackLocation: note.tieBack != nil ? .graceZeroDelta : nil,
+                options: options,
+            ))
         }
         return XMLTreeNode(name: "Chord", children: children)
     }
