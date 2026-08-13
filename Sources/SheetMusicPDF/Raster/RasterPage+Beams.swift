@@ -49,6 +49,26 @@ extension RasterPage {
     /// Worst allowed deviation of an edge from its straight-line fit, in
     /// staff spaces. Expressed in staff spaces, not pixels, so the same
     /// page content gets the same verdict at 200 and 400dpi.
+    ///
+    /// Swept through the hybrid on 198 renders (pitch p50 is 94 at every
+    /// value):
+    ///
+    ///     value   dur p50   dur mean
+    ///     0.08    76        64.7
+    ///     0.12    78        64.9
+    ///     0.20    78        65.4
+    ///     0.30    78        65.7
+    ///     0.50    78        65.7
+    ///
+    /// 0.30 and 0.50 are identical, so past 0.30 the gate rejects nothing
+    /// at all and there is no plateau midpoint to take — the optimum is
+    /// an unbounded interval. KEPT AT 0.12 anyway, and the 0.8 mean
+    /// points above it are left on the table deliberately: every render
+    /// here is CLEAN, and what this gate exists to reject is curved ink.
+    /// Slurs are not detected at all yet, so on a page where one grazes a
+    /// stem row a loose gate is what would let it through as a beam, and
+    /// nothing in this sweep can see that. Re-measure on the frozen
+    /// degraded set before spending the headroom.
     static let beamStraightnessInSpaces = 0.12
 
     /// How far a slab may run with no matching run before it is closed,

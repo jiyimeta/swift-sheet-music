@@ -127,6 +127,11 @@ extension RasterPage {
     /// (~0.15 sp wide) or a barline or bracket (up to ~0.6 sp); the
     /// narrowest beam measured on this dataset is 1.30 sp long, so 1.0 sp
     /// separates the two classes with margin on both sides.
+    ///
+    /// SWEPT, no headroom: 0.7 measures pitch p50 94 / dur p50 78 /
+    /// dur mean 65.5 and 1.5 measures 94 / 78 / 65.4 — flat across more
+    /// than a factor of two, which is what a threshold sitting in a real
+    /// gap between two classes looks like.
     static let verticalMaxWidthInSpaces = 1.0
 
     /// Inked stretches of one column, top to bottom.
