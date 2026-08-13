@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Per-chord articulation marking. C++: `mu::engraving::Articulation`.
 ///

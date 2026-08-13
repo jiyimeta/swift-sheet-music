@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiRenderer {
     /// Per-note (on-tick, off-tick) offsets for an N-note arpeggio, both

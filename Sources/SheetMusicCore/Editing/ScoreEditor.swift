@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Owns a mutable `Score` plus undo/redo stacks of inverse commands.
 ///

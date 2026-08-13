@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Maps a MuseScore `<Dynamic><subtype>` value to the sequence of
 /// SMuFL glyphs that should be drawn from the music font (Bravura).
@@ -24,9 +24,7 @@ public enum DynamicSymbolMap {
     /// `subtype`, or `nil` when the string contains any non-dynamic
     /// character (free-form text dynamic).
     public static func codepoints(for subtype: String) -> [UInt32]? {
-        let trimmed = subtype.trimmingCharacters(
-            in: .whitespacesAndNewlines,
-        )
+        let trimmed = subtype.trimmingWhitespaceAndNewlines()
         guard !trimmed.isEmpty else { return nil }
         // Only attempt the mapping when every character is one of the
         // seven SMuFL atomic letters; this excludes free-form text

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Reads a PCM WAV container into mono `Int16` samples plus its sample rate.
 ///

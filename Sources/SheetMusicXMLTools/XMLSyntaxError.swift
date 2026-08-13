@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Syntax failure from `XMLTreeParser`, carried as the `underlying` payload of
 /// `SheetMusicError.invalidXML`.
@@ -23,8 +23,13 @@ public struct XMLSyntaxError: Error, Sendable, Equatable, CustomStringConvertibl
     }
 }
 
-extension XMLSyntaxError: LocalizedError {
-    public var errorDescription: String? {
-        description
+// `LocalizedError` is part of the `Foundation` umbrella, which this target
+// avoids where `FoundationEssentials` is available. `description` carries the
+// same text either way.
+#if !canImport(FoundationEssentials)
+    extension XMLSyntaxError: LocalizedError {
+        public var errorDescription: String? {
+            description
+        }
     }
-}
+#endif

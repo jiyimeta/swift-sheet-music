@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Turns "the last note in this voice-measure just got deleted" into a single full-measure rest.
 ///

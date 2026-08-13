@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Minimal little-endian byte buffer for building RIFF / SF2 files.
 ///

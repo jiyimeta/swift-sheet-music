@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// One entry within a ZIP archive.
 ///

@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Pure geometry for tremolo bars: the slanted bars that cross a
 /// chord's stem (single-chord tremolo) or span between two chords

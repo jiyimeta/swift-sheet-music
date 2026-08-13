@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// MuseScore's `AccidentalState` (`engraving/dom/accidental.cpp`), as much of it as an editor needs.
 ///

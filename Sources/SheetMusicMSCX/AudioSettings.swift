@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Per-part playback overrides stored in MuseScore 4's
 /// `audiosettings.json`. When the user picks a different SoundFont

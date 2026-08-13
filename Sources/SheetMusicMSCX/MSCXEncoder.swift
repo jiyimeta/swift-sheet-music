@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 /// Public façade that turns a `Score` into `.mscx` XML bytes.

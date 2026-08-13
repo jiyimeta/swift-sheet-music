@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 extension Score {
     /// Find the next note in the same voice that could serve as the

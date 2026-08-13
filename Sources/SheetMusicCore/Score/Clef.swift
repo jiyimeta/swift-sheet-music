@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Clef change. Display-only — does not affect MIDI output.
 /// C++: `mu::engraving::Clef`.

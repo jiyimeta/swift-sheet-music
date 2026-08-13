@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// In-memory SMF representation. The renderer fills this; the writer turns it into bytes.
 public struct MidiFile: Sendable, Equatable {

@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Shared geometry for placing accidental glyphs to the left of a notehead.
 /// Single source of truth consumed by the CALayer renderer, the SwiftUI

@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Font size / italic / anchor constants for the small set of text
 /// labels that aren't covered by `TextStyleType` (which mirrors

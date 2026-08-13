@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// One of the clef glyphs the engraving / layout pipeline knows how
 /// to place. Each clef anchors a reference pitch to a reference staff

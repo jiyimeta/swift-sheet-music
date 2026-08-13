@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// One MIDI event (no timing). Channel events use 0-based channel indices (0..15).
 public enum MidiEvent: Sendable, Equatable {

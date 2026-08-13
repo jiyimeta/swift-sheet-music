@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Path-based identity for a tuplet inside a `Score`. A tuplet is
 /// keyed by its first member's element index — the entry in the

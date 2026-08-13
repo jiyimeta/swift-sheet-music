@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Sets the `tieForward` field on one note and the `tieBack` field
 /// on another. Used to add or remove a tie between two adjacent

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import Wirelet
 
 /// Codec for a selection tint payload — the color plus the (already-expanded, see `SelectionExpansion`'s doc

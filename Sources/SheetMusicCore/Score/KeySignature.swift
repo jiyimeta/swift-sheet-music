@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Concert-pitch key signature. C++: `mu::engraving::KeySig`.
 public struct KeySignature: Sendable, Equatable {

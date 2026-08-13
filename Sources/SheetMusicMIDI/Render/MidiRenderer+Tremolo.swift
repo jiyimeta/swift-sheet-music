@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiRenderer {
     /// Internal segment description for tremolo expansion. Each segment

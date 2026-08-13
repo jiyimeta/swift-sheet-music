@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// SMuFL code point for a note accidental. Single source of truth so the
 /// Apple renderer (`AccidentalRenderer`) and the Android bridge

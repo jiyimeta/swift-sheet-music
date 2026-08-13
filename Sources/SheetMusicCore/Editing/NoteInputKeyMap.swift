@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Maps a keyboard letter (C..B) and an octave to the `(pitch, tpc)`
 /// pair used by `Note`.

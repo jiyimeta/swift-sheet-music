@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Options controlling MIDI import behavior. All fields have
 /// defaults that produce a reasonable Score from a typical

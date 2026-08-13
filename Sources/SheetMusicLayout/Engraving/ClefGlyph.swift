@@ -1,8 +1,8 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Maps a typed `NotatedClef` to the SMuFL codepoint that renders it and
 /// the staff-space Y offset from the staff-middle reference line.

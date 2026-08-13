@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Parses XML bytes into an in-memory `XMLTreeNode` tree.
 ///

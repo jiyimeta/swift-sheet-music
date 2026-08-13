@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// What a host asked the score to become — the unit of editing that crosses a process or image boundary.
 ///

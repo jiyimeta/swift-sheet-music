@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// One resolved fermata: the original-tick range its anchor chord/rest
 /// occupies, and the hold ratio to apply during that range.

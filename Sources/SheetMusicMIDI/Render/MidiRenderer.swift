@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Renders a `Score` into a `MidiFile`. The implementation is split across
 /// `MidiRenderer+*.swift` extensions for: header emission, channel allocation,

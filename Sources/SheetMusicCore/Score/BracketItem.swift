@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Bracket / brace style. Mirrors MuseScore's
 /// `engraving/dom/bracket.h` `BracketType` enum, including the same

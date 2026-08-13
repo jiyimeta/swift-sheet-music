@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Replace the element at `location` with `element`, rebalancing
 /// the voice when the durations differ. Same algorithm

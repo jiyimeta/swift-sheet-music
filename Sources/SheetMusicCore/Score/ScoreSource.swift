@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Records where a `Score` was loaded from, so consumers can branch
 /// on the original format (e.g. show a "imported from MIDI" badge,

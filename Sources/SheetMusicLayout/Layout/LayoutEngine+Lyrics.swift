@@ -2,8 +2,8 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension LayoutEngine {
     /// True when consecutive same-verse syllables should be linked

@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 extension LayoutDocument {
     /// Bounding rectangles (document coords) for a loop region spanning

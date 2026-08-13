@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A rational number used for note durations and time positions.
 /// C++: `mu::engraving::Fraction`

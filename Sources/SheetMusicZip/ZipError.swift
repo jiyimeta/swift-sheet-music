@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Error type raised by SheetMusicZip's `ZipReader` and `ZipWriter`.
 /// Consumers (e.g. `MSCZReader`, `MXLReader`) translate to

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiRenderer {
     /// GM percussion channel (0-indexed). DAWs like Logic Pro auto-detect any

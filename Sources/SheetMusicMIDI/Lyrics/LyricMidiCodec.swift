@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Packs and unpacks `Lyric` information into standard SMF Lyric
 /// (`0xFF 0x05`) meta events so lyrics round-trip through MIDI without a

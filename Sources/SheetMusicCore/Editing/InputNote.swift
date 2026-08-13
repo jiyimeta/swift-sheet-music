@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Replaces a rest with a single-note chord of the same duration.
 ///

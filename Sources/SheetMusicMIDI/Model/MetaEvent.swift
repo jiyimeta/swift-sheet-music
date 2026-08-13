@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// SMF meta events used by the renderer.
 public enum MetaEvent: Sendable, Equatable {

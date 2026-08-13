@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Retunes a note (changes its MIDI `pitch`, `tpc`, and the
 /// accidental override the layout renders).

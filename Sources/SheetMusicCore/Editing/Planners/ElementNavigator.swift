@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Voice-order walking for caret auto-advance: the caret should step forward after a pitch-key input, but not
 /// after a drag.

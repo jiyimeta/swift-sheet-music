@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiImporter {
     /// MIDI channel index used for GM percussion (0-based).

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Append a note to an existing chord's `notes`. Used to build
 /// chords interactively (Shift+letter in the macOS example).

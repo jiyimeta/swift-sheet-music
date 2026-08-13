@@ -1,8 +1,8 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Pure helpers that turn a `Harmony.name` into a `[HarmonyRun]`
 /// list and report the resulting typeset width. Used at layout

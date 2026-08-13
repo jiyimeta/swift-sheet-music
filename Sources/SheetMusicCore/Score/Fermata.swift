@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A fermata symbol held above/below a chord or rest.
 /// C++: `mu::engraving::Fermata`.

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Breath {
@@ -8,7 +8,7 @@ extension Breath {
     /// `Breath.defaultPause(for:)` (MusicXML carries no pause).
     static func decodeMusicXMLBreathMark(_ node: XMLTreeNode) -> Breath {
         let style: Breath.BreathMarkStyle
-        switch node.text.trimmingCharacters(in: .whitespacesAndNewlines) {
+        switch node.text.trimmingWhitespaceAndNewlines() {
         case "comma", "": style = .comma
         case "tick": style = .tick
         case "upbow": style = .upbow
@@ -24,7 +24,7 @@ extension Breath {
     /// `Breath.defaultPause(for:)` (MusicXML carries no pause).
     static func decodeMusicXMLCaesura(_ node: XMLTreeNode) -> Breath {
         let style: Breath.CaesuraStyle
-        switch node.text.trimmingCharacters(in: .whitespacesAndNewlines) {
+        switch node.text.trimmingWhitespaceAndNewlines() {
         case "normal", "": style = .normal
         case "short": style = .short
         case "thick": style = .thick

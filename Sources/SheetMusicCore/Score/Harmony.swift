@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Chord symbol attached to a voice position. Source of truth for
 /// rendering is `name`; the TPC/case fields are preserved so future

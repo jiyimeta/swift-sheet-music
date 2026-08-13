@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Replaces the lyrics array on a chord. Inverse is another
 /// `SetLyrics` carrying the prior lyrics.

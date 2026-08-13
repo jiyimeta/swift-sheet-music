@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Knobs for `MSCXEncoder.encode(_:options:)`.
 ///

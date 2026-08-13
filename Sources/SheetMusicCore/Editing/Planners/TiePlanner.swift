@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// The two questions an editor asks about ties: what a note could be tied to, and what it already is tied to.
 public enum TiePlanner {

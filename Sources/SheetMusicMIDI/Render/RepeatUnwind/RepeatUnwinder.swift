@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Unrolls a `ScoreNavigation` into the flat measure-play order,
 /// honoring start/end repeats, voltas and section breaks (jump /

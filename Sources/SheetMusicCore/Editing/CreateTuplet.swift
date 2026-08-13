@@ -1,5 +1,5 @@
 // swiftlint:disable file_length
-import Foundation
+import SheetMusicFoundation
 
 /// Convert a single chord or rest into a tuplet of `actualNotes`
 /// members (e.g. `actualNotes = 3`, `normalNotes = 2` for a

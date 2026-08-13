@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Arpeggio attached to a chord. Spreads the chord's notes in time.
 /// C++: `mu::engraving::Arpeggio`.

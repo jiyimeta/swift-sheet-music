@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Replace a voice's `elements` (and `tuplets`) wholesale at a given
 /// staff / measure / voice location. Used as the inverse of any

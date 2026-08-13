@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Swing rhythm directive. MuseScore exposes swing two ways:
 ///

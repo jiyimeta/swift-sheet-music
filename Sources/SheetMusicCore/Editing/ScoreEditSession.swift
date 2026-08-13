@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// One editing session over a score: turns an `EditIntent` into the commands that realize it and applies them as a
 /// single undoable step.

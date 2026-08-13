@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A mid-score instrument change: the engraved instruction text plus
 /// the full `Instrument` that takes over from this position onward.

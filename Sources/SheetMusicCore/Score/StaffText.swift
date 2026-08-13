@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Free-form text label attached to a chord/rest position. Covers
 /// both `<StaffText>` (per-staff) and `<SystemText>` (system-wide)

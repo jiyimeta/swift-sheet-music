@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Reads ZIP archives produced by SheetMusicZip, MuseScore Studio, and
 /// other standard ZIP writers. Scope: STORED + DEFLATE, single-disk,

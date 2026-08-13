@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Bundles several sub-commands into one atomic edit step. Apply
 /// runs each sub-command in order, collecting their inverses; the

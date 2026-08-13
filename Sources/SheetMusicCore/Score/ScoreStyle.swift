@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Subset of MuseScore's `<Style>` block that affects engraving
 /// dimensions. Currently covers page geometry, spatium, and the

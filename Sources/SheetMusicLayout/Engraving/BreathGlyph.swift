@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// SMuFL codepoint selection for breath marks and caesuras.
 ///

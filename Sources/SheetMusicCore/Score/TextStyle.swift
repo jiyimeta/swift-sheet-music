@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Identifies a logical text role in MuseScore (dynamics, rehearsal
 /// mark, lyrics, …). Each role maps to a `TextStyleDefaults` row that

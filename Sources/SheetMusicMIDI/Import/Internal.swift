@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// One channel-coherent slice of an SMF track. Pass 2 produces
 /// these from `MidiFile.tracks`; subsequent passes consume them.

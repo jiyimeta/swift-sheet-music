@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 /// Decodes `<attributes>` into a sequence of `Emission`s (clef, key, time) and

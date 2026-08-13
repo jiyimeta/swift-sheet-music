@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Which side of the staff an autoplaced item is pushed toward.
 public enum AutoplaceSide: Sendable, Equatable {

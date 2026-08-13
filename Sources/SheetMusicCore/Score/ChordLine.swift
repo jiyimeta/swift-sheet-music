@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A bezier (or straight, or wavy) line attached to a chord that
 /// notates a jazz/brass inflection: fall, doit, plop, or scoop.

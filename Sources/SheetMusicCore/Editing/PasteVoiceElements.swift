@@ -1,5 +1,5 @@
 // swiftlint:disable file_length
-import Foundation
+import SheetMusicFoundation
 
 /// Multi-element paste: replace the single element at `location`
 /// with a sequence of `elements`, then rebalance the voice's

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// TaskLocal stash that lets decoders find the active
 /// `MSCXDiagnosticCollector` without threading it through every

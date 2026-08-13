@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Identity of one rendered SMF channel.
 ///

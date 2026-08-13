@@ -1,8 +1,8 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Per-glyph offsets describing where the visible glyph sits relative
 /// to `origin.y` when `Text(glyph)` is drawn with anchor `.center`

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Visual accidental on a note. Display-only; MIDI pitch is the source of truth.
 ///

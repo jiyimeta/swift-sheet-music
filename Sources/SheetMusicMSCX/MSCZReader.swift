@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicZip
 
 /// Reads `.mscz` (ZIP) containers and returns the `Score` contained in

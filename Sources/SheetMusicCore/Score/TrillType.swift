@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Trill line subtype. Selects the SMuFL glyphs MuseScore repeats
 /// along the marking and maps to the `<Trill><subtype>` token in the

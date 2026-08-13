@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A score part (one instrument). Owns its staves directly.
 /// C++: `mu::engraving::Part`.

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// One resolved ottava: a tick range during which every sounding note
 /// in the voice gets its pitch shifted by `semitones`. Built by

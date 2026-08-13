@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A breath mark or caesura sitting between two chords in a voice.
 ///

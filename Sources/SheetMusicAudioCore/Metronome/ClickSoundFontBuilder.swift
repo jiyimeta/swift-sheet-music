@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Builds a minimal SoundFont 2 (.sf2) in memory that maps two click
 /// samples to GM-percussion notes 76 (strong) and 77 (weak) in a

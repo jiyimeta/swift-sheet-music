@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 import SheetMusicMIDI
 
 /// Builds the MIDI the metronome is played from. Shared by every backend that schedules clicks off a

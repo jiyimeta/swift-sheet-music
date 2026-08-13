@@ -1,5 +1,5 @@
 // swiftlint:disable file_length
-import Foundation
+import SheetMusicFoundation
 
 /// Shared shorten / lengthen algorithm used by `SetChordDuration`
 /// and `SetRestDuration`. Both commands resolve to "change the

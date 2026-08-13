@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Builds the per-section ordered navigation element lists from a
 /// `ScoreNavigation`. Swift reimplementation — studied from, not

@@ -1,8 +1,11 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
-#else
-    // On non-Apple platforms (Android, Linux), swift-corelibs-foundation
-    // provides CGFloat / CGPoint via Foundation.
+#elseif !os(WASI)
+    // On Android and Linux, swift-corelibs-foundation provides CGFloat /
+    // CGPoint via Foundation. On WebAssembly there is no such shim, so this
+    // module declares its own — see `CGCompat+WASI.swift`. Importing the
+    // Foundation umbrella here instead would drag ICU back into the wasm
+    // binary from this single file.
     import Foundation
 #endif
 

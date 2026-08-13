@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension Chord {
     /// Per-note `<prev>` overrides for the "tied acciaccatura into its

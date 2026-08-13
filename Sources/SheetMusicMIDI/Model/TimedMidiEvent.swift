@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// `MidiEvent` plus the absolute tick at which it occurs.
 public struct TimedMidiEvent: Sendable, Equatable {

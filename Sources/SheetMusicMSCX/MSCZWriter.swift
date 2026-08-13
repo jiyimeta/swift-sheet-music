@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicZip
 
 /// Packages already-serialized `.mscx` XML bytes into a minimal `.mscz`

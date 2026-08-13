@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Element category a `ShapeRect` came from. Drives the autoplace
 /// ignore rules and the `minDistance` table.

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Container + codec selection for audio file export.
 ///

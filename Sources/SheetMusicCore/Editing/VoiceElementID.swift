@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 public struct VoiceElementID: Hashable, Sendable {
     public let staff: StaffAddress

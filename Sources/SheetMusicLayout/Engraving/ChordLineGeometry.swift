@@ -1,8 +1,8 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// One segment of a `ChordLine`'s stroked outline, in coordinates
 /// relative to the element's origin. Mirrors the subset of

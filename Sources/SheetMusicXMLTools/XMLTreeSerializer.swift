@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Serializes an `XMLTreeNode` tree to UTF-8 XML bytes.
 ///

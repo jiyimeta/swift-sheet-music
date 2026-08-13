@@ -4,8 +4,8 @@
     // On non-Apple platforms (Android, Linux), swift-corelibs-foundation
     // provides CGFloat / CGPoint via Foundation.
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension ScoreFrame {

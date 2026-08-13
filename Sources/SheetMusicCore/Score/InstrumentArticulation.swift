@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Per-articulation velocity/gate-time settings for an instrument.
 /// C++: `mu::engraving::MidiArticulation`.

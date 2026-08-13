@@ -4,8 +4,8 @@
     // On non-Apple platforms (Android, Linux), swift-corelibs-foundation
     // provides CGFloat / CGPoint via Foundation.
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension ScoreFrame {
@@ -79,5 +79,5 @@ private func stripInlineMarkup(_ s: String) -> String {
         if char == ">" { inTag = false; continue }
         if !inTag { result.append(char) }
     }
-    return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    return result.trimmingWhitespaceAndNewlines()
 }

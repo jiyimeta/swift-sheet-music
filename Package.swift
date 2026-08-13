@@ -29,13 +29,20 @@ var targets: [Target] = [
         name: "GenSMuFLTables",
         path: "Sources/GenSMuFLTables",
     ),
-    .target(name: "SheetMusicCore"),
+    // Re-exports FoundationEssentials where it exists and Foundation
+    // elsewhere; see Sources/SheetMusicFoundation for why.
+    .target(name: "SheetMusicFoundation"),
+    .target(
+        name: "SheetMusicCore",
+        dependencies: ["SheetMusicFoundation"],
+    ),
     .target(
         name: "SheetMusicXMLTools",
-        dependencies: ["SheetMusicCore"],
+        dependencies: ["SheetMusicCore", "SheetMusicFoundation"],
     ),
     .target(
         name: "SheetMusicZip",
+        dependencies: ["SheetMusicFoundation"],
         linkerSettings: [
             .linkedLibrary("z", .when(platforms: [.linux, .android])),
         ],
@@ -44,6 +51,7 @@ var targets: [Target] = [
         name: "SheetMusicMSCX",
         dependencies: [
             "SheetMusicCore",
+            "SheetMusicFoundation",
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ],
@@ -52,18 +60,20 @@ var targets: [Target] = [
         name: "SheetMusicMusicXML",
         dependencies: [
             "SheetMusicCore",
+            "SheetMusicFoundation",
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ],
     ),
     .target(
         name: "SheetMusicMIDI",
-        dependencies: ["SheetMusicCore"],
+        dependencies: ["SheetMusicCore", "SheetMusicFoundation"],
     ),
     .target(
         name: "SheetMusicAudioCore",
         dependencies: [
             "SheetMusicCore",
+            "SheetMusicFoundation",
             "SheetMusicMIDI",
             .product(name: "Wirelet", package: "swift-wirelet"),
         ],
@@ -72,6 +82,7 @@ var targets: [Target] = [
         name: "SheetMusic",
         dependencies: [
             "SheetMusicCore",
+            "SheetMusicFoundation",
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicMIDI",
@@ -79,7 +90,7 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicLayout",
-        dependencies: ["SheetMusicCore"],
+        dependencies: ["SheetMusicCore", "SheetMusicFoundation"],
     ),
     .target(
         name: "SheetMusicPDF",
@@ -127,6 +138,7 @@ var targets: [Target] = [
         name: "SheetMusicEditWire",
         dependencies: [
             "SheetMusicCore",
+            "SheetMusicFoundation",
             .product(name: "Wirelet", package: "swift-wirelet"),
         ],
         swiftSettings: [

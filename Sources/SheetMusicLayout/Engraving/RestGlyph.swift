@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Pick the SMuFL rest glyph for the given duration.
 ///

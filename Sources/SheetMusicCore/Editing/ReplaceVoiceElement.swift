@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Replaces the `VoiceElement` at `location` with `element`.
 ///
