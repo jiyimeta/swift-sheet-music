@@ -4,12 +4,13 @@ from pathlib import Path
 from model import prep
 
 
-def _write_page(root: Path, render_id: str, source_id: str, page_index: int):
+def _write_page(root: Path, render_id: str, source_id: str, page_index: int,
+                 face: str = "ms4/Bravura"):
     d = root / render_id
     d.mkdir(parents=True, exist_ok=True)
     (d / f"page_{page_index}.prep.json").write_text(json.dumps({
         "schema": 1, "render_id": render_id, "source_id": source_id,
-        "face": "ms4/Bravura", "page_index": page_index,
+        "face": face, "page_index": page_index,
         "image": {"file": f"page_{page_index}.prep.png", "width_px": 100,
                   "height_px": 80, "staff_space_px": 12.0, "scale": 0.5,
                   "source_width_px": 200, "source_height_px": 160,
@@ -39,9 +40,10 @@ def test_the_split_is_by_source_and_page_not_by_render(tmp_path):
     b = prep.split_of("src_a", 3, seed=7)
     assert a == b
 
-    _write_page(tmp_path, "r_a_ms4_Bravura_v0", "src_a", 3)
-    _write_page(tmp_path, "r_a_ms3_Emmentaler_v1", "src_a", 3)
+    _write_page(tmp_path, "r_a_ms4_Bravura_v0", "src_a", 3, face="ms4/Bravura")
+    _write_page(tmp_path, "r_a_ms3_Emmentaler_v1", "src_a", 3, face="ms3/Emmentaler")
     index = prep.PrepIndex(tmp_path)
+    assert {page.face for page in index.pages} == {"ms4/Bravura", "ms3/Emmentaler"}
     splits = {prep.split_of(page.source_id, page.page_index, seed=7)
               for page in index.pages}
     assert len(splits) == 1
