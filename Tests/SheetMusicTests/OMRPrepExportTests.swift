@@ -15,20 +15,25 @@
     enum OMRPrepExport {
         /// Batch counters. Every summary line built on top of this leads
         /// with a count, so an empty traversal reads as "zero renders",
-        /// never as a silently-passing gate.
+        /// never as a silently-passing gate. `failed` is set only by a
+        /// caller that catches `exportPage`'s throw (this function never
+        /// touches it itself — see `OMRPrepExportHarness.sweep`).
         struct Outcome: Equatable {
             var pages = 0
             var glyphs = 0
             var droppedNoBBox = 0
             var skippedNoStaff = 0
             var oversize = 0
+            var failed = 0
         }
 
-        /// `render.json`'s fields this stage needs, decoded tolerantly.
-        /// `OMRHarnessFixture` writes only `pdf` and `dpi` — no
-        /// `render_id`, `face`, or `provenance` — while a real dataset's
-        /// render.json carries all three (see the task brief's worked
-        /// example). Nothing here may crash on their absence.
+        /// `render.json` / `frozen.json`'s fields this stage needs,
+        /// decoded tolerantly. A real render.json carries all three (see
+        /// the task brief's worked example); a frozen eval directory
+        /// (`Training/generate/build_dataset.py`) writes ONLY
+        /// `frozen.json`, carrying `render_id` but never `face` or
+        /// `provenance`; `OMRHarnessFixture`'s render.json carries
+        /// neither. Nothing here may crash on any field's absence.
         private struct RenderMeta: Decodable {
             var renderId: String?
             var face: String?
@@ -51,7 +56,10 @@
         /// One page: decode labels, load + analyze the raster, bail out
         /// when there is no staff to measure the canonical scale by,
         /// normalize, project labels to detector targets, write the
-        /// PNG/JSON pair, and accumulate `totals`.
+        /// PNG/JSON pair, and accumulate `totals`. Throws on any failure
+        /// (bad labels, unreadable/corrupt raster, bad render.json) — a
+        /// caller sweeping a whole dataset must catch this itself; see
+        /// `OMRPrepExportHarness.sweep`, which does.
         static func exportPage(
             dir: String, labelFile: String, prepRoot: String,
             staffSpacePx: Double, tile: Int, into totals: inout Outcome,
@@ -92,21 +100,49 @@
             totals.oversize += oversize
         }
 
-        /// `render_id` / `source_id` / `face`, falling back to the render
-        /// directory's own basename (and to `render_id` again for
-        /// `source_id`) when `render.json` omits them.
+        /// `render_id` / `source_id` / `face`, read from `render.json`
+        /// when present or `frozen.json` otherwise (Task 6 review,
+        /// Critical: a frozen eval directory has no `render.json` at
+        /// all, so unconditionally opening it threw on every frozen
+        /// page). A missing `render_id` warns and falls back to the
+        /// render directory's own basename regardless of which file it
+        /// came from — both formats are documented to carry it. Missing
+        /// `face` / `provenance.source_id` warns ONLY when the source
+        /// was `render.json`: `frozen.json`'s schema never carries
+        /// either (`build_dataset.py`), so their absence there is
+        /// expected shape, not a real data gap, and does not warn.
         private static func renderMeta(
             dir: String,
         ) throws -> (renderId: String, sourceId: String, face: String) {
             let dirName = (dir as NSString).lastPathComponent
-            let data = try Data(contentsOf: URL(fileURLWithPath: "\(dir)/render.json"))
-            let decoded = try JSONDecoder().decode(RenderMeta.self, from: data)
-            let renderId = decoded.renderId ?? dirName
-            return (
-                renderId: renderId,
-                sourceId: decoded.provenance?.sourceId ?? renderId,
-                face: decoded.face ?? "",
+            let renderJSONPath = "\(dir)/render.json"
+            let isFrozen = !FileManager.default.fileExists(atPath: renderJSONPath)
+            let metaPath = isFrozen ? "\(dir)/frozen.json" : renderJSONPath
+            let sourceFile = isFrozen ? "frozen.json" : "render.json"
+            let decoded = try JSONDecoder().decode(
+                RenderMeta.self, from: Data(contentsOf: URL(fileURLWithPath: metaPath)),
             )
+            let renderId = decoded.renderId ?? warnFallback(
+                dir: dirName, sourceFile: sourceFile, field: "render_id", value: dirName,
+            )
+            let face = decoded.face ?? (isFrozen ? "" : warnFallback(
+                dir: dirName, sourceFile: sourceFile, field: "face", value: "",
+            ))
+            let sourceId = decoded.provenance?.sourceId ?? (isFrozen ? renderId : warnFallback(
+                dir: dirName, sourceFile: sourceFile, field: "provenance.source_id",
+                value: renderId,
+            ))
+            return (renderId: renderId, sourceId: sourceId, face: face)
+        }
+
+        /// Prints `[prep][WARN]` naming the directory, the source file,
+        /// and the missing field, then returns `value` — the fallback
+        /// used because the field genuinely should have been there.
+        private static func warnFallback(
+            dir: String, sourceFile: String, field: String, value: String,
+        ) -> String {
+            print("[prep][WARN] \(dir) \(sourceFile) missing \(field), using fallback")
+            return value
         }
 
         /// Writes `<prepRoot>/<render_id>/page_<n>.prep.{png,json}`,
@@ -147,20 +183,15 @@
             let prepRoot = layout.root + "-prep"
             defer { try? FileManager.default.removeItem(atPath: prepRoot) }
 
-            var totals = OMRPrepExport.Outcome()
-            for dir in try OMRHarnessDirectoryWalk.renderDirectories(root: layout.root) {
-                for name in try OMRHarnessDirectoryWalk.labelFiles(in: dir) {
-                    try OMRPrepExport.exportPage(
-                        dir: dir, labelFile: name, prepRoot: prepRoot,
-                        staffSpacePx: 12, tile: 384, into: &totals,
-                    )
-                }
-            }
+            let result = try OMRPrepExportHarness.sweep(
+                root: layout.root, prepRoot: prepRoot, staffSpacePx: 12, tile: 384,
+            )
             // The fixture is a bare 5-line staff with no glyphs: a page
             // is exported, and zero glyph targets is the correct answer,
             // not a failure.
-            #expect(totals.pages >= 1)
-            #expect(totals.skippedNoStaff == 0)
+            #expect(result.totals.pages >= 1)
+            #expect(result.totals.skippedNoStaff == 0)
+            #expect(result.totals.failed == 0)
             let files = try FileManager.default.subpathsOfDirectory(atPath: prepRoot)
             #expect(files.contains { $0.hasSuffix(".prep.png") })
             #expect(files.contains { $0.hasSuffix(".prep.json") })
@@ -199,21 +230,17 @@
 
         /// Runs the export into `layout.root + suffix` and returns every
         /// produced file's bytes, keyed by path relative to the prep
-        /// root — what the byte-identical comparison needs.
+        /// root — what the byte-identical comparison needs. Shares the
+        /// walk with `aWellFormedRenderProducesAPngAndAJsonSideBySide`
+        /// via `OMRPrepExportHarness.sweep` rather than repeating it.
         private func exportAllAndHash(
             layout: OMRHarnessFixture.Layout, suffix: String,
         ) throws -> [String: Data] {
             let prepRoot = layout.root + suffix
             defer { try? FileManager.default.removeItem(atPath: prepRoot) }
-            var totals = OMRPrepExport.Outcome()
-            for dir in try OMRHarnessDirectoryWalk.renderDirectories(root: layout.root) {
-                for name in try OMRHarnessDirectoryWalk.labelFiles(in: dir) {
-                    try OMRPrepExport.exportPage(
-                        dir: dir, labelFile: name, prepRoot: prepRoot,
-                        staffSpacePx: 12, tile: 384, into: &totals,
-                    )
-                }
-            }
+            _ = try OMRPrepExportHarness.sweep(
+                root: layout.root, prepRoot: prepRoot, staffSpacePx: 12, tile: 384,
+            )
             var out: [String: Data] = [:]
             for relative in try FileManager.default.subpathsOfDirectory(atPath: prepRoot) {
                 let full = "\(prepRoot)/\(relative)"
@@ -224,50 +251,6 @@
                 out[relative] = try Data(contentsOf: URL(fileURLWithPath: full))
             }
             return out
-        }
-    }
-
-    /// Design §3.1 phase 1. No-op unless `OMR_PREP_EXPORT=1`.
-    ///
-    ///     OMR_DATA_ROOT=~/Datasets/sheet-music-omr/v2 \
-    ///     OMR_PREP_ROOT=~/Datasets/sheet-music-omr/v2-prep \
-    ///     ~/.claude/bin/run-with-memcap.sh 4000 /tmp/omr-prep.log \
-    ///         env OMR_PREP_EXPORT=1 swift test -c release --no-parallel \
-    ///         --filter OMRPrepExportHarness
-    @Suite(.enabled(if: ProcessInfo.processInfo.environment["OMR_PREP_EXPORT"] == "1"))
-    struct OMRPrepExportHarness {
-        @Test func exportEveryRender() throws {
-            guard let root = ProcessInfo.processInfo.environment["OMR_DATA_ROOT"] else {
-                Issue.record("OMR_PREP_EXPORT=1 but OMR_DATA_ROOT is unset")
-                return
-            }
-            guard let prepRoot = ProcessInfo.processInfo.environment["OMR_PREP_ROOT"] else {
-                Issue.record("OMR_PREP_EXPORT=1 but OMR_PREP_ROOT is unset")
-                return
-            }
-            let staffSpacePx = ProcessInfo.processInfo.environment["OMR_PREP_STAFF_SPACE_PX"]
-                .flatMap(Double.init) ?? 12
-            let tile = ProcessInfo.processInfo.environment["OMR_PREP_TILE"]
-                .flatMap(Int.init) ?? 384
-
-            let renderDirs = try OMRHarnessDirectoryWalk.renderOrFrozenDirectories(root: root)
-            var totals = OMRPrepExport.Outcome()
-            for dir in renderDirs {
-                try autoreleasepool {
-                    for name in try OMRHarnessDirectoryWalk.labelFiles(in: dir) {
-                        try OMRPrepExport.exportPage(
-                            dir: dir, labelFile: name, prepRoot: prepRoot,
-                            staffSpacePx: staffSpacePx, tile: tile, into: &totals,
-                        )
-                    }
-                }
-            }
-            print(
-                "[prep][SUMMARY] renders=\(renderDirs.count) pages=\(totals.pages) "
-                    + "glyphs=\(totals.glyphs) dropped_no_bbox=\(totals.droppedNoBBox) "
-                    + "skipped_no_staff=\(totals.skippedNoStaff) oversize=\(totals.oversize) "
-                    + "peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB",
-            )
         }
     }
 #endif
