@@ -247,6 +247,9 @@ half-hour sweep into a multi-day one.
 | stacked-beam fusion rate | `OMR_DATA_ROOT=$R Training/.venv/bin/python Training/probes/measure_beam_fusion.py 60 [degraded]` | `fusionRate`. Above ~2% the beam detector needs de-fusion — and note a fused pair is 1.25 sp, above a single-beam window, so without it the group loses EVERY level, not one |
 | seam level: raster paths vs labels | `OMR_DATA_ROOT=$R OMR_RASTER_SEAM=1 swift test -c release --no-parallel --filter OMRRasterSeamEvalHarness` | one `[raster-seam][SUMMARY]` line. **Read `pages=` before any ratio** — `pages=0` means the sweep ran over nothing |
 | score level: hybrid vs `source.mscx` | `OMR_DATA_ROOT=$R OMR_HYBRID_EVAL=1 swift test -c release --no-parallel --filter OMRHybridEvalHarness` | per-render rows plus `[hybrid][SUMMARY]`. **Read `measuresA`/`measuresB` before any percentage** (§8.2's blind spots apply) |
+| which truth verticals the front-end drops, by length and beam relation | add `OMR_STEM_MISS_PROBE=1` to the seam command | `[stemprofile] key=<halfSpaces>\|<in\|edge\|none>`. This is what showed the miss was a pure LENGTH cliff and not a beam-relation effect |
+| how far a predicted vertical's nearer END is from the notehead that would certify it | add `OMR_STEM_END_PROBE=1` to the seam command | `[endprofile] sp=… real=… false=…`. Sets `stemHeadEndToleranceInSpaces`. Run it with the length floor LOWERED, or the population it must separate is not on the page |
+| per-duration histogram, hybrid or oracle | add `OMR_HYBRID_DURHIST=1` to either the hybrid or the `OMR_SCORE_EVAL` command | `[durhist] <render> 8:6037->4577 …`. Subtract the two: a duration the CEILING also loses is not this stage's to fix — 1/20, 1/28 and 64ths are 100% lost at the ceiling, so of the "2794 tuplet notes" only the ~660 triplets were ever ours |
 
 The hybrid harness takes glyphs from the labels — a perfect detector,
 restricted to the frozen detector vocabulary — and paths from the real
@@ -254,10 +257,17 @@ raster pipeline, so its delta against the P0-G3 oracle ceiling is this
 stage's contribution and nothing else's. Two env vars vary it:
 
 - `OMR_HYBRID_MODE` = `full` (default) | `noStaffLines` | `noVerticals` |
-  `noBeams` | `nullFrontEnd`. The last three are the **lobotomy** checks:
+  `noBeams` | `nullFrontEnd` | `truthStaffLines` | `truthVerticals` |
+  `truthBeams`. The three `no*` are the **lobotomy** checks:
   dropping one primitive must crater one specific metric (staff lines →
   pitch, verticals → measure counts, beams → duration). A mode that
   changes nothing means that primitive never reached `buildScore`.
+  The three `truth*` are the **bisect**: each hands ONE primitive back to
+  the oracle and leaves the rest raster, so the duration it recovers is
+  that primitive's share of the loss. Run these BEFORE theorizing about
+  which primitive is at fault. They answered it in two sweeps
+  (verticals 16 points, beams 3) after a careful reading of the code had
+  picked the wrong one.
 - `OMR_HYBRID_JITTER_SP` — displaces every glyph origin by this many
   staff spaces. The hybrid otherwise feeds PERFECT origins while a real
   detector will not, and `barlineCandidates`' 2.0 / 0.6 sp windows were
@@ -269,7 +279,61 @@ stage's contribution and nothing else's. Two env vars vary it:
 numbers are not far above it, the harness is measuring nothing, and the
 same run also catches truth paths leaking into the hybrid plumbing.
 
-#### Measured 2026-08-13 — the numbers these gates are frozen at
+#### Measured 2026-08-14 — the current numbers
+
+All 2028 scorable renders of v2, hybrid `full` against the P0-G3 oracle
+ceiling on the same renders:
+
+| | pitch p50 | pitch mean | dur p50 | dur mean |
+|---|---|---|---|---|
+| oracle ceiling | 100 | 80.5 | 82 | 72.1 |
+| hybrid, 2026-08-13 | 97 | 68.8 | 55 | 52.4 |
+| **hybrid, now** | **94** | **68.2** | **73** | **61.0** |
+
+Duration closed 18 of the 27-point gap for three points of pitch median
+(the mean is unchanged). Both axes now sit at ~85% of the ceiling on the
+mean, where before duration was at 73% and pitch at 85% — and **that
+asymmetry was the whole argument for staying in classical CV**. See
+"When to start the CNN" in the round-summary.
+
+Two changes did it, in this order:
+
+1. **`isStem` grew a y-term** (`PDFImporter+Rhythm.swift`). It accepted
+   any vertical whose x was within 1.4 sp of ANY notehead in the cell,
+   with no y condition — a vector-era assumption (MuseScore strokes stems
+   and draws accidentals as glyphs, so paths and glyphs are disjoint ink)
+   that a raster front-end violates by construction. Now a RASTER-tagged
+   vertical also needs a notehead within 0.25 sp of one of its ENDS.
+   That let `verticalMinLengthInSpaces` drop 3.5 → 2.5 and stop being a
+   classifier: it had been cutting ~6,200 real verticals, which was the
+   largest single item in the duration gap.
+2. **`extendedSpan`** (`RasterPage+BeamFit.swift`) walks a fitted beam
+   out to its own outermost stems. The fit structurally cannot reach
+   them, and `beamWindow` uses a beam's x-range as a tuplet's member-run
+   window, so triplets were 96% lost.
+
+The bisect that found them is the reusable part. `OMR_HYBRID_MODE` now
+takes `truthStaffLines` / `truthVerticals` / `truthBeams`, which hand ONE
+primitive back to the oracle and leave the rest raster; the duration each
+recovers is that primitive's share of the loss. It read verticals 16
+points, beams 3 — before any code changed.
+
+Seam level, 299 pages of the 200-render subsample:
+
+| | before | after |
+|---|---|---|
+| beam x-coverage p50 / p01 | 0.90 / 0.85 | **0.95 / 0.85** |
+| matched beams covering ≥95% | 3103 / 6218 | **5576 / 6218** |
+| truth verticals missed | 8517 | **3115** |
+| barline fp | 1526 | 6889 |
+
+The barline false positives rise BY DESIGN and are not a regression: the
+front-end now emits the short verticals it used to cut, and `isStem`
+rejects the false ones downstream where the noteheads are. Structure is
+unaffected — exact measure counts are 142/198 before and after, because
+`barlineCandidates` requires 85% of the staff height.
+
+#### Measured 2026-08-13 — the previous freeze
 
 Score level, hybrid vs `source.mscx`, **all 2028 scorable renders of v2**,
 against the oracle-replay ceiling on the same renders:
