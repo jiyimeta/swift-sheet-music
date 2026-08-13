@@ -84,7 +84,7 @@ struct GraceNoteEncoderStructuralTests {
     /// Pins the fix for the grace-tie `<location>` gap: a grace note's
     /// `tieForward` must not encode as a bare, location-less `<next/>`.
     /// Cross-referenced against MuseScore Studio's own C++ source
-    /// (`src/engraving/dom/connector.cpp`, `.../rw/read460/
+    /// (`src/engraving/rw/write/connectorinfowriter.cpp`, `.../rw/read460/
     /// connectorinforeader.cpp`, `.../dom/location.cpp`) rather than
     /// guessed: a grace chord shares its parent chord's tick, so a
     /// tied acciaccatura into its own main note is a zero-delta,

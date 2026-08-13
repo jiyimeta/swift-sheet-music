@@ -30,7 +30,7 @@ extension GraceChord {
     /// a grace chord shares its parent chord's tick (MuseScore never
     /// advances the write cursor for a grace item —
     /// `TWrite::write(const ChordRest*, …)`,
-    /// `rw/write/twrite.cpp:1126-1130`, guards `ctx.incCurTick` with
+    /// `rw/write/twrite.cpp:1127-1133`, guards `ctx.incCurTick` with
     /// `!item->isGrace()` — and `EngravingItem::tick()`,
     /// `dom/engravingitem.cpp:584-596`, resolves to the tick of the
     /// enclosing `Segment`, which a grace chord shares with the main
@@ -40,6 +40,22 @@ extension GraceChord {
     /// citation trail, including why an *absent* `<location>` (this
     /// project's previous output) is not merely imprecise but silently
     /// drops the tie when MuseScore Studio reloads the file.
+    ///
+    /// Caveat on `tieBack` specifically: `graceZeroDelta` assumes the
+    /// tie's source is this grace's own parent chord (zero delta —
+    /// e.g. an appoggiatura continuing a tie already sounding when it
+    /// begins). MuseScore also permits a tie into a grace-before note
+    /// from the *preceding* main chord — a different, earlier chord,
+    /// nonzero delta — which this always-zero-delta encoding gets
+    /// wrong. Not a regression: the previous output (a location-less
+    /// `<prev/>`) already lost any `tieBack` on a grace note
+    /// unconditionally, so this is strictly no worse, and the common
+    /// "own parent chord" case is now correct. Distinguishing the two
+    /// would need the same by-pitch structural matching
+    /// `Chord.graceBeforeTieBackLocations()` does for the mirror
+    /// direction (main note's `tieBack` into a `graceNotesBefore`
+    /// note) — not done here, since a grace note's own encoder has no
+    /// visibility into the chord *before* its parent.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         duration.appendDurationXML(to: &children)

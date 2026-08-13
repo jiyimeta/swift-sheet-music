@@ -11,7 +11,10 @@ extension Chord {
     /// `<Spanner type="Tie"><location>` payload for ties on this
     /// chord. `Voice.encode` decides which form to use based on
     /// whether the partner chord lives in the same measure or
-    /// crosses the bar line.
+    /// crosses the bar line. A note whose `tieBack` actually targets
+    /// one of this chord's own `graceNotesBefore` overrides
+    /// `tieBackLocation` per-note — see
+    /// `graceBeforeTieBackLocations()`.
     func encodeAsChord(
         tieForwardLocation: TieLocation? = nil,
         tieBackLocation: TieLocation? = nil,
@@ -80,10 +83,19 @@ extension Chord {
         for lyric in lyrics where !lyric.text.isEmpty {
             children.append(lyric.encode(options: options))
         }
+        // Per-note override for a `tieBack` that actually targets one
+        // of this chord's own `graceNotesBefore` rather than the
+        // previous real chord `tieBackLocation` was computed against
+        // — see `graceBeforeTieBackLocations()`'s doc comment. Empty
+        // whenever this chord has no grace-tie partner, so a chord
+        // without graces (or whose graces carry no matching tie)
+        // takes the `?? tieBackLocation` fallback on every note and
+        // this loop's output is unchanged from before that fix.
+        let graceTieBackOverrides = graceBeforeTieBackLocations()
         for (noteIndex, note) in notes.enumerated() {
             children.append(note.encode(
                 tieForwardLocation: tieForwardLocation,
-                tieBackLocation: tieBackLocation,
+                tieBackLocation: graceTieBackOverrides[noteIndex] ?? tieBackLocation,
                 options: options,
                 drumDefaultHead: isPercussionV3 ? "normal" : nil,
                 chordLines: chordLines.filter { $0.noteIndex == noteIndex },

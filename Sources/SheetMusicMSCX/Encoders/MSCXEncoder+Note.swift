@@ -21,31 +21,54 @@ import SheetMusicXMLTools
 ///   bar line" — without it, MuseScore matches the wrong chord on
 ///   the source side of the bar, which is what produced the
 ///   m21→m23 cross-wired ties in `test_export9.mscx`.
+///
+/// * `.graceIndexed(_:)` — emits `<location><grace>N</grace></location>`,
+///   no `<fractions>`/`<measures>`. MuseScore reads `<grace>` as the
+///   destination's ordinal within its parent chord's grace series
+///   (`Location::graceIndex`, `dom/location.cpp:199-208`); see its doc
+///   comment for the citation trail confirming this against a genuine
+///   MuseScore Studio fixture.
 enum TieLocation {
     case sameMeasure(fractions: Fraction)
     case crossMeasure(measures: Int, fractions: Fraction?)
+    /// A tie whose partner is a specific grace chord of the *same*
+    /// parent chord — emits `<location><grace>N</grace></location>`,
+    /// no `<fractions>`/`<measures>` (both are zero and elided, same
+    /// as `graceZeroDelta`). `N` is the grace chord's 0-based ordinal
+    /// within its parent's combined before+after grace series — see
+    /// `Chord.graceBeforeTieBackLocations()`'s doc comment for how
+    /// that ordinal is derived and its caveats.
+    case graceIndexed(Int)
 
-    /// The location for a tie between a grace note and a note of its
-    /// own parent chord (in either direction) — the single most common
-    /// grace tie, e.g. a tied acciaccatura into its main note.
+    /// The location for a grace note's own tie into/from a note of its
+    /// parent chord — the single most common grace tie, e.g. a tied
+    /// acciaccatura into its main note. Used by `GraceChord.encode`
+    /// for the grace note's *own* `<next>`/`<prev>`, whose partner (an
+    /// ordinary note of the parent chord) is never itself a grace, so
+    /// no `<grace>` tag is needed — see `.graceIndexed` for the mirror
+    /// case, where the partner *is* the grace chord.
     ///
     /// A grace chord shares its parent chord's tick — MuseScore's
     /// writer never advances the cursor for a grace item
     /// (`if (!item->isGrace()) { … ctx.incCurTick(t); }`,
-    /// `rw/write/twrite.cpp:1126-1130`) because `EngravingItem::tick()`
+    /// `rw/write/twrite.cpp:1127-1133`) because `EngravingItem::tick()`
     /// (`dom/engravingitem.cpp:584-596`) resolves through the enclosing
     /// `Segment`, which a grace chord shares with the chord it
     /// decorates. So the tie's source and destination ticks are
     /// identical: zero delta, same measure.
     ///
     /// This is `.sameMeasure(fractions: 0/1)` rather than a distinct
-    /// case because MuseScore's own `SpannerWriter` (`dom/connector.cpp`
-    /// `SpannerWriter::SpannerWriter`, `~103-138`) prefers computing a
-    /// tie's `<location>` from its actual start/end elements via
+    /// case because MuseScore's own `SpannerWriter`
+    /// (`rw/write/connectorinfowriter.cpp:103-139`,
+    /// `SpannerWriter::SpannerWriter`) prefers computing a tie's
+    /// `<location>` from its actual start/end elements via
     /// `Location::fillForElement` (`dom/location.cpp:128-139`) over any
     /// tie-specific special-casing — reusing the ordinary same-measure
     /// path is what "prefer this source of information" means in
-    /// practice for a grace tie.
+    /// practice for a grace tie. (`ConnectorInfo::connect`, the actual
+    /// endpoint-matching comparison this location feeds, lives at
+    /// `dom/connector.cpp:91-122` — a different file from the writer
+    /// despite the similar name.)
     ///
     /// Verified this is not merely a formatting nicety: MuseScore's
     /// reader treats an *absent* `<location>` under `<next>`/`<prev>`
@@ -226,6 +249,18 @@ extension Note {
             if let fractions {
                 children.append(fractionsNode(fractions))
             }
+        case let .graceIndexed(index):
+            // `<fractions>`/`<measures>` are both zero here too (the
+            // grace shares its parent's tick, same as `graceZeroDelta`)
+            // and elided the same way; `<grace>` has no zero-elision —
+            // its "no value" sentinel is `INT_MIN`, not `0`
+            // (`Location::relative()`, `dom/location.h:51`), so index
+            // `0` is written explicitly. Verified against a genuine
+            // MuseScore Studio fixture: `<next><location><grace>0
+            // </grace></location></next>` —
+            // `midirenderer_bend_data/bend_release_twice.mscx:135-139`
+            // in the upstream engraving test resources.
+            children.append(XMLTreeNode(name: "grace", text: String(index)))
         }
         return XMLTreeNode(name: "location", children: children)
     }

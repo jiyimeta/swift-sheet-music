@@ -99,6 +99,44 @@
           </Rest>
         </voice>
       </Measure>
+      <Measure>
+        <voice>
+          <!--
+            A tied acciaccatura into its main note — the single most
+            common grace-tie figure, and the case
+            TieLocation.graceZeroDelta / graceIndexed exist for. `<next/>`
+            / `<prev/>` are written bare here (this fixture predates the
+            location fix and the decoder never reads <location> content —
+            see MSCXDecoder+Note.swift); the round-trip test below only
+            pins that both notes decode with tieForward/tieBack set, not
+            the wire shape of <location> itself, which
+            GraceTieMainNoteEncoderTests / GraceNoteEncoderTests pin
+            directly.
+          -->
+          <Chord>
+            <durationType>16th</durationType>
+            <acciaccatura/>
+            <Note>
+              <pitch>60</pitch>
+              <tpc>14</tpc>
+              <Spanner type="Tie">
+                <Tie/>
+                <next/>
+              </Spanner>
+            </Note>
+          </Chord>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note>
+              <pitch>60</pitch>
+              <tpc>14</tpc>
+              <Spanner type="Tie">
+                <prev/>
+              </Spanner>
+            </Note>
+          </Chord>
+        </voice>
+      </Measure>
     </Staff>
   </Score>
 </museScore>
