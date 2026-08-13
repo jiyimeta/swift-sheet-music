@@ -7,17 +7,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-08-13
+
 ### Fixed
 
-- The MSCX encoder writes grace notes back out. `Chord.graceNotesBefore` /
-  `graceNotesAfter` were decoded but never encoded — `rg -i grace
-  Sources/SheetMusicMSCX/Encoders/` returned nothing — so a
-  parse → encode → parse round trip silently dropped every acciaccatura /
-  appoggiatura / grace4-32(after) in a score. Grace chords are now emitted
-  as their own `<Chord>` siblings (immediately before the parent for the
-  "before" types, immediately after for the "after" types), carrying their
-  own un-scaled duration — they never consume tuplet or voice-cursor time,
-  matching the decoder.
+- Scores with grace notes now survive a save. The MSCX encoder writes grace
+  notes back out — `Chord.graceNotesBefore` / `graceNotesAfter` were decoded
+  but never encoded — `rg -i grace Sources/SheetMusicMSCX/Encoders/` returned
+  nothing — so a parse → encode → parse round trip silently dropped every
+  acciaccatura / appoggiatura / grace4-32(after) in a score. Grace chords are
+  now emitted as their own `<Chord>` siblings (immediately before the parent
+  for the "before" types, immediately after for the "after" types), carrying
+  their own un-scaled duration — they never consume tuplet or voice-cursor
+  time, matching the decoder.
 
   Also: `Voice.encodeChord`'s tuplet-unscaling rebuilt `Chord` from an
   explicit field list, with a comment warning that new fields must be
@@ -26,6 +28,29 @@ and this project adheres to
   (`var unscaledChord = chord; unscaledChord.duration = …`), which forwards
   every field by construction and closes this class of bug for any future
   `Chord` field.
+
+  A follow-up review flagged that a grace note tied forward into its main
+  note — the single most common grace-tie figure — encoded the tie's
+  `<Spanner type="Tie"><next>` with no `<location>` child at all. Checked
+  against MuseScore Studio's own source rather than assumed: a grace chord
+  shares its parent chord's tick, so this is a zero-delta, same-measure tie,
+  and MuseScore's writer represents that as a *present but empty*
+  `<location/>` (every field equals its default and is elided) — not as an
+  absent `<location>`. The distinction matters on reload: MuseScore Studio's
+  reader treats an absent `<location>` as "position unknown" and silently
+  drops the tie, so the previous output would have lost the tie the moment a
+  real user reopened the file in MuseScore Studio, even though this
+  library's own round trip couldn't see the problem (its decoder only checks
+  for `<next>` / `<prev>`, not their contents). Fixed by giving the grace
+  encoder the same zero-delta `TieLocation` the ordinary same-measure tie
+  path already knows how to write, in both tie directions.
+
+- The engine version stamp (`SheetMusicEngine.version`) is bumped to
+  `1.13.1`, matching this release. It had been left at `1.12.0` since that
+  tag — this constant is the entire basis of the Android version-skew gate
+  (two copies of the engine loaded in one process compare it before opening
+  an edit session), so a stale value meant the gate was comparing the wrong
+  thing.
 
 - The metronome strip's volume reaches an injected `SynthBackend`. Such a
   backend mixes its own click, and the volume stopped at the AUMIDISynth
