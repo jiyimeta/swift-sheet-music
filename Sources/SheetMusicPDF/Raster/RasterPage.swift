@@ -24,10 +24,25 @@ struct RasterPageAnalysis {
     var staffSpacingPt: Double
     /// Rotation removed by deskew, in degrees, positive counter-clockwise.
     var deskewDegrees: Double
+    /// The deskewed grayscale the passes above were measured on — P3a's
+    /// output, which is what P3d's detector consumes (design §3.1).
+    ///
+    /// Opt-in via `analyze(keepDeskewed:)` and nil by default. A page is
+    /// ~18MB of grayscale and the hybrid harness holds one analysis per
+    /// page of a render, so keeping it unconditionally would multiply an
+    /// existing sweep's peak RSS by the page count for a consumer that
+    /// does not exist on that path.
+    var deskewed: GrayBitmap?
 
     /// The page size `buildScore` must be given for these paths.
     var pageSizePt: CGSize {
         transform.pageSize
+    }
+
+    /// The measured staff spacing in the pixels of `deskewed` — the unit
+    /// the detector's scale normalization divides by.
+    var staffSpacingPx: Double {
+        staffSpacingPt * transform.dpi / 72.0
     }
 }
 
@@ -44,7 +59,7 @@ extension RasterPage {
     /// measured against a guessed scale: every threshold below is in
     /// staff spaces, and without a staff there is no space to measure
     /// them in.
-    static func analyze(_ bitmap: GrayBitmap, pageIndex: Int) -> RasterPageAnalysis {
+    static func analyze(_ bitmap: GrayBitmap, pageIndex: Int, keepDeskewed: Bool = false) -> RasterPageAnalysis {
         let angle = estimateSkewDegrees(binarize(bitmap))
         let straight = rotate(bitmap, degrees: -angle)
         let mask = binarize(straight)
@@ -56,6 +71,7 @@ extension RasterPage {
             return RasterPageAnalysis(
                 paths: [], transform: transform,
                 staffSpacingPt: 0, deskewDegrees: angle,
+                deskewed: keepDeskewed ? straight : nil,
             )
         }
         var paths = staffLineSegments(
@@ -76,6 +92,7 @@ extension RasterPage {
             paths: paths, transform: transform,
             staffSpacingPt: spacingPx * 72.0 / straight.dpi,
             deskewDegrees: angle,
+            deskewed: keepDeskewed ? straight : nil,
         )
     }
 }

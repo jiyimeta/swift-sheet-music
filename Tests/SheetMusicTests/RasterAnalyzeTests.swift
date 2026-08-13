@@ -66,5 +66,41 @@
             #expect(first.paths == second.paths)
             #expect(first.staffSpacingPt == second.staffSpacingPt)
         }
+
+        @Test func analyzeDropsTheDeskewedPageUnlessAsked() {
+            let bitmap = RasterTestBitmaps.staff(
+                widthPx: 400, heightPx: 300, dpi: 300, topY: 100, spacingPx: 8,
+            )
+            #expect(RasterPage.analyze(bitmap, pageIndex: 0).deskewed == nil)
+        }
+
+        @Test func analyzeKeepsTheDeskewedPageWhenAsked() {
+            let bitmap = RasterTestBitmaps.staff(
+                widthPx: 400, heightPx: 300, dpi: 300, topY: 100, spacingPx: 8,
+            )
+            let analysis = RasterPage.analyze(bitmap, pageIndex: 0, keepDeskewed: true)
+            // Deskew preserves the canvas, so the kept page is the transform's
+            // own size — that is what makes it safe to index with the transform.
+            #expect(analysis.deskewed?.width == analysis.transform.widthPx)
+            #expect(analysis.deskewed?.height == analysis.transform.heightPx)
+            #expect(analysis.deskewed?.dpi == bitmap.dpi)
+        }
+
+        @Test func aStafflessPageStillCarriesTheDeskewedPage() {
+            // The early return (no staff spacing) is a separate exit and had to
+            // be wired too; a blank page takes it.
+            let blank = RasterTestBitmaps.blank(widthPx: 200, heightPx: 200, dpi: 300)
+            let analysis = RasterPage.analyze(blank, pageIndex: 0, keepDeskewed: true)
+            #expect(analysis.staffSpacingPt == 0)
+            #expect(analysis.deskewed != nil)
+        }
+
+        @Test func staffSpacingInPixelsInvertsThePointConversion() {
+            let bitmap = RasterTestBitmaps.staff(
+                widthPx: 400, heightPx: 300, dpi: 300, topY: 100, spacingPx: 8,
+            )
+            let analysis = RasterPage.analyze(bitmap, pageIndex: 0)
+            #expect(abs(analysis.staffSpacingPx - 8.0) < 0.5)
+        }
     }
 #endif
