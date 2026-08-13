@@ -41,9 +41,46 @@ and this project adheres to
   drops the tie, so the previous output would have lost the tie the moment a
   real user reopened the file in MuseScore Studio, even though this
   library's own round trip couldn't see the problem (its decoder only checks
-  for `<next>` / `<prev>`, not their contents). Fixed by giving the grace
-  encoder the same zero-delta `TieLocation` the ordinary same-measure tie
-  path already knows how to write, in both tie directions.
+  for `<next>` / `<prev>`, not their contents). Fixed the grace side by
+  giving the grace encoder the same zero-delta `TieLocation` the ordinary
+  same-measure tie path already knows how to write, in both tie directions.
+
+  A second review pass caught that a tie reconnects on reload only when
+  *both* endpoint records match — the grace side alone was not enough. The
+  main note's side of the same tie was still written by the ordinary
+  chord-to-chord path, which computes its location from the *previous real
+  chord*'s duration: the wrong partner entirely when that tie is actually to
+  one of the chord's own `graceNotesBefore`, producing either a wrong
+  fraction or (when the tied grace opens the piece, with no previous chord
+  at all) the same tie-losing bare `<prev/>` this release already fixed on
+  the grace side. MuseScore instead writes `<prev><location><grace>0</grace>
+  </location></prev>` — `<grace>` names which of the chord's own graces the
+  tie belongs to (`Location::graceIndex`), and carries no `<fractions>`
+  (also zero, also elided). Since this project's tie model is presence-only
+  (no pointer from a tie to its partner note), the encoder now recognizes
+  the shape structurally: a chord whose note has `tieBack` set, matched by
+  pitch against a `graceNotesBefore` note with `tieForward` set. The match
+  is used only when unambiguous — a chord without matching grace notes, or
+  where the pitch match isn't unique, is byte-identical to before this
+  paragraph, which a chord-shaped regression suite now pins alongside the
+  positive cases.
+
+  **Known gap, left in place rather than guessed at:** the mirror direction
+  — a main note tying forward into its own trailing `graceNotesAfter` note
+  (a tied Nachschlag) — is not fixed. Investigating it surfaced a separate,
+  pre-existing issue: this encoder places a chord's `graceNotesAfter`
+  `<Chord>` elements *after* that chord in the file, but MuseScore's own
+  writer places every grace — before or after type alike — *before* the
+  chord it decorates, with the type tag controlling only rendering and
+  playback timing, not file position. A real MuseScore Studio reader
+  therefore attaches this project's after-graces to the *next* chord in the
+  file, not the one they were meant to decorate, which affects an
+  after-grace's read-time tick independent of any tie. A tie location
+  computed against this project's current placement would look confident
+  and be wrong, so the ordinary (already non-reconnecting) location is left
+  in place for that direction instead. Fixing the underlying placement —
+  which affects every score with an after-grace, independent of ties — is a
+  larger, separate change and needs its own follow-up.
 
 - The engine version stamp (`SheetMusicEngine.version`) is bumped to
   `1.13.1`, matching this release. It had been left at `1.12.0` since that
@@ -1238,7 +1275,14 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.8.0...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.13.1...HEAD
+[1.13.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.13.0...1.13.1
+[1.13.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.12.0...1.13.0
+[1.12.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.11.0...1.12.0
+[1.11.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.10.1...1.11.0
+[1.10.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.10.0...1.10.1
+[1.10.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.9.0...1.10.0
+[1.9.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.8.0...1.9.0
 [1.8.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.7.0...1.8.0
 [1.7.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.6.0...1.7.0
 [1.6.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.1...1.6.0
