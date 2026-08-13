@@ -383,8 +383,78 @@ SwiftPM swaps the checkout dir for the edit path, and the Gradle
 plugin's `swiftPackagePath` follows along automatically. Run
 `swift package unedit Wirelet` to revert.
 
+## WebAssembly build
+
+WebAssembly is an official swift.org Swift SDK, installed the same way
+as the Android one. The toolchain and SDK versions must match exactly:
+
+```bash
+swift sdk install \
+    https://download.swift.org/swift-6.3.3-release/wasm-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_wasm.artifactbundle.tar.gz \
+    --checksum cabfa08b73bb8ac783927ecd15fa386e99d0c139c5f232445067bcf58379cae7
+```
+
+**Use the open-source swift.org toolchain, not Xcode's** — exactly the
+same trap as the Android build. Xcode's `swift-frontend` has no
+WebAssembly backend and crashes with `No available targets are
+compatible with triple wasm32-unknown-wasip1`:
+
+```bash
+export PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH"
+swift build --swift-sdk swift-6.3.3-RELEASE_wasm --target SheetMusicLayout
+```
+
+Building today: Core / XMLTools / Layout / MIDI / Foundation. `SheetMusicZip`
+does **not** build — the wasm SDK ships no `zlib` modulemap, and MSCX /
+MusicXML hard-depend on Zip, so they are blocked with it. AudioCore and
+EditWire build but must stay out of any wasm graph you care about the
+size of, because the `Wirelet` product imports `Foundation`
+unconditionally.
+
+`swift test` cannot target the wasm SDK directly; cross-build with
+`--build-tests` and run the bundle under wasmtime / WasmKit.
+
+### Size is the constraint — `Scripts/wasm-size.sh`
+
+The `Foundation` umbrella carries ICU and costs ~13 MB brotli;
+`FoundationEssentials` costs ~2.9 MB. The portable targets therefore
+import `SheetMusicFoundation` (see Conventions) and the measured probe
+lands at ~3.2 MB brotli.
+
+**A single plain `import Foundation` anywhere in the portable graph
+undoes all of it**, and nothing in the compiler objects — it builds fine,
+it just quadruples the download. This happened twice while the migration
+was being written, both times from one file, and once from an import
+nested inside a `#if` block. Run the gate after touching imports:
+
+```bash
+Scripts/wasm-size.sh            # fails past a 4 MB brotli ceiling
+Scripts/wasm-size.sh --report   # measure only
+```
+
+It builds `Sources/WasmSizeProbe` (added to the manifest only when
+`SWIFT_SHEET_MUSIC_WASM=1` is exported) and brotli-compresses it.
+
 ## Conventions
 
+- **Portable targets import `SheetMusicFoundation`, never `Foundation`.**
+  That internal target re-exports `FoundationEssentials` where it exists
+  (WASI, Linux, Android) and `Foundation` on Apple, plus the platform C
+  library — `Foundation` re-exports Darwin/Glibc, so `cos` and friends
+  came along with it and would otherwise vanish. Applies to Core,
+  XMLTools, Zip, MIDI, MSCX, MusicXML, Layout, AudioCore, EditWire and
+  the `SheetMusic` umbrella. Apple-only targets (LayoutApple, UI, Audio,
+  AudioApple, PDF, RenderPreviews) and `SheetMusicAndroidJNI` keep plain
+  `Foundation`. See "WebAssembly build" for why it matters and how it is
+  enforced.
+  - `CharacterSet` is not in `FoundationEssentials`. Use
+    `trimmingHorizontalWhitespace()` / `trimmingWhitespaceAndNewlines()` /
+    `trimmingControlCharacters()` from `SheetMusicFoundation` instead of
+    `trimmingCharacters(in:)`. They are pinned against Foundation's own
+    behaviour by a sweep over every BMP scalar.
+  - `String(format:)`, `ISO8601DateFormatter`, `LocalizedError` and
+    `NSObject` are umbrella-only too. `FormatG`, `ISODate`, and the
+    hand-written XML scanner exist because of that.
 - **Idiomatic Swift naming.** Don't transliterate C++ names. When the
   rename is non-obvious, leave the original as a doc comment, e.g.
   `/// C++: mu::engraving::MasterScore`.

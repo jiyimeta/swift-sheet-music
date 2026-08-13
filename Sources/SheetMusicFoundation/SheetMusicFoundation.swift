@@ -53,9 +53,17 @@ extension StringProtocol {
     /// Equivalent of `trimmingCharacters(in: .whitespaces)`: Unicode space
     /// separators (category Zs) plus the tab, and deliberately not newlines.
     public func trimmingHorizontalWhitespace() -> String {
-        trimming { scalar in
-            scalar.value == 0x09 || scalar.properties.generalCategory == .spaceSeparator
-        }
+        trimming(Self.isHorizontalWhitespace)
+    }
+
+    /// U+200B is the one member Foundation's `.whitespaces` has that the
+    /// category lookup does not: it was `Zs` in early Unicode and was
+    /// reclassified to `Cf`, and Foundation kept the original membership.
+    /// The scalar sweep in `TrimmingHelpersTests` is what turned this up.
+    private static func isHorizontalWhitespace(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.value == 0x09
+            || scalar.value == 0x200B
+            || scalar.properties.generalCategory == .spaceSeparator
     }
 
     /// Equivalent of `trimmingCharacters(in: .whitespacesAndNewlines)`: the
@@ -64,10 +72,10 @@ extension StringProtocol {
     public func trimmingWhitespaceAndNewlines() -> String {
         trimming { scalar in
             switch scalar.value {
-            case 0x09, 0x0A ... 0x0D, 0x85, 0x2028, 0x2029:
+            case 0x0A ... 0x0D, 0x85, 0x2028, 0x2029:
                 true
             default:
-                scalar.properties.generalCategory == .spaceSeparator
+                Self.isHorizontalWhitespace(scalar)
             }
         }
     }

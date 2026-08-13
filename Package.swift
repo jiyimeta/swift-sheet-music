@@ -8,6 +8,10 @@ import PackageDescription
 /// (Layout / UI / PDF / Audio / RenderPreviews). See
 /// docs/superpowers/specs/2026-05-18-android-toolchain-design.md.
 let isAndroid = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_ANDROID"] == "1"
+/// When SWIFT_SHEET_MUSIC_WASM=1 is exported, the manifest also offers the
+/// `WasmSizeProbe` executable that `Scripts/wasm-size.sh` measures. Kept behind
+/// a flag so the shipping package shape carries no extra product.
+let isWasm = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_WASM"] == "1"
 
 var products: [Product] = [
     .library(name: "SheetMusic", targets: ["SheetMusic"]),
@@ -186,6 +190,7 @@ var targets: [Target] = [
             "SheetMusicEditWire",
             "SheetMusicAudioCore",
             .product(name: "Wirelet", package: "swift-wirelet"),
+            "SheetMusicFoundation",
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ] : [
@@ -204,6 +209,7 @@ var targets: [Target] = [
             "SheetMusicAudioSwiftySynth",
             "SheetMusicPDF",
             .product(name: "Wirelet", package: "swift-wirelet"),
+            "SheetMusicFoundation",
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ],
@@ -310,6 +316,20 @@ if isAndroid {
             name: "CJNI",
             path: "Sources/CJNI",
             publicHeadersPath: ".",
+        ),
+    ]
+}
+
+if isWasm {
+    targets += [
+        .executableTarget(
+            name: "WasmSizeProbe",
+            dependencies: [
+                "SheetMusicCore",
+                "SheetMusicLayout",
+                "SheetMusicMIDI",
+            ],
+            path: "Sources/WasmSizeProbe",
         ),
     ]
 }
