@@ -299,6 +299,18 @@
             return (Double(a.x), Double(b.x), m, Double(a.y) - m * Double(a.x))
         }
 
+        /// The clean-page-point → front-end-page-point map for this page.
+        ///
+        /// Non-private because the prep export needs exactly this
+        /// composition and must not grow a second copy of it: on a clean
+        /// raster every step is the identity, so a second copy stays
+        /// invisible until the first degraded run.
+        static func pointMap(
+            page: OMRPageLabels, transform: PageTransform,
+        ) -> (CGPoint) -> CGPoint {
+            frameContext(page: page, transform: transform) ?? { $0 }
+        }
+
         /// The clean-page-point → front-end-page-point map for this page,
         /// or nil when it is the identity.
         private static func frameContext(
