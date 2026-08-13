@@ -1,5 +1,8 @@
+coremltools==9.0
 numpy==2.3.2
-scipy==1.16.1
+onnx==1.22.0
 pillow==11.3.0
 pypdfium2==4.30.0
 pytest==8.4.1
+scipy==1.16.1
+torch==2.13.0
