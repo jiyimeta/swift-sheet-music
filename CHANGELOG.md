@@ -9,6 +9,24 @@ and this project adheres to
 
 ### Fixed
 
+- The MSCX encoder writes grace notes back out. `Chord.graceNotesBefore` /
+  `graceNotesAfter` were decoded but never encoded — `rg -i grace
+  Sources/SheetMusicMSCX/Encoders/` returned nothing — so a
+  parse → encode → parse round trip silently dropped every acciaccatura /
+  appoggiatura / grace4-32(after) in a score. Grace chords are now emitted
+  as their own `<Chord>` siblings (immediately before the parent for the
+  "before" types, immediately after for the "after" types), carrying their
+  own un-scaled duration — they never consume tuplet or voice-cursor time,
+  matching the decoder.
+
+  Also: `Voice.encodeChord`'s tuplet-unscaling rebuilt `Chord` from an
+  explicit field list, with a comment warning that new fields must be
+  propagated there by hand or silently dropped on encode — that rebuild is
+  itself what dropped the grace fields. Replaced with a copy-and-mutate
+  (`var unscaledChord = chord; unscaledChord.duration = …`), which forwards
+  every field by construction and closes this class of bug for any future
+  `Chord` field.
+
 - The metronome strip's volume reaches an injected `SynthBackend`. Such a
   backend mixes its own click, and the volume stopped at the AUMIDISynth
   `MetronomeController` — so on the backend path the click always mixed at

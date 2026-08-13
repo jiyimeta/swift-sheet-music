@@ -217,6 +217,18 @@ extension Voice {
                 state.pendingFollowerTremolo = trem
             }
         }
+        // Grace chords are siblings of the parent `<Chord>` in the
+        // voice stream, not children of it — see `GraceChord.encode`.
+        // They carry their own duration and are never folded into the
+        // voice-total / previous-chord-duration bookkeeping below:
+        // graces don't consume voice time, mirroring the decoder's
+        // `pendingGracesBefore` buffer, which is likewise kept off
+        // `Voice.elements` and its cursor advance.
+        if case let .chord(chord) = element {
+            for grace in chord.graceNotesBefore {
+                state.children.append(grace.encode(options: options))
+            }
+        }
         try state.children.append(encode(
             element: element,
             activeTuplets: state.stack,
@@ -232,6 +244,9 @@ extension Voice {
             voiceIndex: voiceIndex,
         ))
         if case let .chord(chord) = element {
+            for grace in chord.graceNotesAfter {
+                state.children.append(grace.encode(options: options))
+            }
             // Resolve `.measure` so `asFraction` cannot trap when
             // accumulating the voice total / previous-chord duration
             // for cross-measure tie offsets.
