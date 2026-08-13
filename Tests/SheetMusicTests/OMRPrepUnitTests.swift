@@ -220,4 +220,50 @@
             )
         }
     }
+
+    struct OMRPrepSchemaTests {
+        @Test func encodingIsCanonicalAndRepeatable() throws {
+            let page = OMRPrepPage.sample()
+            let a = try OMRPrepSchema.encodeCanonical(page)
+            let b = try OMRPrepSchema.encodeCanonical(page)
+            #expect(a == b)
+            let text = try #require(String(data: a, encoding: .utf8))
+            // Sorted keys, so a diff of two prep files is a content diff.
+            let glyphs = try #require(text.range(of: "\"glyphs\"")).upperBound
+            let advance = try #require(
+                text.range(of: "\"advance_px\"", range: glyphs ..< text.endIndex),
+            ).lowerBound
+            let className = try #require(
+                text.range(of: "\"class\"", range: glyphs ..< text.endIndex),
+            ).lowerBound
+            #expect(advance < className)
+        }
+
+        @Test func itRoundTripsThroughJSON() throws {
+            let page = OMRPrepPage.sample()
+            let decoded = try JSONDecoder().decode(
+                OMRPrepPage.self, from: OMRPrepSchema.encodeCanonical(page),
+            )
+            #expect(decoded == page)
+        }
+    }
+
+    struct OMRPrepPNGTests {
+        @Test func aGrayBitmapSurvivesTheRoundTripExactly() throws {
+            var bitmap = RasterTestBitmaps.blank(widthPx: 9, heightPx: 7, dpi: 300)
+            for i in 0 ..< bitmap.pixels.count {
+                bitmap.pixels[i] = UInt8(i % 256)
+            }
+            let url = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("omr-prep-test-\(UUID().uuidString).png")
+            defer { try? FileManager.default.removeItem(at: url) }
+            try OMRPrepPNG.write(bitmap, to: url)
+            let back = try OMRPrepPNG.read(url)
+            // Byte-exact, because this file IS the training input and the
+            // inference path must reproduce it (gate P3d-G2).
+            #expect(back.pixels == bitmap.pixels)
+            #expect(back.width == 9)
+            #expect(back.height == 7)
+        }
+    }
 #endif

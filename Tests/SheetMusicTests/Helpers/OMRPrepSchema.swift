@@ -72,4 +72,61 @@
             case glyphs
         }
     }
+
+    extension OMRPrepPage {
+        /// One page with two glyphs, for the schema codec tests: gives the
+        /// encoder something with both nesting levels (`image` + `glyphs`)
+        /// populated.
+        static func sample() -> OMRPrepPage {
+            OMRPrepPage(
+                schema: OMRPrepSchema.version,
+                renderId: "render-0001",
+                sourceId: "source-0001",
+                face: "Bravura",
+                pageIndex: 0,
+                image: Image(
+                    file: "page-0000.png",
+                    widthPx: 833,
+                    heightPx: 417,
+                    staffSpacePx: 8,
+                    scale: 1,
+                    sourceWidthPx: 833,
+                    sourceHeightPx: 417,
+                    sourceDpi: 300,
+                    deskewDegrees: 0,
+                ),
+                glyphs: [
+                    Glyph(
+                        className: "noteheadBlack",
+                        centerPx: [150, 117],
+                        originPx: [150, 121],
+                        advancePx: 12,
+                        renderedSizePx: 8,
+                    ),
+                    Glyph(
+                        className: "gClef",
+                        centerPx: [40, 120],
+                        originPx: [40, 148],
+                        advancePx: 20,
+                        renderedSizePx: 28,
+                    ),
+                ],
+            )
+        }
+    }
+
+    enum OMRPrepSchema {
+        static let version = 1
+
+        /// Canonical bytes: keys sorted, pretty-printed so dataset diffs
+        /// are real diffs. Doubles are shortest-round-trip (JSONEncoder
+        /// default) — bit-exact on decode.
+        static func encodeCanonical(_ page: OMRPrepPage) throws -> Data {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [
+                .prettyPrinted, .sortedKeys, .withoutEscapingSlashes,
+            ]
+            return try encoder.encode(page)
+        }
+    }
 #endif
