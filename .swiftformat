@@ -11,6 +11,15 @@
 # leading char, spaces). Keep the description-string form until
 # both tools agree.
 --disable swiftTestingTestCaseNames
+# SwiftFormat deprecated the opt-in `wrapConditionalBodies` and split it
+# into per-statement rules, of which these two ship enabled by default.
+# They rewrite every `if foo { return bar }` in the package onto three
+# lines — 1446 sites, against a house style that deliberately keeps short
+# conditional bodies inline (`if case let .chord(c) = e { return … }`).
+# Disabling them is what keeps the formatter a no-op on existing code;
+# without it the first pre-commit run reformats the whole repository.
+--disable wrapIfStatementBodies
+--disable wrapIfExpressionBodies
 --lineaftermarks false
 --swiftversion 6.2
 --wraparguments before-first

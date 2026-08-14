@@ -20,7 +20,7 @@ public struct MeasurePosition: Hashable, Sendable {
     }
 
     public init(numerator: Int, denominator: Int) {
-        self.offset = Fraction(numerator: numerator, denominator: denominator)
+        offset = Fraction(numerator: numerator, denominator: denominator)
     }
 
     /// Start of the measure (downbeat).

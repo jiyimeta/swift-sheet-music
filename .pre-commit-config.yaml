@@ -1,3 +1,13 @@
+# Install with `pre-commit install` (see CONTRIBUTING.md). The hooks are
+# `language: system`, so they invoke the Homebrew binaries on PATH rather
+# than managing their own — `brew install swiftlint swiftformat` first.
+#
+# `--force-exclude` is not optional here. pre-commit appends the staged
+# file paths to each entry, and SwiftLint ignores the config's `excluded:`
+# for paths named explicitly on the command line. Without the flag, every
+# commit touching Examples/Apple or the machine-generated
+# SMuFLCodepoints+*.swift tables fails on violations the project has
+# deliberately excluded.
 repos:
   - repo: local
     hooks:
@@ -8,11 +18,11 @@ repos:
         types: [swift]
       - id: swiftlint-autocorrect
         name: SwiftLint (--fix)
-        entry: swiftlint --fix --quiet
+        entry: swiftlint --fix --quiet --force-exclude
         language: system
         types: [swift]
       - id: swiftlint
         name: SwiftLint (strict)
-        entry: swiftlint lint --strict --quiet
+        entry: swiftlint lint --strict --quiet --force-exclude
         language: system
         types: [swift]

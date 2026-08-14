@@ -135,36 +135,6 @@ struct MidiImporterPipelineTests {
         let bytes = try MidiWriter.write(file)
         let score = try MidiImporter.parse(bytes)
 
-        func keySigSharpsFlats(in staff: Staff) -> Int? {
-            for measure in staff.measures {
-                for v in measure.voices {
-                    for el in v.elements {
-                        if case let .keySignature(k) = el { return k.concertKey }
-                    }
-                }
-            }
-            return nil
-        }
-        // With the system-element refactor, tempo events live on
-        // `Score.systemMeasures` and carry the originating staff as
-        // `originalStaff` (set to the conductor track's staff
-        // address — part 0, staff 0 in this fixture). Aggregate
-        // which parts contribute tempo entries by walking the
-        // score-level system measures.
-        func partsWithTempo(in score: Score) -> [Int] {
-            var indices: Set<Int> = []
-            for systemMeasure in score.systemMeasures {
-                for positioned in systemMeasure.elements {
-                    if case .tempo = positioned.element,
-                       let staff = positioned.originalStaff
-                    {
-                        indices.insert(staff.partIndex)
-                    }
-                }
-            }
-            return indices.sorted()
-        }
-
         let pianoIdx = score.parts.firstIndex(where: { $0.trackName == "Piano" })
         let bassIdx = score.parts.firstIndex(where: { $0.trackName == "Bass" })
         let drumsIdx = score.parts.firstIndex(where: { $0.instrument.useDrumset })
@@ -284,4 +254,37 @@ struct MidiImporterPipelineTests {
         #expect(!allTpcs.contains(24))
         #expect(!allTpcs.contains(23))
     }
+}
+
+/// The concert key of the first key signature on `staff`, or nil when the
+/// staff carries none — a drum staff, for instance.
+private func keySigSharpsFlats(in staff: Staff) -> Int? {
+    for measure in staff.measures {
+        for v in measure.voices {
+            for el in v.elements {
+                if case let .keySignature(k) = el { return k.concertKey }
+            }
+        }
+    }
+    return nil
+}
+
+/// The part indices that contribute tempo entries, sorted.
+///
+/// With the system-element refactor, tempo events live on
+/// `Score.systemMeasures` and carry the originating staff as
+/// `originalStaff` (set to the conductor track's staff address), so this
+/// has to walk the score-level system measures rather than the parts.
+private func partsWithTempo(in score: Score) -> [Int] {
+    var indices: Set<Int> = []
+    for systemMeasure in score.systemMeasures {
+        for positioned in systemMeasure.elements {
+            if case .tempo = positioned.element,
+               let staff = positioned.originalStaff
+            {
+                indices.insert(staff.partIndex)
+            }
+        }
+    }
+    return indices.sorted()
 }
