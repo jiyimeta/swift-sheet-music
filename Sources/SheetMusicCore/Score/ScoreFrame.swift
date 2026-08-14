@@ -1,11 +1,18 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #elseif !os(WASI)
-    // On Android and Linux, swift-corelibs-foundation provides CGFloat /
-    // CGPoint via Foundation. On WebAssembly there is no such shim, so this
-    // module declares its own — see `CGCompat+WASI.swift`. Importing the
-    // Foundation umbrella here instead would drag ICU back into the wasm
-    // binary from this single file.
+    // The one place in the package that reaches past `SheetMusicFoundation`
+    // to the umbrella on purpose. On Android and Linux,
+    // swift-corelibs-foundation is what declares `CGFloat` / `CGPoint`, and
+    // the Android JNI bridge depends on getting *those* types rather than a
+    // structurally identical local copy. `SheetMusicFoundation` resolves to
+    // `FoundationEssentials` on both platforms, which carries neither.
+    //
+    // The `!os(WASI)` gate is what makes this safe: WebAssembly takes the
+    // module's own declarations from `CGCompat+WASI.swift`, so the umbrella
+    // never reaches the wasm binary and the ICU cost is not paid. Do not
+    // widen the gate to `!canImport(CoreGraphics)`.
+    // swiftlint:disable:next no_foundation_umbrella
     import Foundation
 #endif
 

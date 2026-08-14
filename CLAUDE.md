@@ -414,7 +414,7 @@ unconditionally.
 `swift test` cannot target the wasm SDK directly; cross-build with
 `--build-tests` and run the bundle under wasmtime / WasmKit.
 
-### Size is the constraint — `Scripts/wasm-size.sh`
+### Size is the constraint — two gates
 
 The `Foundation` umbrella carries ICU and costs ~13 MB brotli;
 `FoundationEssentials` costs ~2.9 MB. The portable targets therefore
@@ -425,7 +425,23 @@ lands at ~3.2 MB brotli.
 undoes all of it**, and nothing in the compiler objects — it builds fine,
 it just quadruples the download. This happened twice while the migration
 was being written, both times from one file, and once from an import
-nested inside a `#if` block. Run the gate after touching imports:
+nested inside a `#if` block.
+
+**First gate — the `no_foundation_umbrella` SwiftLint rule.** Path-scoped
+to the portable targets, `severity: error`, and deliberately blind to
+`#if`, so a conditional import is caught the same as a top-level one. It
+runs in CI, in `Scripts/preflight.sh`, and on commit through
+`pre-commit`, needs no cross-compilation toolchain, and names the file
+and line. A genuinely platform-scoped umbrella import carries a
+`// swiftlint:disable:next no_foundation_umbrella` and a reason —
+`ScoreFrame.swift` is the only one, and the reason there is that Android
+needs corelibs Foundation's own `CGFloat`.
+
+**Second gate — `Scripts/wasm-size.sh`.** Measures rather than reads, so
+it also catches weight arriving through a dependency (`Wirelet` imports
+the umbrella unconditionally) or through an API that pulls ICU without a
+new import. Slower: it needs the swift.org toolchain, the wasm SDK, and
+brotli.
 
 ```bash
 Scripts/wasm-size.sh            # fails past a 4 MB brotli ceiling
@@ -434,6 +450,9 @@ Scripts/wasm-size.sh --report   # measure only
 
 It builds `Sources/WasmSizeProbe` (added to the manifest only when
 `SWIFT_SHEET_MUSIC_WASM=1` is exported) and brotli-compresses it.
+
+Neither gate subsumes the other: lint catches what the size script cannot
+attribute, and the size script catches what no import scan can see.
 
 ## Conventions
 
