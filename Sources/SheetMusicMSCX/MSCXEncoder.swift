@@ -26,7 +26,7 @@ public enum MSCXEncoder {
     public static func encode(_ score: Score, to url: URL) throws {
         let bytes = try encode(score)
         do {
-            try bytes.write(to: url, options: .atomic)
+            try bytes.write(to: url, options: .atomicIfAvailable)
         } catch {
             throw SheetMusicError.ioError(url: url, underlying: error)
         }
@@ -39,7 +39,7 @@ public enum MSCXEncoder {
     ) throws {
         let bytes = try encode(score, options: options)
         do {
-            try bytes.write(to: url, options: .atomic)
+            try bytes.write(to: url, options: .atomicIfAvailable)
         } catch {
             throw SheetMusicError.ioError(url: url, underlying: error)
         }

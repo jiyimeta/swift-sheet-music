@@ -47,7 +47,7 @@ public enum MSCZWriter {
     ) throws {
         let bytes = try write(mscxData: mscxData, mainFileName: mainFileName)
         do {
-            try bytes.write(to: url, options: .atomic)
+            try bytes.write(to: url, options: .atomicIfAvailable)
         } catch {
             throw SheetMusicError.ioError(url: url, underlying: error)
         }
@@ -65,7 +65,7 @@ public enum MSCZWriter {
     ) throws {
         let bytes = try write(score: score, mainFileName: mainFileName)
         do {
-            try bytes.write(to: url, options: .atomic)
+            try bytes.write(to: url, options: .atomicIfAvailable)
         } catch {
             throw SheetMusicError.ioError(url: url, underlying: error)
         }
@@ -87,7 +87,7 @@ public enum MSCZWriter {
             score: score, options: options, mainFileName: mainFileName,
         )
         do {
-            try bytes.write(to: url, options: .atomic)
+            try bytes.write(to: url, options: .atomicIfAvailable)
         } catch {
             throw SheetMusicError.ioError(url: url, underlying: error)
         }
@@ -121,12 +121,23 @@ public enum MSCZWriter {
         """.utf8)
     }
 
+    /// A single pass rather than five `replacingOccurrences` calls, which
+    /// are umbrella-only and so unavailable on wasm. Output is unchanged:
+    /// the chained form replaced `&` first, so the ampersands the later
+    /// replacements introduced were never re-escaped either.
     private static func xmlAttributeEscape(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&apos;")
+        var escaped = ""
+        escaped.reserveCapacity(value.count)
+        for character in value {
+            switch character {
+            case "&": escaped += "&amp;"
+            case "<": escaped += "&lt;"
+            case ">": escaped += "&gt;"
+            case "\"": escaped += "&quot;"
+            case "'": escaped += "&apos;"
+            default: escaped.append(character)
+            }
+        }
+        return escaped
     }
 }

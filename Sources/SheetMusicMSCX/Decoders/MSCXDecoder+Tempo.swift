@@ -59,8 +59,10 @@ extension Tempo {
     /// `=` (so a leading "Allegro 1:" or the note glyph don't get picked up); if there's no `=`, the first number in
     /// the whole string.
     private static func printedTempoValue(in text: String) -> Double? {
-        let scope: String = if let equals = text.range(of: "=", options: .backwards) {
-            String(text[equals.upperBound...])
+        // `lastIndex(of:)` rather than `range(of:options: .backwards)`:
+        // the latter is umbrella-only and this target builds for wasm.
+        let scope: String = if let equals = text.lastIndex(of: "=") {
+            String(text[text.index(after: equals)...])
         } else {
             text
         }
