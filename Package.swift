@@ -161,9 +161,44 @@ var targets: [Target] = [
             .swiftLanguageMode(.v5),
         ],
     ),
+    // The platform-neutral half of what SheetMusicAndroidJNI used to be: the layout and
+    // draw-program bridge, the handle tables, the SMuFL metrics table and the wire codecs.
+    // Split out so a WebAssembly bridge reuses this implementation instead of growing a
+    // second one beside it.
+    //
+    // The `native*` entry points cannot live here. swift-java's jextract scans exactly one
+    // directory — `--input-swift <the target's own source dir>`, JExtractSwiftPlugin.swift:72 —
+    // and its `--depends-on` flag resolves types from dependency modules rather than
+    // generating entry points from them. So the entry points keep their residency in
+    // SheetMusicAndroidJNI and everything they call lives here.
+    //
+    // Deliberately depends on neither SheetMusicPDF nor SwiftJava: PDF has no wasm shape and is
+    // still on the Foundation umbrella, and SwiftJava does not cross-compile to WASI. Keeping
+    // both out is what makes this target buildable for wasm at all — see `Scripts/wasm-size.sh`
+    // and CLAUDE.md's "Size is the constraint". SheetMusicEditWire is fine by contrast: it has
+    // built for wasm since Wirelet 0.4.1, and on Android it is already linked into this same
+    // `.so` through SheetMusicAndroidJNI, so naming it here adds no second image.
+    .target(
+        name: "SheetMusicBridgeCore",
+        dependencies: [
+            "SheetMusicCore",
+            "SheetMusicFoundation",
+            "SheetMusicLayout",
+            "SheetMusicMIDI",
+            "SheetMusicMSCX",
+            "SheetMusicMusicXML",
+            "SheetMusicAudioCore",
+            "SheetMusicEditWire",
+            .product(name: "Wirelet", package: "swift-wirelet"),
+        ],
+        swiftSettings: [
+            .swiftLanguageMode(.v5),
+        ],
+    ),
     .target(
         name: "SheetMusicAndroidJNI",
         dependencies: [
+            "SheetMusicBridgeCore",
             "SheetMusicCore",
             "SheetMusicPDF",
             "SheetMusicMSCX",
@@ -199,6 +234,7 @@ var targets: [Target] = [
             "SheetMusicMusicXML",
             "SheetMusicLayout",
             "SheetMusicAndroidJNI",
+            "SheetMusicBridgeCore",
             "SheetMusicEditWire",
             "SheetMusicAudioCore",
             .product(name: "Wirelet", package: "swift-wirelet"),
@@ -213,6 +249,7 @@ var targets: [Target] = [
             "SheetMusicMusicXML",
             "SheetMusicLayout",
             "SheetMusicAndroidJNI",
+            "SheetMusicBridgeCore",
             "SheetMusicEditWire",
             "SheetMusicLayoutApple",
             "SheetMusicUI",

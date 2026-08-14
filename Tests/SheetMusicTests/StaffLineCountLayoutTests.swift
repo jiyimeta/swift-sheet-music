@@ -1,6 +1,7 @@
 #if os(macOS)
     import CoreGraphics
     @testable import SheetMusicAndroidJNI
+    @testable import SheetMusicBridgeCore
     import SheetMusicCore
     @testable import SheetMusicLayout
     @testable import SheetMusicUI

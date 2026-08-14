@@ -1,5 +1,6 @@
 import Foundation
 @testable import SheetMusicAndroidJNI
+@testable import SheetMusicBridgeCore
 @testable import SheetMusicCore
 import Testing
 

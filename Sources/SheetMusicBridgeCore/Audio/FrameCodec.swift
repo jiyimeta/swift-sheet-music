@@ -24,7 +24,7 @@ public enum FrameCodec {
 }
 
 @WireFormat
-struct FrameWire {
+package struct FrameWire {
     var tick: Int64
     var timeSeconds: Double
     var cursor: ScoreCursorWire

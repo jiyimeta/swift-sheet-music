@@ -172,7 +172,7 @@ public enum DrawProgramCodec {
 }
 
 @WireFormat
-struct DrawProgramWire {
+package struct DrawProgramWire {
     var magic: UInt32
     var version: UInt32
     var pages: [EncodablePage]

@@ -147,12 +147,30 @@ is a pure function of the score; the platform engines only schedule it.
 
 The Foundation-only targets (Core / MSCX / MusicXML / MIDI / Layout /
 AudioCore) cross-compile with the official swift.org Android SDK. Kotlin
-consumes them through a JNI bridge (`Sources/SheetMusicAndroidJNI`) whose
-wire format is generated from Swift `@WireFormat` types by the
+consumes them through a JNI bridge whose wire format is generated from
+Swift `@WireFormat` types by the
 [`swift-wirelet`](https://github.com/jiyimeta/swift-wirelet) Gradle plugin
 — one source of truth for the Swift↔Kotlin codecs, no hand-maintained
 parallel serialization. See `CLAUDE.md` for the toolchain setup and the
 Android module READMEs for the consumer story.
+
+That bridge is split across two targets, and the seam is drawn by a
+constraint rather than by taste:
+
+- **`Sources/SheetMusicAndroidJNI`** holds the `native*` entry points and
+  nothing else. swift-java's jextract scans exactly one directory —
+  the target's own — so an entry point only becomes a JNI symbol if its
+  source file physically lives here.
+- **`Sources/SheetMusicBridgeCore`** holds everything those entry points
+  call: the layout and draw-program bridge, the handle tables, the SMuFL
+  metrics table and the wire codecs. It depends on neither `SheetMusicPDF`,
+  `SheetMusicEditWire` nor SwiftJava, which is what lets it build for
+  WebAssembly — so a browser bridge reuses this implementation instead of
+  growing a second one beside it.
+
+The wirelet Gradle plugin scans `SheetMusicBridgeCore/Metadata` and
+`SheetMusicBridgeCore/Audio` for the `@WireFormat` types it turns into
+Kotlin codecs.
 
 `SheetMusicUI` and `SheetMusicPDF` remain Apple-only; Android rendering
 draws from the layout geometry plus its own `Paint` provider.

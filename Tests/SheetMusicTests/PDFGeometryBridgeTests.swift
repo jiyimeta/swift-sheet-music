@@ -1,6 +1,7 @@
 #if !os(Android)
     import Foundation
     @testable import SheetMusicAndroidJNI
+    @testable import SheetMusicBridgeCore
     @testable import SheetMusicCore
     @testable import SheetMusicPDF
     import Testing

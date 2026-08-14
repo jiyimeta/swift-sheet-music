@@ -44,7 +44,7 @@ import SheetMusicLayout
 /// framing never matched the flat producer, so the table never installed.)
 /// The `version` field guards against accidental mix-and-match builds via
 /// `unsupportedVersion`.
-struct SMuFLMetricsTable {
+package struct SMuFLMetricsTable {
     struct Entry {
         let advance: Double
         let bboxX: Double
@@ -74,7 +74,7 @@ struct SMuFLMetricsTable {
     /// through `@WireFormat`, but that macro emits tag/varint/length-
     /// delimited framing the hand-written producer never matched, so the
     /// decode silently failed and the metrics table was never installed.)
-    static func decode(_ data: Data) throws -> SMuFLMetricsTable {
+    package static func decode(_ data: Data) throws -> SMuFLMetricsTable {
         var cursor = 0
         func readU32() throws -> UInt32 {
             guard cursor + 4 <= data.count else { throw DecodeError.truncated }
@@ -135,7 +135,7 @@ struct SMuFLMetricsTable {
 /// Swift forbids `internal` methods from returning a `private` type.
 /// Returning the existential erases the concrete type so callers
 /// elsewhere in the module never need to name it.
-func makeSMuFLMetricsTableProvider(
+package func makeSMuFLMetricsTableProvider(
     table: SMuFLMetricsTable,
 ) -> any FontMetricsProvider {
     SMuFLMetricsTableProvider(table: table)

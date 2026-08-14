@@ -1,4 +1,5 @@
 import Foundation
+import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicLayout
 

@@ -31,4 +31,12 @@ public struct CountInWire {
     /// note up, and wobbled audibly).
     public var preRollTicks: Int32
     public var beats: [CountInBeatWire]
+
+    /// Explicit because a `public` struct's synthesized memberwise initializer is `internal`, and
+    /// SheetMusicAndroidJNI constructs this across the module boundary.
+    public init(totalSeconds: Double, preRollTicks: Int32, beats: [CountInBeatWire]) {
+        self.totalSeconds = totalSeconds
+        self.preRollTicks = preRollTicks
+        self.beats = beats
+    }
 }

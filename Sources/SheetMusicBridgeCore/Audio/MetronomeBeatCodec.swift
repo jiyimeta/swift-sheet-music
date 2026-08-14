@@ -27,7 +27,7 @@ public enum MetronomeBeatCodec {
 }
 
 @WireFormat
-struct MetronomeBeatWire {
+package struct MetronomeBeatWire {
     var tick: Int64
     var isDownbeat: Bool
 

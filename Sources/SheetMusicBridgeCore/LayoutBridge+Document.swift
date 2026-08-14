@@ -96,7 +96,7 @@ extension LayoutBridge {
     /// - `.page` — `document.systems` paginated by `LayoutPaginator` at `pageHeightMM`, each page a
     ///   `pageWidthMM` × `pageHeightMM` slice with its first system lifted to y ≈ 0 (mirrors the original
     ///   inline implementation this was extracted from — see the two comments below for why).
-    static func encodePages(
+    package static func encodePages(
         document: LayoutDocument,
         options optionsWire: LayoutOptionsWire,
         pageWidthMM: Double,

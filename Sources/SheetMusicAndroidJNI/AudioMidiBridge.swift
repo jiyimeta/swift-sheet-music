@@ -1,5 +1,6 @@
 import Foundation
 import SheetMusicAudioCore
+import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicEditWire
 import SheetMusicMIDI

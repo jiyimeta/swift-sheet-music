@@ -1,4 +1,5 @@
 import Foundation
+import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicPDF
 #if canImport(CoreGraphics)
@@ -138,5 +139,23 @@ private final class PDFDiagnosticsCollector: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return items
+    }
+}
+
+// MARK: - Rect encoding
+
+/// Lives here rather than beside `PdfRectWire` in SheetMusicBridgeCore because it is the one piece of
+/// that file needing `SheetMusicPDF`, and BridgeCore stays clear of PDF so it can build for WebAssembly.
+enum PDFGeometryCodecs {
+    /// Encode `rect` with its y flipped into top-left page space of `pageHeight`.
+    static func encodeTopLeft(_ rect: PDFElementRect, pageHeight: Double) -> Data {
+        let flipped = rect.flipped(pageHeight: CGFloat(pageHeight))
+        return PdfRectWire(
+            pageIndex: Int32(flipped.pageIndex),
+            x: Double(flipped.rect.origin.x),
+            y: Double(flipped.rect.origin.y),
+            width: Double(flipped.rect.size.width),
+            height: Double(flipped.rect.size.height),
+        ).encodeToData()
     }
 }

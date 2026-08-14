@@ -77,7 +77,7 @@ wirelet {
     swiftPackagePath.set(File(packageRoot, ".build/checkouts/swift-wirelet"))
     sources {
         register("main") {
-            schemaPaths.from(packageRoot.resolve("Sources/SheetMusicAndroidJNI/Metadata"))
+            schemaPaths.from(packageRoot.resolve("Sources/SheetMusicBridgeCore/Metadata"))
             codecPackage.set("io.github.jiyimeta.sheetmusic")
             modelPackage.set("io.github.jiyimeta.sheetmusic")
             emitModels.set(true)

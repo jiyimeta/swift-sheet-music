@@ -1,4 +1,5 @@
 @testable import SheetMusicAndroidJNI
+@testable import SheetMusicBridgeCore
 import Testing
 
 struct HandleTableTests {

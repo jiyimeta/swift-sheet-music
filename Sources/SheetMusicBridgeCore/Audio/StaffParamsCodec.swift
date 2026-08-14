@@ -139,7 +139,7 @@ public enum StaffParamsCodec {
 }
 
 @WireFormat
-struct StaffParamsWire {
+package struct StaffParamsWire {
     var staffIndex: Int32
     var bankLSB: UInt8
     var program: UInt8

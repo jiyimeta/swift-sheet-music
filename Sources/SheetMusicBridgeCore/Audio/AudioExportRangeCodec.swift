@@ -28,7 +28,7 @@ public enum AudioExportRangeCodec {
 }
 
 @WireFormatChoice
-enum AudioExportRangeWire {
+package enum AudioExportRangeWire {
     case full
     case currentLoop
     case region(ScoreCursorWire, ScoreCursorWire)

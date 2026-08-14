@@ -82,7 +82,7 @@ public enum InstrumentParamsCodec {
 }
 
 @WireFormat
-struct InstrumentParamsWire {
+package struct InstrumentParamsWire {
     var partIndex: Int32
     var ordinal: Int32
     var liveChannel: Int32

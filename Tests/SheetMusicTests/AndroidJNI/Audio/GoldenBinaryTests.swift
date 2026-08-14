@@ -2,6 +2,7 @@
     import Foundation
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicAudioCore
+    @testable import SheetMusicBridgeCore
     import SheetMusicCore
     import SheetMusicEditWire
     import Testing

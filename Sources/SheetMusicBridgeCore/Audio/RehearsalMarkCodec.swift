@@ -22,8 +22,8 @@ import SheetMusicCore
 /// The cursor sub-blob is opaque here: it is produced by `ScoreCursorCodec.encode`
 /// and consumed by `ScoreCursorCodec.decode`, so its internal framing (Wirelet
 /// `@WireFormatChoice`) is independent of this list framing.
-enum RehearsalMarkCodec {
-    static func encode(_ entries: [RehearsalMarkEntry]) -> Data {
+package enum RehearsalMarkCodec {
+    package static func encode(_ entries: [RehearsalMarkEntry]) -> Data {
         var data = Data()
         appendI32(Int32(entries.count), to: &data)
         for entry in entries {
@@ -38,7 +38,7 @@ enum RehearsalMarkCodec {
         return data
     }
 
-    static func decode(_ data: Data) throws -> [RehearsalMarkEntry] {
+    package static func decode(_ data: Data) throws -> [RehearsalMarkEntry] {
         var cursor = 0
         let count = try readI32(data, &cursor)
         var entries: [RehearsalMarkEntry] = []

@@ -1,9 +1,5 @@
 import Foundation
-import SheetMusicPDF
 import Wirelet
-#if canImport(CoreGraphics)
-    import CoreGraphics
-#endif
 
 /// One rectangle on one PDF page, in **top-left origin, y-down** page space — the convention the Reader
 /// lays PDF pages out in on both platforms. The Swift side flips; Kotlin never converts.
@@ -83,19 +79,5 @@ public struct PdfParseResultWire: Equatable {
         self.geometryHandle = geometryHandle
         self.diagnostics = diagnostics
         self.playableElementCount = playableElementCount
-    }
-}
-
-enum PDFGeometryCodecs {
-    /// Encode `rect` with its y flipped into top-left page space of `pageHeight`.
-    static func encodeTopLeft(_ rect: PDFElementRect, pageHeight: Double) -> Data {
-        let flipped = rect.flipped(pageHeight: CGFloat(pageHeight))
-        return PdfRectWire(
-            pageIndex: Int32(flipped.pageIndex),
-            x: Double(flipped.rect.origin.x),
-            y: Double(flipped.rect.origin.y),
-            width: Double(flipped.rect.size.width),
-            height: Double(flipped.rect.size.height),
-        ).encodeToData()
     }
 }
