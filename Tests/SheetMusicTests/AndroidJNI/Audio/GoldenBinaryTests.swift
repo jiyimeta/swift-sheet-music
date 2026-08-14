@@ -109,6 +109,14 @@
             x: 10.5, y: 20.0, width: 4.0, height: 80.5,
         )
 
+        // editCaretFrame-v1.bin / selectionTint-v1.bin — the two payloads the editing-geometry JNI entry
+        // points exchange with a Kotlin host, and the only ones whose Kotlin side is a *generated* codec
+        // (`editGeometry` in SheetMusicAudioAndroid's build.gradle.kts) rather than a hand-written model.
+        // A generated encoder that disagrees with this one would mistint the score or float the caret in
+        // the wrong place, silently — nothing on either side validates the other.
+        static let canonicalCaretFrame = (xMm: 12.5, yMm: 30.25, widthMm: 1.5, heightMm: 24.0)
+        static let canonicalTintArgb: UInt32 = 0xFF33_66CC
+
         // MARK: - Golden directory helper
         //
         // Resolved via #filePath so it always points at the source-tree resource
@@ -145,6 +153,30 @@
         @Test func scoreItemIdNoteGoldenMatches() throws {
             let encoded = ScoreItemIDCodec.encode(GoldenBinaryTests.canonicalScoreItemIDNote)
             let committed = try Data(contentsOf: goldenDir.appendingPathComponent("scoreItemId-v1.bin"))
+            #expect(encoded == committed)
+        }
+
+        // editCaretFrame-v1.bin: four fixed64 fields, no version envelope
+
+        @Test func editCaretFrameGoldenMatches() throws {
+            let frame = GoldenBinaryTests.canonicalCaretFrame
+            let encoded = EditCaretFrameCodec.encode(
+                xMm: frame.xMm, yMm: frame.yMm, widthMm: frame.widthMm, heightMm: frame.heightMm,
+            )
+            let committed = try Data(contentsOf: goldenDir.appendingPathComponent("editCaretFrame-v1.bin"))
+            #expect(encoded == committed)
+        }
+
+        // selectionTint-v1.bin: argb + a one-element ScoreItemID array. One element on purpose — the Swift
+        // side takes a Set, so any larger fixture would encode in an unspecified order and the golden would
+        // flap.
+
+        @Test func selectionTintGoldenMatches() throws {
+            let encoded = SelectionTintCodec.encode(
+                argb: GoldenBinaryTests.canonicalTintArgb,
+                ids: [GoldenBinaryTests.canonicalScoreItemIDNote],
+            )
+            let committed = try Data(contentsOf: goldenDir.appendingPathComponent("selectionTint-v1.bin"))
             #expect(encoded == committed)
         }
 

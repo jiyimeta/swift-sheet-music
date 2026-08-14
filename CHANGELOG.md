@@ -87,6 +87,21 @@ and this project adheres to
   and the notated score. Android round-trips through unrolled ticks because FluidSynth reports one;
   a Web Audio sequencer reports seconds, and `UnrolledTimeMap` already speaks them on both sides.
 
+- Kotlin codecs for the two editing-geometry payloads, `SelectionTint` and
+  `EditCaretFrame`. `nativeEncodeDrawProgram` takes the first and
+  `nativeEditingCaretFrame` answers with the second, but both live in
+  `SheetMusicEditWire/Geometry` while the Android codegen only ever scanned
+  `SheetMusicEditWire/Path` — so a Kotlin host could call either entry point and
+  had no way to build or read its payload. Hand-writing one would have put a
+  second spelling of a frozen schema in a second language, which is the thing a
+  single shared wire product exists to prevent. The two types move into their own
+  directory (a `schemaPaths` entry must resolve to exactly one directory, and the
+  edit-*intent* vocabulary in the neighbouring `Intent/` must stay unemitted —
+  Kotlin never builds an intent) and a new `editGeometry` source set emits them,
+  models included. Byte agreement with the Swift codecs is pinned by
+  `editCaretFrame-v1.bin` / `selectionTint-v1.bin` in the existing cross-language
+  golden set.
+
 ### Changed
 
 - **Breaking.** A tapped `.tuplet` now crosses `Score.engineCursorForFilteredTap` and
@@ -121,6 +136,22 @@ and this project adheres to
   `SheetMusicBridgeCore`, so Android and WebAssembly share one implementation. The `native*` entry
   points stayed behind — jextract only makes a JNI symbol where the declaration physically sits.
   No behaviour change on Android.
+
+### Fixed
+
+- A layout computed while an edit lands is no longer cached against the edited
+  handle. `nativeComputeLayout` reads the score at its start and files the
+  document at its end without the edit lock, so an intent applied in between left
+  a layout of the *old* score cached against a handle whose score was new —
+  invisible to the fingerprint gate, which compares scores rather than layouts.
+  `LayoutDocumentCache` now carries a per-handle generation: the compute stamps
+  it before reading, `nativeApplyEditIntent` / undo / redo advance it through
+  `invalidate`, and a store whose stamp has been superseded is refused, leaving
+  the cache empty rather than stale. Empty is the right answer — the edit has
+  already requested the recompute that repopulates it, and in the meantime
+  `nativeEditingHitTest` returns nothing instead of naming an element the user
+  did not tap, which since 1.11.0 would have become the target of the next edit.
+
 
 ## [1.15.0] - 2026-08-17
 
