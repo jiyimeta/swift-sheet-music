@@ -62,8 +62,9 @@ if [[ "$run_apple" == 1 ]]; then
 fi
 
 if [[ "$run_android" == 1 ]]; then
-    TOOLCHAIN_BIN="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin"
-    [[ -d "$TOOLCHAIN_BIN" ]] && export PATH="$TOOLCHAIN_BIN:$PATH"
+    if TOOLCHAIN_BIN="$("$ROOT/Scripts/swift-org-toolchain.sh")"; then
+        export PATH="$TOOLCHAIN_BIN:$PATH"
+    fi
 
     step "Android: cross-compile JNI natives + stage bindings"
     "$ROOT/Scripts/android-build-libs.sh"

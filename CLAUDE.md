@@ -161,19 +161,23 @@ UI / PDF remain Apple-only.
 
 - **Open-source swift.org Swift 6.3.3-RELEASE toolchain on the host**
   (not Apple's Xcode-shipped Swift). Install the `.pkg` from
-  <https://www.swift.org/install/macos/> (lands at
-  `/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain`). The
-  Android build scripts (`android-build-libs.sh`, `android-test.sh`,
-  `preflight.sh`) **prepend that toolchain's `usr/bin` to `PATH`** so plain
-  `swift` resolves to it. Prefer PATH over `TOOLCHAINS`: on hosts where
-  `swift` is the swiftly shim, the shim ignores `TOOLCHAINS`. The Android
-  SDK's pre-built Foundation swiftmodule is tagged
+  <https://www.swift.org/install/macos/>. Double-clicking it needs an
+  administrator password and lands in `/Library/Developer/Toolchains`;
+  `installer -pkg … -target CurrentUserHomeDirectory` needs none and lands
+  in `~/Library/Developer/Toolchains`, which is the form to reach for in an
+  unattended setup. `Scripts/swift-org-toolchain.sh` resolves either
+  location, and the build scripts (`android-build-libs.sh`,
+  `android-test.sh`, `preflight.sh`) call it to **prepend that toolchain's
+  `usr/bin` to `PATH`** so plain `swift` resolves to it.
+  Prefer PATH over `TOOLCHAINS`: on hosts where `swift` is the swiftly
+  shim, the shim ignores `TOOLCHAINS`. The Android SDK's pre-built
+  Foundation swiftmodule is tagged
   `Swift version 6.3.3 (swift-6.3.3-RELEASE)` and Apple's Xcode-shipped
   `swiftlang-6.3.3.*` fork rejects it ("compiled module was created by a
   different version of the compiler").
 
   ```bash
-  export PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH"
+  export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
   swift --version  # banner should contain "swift-6.3.3-RELEASE"
   ```
 

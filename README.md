@@ -291,12 +291,21 @@ version of the compiler`), so a Swift SDK build needs the open-source
 [swift.org toolchain](https://www.swift.org/install/macos/) — and the
 toolchain and SDK versions have to match exactly.
 
-Install the `.pkg`; it lands in `/Library/Developer/Toolchains/`. Then
-**put it first on `PATH`** — do not use `TOOLCHAINS`, which the `swiftly`
-shim ignores if you have swiftly installed:
+Install the `.pkg` — double-clicking it puts the toolchain in
+`/Library/Developer/Toolchains/` and asks for an administrator password.
+There is a per-user install that does not:
 
 ```bash
-export PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH"
+installer -pkg swift-6.3.3-RELEASE-osx.pkg -target CurrentUserHomeDirectory
+# → ~/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain
+```
+
+Either location works; Xcode and the scripts here read both. Then **put
+it first on `PATH`** — do not use `TOOLCHAINS`, which the `swiftly` shim
+ignores if you have swiftly installed:
+
+```bash
+export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
 swift --version
 ```
 
@@ -308,9 +317,12 @@ checking before assuming a build failure is real:
 | `Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 …)` | Xcode's fork | no |
 | `Apple Swift version 6.3.3 (swift-6.3.3-RELEASE)` | swift.org build | yes |
 
+`Scripts/swift-org-toolchain.sh` is what resolves the two locations —
+system first, then per-user — and prints the `usr/bin` path or exits 1.
 `Scripts/android-build-libs.sh`, `Scripts/android-test.sh` and
-`Scripts/preflight.sh` prepend that path themselves, so they work without
-the `export`. Ad-hoc `swift build --swift-sdk …` invocations do not.
+`Scripts/preflight.sh` call it and prepend the result themselves, so they
+work without the `export`. Ad-hoc `swift build --swift-sdk …` invocations
+do not.
 
 Install the Android SDK with the matching toolchain version:
 
