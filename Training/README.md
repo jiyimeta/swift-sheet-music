@@ -9,12 +9,57 @@ public-domain scores, and the repository owner's own originals only.
 
 ## Setup
 
-    python3 -m venv Training/.venv
+    python3.13 -m venv Training/.venv
     Training/.venv/bin/pip install -r Training/requirements.txt
+
+**Use Python 3.13, not whatever `python3` resolves to on a Homebrew host**
+(often the newest installed minor, 3.14 as of this writing). `coremltools`
+9.0 publishes compiled wheels only up to `cp313`; pip silently falls back
+to a `py3-none-any` sdist build on 3.14 that is missing its native
+extensions (`_MLModelProxy`, `libmilstoragepython`'s `BlobWriter`/
+`BlobReader`), so `ct.convert(..., convert_to="mlprogram")` fails with
+`RuntimeError: BlobWriter not loaded` and `ct.models.MLModel(...)` can't
+load anything — with no import-time error to point at the cause. Verify
+after install with `Training/.venv/bin/python -c "import coremltools;
+import coremltools.libcoremlpython"` — a clean import (mentioning nothing
+about a missing module) means the real extension loaded.
 
 ## Tests
 
     Training/.venv/bin/pytest Training/tests -q
+
+## Export (`model/export.py`)
+
+Packages a `checkpoint.pt` from `model.train` into the three artifacts the
+Swift side consumes: `model.mlpackage` (Apple inference), `model.onnx`
+(canonical, for the later Android conversion — nothing in Swift uses it
+this round), and `model.json` (the manifest `OMRDetectorFrontEnd` checks
+the frozen class vocabulary against before loading anything).
+
+    Training/.venv/bin/python -m model.export \
+        --checkpoint ~/omr-models/run1/checkpoint.pt --out ~/omr-models/run1 \
+        --tile 384 --staff-space-px 12.0 --overlap 64
+
+`--checkpoint random` exports a freshly initialized, untrained network with
+no checkpoint file needed — the P3d-G1 floor a trained model is measured
+against, produced before training so the floor is not chosen after seeing
+a result.
+
+**Conversion path: `torch.jit.trace` + `ct.convert`, as the plan's Step 3
+specifies — `coremltools` did not reject it, so the `torch.export` +
+`ExportedProgram` fallback was not needed to get a working `.mlpackage`.**
+It was tried anyway, to see whether it would clear `torch.jit.trace`'s own
+deprecation notice under torch 2.13 (which nudges callers toward
+`torch.compile`/`torch.export`): `torch.export.export(...).run_decompositions({})`
+followed by `ct.convert` on the resulting `ExportedProgram` does convert
+successfully, but trades one clean, well-understood warning for roughly 50
+repeated internal `coremltools` `_TORCH_OPS_REGISTRY.__contains__`
+deprecation warnings, plus a `FutureWarning` from `torch.export`'s own
+pytree handling and a `ResourceWarning` from an implicitly-cleaned-up temp
+directory — strictly worse under the versions pinned in
+`requirements.txt`. `export.py` keeps `torch.jit.trace` and silences its
+own notice deliberately (`_silence_known_export_deprecations`), rather
+than switching graph-capture strategy to chase a warning that trades down.
 
 ## MuseScore CLI export (`generate/export_pdf.py`)
 
