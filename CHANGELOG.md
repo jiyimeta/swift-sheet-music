@@ -61,21 +61,26 @@ and this project adheres to
   from the position within `graceNotesBefore` alone, which is what
   `Location::graceIndex` actually means.
 
-- Ties between a grace note and a **multi-note** chord survive a reload.
-  MuseScore's endpoint match compares full `Location` equality including
-  `m_note`, and neither side of this project's encoding emitted `<notes>`, so
-  the comparison was always `0 − 0` — correct only when both tied notes were
-  alone in their chords, and silently dropping the tie otherwise. Both sides
-  now emit the delta. The index is the note's rank **by pitch** within its
-  chord (`Chord::notes()` is kept pitch-sorted by `Chord::add`), not its
-  position among the `<Note>` elements, which this project's `ChordNotes`
-  does not sort.
+- Ties involving a **multi-note** chord survive a reload — grace ties and
+  ordinary chord-to-chord ties alike. MuseScore's endpoint match compares full
+  `Location` equality including `m_note`, and no tie this project wrote emitted
+  `<notes>`, so the comparison was always `0 − 0`. That is correct only when
+  both tied notes are alone in their chords (or rank the same in both); any
+  other pairing — a note that ranks second in one chord and is alone in the
+  other, say — was silently dropped by MuseScore on reload. Both sides of both
+  tie kinds now emit the delta. The index is the note's rank **by pitch**
+  within its chord (`Chord::notes()` is kept pitch-sorted by `Chord::add`), not
+  its position among the `<Note>` elements, which this project's `ChordNotes`
+  does not sort. A tie leaving the last chord of a measure needs the next
+  measure's first chord to measure against, which the measure-at-a-time encoder
+  cannot see on its own; `Staff.encodeTopLevel` now supplies that one-measure
+  look-ahead.
 
-  Known gap, unchanged: an ordinary chord-to-chord tie between two chords of
-  *different* shapes (say a note that ranks second in one chord and is alone
-  in the other) still emits no `<notes>` and is still dropped by MuseScore on
-  reload. That path has no visibility into the neighbouring chord's note list
-  and is a separate fix.
+  Known gap: a tie between a grace of one chord and a note of the
+  *neighbouring* chord — a Nachschlag tied into the next note — is written
+  correctly on the grace's own side but not on the other, whose `<location>`
+  would need `<grace>` naming an ordinal in a chord it has no view of. Such a
+  tie is still dropped on reload, as it was before.
 
 ## [1.13.1] - 2026-08-13
 

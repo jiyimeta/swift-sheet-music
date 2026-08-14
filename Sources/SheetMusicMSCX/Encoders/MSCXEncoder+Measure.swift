@@ -39,6 +39,7 @@ extension Measure {
         staffGroup: String = "pitched",
         voice0SystemElements: [PositionedSystemElement] = [],
         effectiveDuration: Fraction = Fraction(numerator: 4, denominator: 4),
+        nextMeasureFirstChordNotes: [ChordNotes?] = [],
     ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
         var children: [XMLTreeNode] = []
         for marker in markers {
@@ -67,6 +68,9 @@ extension Measure {
                 voiceIndex: index,
                 systemElements: injection,
                 effectiveDuration: effectiveDuration,
+                nextMeasureFirstChordNotes: index < nextMeasureFirstChordNotes.count
+                    ? nextMeasureFirstChordNotes[index]
+                    : nil,
             )
             children.append(result.node)
             carryOut[index] = result.carryOut

@@ -39,13 +39,22 @@ extension Voice {
     /// `prevVoiceTotal` is that voice's total played duration (= bar
     /// length) — used to compute the source's position-within-its-bar
     /// for `<measures>-1</measures><fractions>P</fractions>` form.
+    /// `prevChordNotes` is that chord's note list, which the `<notes>`
+    /// half of a backward tie's `<location>` is measured against — see
+    /// `TieEndpoint`.
     struct VoiceTieCarry {
         var prevChordDuration: Fraction?
         var prevVoiceTotal: Fraction?
+        var prevChordNotes: ChordNotes?
 
-        init(prevChordDuration: Fraction? = nil, prevVoiceTotal: Fraction? = nil) {
+        init(
+            prevChordDuration: Fraction? = nil,
+            prevVoiceTotal: Fraction? = nil,
+            prevChordNotes: ChordNotes? = nil,
+        ) {
             self.prevChordDuration = prevChordDuration
             self.prevVoiceTotal = prevVoiceTotal
+            self.prevChordNotes = prevChordNotes
         }
     }
 
@@ -83,53 +92,19 @@ extension Voice {
         voiceIndex: Int = 0,
         systemElements: [PositionedSystemElement] = [],
         effectiveDuration: Fraction = Fraction(numerator: 4, denominator: 4),
+        nextMeasureFirstChordNotes: ChordNotes? = nil,
     ) throws -> (node: XMLTreeNode, carryOut: VoiceTieCarry) {
         try Self.validateProperlyNested(tuplets)
-        // At a given startIndex, push outer tuplets (longer range)
-        // before inner ones so the close-side LIFO pops innermost first.
-        var startsByIndex: [Int: [Tuplet]] = [:]
-        for tuplet in tuplets {
-            startsByIndex[tuplet.startIndex, default: []].append(tuplet)
-        }
-        for key in startsByIndex.keys {
-            startsByIndex[key]?.sort { $0.endIndex > $1.endIndex }
-        }
-        var endCountByIndex: [Int: Int] = [:]
-        for tuplet in tuplets {
-            endCountByIndex[tuplet.endIndex, default: 0] += 1
-        }
-
-        // Index of the last chord-bearing element in this voice. A
-        // chord at this index whose `tieForward` is set ties into
-        // the *next* measure (no further chord follows here), so the
-        // forward location gets the `<measures>1</measures>` form
-        // instead of `<fractions>chord.duration</fractions>`.
-        var lastChordIndex: Int?
-        for (i, el) in elements.enumerated() {
-            if case .chord = el { lastChordIndex = i }
-        }
-
-        let voiceBarLength = resolvedBarLength(effectiveDuration: effectiveDuration)
-        // Staff-head suppression of an implicit C-major KeySig: drop
-        // the very first VoiceElement when this voice sits at the
-        // staff head and that element is `keySignature` with
-        // concertKey == 0. Tuplets do not span key signatures, so
-        // the open/close tuplet bookkeeping at index 0 is unaffected.
-        let dropInitialZeroKeySig = shouldDropInitialZeroKeySig(isStaffHead: isStaffHead)
-
+        let plan = makeIterationPlan(
+            isStaffHead: isStaffHead,
+            effectiveDuration: effectiveDuration,
+            nextMeasureFirstChordNotes: nextMeasureFirstChordNotes,
+        )
         var state = EncodeState(carryIn: carryIn)
         let sortedSys = Self.sortedSystemElements(systemElements)
         var sysIdx = Self.emitSystemElementsAtCursor(
             sortedSys, from: 0,
             cursor: state.voiceTotal, into: &state.children, options: options,
-        )
-        let plan = IterationPlan(
-            startsByIndex: startsByIndex,
-            endCountByIndex: endCountByIndex,
-            lastChordIndex: lastChordIndex,
-            voiceBarLength: voiceBarLength,
-            effectiveDuration: effectiveDuration,
-            dropInitialZeroKeySig: dropInitialZeroKeySig,
         )
         for (index, element) in elements.enumerated() {
             try iterate(
@@ -156,6 +131,58 @@ extension Voice {
             VoiceTieCarry(
                 prevChordDuration: state.previousChordDuration,
                 prevVoiceTotal: state.voiceTotal,
+                prevChordNotes: state.previousChordNotes,
+            ),
+        )
+    }
+
+    /// Everything the encode loop needs that doesn't change between
+    /// iterations: the tuplet open/close indices, the last chord's
+    /// index, the bar length, and the forward-tie partner map.
+    private func makeIterationPlan(
+        isStaffHead: Bool,
+        effectiveDuration: Fraction,
+        nextMeasureFirstChordNotes: ChordNotes?,
+    ) -> IterationPlan {
+        // At a given startIndex, push outer tuplets (longer range)
+        // before inner ones so the close-side LIFO pops innermost first.
+        var startsByIndex: [Int: [Tuplet]] = [:]
+        for tuplet in tuplets {
+            startsByIndex[tuplet.startIndex, default: []].append(tuplet)
+        }
+        for key in startsByIndex.keys {
+            startsByIndex[key]?.sort { $0.endIndex > $1.endIndex }
+        }
+        var endCountByIndex: [Int: Int] = [:]
+        for tuplet in tuplets {
+            endCountByIndex[tuplet.endIndex, default: 0] += 1
+        }
+        // Index of the last chord-bearing element in this voice. A
+        // chord at this index whose `tieForward` is set ties into
+        // the *next* measure (no further chord follows here), so the
+        // forward location gets the `<measures>1</measures>` form
+        // instead of `<fractions>chord.duration</fractions>`.
+        var lastChordIndex: Int?
+        for (i, el) in elements.enumerated() {
+            if case .chord = el { lastChordIndex = i }
+        }
+        return IterationPlan(
+            startsByIndex: startsByIndex,
+            endCountByIndex: endCountByIndex,
+            lastChordIndex: lastChordIndex,
+            voiceBarLength: resolvedBarLength(effectiveDuration: effectiveDuration),
+            effectiveDuration: effectiveDuration,
+            // Staff-head suppression of an implicit C-major KeySig: drop
+            // the very first VoiceElement when this voice sits at the
+            // staff head and that element is `keySignature` with
+            // concertKey == 0. Tuplets do not span key signatures, so
+            // the open/close tuplet bookkeeping at index 0 is unaffected.
+            dropInitialZeroKeySig: shouldDropInitialZeroKeySig(
+                isStaffHead: isStaffHead,
+            ),
+            forwardTiePartnerNotes: Self.forwardTiePartnerNotes(
+                in: elements,
+                nextMeasureFirstChordNotes: nextMeasureFirstChordNotes,
             ),
         )
     }
@@ -167,6 +194,10 @@ extension Voice {
         var children: [XMLTreeNode] = []
         var stack: [Tuplet] = []
         var previousChordDuration: Fraction?
+        /// The note list of the same chord `previousChordDuration`
+        /// measures — the partner a backward tie's `<notes>` delta is
+        /// taken against.
+        var previousChordNotes: ChordNotes?
         var seenChordInVoice = false
         var voiceTotal = Fraction(numerator: 0, denominator: 1)
         /// Two-chord tremolo (`span == .between`) lives only on the
@@ -178,6 +209,7 @@ extension Voice {
 
         init(carryIn: VoiceTieCarry) {
             previousChordDuration = carryIn.prevChordDuration
+            previousChordNotes = carryIn.prevChordNotes
         }
     }
 
@@ -187,103 +219,6 @@ extension Voice {
             return true
         }
         return false
-    }
-
-    func emitElement(
-        element: VoiceElement,
-        index: Int,
-        lastChordIndex: Int?,
-        voiceBarLength: Fraction,
-        effectiveDuration: Fraction,
-        carryIn: VoiceTieCarry,
-        state: inout EncodeState,
-        options: MSCXEncoderOptions,
-        staffGroup: String,
-        voiceIndex: Int,
-    ) throws {
-        let isLastChord: Bool = {
-            if case .chord = element { return index == lastChordIndex }
-            return false
-        }()
-        // Consume any pending follower tremolo from the previous start
-        // chord — only chord-bearing elements claim it; rests pass
-        // through. If the current chord is itself a `.between` start,
-        // stash its tremolo for the next chord-bearing element.
-        var injectedTremolo: Tremolo?
-        if case let .chord(chord) = element, !chord.notes.isEmpty {
-            injectedTremolo = state.pendingFollowerTremolo
-            state.pendingFollowerTremolo = nil
-            if let trem = chord.tremolo, trem.span == .between {
-                state.pendingFollowerTremolo = trem
-            }
-        }
-        // Grace chords are siblings of the parent `<Chord>` in the
-        // voice stream, not children of it — see `GraceChord.encode`.
-        // *Every* grace goes ahead of its parent, after-graces
-        // included, in the single file order `mscxFileOrderedGraces`
-        // defines; MuseScore's reader attaches the whole run to the
-        // next normal chord and splits it by grace-type tag, never by
-        // file position. They carry their own duration and are never
-        // folded into the voice-total / previous-chord-duration
-        // bookkeeping below: graces don't consume voice time,
-        // mirroring the decoder's `pendingGraces` buffer, which is
-        // likewise kept off `Voice.elements` and its cursor advance.
-        if case let .chord(chord) = element,
-           !(chord.graceNotesBefore.isEmpty && chord.graceNotesAfter.isEmpty)
-        {
-            // A grace whose tie leaves the parent chord needs the
-            // parent's own neighbour-chord delta — the grace shares the
-            // parent's tick, so the two are the same value. The
-            // unguarded `…Delta` forms are used because the parent
-            // chord itself need not carry any tie. See
-            // `GraceChord.encode`.
-            let forwardDelta = forwardTieDelta(
-                chord: chord,
-                isLastChordOfVoice: isLastChord,
-                voiceBarLength: voiceBarLength,
-            )
-            let backwardDelta = backwardTieDelta(
-                isFirstChordOfVoice: !state.seenChordInVoice,
-                previousChordDuration: state.previousChordDuration,
-                prevVoiceTotal: carryIn.prevVoiceTotal,
-            )
-            for grace in chord.mscxFileOrderedGraces {
-                state.children.append(grace.encode(
-                    parentChord: chord,
-                    parentForwardTieLocation: forwardDelta,
-                    parentBackwardTieLocation: backwardDelta,
-                    options: options,
-                ))
-            }
-        }
-        try state.children.append(encode(
-            element: element,
-            activeTuplets: state.stack,
-            previousChordDuration: state.previousChordDuration,
-            isFirstChordOfVoice: !state.seenChordInVoice,
-            isLastChordOfVoice: isLastChord,
-            prevVoiceTotal: carryIn.prevVoiceTotal,
-            voiceBarLength: voiceBarLength,
-            effectiveDuration: effectiveDuration,
-            injectedTremolo: injectedTremolo,
-            options: options,
-            staffGroup: staffGroup,
-            voiceIndex: voiceIndex,
-        ))
-        if case let .chord(chord) = element {
-            // Resolve `.measure` so `asFraction` cannot trap when
-            // accumulating the voice total / previous-chord duration
-            // for cross-measure tie offsets.
-            let chordFrac = chord.duration
-                .resolved(in: effectiveDuration)
-                .asFraction
-            state.previousChordDuration = chordFrac
-            state.seenChordInVoice = true
-            // Fraction defines `+` but no `+=`; rewriting as
-            // shorthand would not compile.
-            // swiftlint:disable:next shorthand_operator
-            state.voiceTotal = state.voiceTotal + chordFrac
-        }
     }
 
     /// Encode a lifted `SystemElement` to its MSCX node. Mirrors the
@@ -322,72 +257,6 @@ extension Voice {
                     )
                 }
             }
-        }
-    }
-
-    private func encode(
-        element: VoiceElement,
-        activeTuplets: [Tuplet],
-        previousChordDuration: Fraction?,
-        isFirstChordOfVoice: Bool,
-        isLastChordOfVoice: Bool,
-        prevVoiceTotal: Fraction?,
-        voiceBarLength: Fraction,
-        effectiveDuration: Fraction,
-        injectedTremolo: Tremolo? = nil,
-        options: MSCXEncoderOptions = .init(),
-        staffGroup: String = "pitched",
-        voiceIndex: Int = 0,
-    ) throws -> XMLTreeNode {
-        switch element {
-        case let .chord(chord):
-            return try encodeChord(
-                chord: chord,
-                activeTuplets: activeTuplets,
-                previousChordDuration: previousChordDuration,
-                isFirstChordOfVoice: isFirstChordOfVoice,
-                isLastChordOfVoice: isLastChordOfVoice,
-                prevVoiceTotal: prevVoiceTotal,
-                voiceBarLength: voiceBarLength,
-                effectiveDuration: effectiveDuration,
-                injectedTremolo: injectedTremolo,
-                options: options,
-                staffGroup: staffGroup,
-                voiceIndex: voiceIndex,
-            )
-        case let .keySignature(key):
-            return key.encode(options: options)
-        case let .timeSignature(time):
-            return time.encode()
-        case let .clef(clef):
-            return clef.encode()
-        case let .dynamic(dynamic):
-            return dynamic.encode()
-        case let .barLine(barLine):
-            return barLine.encode()
-        case let .harmony(harmony):
-            return harmony.encode()
-        case let .measureRepeat(measureRepeat):
-            return measureRepeat.encode(options: options, in: effectiveDuration)
-        case let .fermata(fermata):
-            return fermata.encode()
-        case let .breath(breath):
-            return breath.encode()
-        case let .locationShift(delta):
-            // Inverse of the inline `<location>` decode: the
-            // voice-level cursor shift is `<location><fractions>N/D
-            // </fractions></location>`. Negative numerators jog
-            // backwards so the next non-temporal element attaches at
-            // a sub-chord tick offset.
-            return XMLTreeNode(
-                name: "location",
-                children: [XMLTreeNode(
-                    name: "fractions",
-                    text: "\(delta.numerator)/\(delta.denominator)",
-                )],
-            )
-        case let .spanner(spanner):
-            return spanner.encode(options: options)
         }
     }
 }
