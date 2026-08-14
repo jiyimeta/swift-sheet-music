@@ -22,7 +22,6 @@
 set -euo pipefail
 
 CEILING_BYTES=$((4 * 1024 * 1024))
-TOOLCHAIN="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin"
 SDK="swift-6.3.3-RELEASE_wasm"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -31,9 +30,10 @@ if [ "${1:-}" = "--report" ]; then
     report_only=1
 fi
 
-if [ ! -x "$TOOLCHAIN/swift" ]; then
-    echo "error: swift.org toolchain not found at $TOOLCHAIN" >&2
-    echo "       install it from https://www.swift.org/install/macos/" >&2
+if ! TOOLCHAIN="$("$REPO_ROOT/Scripts/swift-org-toolchain.sh")"; then
+    echo "error: the swift.org Swift toolchain is not installed" >&2
+    echo "       install it from https://www.swift.org/install/macos/ — see" >&2
+    echo "       README \"Toolchain\" for why Xcode's Swift cannot be used" >&2
     exit 1
 fi
 
