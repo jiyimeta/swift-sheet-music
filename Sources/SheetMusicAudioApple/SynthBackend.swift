@@ -80,7 +80,13 @@ public protocol SynthBackend: AnyObject {
     /// the backend's separate metronome transport, kept in lockstep with the
     /// score. Muting it (`setMetronomeMuted`) is then a live flag flip — no
     /// score-SMF reload, so a toggle never resets the score synth's voices.
-    func loadMetronomeSequence(_ midi: MidiFile)
+    ///
+    /// `offsetSeconds` is how far AHEAD of the score transport this sequence
+    /// runs. It is `0` for the ordinary body metronome and `> 0` for a count-in
+    /// sequence, which carries a pre-roll the score's SMF does not: the backend
+    /// adds it to every metronome seek so the two transports stay aligned once
+    /// the pre-roll has elapsed.
+    func loadMetronomeSequence(_ midi: MidiFile, offsetSeconds: TimeInterval)
 
     /// Silence / restore the metronome without reloading anything. The
     /// metronome transport keeps advancing while muted so an un-mute lands on
@@ -100,6 +106,18 @@ public protocol SynthBackend: AnyObject {
     func stop()
     func seek(toTick tick: Int)
     var currentTick: Int { get }
+
+    /// Start playing, but hold the SCORE transport for `seconds` first while the
+    /// metronome transport — already loaded with a count-in sequence — plays the
+    /// pre-roll. The count MUST be audible during that window whatever
+    /// `setMetronomeMuted` says: counting in is an explicit request, not the
+    /// metronome toggle.
+    ///
+    /// The wait belongs to the backend rather than the engine because it is the
+    /// only place with a sample clock: a main-actor timer would quantize the
+    /// downbeat to whichever render buffer happened to notice the deadline had
+    /// passed, which is audible as an unsteady count.
+    func play(afterCountInSeconds seconds: TimeInterval)
 
     /// Raw transport position in seconds on the backend's own clock, before
     /// any score-tick mapping. `currentTick` is the identity-mapped
@@ -155,6 +173,13 @@ extension SynthBackend {
     public var onReadyChanged: (@MainActor (Bool) -> Void)? {
         get { nil }
         set { _ = newValue } // synchronous backend never fires readiness changes
+    }
+
+    /// Default for a backend that can't hold its score transport: it simply
+    /// starts, i.e. plays without a count-in rather than mis-timing one. Keeps
+    /// transport-only test doubles source-compatible.
+    public func play(afterCountInSeconds _: TimeInterval) {
+        play()
     }
 
     /// Default for a backend that renders its metronome at a fixed level: the
