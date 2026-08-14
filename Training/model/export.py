@@ -9,6 +9,10 @@ into the three artifacts the Swift side consumes:
 - `model.json` — the manifest. `OMRDetectorFrontEnd` reads it and asserts
   the class list against the frozen `prep.VOCABULARY` table, throwing if
   they disagree, before it will run any tile through the model at all.
+  Also records `training_config_hash` (a hash of the checkpoint's own
+  hyperparams dict — distinct from `commit`, which pins the code, not the
+  run) and `decode_defaults_measured` (`false` until plan Task 17's sweep
+  sets the decode constants from real val performance).
 
 The exported graph is `net.ExportWrapper(model)`: the heatmap head already
 carries its sigmoid, offset/geom pass through untouched. Peak extraction,
@@ -32,6 +36,7 @@ training run, never after one that happened to look good.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import warnings
@@ -44,11 +49,14 @@ import torch
 from . import net, prep
 
 #: Decode-time constants recorded in `model.json`. Per spec §11 these are
-#: OPEN PARAMETERS a later sweep chooses from val performance (detection
-#: threshold tau, top-K, NMS radius) — this task only needs the manifest
-#: schema to be complete before a trained model exists to sweep against.
-#: A later export re-run updates these once the sweep has an answer;
-#: nothing downstream (this task) treats them as final.
+#: OPEN PARAMETERS a later sweep (plan Task 17, "sweep the open
+#: parameters") chooses from val performance (detection threshold tau,
+#: top-K, NMS radius) — this task only needs the manifest schema to be
+#: complete before a trained model exists to sweep against. Because the
+#: manifest shape gives them no visual distinction from a genuinely
+#: measured field, `model.json` also carries `decode_defaults_measured:
+#: false` alongside them (see `_write_manifest`) — Task 17 is the one
+#: that flips it to `true`, once these three numbers stop being guesses.
 _DEFAULT_THRESHOLD = 0.3
 _DEFAULT_TOP_K = 300
 _DEFAULT_NMS_RADIUS_SP = 0.5
@@ -95,6 +103,22 @@ def _repo_commit() -> str:
         return result.stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
+
+
+def _training_config_hash(hyperparams: dict) -> str | None:
+    """Distinct from `commit` (which pins the CODE): this pins the
+    TRAINING RUN. Two checkpoints trained with different `lr` / `epochs`
+    / `tile` / `overlap` but the same `prep_root` and `seed` would
+    otherwise be indistinguishable in the manifest, and `prep_root` +
+    `seed` alone is exactly the pair a mismatch like that could slip
+    past. `None` for `--checkpoint random`, where `hyperparams` is `{}`
+    and there is no training run to hash — a hash of `{}` would look like
+    a real, reproducible answer instead of "there was nothing to hash."
+    """
+    if not hyperparams:
+        return None
+    return hashlib.sha256(
+        json.dumps(hyperparams, sort_keys=True).encode()).hexdigest()
 
 
 def _build_model(checkpoint_arg: str) -> tuple[net.SymbolNet, dict]:
@@ -196,7 +220,14 @@ def _write_manifest(out: Path, args: argparse.Namespace, hyperparams: dict,
         "threshold": _DEFAULT_THRESHOLD,
         "top_k": _DEFAULT_TOP_K,
         "nms_radius_sp": _DEFAULT_NMS_RADIUS_SP,
+        # False until plan Task 17's sweep sets these three from measured
+        # val performance — see the constants' doc comment above. A
+        # consumer (or a later gate) can refuse to trust threshold/top_k/
+        # nms_radius_sp programmatically by reading this flag rather than
+        # having to know out-of-band that they are still placeholders.
+        "decode_defaults_measured": False,
         "commit": _repo_commit(),
+        "training_config_hash": _training_config_hash(hyperparams),
         "prep_root": hyperparams.get("prep_root"),
         "seed": hyperparams.get("seed"),
         "checkpoint": checkpoint_arg,

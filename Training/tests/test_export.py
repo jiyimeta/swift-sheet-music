@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -46,7 +47,8 @@ def test_model_json_records_everything_swift_needs(tmp_path):
     assert meta["stride"] == 4
     assert set(meta) >= {"classes", "staff_space_px", "tile", "overlap",
                           "stride", "mean", "std", "threshold", "top_k",
-                          "nms_radius_sp", "commit", "prep_root", "seed"}
+                          "nms_radius_sp", "commit", "prep_root", "seed",
+                          "training_config_hash", "decode_defaults_measured"}
 
     # The VALUES behind those required keys, not just their presence: a
     # manifest carrying one training run's prep_root/seed while actually
@@ -64,6 +66,21 @@ def test_model_json_records_everything_swift_needs(tmp_path):
         capture_output=True, text=True, check=True).stdout.strip()
     assert meta["commit"] == want_commit
     assert len(meta["commit"]) == 40
+
+    # training_config_hash pins the TRAINING RUN (lr/epochs/tile/overlap/
+    # ...), distinct from commit (which pins the CODE) and from
+    # prep_root/seed (which two different runs over the same data could
+    # share). Recomputed independently from the exact hyperparams dict
+    # _write_checkpoint saved, rather than trusting export.py's own
+    # formula — a stub value or a hash of the wrong dict would fail this.
+    want_hash = hashlib.sha256(json.dumps(
+        {"prep_root": "/data/prep", "seed": 42, "tile": 384, "overlap": 64,
+         "epochs": 4}, sort_keys=True).encode()).hexdigest()
+    assert meta["training_config_hash"] == want_hash
+
+    # Still a placeholder at export time — Task 17's sweep is what flips
+    # this, and that task does not exist yet.
+    assert meta["decode_defaults_measured"] is False
 
 
 def test_the_onnx_graph_loads_and_has_three_outputs(tmp_path):
@@ -119,10 +136,32 @@ def test_checkpoint_random_exports_an_untrained_network_with_no_checkpoint_file(
     assert meta["prep_root"] is None
     assert meta["seed"] is None
     assert meta["classes"] == prep.VOCABULARY
+    # There is no training run to hash — a hash of {} would masquerade as
+    # a real, reproducible answer instead of "nothing to hash here."
+    assert meta["training_config_hash"] is None
 
     spec = ct.models.MLModel(str(out / "model.mlpackage")).get_spec()
     assert [o.name for o in spec.description.output] == [
         "heatmap", "offset", "geom"]
+
+
+def test_decode_defaults_measured_flag_is_present_and_false_for_a_fresh_export(tmp_path):
+    # threshold/top_k/nms_radius_sp are unmeasured placeholders (plan
+    # spec §11 — a later sweep, Task 17, sets them from real val
+    # performance). Nothing in export.py has ever run that sweep, so
+    # every export this module can currently produce must say so
+    # explicitly rather than looking exactly like a measured field.
+    checkpoint = tmp_path / "checkpoint.pt"
+    _write_checkpoint(checkpoint, num_classes=5, width=4)
+    out = tmp_path / "out"
+    export.main([
+        "--checkpoint", str(checkpoint), "--out", str(out),
+        "--tile", "64", "--staff-space-px", "12.0", "--overlap", "16",
+    ])
+
+    meta = json.loads((out / "model.json").read_text())
+    assert "decode_defaults_measured" in meta
+    assert meta["decode_defaults_measured"] is False
 
 
 def test_a_checkpoint_trained_at_a_different_width_still_round_trips(tmp_path):
