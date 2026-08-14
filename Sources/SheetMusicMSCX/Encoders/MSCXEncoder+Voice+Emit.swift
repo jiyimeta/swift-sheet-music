@@ -187,7 +187,7 @@ extension Voice {
         case let .barLine(barLine):
             return barLine.encode()
         case let .harmony(harmony):
-            return harmony.encode()
+            return harmony.encode(options: options)
         case let .measureRepeat(measureRepeat):
             return measureRepeat.encode(options: options, in: effectiveDuration)
         case let .fermata(fermata):

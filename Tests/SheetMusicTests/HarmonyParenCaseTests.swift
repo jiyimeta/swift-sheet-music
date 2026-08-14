@@ -9,11 +9,11 @@ import Testing
 /// `tpc2name` (`pitchspelling.cpp:372-381`).
 @Suite("Harmony parentheses and note case")
 struct HarmonyParenCaseTests {
-    /// MuseScore TPC cycle-of-fifths values (`pitchspelling.h`):
-    /// 13 = B♭, 15 = C, 17 = D.
+    /// MuseScore TPC cycle-of-fifths values (`pitchspelling.h:40-51`,
+    /// which starts at `TPC_F_BBB = -8`): 12 = B♭, 14 = C, 16 = D.
     private func harmony(
         name: String = "7",
-        rootTpc: Int? = 15,
+        rootTpc: Int? = 14,
         rootCase: NoteCase = .auto,
         bassTpc: Int? = nil,
         bassCase: NoteCase = .auto,
@@ -70,21 +70,21 @@ struct HarmonyParenCaseTests {
     }
 
     @Test func rootCaseLeavesTheAccidentalAlone() {
-        // TPC 13 = B flat → "Bb"; lowercasing must not touch the `b`
+        // TPC 12 = B flat → "Bb"; lowercasing must not touch the `b`
         // that stands for the flat, or the accidental substitution in
         // `parseSlices` would still fire but the letter would read as
         // "bb" (B double flat).
         #expect(HarmonyRendering.displayedName(
-            for: harmony(name: "", rootTpc: 13, rootCase: .lower),
+            for: harmony(name: "", rootTpc: 12, rootCase: .lower),
         ) == "bb")
         #expect(HarmonyRendering.displayedName(
-            for: harmony(name: "", rootTpc: 13, rootCase: .upper),
+            for: harmony(name: "", rootTpc: 12, rootCase: .upper),
         ) == "Bb")
     }
 
     @Test func bassCaseAppliesToTheSlashBass() {
         #expect(HarmonyRendering.displayedName(
-            for: harmony(bassTpc: 17, bassCase: .lower),
+            for: harmony(bassTpc: 16, bassCase: .lower),
         ) == "C7/d")
     }
 

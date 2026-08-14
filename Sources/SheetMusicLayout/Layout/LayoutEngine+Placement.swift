@@ -433,9 +433,15 @@ extension LayoutEngine {
             // Emit the synthesized leading key signature once, after
             // the clef column.
             if remainingSynthKeySig, let k = initialKeyForSynth {
+                // `currentClef` is already right when the leading clef
+                // was synthesized too; when the measure carries an
+                // explicit one it hasn't been walked yet.
+                let clef = firstVoiceLeadingClefRawType(measure: measure)
+                    .map(NotatedClef.init(rawType:)) ?? currentClef
                 out.append(.keySignature(
                     sharps: max(0, k),
                     flats: max(0, -k),
+                    clef: clef,
                     origin: CGPoint(
                         x: headerSchedule.keySigX, y: staffMidY,
                     ),
@@ -501,6 +507,7 @@ extension LayoutEngine {
                     let element = LayoutElement.keySignature(
                         sharps: max(0, key.concertKey),
                         flats: max(0, -key.concertKey),
+                        clef: currentClef,
                         origin: CGPoint(x: keyX, y: staffMidY),
                     )
                     if key.visible {

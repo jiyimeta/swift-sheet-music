@@ -229,6 +229,21 @@ extension LayoutEngine {
         return false
     }
 
+    /// Raw clef type of the first voice's leading `<Clef>`, when it has
+    /// one. A SYNTHESIZED key signature is emitted before the voice
+    /// loop walks that element, so it cannot read the running
+    /// `currentClef` — it has to look the clef up directly, the same
+    /// way `TLayout::layoutKeySig` scans back for a clef segment at the
+    /// key signature's own tick.
+    static func firstVoiceLeadingClefRawType(
+        measure: Measure,
+    ) -> String? {
+        guard let first = measure.voices.first?.elements.first,
+              case let .clef(clef) = first
+        else { return nil }
+        return clef.concertClefType
+    }
+
     /// True when the first voice's leading (pre-timed-content) run
     /// contains a `<KeySig>`.  Used to skip key-signature synthesis
     /// when the measure already has an explicit one.

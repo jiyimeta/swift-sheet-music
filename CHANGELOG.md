@@ -34,6 +34,52 @@ and this project adheres to
 
 ### Fixed
 
+- Key signatures are now placed against the clef in force, so an F-clef staff's
+  accidentals sit a line lower than a G-clef staff's instead of on the treble
+  positions. MuseScore keeps one 14-entry line table per clef
+  (`ClefInfo::lines`, `engraving/dom/clef.cpp:50-83` — the first seven for
+  sharps, the last seven for flats) and `TLayout::layoutKeySig` scans back for
+  the clef segment at the key signature's own tick before placing a single
+  glyph. This project had one hard-coded treble table, and
+  `LayoutElement.keySignature` carried no clef for a renderer to consult, so
+  every clef drew the treble cluster; a bass staff's E♭ major read a third too
+  high. The tables are transcribed rather than derived because two of them are
+  not the treble table shifted uniformly: the tenor (C4) and soprano (C1) rows
+  raise individual accidentals by an octave to keep the cluster off ledger
+  lines, so tenor F♯ sits *below* C♯. The three renderers (SwiftUI, CALayer,
+  and the Android draw-command bridge) now all resolve their steps through
+  `KeySignatureSteps` — the CALayer path had grown its own third copy of the
+  treble table.
+- Chord symbols imported from MuseScore no longer read a perfect fourth too
+  high, and no longer lose their slash bass. Two independent defects on the
+  same path:
+  - The TPC → letter table was anchored one fifth away. `Tpc` starts at
+    `TPC_F_BBB = -8` (`engraving/dom/pitchspelling.h:40-51`), putting the
+    naturals at `F = 13, C = 14, …` — the origin `SheetMusicCore.PitchSpelling`
+    and `PitchStaffPosition` already document — while `HarmonyRendering`
+    assumed `F = 14`. Every root came out a fifth flatward: an imported `Fm7`
+    rendered `B♭m7`, `E♭M7` rendered `A♭M7`. Confirmed against MuseScore 4.7.4
+    itself, which writes `<root>13</root>` for an F root.
+  - MuseScore 4.6 renamed the slash-bass tag from `<base>` to `<bass>` (and
+    `<baseCase>` to `<bassCase>`) — compare `rw/read460/tread.cpp:2957-2986`
+    with `rw/read410/tread.cpp:2991`. The decoder read only the historical
+    spelling, so `Fm7/B♭` from a current MuseScore imported as `Fm7`. Both
+    spellings are accepted now.
+- MuseScore-v4 export no longer loses every chord symbol. We declare
+  `version="4.60"`, so MuseScore reads the file with read460 — which does not
+  recognize `<name>` / `<root>` / `<base>` as direct children of `<Harmony>`
+  and drops them, leaving a `Harmony` with no `HarmonyInfo`, which
+  `TWrite::write` then skips entirely. The v4 encoder now emits the
+  `<harmonyInfo>` wrapper and the `<bass>` / `<bassCase>` spellings; the v3
+  target keeps the flat layout its readers expect. Measured with MuseScore
+  4.7.4: 0 of 4 chord symbols survived the round trip before, 4 of 4 after.
+- Transposing a score now moves its chord symbols with the notes.
+  `Score.transposed(bySemitones:)` shifted key signatures and chords but let
+  `.harmony` fall through untouched, so a transposed lead sheet's symbols named
+  the original key while the staff under them named the new one.
+  `Harmony.rootTpc` / `bassTpc` now shift by the same fifths delta the notes
+  use, preserving each root's degree in the key; `Harmony.name` is only the
+  quality suffix and a text-only symbol (no root TPC) passes through unchanged.
 - Grace notes now sit where MuseScore puts them, in both directions. MuseScore
   stores every grace of a chord — before *and* after type — in one vector and
   writes the whole vector **ahead of** the parent chord's own `<Chord>`

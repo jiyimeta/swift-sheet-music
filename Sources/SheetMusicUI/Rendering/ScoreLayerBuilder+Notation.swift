@@ -51,26 +51,26 @@ extension ScoreLayerBuilder {
 
     // MARK: - Key signature
 
-    private static let sharpSteps: [Int] = [4, 1, 5, 2, -1, 3, 0]
-    private static let flatSteps: [Int] = [0, 3, -1, 2, -2, 1, -3]
-
     static func drawKeySignature(
-        sharps: Int, flats: Int, origin: CGPoint,
+        sharps: Int, flats: Int, clef: NotatedClef, origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        let count = max(0, sharps) + max(0, flats)
-        guard count > 0 else { return }
-        let isSharp = sharps > 0
-        let glyph = isSharp
+        let glyph = sharps > 0
             ? SMuFLGlyph.accidentalSharp
             : SMuFLGlyph.accidentalFlat
-        let steps = isSharp ? sharpSteps : flatSteps
-        let advance = metrics.sp * 1.4
-        for i in 0 ..< min(count, steps.count) {
-            let step = steps[i]
+        // Step table and advance come from `KeySignatureSteps` so this
+        // renderer, `KeySignatureRenderer` (SwiftUI) and the Android
+        // draw-command bridge all place the cluster identically.
+        let steps = KeySignatureSteps.steps(
+            sharps: sharps, flats: flats, clef: clef,
+        )
+        let advance = KeySignatureSteps.advance(sp: metrics.sp)
+        for (i, step) in steps.enumerated() {
             let x = origin.x + CGFloat(i) * advance
-            let y = origin.y - CGFloat(step) * metrics.sp / 2
+            let y = origin.y + KeySignatureSteps.stepDy(
+                step: step, sp: metrics.sp,
+            )
             if let layer = glyphLayer(
                 glyph,
                 at: CGPoint(x: x, y: y),

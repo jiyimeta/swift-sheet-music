@@ -1145,25 +1145,23 @@ extension LayoutBridge {
     static func encodeKeySignature(
         sharps: Int,
         flats: Int,
+        clef: NotatedClef,
         originX: Double,
         originY: Double,
         sp: Double,
         glyphSize: Double,
         into out: inout [DrawCommand],
     ) {
-        let count = max(0, sharps) + max(0, flats)
-        guard count > 0 else { return }
-        let isSharp = sharps > 0
-        let codepoint = isSharp
+        let codepoint = sharps > 0
             ? SMuFLCodepoint.accidentalSharp
             : SMuFLCodepoint.accidentalFlat
-        let steps = isSharp
-            ? KeySignatureSteps.sharps
-            : KeySignatureSteps.flats
+        let steps = KeySignatureSteps.steps(
+            sharps: sharps, flats: flats, clef: clef,
+        )
         let advance = Double(KeySignatureSteps.advance(sp: CGFloat(sp)))
-        for i in 0 ..< min(count, steps.count) {
+        for (i, step) in steps.enumerated() {
             let stepDy = Double(KeySignatureSteps.stepDy(
-                step: steps[i], sp: CGFloat(sp),
+                step: step, sp: CGFloat(sp),
             ))
             emitCenterAnchoredGlyph(
                 codepoint: codepoint,
