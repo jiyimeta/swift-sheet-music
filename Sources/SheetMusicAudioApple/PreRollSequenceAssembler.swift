@@ -105,12 +105,14 @@ enum PreRollSequenceAssembler {
         metronomeBeats: [MetronomeBeat],
         plan: CountInBeats.Result? = nil,
         baseTick: Int = 0,
+        includingPreRollClicks: Bool = false,
     ) -> MidiFile {
         MetronomeSequenceBuilder.metronomeOnlySequence(
             rendered: rendered,
             metronomeBeats: metronomeBeats,
             plan: plan,
             baseTick: baseTick,
+            includingPreRollClicks: includingPreRollClicks,
         )
     }
 

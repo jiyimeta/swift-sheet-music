@@ -46,7 +46,7 @@
                     self.timeline = timeline
                 }
 
-                func loadMetronomeSequence(_: MidiFile) {}
+                func loadMetronomeSequence(_: MidiFile, offsetSeconds _: TimeInterval) {}
                 func setMetronomeMuted(_: Bool) {}
                 func play() {}
                 func pause() {}

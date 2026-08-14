@@ -47,7 +47,7 @@
                     soundfontURL _: URL?, metronomeSoundfontURL _: URL?, drumChannels _: Set<UInt8>,
                 ) {}
                 func loadSequence(_: MidiFile, timeline _: PlaybackTimeline) {}
-                func loadMetronomeSequence(_: MidiFile) {}
+                func loadMetronomeSequence(_: MidiFile, offsetSeconds _: TimeInterval) {}
                 func setMetronomeMuted(_: Bool) {}
                 func play() {}
                 func pause() {}
@@ -171,10 +171,9 @@
                 let score = makeFourQuarterScore()
                 try engine.prepare(score: score)
 
-                // `backendPreRollSeconds` stays > 0 for the WHOLE count-in playback (it is cleared
-                // only by the next normal load / seek), so this playback runs its end detection
-                // through `backendTickCursor`'s pre-roll branch — which has its own saturating
-                // frame lookup and so needs the same fix.
+                // A count-in leaves the score transport un-shifted (the count runs on the
+                // metronome transport), so end detection must behave exactly as it does for a
+                // plain play — including past the saturating frame lookup.
                 engine.play(from: nil, in: score, countIn: true)
                 #expect(engine.state == .playing)
 

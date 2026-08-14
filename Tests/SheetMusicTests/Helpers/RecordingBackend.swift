@@ -17,6 +17,15 @@
         var isAtEnd = false
         private(set) var volumeSends: [(channel: UInt8, cc7: UInt8)] = []
         private(set) var programSends: [(channel: UInt8, program: UInt8)] = []
+        /// Pre-roll length the last `play` was given, or nil when it was a plain one.
+        private(set) var countInSeconds: TimeInterval?
+        /// Offset the last-loaded metronome sequence declared.
+        private(set) var metronomeOffsetSeconds: TimeInterval = 0
+        private(set) var seekCalls: [Int] = []
+        /// The SMFs the engine last handed to each transport, so a test can assert
+        /// which one a count-in's clicks were written into.
+        private(set) var lastSequence: MidiFile?
+        private(set) var lastMetronomeSequence: MidiFile?
         private var timeline: PlaybackTimeline?
 
         func clearRecordings() {
@@ -36,16 +45,29 @@
         func prepare(
             soundfontURL _: URL?, metronomeSoundfontURL _: URL?, drumChannels _: Set<UInt8>,
         ) {}
-        func loadSequence(_: MidiFile, timeline: PlaybackTimeline) {
+        func loadSequence(_ midi: MidiFile, timeline: PlaybackTimeline) {
+            lastSequence = midi
             self.timeline = timeline
         }
 
-        func loadMetronomeSequence(_: MidiFile) {}
+        func loadMetronomeSequence(_ midi: MidiFile, offsetSeconds: TimeInterval) {
+            lastMetronomeSequence = midi
+            metronomeOffsetSeconds = offsetSeconds
+        }
+
         func setMetronomeMuted(_: Bool) {}
-        func play() {}
+        func play() {
+            countInSeconds = nil
+        }
+
+        func play(afterCountInSeconds seconds: TimeInterval) {
+            countInSeconds = seconds
+        }
+
         func pause() {}
         func stop() {}
         func seek(toTick tick: Int) {
+            seekCalls.append(tick)
             guard let timeline else { return }
             currentPositionSeconds = timeline.seconds(atTick: Double(tick))
         }

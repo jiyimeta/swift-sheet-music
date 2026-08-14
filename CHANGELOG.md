@@ -7,6 +7,39 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- The count-in works again on the SwiftySynth backend — the path every live
+  playback takes — where it had two bugs a host reported together: it never
+  counted at all while a loop was active, and when it did count it clicked
+  with the score SoundFont's GM wood block instead of the host's click
+  samples. "Repeat whole score" pushes a whole-score loop into the engine, so
+  for anyone practising with repeat on, the count-in simply did nothing.
+
+  Both came from the same decision. The backend path built its count-in by
+  shifting the SCORE SMF behind a click track baked into it. That click
+  therefore played on the score synth — which loads the score's SoundFont; the
+  metronome synth is the one holding `metronomeSoundfontURL` — and it left
+  every score-tick read (seek, loop wrap, end detection) speaking a shifted
+  coordinate space, which is why a loop had to suppress the count-in rather
+  than compose with it.
+
+  The count now runs the way the Android engine already ran it: the score's
+  SMF is the ordinary un-shifted build, `plan.beats` fill `[0, preRollTicks)`
+  ahead of the body on the METRONOME transport, and the backend holds the
+  score transport for the pre-roll (`SynthBackend.play(afterCountInSeconds:)`)
+  while that transport counts. The hold is counted in frames on the render
+  thread, so the downbeat lands where the count says it does rather than on
+  whichever buffer noticed a deadline had passed, and the pre-roll is forced
+  audible through the mute flag — counting in is an explicit request, not the
+  metronome toggle.
+
+  `SynthBackend` gains `play(afterCountInSeconds:)` (default: plain `play()`)
+  and `loadMetronomeSequence(_:offsetSeconds:)`, the offset being how far
+  ahead of the score transport a count-in sequence runs. The AUMIDISynth path
+  (offline export) is unchanged — it routes its pre-roll track to the
+  metronome AU and was always correct.
+
 ## [1.13.1] - 2026-08-13
 
 ### Fixed

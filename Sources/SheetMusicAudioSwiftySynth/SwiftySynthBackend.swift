@@ -43,6 +43,18 @@ public final class SwiftySynthBackend: SynthBackend {
         /// volume outlives a SoundFont swap without being re-pushed.
         var metronomeGain: Float = 1
         var isPlaying = false
+        /// Frames of count-in pre-roll still owed. While it is `> 0` the SCORE
+        /// transport is held (only its release tails render) and the metronome
+        /// transport advances AND sounds regardless of `metronomeMuted` — the
+        /// count has to be audible with the metronome switched off, which is the
+        /// usual case. Decremented on the render thread, so the body starts on
+        /// the exact frame the count ends.
+        var preRollFramesRemaining = 0
+        /// Seconds the metronome transport runs AHEAD of the score transport.
+        /// Non-zero only for a count-in sequence, whose SMF carries a pre-roll
+        /// the score's does not; added to every metronome seek so the two stay
+        /// aligned for the rest of the playback.
+        var metronomeOffsetSeconds: Double = 0
         /// Pre-allocated render-thread scratch for the metronome mix, so the
         /// render block allocates nothing. Sized in `prepare`.
         var scratchL: [Float] = []
@@ -257,16 +269,22 @@ public final class SwiftySynthBackend: SynthBackend {
         lock.withLockUnchecked { shared in
             shared.sequencer?.play(smf, loop: false)
             shared.isPlaying = false
+            shared.preRollFramesRemaining = 0
         }
         // `sequencer.play` resets the synthesizer, so re-assert rate + tuning.
         applyRateAndTuning()
     }
 
-    public func loadMetronomeSequence(_ midi: SheetMusicMIDI.MidiFile) {
+    public func loadMetronomeSequence(
+        _ midi: SheetMusicMIDI.MidiFile, offsetSeconds: TimeInterval = 0,
+    ) {
         guard let smf = Self.parse(midi) else { return }
         lock.withLockUnchecked { shared in
+            // `play` parks the transport at 0 — the pre-roll's first click for a
+            // count-in sequence, the score's own start for a plain one.
             shared.metronomeSequencer?.play(smf, loop: false)
             shared.metronomeSequencer?.speed = max(0.01, Double(rate))
+            shared.metronomeOffsetSeconds = offsetSeconds
         }
     }
 
@@ -276,7 +294,9 @@ public final class SwiftySynthBackend: SynthBackend {
             // rendered, to spend no CPU), so reseek it to the score's current
             // position before it resumes so clicks land back on the beat.
             if !muted, shared.metronomeMuted, let pos = shared.sequencer?.position {
-                shared.metronomeSequencer?.seek(to: pos)
+                let seconds = Double(pos.components.seconds)
+                    + Double(pos.components.attoseconds) * 1e-18
+                shared.metronomeSequencer?.seek(to: Self.metronomePosition(seconds, in: shared))
             }
             shared.metronomeMuted = muted
         }
@@ -286,6 +306,17 @@ public final class SwiftySynthBackend: SynthBackend {
         lock.withLockUnchecked { shared in
             shared.metronomeGain = max(0, volume)
         }
+    }
+
+    /// Where the metronome transport belongs when the score transport is at
+    /// `seconds`. Clamped at zero: with a count-in started mid-score the offset
+    /// is negative (the count is shorter than the music already behind the start
+    /// position), and a host that then seeks back near the top would otherwise
+    /// ask for a position before the sequence begins.
+    private nonisolated static func metronomePosition(
+        _ seconds: Double, in shared: Shared,
+    ) -> Duration {
+        .seconds(max(0, seconds + shared.metronomeOffsetSeconds))
     }
 
     private nonisolated static func parse(_ midi: SheetMusicMIDI.MidiFile) -> SwiftySynth.MidiFile? {
@@ -360,7 +391,18 @@ public final class SwiftySynthBackend: SynthBackend {
     }
 
     public func play() {
-        lock.withLockUnchecked { $0.isPlaying = true }
+        lock.withLockUnchecked { shared in
+            shared.preRollFramesRemaining = 0
+            shared.isPlaying = true
+        }
+    }
+
+    public func play(afterCountInSeconds seconds: TimeInterval) {
+        let frames = max(0, Int((seconds * sampleRate).rounded()))
+        lock.withLockUnchecked { shared in
+            shared.preRollFramesRemaining = frames
+            shared.isPlaying = true
+        }
     }
 
     public func pause() {
@@ -370,9 +412,12 @@ public final class SwiftySynthBackend: SynthBackend {
     public func stop() {
         lock.withLockUnchecked { shared in
             shared.isPlaying = false
+            shared.preRollFramesRemaining = 0
             shared.sequencer?.seek(to: .zero)
             shared.synthesizer?.noteOffAll(immediate: true)
-            shared.metronomeSequencer?.seek(to: .zero)
+            // Score tick 0 sits `metronomeOffsetSeconds` into a count-in
+            // metronome sequence — rewinding it to zero would replay the count.
+            shared.metronomeSequencer?.seek(to: Self.metronomePosition(0, in: shared))
             shared.metronomeSynthesizer?.noteOffAll(immediate: true)
         }
     }
@@ -393,8 +438,11 @@ public final class SwiftySynthBackend: SynthBackend {
         // to `tick` itself, so the displayed position is unaffected.
         let seconds = timeline.seconds(atTick: Double(tick) - 0.5)
         lock.withLockUnchecked { shared in
+            // A seek is "play from here, now": it ends any count-in still owed
+            // rather than counting the user in a second time from a new spot.
+            shared.preRollFramesRemaining = 0
             shared.sequencer?.seek(to: .seconds(seconds))
-            shared.metronomeSequencer?.seek(to: .seconds(seconds))
+            shared.metronomeSequencer?.seek(to: Self.metronomePosition(seconds, in: shared))
         }
         // `MidiFileSequencer.seek` resets the synthesizer before chasing — same as `sequencer.play`
         // in `loadSequence` — so the persisted tuning is gone and only the SMF's own chased events
@@ -472,6 +520,8 @@ public final class SwiftySynthBackend: SynthBackend {
         isReady = false
         lock.withLockUnchecked { shared in
             shared.isPlaying = false
+            shared.preRollFramesRemaining = 0
+            shared.metronomeOffsetSeconds = 0
             shared.sequencer?.stop()
             shared.metronomeSequencer?.stop()
             shared.sequencer = nil
