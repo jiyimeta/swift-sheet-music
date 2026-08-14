@@ -93,9 +93,10 @@ xcodebuild -project Examples/Apple/SheetMusicExample.xcodeproj \
 
 GitHub Actions runs on public runners (free for public repos):
 
-- `ci.yml` — Apple `swift build` + `swift test`, on every push and pull
-  request to `main`. Needs no secrets, so it also covers fork PRs. This is
-  the primary gate.
+- `ci.yml` — two jobs on every push and pull request to `main`: Apple
+  `swift build` + `swift test`, and a lint job running
+  `swiftlint lint --strict` + `swiftformat --lint`. Needs no secrets, so it
+  also covers fork PRs. This is the primary gate.
 - `android-audio.yml` — Android cross-compile → Kotlin unit tests →
   `assembleRelease`, on push to `main` and `workflow_dispatch`. Not run on
   `pull_request` because it needs the `WIRELET_PAT` GitHub Packages token,
@@ -386,7 +387,7 @@ plugin's `swiftPackagePath` follows along automatically. Run
 - **Value types preferred.** All Score / MIDI types are `struct` or
   `enum`. Sendable. No back-pointers; cross-references live in
   rendering passes, not in the model.
-- **One responsibility per file.** SwiftLint caps file length at 300.
+- **One responsibility per file.** SwiftLint warns past 400 lines.
   When `MidiRenderer.swift` outgrew this it was split into
   `MidiRenderer+Header.swift`, `…+Voice.swift`, `…+Repeats.swift`, etc.
 - **Permissive parser.** Unknown XML elements inside a `<voice>` are

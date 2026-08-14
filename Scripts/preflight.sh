@@ -2,10 +2,10 @@
 # Pre-merge verification — run this before merging a branch into main.
 #
 # CI (GitHub Actions, free on public runners): ci.yml runs the Apple
-# build/test on every push + PR; android-audio.yml runs the Android
-# cross-compile on push to main + on demand. This script is the fast
-# LOCAL gate — run it before opening a PR / merging, especially for
-# Android changes, which CI only verifies post-merge to main.
+# build/test and the lint job on every push + PR; android-audio.yml runs
+# the Android cross-compile on push to main + on demand. This script is
+# the fast LOCAL gate — run it before opening a PR / merging, especially
+# for Android changes, which CI only verifies post-merge to main.
 #
 # Usage:
 #   Scripts/preflight.sh              # full suite (Apple + Android)
@@ -32,6 +32,28 @@ esac
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 
 if [[ "$run_apple" == 1 ]]; then
+    # Lint first: it takes seconds and CI fails the PR on it either way.
+    # Missing tools are a hard error rather than a skip — a silently
+    # skipped lint is how the repository drifted while `.pre-commit-config.yaml`
+    # sat uninstalled.
+    for tool in swiftlint swiftformat; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            echo "error: $tool not found (brew install swiftlint swiftformat)" >&2
+            exit 1
+        fi
+    done
+
+    step "Apple / SwiftPM: swiftlint"
+    # No path arguments — `included:` in .swiftlint.yml already names them,
+    # and repeating them makes SwiftLint lint each file twice.
+    (cd "$ROOT" && swiftlint lint --strict --quiet)
+
+    # Wider than swiftlint: .swiftlint.yml excludes Examples/Apple, but
+    # the example app is formatter-clean and the pre-commit hook formats
+    # it, so check it here too.
+    step "Apple / SwiftPM: swiftformat"
+    (cd "$ROOT" && swiftformat Sources Tests Examples --lint)
+
     step "Apple / SwiftPM: swift build"
     swift build --package-path "$ROOT"
 
