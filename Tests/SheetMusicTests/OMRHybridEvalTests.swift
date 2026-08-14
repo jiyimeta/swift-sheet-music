@@ -287,6 +287,33 @@
                 )
             }
         }
+
+        /// `compose`'s "no raster analysis for this page" branch predates
+        /// `.detectorGlyphs` and is mode-agnostic by default — it silently
+        /// falls back to the oracle's own vocabulary glyphs, which is
+        /// correct for every OTHER mode but would let `.detectorGlyphs`
+        /// contribute perfect-label glyphs for a page a real corpus run
+        /// dropped (missing PNG, failed `RasterPage.analyze`), unreported.
+        /// `analyses: [:]` here means "this page's raster analysis is
+        /// absent", exactly what a dropped page looks like to `compose`.
+        @Test func detectorModeWithoutAnAnalysisForItsPageThrows() throws {
+            let (page, _) = Self.skewedPage()
+
+            // Every other mode keeps the pre-existing fallback: `full`
+            // must still succeed, unchanged, over the very same input.
+            let full = try OMRHybridFrontEnd.compose(
+                pages: [page], analyses: [:], mode: .full,
+            )
+            #expect(full.walked.glyphs.map(\.semantic) == [.noteheadBlack])
+            #expect(full.pageSizes[0] != nil)
+
+            #expect(throws: (any Error).self) {
+                try OMRHybridFrontEnd.compose(
+                    pages: [page], analyses: [:], mode: .detectorGlyphs,
+                    detector: LabelReplayDetector(),
+                )
+            }
+        }
     }
 
     /// Score-level evaluation of the hybrid front-end against

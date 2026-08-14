@@ -406,6 +406,22 @@
                 )
                 walked.texts += oracle.walked.texts.filter { $0.pageIndex == index }
                 guard let analysis = analyses[index] else {
+                    // For every OTHER mode this is "no raster data for
+                    // this page", so the page falls back to the oracle's
+                    // own (unreframed) vocabulary glyphs — unrelated to
+                    // detector plumbing. `.detectorGlyphs` must NOT take
+                    // that fallback: a corpus run that drops a page's
+                    // analysis (missing PNG, failed `RasterPage.analyze`)
+                    // would otherwise silently contribute perfect-label
+                    // glyphs for that page under a detector heading, with
+                    // no error and no signal — the same failure the
+                    // missing-detector guard below exists to prevent,
+                    // arriving through a different door.
+                    guard mode != .detectorGlyphs else {
+                        throw hybridError(
+                            "detectorGlyphs has no raster analysis for page \(index)",
+                        )
+                    }
                     walked.glyphs += vocabulary
                     sizes[index] = oracle.pageSizes[index] ?? .zero
                     continue
