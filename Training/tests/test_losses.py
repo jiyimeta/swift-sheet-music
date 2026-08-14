@@ -10,21 +10,24 @@ def test_focal_loss_is_zero_for_a_perfect_prediction():
     assert float(losses.focal(logits, target)) == pytest.approx(0.0, abs=1e-4)
 
 
-def test_focal_loss_punishes_a_missed_peak_more_than_a_soft_background():
-    # Two targets, same wrong prediction (pred ~= 0 everywhere): one has a
-    # true peak (target == 1) the model completely misses, the other has
-    # only a "soft" background cell (target == 0.8, the kind of value the
-    # Gaussian falloff around a nearby peak leaves behind) at the same
-    # spot. The (1 - target)^4 penalty reduction in the negative term
-    # exists precisely so a soft cell like that — where a real detector's
-    # false positives cluster — costs far less than a genuine miss.
-    logits = torch.full((1, 1, 4, 4), -20.0)  # pred ~= 0 everywhere
-    missed_peak = torch.zeros(1, 1, 4, 4)
-    missed_peak[0, 0, 2, 2] = 1.0
-    soft_background = torch.zeros(1, 1, 4, 4)
-    soft_background[0, 0, 2, 2] = 0.8
-    assert (float(losses.focal(logits, missed_peak))
-            > float(losses.focal(logits, soft_background)))
+def test_focal_loss_punishes_a_false_positive_less_near_a_peak_than_far_from_one():
+    # Neither target has any target == 1 cell, so this stays entirely in
+    # the negative branch of `focal` — the `(1 - target) ** 4` term is
+    # the only thing that can produce a difference here. `logits` is a
+    # uniform +20 everywhere: a confident false positive at every cell.
+    # `soft` has one cell just outside a Gaussian peak (target == 0.8);
+    # `hard_background` is pure background (target == 0) everywhere. The
+    # false positive at the soft cell must cost less than the same false
+    # positive on pure background — that differential is the entire
+    # reason this loss survives the corpus's extreme class imbalance
+    # (noteheadBlack 55,675x vs. the rarest class 16x, per a 600-page
+    # sample).
+    logits = torch.full((1, 1, 4, 4), 20.0)
+    soft = torch.zeros(1, 1, 4, 4)
+    soft[0, 0, 1, 1] = 0.8
+    hard_background = torch.zeros(1, 1, 4, 4)
+    assert (float(losses.focal(logits, soft))
+            < float(losses.focal(logits, hard_background)))
 
 
 def test_masked_l1_ignores_everything_outside_the_mask():
