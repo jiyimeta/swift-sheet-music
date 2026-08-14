@@ -40,7 +40,14 @@ public enum TremoloAnchor: Sendable, Equatable {
 /// is — must go through `StaffLineGeometry`, not through `staffHeight`.
 public enum LayoutElement: Sendable, Equatable {
     case clef(rawType: String, origin: CGPoint, anchor: ClefAnchor?)
-    case keySignature(sharps: Int, flats: Int, origin: CGPoint)
+    /// `clef` is the clef in force where the signature is drawn. It
+    /// selects the accidental step table — MuseScore reads the same
+    /// thing off the preceding clef segment in `TLayout::layoutKeySig`
+    /// — so a bass staff's sharps land on F3 / C3 / … instead of the
+    /// treble positions. See `KeySignatureSteps`.
+    case keySignature(
+        sharps: Int, flats: Int, clef: NotatedClef, origin: CGPoint,
+    )
     case timeSignature(numerator: Int, denominator: Int, origin: CGPoint)
     /// `origin.y` is the vertical center of the barline's stroke — for
     /// a staff with more than one line that is the staff's own center,

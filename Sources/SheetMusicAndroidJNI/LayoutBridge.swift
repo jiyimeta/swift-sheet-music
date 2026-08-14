@@ -314,10 +314,11 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .keySignature(sharps, flats, origin):
+        case let .keySignature(sharps, flats, clef, origin):
             encodeKeySignature(
                 sharps: sharps,
                 flats: flats,
+                clef: clef,
                 originX: mox + Double(origin.x),
                 originY: moy + Double(origin.y),
                 sp: sp,

@@ -34,9 +34,9 @@ extension ScoreLayerBuilder {
             if let layer, let anchor {
                 context.attach(layer, to: .clef(anchor))
             }
-        case let .keySignature(s, f, p):
+        case let .keySignature(s, f, clef, p):
             drawKeySignature(
-                sharps: s, flats: f, origin: shift(p),
+                sharps: s, flats: f, clef: clef, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
         case let .timeSignature(n, d, p):

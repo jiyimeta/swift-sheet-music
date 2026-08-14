@@ -262,9 +262,13 @@ extension LayoutEngine {
             }
             if staffIdx < context.keySignatures.count, keyAbs > 0 {
                 let key = context.keySignatures[staffIdx]
+                let clef = staffIdx < context.clefRawTypes.count
+                    ? NotatedClef(rawType: context.clefRawTypes[staffIdx])
+                    : .treble
                 elements.append(.keySignature(
                     sharps: max(0, key),
                     flats: max(0, -key),
+                    clef: clef,
                     origin: CGPoint(x: keySigX, y: staffMidY),
                 ))
             }

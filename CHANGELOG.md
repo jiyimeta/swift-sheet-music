@@ -9,6 +9,22 @@ and this project adheres to
 
 ### Fixed
 
+- Key signatures are now placed against the clef in force, so an F-clef staff's
+  accidentals sit a line lower than a G-clef staff's instead of on the treble
+  positions. MuseScore keeps one 14-entry line table per clef
+  (`ClefInfo::lines`, `engraving/dom/clef.cpp:50-83` — the first seven for
+  sharps, the last seven for flats) and `TLayout::layoutKeySig` scans back for
+  the clef segment at the key signature's own tick before placing a single
+  glyph. This project had one hard-coded treble table, and
+  `LayoutElement.keySignature` carried no clef for a renderer to consult, so
+  every clef drew the treble cluster; a bass staff's E♭ major read a third too
+  high. The tables are transcribed rather than derived because two of them are
+  not the treble table shifted uniformly: the tenor (C4) and soprano (C1) rows
+  raise individual accidentals by an octave to keep the cluster off ledger
+  lines, so tenor F♯ sits *below* C♯. The three renderers (SwiftUI, CALayer,
+  and the Android draw-command bridge) now all resolve their steps through
+  `KeySignatureSteps` — the CALayer path had grown its own third copy of the
+  treble table.
 - Grace notes now sit where MuseScore puts them, in both directions. MuseScore
   stores every grace of a chord — before *and* after type — in one vector and
   writes the whole vector **ahead of** the parent chord's own `<Chord>`

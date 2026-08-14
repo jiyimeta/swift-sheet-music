@@ -242,9 +242,9 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, rawType: raw,
                 origin: shift(p), metrics: metrics,
             )
-        case let .keySignature(s, f, p):
+        case let .keySignature(s, f, clef, p):
             KeySignatureRenderer.draw(
-                context: &context, sharps: s, flats: f,
+                context: &context, sharps: s, flats: f, clef: clef,
                 origin: shift(p), metrics: metrics,
             )
         case let .timeSignature(n, d, p):
