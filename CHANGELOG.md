@@ -48,6 +48,13 @@ and this project adheres to
   `<harmonyInfo>` wrapper and the `<bass>` / `<bassCase>` spellings; the v3
   target keeps the flat layout its readers expect. Measured with MuseScore
   4.7.4: 0 of 4 chord symbols survived the round trip before, 4 of 4 after.
+- Transposing a score now moves its chord symbols with the notes.
+  `Score.transposed(bySemitones:)` shifted key signatures and chords but let
+  `.harmony` fall through untouched, so a transposed lead sheet's symbols named
+  the original key while the staff under them named the new one.
+  `Harmony.rootTpc` / `bassTpc` now shift by the same fifths delta the notes
+  use, preserving each root's degree in the key; `Harmony.name` is only the
+  quality suffix and a text-only symbol (no root TPC) passes through unchanged.
 - Grace notes now sit where MuseScore puts them, in both directions. MuseScore
   stores every grace of a chord — before *and* after type — in one vector and
   writes the whole vector **ahead of** the parent chord's own `<Chord>`

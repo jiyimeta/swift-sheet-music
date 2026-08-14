@@ -30,8 +30,12 @@ extension Score {
     /// `"percussion"` (unpitched — transposing would re-map drum sounds). The active key per note is resolved at
     /// per-measure granularity via `activeKey(staff:measureIndex:)`. Grace notes transpose with their parent chord.
     ///
-    /// Tick structure, note IDs, and element ordering are unchanged — only `pitch` / `tpc` / `accidental` and
-    /// `KeySignature.concertKey` move — so playback cursors and seek positions stay valid against the transposed score.
+    /// Chord symbols move with the notes: `Harmony.rootTpc` / `bassTpc` shift by the same fifths, so a lead sheet's
+    /// symbols keep naming the harmony written under them.
+    ///
+    /// Tick structure, note IDs, and element ordering are unchanged — only `pitch` / `tpc` / `accidental`,
+    /// `Harmony.rootTpc` / `bassTpc` and `KeySignature.concertKey` move — so playback cursors and seek positions stay
+    /// valid against the transposed score.
     public func transposed(bySemitones delta: Int) -> Score {
         guard delta != 0 else { return self }
         let phi = globalFifthsOffset(bySemitones: delta)
@@ -68,6 +72,12 @@ extension Score {
                                     .elements[elementIndex] = .chord(Self.transposedChord(
                                         c, semitones: delta, fifthsDelta: fifthsDelta, key: newKey,
                                     ))
+                            case let .harmony(h):
+                                copy.parts[partIndex].staves[staffIndex]
+                                    .measures[measureIndex].voices[voiceIndex]
+                                    .elements[elementIndex] = .harmony(
+                                        Self.transposedHarmony(h, fifthsDelta: fifthsDelta),
+                                    )
                             default:
                                 break
                             }
@@ -161,6 +171,22 @@ extension Score {
             Self.transposedNote($0, semitones: semitones, fifthsDelta: fifthsDelta, key: key)
         })
         return g
+    }
+
+    /// Transpose a chord symbol's root and slash bass by the same fifths the notes and the key moved, so the symbol
+    /// keeps naming the harmony under it. `Harmony.name` is only the quality suffix (`m7`, `maj9`) and never carries
+    /// the root, so it is left alone; a text-only symbol (`rootTpc == nil` — MuseScore could not parse it, e.g.
+    /// "N.C.") has nothing to shift and passes through unchanged.
+    ///
+    /// C++: `Score::transpose` routes harmonies through `Transpose::transposeTpc` the same way.
+    private static func transposedHarmony(
+        _ harmony: Harmony, fifthsDelta: Int,
+    ) -> Harmony {
+        guard fifthsDelta != 0 else { return harmony }
+        var h = harmony
+        h.rootTpc = harmony.rootTpc.map { $0 + fifthsDelta }
+        h.bassTpc = harmony.bassTpc.map { $0 + fifthsDelta }
+        return h
     }
 
     /// Transpose a single note by `semitones`, preserving its spelling relative to the key: the tonal pitch class
