@@ -1,6 +1,7 @@
 #if !os(Android)
     import CoreGraphics
     import Foundation
+    @testable import SheetMusicCore
     @testable import SheetMusicPDF
 
     /// Glyphs from the labels — a perfect detector, restricted to the
@@ -35,6 +36,17 @@
             case truthStaffLines
             case truthVerticals
             case truthBeams
+            /// Glyphs come from a REAL detector (`OMRGlyphDetecting`)
+            /// instead of the label oracle; paths are still the raster
+            /// front-end's own classical CV, unchanged from `.full`. This
+            /// is the mode that turns the hybrid's numbers from "P3a/P3b's
+            /// contribution against a known ceiling" into an end-to-end
+            /// measurement. `nullFrontEnd` remains the floor for PATHS (no
+            /// front-end at all); for GLYPHS under this mode, the floor is
+            /// the untrained / random-checkpoint model (gate P3d-G1) —
+            /// there is no separate lobotomy mode for glyphs because the
+            /// detector itself, run with no training, already supplies one.
+            case detectorGlyphs
 
             /// The path kind this mode takes from the oracle instead of
             /// the raster front-end.
@@ -382,7 +394,7 @@
         /// the two frames coincide.
         static func compose(
             pages: [OMRPageLabels], analyses: [Int: RasterPageAnalysis], mode: Mode,
-            originJitterInSpaces: Double = 0,
+            originJitterInSpaces: Double = 0, detector: (any OMRGlyphDetecting)? = nil,
         ) throws -> (walked: WalkedContent, pageSizes: [Int: CGSize], pageCount: Int) {
             let oracle = try OMROracleFrontEnd.replay(pages: pages)
             var walked = WalkedContent(glyphs: [], texts: [], paths: [], curves: [])
@@ -398,11 +410,27 @@
                     sizes[index] = oracle.pageSizes[index] ?? .zero
                     continue
                 }
-                walked.glyphs += jitter(
-                    reframe(vocabulary, page: page, transform: analysis.transform),
-                    sigmaInSpaces: originJitterInSpaces,
-                    staffSpacingPt: analysis.staffSpacingPt,
-                )
+                let pageGlyphs: [ClassifiedGlyph]
+                switch mode {
+                case .detectorGlyphs:
+                    guard let detector else {
+                        throw hybridError("detectorGlyphs needs a detector")
+                    }
+                    // No `reframe` and no `jitter`: the detector works on
+                    // the front-end's OWN deskewed pixels, so its output is
+                    // already in the frame the paths are in. Reframing it
+                    // would apply the label transform a second time, and
+                    // jittering it would be simulating noise on top of the
+                    // detector's own (real) noise.
+                    pageGlyphs = try detector.glyphs(page: page, analysis: analysis)
+                default:
+                    pageGlyphs = jitter(
+                        reframe(vocabulary, page: page, transform: analysis.transform),
+                        sigmaInSpaces: originJitterInSpaces,
+                        staffSpacingPt: analysis.staffSpacingPt,
+                    )
+                }
+                walked.glyphs += pageGlyphs
                 var pagePaths = filter(analysis.paths, mode: mode)
                 if let substituted = mode.substituted {
                     pagePaths += reframe(
@@ -424,6 +452,14 @@
                 sizes[index] = analysis.pageSizePt
             }
             return (walked, sizes, oracle.pageCount)
+        }
+
+        /// `.detectorGlyphs` asking for a detector it wasn't given must
+        /// throw, not silently fall back to the label oracle — a silent
+        /// fallback would report label-quality numbers under a detector
+        /// heading.
+        private static func hybridError(_ reason: String) -> Error {
+            SheetMusicError.malformedScore(reason: "OMRHybridFrontEnd: \(reason)")
         }
     }
 #endif

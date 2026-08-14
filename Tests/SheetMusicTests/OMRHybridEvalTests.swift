@@ -196,6 +196,97 @@
             )
             #expect(OMRHybridFrontEnd.filter(paths, mode: .truthBeams).count == 1)
         }
+
+        /// One minimal page + raster analysis, built directly rather than
+        /// via `OMRHarnessFixture` — that fixture's own bare 5-line-staff
+        /// page ships ZERO glyphs and ZERO skew by design (see its own
+        /// header), and on an identity transform `reframe` is already a
+        /// no-op, so applying it once vs. applying it twice by mistake
+        /// would look identical either way. Reusing it here would make
+        /// `feedingBackTheLabelGlyphsReproducesFullExactly` pass whether or
+        /// not the swap is faithful — exactly the vacuous-test failure mode
+        /// this task exists to avoid. A rotated raster gives
+        /// `RasterPage.analyze` a real, non-zero deskew angle to report
+        /// (see `RasterPageAnalyzeTests.aSkewedPageReportsTheAngleItRemoved`),
+        /// which makes `reframe` a genuine transform and a stray extra
+        /// application of it a detectable one; the added label glyph gives
+        /// it something to move.
+        static func skewedPage() -> (page: OMRPageLabels, analysis: RasterPageAnalysis) {
+            let bitmap = RasterTestBitmaps.rotated(
+                RasterTestBitmaps.staff(
+                    widthPx: 1200, heightPx: 400, dpi: 300, topY: 150, spacingPx: 14,
+                ),
+                degrees: 1.5,
+            )
+            let analysis = RasterPage.analyze(bitmap, pageIndex: 0)
+            let size = analysis.pageSizePt
+            let glyph = OMRPageLabels.Glyph(
+                className: "noteheadBlack", bboxPt: nil,
+                originPt: [150, 45], advancePt: 6, renderedSizePt: 5, fontSizePt: 17,
+            )
+            let page = OMRPageLabels(
+                schema: 1,
+                page: .init(index: 0, widthPt: size.width, heightPt: size.height),
+                image: .init(
+                    file: "page_0.png", dpi: 300,
+                    labelTransform: [1, 0, 0, 0, 1, 0, 0, 0, 1], sourceSizePx: nil,
+                ),
+                glyphs: [glyph], paths: [], beams: [], curves: [], texts: [],
+                census: .init(glyphsByClass: ["noteheadBlack": 1], texts: 0),
+            )
+            return (page, analysis)
+        }
+
+        /// A test-only `OMRGlyphDetecting` that returns exactly what
+        /// `.full` would have used for glyphs: the label oracle's glyphs,
+        /// filtered to the detector vocabulary, reframed into the
+        /// front-end's frame. Standing in for "a perfect detector", it is
+        /// what the anti-vacuity test feeds `.detectorGlyphs`.
+        struct LabelReplayDetector: OMRGlyphDetecting {
+            func glyphs(
+                page: OMRPageLabels, analysis: RasterPageAnalysis,
+            ) throws -> [ClassifiedGlyph] {
+                let oracle = try OMROracleFrontEnd.replay(pages: [page])
+                let vocabulary = OMRHybridFrontEnd.detectorVocabularyGlyphs(oracle.walked.glyphs)
+                return OMRHybridFrontEnd.reframe(vocabulary, page: page, transform: analysis.transform)
+            }
+        }
+
+        /// The point of this test is that the SWAP is faithful. A detector
+        /// that returns exactly what `full` would have used must produce a
+        /// bit-identical `WalkedContent` — otherwise `.detectorGlyphs` is
+        /// measuring the plumbing as well as the model, and every number it
+        /// reports carries an unknown offset.
+        @Test func feedingBackTheLabelGlyphsReproducesFullExactly() throws {
+            let (page, analysis) = Self.skewedPage()
+            let pages = [page]
+            let analyses = [0: analysis]
+            // The fixture is only a real check if its transform actually
+            // moves things and the oracle actually has a glyph to move.
+            #expect(analysis.transform.deskewDegrees != 0)
+
+            let full = try OMRHybridFrontEnd.compose(
+                pages: pages, analyses: analyses, mode: .full,
+            )
+            #expect(!full.walked.glyphs.isEmpty)
+
+            let replayed = try OMRHybridFrontEnd.compose(
+                pages: pages, analyses: analyses, mode: .detectorGlyphs,
+                detector: LabelReplayDetector(),
+            )
+            #expect(replayed.walked.glyphs == full.walked.glyphs)
+            #expect(replayed.walked.paths == full.walked.paths)
+            #expect(replayed.pageSizes == full.pageSizes)
+        }
+
+        @Test func detectorModeWithoutADetectorThrows() {
+            let (page, analysis) = Self.skewedPage()
+            #expect(throws: (any Error).self) {
+                try OMRHybridFrontEnd.compose(
+                    pages: [page], analyses: [0: analysis], mode: .detectorGlyphs,
+                )
+            }
+        }
     }
 
     /// Score-level evaluation of the hybrid front-end against
