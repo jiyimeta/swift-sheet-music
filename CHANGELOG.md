@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-08-14
+
 ### Added
 
 - `PlaybackEngine.AudioSessionPolicy`, a new `init` parameter that decides when
