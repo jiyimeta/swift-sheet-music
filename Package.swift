@@ -395,6 +395,7 @@ if isWasm {
                 "SheetMusicMIDI",
                 "SheetMusicMSCX",
                 "SheetMusicEditWire",
+                "SheetMusicBridgeCore",
             ],
             path: "Sources/WasmSizeProbe",
         ),

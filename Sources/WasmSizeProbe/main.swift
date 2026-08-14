@@ -9,6 +9,7 @@
 //
 // Only built when SWIFT_SHEET_MUSIC_WASM=1 is exported, so the normal package
 // shape is unaffected.
+import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicEditWire
 import SheetMusicLayout
@@ -53,3 +54,21 @@ print("mscz=\(container.count)B parts=\(reparsed.parts.count)")
 let intentBytes = EditIntentCodec.encode(.composite([]))
 let intent = try EditIntentCodec.decode(intentBytes)
 print("intent=\(intentBytes.count)B \(intent)")
+
+// The bridge layer itself, entered through the same calls the Android bridge makes,
+// so what gets measured is what a browser host would actually ship rather than what
+// merely links. `ScoreBridge.loadScore` drags in the format sniff and both parsers;
+// `LayoutBridge.compute` runs the whole engraving pass and the draw-program encoder,
+// which is the bulk of the target; `ScoreMetadataWire` keeps a Metadata/ wirelet codec
+// in the image, since those are generated per directory and would otherwise go
+// unmeasured.
+let bridgeScore = try ScoreBridge.loadScore(bytes: container)
+let program = LayoutBridge.compute(score: bridgeScore, pageWidthMM: 210, pageHeightMM: 297)
+let decodedPages = try DrawProgramCodec.decode(program)
+let handles = HandleTable<Score>()
+let handle = handles.insert(bridgeScore)
+let metadata = ScoreMetadataWire(title: "size probe", composer: "").encodeToData()
+print(
+    "bridge=\(program.count)B pages=\(decodedPages.count) "
+        + "handle=\(handle) meta=\(metadata.count)B",
+)

@@ -405,8 +405,18 @@ swift build --swift-sdk swift-6.3.3-RELEASE_wasm --target SheetMusicLayout
 ```
 
 Building today: Foundation / Core / XMLTools / Zip / MIDI / Layout /
-MSCX / MusicXML / AudioCore / EditWire — parse, lay out, render MIDI and
-edit. UI / PDF / LayoutApple / AudioApple are Apple-only.
+MSCX / MusicXML / AudioCore / EditWire / BridgeCore — parse, lay out,
+render MIDI, edit, and drive the bridge layer. UI / PDF / LayoutApple /
+AudioApple are Apple-only.
+
+`SheetMusicBridgeCore` is the platform-neutral half of the old
+`SheetMusicAndroidJNI` — `LayoutBridge`, `DrawProgram`, `HandleTable`,
+`LayoutDocumentCache`, the SMuFL metrics table and the wire codecs. The
+`native*` entry points could not come with it: swift-java's jextract
+scans only `--input-swift`, the target's own source directory
+(`JExtractSwiftPlugin.swift:72`), so an entry point is a JNI symbol only
+where its file physically sits. A wasm bridge writes its own entry
+points and calls the same implementation underneath.
 
 `SheetMusicAudioCore` and `SheetMusicEditWire` were out of reach until
 `Wirelet` 0.4.1. Both depend on it, and its source files imported the
@@ -454,10 +464,12 @@ shows up here as a differing fingerprint rather than as silent corruption.
 The `Foundation` umbrella carries ICU and costs ~13 MB brotli;
 `FoundationEssentials` costs ~2.9 MB. The portable targets therefore
 import `SheetMusicFoundation` (see Conventions) and the measured probe
-lands at ~3.38 MB brotli — parse, layout, MIDI, the ZIP container, the
-vendored zlib and the edit-intent codecs together. MSCX and Zip are worth
-about 166 KB of that and the codecs another 33 KB, which is what makes
-keeping the umbrella out the whole ballgame.
+lands at **3,672,043 bytes brotli** — parse, layout, MIDI, the ZIP
+container, the vendored zlib, the edit-intent codecs and the bridge layer
+together, against a 4 MB ceiling. MSCX and Zip are worth about 166 KB of
+that, the codecs another 33 KB, and `SheetMusicBridgeCore` 124 KB, which
+is what makes keeping the umbrella out the whole ballgame: one file's
+worth of umbrella is two orders of magnitude more than any of them.
 
 **A single plain `import Foundation` anywhere in the portable graph
 undoes all of it**, and nothing in the compiler objects — it builds fine,
@@ -504,11 +516,27 @@ attribute, and the size script catches what no import scan can see.
   (WASI, Linux, Android) and `Foundation` on Apple, plus the platform C
   library — `Foundation` re-exports Darwin/Glibc, so `cos` and friends
   came along with it and would otherwise vanish. Applies to Core,
-  XMLTools, Zip, MIDI, MSCX, MusicXML, Layout, AudioCore, EditWire and
-  the `SheetMusic` umbrella. Apple-only targets (LayoutApple, UI, Audio,
-  AudioApple, PDF, RenderPreviews) and `SheetMusicAndroidJNI` keep plain
-  `Foundation`. See "WebAssembly build" for why it matters and how it is
-  enforced.
+  XMLTools, Zip, MIDI, MSCX, MusicXML, Layout, AudioCore, EditWire,
+  BridgeCore and the `SheetMusic` umbrella. Apple-only targets
+  (LayoutApple, UI, Audio, AudioApple, PDF, RenderPreviews) and
+  `SheetMusicAndroidJNI` keep plain `Foundation`. See "WebAssembly build"
+  for why it matters and how it is enforced.
+  - **`Dispatch` is a re-export too.** The umbrella supplies
+    `DispatchQueue` the same way it supplies `cos`, so dropping it takes
+    both. Use `SerialLock` from `SheetMusicFoundation`, which is a
+    `DispatchQueue` on Apple and Android and a reentrancy-checked flag on
+    WASI, where wasip1 has neither threads nor Dispatch. Its `withLock`
+    closure is synchronous on purpose — that is what makes the WASI
+    branch correct, not merely convenient. Read the file before adding an
+    `async` variant or before building for `wasip1-threads`
+    (`Scripts/wasm-size.sh` refuses that triple).
+  - `CGFloat` / `CGRect` / `CGPoint` are not in `FoundationEssentials`
+    either, and Android used to borrow swift-corelibs-foundation's. A
+    portable file that needs them either anchors to
+    `SheetMusicLayout`'s stubs with a file-scoped
+    `private typealias` under `#if !canImport(CoreGraphics)`, or puts the
+    CoreGraphics-typed API behind `#if canImport(CoreGraphics)` when it
+    is an Apple convenience overload (see `CursorFrameCodec`).
   - `CharacterSet` is not in `FoundationEssentials`. Use
     `trimmingHorizontalWhitespace()` / `trimmingWhitespaceAndNewlines()` /
     `trimmingControlCharacters()` from `SheetMusicFoundation` instead of
@@ -687,7 +715,7 @@ MuseScore repository root.
 - **wirelet `schemaPaths` scans exactly one directory**: each module's
   `wirelet { sources { register("main") { schemaPaths.from(...) } } }`
   block (e.g. `Android/SheetMusicAndroid/build.gradle.kts`, which
-  points at `Sources/SheetMusicAndroidJNI/Metadata`) generates Kotlin
+  points at `Sources/SheetMusicBridgeCore/Metadata`) generates Kotlin
   codecs only for `@WireFormat` types physically located under that
   path. A type declared outside it produces no codec and no error or
   warning — the build just silently omits it. Keep every `@WireFormat`
@@ -706,7 +734,7 @@ MuseScore repository root.
   A `schemaPaths` entry must resolve to exactly one directory (the plugin
   throws otherwise), so a second scan root needs a second
   `sources { register("…") }` — see `:SheetMusicAudioAndroid`, which
-  registers `main` (`Sources/SheetMusicAndroidJNI/Audio`) plus `editWire`
+  registers `main` (`Sources/SheetMusicBridgeCore/Audio`) plus `editWire`
   (`Sources/SheetMusicEditWire/Path`) under one codec/model package pair.
   The plugin only auto-wires a source set literally named `main` into the
   Android variants, so any other name needs its output dir added to
@@ -715,3 +743,28 @@ MuseScore repository root.
   Kotlin models exist under `audio/model/`) and `Intent/` (not scanned) for
   exactly this reason — adding a type to `Path/` emits a Kotlin codec that
   expects a hand-written model class of the same name.
+
+  **A green Gradle run is not evidence that a `schemaPaths` change took
+  effect.** `schemaPaths` is `@Internal`; what Gradle tracks is
+  `swiftSourceFiles`, a `FileTree` under it with
+  `@PathSensitive(PathSensitivity.RELATIVE)`
+  (`GenerateWireletCodecs.kt:43-55`). Move the same file names with the
+  same contents to a different parent and the fingerprint is unchanged, so
+  the task stays `UP-TO-DATE` and the old output is reused — correctly, but
+  proving nothing. When you move a scan directory, delete
+  `Android/*/build/generated/wirelet/` first, then diff the regenerated
+  `*.kt` against a snapshot taken before the move.
+
+- **`Scripts/android-build-libs.sh` mirrors a directory SwiftPM never
+  cleans.** It `rm -rf`s
+  `Android/SheetMusicAndroid/src/main/java-generated/` and re-copies from
+  the jextract prebuild-plugin output under
+  `.build/plugins/outputs/.../JExtractSwiftPlugin/`. SwiftPM does not
+  remove stale files from *that* directory, so classes whose Swift
+  declarations have been deleted or moved keep being staged, and the local
+  tree ends up with generated Java that a clean checkout would never
+  produce. `java-generated/` is gitignored, so nothing flags it. After a
+  refactor that removes public declarations, `rm -rf` the plugin output
+  directory and rebuild before believing the staged set. Extracting
+  `SheetMusicBridgeCore` took the real output from 39 files to 3; the
+  stale copies were only visible by mtime.
