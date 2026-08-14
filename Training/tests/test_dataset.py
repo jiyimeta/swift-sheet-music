@@ -124,6 +124,40 @@ def test_a_glyph_outside_the_tile_is_not_a_target(tmp_path):
     assert float(mask.sum()) == 0.0
 
 
+def test_a_glyph_in_the_overlap_strip_is_a_target_in_both_tiles(tmp_path):
+    # Deliberate, not a bug: exclusive tile ownership (OMRTiling.coreRange)
+    # is an INFERENCE-time rule, so a detection made from two overlapping
+    # crops isn't double-counted in the merge step. Training is a
+    # different problem — each tile is an independent sample, and the
+    # glyph is genuinely, fully visible in both crops. Suppressing the
+    # target in whichever tile doesn't "own" it would teach the model to
+    # NOT fire on symbols that happen to sit near a tile edge, which is
+    # actively harmful. So a glyph in the overlap strip between two tiles
+    # is a positive target in BOTH, each with its own local offset.
+    #
+    # 900px wide -> origins [0, 320, 516] (tile_origins(900, 384, 64)).
+    # A glyph centred at page x=350 falls inside both tile 0's window
+    # ([0, 384)) and tile 320's window ([320, 704)), with local x 350
+    # and 30 respectively.
+    _write_page(tmp_path, "r_a", "src_a", 0,
+                [_glyph("noteheadBlack", (350.0, 60.0))],
+                width_px=900, height_px=900)
+    index = prep.PrepIndex(tmp_path)
+    ds = dataset.SymbolTiles(index, "train", seed=0)
+
+    def _recovered_x(item):
+        _image, _hm, off, _geom, mask = item
+        assert mask.sum() == 1.0
+        row, col = (mask[0] == 1).nonzero(as_tuple=True)
+        row, col = int(row[0]), int(col[0])
+        return (col + float(off[0, row, col])) * ds.stride
+
+    tile0 = ds[ds.tiles.index((0, 0, 0))]
+    tile320 = ds[ds.tiles.index((0, 320, 0))]
+    assert _recovered_x(tile0) == pytest.approx(350.0)
+    assert _recovered_x(tile320) == pytest.approx(30.0)
+
+
 def test_rare_classes_are_oversampled(tmp_path):
     # Two pages: one with 100 noteheadBlack, one with a single rest32nd.
     # Over many draws the rare page must appear far more often than its
