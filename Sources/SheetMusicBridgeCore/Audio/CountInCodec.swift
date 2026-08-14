@@ -1,6 +1,6 @@
-import Foundation
 import SheetMusicAudioCore
 import SheetMusicCore
+import SheetMusicFoundation
 import Wirelet
 
 /// Encodes the shared count-in schedule for the Android host. The wire types themselves live in

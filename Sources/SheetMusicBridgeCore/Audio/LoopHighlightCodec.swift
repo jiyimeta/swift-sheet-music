@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 import Wirelet
 
 /// Wire format for the loop-region highlight rectangles. One rect per

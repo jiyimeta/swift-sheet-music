@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicLayout
 
 /// System-start decorations for the Android draw-command bridge: the

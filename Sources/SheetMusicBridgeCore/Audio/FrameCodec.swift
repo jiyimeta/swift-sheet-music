@@ -1,6 +1,6 @@
-import Foundation
 import SheetMusicAudioCore
 import SheetMusicCore
+import SheetMusicFoundation
 import Wirelet
 
 /// Codec for `PlaybackTimeline.Frame` — a top-level blob.

@@ -1,6 +1,7 @@
-// swiftlint:disable file_length
-import Foundation
 import SheetMusicCore
+
+// swiftlint:disable file_length
+import SheetMusicFoundation
 import SheetMusicLayout
 
 #if !canImport(CoreGraphics)

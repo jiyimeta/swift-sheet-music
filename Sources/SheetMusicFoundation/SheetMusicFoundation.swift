@@ -1,5 +1,10 @@
-// The single choke point for the Foundation dependency of every portable
-// target.
+// The single choke point for what every portable target used to get from
+// `import Foundation`.
+//
+// That is a wider surface than the Foundation module itself, and deliberately so:
+// the umbrella re-exports the platform C library and Dispatch, so dropping it takes
+// `cos` and `DispatchQueue` with it. Anything in that category belongs here — see
+// the libm re-export below and `SerialLock.swift`.
 //
 // On platforms that ship swift-foundation's `FoundationEssentials` as a module
 // of its own (WASI, Linux, Android) this imports that, avoiding the

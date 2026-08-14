@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import Wirelet
 
 /// Per-part / per-staff descriptor for the Android Reader's display-inspector Parts section.

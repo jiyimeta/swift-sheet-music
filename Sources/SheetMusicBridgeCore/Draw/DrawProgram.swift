@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 import Wirelet
 
 /// Self-describing binary format that ferries layout output across the JNI

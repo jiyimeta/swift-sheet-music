@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 import Wirelet
 
 // Wire codecs for the annotation anchor primitives (freehand ink ↔ musical

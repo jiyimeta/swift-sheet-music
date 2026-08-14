@@ -48,6 +48,19 @@ if ! "$TOOLCHAIN/swift" sdk list | grep -q "^$SDK$"; then
     exit 1
 fi
 
+# `SerialLock` (Sources/SheetMusicFoundation/SerialLock.swift) does no real locking on
+# WASI, because wasip1 is single-threaded. `wasip1-threads` is not, and no `#if` tells the
+# two apart — both are `os(WASI)` — so the guard has to sit where such a build would be
+# asked for. Read that file before lifting this.
+case "$SDK" in
+    *-threads | *threads*)
+        echo "error: '$SDK' is a threaded WASI target, which SerialLock does not support" >&2
+        echo "       see Sources/SheetMusicFoundation/SerialLock.swift — its WASI branch" >&2
+        echo "       assumes a single thread and would silently stop serializing" >&2
+        exit 1
+        ;;
+esac
+
 export SWIFT_SHEET_MUSIC_WASM=1
 
 echo "Building WasmSizeProbe for $SDK ..."

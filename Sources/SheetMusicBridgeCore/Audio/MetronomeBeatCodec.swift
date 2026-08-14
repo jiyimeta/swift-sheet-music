@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicAudioCore
+import SheetMusicFoundation
 import Wirelet
 
 /// Codec for `[MetronomeBeat]`.

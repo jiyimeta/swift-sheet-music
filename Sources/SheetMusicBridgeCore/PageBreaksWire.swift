@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Wire format for `nativePageBreaks`: `i32 count` (big-endian) then `count × f64`
 /// (big-endian IEEE 754), each value being a document-Y offset in millimetres.

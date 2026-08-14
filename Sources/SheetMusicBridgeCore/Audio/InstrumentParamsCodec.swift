@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import Wirelet
 
 /// Instrument/channel parameters for one mixer strip, passed across the

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicMIDI
 import SheetMusicMSCX
 import SheetMusicMusicXML

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 import Wirelet
 #if canImport(CoreGraphics)
     import CoreGraphics
@@ -37,14 +37,21 @@ public enum CursorFrameCodec {
         DecodedFrame(x: x, y: y, width: width, height: height).encodeToData()
     }
 
-    public static func encode(_ rect: CGRect) -> Data {
-        encodeComponents(
-            x: Double(rect.origin.x),
-            y: Double(rect.origin.y),
-            width: Double(rect.size.width),
-            height: Double(rect.size.height),
-        )
-    }
+    // Apple-only, and not for want of trying: `CGRect` reaches this file from CoreGraphics and from
+    // nowhere else once the target is off the Foundation umbrella. Android used to borrow
+    // swift-corelibs-foundation's own `CGRect`, and `FoundationEssentials` carries no such type on
+    // either Android or WASI. Callers there use `encodeComponents` above, which is what the JNI
+    // bridge already does — this overload has no caller in Sources at all, only Apple tests.
+    #if canImport(CoreGraphics)
+        public static func encode(_ rect: CGRect) -> Data {
+            encodeComponents(
+                x: Double(rect.origin.x),
+                y: Double(rect.origin.y),
+                width: Double(rect.size.width),
+                height: Double(rect.size.height),
+            )
+        }
+    #endif
 
     public static func decode(_ data: Data) throws -> DecodedFrame? {
         if data.isEmpty { return nil }

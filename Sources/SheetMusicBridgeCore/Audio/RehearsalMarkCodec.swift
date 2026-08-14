@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Codec for `[RehearsalMarkEntry]` — the rehearsal-mark list surfaced to the
 /// Android Reader so it can render tappable rehearsal-mark chips/menu items that

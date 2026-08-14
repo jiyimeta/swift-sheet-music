@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// ID matching for the selection tint threaded through `LayoutBridge.buildCommands(layout:tint:)`. Split out
 /// of `LayoutBridge.swift` — already at the file-length cap — since this is pure "is this ID selected" logic,

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 import Wirelet
 
 /// Score metadata payload returned across JNI. The wire format is

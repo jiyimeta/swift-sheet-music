@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicAudioCore
+import SheetMusicFoundation
 import Wirelet
 
 /// Codec for `[GMInstrument]` — Swift is the source of truth for the

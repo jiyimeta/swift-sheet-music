@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 import SheetMusicLayout
 
 #if !canImport(CoreGraphics)
