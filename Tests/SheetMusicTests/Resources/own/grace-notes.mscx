@@ -40,6 +40,14 @@
               <tpc>16</tpc>
             </Note>
           </Chord>
+          <!--
+            A grace-type <Chord> belongs to the NEXT normal chord, both
+            for before- and after-types: MuseScore buffers the whole run
+            and attaches it to the following chord, splitting it by tag
+            (MeasureRead::readVoice). So this <grace8after/> is a
+            Nachschlag of the half note below (pitch 65), not of the
+            quarter above it.
+          -->
           <Chord>
             <durationType>eighth</durationType>
             <grace8after/>

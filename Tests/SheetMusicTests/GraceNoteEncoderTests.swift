@@ -10,12 +10,13 @@ import Testing
 /// fingerprint test).
 @Suite("Grace note encoding — structural")
 struct GraceNoteEncoderStructuralTests {
-    /// A minimal `<voice>` with one main chord flanked by a
-    /// before-grace and an after-grace. Encoding it must emit three
-    /// sibling `<Chord>` nodes, in this order, and the grace ones must
-    /// carry their own grace-type tag rather than being folded into
-    /// (or dropped from) the main chord's node.
-    @Test("Before- and after-graces are emitted as sibling <Chord> nodes, in order")
+    /// A minimal `<voice>` with one main chord carrying a before-grace
+    /// and an after-grace. Encoding it must emit three sibling
+    /// `<Chord>` nodes — **both** graces ahead of the parent, the way
+    /// MuseScore's writer emits `Chord::graceNotes()` — and the grace
+    /// ones must carry their own grace-type tag rather than being
+    /// folded into (or dropped from) the main chord's node.
+    @Test("Before- and after-graces are both emitted ahead of the parent <Chord>")
     func gracesEmittedAsSiblings() throws {
         let before = GraceChord(
             graceType: .acciaccatura,
@@ -47,17 +48,46 @@ struct GraceNoteEncoderStructuralTests {
         #expect(chordNodes[0].hasChild("acciaccatura"))
         #expect(chordNodes[0].all("Note").map(\.pitch) == [62])
 
-        // 2. The main chord: no grace tag, carries the main note
+        // 2. The after-grace: also ahead of the parent, tagged
+        // <grace8after/>, carrying only its own note (pitch 64).
+        #expect(chordNodes[1].hasChild("grace8after"))
+        #expect(chordNodes[1].all("Note").map(\.pitch) == [64])
+
+        // 3. The main chord: no grace tag, carries the main note
         // (pitch 60) and neither grace's note.
         for graceTag in GraceType.allCases.map(\.mscxTag) {
-            #expect(!chordNodes[1].hasChild(graceTag))
+            #expect(!chordNodes[2].hasChild(graceTag))
         }
-        #expect(chordNodes[1].all("Note").map(\.pitch) == [60])
+        #expect(chordNodes[2].all("Note").map(\.pitch) == [60])
+    }
 
-        // 3. The after-grace: its own <Chord>, tagged <grace8after/>,
-        // carrying only its own note (pitch 64).
-        #expect(chordNodes[2].hasChild("grace8after"))
-        #expect(chordNodes[2].all("Note").map(\.pitch) == [64])
+    /// The after-run is written back-to-front: `graceNotesAfter` is the
+    /// sounding order, and MuseScore rebuilds it by filtering its file
+    /// order **in reverse** (`Chord::graceNotesAfter()`). Mirror of
+    /// `VoiceGraceAttachmentTests.afterOrderIsReversed` on the decode
+    /// side; together they pin the round trip.
+    @Test("Multiple after-graces are written in reverse sounding order")
+    func afterGracesWrittenReversed() throws {
+        let g1 = GraceChord(
+            graceType: .grace16after, duration: .sixteenth,
+            notes: ChordNotes([Note(pitch: 67, tpc: 15)]),
+        )
+        let g2 = GraceChord(
+            graceType: .grace32after, duration: .thirtySecond,
+            notes: ChordNotes([Note(pitch: 69, tpc: 17)]),
+        )
+        let voice = Voice(elements: [
+            .chord(Chord(
+                duration: .quarter,
+                notes: ChordNotes([Note(pitch: 65, tpc: 13)]),
+                graceNotesAfter: [g1, g2],
+            )),
+        ])
+
+        let chordNodes = try voice.encode().all("Chord")
+        #expect(chordNodes.count == 3)
+        guard chordNodes.count == 3 else { return }
+        #expect(chordNodes.map { $0.all("Note").map(\.pitch) } == [[69], [67], [65]])
     }
 
     /// Multiple before-graces must preserve mscx (array) order in the

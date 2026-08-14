@@ -11,10 +11,10 @@ extension Chord {
     /// `<Spanner type="Tie"><location>` payload for ties on this
     /// chord. `Voice.encode` decides which form to use based on
     /// whether the partner chord lives in the same measure or
-    /// crosses the bar line. A note whose `tieBack` actually targets
-    /// one of this chord's own `graceNotesBefore` overrides
-    /// `tieBackLocation` per-note — see
-    /// `graceBeforeTieBackLocations()`.
+    /// crosses the bar line. A note whose tie actually targets one of
+    /// this chord's own graces overrides the corresponding argument
+    /// per-note — see `graceBeforeTieBackEndpoints()` and
+    /// `graceAfterTieForwardEndpoints()`.
     func encodeAsChord(
         tieForwardLocation: TieLocation? = nil,
         tieBackLocation: TieLocation? = nil,
@@ -83,19 +83,22 @@ extension Chord {
         for lyric in lyrics where !lyric.text.isEmpty {
             children.append(lyric.encode(options: options))
         }
-        // Per-note override for a `tieBack` that actually targets one
-        // of this chord's own `graceNotesBefore` rather than the
-        // previous real chord `tieBackLocation` was computed against
-        // — see `graceBeforeTieBackLocations()`'s doc comment. Empty
-        // whenever this chord has no grace-tie partner, so a chord
-        // without graces (or whose graces carry no matching tie)
-        // takes the `?? tieBackLocation` fallback on every note and
-        // this loop's output is unchanged from before that fix.
-        let graceTieBackOverrides = graceBeforeTieBackLocations()
+        // Per-note overrides for a tie whose partner is one of this
+        // chord's own graces rather than the neighbouring real chord
+        // the `tieForwardLocation` / `tieBackLocation` arguments were
+        // computed against — see `graceBeforeTieBackEndpoints()` and
+        // `graceAfterTieForwardEndpoints()`. Both are empty whenever
+        // this chord has no grace-tie partner, so a chord without
+        // graces (or whose graces carry no matching tie) takes the
+        // fallback on every note and this loop's output is unchanged.
+        let graceTieBackOverrides = graceBeforeTieBackEndpoints()
+        let graceTieForwardOverrides = graceAfterTieForwardEndpoints()
         for (noteIndex, note) in notes.enumerated() {
             children.append(note.encode(
-                tieForwardLocation: tieForwardLocation,
-                tieBackLocation: graceTieBackOverrides[noteIndex] ?? tieBackLocation,
+                tieForwardEndpoint: graceTieForwardOverrides[noteIndex]
+                    ?? tieForwardLocation.map { TieEndpoint($0) },
+                tieBackEndpoint: graceTieBackOverrides[noteIndex]
+                    ?? tieBackLocation.map { TieEndpoint($0) },
                 options: options,
                 drumDefaultHead: isPercussionV3 ? "normal" : nil,
                 chordLines: chordLines.filter { $0.noteIndex == noteIndex },

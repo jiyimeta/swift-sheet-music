@@ -219,14 +219,41 @@ extension Voice {
         }
         // Grace chords are siblings of the parent `<Chord>` in the
         // voice stream, not children of it — see `GraceChord.encode`.
-        // They carry their own duration and are never folded into the
-        // voice-total / previous-chord-duration bookkeeping below:
-        // graces don't consume voice time, mirroring the decoder's
-        // `pendingGracesBefore` buffer, which is likewise kept off
-        // `Voice.elements` and its cursor advance.
-        if case let .chord(chord) = element {
-            for grace in chord.graceNotesBefore {
-                state.children.append(grace.encode(options: options))
+        // *Every* grace goes ahead of its parent, after-graces
+        // included, in the single file order `mscxFileOrderedGraces`
+        // defines; MuseScore's reader attaches the whole run to the
+        // next normal chord and splits it by grace-type tag, never by
+        // file position. They carry their own duration and are never
+        // folded into the voice-total / previous-chord-duration
+        // bookkeeping below: graces don't consume voice time,
+        // mirroring the decoder's `pendingGraces` buffer, which is
+        // likewise kept off `Voice.elements` and its cursor advance.
+        if case let .chord(chord) = element,
+           !(chord.graceNotesBefore.isEmpty && chord.graceNotesAfter.isEmpty)
+        {
+            // A grace whose tie leaves the parent chord needs the
+            // parent's own neighbour-chord delta — the grace shares the
+            // parent's tick, so the two are the same value. The
+            // unguarded `…Delta` forms are used because the parent
+            // chord itself need not carry any tie. See
+            // `GraceChord.encode`.
+            let forwardDelta = forwardTieDelta(
+                chord: chord,
+                isLastChordOfVoice: isLastChord,
+                voiceBarLength: voiceBarLength,
+            )
+            let backwardDelta = backwardTieDelta(
+                isFirstChordOfVoice: !state.seenChordInVoice,
+                previousChordDuration: state.previousChordDuration,
+                prevVoiceTotal: carryIn.prevVoiceTotal,
+            )
+            for grace in chord.mscxFileOrderedGraces {
+                state.children.append(grace.encode(
+                    parentChord: chord,
+                    parentForwardTieLocation: forwardDelta,
+                    parentBackwardTieLocation: backwardDelta,
+                    options: options,
+                ))
             }
         }
         try state.children.append(encode(
@@ -244,9 +271,6 @@ extension Voice {
             voiceIndex: voiceIndex,
         ))
         if case let .chord(chord) = element {
-            for grace in chord.graceNotesAfter {
-                state.children.append(grace.encode(options: options))
-            }
             // Resolve `.measure` so `asFraction` cannot trap when
             // accumulating the voice total / previous-chord duration
             // for cross-measure tie offsets.

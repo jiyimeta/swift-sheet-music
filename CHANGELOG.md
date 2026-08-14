@@ -7,6 +7,76 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Grace notes now sit where MuseScore puts them, in both directions. MuseScore
+  stores every grace of a chord — before *and* after type — in one vector and
+  writes the whole vector **ahead of** the parent chord's own `<Chord>`
+  (`TWrite::write(const Chord*, …)` iterating `Chord::graceNotes()`); its
+  reader mirrors that, buffering every consecutive grace-type `<Chord>` and
+  attaching the run to the **next** normal chord, splitting it by grace-type
+  tag rather than by file position (`MeasureRead::readVoice`). This project
+  did neither: the encoder wrote after-graces *behind* their owner and the
+  decoder attached them by walking *backwards* to the most recent chord. The
+  two were exact mirrors of each other, so this library's own round trip was
+  byte-clean and no existing test could see any of it, while both directions
+  of real MuseScore interop were wrong — an after-grace written on chord *N*
+  was read by MuseScore as belonging to chord *N+1* (or dropped when no chord
+  followed in the bar), and an after-grace in a genuine MuseScore file was
+  read here as belonging to chord *N-1* (or dropped when its owner opened the
+  bar). Settled against upstream fixtures rather than inferred:
+  `midirenderer_data/grace_after.mscx` writes a `<grace8after/>` ahead of the
+  very first chord of its measure, a position no "after-graces follow their
+  owner" reading can explain.
+
+  The split back out of that single run is asymmetric — `graceNotesBefore()`
+  filters it forward, `graceNotesAfter()` filters it **in reverse** — so a
+  multi-note Nachschlag was also being read (and played) back-to-front.
+  Pinned against upstream's own playback expectation for
+  `single_note_multi_appoggiatura_post`, whose file order is `<grace32after/>`
+  A4 then `<grace16after/>` G4 but whose sounding order is F4 → G4 → A4.
+  `Chord.graceNotesAfter` holds the sounding order, so it is reversed on the
+  way in and out. Both fixtures are now in the test suite, which is the only
+  kind of evidence that can answer these questions — this project's own
+  parse → encode → parse round trip is blind to all of them by construction.
+
+- A grace tie now names the right chord in the direction that leaves the
+  parent. A grace shares its parent chord's tick, so "zero delta, same
+  measure" is right only for the tie direction that stays inside the parent;
+  sounding order fixes which that is. A before-grace sounds ahead of its
+  parent, so its `tieBack` can only come from the *previous* main chord; an
+  after-grace sounds past its parent, so its `tieForward` reaches the *next*
+  one. Both were previously written as the zero-delta location, naming the
+  parent — a partner MuseScore then fails to match, dropping the tie on
+  reload. Where no such neighbour chord exists, no `<location>` is written at
+  all rather than a confident guess, which could additionally mis-connect the
+  tie to whatever note happens to sit at the named position.
+
+- A tied Nachschlag — a main note tying forward into one of its own
+  `graceNotesAfter` — now carries `<next><location><grace>N</grace></location>`,
+  the mirror of the tied-acciaccatura fix shipped in 1.13.1. It was
+  deliberately left out then: an after-grace was written behind its owner, so
+  a computed ordinal would have named a grace of the wrong chord. The ordinal
+  itself is now derived from the combined before + after file run rather than
+  from the position within `graceNotesBefore` alone, which is what
+  `Location::graceIndex` actually means.
+
+- Ties between a grace note and a **multi-note** chord survive a reload.
+  MuseScore's endpoint match compares full `Location` equality including
+  `m_note`, and neither side of this project's encoding emitted `<notes>`, so
+  the comparison was always `0 − 0` — correct only when both tied notes were
+  alone in their chords, and silently dropping the tie otherwise. Both sides
+  now emit the delta. The index is the note's rank **by pitch** within its
+  chord (`Chord::notes()` is kept pitch-sorted by `Chord::add`), not its
+  position among the `<Note>` elements, which this project's `ChordNotes`
+  does not sort.
+
+  Known gap, unchanged: an ordinary chord-to-chord tie between two chords of
+  *different* shapes (say a note that ranks second in one chord and is alone
+  in the other) still emits no `<notes>` and is still dropped by MuseScore on
+  reload. That path has no visibility into the neighbouring chord's note list
+  and is a separate fix.
+
 ## [1.13.1] - 2026-08-13
 
 ### Fixed

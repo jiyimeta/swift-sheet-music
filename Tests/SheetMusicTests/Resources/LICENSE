@@ -8,11 +8,18 @@ fixtures taken from the upstream MuseScore repository:
       src/importexport/musicxml/tests/data/
   - repeat52.mscx, repeat53.mscx:
       src/engraving/tests/repeat_data/
+  - grace_after.mscx:
+      src/engraving/tests/midi/midirenderer_data/
+  - single_note_multi_appoggiatura_post.mscx:
+      src/engraving/tests/playback/playbackeventsrenderer_data/
+      single_note_multi_appoggiatura_post/
 
 They are reproduced here to allow the swift-sheet-music test suite to
 verify equivalence of its MIDI export against MuseScore's own exporter
-output, and to exercise the MusicXML importer against MuseScore's own
-MusicXML round-trip reference files.
+output, to exercise the MusicXML importer against MuseScore's own
+MusicXML round-trip reference files, and — for the two grace fixtures —
+to pin how MuseScore itself lays grace notes out in a file, which this
+project's own round trip cannot observe.
 
 These files are licensed under the GNU General Public License version 3
 (GPL-3.0), the same licence as the upstream MuseScore source code:
