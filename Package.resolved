@@ -1,5 +1,5 @@
 {
-  "originHash" : "3d7d13d587e30193ca9ee606b467ea84ced33f3b1dc2f8588f113d6bd97022a9",
+  "originHash" : "53e6a451415c08512eb1bb0070cddec6227c702cf880070a257439b77c1058ab",
   "pins" : [
     {
       "identity" : "abseil-cpp-binary",
@@ -239,7 +239,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jiyimeta/swift-wirelet.git",
       "state" : {
-        "revision" : "cd0d148e9d4dddad1c6afc47d5ef0a8d6f4a4a13"
+        "revision" : "5d50726cd49ba52ba372f63540a0ea14d9cc1ba9",
+        "version" : "0.4.1"
       }
     },
     {

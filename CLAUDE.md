@@ -405,27 +405,26 @@ swift build --swift-sdk swift-6.3.3-RELEASE_wasm --target SheetMusicLayout
 ```
 
 Building today: Foundation / Core / XMLTools / Zip / MIDI / Layout /
-MSCX / MusicXML — the whole parse-and-lay-out path. UI / PDF /
-LayoutApple / AudioApple are Apple-only.
+MSCX / MusicXML / AudioCore / EditWire — parse, lay out, render MIDI and
+edit. UI / PDF / LayoutApple / AudioApple are Apple-only.
 
-`SheetMusicAudioCore` and `SheetMusicEditWire` compile but must stay out
-of any wasm graph you care about the size of, because both depend on
-`Wirelet`, whose five source files import the `Foundation` umbrella. That
-was measured, not assumed: adding `SheetMusicEditWire` to the size probe
-takes it from 3,514,776 to 13,654,329 bytes brotli. Shimming those five
-imports upstream brings it back to 3,547,838 — so the codecs themselves
-cost ~33 KB and the other 10.1 MB is ICU.
+`SheetMusicAudioCore` and `SheetMusicEditWire` were out of reach until
+`Wirelet` 0.4.1. Both depend on it, and its source files imported the
+`Foundation` umbrella, which is worth ~10 MB brotli on wasm: adding
+`SheetMusicEditWire` to the size probe took it from 3,514,776 to
+13,654,329 bytes, and the upstream shim brought it back to 3,547,591. The
+codecs themselves cost ~33 KB; everything else was ICU arriving through a
+dependency whose own source never mentions it.
 
-The fix therefore lives in `jiyimeta/swift-wirelet`, not here: apply the
-same `canImport(FoundationEssentials)` conditional, tag, and raise the
-`exact:` pin in `Package.swift`. Until that lands, adding either target to
-`WasmSizeProbe` fails the gate.
+`exact: "0.4.1"` in `Package.swift` is therefore load-bearing, not
+housekeeping. Read the comment there before lowering it.
 
-**Measure wasm sizes from a clean build.** After `swift package edit`
-swapped the Wirelet checkout, three incremental runs in a row reported the
-unshimmed 13.65 MB from an already-fixed tree; `rm -rf
-.build/wasm32-unknown-wasip1` gave 3.55 MB. A size that does not move when
-you expect it to is the symptom.
+**Measure wasm sizes from a clean build when a dependency changed.** After
+`swift package edit` swapped the Wirelet checkout, three incremental runs
+in a row reported the unshimmed 13.65 MB from an already-fixed tree — the
+edit path was genuinely in use, verified by injecting a type error the
+compiler duly reported. `rm -rf .build/wasm32-unknown-wasip1` gave 3.55 MB.
+A size that does not move when you expect it to is the symptom.
 
 `SheetMusicZip` needs `zlib`, which the wasm SDK does not ship. The
 raw-DEFLATE subset is vendored at `Sources/zlib` and added to the package
@@ -455,9 +454,10 @@ shows up here as a differing fingerprint rather than as silent corruption.
 The `Foundation` umbrella carries ICU and costs ~13 MB brotli;
 `FoundationEssentials` costs ~2.9 MB. The portable targets therefore
 import `SheetMusicFoundation` (see Conventions) and the measured probe
-lands at ~3.35 MB brotli — parse, layout, MIDI, the ZIP container and the
-vendored zlib together. MSCX and Zip are worth about 166 KB of that, which
-is what makes keeping the umbrella out the whole ballgame.
+lands at ~3.38 MB brotli — parse, layout, MIDI, the ZIP container, the
+vendored zlib and the edit-intent codecs together. MSCX and Zip are worth
+about 166 KB of that and the codecs another 33 KB, which is what makes
+keeping the umbrella out the whole ballgame.
 
 **A single plain `import Foundation` anywhere in the portable graph
 undoes all of it**, and nothing in the compiler objects — it builds fine,

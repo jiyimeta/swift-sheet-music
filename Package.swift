@@ -1,5 +1,12 @@
 // swift-tools-version: 6.2
 
+// A manifest describing twenty-odd targets does not decompose the way a
+// source file does — SwiftPM wants one file — and most of the length here
+// is comments earning their keep. `file_length` has no line-scoped form,
+// so the blanket disable is the only expression available; `.swiftlint.yml`
+// permits it for this rule alone.
+// swiftlint:disable file_length
+
 import Foundation
 import PackageDescription
 
@@ -350,6 +357,7 @@ if isWasm {
                 "SheetMusicLayout",
                 "SheetMusicMIDI",
                 "SheetMusicMSCX",
+                "SheetMusicEditWire",
             ],
             path: "Sources/WasmSizeProbe",
         ),
@@ -376,9 +384,13 @@ let packageDependencies: [Package.Dependency] = [
     // last release where that API still exists — so JExtractSwiftPlugin builds.
     // Aligns with Folino's swift-java pin so a single swiftkit-core satisfies both.
     .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.4.0"),
+    // 0.4.1 imports FoundationEssentials where it exists. Before it, the
+    // umbrella arrived through this package and cost ~10 MB brotli in any
+    // WebAssembly graph containing SheetMusicAudioCore or
+    // SheetMusicEditWire — see CLAUDE.md "WebAssembly build".
     .package(
         url: "https://github.com/jiyimeta/swift-wirelet.git",
-        exact: "0.4.0",
+        exact: "0.4.1",
     ),
     .package(
         url: "https://github.com/jiyimeta/swiftysynth.git",

@@ -10,6 +10,7 @@
 // Only built when SWIFT_SHEET_MUSIC_WASM=1 is exported, so the normal package
 // shape is unaffected.
 import SheetMusicCore
+import SheetMusicEditWire
 import SheetMusicLayout
 import SheetMusicMIDI
 import SheetMusicMSCX
@@ -45,3 +46,10 @@ let reparsed = try MSCZReader.parse(container)
 
 print("systems=\(document.systems.count) pages=\(pages.count) midi=\(bytes.count)B")
 print("mscz=\(container.count)B parts=\(reparsed.parts.count)")
+
+// The edit-intent codecs reach Wirelet, which imported the Foundation
+// umbrella until 0.4.1 and was worth ~10 MB brotli on its own. Keeping the
+// round trip here is what stops that coming back unnoticed.
+let intentBytes = EditIntentCodec.encode(.composite([]))
+let intent = try EditIntentCodec.decode(intentBytes)
+print("intent=\(intentBytes.count)B \(intent)")

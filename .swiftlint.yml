@@ -234,6 +234,12 @@ analyzer_rules:
 included:
   - Sources
   - Tests
+  # The manifest is Swift source too, and the pre-commit hook lints it
+  # either way — it passes staged paths explicitly, so `included:` does not
+  # apply there. Listing it keeps CI and the hook looking at the same set;
+  # without it a manifest violation only ever surfaces on the machine that
+  # happens to have the hook installed.
+  - Package.swift
 
 excluded:
   - "**/.build"
