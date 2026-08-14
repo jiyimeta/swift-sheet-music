@@ -18,6 +18,8 @@ extension Voice {
         voiceBarLength: Fraction,
         effectiveDuration: Fraction,
         injectedTremolo: Tremolo?,
+        previousChordNotes: ChordNotes? = nil,
+        forwardTiePartnerNotes: ChordNotes? = nil,
         options: MSCXEncoderOptions,
         staffGroup: String,
         voiceIndex: Int,
@@ -46,6 +48,8 @@ extension Voice {
             : unscaledChord.encodeAsChord(
                 tieForwardLocation: tieForward,
                 tieBackLocation: tieBack,
+                tieForwardPartnerNotes: forwardTiePartnerNotes,
+                tieBackPartnerNotes: previousChordNotes,
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,

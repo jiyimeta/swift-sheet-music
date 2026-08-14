@@ -163,16 +163,65 @@ struct VoiceGraceAttachmentTests {
         #expect(c.graceNotesBefore.map { $0.notes.first?.pitch } == [64, 65])
     }
 
-    @Test("grace8after attaches to preceding chord")
+    /// An after-grace is written *ahead of* the chord it decorates, not
+    /// behind it — MuseScore's reader buffers every grace-type `<Chord>`
+    /// and attaches the run to the **next** normal chord, splitting it
+    /// by tag rather than by file position (see
+    /// `Chord.mscxFileOrderedGraces`). Shaped after the upstream
+    /// fixture `midi/midirenderer_data/grace_after.mscx`, where a
+    /// `<grace8after/>` precedes the first chord of its measure.
+    @Test("grace8after attaches to the FOLLOWING chord")
     func afterAttaches() throws {
         let v = try voiceXML(
-            chordXML(dur: "quarter", pitch: 60, tpc: 14)
-                + chordXML("grace8after", dur: "eighth", pitch: 62, tpc: 16),
+            chordXML("grace8after", dur: "eighth", pitch: 62, tpc: 16)
+                + chordXML(dur: "quarter", pitch: 60, tpc: 14),
         )
         #expect(v.elements.count == 1)
         guard case let .chord(c) = v.elements[0] else { return }
+        #expect(c.notes.first?.pitch == 60)
         #expect(c.graceNotesAfter.count == 1)
         #expect(c.graceNotesAfter[0].graceType == .grace8after)
+        #expect(c.graceNotesAfter[0].notes.first?.pitch == 62)
+        #expect(c.graceNotesBefore.isEmpty)
+    }
+
+    /// The after-run is stored back-to-front relative to the order it
+    /// sounds in: `Chord::graceNotesAfter()` filters MuseScore's single
+    /// `m_graceNotes` vector **in reverse**. Pinned against the upstream
+    /// playback expectation for
+    /// `single_note_multi_appoggiatura_post` — file order
+    /// `<grace32after>`A4, `<grace16after>`G4, main F4; sounding order
+    /// F4 → G4 → A4.
+    @Test("Multiple after-graces are reversed into sounding order")
+    func afterOrderIsReversed() throws {
+        let v = try voiceXML(
+            chordXML("grace32after", dur: "32nd", pitch: 69, tpc: 17)
+                + chordXML("grace16after", dur: "16th", pitch: 67, tpc: 15)
+                + chordXML(dur: "quarter", pitch: 65, tpc: 13),
+        )
+        guard case let .chord(c) = v.elements.first else {
+            Issue.record("no chord"); return
+        }
+        #expect(c.graceNotesAfter.map { $0.notes.first?.pitch } == [67, 69])
+        #expect(c.graceNotesAfter.map(\.graceType) == [.grace16after, .grace32after])
+    }
+
+    /// A run containing both types splits by tag, each half keeping its
+    /// own orientation — before forward, after reversed.
+    @Test("A mixed run splits by tag, not by file position")
+    func mixedRunSplitsByTag() throws {
+        let v = try voiceXML(
+            chordXML("grace16", dur: "16th", pitch: 62, tpc: 16)
+                + chordXML("grace16after", dur: "16th", pitch: 71, tpc: 19)
+                + chordXML("grace16after", dur: "16th", pitch: 69, tpc: 17)
+                + chordXML(dur: "quarter", pitch: 60, tpc: 14),
+        )
+        #expect(v.elements.count == 1)
+        guard case let .chord(c) = v.elements.first else {
+            Issue.record("no chord"); return
+        }
+        #expect(c.graceNotesBefore.map { $0.notes.first?.pitch } == [62])
+        #expect(c.graceNotesAfter.map { $0.notes.first?.pitch } == [69, 71])
     }
 
     @Test("Stranded before-graces (no following main chord) are dropped")
@@ -181,10 +230,31 @@ struct VoiceGraceAttachmentTests {
         #expect(v.elements.isEmpty)
     }
 
-    @Test("Stranded after-grace (no preceding chord) is dropped")
+    /// MuseScore's grace buffer is per-measure and never flushed, so a
+    /// run with no normal chord after it is dropped on its side too —
+    /// mirrored here rather than preserved.
+    @Test("Stranded after-grace (no following chord) is dropped")
     func strandedAfter() throws {
         let v = try voiceXML(chordXML("grace8after", dur: "eighth", pitch: 62, tpc: 16))
         #expect(v.elements.isEmpty)
+    }
+
+    /// A grace run that follows a normal chord belongs to the *next*
+    /// one, never the one it happens to sit behind — the pre-fix
+    /// backwards walk got this exactly wrong.
+    @Test("An after-grace between two chords attaches to the later one")
+    func afterGraceBetweenChordsGoesForward() throws {
+        let v = try voiceXML(
+            chordXML(dur: "quarter", pitch: 60, tpc: 14)
+                + chordXML("grace8after", dur: "eighth", pitch: 62, tpc: 16)
+                + chordXML(dur: "quarter", pitch: 64, tpc: 18),
+        )
+        #expect(v.elements.count == 2)
+        guard case let .chord(first) = v.elements[0],
+              case let .chord(second) = v.elements[1]
+        else { Issue.record("expected two chords"); return }
+        #expect(first.graceNotesAfter.isEmpty)
+        #expect(second.graceNotesAfter.map { $0.notes.first?.pitch } == [62])
     }
 
     @Test("Grace inside a triplet does not consume tuplet wall-clock time")

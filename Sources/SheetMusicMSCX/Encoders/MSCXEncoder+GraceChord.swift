@@ -11,9 +11,9 @@ extension GraceChord {
     /// (`<acciaccatura/>`, `<appoggiatura/>`, `<grace4/>`, `<grace16/>`,
     /// `<grace32/>`, `<grace8after/>`, `<grace16after/>`,
     /// `<grace32after/>`; see `GraceType.mscxTag`). `Voice.emitElement`
-    /// places the "before" types immediately ahead of the parent chord's
-    /// own `<Chord>` node and the "after" types (`GraceType.isAfter`)
-    /// immediately behind it.
+    /// places every grace — before *and* after type — ahead of the
+    /// parent chord's own `<Chord>` node, in the single file order
+    /// `Chord.mscxFileOrderedGraces` defines.
     ///
     /// `duration` is written straight through, unlike an ordinary
     /// chord's duration: grace notes don't consume tuplet time, so the
@@ -26,47 +26,104 @@ extension GraceChord {
     /// `<Note>` per note, reusing the same note encoder an ordinary
     /// chord's notes go through.
     ///
-    /// A tie on a grace note always uses `TieLocation.graceZeroDelta`:
-    /// a grace chord shares its parent chord's tick (MuseScore never
-    /// advances the write cursor for a grace item —
-    /// `TWrite::write(const ChordRest*, …)`,
-    /// `rw/write/twrite.cpp:1127-1133`, guards `ctx.incCurTick` with
-    /// `!item->isGrace()` — and `EngravingItem::tick()`,
-    /// `dom/engravingitem.cpp:584-596`, resolves to the tick of the
-    /// enclosing `Segment`, which a grace chord shares with the main
-    /// chord it decorates), so a tied acciaccatura/appoggiatura into
-    /// its own main note is a same-tick, same-measure tie. See
-    /// `TieLocation.graceZeroDelta`'s doc comment for the full
-    /// citation trail, including why an *absent* `<location>` (this
-    /// project's previous output) is not merely imprecise but silently
-    /// drops the tie when MuseScore Studio reloads the file.
+    /// ## Which chord a grace's own tie points at
     ///
-    /// Caveat on `tieBack` specifically: `graceZeroDelta` assumes the
-    /// tie's source is this grace's own parent chord (zero delta —
-    /// e.g. an appoggiatura continuing a tie already sounding when it
-    /// begins). MuseScore also permits a tie into a grace-before note
-    /// from the *preceding* main chord — a different, earlier chord,
-    /// nonzero delta — which this always-zero-delta encoding gets
-    /// wrong. Not a regression: the previous output (a location-less
-    /// `<prev/>`) already lost any `tieBack` on a grace note
-    /// unconditionally, so this is strictly no worse, and the common
-    /// "own parent chord" case is now correct. Distinguishing the two
-    /// would need the same by-pitch structural matching
-    /// `Chord.graceBeforeTieBackLocations()` does for the mirror
-    /// direction (main note's `tieBack` into a `graceNotesBefore`
-    /// note) — not done here, since a grace note's own encoder has no
-    /// visibility into the chord *before* its parent.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    /// A grace chord shares its parent chord's tick — MuseScore's
+    /// writer never advances the cursor for a grace item
+    /// (`TWrite::write(const ChordRest*, …)`,
+    /// `rw/write/twrite.cpp:1127-1133`, guards `ctx.incCurTick` with
+    /// `!item->isGrace()`) because `EngravingItem::tick()`
+    /// (`dom/engravingitem.cpp:584-596`) resolves through the enclosing
+    /// `Segment`, which a grace shares with the chord it decorates. So
+    /// a tie between a grace and a note of its **own parent chord** is a
+    /// zero-delta, same-measure tie: `TieLocation.graceZeroDelta`. See
+    /// that constant's doc comment for why an *absent* `<location>` is
+    /// not merely imprecise but silently drops the tie on reload.
+    ///
+    /// The other direction of each tie leaves the parent, and there the
+    /// zero delta would name the wrong chord. Sounding order decides
+    /// which case applies, and it is fully determined by the grace type:
+    ///
+    /// | | `tieBack` (`<prev>`) | `tieForward` (`<next>`) |
+    /// | --- | --- | --- |
+    /// | before-grace | previous main chord — `parentBackwardTieLocation` | own parent chord — zero delta |
+    /// | after-grace | own parent chord — zero delta | next main chord — `parentForwardTieLocation` |
+    ///
+    /// A before-grace sounds *ahead of* its parent, so nothing of the
+    /// parent can tie into it and its `tieBack` must come from the
+    /// chord before; an after-grace sounds *after* its parent, so the
+    /// mirror holds. Because the grace shares the parent's tick, "the
+    /// chord before/after the parent" is exactly the delta the parent's
+    /// own ordinary tie location carries — hence the two parameters,
+    /// which `Voice.emitElement` fills from `Voice.backwardTieDelta` /
+    /// `forwardTieDelta` (the unguarded forms: the parent chord itself
+    /// need not carry any tie).
+    ///
+    /// When the needed parent location is `nil` — no previous chord to
+    /// point at — no `<location>` is written at all. That drops the tie
+    /// on reload, but so would a confidently wrong one, and a wrong
+    /// location can additionally mis-connect to some *other* note that
+    /// happens to sit there.
+    ///
+    /// Not covered: a tie between a grace of one chord and a grace of
+    /// the neighbouring chord (a Nachschlag tied into the next chord's
+    /// Vorschlag). That needs `<grace>` naming the partner's ordinal
+    /// within the *other* chord's run, which neither side has visibility
+    /// into here; such a tie is written with the plain neighbour-chord
+    /// location and is dropped on reload.
+    ///
+    /// `parentChord` supplies the note list the `<notes>` delta is
+    /// measured against for the zero-delta cases (`TieEndpoint`). It is
+    /// optional so a grace can still be encoded standalone; without it
+    /// the delta is `0`, which is correct exactly when both tied notes
+    /// are alone in their chords.
+    func encode(
+        parentChord: Chord? = nil,
+        parentForwardTieLocation: TieLocation? = nil,
+        parentBackwardTieLocation: TieLocation? = nil,
+        options: MSCXEncoderOptions = .init(),
+    ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         duration.appendDurationXML(to: &children)
         children.append(XMLTreeNode(name: graceType.mscxTag))
         for note in notes {
             children.append(note.encode(
-                tieForwardLocation: note.tieForward != nil ? .graceZeroDelta : nil,
-                tieBackLocation: note.tieBack != nil ? .graceZeroDelta : nil,
+                tieForwardEndpoint: note.tieForward == nil ? nil : endpoint(
+                    forNote: note,
+                    towardsParent: !graceType.isAfter,
+                    awayFromParent: parentForwardTieLocation,
+                    parentChord: parentChord,
+                ),
+                tieBackEndpoint: note.tieBack == nil ? nil : endpoint(
+                    forNote: note,
+                    towardsParent: graceType.isAfter,
+                    awayFromParent: parentBackwardTieLocation,
+                    parentChord: parentChord,
+                ),
                 options: options,
             ))
         }
         return XMLTreeNode(name: "Chord", children: children)
+    }
+
+    /// Resolve one side of one grace note's tie to its `<location>`
+    /// payload, per the table in `encode`'s doc comment.
+    private func endpoint(
+        forNote note: Note,
+        towardsParent: Bool,
+        awayFromParent: TieLocation?,
+        parentChord: Chord?,
+    ) -> TieEndpoint? {
+        guard towardsParent else {
+            return awayFromParent.map { TieEndpoint($0) }
+        }
+        let parentNoteIndex = parentChord.map {
+            MSCXLocationNoteIndex.index(ofPitch: note.pitch, in: $0.notes)
+        } ?? 0
+        return TieEndpoint(
+            .graceZeroDelta,
+            notesDelta: parentNoteIndex
+                - MSCXLocationNoteIndex.index(ofPitch: note.pitch, in: notes),
+        )
     }
 }

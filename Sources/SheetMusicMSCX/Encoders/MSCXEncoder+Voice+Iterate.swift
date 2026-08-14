@@ -13,6 +13,14 @@ extension Voice {
         let voiceBarLength: Fraction
         let effectiveDuration: Fraction
         let dropInitialZeroKeySig: Bool
+        /// For each chord-bearing element index, the note list of the
+        /// chord a forward tie there would land on — the next
+        /// chord-bearing element in this voice, or the next measure's
+        /// first one when this is the last. Feeds the `<notes>` half of
+        /// the tie's `<location>`; see `TieEndpoint`. Absent where the
+        /// partner is unknown (no following chord anywhere), in which
+        /// case the delta stays `0`.
+        let forwardTiePartnerNotes: [Int: ChordNotes]
     }
 
     /// One iteration of the main encode loop: open any tuplets that
@@ -43,9 +51,7 @@ extension Voice {
             try emitElement(
                 element: element,
                 index: index,
-                lastChordIndex: plan.lastChordIndex,
-                voiceBarLength: plan.voiceBarLength,
-                effectiveDuration: plan.effectiveDuration,
+                plan: plan,
                 carryIn: carryIn,
                 state: &state,
                 options: options,
