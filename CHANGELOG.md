@@ -7,6 +7,58 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `PlaybackEngine.AudioSessionPolicy`, a new `init` parameter that decides when
+  the engine claims the process-wide `AVAudioSession`. `prepare(score:)` used to
+  unconditionally take an exclusive `.playback` session, so a host that prepares
+  a score when a screen merely *opens* interrupted whatever the user had playing
+  in another app long before they asked for any sound — and a note-tap preview,
+  which rides the session `prepare` left active, inherited that.
+
+  - `.exclusiveOnPrepare` (default) is the previous behavior, unchanged.
+  - `.mixUntilPlay` prepares with `.mixWithOthers` — other apps keep playing and
+    `playPreview` mixes over them — and drops it on the first `play(...)`, so the
+    interruption lands on the user's press of play. A re-prepare after that (a
+    SoundFont hot-swap) does not demote the session back to mixing; `teardown()`
+    resets the claim.
+  - `.hostManaged` has the engine never touch `AVAudioSession`, for a host with
+    its own session requirements (a tuner holding `.playAndRecord` for live pitch
+    tracking) that would otherwise undo the engine's category write after every
+    `prepare`.
+
+  The 48 kHz preferred-rate pin that un-sticks a wedged system I/O rate now runs
+  on the `.mixUntilPlay` escalation too, not only at prepare: while mixing, the
+  app that already owns the route decides the rate, so going exclusive is the
+  first moment the request can be granted.
+
+### Fixed
+
+- An `AVAudioSession` interruption no longer leaves `PlaybackEngine.state`
+  claiming `.playing`. When another app started non-mixing playback — opening
+  Music while a score played in the background — iOS deactivated this app's
+  session and the `AVAudioEngine` stopped rendering, but nothing reached the
+  transport: the sequencer / backend was still nominally started, so a host's
+  play button kept showing "pause" (and its Now Playing entry kept claiming to
+  be playing) for audio that had already gone silent. The engine now observes
+  `AVAudioSession.interruptionNotification` and pauses on `.began`, for every
+  `AudioSessionPolicy`. `.ended` is left to the host: whether to resume — and
+  whether resuming is even wanted while the interrupter is still playing — is an
+  app-level decision, so a host already driving resume from its own session
+  observation is unaffected.
+
+  Relatedly, under `.mixUntilPlay` an audition now always sounds on a mixing
+  session — `playPreview` / `previewNoteOn` put the category back and hand the
+  exclusive claim in, unless they are overlaid on live playback. Previously the
+  exclusive category a `play(...)` escalated to stayed in place for the rest of
+  the engine's life, and the engine re-activates the session implicitly whenever
+  it starts its `AVAudioEngine` to sound a note — so once a score had been
+  played, a single tap-audition cut off whatever else was playing. That happens
+  with no interruption to react to: iOS does not interrupt an app that is not
+  making a sound, so a paused engine holding an exclusive category is never told
+  that another app has taken over. Only an explicit `play(...)` takes the route
+  back.
+
 ## [1.13.1] - 2026-08-13
 
 ### Fixed

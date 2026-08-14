@@ -302,13 +302,34 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// replayed the moment the backend reports ready.
     private var pendingBackendPlay: (cursor: ScoreCursor?, score: Score, countIn: Bool)?
 
+    /// How this engine treats the process-wide `AVAudioSession`. See `AudioSessionPolicy`. `internal` so the
+    /// `+AudioSession` extension can branch on it.
+    let audioSessionPolicy: AudioSessionPolicy
+
+    /// `true` once a `.mixUntilPlay` engine has taken the session exclusively for a `play(...)`. Keeps a re-prepare
+    /// (SoundFont hot-swap) from demoting the session back to mixing, and keeps the escalation to one write per engine
+    /// lifetime. Cleared by `teardown()` and by an interruption. `internal` for the `+AudioSession` extension.
+    var hasEscalatedAudioSession = false
+
+    /// `true` between an interruption deactivating the session and the next thing that needs to sound. A session
+    /// survives an interruption with its *category* intact, so re-activating it — which `AVAudioEngine.start()` does
+    /// implicitly — would silence the interrupter all over again if that category were the exclusive one a
+    /// `play(...)` escalated to. See `prepareAudioSessionForPreview()`. `internal` for the `+AudioSession` extension.
+    var needsAudioSessionReactivation = false
+
+    /// Holder for the block-based `AVAudioSession.interruptionNotification` observer token. `internal` for the
+    /// `+AudioSession` extension that fills it in; see `startObservingAudioSessionInterruptions()`.
+    let interruptionObserver = AudioSessionInterruptionObserver()
+
     public init(
         soundfontResolver: SoundfontResolver,
         metronomeClickProvider metronomeClickProvider0: MetronomeClickProvider? = nil,
         backend: (any SynthBackend)? = nil,
+        audioSessionPolicy: AudioSessionPolicy = .exclusiveOnPrepare,
     ) {
         resolver = soundfontResolver
         self.backend = backend
+        self.audioSessionPolicy = audioSessionPolicy
         metronomeClickProvider = metronomeClickProvider0
         clickResolver = MetronomeClickResolver(
             provider: metronomeClickProvider0,
@@ -319,6 +340,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // is not itself boosted by the master gain.
         metronome = MetronomeController(engine: engine, output: sumMixer)
         buildMasterChain()
+        startObservingAudioSessionInterruptions()
     }
 
     /// Scale playback speed. `1.0` is the score's native tempo;
@@ -681,34 +703,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         instrumentMIDIChannels.removeAll()
         staffChannelSwitches.removeAll()
 
-        #if os(iOS) || os(tvOS) || os(watchOS)
-            let session = AVAudioSession.sharedInstance()
-            // Best-effort: a host that manages its own session — e.g. a tuner holding `.playAndRecord` with the mic
-            // active for live pitch tracking — can have iOS reject this `.playback` switch with
-            // `AVAudioSessionError.insufficientPriority`. A hard `try` there would throw out of `prepare(score:)`
-            // BEFORE the synths are built (`prepareSynth` below), leaving every voice silent while only the
-            // already-prepared metronome sounds. Treat the session setup as advisory so synth creation always
-            // proceeds; the engine adapts to whatever route the host left active (`connect` uses `format: nil`).
-            try? session.setCategory(.playback, mode: .default, options: [])
-            // Request a concrete hardware sample rate before activating.
-            // iOS's audio HAL can get its system-wide I/O rate stuck at an
-            // odd value (e.g. 24 kHz left over from another app's Bluetooth
-            // HFP call), and a session that simply adopts whatever rate the
-            // system hands back then renders the whole graph against that
-            // stale clock — heard as playback that is both sped up and
-            // pitched up, and which survives an app relaunch because the
-            // wedge lives in the system audio daemon, not our process.
-            // Asking for a definite rate makes `setActive` reconfigure the
-            // HAL toward it, which un-sticks that state without a reboot.
-            // 48 kHz is the native rate of modern iOS output hardware, so on
-            // a healthy device this is a no-op (no forced resample); it only
-            // takes effect when the system was parked somewhere unexpected.
-            // Best-effort: the route may clamp or ignore it (the graph still
-            // adapts because every `connect` uses `format: nil`), so a
-            // failure here must not abort score preparation.
-            try? session.setPreferredSampleRate(48000)
-            try? session.setActive(true, options: [])
-        #endif
+        // Category / activation per `audioSessionPolicy` — see `PlaybackEngine+AudioSession`. Deliberately BEFORE
+        // `prepareSynth`: the synths are built against whatever route the session ends up on.
+        configureAudioSessionForPrepare()
 
         try prepareSynth(score: score)
 
@@ -1086,6 +1083,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         velocity: UInt8 = 96,
     ) {
         guard state != .exporting else { return }
+        // An audition is not a claim on the audio route: sound it on a mixing session rather than letting
+        // `engine.start()` below re-activate an exclusive one a previous `play(...)` took. No-op when the session is
+        // already mixing. See `PlaybackEngine+AudioSession`.
+        prepareAudioSessionForPreview()
         guard let pitch = pitch(for: noteID, in: score) else { return }
         let flatIdx = score.allStaves.firstIndex(where: {
             $0.address == noteID.staff
@@ -1197,6 +1198,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         pitch: UInt8, onStaff flatStaffIndex: Int, velocity: UInt8 = 96, atTick tick: Int = 0,
     ) {
         guard state != .exporting else { return }
+        // Same as `playPreview`: an audition sounds on a mixing session, never on the exclusive one playback took.
+        prepareAudioSessionForPreview()
         guard let midiChannel = midiChannel(forStaff: flatStaffIndex, atTick: tick) else { return }
         // Resolve the AU instrument (AUMIDISynth path only) BEFORE any side
         // effect below, so an invalid staff index bails out cleanly instead of
@@ -1312,6 +1315,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     ) {
         guard state != .exporting else { return }
         guard let timeline else { return }
+        // A `.mixUntilPlay` host has been sharing output with whatever else was playing since `prepare(score:)`; this
+        // is the moment it asked for playback, so take the session exclusively. Ahead of both transport paths and of
+        // the not-ready deferral below, so the claim lands on the user's press rather than on the SoundFont finishing
+        // to load. No-op under the other policies. See `PlaybackEngine+AudioSession`.
+        escalateAudioSessionForPlayback()
         if usingBackend {
             if let backend, !backend.isReady {
                 // SoundFont still loading — remember the request and start it the
@@ -2477,6 +2485,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// teardown-on-dealloc, and is a no-op on an already-stopped engine —
     /// so an explicit `teardown()` first leaves this harmless.
     deinit {
+        // The interruption observer needs no unregistering here — `AudioSessionInterruptionObserver` removes it in
+        // its own (unisolated) deinit as this instance releases it.
         engine.stop()
     }
 
@@ -2527,5 +2537,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         instrumentMIDIChannels.removeAll()
         staffChannelSwitches.removeAll()
         metronome.teardown()
+        // The engine no longer holds any audio, so the exclusive claim a `.mixUntilPlay` host escalated to is spent:
+        // a later `prepare(score:)` on this same instance is a fresh score load and starts out mixing again. Hosts
+        // typically deactivate the session around here too, which is theirs to do — the engine only forgets that it
+        // escalated.
+        hasEscalatedAudioSession = false
+        needsAudioSessionReactivation = false
     }
 }
