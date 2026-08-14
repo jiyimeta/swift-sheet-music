@@ -46,7 +46,12 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicZip",
-        dependencies: ["SheetMusicFoundation"],
+        // Linux and Android link the system libz and resolve `import zlib`
+        // against their sysroot's modulemap. The WebAssembly SDK ships
+        // neither, so under SWIFT_SHEET_MUSIC_WASM the vendored target
+        // below supplies a module of the same name. Apple uses
+        // `Compression` and needs nothing here.
+        dependencies: isWasm ? ["SheetMusicFoundation", "zlib"] : ["SheetMusicFoundation"],
         linkerSettings: [
             .linkedLibrary("z", .when(platforms: [.linux, .android])),
         ],
@@ -322,14 +327,42 @@ if isAndroid {
 
 if isWasm {
     targets += [
+        // Vendored zlib 1.3.1, raw-DEFLATE subset — see Sources/zlib/README.md.
+        // Lowercase on purpose: the module name has to match the system
+        // module Linux and Android provide, or DeflateZLib.swift would need
+        // a per-platform import alias.
+        .target(
+            name: "zlib",
+            path: "Sources/zlib",
+            exclude: ["LICENSE", "README.md"],
+            cSettings: [
+                // The gzip wrapper inside deflate.c / inflate.c is
+                // unreachable here — this package only ever asks for raw
+                // DEFLATE (windowBits = -15) — and the gz* file-I/O
+                // translation units are not vendored at all.
+                .define("NO_GZIP"),
+            ],
+        ),
         .executableTarget(
             name: "WasmSizeProbe",
             dependencies: [
                 "SheetMusicCore",
                 "SheetMusicLayout",
                 "SheetMusicMIDI",
+                "SheetMusicMSCX",
             ],
             path: "Sources/WasmSizeProbe",
+        ),
+        // Run natively and under a wasm host to compare the parse of the
+        // same file; see Sources/WasmParityProbe/main.swift.
+        .executableTarget(
+            name: "WasmParityProbe",
+            dependencies: [
+                "SheetMusicCore",
+                "SheetMusicFoundation",
+                "SheetMusicMSCX",
+            ],
+            path: "Sources/WasmParityProbe",
         ),
     ]
 }

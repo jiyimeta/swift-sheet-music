@@ -400,26 +400,47 @@ WebAssembly backend and crashes with `No available targets are
 compatible with triple wasm32-unknown-wasip1`:
 
 ```bash
-export PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH"
+export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
 swift build --swift-sdk swift-6.3.3-RELEASE_wasm --target SheetMusicLayout
 ```
 
-Building today: Core / XMLTools / Layout / MIDI / Foundation. `SheetMusicZip`
-does **not** build — the wasm SDK ships no `zlib` modulemap, and MSCX /
-MusicXML hard-depend on Zip, so they are blocked with it. AudioCore and
-EditWire build but must stay out of any wasm graph you care about the
+Building today: Foundation / Core / XMLTools / Zip / MIDI / Layout /
+MSCX / MusicXML — the whole parse-and-lay-out path. AudioCore and
+EditWire compile but must stay out of any wasm graph you care about the
 size of, because the `Wirelet` product imports `Foundation`
-unconditionally.
+unconditionally. UI / PDF / LayoutApple / AudioApple are Apple-only.
 
-`swift test` cannot target the wasm SDK directly; cross-build with
-`--build-tests` and run the bundle under wasmtime / WasmKit.
+`SheetMusicZip` needs `zlib`, which the wasm SDK does not ship. The
+raw-DEFLATE subset is vendored at `Sources/zlib` and added to the package
+**only under `SWIFT_SHEET_MUSIC_WASM=1`**, so Apple and Android builds are
+untouched and keep using `Compression` and the system libz respectively.
+See `Sources/zlib/README.md`; re-stage a newer upstream with
+`Scripts/vendor-zlib.sh`.
+
+`swift test` cannot target the wasm SDK directly, and the test target has
+not been cross-built (its Apple-framework guards are spelled
+`#if !os(Android)`, which is true on WASI). Parity is checked instead with
+`WasmParityProbe`, which prints `Score.stableFingerprint` for a file and is
+built for both hosts:
+
+```bash
+SWIFT_SHEET_MUSIC_WASM=1 swift run WasmParityProbe <file.mscz>
+wasmtime --dir . .build/wasm32-unknown-wasip1/debug/WasmParityProbe.wasm <file.mscz>
+```
+
+The fingerprint is FNV-1a with fixed constants and no per-process seed, so
+the two numbers are directly comparable. A `.mscz` is DEFLATE all the way
+down, so a disagreement between the vendored inflate and the platform one
+shows up here as a differing fingerprint rather than as silent corruption.
 
 ### Size is the constraint — two gates
 
 The `Foundation` umbrella carries ICU and costs ~13 MB brotli;
 `FoundationEssentials` costs ~2.9 MB. The portable targets therefore
 import `SheetMusicFoundation` (see Conventions) and the measured probe
-lands at ~3.2 MB brotli.
+lands at ~3.35 MB brotli — parse, layout, MIDI, the ZIP container and the
+vendored zlib together. MSCX and Zip are worth about 166 KB of that, which
+is what makes keeping the umbrella out the whole ballgame.
 
 **A single plain `import Foundation` anywhere in the portable graph
 undoes all of it**, and nothing in the compiler objects — it builds fine,
@@ -449,7 +470,12 @@ Scripts/wasm-size.sh --report   # measure only
 ```
 
 It builds `Sources/WasmSizeProbe` (added to the manifest only when
-`SWIFT_SHEET_MUSIC_WASM=1` is exported) and brotli-compresses it.
+`SWIFT_SHEET_MUSIC_WASM=1` is exported) and brotli-compresses it. The
+probe lays out a score, renders MIDI, then writes and re-reads a `.mscz`,
+so nothing in the measured graph can be stripped as unreachable — a probe
+that merely imports the libraries reports a number that means nothing.
+Anything you add to the wasm surface belongs in that call chain, or the
+gate stops seeing it.
 
 Neither gate subsumes the other: lint catches what the size script cannot
 attribute, and the size script catches what no import scan can see.

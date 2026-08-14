@@ -12,6 +12,7 @@
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicMIDI
+import SheetMusicMSCX
 
 let score = Score(
     division: 480,
@@ -35,4 +36,12 @@ let pages = LayoutPaginator.paginate(
 let midi = try MidiRenderer.render(score: score)
 let bytes = try MidiWriter.write(midi)
 
+// Round-trips through the container so the ZIP writer, the DEFLATE backend
+// (the vendored zlib on wasm) and the whole MSCX decoder tree stay in the
+// linked image. Without this the measurement covers layout and MIDI only,
+// which is not what a browser host actually downloads.
+let container = try MSCZWriter.write(score: score)
+let reparsed = try MSCZReader.parse(container)
+
 print("systems=\(document.systems.count) pages=\(pages.count) midi=\(bytes.count)B")
+print("mscz=\(container.count)B parts=\(reparsed.parts.count)")
