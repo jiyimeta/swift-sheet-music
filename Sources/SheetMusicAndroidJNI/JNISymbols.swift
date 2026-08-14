@@ -114,6 +114,11 @@ public func nativeComputeLayout(
     pageHeightMM: Double,
     optionsBlob: Data,
 ) -> Data {
+    // Read the generation BEFORE the score, so an edit landing between the two is counted rather than missed —
+    // see `LayoutDocumentCache.scoreGeneration(for:)`. This function does not take the edit lock (nothing that
+    // lays out does), so an edit can replace the score at any point below; the stamp is how the store at the end
+    // finds out.
+    let generation = LayoutDocumentCache.scoreGeneration(for: scoreHandle)
     guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
     let optionsWire: LayoutOptionsWire
     do {
@@ -127,6 +132,10 @@ public func nativeComputeLayout(
         pageHeightMM: pageHeightMM,
         options: optionsWire,
     )
+    // A refused store leaves the cache empty rather than stale, and the encoded program is still returned: the
+    // caller asked for a drawing of the score as it was, and the edit that overtook it has already asked for the
+    // recompute that supersedes it. What must not happen is `nativeEditingHitTest` resolving a tap against this
+    // document afterwards.
     LayoutDocumentCache.store(
         handle: scoreHandle,
         document: result.document,
@@ -135,6 +144,7 @@ public func nativeComputeLayout(
         options: optionsWire,
         pageWidthMM: pageWidthMM,
         pageHeightMM: pageHeightMM,
+        computedFromGeneration: generation,
     )
     return result.encoded
 }

@@ -54,21 +54,64 @@ public enum LayoutDocumentCache {
         label: "SheetMusicBridgeCore.LayoutDocumentCache",
     )
     private nonisolated(unsafe) static var storage: [Int64: Entry] = [:]
+    private nonisolated(unsafe) static var generations: [Int64: Int64] = [:]
+
+    /// How many times the score behind `handle` has been replaced under it.
+    ///
+    /// A layout compute is long, reads the score at its start, and writes this cache at its end — without the
+    /// edit lock (see `EditSessionBridge`'s threading note). An edit landing in between replaces the score and
+    /// clears the cache, and the compute then files a document describing a score that no longer exists. Passing
+    /// this value into `store(handle:computedFromGeneration:…)` is what lets the write notice.
+    ///
+    /// Read it *before* reading the score, so a generation bump that happens between the two reads is counted
+    /// rather than missed: seeing an older generation than the score is safe (a needless refusal), seeing a newer
+    /// one is the bug.
+    public static func scoreGeneration(for handle: Int64) -> Int64 {
+        lock.withLock { generations[handle] ?? 0 }
+    }
+
+    /// Drops the cached layout **and** marks the handle's score as changed.
+    ///
+    /// This is the edit path's invalidation, distinct from `release(_:)`: the handle lives on, so the generation
+    /// has to survive and advance rather than disappear. Without the bump, a compute already in flight would
+    /// re-file its stale document into the cache this call just emptied.
+    public static func invalidate(_ handle: Int64) {
+        lock.withLock {
+            storage.removeValue(forKey: handle)
+            generations[handle] = (generations[handle] ?? 0) + 1
+        }
+    }
 
     /// `options`/`pageWidthMM`/`pageHeightMM` default to `nativeComputeLayout`'s own `.verticalDefault` /
     /// A4 shape so callers that only need `document`/`filteredScore`/`hiddenStaves` (cursor- and
     /// anchor-frame lookups, which don't re-encode a draw program) don't have to thread values they don't
     /// use. `nativeComputeLayout` (`JNISymbols.swift`, the one production call site) always passes its real
     /// values explicitly.
+    ///
+    /// `computedFromGeneration` is the value `scoreGeneration(for:)` returned before the layout was computed.
+    /// When it no longer matches, the score changed while the layout was being built and the document describes
+    /// the old one: the write is refused and the cache stays empty, so every reader that resolves geometry
+    /// against it (`nativeEditingHitTest` above all, whose answer becomes the *target of an edit*) gets "no
+    /// layout" rather than a confident wrong answer. The recompute that the edit already requested repopulates
+    /// it. `nil` skips the check, for callers with no compute window to race — the tests, which install a
+    /// document directly.
+    ///
+    /// Returns whether the entry was stored.
+    @discardableResult
     public static func store(
         handle: Int64, document: LayoutDocument, filteredScore: Score, hiddenStaves: Set<StaffAddress>,
         options: LayoutOptionsWire = .verticalDefault, pageWidthMM: Double = 210, pageHeightMM: Double = 297,
-    ) {
+        computedFromGeneration: Int64? = nil,
+    ) -> Bool {
         let entry = Entry(
             document: document, filteredScore: filteredScore, hiddenStaves: hiddenStaves,
             options: options, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
         )
-        lock.withLock { storage[handle] = entry }
+        return lock.withLock {
+            if let computedFromGeneration, (generations[handle] ?? 0) != computedFromGeneration { return false }
+            storage[handle] = entry
+            return true
+        }
     }
 
     /// The cached document for `handle` (back-compat accessor for callers that only need the layout).
@@ -81,7 +124,15 @@ public enum LayoutDocumentCache {
         lock.withLock { storage[handle] }
     }
 
+    /// Forgets the handle entirely — the score behind it is gone, not merely changed.
+    ///
+    /// The generation goes with it so a recycled handle id starts from zero. A compute still in flight against
+    /// the released handle then finds a generation that no longer matches the one it captured and declines to
+    /// file its document, which is what should happen: it laid out a score that has since been freed.
     public static func release(_ handle: Int64) {
-        lock.withLock { _ = storage.removeValue(forKey: handle) }
+        lock.withLock {
+            storage.removeValue(forKey: handle)
+            generations.removeValue(forKey: handle)
+        }
     }
 }

@@ -27,18 +27,19 @@ import SheetMusicEditWire
 /// cost is negligible: edits are user-paced, nowhere near the rate where lock contention would be measurable.
 ///
 /// It does **not** cover `nativeComputeLayout` (`JNISymbols.swift`), which reads `scoreTable` and writes
-/// `LayoutDocumentCache` without taking `editSessionsLock` — so a layout compute racing an edit can still read the
-/// pre-edit score and then store its (now-stale) result after the edit's own cache invalidation has already run,
-/// leaving a layout built from the old score cached against a handle whose score is new. That race is pre-existing
-/// architecture (every other bridge file writes `LayoutDocumentCache` the same unlocked way) and out of scope here;
-/// this comment exists so a future reader doesn't assume this lock buys more than it does.
+/// `LayoutDocumentCache` without taking `editSessionsLock` — so a layout compute racing an edit still reads the
+/// pre-edit score and finishes after the edit has landed. What it can no longer do is *file* that result: the
+/// compute stamps the handle's `LayoutDocumentCache.scoreGeneration(for:)` before it starts and hands the stamp
+/// back to `store`, and `publish` below advances the generation, so the late write is refused and the cache stays
+/// empty rather than stale. The lock still buys nothing here; the generation does.
 ///
-/// This race gained a new, sharper consumer in 1.11.0: `nativeEditingHitTest` (`EditGeometryBridge.swift`) reads
-/// that same stale-or-fresh cached layout and returns a `ScoreItemID` derived from its geometry, which a host feeds
-/// straight into the next edit intent. Before, a stale cache only meant a cursor drawn against the wrong (old)
-/// layout — cosmetic, self-correcting on the next frame. Now a stale cache can hand back an ID that doesn't
-/// address what the host actually tapped, and that ID gets edited. Whoever picks up this deferral needs to know
-/// the consequence has moved from "wrong place drawn" to "wrong element edited."
+/// That guard exists because the race gained a sharper consumer in 1.11.0: `nativeEditingHitTest`
+/// (`EditGeometryBridge.swift`) reads the cached layout and returns a `ScoreItemID` derived from its geometry,
+/// which a host feeds straight into the next edit intent. A stale cache used to mean a cursor drawn against the
+/// wrong (old) layout — cosmetic, self-correcting on the next frame. It would now mean an ID that doesn't address
+/// what the user actually tapped, and that ID gets edited: the consequence moved from "wrong place drawn" to
+/// "wrong element edited," which is why an empty cache (the tap does nothing, and the recompute the edit already
+/// requested repopulates it) is the right answer instead.
 ///
 /// `publish` reports back whether the write actually landed (see `HandleTable.replace`), so a handle released out
 /// from under an in-flight edit — e.g. by a concurrent `nativeReleaseScore` — makes the apply/undo/redo call return
@@ -127,6 +128,9 @@ public func nativeEngineVersionStamp() -> Int64 {
 @discardableResult
 private func publish(_ score: Score, to scoreHandle: Int64) -> Bool {
     guard scoreTable.replace(scoreHandle, with: score) else { return false }
-    LayoutDocumentCache.release(scoreHandle)
+    // `invalidate`, not `release`: the handle lives on and its generation has to advance, so a layout compute
+    // already in flight against the pre-edit score is refused when it tries to file its document. Dropping the
+    // entry alone leaves that compute free to re-fill the cache a moment later with the old geometry.
+    LayoutDocumentCache.invalidate(scoreHandle)
     return true
 }
