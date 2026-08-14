@@ -25,6 +25,29 @@ and this project adheres to
   and the Android draw-command bridge) now all resolve their steps through
   `KeySignatureSteps` — the CALayer path had grown its own third copy of the
   treble table.
+- Chord symbols imported from MuseScore no longer read a perfect fourth too
+  high, and no longer lose their slash bass. Two independent defects on the
+  same path:
+  - The TPC → letter table was anchored one fifth away. `Tpc` starts at
+    `TPC_F_BBB = -8` (`engraving/dom/pitchspelling.h:40-51`), putting the
+    naturals at `F = 13, C = 14, …` — the origin `SheetMusicCore.PitchSpelling`
+    and `PitchStaffPosition` already document — while `HarmonyRendering`
+    assumed `F = 14`. Every root came out a fifth flatward: an imported `Fm7`
+    rendered `B♭m7`, `E♭M7` rendered `A♭M7`. Confirmed against MuseScore 4.7.4
+    itself, which writes `<root>13</root>` for an F root.
+  - MuseScore 4.6 renamed the slash-bass tag from `<base>` to `<bass>` (and
+    `<baseCase>` to `<bassCase>`) — compare `rw/read460/tread.cpp:2957-2986`
+    with `rw/read410/tread.cpp:2991`. The decoder read only the historical
+    spelling, so `Fm7/B♭` from a current MuseScore imported as `Fm7`. Both
+    spellings are accepted now.
+- MuseScore-v4 export no longer loses every chord symbol. We declare
+  `version="4.60"`, so MuseScore reads the file with read460 — which does not
+  recognize `<name>` / `<root>` / `<base>` as direct children of `<Harmony>`
+  and drops them, leaving a `Harmony` with no `HarmonyInfo`, which
+  `TWrite::write` then skips entirely. The v4 encoder now emits the
+  `<harmonyInfo>` wrapper and the `<bass>` / `<bassCase>` spellings; the v3
+  target keeps the flat layout its readers expect. Measured with MuseScore
+  4.7.4: 0 of 4 chord symbols survived the round trip before, 4 of 4 after.
 - Grace notes now sit where MuseScore puts them, in both directions. MuseScore
   stores every grace of a chord — before *and* after type — in one vector and
   writes the whole vector **ahead of** the parent chord's own `<Chord>`
