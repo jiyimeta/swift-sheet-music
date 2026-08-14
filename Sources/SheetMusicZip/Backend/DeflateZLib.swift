@@ -1,5 +1,8 @@
 #if !canImport(Compression)
-    import Foundation
+    // `!canImport(Compression)` is true on WASI as well as Linux/Android, so
+    // this branch is part of the WebAssembly graph the moment zlib resolves
+    // there. Only `Data` is needed, which `FoundationEssentials` carries.
+    import SheetMusicFoundation
     import zlib
 
     extension Deflate {

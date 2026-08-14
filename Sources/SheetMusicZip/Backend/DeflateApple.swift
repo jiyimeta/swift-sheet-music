@@ -1,6 +1,6 @@
 #if canImport(Compression)
     import Compression
-    import Foundation
+    import SheetMusicFoundation
 
     extension Deflate {
         /// Compress `input` to raw DEFLATE bytes using Apple's `Compression`
