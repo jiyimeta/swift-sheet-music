@@ -82,7 +82,7 @@ wirelet {
     swiftPackagePath.set(File(packageRoot, ".build/checkouts/swift-wirelet"))
     sources {
         register("main") {
-            schemaPaths.from(packageRoot.resolve("Sources/SheetMusicAndroidJNI/Draw"))
+            schemaPaths.from(packageRoot.resolve("Sources/SheetMusicBridgeCore/Draw"))
             codecPackage.set("com.example.sheetmusic.draw")
             modelPackage.set("com.example.sheetmusic.draw.model")
             // emitModels intentionally NOT set (default false) — hand-written model

@@ -219,13 +219,23 @@ cross-compile fails with `'semaphore.h' file not found` /
 ### Distribution
 
 The Android libraries are published to GitHub Packages on `v*` tag
-push via `.github/workflows/android-publish.yml`. Two artifacts:
+push via `.github/workflows/android-publish.yml`. Three Gradle modules
+carry publishing configuration:
 
 - `io.github.jiyimeta:sheet-music-android:<v>` — JNI bridge + bundled
   `libSheetMusicJNI.so` (the new home for what used to be the
   example-app's `com.example.sheetmusic.jni` package).
 - `io.github.jiyimeta:sheet-music-audio-android:<v>` — FluidSynth +
   Oboe audio playback. Has `api` dep on `sheet-music-android`.
+- `io.github.jiyimeta:sheet-music-compose-android:<v>` — Compose
+  rendering (`ScorePage`, `BandedScorePage`, the cursor / loop-highlight
+  overlays, `DrawProgramReader`) plus the wirelet codecs generated from
+  `Sources/SheetMusicBridgeCore/Draw`.
+
+**`android-publish.yml` only invokes the first two.** The Compose module
+has a `publishing` block of its own but no workflow step, so its AAR does
+not go out with a tag push even though downstream apps depend on it.
+Consider that before cutting a release.
 
 Consumers need a GitHub PAT with `read:packages`. See
 `Android/SheetMusicAndroid/README.md` for the consumer-side
@@ -743,6 +753,18 @@ MuseScore repository root.
   Kotlin models exist under `audio/model/`) and `Intent/` (not scanned) for
   exactly this reason — adding a type to `Path/` emits a Kotlin codec that
   expects a hand-written model class of the same name.
+
+  **Find every scanner before moving a directory, and do it by searching,
+  not by listing modules you remember.** Four Gradle files scan Swift
+  directories, and one of them is outside `Android/`:
+
+      grep -rn "Sources/SheetMusic" --include="*.kts" Android Examples
+
+  `:SheetMusicAndroid` (`Metadata`), `:SheetMusicAudioAndroid` (`Audio` +
+  `SheetMusicEditWire/Path`), `:SheetMusicComposeAndroid` (`Draw`) and
+  `Examples/Android/app` (`Draw`). Extracting `SheetMusicBridgeCore`
+  updated the first two and broke the other two, because the search was
+  two named files rather than the tree.
 
   **A green Gradle run is not evidence that a `schemaPaths` change took
   effect.** `schemaPaths` is `@Internal`; what Gradle tracks is

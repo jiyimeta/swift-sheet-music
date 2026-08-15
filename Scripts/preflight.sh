@@ -94,9 +94,16 @@ if [[ "$run_android" == 1 ]]; then
     "$ROOT/Android/gradlew" -p "$ROOT/Android" \
         :SheetMusicAudioAndroid:testDebugUnitTest
 
-    step "Android: assemble release AAR"
+    # Every published module, not just the one that transitively pulls the others in.
+    # :SheetMusicAudioAndroid depends on :SheetMusicAndroid, so those two were covered
+    # by the single call this replaced — :SheetMusicComposeAndroid depends on neither and
+    # was therefore never built by any gate, local or CI, despite being published and
+    # consumed. Extracting SheetMusicBridgeCore moved the directory its wirelet
+    # `schemaPaths` scans and nothing noticed; the module is in the list for that reason.
+    step "Android: assemble release AARs"
     "$ROOT/Android/gradlew" -p "$ROOT/Android" \
-        :SheetMusicAudioAndroid:assembleRelease
+        :SheetMusicAudioAndroid:assembleRelease \
+        :SheetMusicComposeAndroid:assembleRelease
 fi
 
 printf '\n\033[1;32m✓ preflight passed\033[0m\n'
