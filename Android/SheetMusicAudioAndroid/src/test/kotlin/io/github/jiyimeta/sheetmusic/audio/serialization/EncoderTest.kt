@@ -197,9 +197,14 @@ class EncoderTest {
 
     @Test fun staffParamsCodec_goldenBytes_matchDecoder() {
         // Verify encode output is identical to the Swift-generated golden binary.
+        // Entry 1 carries a non-default staff group so the byte comparison discriminates: with both
+        // entries at "pitched" a swap between the two trailing strings would survive it.
         val params = listOf(
             StaffParams(staffIndex = 0, bankLSB = 0, program = 0, isDrums = false, partAddressHash = 0L),
-            StaffParams(staffIndex = 1, bankLSB = 0, program = 0, isDrums = true, partAddressHash = 1001L),
+            StaffParams(
+                staffIndex = 1, bankLSB = 0u, program = 0u, isDrums = true, partAddressHash = 1001L,
+                groupRawValue = "percussion",
+            ),
         )
         val encoded = encodeArray(params) { StaffParamsCodec.encodePayload(it, this) }
         val golden = javaClass.classLoader!!.getResourceAsStream("golden/staffParams-v1.bin")!!

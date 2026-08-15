@@ -322,6 +322,23 @@
                 #expect(decoded[idx].isDrums == expectedDrums)
             }
         }
+
+        @Test func staffParamsCarriesTheStaffGroup() throws {
+            // The bridge is the only place `Staff.group` reaches the wire, and the codec's own
+            // round-trip cannot see a population site that never reads it — a bridge hardcoding
+            // "pitched" would leave every codec test green.
+            var score = try loadFixtureScore()
+            #expect(score.parts[0].staves[0].group == "pitched")
+            score.parts[0].staves[0].group = "percussion"
+            let decoded = try StaffParamsCodec.decodeArray(
+                AudioMidiBridge.staffParams(score: score),
+            )
+            #expect(decoded[0].groupRawValue == "percussion")
+            // The staff type is not the same question as the part's drum flag; the fixture's part
+            // does not declare `useDrumset`, so a bridge that derived the group FROM `isDrums`
+            // would report "pitched" here.
+            #expect(decoded[0].isDrums == false)
+        }
     }
 
     // MARK: - T18: pitchAndStaffOfNote + earliestOf

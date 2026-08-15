@@ -67,6 +67,7 @@ extension AudioMidiBridge {
                 instrumentLongName: part?.instrument.longName ?? "",
                 channelVolume: UInt8(clamping: channel.volume),
                 defaultClefType: entry.staff.defaultClefType ?? "",
+                groupRawValue: entry.staff.group,
             )
         }
         return StaffParamsCodec.encodeArray(entries)
