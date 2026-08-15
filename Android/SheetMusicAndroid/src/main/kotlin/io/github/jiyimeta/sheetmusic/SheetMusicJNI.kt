@@ -119,6 +119,21 @@ object SheetMusicJNI {
     }
 
     /**
+     * Continuous playback seconds at a possibly fractional UNROLLED player tick.
+     *
+     * The smooth counterpart of the audio module's `nativeFrameAtTick`, whose `timeSeconds` snaps to
+     * a frame onset and therefore steps once per note. A host cannot recover the in-between value by
+     * interpolating two polled frame times — those are themselves quantized — so animating a playhead
+     * or a scroll needs this entry.
+     *
+     * [unrolledTick] is in the same coordinates the FluidSynth player reports (repeats and jumps
+     * expanded); the fractional part is honoured. Returns **−1** when [scoreHandle] is unknown, which
+     * a real position never is — 0 would be indistinguishable from the start of the score.
+     */
+    fun nativeSecondsAtTick(scoreHandle: Long, unrolledTick: Double): Double =
+        SwiftJavaJNI.nativeSecondsAtTick(scoreHandle, unrolledTick)
+
+    /**
      * Bounding rectangle (document/mm coordinates) of the MEASURE the cursor
      * [cursorBytes] sits in — the measure anchor for the horizontal Reader's
      * leading-edge auto-scroll. Same wire format as [nativeCursorFrame]

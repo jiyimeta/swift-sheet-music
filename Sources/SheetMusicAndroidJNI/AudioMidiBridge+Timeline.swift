@@ -121,6 +121,29 @@ extension AudioMidiBridge {
         return FrameCodec.encode(frame)
     }
 
+    /// Continuous seconds at a possibly fractional UNROLLED player tick.
+    ///
+    /// The counterpart of `frameAtTick`, which snaps to a frame onset and so
+    /// quantizes to note / beat granularity. A host animating a playhead needs
+    /// the value BETWEEN onsets, and interpolating between two polled frame
+    /// times cannot supply it: those times are themselves quantized, so the
+    /// result steps at note granularity no matter how often it is sampled.
+    ///
+    /// Takes the same unrolled coordinates the FluidSynth player reports, and
+    /// translates the whole part through the unroll map before carrying the
+    /// fraction across. Within one pass of a repeat that map is a constant
+    /// offset, so adding the remainder back is exact; the only inexact instant
+    /// is a jump landing strictly inside a tick, which no player reports.
+    static func secondsAtTick(score: Score, unrolledTick: Double) -> Double {
+        guard unrolledTick >= 0, unrolledTick.isFinite else { return 0 }
+        let timeline = PlaybackTimeline(score: score)
+        let unroll = MidiRenderer.playbackUnroll(score: score)
+        let whole = unrolledTick.rounded(.down)
+        let notated = Double(unroll.notatedTick(fromUnrolled: Int(whole)))
+            + (unrolledTick - whole)
+        return timeline.seconds(atTick: notated)
+    }
+
     static func frameForCursor(score: Score, cursor: ScoreCursor) -> Data {
         let timeline = PlaybackTimeline(score: score)
         guard let frame = timeline.frame(forCursor: cursor) else { return Data() }
@@ -186,6 +209,18 @@ public func nativeTimelineSummary(scoreHandle: Int64) -> [Int64] {
 public func nativeFrameAtTick(scoreHandle: Int64, tick: Int64) -> Data {
     guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
     return AudioMidiBridge.frameAtTick(score: score, tick: tick)
+}
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativeSecondsAtTick(...)` call site.
+///
+/// Continuous seconds at a fractional UNROLLED player tick — the smooth
+/// counterpart of `nativeFrameAtTick`, whose time snaps to a frame onset.
+/// Returns **−1** for an unknown handle, which a real position never is;
+/// returning 0 there would be indistinguishable from the start of the score.
+public func nativeSecondsAtTick(scoreHandle: Int64, unrolledTick: Double) -> Double {
+    guard let score = scoreTable.value(for: scoreHandle) else { return -1 }
+    return AudioMidiBridge.secondsAtTick(score: score, unrolledTick: unrolledTick)
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin
