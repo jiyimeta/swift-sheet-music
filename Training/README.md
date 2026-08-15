@@ -483,6 +483,169 @@ two different rasters and the homography maps between them. Read
 `[coco][SUMMARY] … images=N`: a `[coco][WARN]` line means the root
 yielded nothing, which is nearly always the wrong `--root`.
 
+### Raster front-end (P3d) — the detector
+
+The CNN symbol detector. It fills the one stream the raster front-end still
+took from the labels — `WalkedContent.glyphs` — so from here the numbers are
+end to end rather than hybrid.
+
+The pipeline has **one implementation of preprocessing, in Swift**, and a phase
+boundary either side of the trainer, the same shape the label export already
+uses:
+
+    1. Swift   OMR_PREP_EXPORT=1 swift test   → normalized page + targets
+    2. Python  model.train / model.export     → checkpoint → .mlpackage
+    3. Swift   OMR_DETECT_EVAL=1 swift test   → seam + end-to-end numbers
+
+Python never re-derives deskew or scale; it consumes what step 1 wrote. A
+second implementation would drift, and the symptom would not be a crash — it
+would read as "the detector is bad", which is exactly what cost this program a
+round once before (the first degraded seam sweep read 0.20 staff-line recall
+against a Python probe's 0.91, and the whole gap was an unmapped frame).
+
+#### Prep roots (`OMR_PREP_EXPORT=1`)
+
+    OMR_DATA_ROOT=$R OMR_PREP_ROOT=$R-prep \
+    OMR_PREP_EXPORT=1 swift test -c release --no-parallel \
+        --filter OMRPrepExportHarness
+
+| root | renders | pages | glyphs | dropped_no_bbox | skipped_no_staff | oversize | failed | size |
+|---|---|---|---|---|---|---|---|---|
+| clean (v2) | 2208 | 4650 | 911409 | 0 | 0 | 0 | 0 | 692MB |
+| frozen (degraded) | 2208 | 4641 | 909363 | 0 | 9 | 0 | 0 | 5.4GB |
+
+Three of those counters answer questions the design left open:
+
+- **`oversize=0` on both.** The parent design worried that a `brace` cannot be
+  centred inside one tile. At S=12 / T=384 it never happens. Do not design
+  around it.
+- **`skipped_no_staff` 0 clean, 9 degraded.** Degradation destroys the staff
+  outright on 9 of 4650 pages, so the detector never sees them and no amount of
+  recognition recovers them. That is 0.19%, and it is a floor on any degraded
+  number below.
+- **`dropped_no_bbox=0`** over 911k glyphs — the ink-bbox chain holds at scale.
+
+The degraded root is 8× the clean one on disk because degradation noise does
+not compress.
+
+#### Measured 2026-08-15 — the first end-to-end numbers
+
+Model: `SymbolNet`, CenterNet-style, stride 4, 62 classes (the frozen 64 minus
+`fine` / `toCoda`). Trained on the clean prep root, 8 epochs, batch 16,
+lr 1e-3 cosine, seed 20260811, MPS.
+
+**Seam level** — detections against the label glyphs. Both rows are the same
+binary over the same 34 renders / 69 pages:
+
+| | recall | precision | mean origin err |
+|---|---|---|---|
+| clean | 0.9657 | 0.9355 | **0.0705 sp** |
+| degraded (frozen) | 0.6676 | 0.8887 | 0.1005 sp |
+
+**The origin figure is what this stage existed to obtain.** P3a/P3b's
+origin-jitter sweep measured that up to ~0.25 staff spaces of glyph-origin
+error is free and 0.5 sp halves pitch; a real detector lands 3.4× inside that
+budget, and stays inside it under degradation. `barlineCandidates`' 2.0 / 0.6 sp
+windows, calibrated against vector geometry, survive a real detector.
+
+Note the shape of the degraded loss: **precision barely moves while recall
+falls.** The detector goes quiet rather than hallucinating. What the next round
+is fighting is misses, not false positives.
+
+**Score level** — the composed `Score` against `source.mscx`, 32 scored
+renders. The middle row is the same run with the glyphs taken from the labels
+instead, i.e. a *perfect* detector on identical input, and is the only
+legitimate denominator here:
+
+| | pitch p50 | pitch mean | dur p50 | dur mean |
+|---|---|---|---|---|
+| floor — untrained model | 0.0000 | 0.0000 | 0.0000 | 0.0000 |
+| label glyphs (perfect detector) | 0.9600 | 0.7375 | 0.7200 | 0.6300 |
+| **detector glyphs** | **0.9437** | **0.7073** | **0.7251** | **0.6200** |
+
+**A real detector costs about two points of pitch against a perfect one, and
+nothing at the duration median.** The label-glyph row is aggregated from the
+per-render integer percentages, so it sits within ~0.005 of what the harness
+would print; both rows went through the identical script, so the delta is
+sound even though the absolutes are coarse.
+
+Do **not** compare these against the 2028-render rows in the P3a/P3b section
+above. Different populations. Everything in this section is the 34-render
+subsample, and the frozen numbers are only ever compared within it.
+
+#### Gates
+
+| gate | how | verdict |
+|---|---|---|
+| **P3d-G1** the detector is really in the loop | export an untrained net through the identical path and sweep first | PASS — floor detects **0** of 8520 truth glyphs, trained detects 7992. But note a zero floor makes this gate weak: anything nonzero clears it. The stronger anti-vacuity evidence is the label-replay test below |
+| **P3d-G2** preprocessing has one implementation | `swift test --filter OMRPrepExport…` plus the inference path reproducing `prep.png` byte-for-byte | PASS (23 tests) |
+| **P3d-G3** vocabulary parity | `swift test --filter OMRDetectorFrontEndTests` | PASS 4/4. The load-bearing case is the **reordered** list — a count- or set-based check passes it, full-array equality does not |
+| **P3d-G4** run twice, byte-identical | run the sweep twice, `diff` the sorted summaries | PASS with one caveat: the only differing field across two runs was `peakRSS`, a process measurement rather than a result. Strip it and the diff is empty. **The summary line should not carry a non-deterministic field that a run-twice gate diffs** — fix next round |
+| **P3d-G5** vector path untouched | `PDF_REAL_CORPUS=1` corpus run, diffed against a baseline | PASS — **141 rows byte-identical**. Baseline is a scratch worktree at this round's own base commit; `main` is NOT usable, it is far ahead of the branch and `Import/` alone differs by 70+ lines |
+
+The anti-vacuity test that matters more than G1: feeding the composer a detector
+that returns exactly what the label path would have used must produce a
+**bit-identical** `WalkedContent`. If it does not, the swap itself perturbs the
+result and every number the mode reports carries an unknown offset.
+
+#### Traps this round walked into, so the next one does not
+
+- **The detector sweep walked `renderDirectories` and so never saw the frozen
+  set**, printing `pages=0 renders=0 recall=0.0000` — an empty traversal wearing
+  the costume of total failure. `OMRHarnessDirectoryWalk` documents this exact
+  trap on `renderOrFrozenDirectories`, and the P3a/P3b seam harness already used
+  the right variant. Widening the walk alone is not enough: a frozen render has
+  **no `source.mscx`** (`freeze` does not copy it), so the sweep now reports
+  three outcomes — `scored` / `seamOnly` / `failed` — and prints `n/a`, never
+  `0.0000`, when nothing was scored.
+- **A clean run and a degraded run over the same renders disagreed on the page
+  count (42 vs 69)** because the pre-fix harness checked for `source.mscx`
+  *before* the seam loop, silently excluding the 2 of 34 renders that carry
+  `source.mscz`. Comparing those two rows would have overstated the cost of
+  degradation. Both rows above are re-measured from the same binary.
+- **Five tests in this round passed unchanged when the mechanism they named was
+  deleted.** The most expensive was the focal loss's penalty-reduction test:
+  removing `(1 - target)^4` — the term that makes a 55,675-to-16 class imbalance
+  trainable — left it green, because its separation came from the `target == 1`
+  branch rather than from the weighting of two negative cells. Every test
+  guarding a mechanism now carries a recorded break-and-restore round trip.
+
+#### Costs, measured — these are what block the parameter sweeps
+
+| | measured |
+|---|---|
+| detector eval | **53 s/page** (34 renders / 69 pages in ~40 min). One Core ML prediction per tile |
+| training | **~46 min/epoch** over 4650 pages. `user` time is under half of `real`, so most of the wall clock is PNG decode — the DataLoader runs with `num_workers=0` |
+| prep export | 51 min clean, 39 min degraded |
+
+At those rates a full-dataset detector sweep is ~22 h and the design's S / T
+sweeps are multi-day, which is why **§11's four open parameters are still
+unmeasured** and `model.json` carries `decode_defaults_measured: false`. Batched
+tile prediction and a worker-backed loader are the next round's entry point;
+neither is a research problem.
+
+#### What the training curve says
+
+    epoch=0 train=0.6066 val=0.3944   <- best, and the checkpoint that ships
+    epoch=1 train=0.1599 val=0.4066
+    epoch=2 train=0.1188 val=0.4214
+    epoch=3 train=0.0968 val=0.4282
+    epoch=4 train=0.0813 val=0.4230
+    epoch=5 train=0.0688 val=0.4365
+    epoch=6 train=0.0596 val=0.4505
+    epoch=7 train=0.0541 val=0.4450
+
+Textbook overfitting from epoch 1: train falls 11×, val rises monotonically.
+So **every number above comes from one effective epoch.** A too-high learning
+rate was the first hypothesis and it is wrong — that would show as an unstable
+*train* loss, and train falls smoothly. The model is memorising. Candidates:
+augmentation is photometric-only by design, and the dataset's content diversity
+is ~140 sources inflated by face × dpi, so a held-out page of a source sits
+close to that source's training pages.
+
+`--limit` small enough to empty the val split reports `val_loss=nan` and then
+selects a "best" checkpoint on nan. It should fail loudly instead.
+
 ### RESOLVED: P0-G1 failed at scale — `buildScore` was not order-invariant
 
 Measured 2026-08-11 on the 2208-render v2 dataset, the first time the
