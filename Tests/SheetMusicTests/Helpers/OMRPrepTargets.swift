@@ -59,8 +59,19 @@
                     originPx: toPixel(CGPoint(
                         x: glyph.originPt[0], y: glyph.originPt[1],
                     )),
-                    advancePx: glyph.advancePt * transform.dpi / 72.0 * scale,
-                    renderedSizePx: glyph.renderedSizePt * transform.dpi / 72.0 * scale,
+                    // Derived from the MAPPED corners (`a`, `b`), not
+                    // from `advancePt`/`renderedSizePt` scaled directly
+                    // by `dpi/72 * scale` — that shortcut agrees with
+                    // the mapped-corner length on a clean page (identity
+                    // `labelTransform`), but a degraded page's
+                    // `label_transform` carries its own resample scale
+                    // (`Training/generate/profiles/scanner.toml`'s
+                    // `scale_lo`/`scale_hi`), which `centerPx`/`originPx`
+                    // absorb via `map` and this shortcut did not — a
+                    // systematic geometry-target error on every glyph of
+                    // a degraded page.
+                    advancePx: abs(b[0] - a[0]),
+                    renderedSizePx: abs(b[1] - a[1]),
                 ))
             }
             return (out, dropped)

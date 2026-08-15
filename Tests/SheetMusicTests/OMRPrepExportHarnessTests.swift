@@ -127,9 +127,19 @@
             let root = try makeTempRoot()
             defer { try? FileManager.default.removeItem(atPath: root) }
             let dir = "\(root)/render_0001"
+            // `advancePx`/`renderedSizePx` are derived from the MAPPED
+            // bbox corners, not from `advancePt`/`renderedSizePt`
+            // directly (final-review-fixes.md finding #4 — the old
+            // shortcut bypassed the label homography and drifted on a
+            // degraded page). So an oversized EXPORTED glyph needs an
+            // oversized BBOX; a huge `advancePt` paired with a tiny bbox
+            // (this test's old fixture) no longer produces an oversized
+            // `advancePx` at all — 200pt wide, well past the 384px tile
+            // at this fixture's ~1:1 clean-page scale (300dpi, staff
+            // detected at ~16px, normalized to `staffSpacePx: 16`).
             let glyph = OMRPageLabels.Glyph(
-                className: "noteheadBlack", bboxPt: [10, 10, 20, 20], originPt: [15, 15],
-                advancePt: 500, renderedSizePt: 8, fontSizePt: 0,
+                className: "noteheadBlack", bboxPt: [10, 10, 210, 20], originPt: [15, 15],
+                advancePt: 12, renderedSizePt: 8, fontSizePt: 0,
             )
             try PrepFixture.stage(
                 at: dir, markerName: "render.json",

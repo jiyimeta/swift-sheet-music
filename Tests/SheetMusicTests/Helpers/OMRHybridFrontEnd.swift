@@ -184,6 +184,24 @@
         /// Composed this way, whatever deskew error remains moves glyphs
         /// and paths TOGETHER, so the relative geometry the back-end
         /// actually reasons about stays consistent.
+        ///
+        /// NOTE: this overload maps only `geometry.origin` — `advance`
+        /// and `renderedSize` pass through UNMAPPED, unlike
+        /// `OMRPrepTargets.glyphs`, which derives its `advancePx`/
+        /// `renderedSizePx` targets from the mapped bbox corners (see
+        /// that function's own doc comment for the degraded-page bug
+        /// that fix addressed). The two are not the same job: this
+        /// overload reframes a DETECTOR'S OWN OUTPUT for seam-metric
+        /// comparison, where advance/renderedSize are decode artifacts,
+        /// not ground truth, so `OMRDetectorMetrics.match` never reads
+        /// them — only `geometry.origin` (origin-distance matching)
+        /// matters there. `OMRPrepTargets.glyphs` instead builds TRAINING
+        /// TARGETS from label ground truth, where advance/renderedSize
+        /// are exactly what the geom head regresses against, so they
+        /// must go through the same homography as everything else. Do
+        /// not "fix" this overload to match that one's shape — they are
+        /// deliberately different because they answer different
+        /// questions about the same coordinates.
         static func reframe(
             _ glyphs: [ClassifiedGlyph], page: OMRPageLabels, transform: PageTransform,
         ) -> [ClassifiedGlyph] {

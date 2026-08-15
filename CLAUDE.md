@@ -386,7 +386,7 @@ plugin's `swiftPackagePath` follows along automatically. Run
 - **Value types preferred.** All Score / MIDI types are `struct` or
   `enum`. Sendable. No back-pointers; cross-references live in
   rendering passes, not in the model.
-- **One responsibility per file.** SwiftLint caps file length at 300.
+- **One responsibility per file.** SwiftLint caps file length at 400.
   When `MidiRenderer.swift` outgrew this it was split into
   `MidiRenderer+Header.swift`, `…+Voice.swift`, `…+Repeats.swift`, etc.
 - **Permissive parser.** Unknown XML elements inside a `<voice>` are

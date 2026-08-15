@@ -1,6 +1,4 @@
 #if !os(Android)
-    import Foundation
-
     /// How a normalized page is cut into fixed-size tiles, and which tile
     /// owns a given pixel.
     ///

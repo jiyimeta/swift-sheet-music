@@ -28,7 +28,8 @@
 
         @Test func coreRegionsPartitionThePageExactly() {
             let extent = 900, tile = 384, overlap = 64
-            let ranges = OMRTiling.origins(extent: extent, tile: tile, overlap: overlap)
+            let origins = OMRTiling.origins(extent: extent, tile: tile, overlap: overlap)
+            let ranges = origins
                 .map { OMRTiling.coreRange(origin: $0, extent: extent, tile: tile, overlap: overlap) }
             // Every pixel column belongs to exactly one tile's core, so a
             // detection is claimed once and only once.
@@ -36,6 +37,19 @@
             #expect(ranges.last?.upperBound == extent)
             for (a, b) in zip(ranges, ranges.dropFirst()) {
                 #expect(a.upperBound == b.lowerBound)
+            }
+            // Contiguity and total span alone do not prove a core stays
+            // INSIDE its own tile's raw window `[origin, origin+tile)` —
+            // e.g. `coreRange` returning `[0,300)/[300,600)/[600,900)`
+            // for these origins `[0,320,516]` would satisfy every check
+            // above while assigning tile 1 (window `[320,704)`) pixels
+            // `[300,320)` it never actually rendered. The first/last
+            // tiles are naturally flush with the page edge (`lowerBound
+            // == 0`, `upperBound == extent`), which the containment
+            // check already covers without a separate exception.
+            for (origin, range) in zip(origins, ranges) {
+                #expect(range.lowerBound >= origin)
+                #expect(range.upperBound <= origin + tile)
             }
         }
     }
@@ -120,6 +134,74 @@
             #expect(abs(b.originPx[0] - a.originPx[0] / 2) < 1e-9)
             #expect(abs(b.advancePx - a.advancePx / 2) < 1e-9)
             #expect(abs(b.renderedSizePx - a.renderedSizePx / 2) < 1e-9)
+        }
+
+        /// On a CLEAN page (identity `labelTransform`), `advancePx`/
+        /// `renderedSizePx` computed straight from `advancePt`/
+        /// `renderedSizePt * dpi/72 * scale` happens to agree with the
+        /// length between the MAPPED bbox corners, because the map is the
+        /// identity. `Training/generate/profiles/scanner.toml`'s
+        /// `resample` stage (`scale_lo`/`scale_hi`) puts a genuine scale
+        /// into a degraded page's `label_transform`, which
+        /// `centerPx`/`originPx` absorb (they go through `pointMap`) but
+        /// the old `advancePx`/`renderedSizePx` formula did not — a
+        /// systematic geometry-target error on every glyph of a degraded
+        /// page. This pins the two lengths to the MAPPED corners under a
+        /// non-identity transform, so it fails against the old formula
+        /// and passes against the fix (which derives them from the same
+        /// `a`/`b` corners `centerPx` already uses).
+        @Test func lengthsAgreeWithTheMappedCornersUnderADegradedTransform() throws {
+            let widthPt = 200.0, heightPt = 100.0, dpi = 300.0
+            let box: [Double] = [36, 68, 48, 76]
+            let glyph = OMRPageLabels.Glyph(
+                className: "noteheadBlack", bboxPt: box,
+                originPt: [36, 72], advancePt: 12, renderedSizePt: 8, fontSizePt: 0,
+            )
+            let scaleH = 1.1
+            let page = OMRPageLabels(
+                schema: 1,
+                page: .init(index: 0, widthPt: widthPt, heightPt: heightPt),
+                image: .init(
+                    file: "page.png", dpi: Int(dpi),
+                    labelTransform: [scaleH, 0, 0, 0, scaleH, 0, 0, 0, 1],
+                    sourceSizePx: nil,
+                ),
+                glyphs: [glyph], paths: [], beams: [], curves: [], texts: [],
+                census: .init(glyphsByClass: ["noteheadBlack": 1], texts: 0),
+            )
+            let transform = PageTransform(
+                dpi: dpi,
+                widthPx: Int((widthPt * dpi / 72.0 * scaleH).rounded()),
+                heightPx: Int((heightPt * dpi / 72.0 * scaleH).rounded()),
+                deskewDegrees: 0,
+            )
+
+            let out = OMRPrepTargets.glyphs(page: page, transform: transform, scale: 1)
+            let g = try #require(out.glyphs.first)
+
+            // Independently recompute the mapped bbox corners through the
+            // SAME shared `pointMap` primitive `OMRPrepTargets.glyphs`
+            // uses internally, then derive the expected lengths from
+            // them exactly as the fix does.
+            let map = OMRHybridFrontEnd.pointMap(page: page, transform: transform)
+            let perPoint = transform.dpi / 72.0
+            let mappedA = map(CGPoint(x: box[0], y: box[1]))
+            let mappedB = map(CGPoint(x: box[2], y: box[3]))
+            let ax = Double(mappedA.x) * perPoint
+            let ay = Double(transform.heightPx) - Double(mappedA.y) * perPoint
+            let bx = Double(mappedB.x) * perPoint
+            let by = Double(transform.heightPx) - Double(mappedB.y) * perPoint
+            let expectedAdvance = abs(bx - ax)
+            let expectedRenderedSize = abs(by - ay)
+
+            #expect(abs(g.advancePx - expectedAdvance) < 1e-6)
+            #expect(abs(g.renderedSizePx - expectedRenderedSize) < 1e-6)
+
+            // And the OLD formula must NOT agree here — proving the
+            // transform's scale is genuinely exercised by this fixture,
+            // not coincidentally equal to the fix's answer.
+            let oldFormulaAdvance = 12.0 * dpi / 72.0 // advancePt * dpi/72 * scale(1)
+            #expect(abs(expectedAdvance - oldFormulaAdvance) > 0.5)
         }
 
         @Test func theCenterIsTheInkBoxCenterNotTheOrigin() throws {
@@ -251,9 +333,17 @@
     struct OMRPrepPNGTests {
         @Test func aGrayBitmapSurvivesTheRoundTripExactly() throws {
             var bitmap = RasterTestBitmaps.blank(widthPx: 9, heightPx: 7, dpi: 300)
+            // 63 pixels: `i % 256` alone stays 0...62 (i never reaches
+            // 256), so it never exercises 255 — the PAPER value this
+            // exact codec is calibrated around (`RasterTestBitmaps`'s own
+            // "0 = ink, 255 = paper" convention) and the value the codec
+            // gate P3d-G2 rests on. `i * 4` spreads the covered range
+            // much wider (0...248); the explicit last-pixel assignment
+            // guarantees 255 itself is covered.
             for i in 0 ..< bitmap.pixels.count {
-                bitmap.pixels[i] = UInt8(i % 256)
+                bitmap.pixels[i] = UInt8((i * 4) % 256)
             }
+            bitmap.pixels[bitmap.pixels.count - 1] = 255
             let url = URL(fileURLWithPath: NSTemporaryDirectory())
                 .appendingPathComponent("omr-prep-test-\(UUID().uuidString).png")
             defer { try? FileManager.default.removeItem(at: url) }
