@@ -33,6 +33,30 @@
             var seamOnly = 0
             /// Something threw that should not have.
             var failed = 0
+            /// A page whose raster analysis was unavailable — no
+            /// `analyses(dir:pages:)` entry for it, because its image
+            /// file was missing/unreadable — and so was skipped from the
+            /// seam pass entirely. Distinct from `failed`: the render as
+            /// a whole may still succeed (`.seamOnly` or `.scored`) with
+            /// its OTHER pages counted normally; this counter is what
+            /// keeps a silently-skipped page from reading as "nothing
+            /// wrong happened" in the summary line (see finding #2's
+            /// `render.json` case, where a missing image is normally
+            /// caught by `evaluateScore`'s throw and counted in
+            /// `failed`, but a FROZEN render — no `source.mscx`, so
+            /// `evaluate` returns `.seamOnly` before ever calling
+            /// `evaluateScore` — has no such backstop).
+            var skippedNoAnalysis = 0
+            /// A page P3a found no staff on (`analysis.staffSpacingPt
+            /// <= 0`, `RasterPage.analyze`'s own outcome for a staffless
+            /// page, not a thrown error). `OMRDetectorMetrics.match`
+            /// still counts every truth glyph on such a page into `fn`
+            /// (see that type's own doc comment); this counter is the
+            /// population-degradation signal the recall number alone
+            /// cannot carry — a run with the same recall but a higher
+            /// `noStaffPages` means P3a, not the detector, is where the
+            /// score moved.
+            var noStaffPages = 0
             var tpByClass: [String: Int] = [:]
             var fpByClass: [String: Int] = [:]
             var fnByClass: [String: Int] = [:]
@@ -42,6 +66,32 @@
             var originErrBuckets: [Int: Int] = [:]
             var originErrSumSp = 0.0
             var originErrCount = 0
+
+            /// Folds another `Totals`' seam-level fields (everything
+            /// `evaluate`/`evaluateSeam` populate) into this one.
+            /// `scored`/`seamOnly`/`failed` are NOT included here — those
+            /// are maintained only by `sweep` itself, one per render, so
+            /// a render-scoped `Totals` used as an accumulation buffer
+            /// (see `evaluate`) never carries a nonzero value for them.
+            mutating func merge(_ other: Totals) {
+                pages += other.pages
+                skippedNoAnalysis += other.skippedNoAnalysis
+                noStaffPages += other.noStaffPages
+                for (cls, n) in other.tpByClass {
+                    tpByClass[cls, default: 0] += n
+                }
+                for (cls, n) in other.fpByClass {
+                    fpByClass[cls, default: 0] += n
+                }
+                for (cls, n) in other.fnByClass {
+                    fnByClass[cls, default: 0] += n
+                }
+                for (bucket, n) in other.originErrBuckets {
+                    originErrBuckets[bucket, default: 0] += n
+                }
+                originErrSumSp += other.originErrSumSp
+                originErrCount += other.originErrCount
+            }
         }
 
         /// One render directory's outcome, distinct from `Totals.failed`:
@@ -102,6 +152,15 @@
         /// of the degraded sweep is the seam number), then one
         /// score-level comparison against `source.mscx`, attempted only
         /// when that file exists.
+        ///
+        /// The seam pass accumulates into a RENDER-SCOPED `renderTotals`
+        /// buffer, not `totals` directly, and is folded into `totals`
+        /// only once this render's own outcome is known to be a success
+        /// (`.seamOnly` or `.scored`) — never on the way to a throw. A
+        /// render whose `source.mscx` exists but fails to parse used to
+        /// leak this render's `pages`/tp/fp/fn into the running totals
+        /// before `MSCXParser.parse` threw, so a render `sweep` correctly
+        /// counts as `failed` still moved the seam numbers.
         static func evaluate(
             dir: String, detector: any OMRGlyphDetecting, matchSp: Double,
             into totals: inout Totals, pitchPcts: inout [Double], durPcts: inout [Double],
@@ -112,14 +171,19 @@
                 try OMRLabelSchema.decode(Data(contentsOf: URL(fileURLWithPath: "\(dir)/\($0)")))
             }
             let pageAnalyses = analyses(dir: dir, pages: pages)
+            var renderTotals = Totals()
             for page in pages {
-                guard let analysis = pageAnalyses[page.page.index] else { continue }
+                guard let analysis = pageAnalyses[page.page.index] else {
+                    renderTotals.skippedNoAnalysis += 1
+                    continue
+                }
                 try evaluateSeam(
                     page: page, analysis: analysis, detector: detector,
-                    matchSp: matchSp, into: &totals,
+                    matchSp: matchSp, into: &renderTotals,
                 )
             }
             guard FileManager.default.fileExists(atPath: "\(dir)/source.mscx") else {
+                totals.merge(renderTotals)
                 return .seamOnly
             }
             let scoreA = try MSCXParser.parse(
@@ -129,6 +193,7 @@
                 dir: dir, scoreA: scoreA, pages: pages, pageAnalyses: pageAnalyses,
                 detector: detector, pitchPcts: &pitchPcts, durPcts: &durPcts,
             )
+            totals.merge(renderTotals)
             return .scored
         }
 
@@ -163,6 +228,7 @@
             detector: any OMRGlyphDetecting, matchSp: Double, into totals: inout Totals,
         ) throws {
             totals.pages += 1
+            if analysis.staffSpacingPt <= 0 { totals.noStaffPages += 1 }
             let oracle = try OMROracleFrontEnd.replay(pages: [page])
             let vocabulary = OMRHybridFrontEnd.detectorVocabularyGlyphs(
                 oracle.walked.glyphs.filter { $0.geometry.pageIndex == page.page.index },

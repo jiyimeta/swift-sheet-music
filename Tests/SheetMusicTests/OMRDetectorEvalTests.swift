@@ -112,6 +112,31 @@
             )
             #expect(reverted.originErrorSpacesP50 == 0)
         }
+
+        /// A page with no detected staff (`staffSpacingPt == 0`, exactly
+        /// what `RasterPage.analyze` returns rather than failing) must
+        /// not drop its truth glyphs from the recall population — even
+        /// though there is no radius to match within and the real
+        /// detector's own contract returns `[]` here, every truth glyph
+        /// is still a genuine miss.
+        ///
+        /// Verified by deletion: reverting `match`'s
+        /// `staffSpacingPt <= 0` branch to `return result` (its pre-fix
+        /// form) turns `fn` from 2 back to 0 here — see the fix report.
+        @Test func aPageWithNoDetectedStaffCountsItsTruthAsMissesNotAsDropped() {
+            let truth = [
+                Self.glyph(.noteheadBlack, x: 100, y: 200),
+                Self.glyph(.clefG, x: 50, y: 150),
+            ]
+            let result = OMRDetectorMetrics.match(
+                predicted: [], truth: truth,
+                staffSpacingPt: 0, matchSp: 0.5,
+            )
+            #expect(result.tp == 0)
+            #expect(result.fp == 0)
+            #expect(result.fn == 2)
+            #expect(result.recall == 0)
+        }
     }
 
     /// Seam + score sweep over `OMR_DATA_ROOT` with a REAL detector
@@ -149,7 +174,7 @@
             let result = try OMRDetectorEvalSweep.sweep(
                 root: root, detector: detector, matchSp: Self.matchSp(),
             )
-            Self.printSeamSummary(totals: result.totals)
+            Self.printSeamSummary(totals: result.totals, detector: detector)
             Self.printScoreSummary(
                 renders: result.renders, scored: result.totals.scored,
                 seamOnly: result.totals.seamOnly, failed: result.totals.failed,
@@ -157,7 +182,20 @@
             )
         }
 
-        static func printSeamSummary(totals: OMRDetectorEvalSweep.Totals) {
+        /// `threshold`/`topK`/`nmsRadiusSp`/`decodeDefaultsMeasured` come
+        /// from the model's OWN manifest, not a sweep-level default,
+        /// specifically so a saved log states whether the decode
+        /// constants it used were actually measured (plan Task 17's
+        /// sweep) or are still the placeholders `Training/model/
+        /// export.py` writes for every export until then — a log from
+        /// this round and a log from that one are otherwise
+        /// indistinguishable by inspection. `peakRSS` is its own
+        /// `[detect-rss]` line, not part of this one: it is a PROCESS
+        /// measurement, not a detector metric, and Gate P3d-G4 diffs
+        /// this summary line byte-for-byte across two runs — a process
+        /// measurement embedded in it can never produce a clean empty
+        /// diff.
+        static func printSeamSummary(totals: OMRDetectorEvalSweep.Totals, detector: OMRDetectorFrontEnd) {
             let tp = totals.tpByClass.values.reduce(0, +)
             let fp = totals.fpByClass.values.reduce(0, +)
             let fn = totals.fnByClass.values.reduce(0, +)
@@ -167,12 +205,18 @@
                 ? totals.originErrSumSp / Double(totals.originErrCount) : 0
             print(
                 "[detect-seam][SUMMARY] pages=\(totals.pages) "
+                    + "noStaffPages=\(totals.noStaffPages) "
+                    + "skippedNoAnalysis=\(totals.skippedNoAnalysis) "
                     + "tp=\(tp) fp=\(fp) fn=\(fn) "
                     + "recall=\(String(format: "%.4f", recall)) "
                     + "precision=\(String(format: "%.4f", precision)) "
                     + "meanOriginErrSp=\(String(format: "%.4f", meanErr)) "
-                    + "peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB",
+                    + "threshold=\(String(format: "%.4f", detector.threshold)) "
+                    + "topK=\(detector.topK) "
+                    + "nmsRadiusSp=\(String(format: "%.4f", detector.nmsRadiusSp)) "
+                    + "decodeDefaultsMeasured=\(detector.decodeDefaultsMeasured)",
             )
+            print("[detect-rss] peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB")
             let classes = Set(totals.tpByClass.keys)
                 .union(totals.fpByClass.keys).union(totals.fnByClass.keys)
             for cls in classes.sorted() {
@@ -339,6 +383,74 @@
             try MSCXEncoder.encode(score).write(to: URL(fileURLWithPath: "\(dir)/source.mscx"))
         }
 
+        /// Same shape as `stageFrozenRender` (FROZEN, not a normal
+        /// `render.json` — no `source.mscx`, so only the seam pass ever
+        /// runs, never `evaluateScore`/`buildScore`, which throws "no
+        /// staff detected on any page" for a `.detectorGlyphs` hybrid
+        /// with no raster-detected staff lines at all), but `page_0.png`
+        /// is a BLANK bitmap — no staff lines drawn — so
+        /// `RasterPage.analyze` (run by the sweep itself when it loads
+        /// this PNG, independent of `stagePage`'s own internal analysis,
+        /// which only sizes the page) finds `staffSpacingPt == 0`,
+        /// exactly like a page P3a's staff detector missed. The label
+        /// glyph (a real notehead) is unaffected — it comes from `page`'s
+        /// own glyph list, not from the bitmap.
+        static func stageNoStaffRender(at dir: String) throws {
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            let (page, _) = try stagePage(glyphs: [noteheadGlyph])
+            let blank = RasterTestBitmaps.blank(widthPx: 900, heightPx: 500, dpi: 300)
+            try OMRPrepPNG.write(blank, to: URL(fileURLWithPath: "\(dir)/page_0.png"))
+            let markerJSON = try JSONSerialization.data(
+                withJSONObject: ["render_id": (dir as NSString).lastPathComponent],
+            )
+            try markerJSON.write(to: URL(fileURLWithPath: "\(dir)/frozen.json"))
+            try OMRLabelSchema.encodeCanonical(page)
+                .write(to: URL(fileURLWithPath: "\(dir)/page_0.labels.json"))
+            // Deliberately no source.mscx — `freeze` never copies it.
+        }
+
+        /// `frozen.json` + labels, NO `page_0.png` and NO `source.mscx` —
+        /// the PNG a real prep export can lose (disk issue, partial
+        /// freeze) is absent. For a `render.json` directory a missing
+        /// image is normally caught later by `evaluateScore`'s deliberate
+        /// throw (`stageBrokenRender`'s case) and counted in `failed`,
+        /// but a FROZEN render has no such backstop: `evaluate` returns
+        /// `.seamOnly` before ever calling `evaluateScore`, so without
+        /// `skippedNoAnalysis` the missing page would vanish with zero
+        /// signal.
+        static func stageFrozenRenderMissingImage(at dir: String) throws {
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            let (page, _) = try stagePage(glyphs: [noteheadGlyph])
+            let markerJSON = try JSONSerialization.data(
+                withJSONObject: ["render_id": (dir as NSString).lastPathComponent],
+            )
+            try markerJSON.write(to: URL(fileURLWithPath: "\(dir)/frozen.json"))
+            try OMRLabelSchema.encodeCanonical(page)
+                .write(to: URL(fileURLWithPath: "\(dir)/page_0.labels.json"))
+            // Deliberately no page_0.png and no source.mscx.
+        }
+
+        /// Same well-formed page/PNG as `stageGoodRender`, but
+        /// `source.mscx` is present-but-garbage — the exact case that
+        /// used to leak this render's seam contribution (`pages`/tp/fp/fn)
+        /// into the running totals before `MSCXParser.parse` threw.
+        static func stageRenderWithUnparseableSource(at dir: String) throws {
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            let (page, _) = try stagePage(glyphs: [noteheadGlyph])
+            let bitmap = RasterTestBitmaps.staff(
+                widthPx: 900, heightPx: 500, dpi: 300, topY: 200, spacingPx: 16,
+            )
+            try OMRPrepPNG.write(bitmap, to: URL(fileURLWithPath: "\(dir)/page_0.png"))
+            let renderJSON = try JSONSerialization.data(
+                withJSONObject: ["pdf": "score.pdf", "dpi": 300],
+            )
+            try renderJSON.write(to: URL(fileURLWithPath: "\(dir)/render.json"))
+            try OMRLabelSchema.encodeCanonical(page)
+                .write(to: URL(fileURLWithPath: "\(dir)/page_0.labels.json"))
+            try Data("this is not valid mscx xml".utf8)
+                .write(to: URL(fileURLWithPath: "\(dir)/source.mscx"))
+        }
+
         /// "aaa_broken" sorts before "bbb_good" so the walk hits the
         /// failure first — proving a failed render is counted AND does
         /// not stop later renders from being processed and counted,
@@ -386,6 +498,94 @@
             #expect(result.totals.seamOnly == 1)
             #expect(result.totals.scored == 0)
             #expect(result.totals.failed == 0)
+        }
+
+        /// A page P3a found no staff on must not vanish from the recall
+        /// population: `OMRDetectorMetrics.match` counts the page's truth
+        /// glyph into `fn`, and `noStaffPages` makes the page itself
+        /// visible in the summary so a run degraded by fewer detected
+        /// staves reads differently from a run with the same recall but
+        /// no staffless pages.
+        ///
+        /// Verified by deletion: reverting `evaluateSeam`'s
+        /// `if analysis.staffSpacingPt <= 0 { totals.noStaffPages += 1 }`
+        /// line makes `noStaffPages` read 0 instead of 1 here — see the
+        /// fix report.
+        @Test func aPageWithNoStaffIsCountedAndItsTruthLandsInFN() throws {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("omr-detect-eval-nostaff-\(UUID().uuidString)").path
+            defer { try? FileManager.default.removeItem(atPath: root) }
+            try Self.stageNoStaffRender(at: "\(root)/aaa_nostaff")
+
+            let result = try OMRDetectorEvalSweep.sweep(
+                root: root, detector: LabelReplayDetector(), matchSp: 0.5,
+            )
+            #expect(result.totals.failed == 0)
+            #expect(result.totals.seamOnly == 1)
+            #expect(result.totals.pages == 1)
+            #expect(result.totals.noStaffPages == 1)
+            #expect(result.totals.fnByClass["noteheadBlack"] == 1)
+            #expect((result.totals.tpByClass["noteheadBlack"] ?? 0) == 0)
+        }
+
+        /// A FROZEN render whose page image is missing has no
+        /// `evaluateScore` throw to catch it (unlike a `render.json`
+        /// render, see `stageBrokenRender` /
+        /// `aFailedRenderIsCountedAndDoesNotStopTheSweep`) — `evaluate`
+        /// returns `.seamOnly` before ever reaching `source.mscx`. Without
+        /// `skippedNoAnalysis` the page vanishes with zero signal: `pages`
+        /// stays 0 and the render still reads as a clean `seamOnly`.
+        ///
+        /// Verified by deletion: reverting `evaluate`'s `guard let
+        /// analysis = ... else { renderTotals.skippedNoAnalysis += 1;
+        /// continue }` to a bare `else { continue }` makes
+        /// `skippedNoAnalysis` read 0 instead of 1 here — see the fix
+        /// report.
+        @Test func aFrozenRenderWithAMissingPageImageIsCountedNotSilentlyDropped() throws {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("omr-detect-eval-missingimg-\(UUID().uuidString)").path
+            defer { try? FileManager.default.removeItem(atPath: root) }
+            try Self.stageFrozenRenderMissingImage(at: "\(root)/frozen_missing")
+
+            let result = try OMRDetectorEvalSweep.sweep(
+                root: root, detector: LabelReplayDetector(), matchSp: 0.5,
+            )
+            #expect(result.renders == 1)
+            #expect(result.totals.pages == 0)
+            #expect(result.totals.skippedNoAnalysis == 1)
+            #expect(result.totals.seamOnly == 1)
+            #expect(result.totals.failed == 0)
+        }
+
+        /// A render whose `source.mscx` EXISTS but does not parse must
+        /// contribute NOTHING to the running totals — not even the seam
+        /// pass's `pages`/tp/fp/fn, which ran successfully before the
+        /// parse throw. Before the fix, `evaluateSeam` wrote directly into
+        /// the running `totals`, so this render's seam numbers landed
+        /// there before `MSCXParser.parse` threw and `sweep` counted the
+        /// render as `failed` — a render correctly marked `failed` was
+        /// still moving the seam summary.
+        ///
+        /// Verified by deletion: reverting `evaluate` to evaluate the seam
+        /// pass directly `into: &totals` (instead of a local
+        /// `renderTotals` merged only on success) makes `totals.pages`
+        /// read 1 and `totals.tpByClass["noteheadBlack"]` read 1 here
+        /// instead of both being empty/zero — see the fix report.
+        @Test func aRenderWithAnUnparseableSourceContributesNothingToTotals() throws {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("omr-detect-eval-badsource-\(UUID().uuidString)").path
+            defer { try? FileManager.default.removeItem(atPath: root) }
+            try Self.stageRenderWithUnparseableSource(at: "\(root)/aaa_badsource")
+
+            let result = try OMRDetectorEvalSweep.sweep(
+                root: root, detector: LabelReplayDetector(), matchSp: 0.5,
+            )
+            #expect(result.totals.failed == 1)
+            #expect(result.totals.pages == 0)
+            #expect(result.totals.scored == 0)
+            #expect(result.totals.seamOnly == 0)
+            #expect(result.totals.tpByClass.isEmpty)
+            #expect(result.totals.fnByClass.isEmpty)
         }
     }
 #endif

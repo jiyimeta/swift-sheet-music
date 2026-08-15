@@ -28,8 +28,15 @@
                 )
                 for detection in detections {
                     let mapped = mapped(detection, origin: origin)
-                    guard coreX.contains(Int(mapped.centerPx.x)),
-                          coreY.contains(Int(mapped.centerPx.y))
+                    // `Int(_:)` truncates TOWARD ZERO, not down — for a
+                    // negative centre (the offset head is unbounded, so
+                    // a real model can emit one), `Int(-0.5)` is `0`,
+                    // which reads as inside `0..<n` when it is actually
+                    // one pixel outside the page. `.rounded(.down)`
+                    // floors before truncating, matching `coreRange`'s
+                    // own half-open-interval semantics.
+                    guard coreX.contains(Int(mapped.centerPx.x.rounded(.down))),
+                          coreY.contains(Int(mapped.centerPx.y.rounded(.down)))
                     else { continue }
                     claimed.append(mapped)
                 }

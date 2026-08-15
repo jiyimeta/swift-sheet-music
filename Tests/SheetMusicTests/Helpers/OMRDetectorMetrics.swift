@@ -90,7 +90,21 @@
             staffSpacingPt: Double, matchSp: Double,
         ) -> Result {
             var result = Result()
-            guard staffSpacingPt > 0 else { return result }
+            guard staffSpacingPt > 0 else {
+                // A page P3a found no staff on: there is no radius to
+                // match within, and the real detector's own contract
+                // (`OMRDetectorFrontEnd.glyphs`) returns `[]` here. But
+                // every truth glyph on the page is still a genuine miss —
+                // it must land in `fn`, not vanish from both sides'
+                // denominators. Silently returning an empty `Result`
+                // dropped the page's truth from the recall population
+                // entirely, which is exactly the direction population
+                // degradation (fewer detected staves) inflates recall.
+                for glyph in truth {
+                    result.byClass[className(glyph), default: ClassCounts()].fn += 1
+                }
+                return result
+            }
             let radiusPt = matchSp * staffSpacingPt
             let classes = Set(predicted.map(className)).union(truth.map(className))
             for cls in classes.sorted() {

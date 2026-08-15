@@ -21,10 +21,15 @@
     final class OMRDetectorFrontEnd: OMRGlyphDetecting {
         /// The `model.json` fields this side reads. Extra keys the Python
         /// exporter writes for provenance (`commit`, `prep_root`, `seed`,
-        /// `training_config_hash`, `decode_defaults_measured`,
-        /// `checkpoint`) are not decoded here — `JSONDecoder` ignores any
-        /// key with no matching property, so they simply pass through
-        /// unread.
+        /// `training_config_hash`) are not decoded here — `JSONDecoder`
+        /// ignores any key with no matching property, so they simply pass
+        /// through unread. `decode_defaults_measured` and `checkpoint` ARE
+        /// decoded: the eval harness's summary line prints both (so a
+        /// saved sweep log states whether the decode constants it used
+        /// were actually swept, not guessed) and
+        /// `OMRDetectorFrontEndModelTests` reads `checkpoint` to tell the
+        /// untrained floor model (`--checkpoint random`) apart from a
+        /// trained one.
         struct Manifest: Decodable {
             var classes: [String]
             var staffSpacePx: Double
@@ -36,6 +41,8 @@
             var threshold: Double
             var topK: Int
             var nmsRadiusSp: Double
+            var decodeDefaultsMeasured: Bool
+            var checkpoint: String
 
             enum CodingKeys: String, CodingKey {
                 case classes
@@ -43,16 +50,45 @@
                 case tile, overlap, stride, mean, std, threshold
                 case topK = "top_k"
                 case nmsRadiusSp = "nms_radius_sp"
+                case decodeDefaultsMeasured = "decode_defaults_measured"
+                case checkpoint
             }
         }
 
         private let model: MLModel
         private let manifest: Manifest
 
+        /// Decode-time constants a caller (the eval harness's summary
+        /// line) needs to print alongside its measured numbers, so a
+        /// saved log is self-describing about which run produced it.
+        var threshold: Double {
+            manifest.threshold
+        }
+
+        var topK: Int {
+            manifest.topK
+        }
+
+        var nmsRadiusSp: Double {
+            manifest.nmsRadiusSp
+        }
+
+        var decodeDefaultsMeasured: Bool {
+            manifest.decodeDefaultsMeasured
+        }
+
+        /// `--checkpoint` as passed to `Training/model/export.py`:
+        /// literally `"random"` for the untrained P3d-G1 floor model, a
+        /// checkpoint path otherwise.
+        var checkpoint: String {
+            manifest.checkpoint
+        }
+
         init(modelRoot: URL) async throws {
             let manifestData = try Data(contentsOf: modelRoot.appendingPathComponent("model.json"))
             let manifest = try JSONDecoder().decode(Manifest.self, from: manifestData)
             try Self.checkVocabulary(manifest.classes)
+            try Self.checkNumerics(manifest)
 
             let packageURL = modelRoot.appendingPathComponent("model.mlpackage")
             let compiledURL = try await MLModel.compileModel(at: packageURL)
@@ -68,13 +104,50 @@
         /// would otherwise build a plausible-looking score out of the
         /// wrong symbols — no crash, no diagnostic, just a wrong score.
         /// Pure and callable with no model present, which is what makes it
-        /// testable without `OMR_MODEL_ROOT`.
+        /// testable without `OMR_MODEL_ROOT`. Names the first differing
+        /// index and both class names there — a bare length mismatch
+        /// ("62 classes does not match ... 62 classes") is useless for
+        /// the load-bearing reorder case, where the two counts are
+        /// identical and the only difference is at one index.
         static func checkVocabulary(_ classes: [String]) throws {
             let expected = OMRPrepTargets.trainableVocabulary
-            guard classes == expected else {
+            guard classes != expected else { return }
+            if classes.count != expected.count {
                 throw SheetMusicError.malformedScore(
                     reason: "OMR detector: model class list (\(classes.count) classes) does not "
                         + "match the frozen trainable vocabulary (\(expected.count) classes)",
+                )
+            }
+            let index = classes.indices.first { classes[$0] != expected[$0] } ?? 0
+            throw SheetMusicError.malformedScore(
+                reason: "OMR detector: model class list disagrees with the frozen trainable "
+                    + "vocabulary at index \(index): model has \"\(classes[index])\", "
+                    + "expected \"\(expected[index])\"",
+            )
+        }
+
+        /// A manifest field that decodes as a syntactically valid number
+        /// but is semantically nonsense (`staff_space_px: 0`, `tile: 0`,
+        /// …) does not fail to decode, so `JSONDecoder` alone lets it
+        /// through. Left unchecked, `staff_space_px: 0` makes
+        /// `OMRPrepNormalize.normalize` return `nil` for every page
+        /// (division by the target staff space), so `glyphs(page:
+        /// analysis:)` returns `[]` everywhere and the eval harness
+        /// reports a clean-looking `recall=0.0000` — indistinguishable
+        /// from "the detector genuinely finds nothing" instead of "the
+        /// manifest is broken". Pure and callable with no model present,
+        /// same reasoning as `checkVocabulary`.
+        static func checkNumerics(_ manifest: Manifest) throws {
+            let checks: [(name: String, value: Double)] = [
+                ("staff_space_px", manifest.staffSpacePx),
+                ("tile", Double(manifest.tile)),
+                ("stride", Double(manifest.stride)),
+                ("top_k", Double(manifest.topK)),
+            ]
+            for check in checks where check.value <= 0 {
+                throw SheetMusicError.malformedScore(
+                    reason: "OMR detector: manifest field \"\(check.name)\" must be positive, "
+                        + "got \(check.value)",
                 )
             }
         }

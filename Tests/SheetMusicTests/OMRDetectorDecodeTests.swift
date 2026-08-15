@@ -209,5 +209,31 @@
             #expect(out.count == 2)
             #expect(Set(out.map(\.classIndex)) == [1, 2])
         }
+
+        /// The offset head is unbounded, so a real model can regress a
+        /// centre to a small NEGATIVE page-space coordinate for a
+        /// detection right at the page's left/top edge — a centre that
+        /// is not actually inside the page's core window. `Int(_:)`
+        /// truncates TOWARD ZERO, so `Int(-0.3)` reads as `0`, which
+        /// `Range.contains` then reports as inside `0..<8` — an
+        /// out-of-bounds centre wrongly kept.
+        ///
+        /// Verified by deletion: reverting the `.rounded(.down)` calls
+        /// back to bare `Int(mapped.centerPx.x)` / `Int(mapped.centerPx.y)`
+        /// makes this test fail with 1 detection instead of 0 — see the
+        /// fix report.
+        @Test func mergeDropsANegativeCenterThatTruncatesToZero() {
+            let detection = OMRDetectorDecode.Detection(
+                classIndex: 0, score: 0.9, centerPx: CGPoint(x: -0.3, y: 4),
+                originPx: .zero, advancePx: 0, renderedSizePx: 0,
+            )
+            let tiles: [(origin: CGPoint, detections: [OMRDetectorDecode.Detection])] = [
+                (CGPoint(x: 0, y: 0), [detection]),
+            ]
+            let out = OMRDetectorDecode.merge(
+                tiles, pageWidth: 8, pageHeight: 8, tile: 8, overlap: 0, nmsRadiusPx: 1.0,
+            )
+            #expect(out.isEmpty)
+        }
     }
 #endif
