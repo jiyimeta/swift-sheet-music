@@ -151,7 +151,8 @@
             )
             Self.printSeamSummary(totals: result.totals)
             Self.printScoreSummary(
-                renders: result.renders, failed: result.totals.failed,
+                renders: result.renders, scored: result.totals.scored,
+                seamOnly: result.totals.seamOnly, failed: result.totals.failed,
                 pitchPcts: result.pitchPcts, durPcts: result.durPcts,
             )
         }
@@ -187,21 +188,29 @@
             }
         }
 
+        /// `pitchPcts`/`durPcts` are empty whenever `scored == 0` — every
+        /// render on this sweep was seam-only (the whole degraded set) or
+        /// there were none at all. `pitchP50=0.0000` over zero renders
+        /// reads as a real (terrible) score rather than as "nothing was
+        /// scored", so those fields print `n/a` instead, mirroring the
+        /// score-eval harness's own `pctStr` convention.
         static func printScoreSummary(
-            renders: Int, failed: Int, pitchPcts: [Double], durPcts: [Double],
+            renders: Int, scored: Int, seamOnly: Int, failed: Int,
+            pitchPcts: [Double], durPcts: [Double],
         ) {
-            func fmt(_ v: Double) -> String {
-                String(format: "%.4f", v)
+            func fmt(_ values: [Double], _ stat: ([Double]) -> Double) -> String {
+                values.isEmpty ? "n/a" : String(format: "%.4f", stat(values))
             }
             func mean(_ values: [Double]) -> Double {
-                values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count)
+                values.reduce(0, +) / Double(values.count)
             }
             print(
-                "[detect][SUMMARY] renders=\(renders) failed=\(failed) "
-                    + "pitchP50=\(fmt(OMRDetectorMetrics.percentile(pitchPcts, 0.5))) "
-                    + "pitchMean=\(fmt(mean(pitchPcts))) "
-                    + "durP50=\(fmt(OMRDetectorMetrics.percentile(durPcts, 0.5))) "
-                    + "durMean=\(fmt(mean(durPcts)))",
+                "[detect][SUMMARY] renders=\(renders) scored=\(scored) "
+                    + "seamOnly=\(seamOnly) failed=\(failed) "
+                    + "pitchP50=\(fmt(pitchPcts) { OMRDetectorMetrics.percentile($0, 0.5) }) "
+                    + "pitchMean=\(fmt(pitchPcts, mean)) "
+                    + "durP50=\(fmt(durPcts) { OMRDetectorMetrics.percentile($0, 0.5) }) "
+                    + "durMean=\(fmt(durPcts, mean))",
             )
         }
     }
@@ -278,6 +287,30 @@
             try stageCommonFiles(dir: dir, page: page, score: score)
         }
 
+        /// `frozen.json` + labels + a real raster PNG, NO `source.mscx`
+        /// — the shape `freeze` actually produces for the degraded eval
+        /// set (marker name deliberately differs from `render.json` so a
+        /// second `freeze` cannot re-degrade its own output, and the
+        /// source is deliberately not copied). `.detectorGlyphs` must
+        /// still run the seam pass over this directory and must NOT
+        /// throw for the missing source — that is `seamOnly`, not
+        /// `failed`.
+        static func stageFrozenRender(at dir: String) throws {
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            let (page, _) = try stagePage(glyphs: [noteheadGlyph])
+            let bitmap = RasterTestBitmaps.staff(
+                widthPx: 900, heightPx: 500, dpi: 300, topY: 200, spacingPx: 16,
+            )
+            try OMRPrepPNG.write(bitmap, to: URL(fileURLWithPath: "\(dir)/page_0.png"))
+            let markerJSON = try JSONSerialization.data(
+                withJSONObject: ["render_id": (dir as NSString).lastPathComponent],
+            )
+            try markerJSON.write(to: URL(fileURLWithPath: "\(dir)/frozen.json"))
+            try OMRLabelSchema.encodeCanonical(page)
+                .write(to: URL(fileURLWithPath: "\(dir)/page_0.labels.json"))
+            // Deliberately no source.mscx — `freeze` never copies it.
+        }
+
         private static var noteheadGlyph: OMRPageLabels.Glyph {
             OMRPageLabels.Glyph(
                 className: "noteheadBlack", bboxPt: nil,
@@ -323,6 +356,36 @@
             #expect(result.renders == 2)
             #expect(result.totals.failed == 1)
             #expect(result.totals.pages == 1)
+            #expect(result.totals.scored == 1)
+            #expect(result.totals.seamOnly == 0)
+        }
+
+        /// The exact regression the coordinator reported: pointed at a
+        /// directory tree that ONLY contains frozen (degraded) renders, a
+        /// walk over `renderDirectories` sees nothing at all —
+        /// `renders`/`pages` read 0, indistinguishable from a total
+        /// detector failure. `renderOrFrozenDirectories` must find it,
+        /// the seam pass must run and count `pages`/tp/fp/fn normally,
+        /// and the outcome must land in `seamOnly`, never `failed` —
+        /// `source.mscx` being absent here is expected, not an error.
+        ///
+        /// Verified by deletion: with `OMRDetectorEvalSweep.sweep`
+        /// temporarily reverted to `renderDirectories`, this test failed
+        /// with `renders == 0` and `pages == 0` (see the fix report).
+        @Test func aFrozenRenderContributesSeamMetricsAndCountsAsSeamOnly() throws {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("omr-detect-eval-frozen-\(UUID().uuidString)").path
+            defer { try? FileManager.default.removeItem(atPath: root) }
+            try Self.stageFrozenRender(at: "\(root)/frozen_0001")
+
+            let result = try OMRDetectorEvalSweep.sweep(
+                root: root, detector: LabelReplayDetector(), matchSp: 0.5,
+            )
+            #expect(result.renders == 1)
+            #expect(result.totals.pages == 1)
+            #expect(result.totals.seamOnly == 1)
+            #expect(result.totals.scored == 0)
+            #expect(result.totals.failed == 0)
         }
     }
 #endif

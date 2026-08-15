@@ -21,6 +21,17 @@
     enum OMRDetectorEvalSweep {
         struct Totals {
             var pages = 0
+            /// Seam AND score level both measured — a normal `render.json`
+            /// directory with a `source.mscx`.
+            var scored = 0
+            /// Seam level measured, score level deliberately NOT
+            /// attempted because the directory has no `source.mscx` — the
+            /// expected, correct state for every FROZEN (degraded)
+            /// render, since `freeze` does not copy the source. Must
+            /// never be folded into `failed`: that would make a healthy
+            /// degraded-set run look broken.
+            var seamOnly = 0
+            /// Something threw that should not have.
             var failed = 0
             var tpByClass: [String: Int] = [:]
             var fpByClass: [String: Int] = [:]
@@ -33,28 +44,49 @@
             var originErrCount = 0
         }
 
-        /// The whole corpus: every render directory
-        /// (`OMRHarnessDirectoryWalk.renderDirectories`), one page's
-        /// bitmap live at a time. A single render's failure — a bad
-        /// label file, a page with no raster analysis under
-        /// `.detectorGlyphs` (see `OMRHybridFrontEnd.compose`'s
-        /// deliberate throw), a corrupt PDF — is caught, counted in
-        /// `totals.failed`, and printed as `[detect][WARN]`; it never
-        /// aborts the sweep, matching `OMRPrepExportHarness.sweep`.
+        /// One render directory's outcome, distinct from `Totals.failed`:
+        /// a render with no `source.mscx` (every FROZEN render) is
+        /// `.seamOnly`, not a failure. `.skipped` is the pre-existing
+        /// silent-skip case (no label files at all), uncounted, matching
+        /// the other OMR harnesses' `.skipped` outcome.
+        enum RenderOutcome {
+            case scored
+            case seamOnly
+            case skipped
+        }
+
+        /// The whole corpus: every render-OR-FROZEN directory
+        /// (`OMRHarnessDirectoryWalk.renderOrFrozenDirectories` — the
+        /// degraded eval set marks itself with `frozen.json` rather than
+        /// `render.json`, deliberately, so a second `freeze` cannot
+        /// re-degrade its own output; a `render.json`-only walk over it
+        /// sweeps nothing while printing a plausible-looking zero, see
+        /// that function's own doc comment and `OMRRasterSeamEvalTests`,
+        /// which hit this exact trap first), one page's bitmap live at a
+        /// time. A single render's failure — a bad label file, a page
+        /// with no raster analysis under `.detectorGlyphs` (see
+        /// `OMRHybridFrontEnd.compose`'s deliberate throw), a corrupt
+        /// PDF — is caught, counted in `totals.failed`, and printed as
+        /// `[detect][WARN]`; it never aborts the sweep, matching
+        /// `OMRPrepExportHarness.sweep`.
         static func sweep(
             root: String, detector: any OMRGlyphDetecting, matchSp: Double,
         ) throws -> (renders: Int, totals: Totals, pitchPcts: [Double], durPcts: [Double]) {
-            let renderDirs = try OMRHarnessDirectoryWalk.renderDirectories(root: root)
+            let renderDirs = try OMRHarnessDirectoryWalk.renderOrFrozenDirectories(root: root)
             var totals = Totals()
             var pitchPcts: [Double] = []
             var durPcts: [Double] = []
             for dir in renderDirs {
                 autoreleasepool {
                     do {
-                        try evaluate(
+                        switch try evaluate(
                             dir: dir, detector: detector, matchSp: matchSp,
                             into: &totals, pitchPcts: &pitchPcts, durPcts: &durPcts,
-                        )
+                        ) {
+                        case .scored: totals.scored += 1
+                        case .seamOnly: totals.seamOnly += 1
+                        case .skipped: break
+                        }
                     } catch {
                         totals.failed += 1
                         print("[detect][WARN] \(dir) \(error)")
@@ -65,18 +97,17 @@
         }
 
         /// One render directory: seam metrics for every page that has a
-        /// raster analysis, then one score-level comparison against
-        /// `source.mscx` over the whole render.
+        /// raster analysis (run REGARDLESS of whether `source.mscx`
+        /// exists — a frozen render never has one, and the whole point
+        /// of the degraded sweep is the seam number), then one
+        /// score-level comparison against `source.mscx`, attempted only
+        /// when that file exists.
         static func evaluate(
             dir: String, detector: any OMRGlyphDetecting, matchSp: Double,
             into totals: inout Totals, pitchPcts: inout [Double], durPcts: inout [Double],
-        ) throws {
+        ) throws -> RenderOutcome {
             let labelNames = try OMRHarnessDirectoryWalk.labelFiles(in: dir)
-            guard FileManager.default.fileExists(atPath: "\(dir)/source.mscx"), !labelNames.isEmpty
-            else { return }
-            let scoreA = try MSCXParser.parse(
-                contentsOf: URL(fileURLWithPath: "\(dir)/source.mscx"),
-            )
+            guard !labelNames.isEmpty else { return .skipped }
             let pages = try labelNames.map {
                 try OMRLabelSchema.decode(Data(contentsOf: URL(fileURLWithPath: "\(dir)/\($0)")))
             }
@@ -88,10 +119,17 @@
                     matchSp: matchSp, into: &totals,
                 )
             }
+            guard FileManager.default.fileExists(atPath: "\(dir)/source.mscx") else {
+                return .seamOnly
+            }
+            let scoreA = try MSCXParser.parse(
+                contentsOf: URL(fileURLWithPath: "\(dir)/source.mscx"),
+            )
             try evaluateScore(
                 dir: dir, scoreA: scoreA, pages: pages, pageAnalyses: pageAnalyses,
                 detector: detector, pitchPcts: &pitchPcts, durPcts: &durPcts,
             )
+            return .scored
         }
 
         /// Every page's raster analysis, `keepDeskewed: true` — the
