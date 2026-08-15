@@ -101,10 +101,17 @@ object SheetMusicJNI {
      * Resolve the bounding rectangle (document/mm coordinates) of the cursor
      * identified by [cursorBytes] within the laid-out score [scoreHandle].
      *
-     * Returns a 34-byte payload in the CursorFrame wire format on success, or
-     * an empty array if the cursor did not resolve (e.g. stale ID after
-     * re-layout). Wire format: u16 version (=1), then 4 × i64 micros
-     * (x, y, width, height), little-endian.
+     * The bytes are **wirelet TLV** — the `@WireFormat` encoding of
+     * `CursorFrameCodec.DecodedFrame`, length-prefixed with a tag per field.
+     * Decode with the generated
+     * `io.github.jiyimeta.sheetmusic.audio.serialization.DecodedFrameCodec`;
+     * do NOT read raw doubles out of it, and do not assume a fixed length. An
+     * empty array means the cursor did not resolve (e.g. a stale ID after
+     * re-layout).
+     *
+     * (This KDoc used to describe a 34-byte `u16 version` + `4 × i64` micros
+     * payload. No part of that was true: the producer says so at the source,
+     * and a reader written from it decodes garbage.)
      */
     fun nativeCursorFrame(
         scoreHandle: Long,
@@ -230,8 +237,17 @@ object SheetMusicJNI {
      * rect per intersected system; the rect spans the full staff
      * height of that system and the X range of the included measures.
      *
-     * Wire format: u16 version=1, i32 count, count × 4×i64 micros.
-     * Empty array when the range yields no measures.
+     * The bytes are **wirelet TLV** — a length-prefixed array of
+     * `LoopHighlightCodec.Rect`, each entry itself length-prefixed with a tag
+     * per field. Decode with the generated
+     * `io.github.jiyimeta.sheetmusic.audio.serialization.RectCodec`; there is
+     * no version word, no micros scaling and no fixed stride. Empty array when
+     * the range yields no measures.
+     *
+     * (Three mutually inconsistent descriptions of this payload were in
+     * circulation — this KDoc's `u16 version` + i64-micros one, the Swift
+     * codec's raw-`f64`-array one, and the TLV the reader actually runs. The
+     * last is the truth.)
      */
     fun nativeLoopHighlightRects(
         scoreHandle: Long,
