@@ -50,12 +50,15 @@ version = (project.findProperty("version") as String?)
     ?: "0.0.0-SNAPSHOT"
 
 dependencies {
-    // Runtime support for swift-java-generated Java bindings under
-    // src/main/java-generated/ (PoC adoption). `api` so downstream
-    // modules using the generated `SheetMusicAndroidJNISwiftJava`
-    // class get `org.swift.swiftkit.core.*` on their classpath.
-    // Locally-published from the swift-java repo until it ships to
-    // Maven Central — see project_swift_java_strategy.md.
+    // Runtime support for the swift-java-generated Java bindings under
+    // src/main/java-generated/. Not optional and not a trial: those bindings
+    // ARE the JNI mechanism — `SheetMusicAndroidJNI.java` declares one
+    // `native` method per entry point and loads the `.so`, and `Data.java`
+    // is what the entry points take and return. They replaced hand-written
+    // `@_cdecl` glue in cacaae24. `SheetMusicJNI.kt` is a façade over them.
+    // `api` so downstream modules get `org.swift.swiftkit.core.*` on their
+    // classpath. Locally-published from the swift-java repo until it ships
+    // to Maven Central — see project_swift_java_strategy.md.
     api("org.swift.swiftkit:swiftkit-core:1.0-SNAPSHOT")
     // wirelet-runtime provides BinaryReader/BinaryWriter used by
     // wirelet-generated codecs. `api` so downstream modules
