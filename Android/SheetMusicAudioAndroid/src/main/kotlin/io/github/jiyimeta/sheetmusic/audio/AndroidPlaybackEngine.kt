@@ -7,6 +7,7 @@ import io.github.jiyimeta.sheetmusic.CountInWireCodec
 import io.github.jiyimeta.sheetmusic.audio.export.AudioExporter
 import io.github.jiyimeta.sheetmusic.audio.export.ExportEngineSnapshot
 import io.github.jiyimeta.sheetmusic.audio.jni.SheetMusicAudioJNI
+import io.github.jiyimeta.sheetmusic.audio.model.AudioClockPosition
 import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
@@ -276,6 +277,30 @@ class AndroidPlaybackEngine internal constructor(
 
     private val _loopRange = MutableStateFlow<LoopRange?>(null)
     val loopRange: StateFlow<LoopRange?> = _loopRange.asStateFlow()
+
+    /**
+     * The transport's position paired with the device's AUDIO clock, or `null` when the output
+     * cannot supply a timestamp (before playback starts, after teardown, or on a route that does
+     * not report one — `AudioTrack.getTimestamp` is best-effort by contract).
+     *
+     * A read, deliberately, and not a flow: [currentTimeSeconds] is written from a 33 ms poll, so
+     * its value is stale by an unknown fraction of that interval whenever a host looks at it. This
+     * asks the audio output where it actually is AT THE MOMENT OF THE CALL, so a host smoothing a
+     * playhead can extrapolate from `nanoTime` rather than from whenever the poll last fired.
+     * Publishing it as a flow would put it back on the poll's cadence and lose the whole point.
+     *
+     * Purely additive: [currentTimeSeconds] and [currentCursor] are untouched and a host that never
+     * calls this behaves exactly as before.
+     */
+    fun audioClockPosition(): AudioClockPosition? {
+        val sample = oboeStream?.audioTimestamp() ?: return null
+        val tick = playerDriver?.currentTick ?: return null
+        return AudioClockPosition(
+            unrolledTick = tick,
+            framePosition = sample.framePosition,
+            nanoTime = sample.nanoTime,
+        )
+    }
 
     // ── Internal mutable state (assembled by prepare) ────────────────
 

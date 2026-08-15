@@ -23,4 +23,19 @@ internal class NoOpOboeStream : OboeStream() {
     override fun play() { /* no-op */ }
     override fun stop() { /* no-op */ }
     override fun close() { /* no-op */ }
+
+    /**
+     * The audio clock a test can drive.
+     *
+     * `null` by default — the real stream returns null until the device has presented audio, and a
+     * fake that always produced a reading would hide the null path from every caller. Tests that
+     * want a clock install [clockSamples], which is consumed one entry per call so a test can make
+     * the value ADVANCE between reads; running past the end returns the last entry.
+     */
+    var clockSamples: MutableList<ClockSample> = mutableListOf()
+
+    override fun audioTimestamp(): ClockSample? {
+        if (clockSamples.isEmpty()) return null
+        return if (clockSamples.size == 1) clockSamples[0] else clockSamples.removeAt(0)
+    }
 }

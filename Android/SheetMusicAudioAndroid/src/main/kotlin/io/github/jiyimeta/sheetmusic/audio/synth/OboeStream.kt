@@ -3,6 +3,7 @@ package io.github.jiyimeta.sheetmusic.audio.synth
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioTimestamp
 import android.media.AudioTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -83,6 +84,12 @@ internal open class OboeStream(
         fun produce(frameCount: Int, left: FloatArray, right: FloatArray)
     }
 
+    /**
+     * One reading of the device's audio clock: the frame the output has actually PRESENTED, and the
+     * host-clock instant (`System.nanoTime()` base) at which it did.
+     */
+    data class ClockSample(val framePosition: Long, val nanoTime: Long)
+
     private var track: AudioTrack? = null
     private val producer = AtomicReference<Producer?>(null)
 
@@ -159,6 +166,21 @@ internal open class OboeStream(
         writerScope = null
         track?.pause()
         track?.flush()
+    }
+
+    /**
+     * Reads the device's audio clock, or `null` when it cannot supply one.
+     *
+     * `AudioTrack.getTimestamp` is documented as best-effort: it returns false before enough audio
+     * has been written, on routes that do not report a timestamp, and after the track is released.
+     * A caller must treat `null` as "no better information than the poll loop's" rather than as an
+     * error — every position this pairs with stays correct without it, only coarser.
+     */
+    open fun audioTimestamp(): ClockSample? {
+        val t = track ?: return null
+        val ts = AudioTimestamp()
+        if (!t.getTimestamp(ts)) return null
+        return ClockSample(framePosition = ts.framePosition, nanoTime = ts.nanoTime)
     }
 
     /** Stops playback, releases the AudioTrack, and shuts down the writer dispatcher. */

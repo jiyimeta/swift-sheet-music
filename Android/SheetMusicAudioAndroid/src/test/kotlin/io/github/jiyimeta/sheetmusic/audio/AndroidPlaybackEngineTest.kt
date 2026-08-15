@@ -8,6 +8,7 @@ import io.github.jiyimeta.sheetmusic.audio.export.AudioExporter
 import io.github.jiyimeta.sheetmusic.audio.export.fakes.FakeAudioFileEncoder
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeJniBridge
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeOboeStream
+import io.github.jiyimeta.sheetmusic.audio.fakes.NoOpOboeStream
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakePlayerDriver
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
@@ -1861,6 +1862,62 @@ class AndroidPlaybackEngineTest {
         assertEquals(PlaybackState.EXPORTING, stateDuringRun)
         assertEquals(PlaybackState.STOPPED, engine.state.value)
         assertTrue("encoder.finish() should have been called", encoder.finished)
+    }
+
+    @Test
+    fun `audioClockPosition advances between polls while currentTimeSeconds does not`() = runTest {
+        // The whole reason the read exists. `currentTimeSeconds` is written from a 33 ms poll, so
+        // between two polls it is a constant; the audio clock is not. A host smoothing a playhead
+        // needs the moving one, and asserting only that the read returns SOMETHING would pass
+        // against an implementation that returned the poll's own cached value.
+        val stream = NoOpOboeStream()
+        stream.clockSamples = mutableListOf(
+            OboeStream.ClockSample(framePosition = 4_800L, nanoTime = 1_000_000_000L),
+            OboeStream.ClockSample(framePosition = 9_600L, nanoTime = 1_100_000_000L),
+        )
+        val engine = newEngineForTests(
+            bridge = FakeJniBridge(
+                timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+                staffParamsResult = oneStaffPayload(),
+                renderMidiResult = minimalSmf,
+            ),
+            oboeFactory = { stream },
+        ).also { managedEngines += it }
+        engine.prepare(1L)
+
+        val timeBefore = engine.currentTimeSeconds.value
+        val first = engine.audioClockPosition()
+        val second = engine.audioClockPosition()
+        assertNotNull("the audio clock must be readable once the stream supplies one", first)
+        assertNotNull(second)
+        assertEquals(4_800L, first!!.framePosition)
+        assertEquals(1_000_000_000L, first.nanoTime)
+        assertEquals(9_600L, second!!.framePosition)
+        assertEquals(1_100_000_000L, second.nanoTime)
+        assertEquals(
+            "currentTimeSeconds must NOT have moved — no poll ran between the two reads",
+            timeBefore,
+            engine.currentTimeSeconds.value,
+            0.0,
+        )
+    }
+
+    @Test
+    fun `audioClockPosition is null when the output cannot supply a timestamp`() = runTest {
+        // `AudioTrack.getTimestamp` is best-effort by contract: it reports nothing before enough
+        // audio has been written and on routes that do not carry a timestamp. A host must be able
+        // to tell "no better information" from "position zero", so the read is nullable and the
+        // default fake supplies no samples at all.
+        val engine = newEngineForTests(
+            bridge = FakeJniBridge(
+                timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+                staffParamsResult = oneStaffPayload(),
+                renderMidiResult = minimalSmf,
+            ),
+            oboeFactory = { NoOpOboeStream() },
+        ).also { managedEngines += it }
+        engine.prepare(1L)
+        assertNull(engine.audioClockPosition())
     }
 
     @Test
