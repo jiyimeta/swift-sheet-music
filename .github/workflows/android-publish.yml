@@ -108,4 +108,5 @@ jobs:
           ./gradlew \
               -Pversion="${ORG_GRADLE_PROJECT_version}" \
               :SheetMusicAndroid:publishReleasePublicationToGithubPackagesRepository \
-              :SheetMusicAudioAndroid:publishReleasePublicationToGithubPackagesRepository
+              :SheetMusicAudioAndroid:publishReleasePublicationToGithubPackagesRepository \
+              :SheetMusicComposeAndroid:publishReleasePublicationToGithubPackagesRepository
