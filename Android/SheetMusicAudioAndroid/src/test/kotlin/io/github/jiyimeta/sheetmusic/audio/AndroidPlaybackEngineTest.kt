@@ -1864,6 +1864,51 @@ class AndroidPlaybackEngineTest {
     }
 
     @Test
+    fun `setTranspose accepts an octave either way and pins beyond it`() = runTest {
+        // Observed through the export snapshot because the engine keeps the semitone count private —
+        // and the snapshot is where it matters anyway, since a clamp that pinned at 7 would silently
+        // bounce a score a fifth flat of what the user set.
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(0L, 0L),
+        )
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        suspend fun coarseRpnAfterTranspose(semitones: Int): List<String> {
+            engine.setTranspose(semitones)
+            val synth = FakeSynthDriver()
+            val (player, _) = FakePlayerDriver.create()
+            val exporter = AudioExporter(
+                resolver = StubSoundfontResolver(),
+                context = null,
+                synthFactory = { _ -> synth },
+                playerFactory = { _ -> player },
+                encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
+            )
+            engine.exportAudioFileWith(
+                outputFd = null,
+                scoreHandle = 1L,
+                format = AudioFileFormat.Wav(),
+                range = AudioExportRange.Full,
+                progress = null,
+                exporterFactory = { exporter },
+            )
+            return synth.calls.filter { it.startsWith("cc(0,6,") }
+        }
+
+        // Coarse master-tuning RPN value is 64 + semitones.
+        assertTrue("+12 must pass through", coarseRpnAfterTranspose(12).contains("cc(0,6,76)"))
+        assertTrue("-12 must pass through", coarseRpnAfterTranspose(-12).contains("cc(0,6,52)"))
+        // 8 is the discriminating value: the previous bound pinned it to 7 (RPN 71).
+        assertTrue("+8 must pass through", coarseRpnAfterTranspose(8).contains("cc(0,6,72)"))
+        assertTrue("+13 must pin at +12", coarseRpnAfterTranspose(13).contains("cc(0,6,76)"))
+        assertTrue("-13 must pin at -12", coarseRpnAfterTranspose(-13).contains("cc(0,6,52)"))
+    }
+
+    @Test
     fun `exportAudioFile carries the live calibration and transpose onto the offline synth`() = runTest {
         // The exporter's own tuning behaviour is pinned by AudioExporterTuningTest, which builds the
         // snapshot by hand. This case exists for the half that one cannot see: that the ENGINE puts

@@ -338,7 +338,7 @@ class AndroidPlaybackEngine internal constructor(
     @Volatile private var pendingRate: Float = 1.0f
     @Volatile private var masterTuningCents: Double = 0.0
 
-    /** Live whole-score transpose (−7…+7). Combined with [masterTuningCents] by `applyTuning`. */
+    /** Live whole-score transpose (−12…+12). Combined with [masterTuningCents] by `applyTuning`. */
     @Volatile private var transposeSemitones: Int = 0
 
     /**
@@ -1084,7 +1084,7 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * Live whole-score transpose in [semitones], clamped to −7…+7. Persists across prepare.
+     * Live whole-score transpose in [semitones], clamped to −12…+12. Persists across prepare.
      * No-op when [state] is [PlaybackState.EXPORTING].
      *
      * Implemented as a tuning shift, not a re-render: [FluidSynthEngine.setMasterTuning] retunes the
@@ -1098,7 +1098,7 @@ class AndroidPlaybackEngine internal constructor(
      */
     fun setTranspose(semitones: Int) {
         if (_state.value == PlaybackState.EXPORTING) return
-        transposeSemitones = semitones.coerceIn(-7, 7)
+        transposeSemitones = semitones.coerceIn(-12, 12)
         applyTuning()
     }
 

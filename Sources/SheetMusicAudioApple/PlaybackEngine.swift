@@ -136,7 +136,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// synth rebuilds in `prepareSynth`, like `masterGain`.
     public private(set) var masterTuningCents: Double = 0 // swiftlint:disable:this inclusive_language
 
-    /// Whole-score transpose in semitones (`-7…+7`). Applied as MIDI
+    /// Whole-score transpose in semitones (`-12…+12`). Applied as MIDI
     /// coarse tuning to every pitched channel; re-applied after each
     /// `prepare(score:)` so a score reload preserves it. `0` = concert.
     public private(set) var transposeSemitones = 0
@@ -478,11 +478,18 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         staffIsDrum[idx] ?? false
     }
 
-    /// Live whole-score transpose in semitones (clamped −7…+7). Global
+    /// Live whole-score transpose in semitones (clamped −12…+12). Global
     /// coarse tuning on the MELODIC unit only, so pitched content (incl.
     /// already-sounding notes) shifts zero-artifact and drums stay put.
+    ///
+    /// An octave either way, not the old diminished fifth: a singer moving a
+    /// song out of its written key routinely needs one, and the MIDI coarse
+    /// tuning RPN carries ±64 semitones so the old limit bought nothing. The
+    /// NOTATION half (`LayoutOptionsWire.transposeDelta`) is clamped to the
+    /// same range and must move with it — a wider sound than notation makes
+    /// the score look and sound like different pieces past the narrower bound.
     public func setTranspose(semitones: Int) {
-        let clamped = max(-7, min(7, semitones))
+        let clamped = max(-12, min(12, semitones))
         transposeSemitones = clamped
         applyTuning()
     }

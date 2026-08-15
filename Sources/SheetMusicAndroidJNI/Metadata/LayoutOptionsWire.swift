@@ -15,7 +15,7 @@ public struct LayoutOptionsWire {
     public var showsInvisibleElements: UInt8 // 0/1
     public var hiddenStaves: [HiddenStaffWire]
     public var clefOverrides: [ClefOverrideWire]
-    /// Whole-score notation transposition in semitones, clamped to −7…+7 by `transposeDelta`. `0` = concert pitch.
+    /// Whole-score notation transposition in semitones, clamped to −12…+12 by `transposeDelta`. `0` = concert pitch.
     ///
     /// Rides on the display options rather than on its own bridge because it is exactly that: a re-spelling of the
     /// score before layout, which the host already re-runs whenever these options change. Note IDs and ticks survive
@@ -64,11 +64,17 @@ extension LayoutOptionsWire {
         })
     }
 
-    /// The transposition to apply, clamped to the range the engine supports (−7…+7, a diminished fifth either way —
-    /// the same clamp the Apple `PlaybackEngine.setTranspose` and the Reader's stepper use). A wire value outside it
-    /// is pinned rather than rejected, so a host that has not clamped can never produce an absurd re-spelling.
+    /// The transposition to apply, clamped to the range the engine supports (−12…+12, an octave either way — the
+    /// same clamp the Apple `PlaybackEngine.setTranspose` and `AndroidPlaybackEngine.setTranspose` use). A wire
+    /// value outside it is pinned rather than rejected, so a host that has not clamped can never produce an absurd
+    /// re-spelling.
+    ///
+    /// THIS CLAMP AND THE TWO AUDIO ONES MOVE TOGETHER. This is the notation half; the audio half is a tuning
+    /// shift on the melodic channels. Widening only the audio side leaves the score sounding transposed past the
+    /// narrower bound while still LOOKING like the written key — which is the failure the three-way symmetry exists
+    /// to prevent.
     public var transposeDelta: Int {
-        max(-7, min(7, Int(transposeSemitones)))
+        max(-12, min(12, Int(transposeSemitones)))
     }
 
     /// Whether the engraver should lay lyrics out. Anything other than an explicit `0` shows them,
