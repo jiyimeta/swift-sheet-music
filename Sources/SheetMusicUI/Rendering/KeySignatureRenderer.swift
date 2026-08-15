@@ -1,3 +1,4 @@
+import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
 
@@ -7,21 +8,18 @@ enum KeySignatureRenderer {
         context: inout GraphicsContext,
         sharps: Int,
         flats: Int,
+        clef: NotatedClef,
         origin: CGPoint,
         metrics: StaffMetrics,
     ) {
-        let count = max(0, sharps) + max(0, flats)
-        guard count > 0 else { return }
-        let isSharp = sharps > 0
-        let glyph = isSharp
+        let glyph = sharps > 0
             ? SMuFLGlyph.accidentalSharp
             : SMuFLGlyph.accidentalFlat
-        let steps = isSharp
-            ? KeySignatureSteps.sharps
-            : KeySignatureSteps.flats
+        let steps = KeySignatureSteps.steps(
+            sharps: sharps, flats: flats, clef: clef,
+        )
         let advance = KeySignatureSteps.advance(sp: metrics.sp)
-        for i in 0 ..< min(count, steps.count) {
-            let step = steps[i]
+        for (i, step) in steps.enumerated() {
             let x = origin.x + CGFloat(i) * advance
             let y = origin.y + KeySignatureSteps.stepDy(
                 step: step, sp: metrics.sp,

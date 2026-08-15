@@ -15,6 +15,15 @@ public struct Staff: Sendable, Equatable {
     public var staffType: String
     /// MuseScore `<StaffType group="…">` (e.g. "pitched", "percussion").
     public var group: String
+    /// MuseScore `<StaffType><lines>` — how many staff lines are drawn.
+    /// 5 for a standard staff, 1 / 3 for percussion, 6 for TAB.
+    /// Valid range 1...16; the MSCX decoder clamps and warns.
+    ///
+    /// Note this does NOT move noteheads: MuseScore's
+    /// `Note::updateRelLine` ignores `StaffType::lines()`, so a note's
+    /// position stays anchored to the top line regardless. Only the
+    /// staff's drawn height and its ledger-line bounds depend on it.
+    public var lineCount: Int
     /// MuseScore `<defaultClef>` (e.g. "G", "F", "PERC"). Layout
     /// engines synthesize the opening clef from this when the first
     /// content measure lacks an explicit `<Clef>`.
@@ -30,12 +39,14 @@ public struct Staff: Sendable, Equatable {
     public init(
         staffType: String = "stdNormal",
         group: String = "pitched",
+        lineCount: Int = 5,
         defaultClefType: String? = nil,
         brackets: [BracketItem] = [],
         measures: [Measure] = [],
     ) {
         self.staffType = staffType
         self.group = group
+        self.lineCount = lineCount
         self.defaultClefType = defaultClefType
         self.brackets = brackets
         self.measures = measures

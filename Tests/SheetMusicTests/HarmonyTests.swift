@@ -332,10 +332,10 @@
 
         @available(macOS 15.0, iOS 16.0, *)
         @Test func rootTpcReconstructsLetterAndAccidental() {
-            // <root>12</root>: TPC 12 = E flat. <name>m7</name> is the
+            // <root>11</root>: TPC 11 = E flat. <name>m7</name> is the
             // suffix only. Display must be "E" + flat + "m7".
             let runs = HarmonyRendering.runs(
-                for: Harmony(name: "m7", rootTpc: 12),
+                for: Harmony(name: "m7", rootTpc: 11),
                 metrics: StaffMetrics(staffSize: 28),
             )
             let kinds = runs.map(\.kind)
@@ -346,9 +346,9 @@
 
         @available(macOS 15.0, iOS 16.0, *)
         @Test func rootTpcNaturalEmitsLetterOnly() {
-            // TPC 17 = D natural — no accidental.
+            // TPC 16 = D natural — no accidental.
             let runs = HarmonyRendering.runs(
-                for: Harmony(name: "aug", rootTpc: 17),
+                for: Harmony(name: "aug", rootTpc: 16),
                 metrics: StaffMetrics(staffSize: 28),
             )
             // Letter + suffix coalesce into a single text run.
@@ -358,11 +358,11 @@
 
         @available(macOS 15.0, iOS 16.0, *)
         @Test func slashChordReconstructsBassFromTpc() {
-            // <root>11</root><name>7</name><base>12</base>
+            // <root>10</root><name>7</name><base>11</base>
             //   = A flat + 7 + / + E flat
             let runs = HarmonyRendering.runs(
                 for: Harmony(
-                    name: "7", rootTpc: 11, bassTpc: 12,
+                    name: "7", rootTpc: 10, bassTpc: 11,
                 ),
                 metrics: StaffMetrics(staffSize: 28),
             )
@@ -656,6 +656,116 @@
             #expect(harmonies[3].harmonyType == .roman)
             #expect(harmonies[4].leftParen)
             #expect(harmonies[4].rightParen)
+        }
+    }
+
+    /// Root / bass spelling against MuseScore's real TPC numbering.
+    ///
+    /// `Tpc::TPC_F_BBB = -8` is the first entry of the enum
+    /// (`engraving/dom/pitchspelling.h:40-51`), which puts the naturals
+    /// at `F = 13, C = 14, G = 15, D = 16, A = 17, E = 18, B = 19` —
+    /// the same origin `SheetMusicCore.PitchSpelling` documents. A
+    /// spelling table anchored one fifth away renders every imported
+    /// chord symbol a perfect fourth too high (F → B♭), which is what
+    /// a user hit on a MuseScore import.
+    extension HarmonyTests {
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test(arguments: [
+            (13, "F"), (14, "C"), (15, "G"), (16, "D"),
+            (17, "A"), (18, "E"), (19, "B"),
+            (12, "Bb"), (11, "Eb"), (10, "Ab"), (7, "Cb"),
+            (20, "F#"), (21, "C#"), (26, "B#"),
+            (5, "Bbb"), (27, "F##"),
+        ] as [(Int, String)])
+        func rootTpcSpellsMuseScoreNaturalsAndAlterations(
+            tpc: Int, spelled: String,
+        ) {
+            let runs = HarmonyRendering.runs(
+                for: Harmony(name: "", rootTpc: tpc),
+                metrics: StaffMetrics(staffSize: 28),
+            )
+            // Rebuild the displayed spelling from the runs so the test
+            // exercises the same path the renderer draws.
+            let rebuilt = runs.map { run -> String in
+                switch run.kind {
+                case .text: run.content
+                case .accidental(.flat): "b"
+                case .accidental(.doubleFlat): "bb"
+                case .accidental(.sharp): "#"
+                case .accidental(.doubleSharp): "##"
+                }
+            }.joined()
+            #expect(rebuilt == spelled)
+        }
+
+        /// MuseScore 4.6 renamed the slash-bass tag from `<base>` to
+        /// `<bass>` (`rw/read460/tread.cpp:2961` vs
+        /// `rw/read410/tread.cpp:2991`). Reading only the historical
+        /// spelling silently drops the slash bass from every chord
+        /// symbol written by a current MuseScore.
+        @Test func decodesModernBassTagInsideHarmonyInfo() throws {
+            let xml = """
+            <Harmony>
+              <bassCase>2</bassCase>
+              <harmonyInfo>
+                <name>m7</name>
+                <root>13</root>
+                <bass>12</bass>
+              </harmonyInfo>
+            </Harmony>
+            """
+            let h = try Harmony.decode(
+                XMLTreeParser.parse(Data(xml.utf8)),
+            )
+            #expect(h.rootTpc == 13)
+            #expect(h.bassTpc == 12)
+            #expect(h.bassCase == .lower)
+        }
+
+        /// The historical spelling must keep working — MuseScore 4.5
+        /// and earlier (and our own encoder) write `<base>`.
+        @Test func decodesLegacyBaseTagStill() throws {
+            let xml = """
+            <Harmony>
+              <baseCase>2</baseCase>
+              <harmonyInfo>
+                <name>m7</name>
+                <root>13</root>
+                <base>12</base>
+              </harmonyInfo>
+            </Harmony>
+            """
+            let h = try Harmony.decode(
+                XMLTreeParser.parse(Data(xml.utf8)),
+            )
+            #expect(h.bassTpc == 12)
+            #expect(h.bassCase == .lower)
+        }
+
+        /// End-to-end shape of the reported bug: `Fm7/B♭` as a current
+        /// MuseScore writes it must display as `Fm7/B♭`, not `B♭m7`.
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test func museScore46SlashChordDisplaysRootAndBass() throws {
+            let xml = """
+            <Harmony>
+              <harmonyInfo>
+                <name>m7</name>
+                <root>13</root>
+                <bass>12</bass>
+              </harmonyInfo>
+            </Harmony>
+            """
+            let h = try Harmony.decode(
+                XMLTreeParser.parse(Data(xml.utf8)),
+            )
+            let runs = HarmonyRendering.runs(
+                for: h, metrics: StaffMetrics(staffSize: 28),
+            )
+            #expect(runs.map(\.kind) == [
+                .text, // "Fm7/B"
+                .accidental(.flat),
+            ])
+            #expect(runs[0].content == "Fm7/B")
         }
     }
 #endif

@@ -18,23 +18,18 @@ extension Voice {
         voiceBarLength: Fraction,
         effectiveDuration: Fraction,
         injectedTremolo: Tremolo?,
+        previousChordNotes: ChordNotes? = nil,
+        forwardTiePartnerNotes: ChordNotes? = nil,
         options: MSCXEncoderOptions,
         staffGroup: String,
         voiceIndex: Int,
     ) throws -> XMLTreeNode {
-        let unscaled = try unscaledDuration(chord.duration, in: activeTuplets)
-        // Rebuild must forward every chord-attached field — new fields
-        // added to `Chord.init` must be propagated here too, otherwise
-        // un-scaling silently drops them from the encoded XML.
-        let unscaledChord = Chord(
-            duration: unscaled,
-            notes: chord.notes,
-            arpeggio: chord.arpeggio,
-            lyrics: chord.lyrics,
-            articulations: chord.articulations,
-            tremolo: chord.tremolo,
-            chordLines: chord.chordLines,
-        )
+        // Copy-and-mutate rather than rebuilding from an explicit field
+        // list: `Chord` is a value type, so every field survives by
+        // construction and a future field added to `Chord` can't be
+        // silently dropped here the way an explicit-list rebuild once was.
+        var unscaledChord = chord
+        unscaledChord.duration = try unscaledDuration(chord.duration, in: activeTuplets)
         let tieForward = forwardTieLocation(
             chord: chord,
             isLastChordOfVoice: isLastChordOfVoice,
@@ -53,6 +48,8 @@ extension Voice {
             : unscaledChord.encodeAsChord(
                 tieForwardLocation: tieForward,
                 tieBackLocation: tieBack,
+                tieForwardPartnerNotes: forwardTiePartnerNotes,
+                tieBackPartnerNotes: previousChordNotes,
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,

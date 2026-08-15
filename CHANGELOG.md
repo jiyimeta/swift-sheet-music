@@ -9,6 +9,431 @@ and this project adheres to
 
 ### Fixed
 
+- **Apple example apps:** exporting while a transposition was active wrote the
+  file in the *authored* key. Every export entry point handed the raw loaded
+  score to the serializer, so `Score.transposed(bySemitones:)` only ever reached
+  the on-screen engraving — PDF, MSCX (MS4 / MS3), MSCZ and MIDI all silently
+  reverted. The macOS app now serializes the transposed score for the file
+  exports and the full display transform for PDF (a PDF is a rendering, so it
+  matches the view, hidden staves and all; a saved `.mscx` / `.mscz` keeps the
+  staves the source file marked `<show>0</show>` rather than dropping music on
+  save). The iOS app's PDF export takes the same transform. Audio export is
+  deliberately unchanged — the offline render reproduces transposition as a
+  tuning shift from the engine snapshot, so transposing the score there too
+  would double it.
+
+  The library itself was never affected; `TransposedScoreExportTests` now pins
+  that (transpose → encode → reparse keeps the keys and pitches for MSCX, MSCZ
+  and MIDI) so a future regression is unambiguously attributable.
+
+## [1.14.0] - 2026-08-14
+
+### Added
+
+- `PlaybackEngine.AudioSessionPolicy`, a new `init` parameter that decides when
+  the engine claims the process-wide `AVAudioSession`. `prepare(score:)` used to
+  unconditionally take an exclusive `.playback` session, so a host that prepares
+  a score when a screen merely *opens* interrupted whatever the user had playing
+  in another app long before they asked for any sound — and a note-tap preview,
+  which rides the session `prepare` left active, inherited that.
+
+  - `.exclusiveOnPrepare` (default) is the previous behavior, unchanged.
+  - `.mixUntilPlay` prepares with `.mixWithOthers` — other apps keep playing and
+    `playPreview` mixes over them — and drops it on the first `play(...)`, so the
+    interruption lands on the user's press of play. A re-prepare after that (a
+    SoundFont hot-swap) does not demote the session back to mixing; `teardown()`
+    resets the claim.
+  - `.hostManaged` has the engine never touch `AVAudioSession`, for a host with
+    its own session requirements (a tuner holding `.playAndRecord` for live pitch
+    tracking) that would otherwise undo the engine's category write after every
+    `prepare`.
+
+  The 48 kHz preferred-rate pin that un-sticks a wedged system I/O rate now runs
+  on the `.mixUntilPlay` escalation too, not only at prepare: while mixing, the
+  app that already owns the route decides the rate, so going exclusive is the
+  first moment the request can be granted.
+
+### Fixed
+
+- Key signatures are now placed against the clef in force, so an F-clef staff's
+  accidentals sit a line lower than a G-clef staff's instead of on the treble
+  positions. MuseScore keeps one 14-entry line table per clef
+  (`ClefInfo::lines`, `engraving/dom/clef.cpp:50-83` — the first seven for
+  sharps, the last seven for flats) and `TLayout::layoutKeySig` scans back for
+  the clef segment at the key signature's own tick before placing a single
+  glyph. This project had one hard-coded treble table, and
+  `LayoutElement.keySignature` carried no clef for a renderer to consult, so
+  every clef drew the treble cluster; a bass staff's E♭ major read a third too
+  high. The tables are transcribed rather than derived because two of them are
+  not the treble table shifted uniformly: the tenor (C4) and soprano (C1) rows
+  raise individual accidentals by an octave to keep the cluster off ledger
+  lines, so tenor F♯ sits *below* C♯. The three renderers (SwiftUI, CALayer,
+  and the Android draw-command bridge) now all resolve their steps through
+  `KeySignatureSteps` — the CALayer path had grown its own third copy of the
+  treble table.
+- Chord symbols imported from MuseScore no longer read a perfect fourth too
+  high, and no longer lose their slash bass. Two independent defects on the
+  same path:
+  - The TPC → letter table was anchored one fifth away. `Tpc` starts at
+    `TPC_F_BBB = -8` (`engraving/dom/pitchspelling.h:40-51`), putting the
+    naturals at `F = 13, C = 14, …` — the origin `SheetMusicCore.PitchSpelling`
+    and `PitchStaffPosition` already document — while `HarmonyRendering`
+    assumed `F = 14`. Every root came out a fifth flatward: an imported `Fm7`
+    rendered `B♭m7`, `E♭M7` rendered `A♭M7`. Confirmed against MuseScore 4.7.4
+    itself, which writes `<root>13</root>` for an F root.
+  - MuseScore 4.6 renamed the slash-bass tag from `<base>` to `<bass>` (and
+    `<baseCase>` to `<bassCase>`) — compare `rw/read460/tread.cpp:2957-2986`
+    with `rw/read410/tread.cpp:2991`. The decoder read only the historical
+    spelling, so `Fm7/B♭` from a current MuseScore imported as `Fm7`. Both
+    spellings are accepted now.
+- MuseScore-v4 export no longer loses every chord symbol. We declare
+  `version="4.60"`, so MuseScore reads the file with read460 — which does not
+  recognize `<name>` / `<root>` / `<base>` as direct children of `<Harmony>`
+  and drops them, leaving a `Harmony` with no `HarmonyInfo`, which
+  `TWrite::write` then skips entirely. The v4 encoder now emits the
+  `<harmonyInfo>` wrapper and the `<bass>` / `<bassCase>` spellings; the v3
+  target keeps the flat layout its readers expect. Measured with MuseScore
+  4.7.4: 0 of 4 chord symbols survived the round trip before, 4 of 4 after.
+- Transposing a score now moves its chord symbols with the notes.
+  `Score.transposed(bySemitones:)` shifted key signatures and chords but let
+  `.harmony` fall through untouched, so a transposed lead sheet's symbols named
+  the original key while the staff under them named the new one.
+  `Harmony.rootTpc` / `bassTpc` now shift by the same fifths delta the notes
+  use, preserving each root's degree in the key; `Harmony.name` is only the
+  quality suffix and a text-only symbol (no root TPC) passes through unchanged.
+- Grace notes now sit where MuseScore puts them, in both directions. MuseScore
+  stores every grace of a chord — before *and* after type — in one vector and
+  writes the whole vector **ahead of** the parent chord's own `<Chord>`
+  (`TWrite::write(const Chord*, …)` iterating `Chord::graceNotes()`); its
+  reader mirrors that, buffering every consecutive grace-type `<Chord>` and
+  attaching the run to the **next** normal chord, splitting it by grace-type
+  tag rather than by file position (`MeasureRead::readVoice`). This project
+  did neither: the encoder wrote after-graces *behind* their owner and the
+  decoder attached them by walking *backwards* to the most recent chord. The
+  two were exact mirrors of each other, so this library's own round trip was
+  byte-clean and no existing test could see any of it, while both directions
+  of real MuseScore interop were wrong — an after-grace written on chord *N*
+  was read by MuseScore as belonging to chord *N+1* (or dropped when no chord
+  followed in the bar), and an after-grace in a genuine MuseScore file was
+  read here as belonging to chord *N-1* (or dropped when its owner opened the
+  bar). Settled against upstream fixtures rather than inferred:
+  `midirenderer_data/grace_after.mscx` writes a `<grace8after/>` ahead of the
+  very first chord of its measure, a position no "after-graces follow their
+  owner" reading can explain.
+
+  The split back out of that single run is asymmetric — `graceNotesBefore()`
+  filters it forward, `graceNotesAfter()` filters it **in reverse** — so a
+  multi-note Nachschlag was also being read (and played) back-to-front.
+  Pinned against upstream's own playback expectation for
+  `single_note_multi_appoggiatura_post`, whose file order is `<grace32after/>`
+  A4 then `<grace16after/>` G4 but whose sounding order is F4 → G4 → A4.
+  `Chord.graceNotesAfter` holds the sounding order, so it is reversed on the
+  way in and out. Both fixtures are now in the test suite, which is the only
+  kind of evidence that can answer these questions — this project's own
+  parse → encode → parse round trip is blind to all of them by construction.
+
+- A grace tie now names the right chord in the direction that leaves the
+  parent. A grace shares its parent chord's tick, so "zero delta, same
+  measure" is right only for the tie direction that stays inside the parent;
+  sounding order fixes which that is. A before-grace sounds ahead of its
+  parent, so its `tieBack` can only come from the *previous* main chord; an
+  after-grace sounds past its parent, so its `tieForward` reaches the *next*
+  one. Both were previously written as the zero-delta location, naming the
+  parent — a partner MuseScore then fails to match, dropping the tie on
+  reload. Where no such neighbour chord exists, no `<location>` is written at
+  all rather than a confident guess, which could additionally mis-connect the
+  tie to whatever note happens to sit at the named position.
+
+- A tied Nachschlag — a main note tying forward into one of its own
+  `graceNotesAfter` — now carries `<next><location><grace>N</grace></location>`,
+  the mirror of the tied-acciaccatura fix shipped in 1.13.1. It was
+  deliberately left out then: an after-grace was written behind its owner, so
+  a computed ordinal would have named a grace of the wrong chord. The ordinal
+  itself is now derived from the combined before + after file run rather than
+  from the position within `graceNotesBefore` alone, which is what
+  `Location::graceIndex` actually means.
+
+- Ties involving a **multi-note** chord survive a reload — grace ties and
+  ordinary chord-to-chord ties alike. MuseScore's endpoint match compares full
+  `Location` equality including `m_note`, and no tie this project wrote emitted
+  `<notes>`, so the comparison was always `0 − 0`. That is correct only when
+  both tied notes are alone in their chords (or rank the same in both); any
+  other pairing — a note that ranks second in one chord and is alone in the
+  other, say — was silently dropped by MuseScore on reload. Both sides of both
+  tie kinds now emit the delta. The index is the note's rank **by pitch**
+  within its chord (`Chord::notes()` is kept pitch-sorted by `Chord::add`), not
+  its position among the `<Note>` elements, which this project's `ChordNotes`
+  does not sort. A tie leaving the last chord of a measure needs the next
+  measure's first chord to measure against, which the measure-at-a-time encoder
+  cannot see on its own; `Staff.encodeTopLevel` now supplies that one-measure
+  look-ahead.
+
+  Known gap: a tie between a grace of one chord and a note of the
+  *neighbouring* chord — a Nachschlag tied into the next note — is written
+  correctly on the grace's own side but not on the other, whose `<location>`
+  would need `<grace>` naming an ordinal in a chord it has no view of. Such a
+  tie is still dropped on reload, as it was before.
+
+- The count-in works again on the SwiftySynth backend — the path every live
+  playback takes — where it had two bugs a host reported together: it never
+  counted at all while a loop was active, and when it did count it clicked
+  with the score SoundFont's GM wood block instead of the host's click
+  samples. "Repeat whole score" pushes a whole-score loop into the engine, so
+  for anyone practising with repeat on, the count-in simply did nothing.
+
+  Both came from the same decision. The backend path built its count-in by
+  shifting the SCORE SMF behind a click track baked into it. That click
+  therefore played on the score synth — which loads the score's SoundFont; the
+  metronome synth is the one holding `metronomeSoundfontURL` — and it left
+  every score-tick read (seek, loop wrap, end detection) speaking a shifted
+  coordinate space, which is why a loop had to suppress the count-in rather
+  than compose with it.
+
+  The count now runs the way the Android engine already ran it: the score's
+  SMF is the ordinary un-shifted build, `plan.beats` fill `[0, preRollTicks)`
+  ahead of the body on the METRONOME transport, and the backend holds the
+  score transport for the pre-roll (`SynthBackend.play(afterCountInSeconds:)`)
+  while that transport counts. The hold is counted in frames on the render
+  thread, so the downbeat lands where the count says it does rather than on
+  whichever buffer noticed a deadline had passed, and the pre-roll is forced
+  audible through the mute flag — counting in is an explicit request, not the
+  metronome toggle.
+
+  `SynthBackend` gains `play(afterCountInSeconds:)` (default: plain `play()`)
+  and `loadMetronomeSequence(_:offsetSeconds:)`, the offset being how far
+  ahead of the score transport a count-in sequence runs. The AUMIDISynth path
+  (offline export) is unchanged — it routes its pre-roll track to the
+  metronome AU and was always correct.
+- An `AVAudioSession` interruption no longer leaves `PlaybackEngine.state`
+  claiming `.playing`. When another app started non-mixing playback — opening
+  Music while a score played in the background — iOS deactivated this app's
+  session and the `AVAudioEngine` stopped rendering, but nothing reached the
+  transport: the sequencer / backend was still nominally started, so a host's
+  play button kept showing "pause" (and its Now Playing entry kept claiming to
+  be playing) for audio that had already gone silent. The engine now observes
+  `AVAudioSession.interruptionNotification` and pauses on `.began`, for every
+  `AudioSessionPolicy`. `.ended` is left to the host: whether to resume — and
+  whether resuming is even wanted while the interrupter is still playing — is an
+  app-level decision, so a host already driving resume from its own session
+  observation is unaffected.
+
+  Relatedly, under `.mixUntilPlay` an audition now always sounds on a mixing
+  session — `playPreview` / `previewNoteOn` put the category back and hand the
+  exclusive claim in, unless they are overlaid on live playback. Previously the
+  exclusive category a `play(...)` escalated to stayed in place for the rest of
+  the engine's life, and the engine re-activates the session implicitly whenever
+  it starts its `AVAudioEngine` to sound a note — so once a score had been
+  played, a single tap-audition cut off whatever else was playing. That happens
+  with no interruption to react to: iOS does not interrupt an app that is not
+  making a sound, so a paused engine holding an exclusive category is never told
+  that another app has taken over. Only an explicit `play(...)` takes the route
+  back.
+
+## [1.13.1] - 2026-08-13
+
+### Fixed
+
+- Scores with grace notes now survive a save. The MSCX encoder writes grace
+  notes back out — `Chord.graceNotesBefore` / `graceNotesAfter` were decoded
+  but never encoded — `rg -i grace Sources/SheetMusicMSCX/Encoders/` returned
+  nothing — so a parse → encode → parse round trip silently dropped every
+  acciaccatura / appoggiatura / grace4-32(after) in a score. Grace chords are
+  now emitted as their own `<Chord>` siblings (immediately before the parent
+  for the "before" types, immediately after for the "after" types), carrying
+  their own un-scaled duration — they never consume tuplet or voice-cursor
+  time, matching the decoder.
+
+  Also: `Voice.encodeChord`'s tuplet-unscaling rebuilt `Chord` from an
+  explicit field list, with a comment warning that new fields must be
+  propagated there by hand or silently dropped on encode — that rebuild is
+  itself what dropped the grace fields. Replaced with a copy-and-mutate
+  (`var unscaledChord = chord; unscaledChord.duration = …`), which forwards
+  every field by construction and closes this class of bug for any future
+  `Chord` field.
+
+  A follow-up review flagged that a grace note tied forward into its main
+  note — the single most common grace-tie figure — encoded the tie's
+  `<Spanner type="Tie"><next>` with no `<location>` child at all. Checked
+  against MuseScore Studio's own source rather than assumed: a grace chord
+  shares its parent chord's tick, so this is a zero-delta, same-measure tie,
+  and MuseScore's writer represents that as a *present but empty*
+  `<location/>` (every field equals its default and is elided) — not as an
+  absent `<location>`. The distinction matters on reload: MuseScore Studio's
+  reader treats an absent `<location>` as "position unknown" and silently
+  drops the tie, so the previous output would have lost the tie the moment a
+  real user reopened the file in MuseScore Studio, even though this
+  library's own round trip couldn't see the problem (its decoder only checks
+  for `<next>` / `<prev>`, not their contents). Fixed the grace side by
+  giving the grace encoder the same zero-delta `TieLocation` the ordinary
+  same-measure tie path already knows how to write, in both tie directions.
+
+  A second review pass caught that a tie reconnects on reload only when
+  *both* endpoint records match — the grace side alone was not enough. The
+  main note's side of the same tie was still written by the ordinary
+  chord-to-chord path, which computes its location from the *previous real
+  chord*'s duration: the wrong partner entirely when that tie is actually to
+  one of the chord's own `graceNotesBefore`, producing either a wrong
+  fraction or (when the tied grace opens the piece, with no previous chord
+  at all) the same tie-losing bare `<prev/>` this release already fixed on
+  the grace side. MuseScore instead writes `<prev><location><grace>0</grace>
+  </location></prev>` — `<grace>` names which of the chord's own graces the
+  tie belongs to (`Location::graceIndex`), and carries no `<fractions>`
+  (also zero, also elided). Since this project's tie model is presence-only
+  (no pointer from a tie to its partner note), the encoder now recognizes
+  the shape structurally: a chord whose note has `tieBack` set, matched by
+  pitch against a `graceNotesBefore` note with `tieForward` set. The match
+  is used only when unambiguous — a chord without matching grace notes, or
+  where the pitch match isn't unique, is byte-identical to before this
+  paragraph, which a chord-shaped regression suite now pins alongside the
+  positive cases.
+
+  **Narrower than it may sound: single-note chords only.** MuseScore's
+  endpoint match also compares each side's note index within its own chord
+  (`Location::note`), and neither this fix nor the grace side emits a
+  `<notes>` delta, so the comparison is always `0 - 0`. That is correct
+  exactly when both the tied main note and the tied grace note are the only
+  note in their respective chords — the common case this fix targets. A
+  multi-note main chord whose tied note sits at index ≥ 1 (or a multi-note
+  grace chord likewise) still drops the tie on reload. Not a regression —
+  the pre-fix bare `<prev/>`/`<next/>` failed those cases identically — but
+  a complete fix needs `<notes>` deltas computed on both tie sides, which is
+  a separate, non-trivial change and not done here.
+
+  **Known gap, left in place rather than guessed at:** the mirror direction
+  — a main note tying forward into its own trailing `graceNotesAfter` note
+  (a tied Nachschlag) — is not fixed. Investigating it surfaced an issue in
+  the grace-writing fix above, new with this release rather than
+  pre-existing: this encoder places a chord's `graceNotesAfter` `<Chord>`
+  elements *after* that chord in the file, but MuseScore's own writer places
+  every grace — before or after type alike — *before* the chord it
+  decorates, with the type tag controlling only rendering and playback
+  timing, not file position. MuseScore's reader buffers grace-type chords
+  and attaches the whole run to the *next* normal chord it finds, with no
+  flush at the end of a voice/measure — so an after-grace written where this
+  encoder puts it is either displaced onto the following chord, or, if none
+  follows, silently dropped on reload with nothing to report. Either way
+  this affects an after-grace's read-time attachment independent of any tie.
+  A tie location computed against this project's current placement would
+  look confident and be wrong, so the ordinary (already non-reconnecting)
+  location is left in place for that direction instead. Fixing the
+  underlying placement — which affects every score with an after-grace,
+  independent of ties — is a larger, separate change and needs its own
+  follow-up.
+
+- The engine version stamp (`SheetMusicEngine.version`) is bumped to
+  `1.13.1`, matching this release. It had been left at `1.12.0` since that
+  tag — this constant is the entire basis of the Android version-skew gate
+  (two copies of the engine loaded in one process compare it before opening
+  an edit session), so a stale value meant the gate was comparing the wrong
+  thing.
+
+- The metronome strip's volume reaches an injected `SynthBackend`. Such a
+  backend mixes its own click, and the volume stopped at the AUMIDISynth
+  `MetronomeController` — so on the backend path the click always mixed at
+  unity: the strip could mute the click but not turn it down, while offline
+  export (AUMIDISynth) obeyed the same slider. Measured, not inferred: before
+  this, rendering the same click at volume 1.0 and 0.25 gave a byte-identical
+  peak.
+
+  `SynthBackend` gains `setMetronomeVolume(_:)`, defaulted to a no-op in the
+  protocol extension so existing conformers are source-compatible, and
+  `SwiftySynthBackend` scales its metronome mix by it (skipping the mix
+  entirely at zero gain, as it already does while muted). The host-facing API
+  is unchanged — `PlaybackEngine.setVolume(forChannel: .metronome, to:)`
+  already expressed this.
+
+  Not addressed here: on the backend path the click is mixed into the
+  backend's output and therefore rides `masterGain`, where the AUMIDISynth
+  metronome deliberately joins the master stage after it. Equalizing that
+  needs the backend to expose a second output node, and is a design question
+  (should the click follow the score's gain?) rather than a slip.
+
+## [1.13.0] - 2026-08-12
+
+### Fixed
+
+- A host-supplied metronome click (`MetronomeClickProvider.clickSamples` /
+  `.soundFont`) is heard during playback on an injected `SynthBackend`. Such a
+  backend renders the metronome on a synth of its own, and `SwiftySynthBackend`
+  built that synth from the SCORE's SoundFont — so the resolved click SF2 only
+  ever reached the AUMIDISynth `MetronomeController`, which never sounds on the
+  backend path, and playback clicked with the score font's GM notes 76 / 77
+  (Hi / Low Wood Block) instead of the host's samples. Offline export, still on
+  AUMIDISynth, used the custom click all along, so the two disagreed. Present
+  since v1.1.0, which decoupled the metronome onto its own transport.
+
+  The click SoundFont now travels with the score's: `SynthBackend.prepare`
+  takes a `metronomeSoundfontURL` (**source-breaking** for out-of-tree
+  conformers — pass `nil` to keep the old sharing), `PlaybackEngine` fills it
+  from the same `MetronomeClickResolver` the AUMIDISynth path uses, and
+  `SwiftySynthBackend` loads it into the metronome synth. `nil` — a
+  `.defaultGM` host, or none at all — still shares the score font, so the GM
+  wood block remains the fallback.
+
+  The metronome tests that covered this asserted `peak > 0`, which a wood block
+  satisfies as readily as a click sample; the new coverage discriminates by
+  duration instead.
+
+## [1.12.0] - 2026-08-12
+
+### Fixed
+
+- The editing caret's band and the editing hit-test's on-staff gate
+  follow the staff's own line count. Both were written against
+  `StaffMetrics.staffHeight`, which is 4 sp for every staff — the height
+  of a FIVE-line one — and 1.11.0 is the release that made that false:
+  it reads `Staff.lineCount`, draws each staff its own number of lines,
+  and stacks staves by their own height. So on a 3-line staff the caret
+  ran 2 sp past the bottom line and the gate reached into the next
+  staff's paper, where a tap was rescued to a note in the staff above
+  it; on a 1-line staff, whose own height is zero, the band was the
+  right 6 sp but hung 2 sp too low, straddling nothing. Both now measure
+  through `StaffLineGeometry.barLineSpanY(sp:)` — the same per-staff
+  span the barline, the playback cursor and the loop highlight already
+  use, including MuseScore's ±2 sp special case for a single line
+  (`dom/barline.cpp:256-291`), which is what keeps the caret a visible
+  column there. Five-line staves are unchanged.
+
+- The range-selection box's two edges follow the end staves' line counts
+  too, for the same reason and through the same span. Measured with
+  `StaffMetrics.staffHeight` the box overshot a three-line bottom staff
+  by 2 sp, and around a one-line staff it enclosed the paper below the
+  single line rather than the line itself. Five-line staves are
+  unchanged.
+
+### Added
+
+- A ninth `EditIntent` case, `.writeRest(at:duration:)`, wire discriminator 13 — the rest key's own meaning: make
+  this timed slot a rest of THIS length, whatever is in it now. Over a rest that is the re-time `.setRestDuration`
+  already did; over a note it is the delete paired with the re-time, as one undo step. A length outrunning the bar
+  is spelled as a run of rests across the barline, and one filling the bar from beat one is promoted to `.measure`,
+  both from the same planners `.setRestDuration` uses.
+
+  Not expressible as `.composite([.delete, .setRestDuration])`, which is what makes it a case rather than a
+  convenience: `.delete` collapses a bar it empties into a single measure rest, so the re-time would then be
+  splicing a bar that had already lost the subdivision — throwing away the very length the caller was stating.
+  `.delete` keeps its collapse, because a delete key means "empty this" while this means "make it this long", and
+  the two want opposite spellings of the same underlying edit.
+
+  The payload is the existing `SlotDurationIntentWire`, shared with `.setRestDuration` and `.setChordDuration`: the
+  three really do carry the same two scalars, and the discriminator is the only thing telling them apart on the
+  wire.
+
+### Changed
+
+- `DurationInterpretation` moved from `SheetMusicLayout` down into `SheetMusicCore`. Splitting a written duration
+  into a base value plus augmentation dots is arithmetic over `NoteDuration` — the type never touched layout, and
+  its old home put it out of reach of anything that depends on Core without depending on layout, which is exactly
+  what a platform-neutral editing core is. **Not source-breaking:** `SheetMusicLayout` now carries
+  `@_exported import SheetMusicCore`, so every existing `import SheetMusicLayout` call site resolves the name
+  unchanged. That re-export is worth having on its own — `SheetMusicLayout`'s public API is written in Core's
+  vocabulary (`Score`, `ScoreItemID`, `StaffAddress`, `NoteDuration`), so a consumer already needs those names in
+  scope, and `SheetMusicUI` has said so one layer up since before this.
+
+## [1.11.0] - 2026-08-12
+
+### Fixed
+
 - Soloing a part no longer silences the metronome. The mixer built a
   metronome strip alongside the instrument strips and then applied one
   rule to all of them — "while any channel is soloed, every non-soloed
@@ -21,6 +446,52 @@ and this project adheres to
   package — the Android engine never put the click in `mixerChannels`,
   so only the Apple engine had the bug.
 
+- A drum strip's kit can be changed, and the score's authored kit is
+  applied at all. A program change on the GM drum channel selects the
+  KIT, but `loadProgram` refused channel 9 outright and
+  `rebuildMixerChannels` reported `program: nil` for a `useDrumset`
+  strip — so a host's kit picker changed nothing, and, because
+  `postProcessForMIDISynth` strips the SMF's tick-0 program for every
+  mixer-managed channel and the drum channel is one, the kit the score
+  asked for never arrived either: every drum part played whatever the
+  SoundFont's default kit happened to be. The strip now reports its
+  program, the change reaches the synth (bank 128 on the percussion unit
+  for the AUMIDISynth path; a plain program change for the SwiftySynth
+  backend, whose percussion channel already interprets it as the kit),
+  and the new `MixerChannel.isDrums` tells a host to offer the drum
+  catalog rather than the melodic one. `program == nil` now means the
+  metronome and nothing else.
+
+- A mixer strip reports the instrument that drives it, rather than the
+  part's own label. The instrument name read `<longName>` first, but
+  MuseScore prints `longName` at the left of the staff — it is the PART's
+  label, and an arranger routinely sets it to the voice ("Soprano 1", or
+  just "S") while `<trackName>` keeps the instrument ("ボーカル",
+  "ピアノ"). So a strip answered "which instrument is this" with the part's
+  own name; that then equalled the part label, the parenthesised suffix
+  was suppressed as a stutter, and a part which genuinely changed
+  instrument mid-score showed a row that never said what it was. The
+  order is now `trackName` → `longName` → `id`. Scores whose two names
+  agree — including the `instrument-change` fixture, so the committed
+  `instrumentParams-v1.bin` golden is unmoved — are unaffected.
+
+- The SwiftUI Canvas renderer — which backs PDF export and the paged view
+  — draws grace chords. It had never drawn them at all, so a grace note
+  was simply missing from an exported page while the CALayer renderer on
+  screen showed it.
+
+- The Android modules build again. `SheetMusicEditWire`, added in this
+  release, is also the wirelet codegen's schema scan root for
+  `:SheetMusicAudioAndroid`, and moving the score-address codecs into it
+  stopped seven Kotlin codecs — `ScoreItemID`, `NoteID`, `RestID`,
+  `TupletID`, `VoiceElementID`, `StaffAddress`, `ClefAnchor` — from being
+  generated, while the generated `ScoreCursorCodec`/`AudioExportRangeCodec`
+  and `AndroidPlaybackEngine` kept referencing them. Nothing on the Apple
+  side could see it: the whole Swift suite stayed green while the AAR would
+  not compile. The target is now split into `Path/` (scanned) and `Intent/`,
+  with a second wirelet source set covering the former; Kotlin package names
+  are unchanged.
+
 ### Added
 
 - `MixerChannel.isSoloable`, `false` for the metronome. Hosts hide the
@@ -28,6 +499,11 @@ and this project adheres to
   `program` hides the program picker. `PlaybackEngine.setSoloed` ignores
   a channel that isn't on the solo bus, so `isSoloed` can never read back
   `true` there whatever the host sends.
+
+- `MixerChannel.isDrums`, so a host offers the drum-kit catalog rather
+  than the melodic one on a strip whose program is a kit. Distinct from
+  the `program == nil` test it replaces, which now identifies only the
+  metronome — see the drum-kit fix above.
 
 - `MixerChannel.partName` and `MixerChannel.instrumentName`, beside the
   composed `name`. A mixer laid out in groups titles the group with the
@@ -46,6 +522,151 @@ and this project adheres to
   now, so the Apple mixer and the Android wire cannot drift apart; the
   committed `instrumentParams-v1.bin` golden holds the wire byte-identical
   across the lift.
+
+- `EditIntent` and `ScoreEditSession` let a host relay a scalar edit — a note write, a duration change, a delete,
+  or several bundled into one undo step — to a second copy of the score, so an Android host can keep a mirror
+  session in step with its own authoritative one. `Score.stableFingerprint` is a deterministic 64-bit digest of
+  the mutable musical content, for confirming two copies agree.
+- `ScoreEditSession.lastRefusalReason` reports why the last `apply` call returned `false` — the only diagnostic
+  available when a mirror session and its authoritative counterpart disagree.
+- Seven JNI entry points expose an edit session to Android: `nativeBeginEditSession`, `nativeApplyEditIntent`,
+  `nativeEditUndo`, `nativeEditRedo`, `nativeEndEditSession`, `nativeScoreFingerprint`, and
+  `nativeEngineVersionStamp`.
+- `HandleTable.replace` swaps the value behind an existing handle and reports whether the write landed, so a
+  handle released mid-edit is told apart from one that isn't.
+- `SheetMusicEngine.version` and `SheetMusicEngine.versionStamp` provide a build identity. On Android two
+  separately linked images of the engine coexist in one process — the host app's and its library's — and a
+  mismatch (a stale `.so`) can cause silent score divergence. `versionStamp` lets a host compare its own
+  compiled-in stamp against the one it reads from the library over JNI before opening an edit session, so it can
+  refuse to open one on a mismatch instead of risking a corrupted score. No host does this comparison yet; that is
+  downstream work this library only makes possible.
+- The note-input planning logic moved into `SheetMusicCore/Editing/Planners/`, `public`, so `ScoreEditSession` can
+  reach it directly instead of Folino's `EditorViewModel` being the only caller: `MeasureAccidentals` (accidental
+  renotation after a pitch/spelling change), `CrossBarInputPlanner` (a note or rest write that overruns its bar
+  chains a tied continuation into the next one instead of refusing), `FullMeasureRestCollapse` (a delete that
+  empties a bar collapses to one `.measure` rest), `NoteInputPlanner`, `TiePlanner`, `IntervalPlanner`,
+  `StaffStepPitch`, `ElementNavigator` (`TiePlanner` depends on its `nextTimedElement`/`previousTimedElement`, so
+  it moved too), and `RestDurationPromotion` (a rest write that exactly fills its bar from beat one is promoted to
+  the `.measure` spelling, matching the rest key's own behavior).
+- Seven new `EditIntent` cases and their `EditIntentWire` discriminators (5…11, appended after the five SP0
+  cases): `.setNotePitch`, `.setAccidental`, `.addNoteToChord`, `.removeNoteFromChord`, `.setTie`,
+  `.createTuplet`, `.removeTuplet`. Together with the five SP0 cases (`.inputNote`, `.setRestDuration`,
+  `.setChordDuration`, `.delete`, `.composite`), every edit `ScoreEditSession` can plan is now reachable from a
+  relayed intent.
+- An eighth new `EditIntent` case, `.writeNote(at:pitch:tpc:duration:)`, wire discriminator 12 — the letter key on a
+  slot that ALREADY holds a note: re-pitch it and re-time it in one undo step. Distinct from `.inputNote`, which
+  targets a rest, and deliberately not expressible as `.setChordDuration` followed by `.setNotePitch`: when the
+  length outruns the bar the note is spelled as a tied chain, the chain is planned by cloning one chord into every
+  link, and the two-intent form would therefore retune only the chain's head and leave its tail tied to it at the
+  old pitch.
+- `TiePlanner.tieChain(containing:in:)` returns every notehead a note is tied to, in voice order, including itself —
+  walked in both directions, so the chain is the same whichever member the caller holds, and an untied note comes
+  back as a chain of one. Within a chord the n-th tie out pairs with the n-th tie in (the rule `MidiRenderer`
+  already resolves tied pitches by), not the n-th in-chord index, which would pair the wrong voices whenever only
+  some of a chord's notes are tied.
+- A new Android-gated `SheetMusicEditWire` library product carries every wire codec Folino's own `FolinoEditorJNI`
+  would otherwise have had to hand-duplicate: `EditIntentCodec`, `PathIDCodecs`, `StaffAddressCodec`,
+  `ScoreItemIDCodec`, `ClefAnchorCodec`, and the new `EditGeometryCodec` (`SelectionTintCodec`,
+  `EditCaretFrameCodec`). It links as its own `.so`-independent target — `SheetMusicAndroidJNI` and a consuming
+  app both statically pull it in, so what has to match between the two images is the wire *schema*, not a shared
+  runtime instance.
+- `LayoutDocument.editingHitTest(at:activeVoice:)` answers "what score item is under this tap" — notehead, stem,
+  or a near-miss rescued through a 44×44-point slop box gated to the tapped staff, with a same-slop-box voice
+  preference — the same policy Folino's `EditorViewModel.displayedItem(at:)` implemented, now available to any
+  `LayoutDocument` including one built on Android. `LayoutDocument.editingCaretRect(for:in:minimumWidth:)`
+  answers the companion question, the rect an edit caret or selection outline should draw for one score item,
+  narrowed to that item's own staff band.
+- `nativeEncodeDrawProgram` re-derives a cached layout's draw program with a selection's notehead/accidental
+  (not the whole chord), rest glyph, or tuplet marking recolored — without relaying out. An empty selection
+  reproduces the untinted bytes exactly.
+- Three new JNI entry points complete the editing surface Android needs: `nativeEditingHitTest`,
+  `nativeEditingCaretFrame`, and `nativeEncodeDrawProgram` (re-tints a cached draw program from a selection,
+  reproducing `nativeComputeLayout`'s page assembly exactly in every layout mode — vertical, horizontal, and
+  paginated).
+- `Score.stableFingerprint`'s walk was widened to see everything a planner's element copy carries: on `Note` —
+  `accidentalBracket`, `accidentalRole`, `glissando`, `headType`, `parentheses`, `isSmall`, `play`, `visible`; on
+  `Chord` — `arpeggio`, `lyrics`, `graceNotesBefore`/`graceNotesAfter` (content, not just count), `articulations`,
+  `tremolo`, `chordLines`, `stemVisible`, `beamVisible`. See "Changed" below for what this means for a fingerprint
+  stored before this release.
+- Per-staff line counts. `SheetMusicCore.Staff.lineCount` carries
+  MuseScore's `<StaffType><lines>`, so a 1-line or 3-line percussion staff
+  keeps its own number of drawn lines end to end: the MSCX reader takes it,
+  the MSCX writer writes it back, the MusicXML importer reads it from
+  `<attributes><staff-details><staff-lines>`, and all three renderers draw
+  it. It defaults to 5, and a five-line staff engraves byte-identically to
+  before.
+- `SheetMusicLayout.StaffLineGeometry` owns every line-count-dependent
+  constant: the staff's drawn height, its top and bottom line in `step`
+  units, where its ledger lines begin, its barline span, a rest's natural
+  line, and MuseScore's whole-rest line move.
+  `LayoutSystem.staffGeometries` carries one per staff, parallel to
+  `staffOrigins`, and `LayoutSystem.geometry(atFlatIndex:)` reads it
+  (falling back to `.standard`). Everything that used to derive a vertical
+  from `StaffMetrics.staffHeight` — barline spans, the playback cursor,
+  the loop highlight, the skyline band, ledger lines, the centered
+  percussion clef and time signature — goes through this type now. Notes,
+  pitched clefs and key signatures deliberately do not: MuseScore anchors
+  those to the five-line reference frame however many lines are drawn.
+- Ledger lines are engraved once by the layout engine
+  (`SheetMusicLayout.LedgerLinePass`) and emitted as
+  `LayoutElement.ledgerLine`, instead of being re-derived inside each
+  renderer. Bounding a ledger line by the staff's own line count needs the
+  staff identity, which only the engine still has.
+
+### Changed
+
+- `ScoreEditor` is no longer `@MainActor`. **Source-breaking:** a `@MainActor final class` is implicitly
+  `Sendable`, and `ScoreEditor` no longer is, so a consumer storing one in a `Sendable` type, or capturing it in a
+  `@Sendable` closure or a detached `Task`, will now fail to compile. The Android JNI process pumps no main run
+  loop, so a main-actor hop from an entry point would be scheduled and never resumed; the editor has to be
+  drivable synchronously from whatever thread calls in.
+- `Selection/` — `ScoreSelection`, `ScoreHitTarget`, `ScoreHitTester`, `ScoreHitTester+Marquee`, and the newly
+  extracted `SelectionExpansion` — moved from `SheetMusicUI` down to `SheetMusicLayout`, so an Android host (which
+  cannot import `SheetMusicUI`, an Apple-only SwiftUI target) can hit-test and expand a selection too.
+  **Source-breaking only for a consumer that imports `SheetMusicLayout` by name directly**: `SheetMusicUI` already
+  carried (and still carries) a whole-module `@_exported import SheetMusicLayout`, so any existing `import
+  SheetMusicUI` call site keeps compiling and resolving these four types unchanged — nothing to do there.
+- `ScoreEditSession.apply` now plans every intent through the planners above instead of mapping it straight onto
+  one command. **Source-behavior change, not source-breaking:** the same intent can now produce more commands
+  bundled into the same undo step — an out-of-key pitch write may ride in with its own accidental repair, and a
+  note or rest write that overruns its bar may chain a tied continuation across the barline instead of being
+  refused. One `apply` call is still one undo step either way; a host that inspects the *count* or *shape* of the
+  resulting commands (rather than treating them as opaque) is the only thing that could observe a difference.
+- `.setChordDuration` reaches across the barline, as `.setRestDuration` already did. The engine refuses any
+  single-slot lengthening that would cross a barline, so a host's length key read as dead at every barline — the
+  very hole `CrossBarInputPlanner` was written to close on the input side. The chain is planned from the chord
+  ALREADY in the slot, so its other notes, articulations, grace notes and ties survive into the continuation. No
+  `.measure` promotion here, unlike the rest case: `.measure` is a rest-only spelling.
+- `.setNotePitch` retunes the whole tie chain the named note belongs to, not that notehead alone. A tie says these
+  noteheads are one sounding note, and `MidiRenderer` reads it that way — it carries the head's pitch through the
+  chain — so retuning one member left two different pitches joined by a tie, unperformable and still sounding at
+  the old pitch. The accidental lands on the chain's head alone, matching MuseScore and `MeasureAccidentals`, which
+  skips tied-back notes when it renotates a measure. **Source-behavior change, not source-breaking:** an untied note
+  is a chain of one and still plans to a bare `SetNotePitch`.
+- **Every `Score.stableFingerprint` value changes** as a consequence of the widened walk above — this is not a
+  bug, it is the point (the walk previously blind to a planner's own repairs now sees them). A host comparing a
+  fingerprint it computed and stored under 1.10.1 or earlier against one computed under 1.11.0 will see them
+  disagree even for an unedited score, and must re-baseline rather than treat the mismatch as drift.
+- **Breaking.** `SheetMusicLayout.LayoutElement.barLine` carries a third
+  associated value, `halfHeight: CGFloat` — the distance from the stroke's
+  center Y to each of its ends — and
+  `SheetMusicLayout.BarLineGeometry.halfHeightSp` is removed. The span is
+  no longer a constant: a three-line staff spans ±1 sp, and a one-line
+  staff spans ±2 sp about its single line rather than collapsing to a dot.
+  Read `halfHeight` off the `.barLine` payload, or call
+  `StaffLineGeometry.barLineSpanY(sp:)` where you have the staff's geometry
+  but not the element.
+- **Breaking.** `SheetMusicLayout.LayoutElement` gains `case ledgerLine`,
+  which breaks exhaustive switches in consuming code. A renderer that
+  ignores the new case draws no ledger lines at all — the engine no longer
+  expects renderers to derive them for themselves.
+- A `LayoutSystem` rebuilt by hand must forward `staffGeometries`. The
+  parameter is defaulted to `[]` so the initializer stays
+  source-compatible, and `[]` means "every staff is five-line" — so
+  omitting it compiles, passes, and silently reverts that system's staves
+  to five-line geometry. The two copy-shaped rebuilds the library needs
+  are `LayoutSystem.addingSpanners(_:)` and `LayoutSystem.movedBy(dy:)`,
+  which carry every field forward; prefer them to re-invoking `init`.
 
 ## [1.10.1] - 2026-08-12
 
@@ -892,7 +1513,14 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.8.0...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.13.1...HEAD
+[1.13.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.13.0...1.13.1
+[1.13.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.12.0...1.13.0
+[1.12.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.11.0...1.12.0
+[1.11.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.10.1...1.11.0
+[1.10.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.10.0...1.10.1
+[1.10.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.9.0...1.10.0
+[1.9.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.8.0...1.9.0
 [1.8.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.7.0...1.8.0
 [1.7.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.6.0...1.7.0
 [1.6.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.1...1.6.0

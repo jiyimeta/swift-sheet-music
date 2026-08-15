@@ -32,9 +32,20 @@ extension Harmony {
         let typeRaw = child("harmonyType")?.text ?? "0"
         let harmonyType = decodeHarmonyType(typeRaw)
         let rootTpc = decodeTpc(child("root")?.text)
-        let bassTpc = decodeTpc(child("base")?.text)
+        // MuseScore 4.6 renamed the slash-bass tag from `<base>` to
+        // `<bass>` (and `<baseCase>` to `<bassCase>`) — compare
+        // `rw/read460/tread.cpp:2961,2977` with
+        // `rw/read410/tread.cpp:2991`. Accept both: reading only the
+        // historical spelling drops the slash bass from every chord
+        // symbol a current MuseScore writes, so `Fm7/B♭` imported as
+        // plain `Fm7`.
+        let bassTpc = decodeTpc(
+            (child("bass") ?? child("base"))?.text,
+        )
         let rootCase = decodeNoteCase(child("rootCase")?.text)
-        let bassCase = decodeNoteCase(child("baseCase")?.text)
+        let bassCase = decodeNoteCase(
+            (child("bassCase") ?? child("baseCase"))?.text,
+        )
         let leftParen = hasChild("leftParen")
         let rightParen = hasChild("rightParen")
         let play = decodePlay(node.first("play")?.text)

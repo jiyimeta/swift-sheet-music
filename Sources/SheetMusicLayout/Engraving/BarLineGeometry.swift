@@ -5,15 +5,13 @@ import Foundation
 
 /// Geometry constants and helpers for engraved barlines.
 ///
-/// `LayoutElement.barLine(subtype:origin:)` carries the staff-middle Y
-/// (the center of the four staff spaces) as the barline's origin. The
-/// barline strokes extend ±2 sp from that origin, matching MuseScore's
-/// convention.
+/// `LayoutElement.barLine(subtype:origin:halfHeight:)` carries both the
+/// stroke's center Y and its half-height, so the vertical span is not
+/// spelled out here: it depends on the staff's line count and is owned
+/// by `StaffLineGeometry.barLineSpanY(sp:)`. A five-line staff still
+/// gets ±2 sp; a one-line staff gets ±2 sp about its single line, and a
+/// three-line staff ±1 sp. Renderers stroke `origin.y ± halfHeight`.
 public enum BarLineGeometry {
-    /// Half-height of a barline in staff-spaces — i.e. the distance
-    /// from the staff middle to the outermost staff line.
-    public static let halfHeightSp: CGFloat = 2
-
     /// Thickness in staff-spaces for the thin component of any barline
     /// (single, double, repeat thin).
     public static let thinThicknessSp: CGFloat = 0.15
@@ -22,7 +20,7 @@ public enum BarLineGeometry {
     /// final / repeat barline.
     public static let thickThicknessSp: CGFloat = 0.4
 
-    /// Right edge of the five staff lines for `system`, in
+    /// Right edge of the staff lines for `system`, in
     /// system-local coordinates. Anchored to the rightmost stroke of
     /// the last measure's terminal barline so the staff passes through
     /// every component of a double / end / end-repeat pair, instead of

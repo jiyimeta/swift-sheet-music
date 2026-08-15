@@ -19,11 +19,12 @@ extension ScoreLayerBuilder {
         into parent: CALayer,
     ) {
         let staffEndX = StaffRenderer.endX(for: system)
-        for origin in system.staffOrigins {
+        for (index, origin) in system.staffOrigins.enumerated() {
             let path = CGMutablePath()
             let width = staffEndX - origin.x
-            for i in 0 ..< 5 {
-                let y = origin.y + CGFloat(i) * metrics.sp
+            let geometry = system.geometry(atFlatIndex: index)
+            for i in 0 ..< geometry.lineCount {
+                let y = origin.y + geometry.lineY(i, sp: metrics.sp)
                 path.move(to: CGPoint(x: origin.x, y: y))
                 path.addLine(
                     to: CGPoint(x: origin.x + width, y: y),
@@ -294,20 +295,18 @@ extension ScoreLayerBuilder {
     /// of the topmost staff to the bottom of the bottommost staff. This
     /// is the "system barline" — MuseScore's
     /// `engraving/dom/measure.cpp` always emits one at the system head.
+    /// Both ends follow the END staves' own line counts; see
+    /// `LayoutSystem.systemStartBarLine`.
     static func drawSystemBar(
         system: LayoutSystem,
         metrics: StaffMetrics,
         height: CGFloat,
         into parent: CALayer,
     ) {
-        guard let first = system.staffOrigins.first,
-              let last = system.staffOrigins.last
-        else { return }
+        guard let span = system.systemStartBarLine else { return }
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: first.x, y: first.y))
-        path.addLine(to: CGPoint(
-            x: first.x, y: last.y + metrics.staffHeight,
-        ))
+        path.move(to: CGPoint(x: span.x, y: span.top))
+        path.addLine(to: CGPoint(x: span.x, y: span.bottom))
         parent.addSublayer(strokeLayer(
             path: path,
             height: height,

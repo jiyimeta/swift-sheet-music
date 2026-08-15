@@ -10,12 +10,20 @@ extension Staff {
         staffID: String, options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        var staffTypeChildren: [XMLTreeNode] = [
+            XMLTreeNode(name: "name", text: staffType),
+        ]
+        // Only non-default line counts are written, so existing
+        // five-line output stays byte-identical.
+        if lineCount != 5 {
+            staffTypeChildren.append(
+                XMLTreeNode(name: "lines", text: String(lineCount)),
+            )
+        }
         children.append(XMLTreeNode(
             name: "StaffType",
             attributes: ["group": group],
-            children: [
-                XMLTreeNode(name: "name", text: staffType),
-            ],
+            children: staffTypeChildren,
         ))
         if let defaultClefType {
             children.append(XMLTreeNode(
@@ -85,6 +93,16 @@ extension Staff {
             let measureDuration = measureIndex < effectiveMeasureDurations.count
                 ? effectiveMeasureDurations[measureIndex]
                 : Fraction(numerator: 4, denominator: 4)
+            // A tie leaving the last chord of a measure lands on the
+            // next measure's first chord of the same voice; its note
+            // list is what that tie's `<notes>` delta is measured
+            // against. The encoder is otherwise strictly
+            // measure-at-a-time with a forward-only carry, so this one
+            // look-ahead is supplied from here, where every measure is
+            // in hand. See `Chord.encodeAsChord`'s `notesDelta`.
+            let nextFirstChordNotes = measureIndex + 1 < measures.count
+                ? measures[measureIndex + 1].voices.map(Self.firstChordNotes)
+                : []
             let result = try measure.encode(
                 carryInVoiceTieCarries: carry,
                 isFirstMeasureOfStaff: measureIndex == 0,
@@ -92,6 +110,7 @@ extension Staff {
                 staffGroup: group,
                 voice0SystemElements: injection,
                 effectiveDuration: measureDuration,
+                nextMeasureFirstChordNotes: nextFirstChordNotes,
             )
             children.append(result.node)
             carry = result.carryOutVoiceTieCarries
@@ -101,5 +120,16 @@ extension Staff {
             attributes: ["id": staffID],
             children: children,
         )
+    }
+
+    /// The note list of the voice's first chord-bearing element — the
+    /// destination a tie out of the previous measure points at. Rests
+    /// are chord-bearing elements too (notes-empty), matching how
+    /// `Voice.forwardTieLocation` picks the chord it measures towards.
+    private static func firstChordNotes(of voice: Voice) -> ChordNotes? {
+        for element in voice.elements {
+            if case let .chord(chord) = element { return chord.notes }
+        }
+        return nil
     }
 }

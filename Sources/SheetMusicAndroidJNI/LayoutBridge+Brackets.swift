@@ -17,22 +17,22 @@ extension LayoutBridge {
         sysOriginY: Double,
         sp: Double,
         staffLineThickness: Double,
-        staffHeight: Double,
         into out: inout [DrawCommand],
     ) {
-        guard let firstStaff = system.staffOrigins.first,
-              let lastStaff = system.staffOrigins.last
-        else { return }
+        guard let firstStaff = system.staffOrigins.first else { return }
 
         // ── System barline: a vertical line at the staff-left edge from the
-        //    top of the first staff to the bottom of the last staff. ──
-        let barX = (sysOriginX + Double(firstStaff.x)) * ptToMMScale
-        let barTop = (sysOriginY + Double(firstStaff.y)) * ptToMMScale
-        let barBottom =
-            (sysOriginY + Double(lastStaff.y) + staffHeight) * ptToMMScale
-        out.append(.moveTo(x: barX, y: barTop))
-        out.append(.lineTo(x: barX, y: barBottom))
-        out.append(.stroke(width: staffLineThickness * ptToMMScale))
+        //    top of the first staff to the bottom of the last staff, each end
+        //    taken from that staff's own line count (see
+        //    `LayoutSystem.systemStartBarLine`). ──
+        if let span = system.systemStartBarLine {
+            let barX = (sysOriginX + Double(span.x)) * ptToMMScale
+            let barTop = (sysOriginY + Double(span.top)) * ptToMMScale
+            let barBottom = (sysOriginY + Double(span.bottom)) * ptToMMScale
+            out.append(.moveTo(x: barX, y: barTop))
+            out.append(.lineTo(x: barX, y: barBottom))
+            out.append(.stroke(width: staffLineThickness * ptToMMScale))
+        }
 
         // ── Part / instrument labels at the system's left edge. ──
         // `label.origin.x` already encodes the right-edge X (clearing any

@@ -171,6 +171,41 @@
                 })
             }
 
+            /// A drum strip's program is its KIT, and it is selectable — so the strip reports it and a program
+            /// change reaches the synth. Both used to be refused: `rebuildMixerChannels` reported `nil` for a
+            /// `useDrumset` strip and `loadProgram` bailed out on channel 9, which left a host's kit picker
+            /// changing nothing AND the score's own authored kit never arriving, since
+            /// `postProcessForMIDISynth` strips the SMF's tick-0 program for every mixer-managed channel and the
+            /// drum channel is one.
+            @Test("a drum strip reports its kit, and a kit change reaches the drum channel")
+            func drumStripProgramIsReportedAndSent() throws {
+                let drums = Instrument(
+                    id: "drumset", longName: "Drums",
+                    channels: [InstrumentChannel(program: 8)], useDrumset: true,
+                )
+                let score = Score(
+                    division: 480,
+                    parts: [Part(
+                        id: "P1", instrument: drums,
+                        staves: [Staff(measures: [Measure(voices: [Voice(elements: [])])])],
+                    )],
+                    systemMeasures: [SystemMeasure()],
+                )
+                let backend = RecordingBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                try engine.prepare(score: score)
+
+                let strip = try #require(engine.mixerChannels.first { $0.id != .metronome })
+                #expect(strip.isDrums)
+                #expect(strip.program == 8)
+
+                backend.clearRecordings()
+                engine.setProgram(forChannel: strip.id, to: 25)
+                // 9 is the GM drum channel, which every drum strip lands on.
+                #expect(backend.programSends.contains { $0.channel == 9 && $0.program == 25 })
+                #expect(engine.mixerChannels.first { $0.id == strip.id }?.program == 25)
+            }
+
             /// A host that groups its strips by part needs the two halves of the label separately, so the engine
             /// publishes them beside the composed `name` rather than leaving the host to re-split it — which would
             /// fail on exactly the strips whose suffix is deliberately suppressed.
@@ -350,17 +385,22 @@
             /// PRIMARY strip's name is always suppressed to the bare part
             /// label (see `suppressedWhenDuplicatesPartLabel`) and so can
             /// never show its own fallback tier.
-            @Test("instrument-name fallback order is longName → trackName → id")
+            /// `trackName` first, because that is the name MuseScore means as the INSTRUMENT's: `longName` is what it
+            /// prints at the left of the staff, i.e. the part's label, and an arranger routinely sets it to the voice
+            /// while leaving `trackName` as the instrument. Reading `longName` first made a strip answer "which
+            /// instrument" with the part's own name — which then matched `partName` and got suppressed as a stutter,
+            /// so a part that changed instrument showed a row that never said what it was.
+            @Test("instrument-name fallback order is trackName → longName → id")
             func fallbackOrder() {
                 let tick0 = Instrument(
                     id: "p0", longName: "Guitar", channels: [InstrumentChannel(program: 0)],
                 )
-                let viaLongName = Instrument(
-                    id: "inst-a", longName: "Banjo", trackName: "ignored-a",
+                let viaTrackNameOverLongName = Instrument(
+                    id: "inst-a", longName: "ignored-a", trackName: "Banjo",
                     channels: [InstrumentChannel(program: 10)],
                 )
-                let viaTrackName = Instrument(
-                    id: "inst-b", trackName: "Mandolin",
+                let viaLongName = Instrument(
+                    id: "inst-b", longName: "Mandolin",
                     channels: [InstrumentChannel(program: 20)],
                 )
                 let viaID = Instrument(
@@ -381,8 +421,8 @@
                         staves: [Staff(measures: [Measure(voices: [])])],
                     )],
                     systemMeasures: [SystemMeasure(elements: [
-                        change(at: 1, viaLongName),
-                        change(at: 2, viaTrackName),
+                        change(at: 1, viaTrackNameOverLongName),
+                        change(at: 2, viaLongName),
                         change(at: 3, viaID),
                     ])],
                 )

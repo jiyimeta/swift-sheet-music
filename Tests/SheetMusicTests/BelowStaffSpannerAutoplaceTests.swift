@@ -136,6 +136,7 @@
             )
             let expected = staffTop + LayoutEngine.defaultBandOffsetY(
                 belowStaff: true,
+                lineGeometry: .standard,
                 metrics: StaffMetrics(staffSize: placed.sp * 4),
             )
             #expect(abs(placed.segmentY - expected) < 0.001)

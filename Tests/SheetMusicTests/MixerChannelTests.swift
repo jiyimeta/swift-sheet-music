@@ -9,18 +9,22 @@
         @Suite("MixerChannel program for drumset")
         @MainActor
         struct MixerChannelTests {
-            /// A drum-kit part has its MIDI program slot ignored by GM
-            /// playback (drums are routed to channel 10 and use note pitch
-            /// as the kit-piece selector). Showing a GM program name in the
-            /// picker would be misleading — `program == nil` hides the
-            /// picker in the mixer UI.
-            @Test("Drumset staff has nil program in mixer")
-            func drumsetStaffHasNilProgram() throws {
+            /// A drum strip's program is the KIT — a bank-128 preset, not a
+            /// melodic patch — and it is selectable, so it is reported.
+            /// This test used to assert `nil`, on the reasoning that drums
+            /// ignore their program slot. They do not: a program change on
+            /// the GM drum channel chooses the kit, and hiding the value
+            /// left both the picker and the score's OWN authored kit with
+            /// nothing to act on. `isDrums` is what tells a host to offer
+            /// the drum catalog instead of the melodic one; `nil` now means
+            /// only the metronome.
+            @Test("Drumset staff reports its kit program and flags itself as drums")
+            func drumsetStaffReportsKitProgram() throws {
                 let part = Part(
                     id: "drums",
                     instrument: Instrument(
                         id: "drumset",
-                        channels: [InstrumentChannel(program: 0)],
+                        channels: [InstrumentChannel(program: 16)],
                         useDrumset: true,
                     ),
                     staves: [Staff(measures: [Measure(voices: [])])],
@@ -31,7 +35,11 @@
                 let drumChannel = try #require(
                     engine.mixerChannels.first { $0.id == .instrument(partIndex: 0, ordinal: 0) },
                 )
-                #expect(drumChannel.program == nil)
+                #expect(drumChannel.program == 16)
+                #expect(drumChannel.isDrums)
+                let metronome = try #require(engine.mixerChannels.first { $0.id == .metronome })
+                #expect(metronome.program == nil)
+                #expect(!metronome.isDrums)
             }
 
             /// Non-drum parts keep their GM program from the InstrumentChannel

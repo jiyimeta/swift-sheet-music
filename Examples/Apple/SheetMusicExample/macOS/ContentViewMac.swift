@@ -235,6 +235,23 @@
                 : transposed.filtered(hidingStaves: hidden)
         }
 
+        /// The score a **file** export should serialize: the loaded score with the active transpose applied, so a
+        /// saved `.mscx` / `.mscz` / `.mid` is in the key on screen rather than the authored one. Without this the
+        /// transpose is a view-only effect and every export silently reverts to the original key.
+        ///
+        /// Authored-hidden staves are deliberately *not* filtered here, unlike `laidOut(_:)`: `<Part><show>0</show>`
+        /// is a display flag of the source file, so dropping those parts on save would delete music the user never
+        /// asked to remove.
+        private var scoreForFileExport: Score? {
+            score.map { $0.transposed(bySemitones: transposeSemitones) }
+        }
+
+        /// The score a **PDF** export should engrave: exactly what the detail view is showing, hidden staves and all.
+        /// A PDF is a rendering rather than a save, so it goes through the full display transform.
+        private var scoreForPDFExport: Score? {
+            score.map(laidOut)
+        }
+
         /// Staff addresses of every part the file authored as hidden
         /// (`Part.isVisibleInScore == false`, i.e. `<Part><show>0</show>`).
         /// `<show>` is a per-part flag, so a hidden part contributes all of
@@ -452,6 +469,11 @@
                 }
             }
             .sheet(isPresented: $showExport) {
+                // Deliberately the *untransposed* score: audio transpose is a
+                // tuning shift the offline render reproduces from the engine's
+                // snapshot (`PlaybackEngine.transposeSemitones`), never a
+                // re-render. Passing `scoreForFileExport` here would transpose
+                // twice.
                 if let score {
                     AudioExportSheet(engine: playbackEngine, score: score)
                         .frame(minWidth: 360, minHeight: 320)
@@ -502,7 +524,7 @@
         }
 
         private func exportPDF() {
-            guard let score else { return }
+            guard let score = scoreForPDFExport else { return }
             let panel = NSSavePanel()
             panel.allowedContentTypes = [.pdf]
             panel.nameFieldStringValue = (sourceName as NSString)
@@ -535,7 +557,7 @@
         }
 
         private func exportMSCX(targetVersion: MSCXVersion, title: String) {
-            guard let score else { return }
+            guard let score = scoreForFileExport else { return }
             let panel = NSSavePanel()
             if let mscx = UTType(filenameExtension: "mscx") {
                 panel.allowedContentTypes = [mscx]
@@ -558,7 +580,7 @@
         }
 
         private func exportMIDI() {
-            guard let score else { return }
+            guard let score = scoreForFileExport else { return }
             let panel = NSSavePanel()
             if let mid = UTType(filenameExtension: "mid") {
                 panel.allowedContentTypes = [mid]
@@ -578,7 +600,7 @@
         }
 
         private func exportMSCZv3() {
-            guard let score else { return }
+            guard let score = scoreForFileExport else { return }
             let panel = NSSavePanel()
             if let mscz = UTType(filenameExtension: "mscz") {
                 panel.allowedContentTypes = [mscz]

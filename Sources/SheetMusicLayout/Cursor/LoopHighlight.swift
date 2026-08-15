@@ -26,11 +26,13 @@ extension LayoutDocument {
             }
             guard let firstM = inRange.first,
                   let lastM = inRange.last else { continue }
-            let topY = system.origin.y
-                + (system.staffOrigins.first?.y ?? 0)
-            let bottomY = system.origin.y
-                + (system.staffOrigins.last?.y ?? 0)
-                + metrics.staffHeight
+            // Same span as the system's left-edge vertical and the
+            // playback cursor — the end staves' drawn extent, with
+            // MuseScore's ±2 sp one-line case, rather than the
+            // five-line reference height.
+            guard let span = system.systemStartBarLine else { continue }
+            let topY = system.origin.y + span.top
+            let bottomY = system.origin.y + span.bottom
             let xStart = system.origin.x + firstM.origin.x
             let xEnd = system.origin.x + lastM.origin.x + lastM.width
             rects.append(CGRect(

@@ -240,19 +240,35 @@ extension LayoutEngine {
 
         var elements: [LayoutElement] = []
         for (staffIdx, origin) in staffOrigins.enumerated() {
+            // `metrics.staffHeight` is the five-line REFERENCE height
+            // that step→Y placement is expressed in, exactly as in
+            // `placeMeasureElements`, so it stays put for every line
+            // count. Only the two glyphs MuseScore centers on the
+            // staff's own height — the percussion clefs and the time
+            // signature — take `centerOffsetSp` on top of it.
             let staffMidY = origin.y + metrics.staffHeight / 2
+            let geometry = templateSystem.geometry(atFlatIndex: staffIdx)
             if staffIdx < context.clefRawTypes.count {
+                let rawType = context.clefRawTypes[staffIdx]
+                let clefDy = metrics.sp * ClefGlyph.staffCenteringOffsetSp(
+                    for: NotatedClef(rawType: rawType),
+                    lineGeometry: geometry,
+                )
                 elements.append(.clef(
-                    rawType: context.clefRawTypes[staffIdx],
-                    origin: CGPoint(x: clefX, y: staffMidY),
+                    rawType: rawType,
+                    origin: CGPoint(x: clefX, y: staffMidY + clefDy),
                     anchor: nil,
                 ))
             }
             if staffIdx < context.keySignatures.count, keyAbs > 0 {
                 let key = context.keySignatures[staffIdx]
+                let clef = staffIdx < context.clefRawTypes.count
+                    ? NotatedClef(rawType: context.clefRawTypes[staffIdx])
+                    : .treble
                 elements.append(.keySignature(
                     sharps: max(0, key),
                     flats: max(0, -key),
+                    clef: clef,
                     origin: CGPoint(x: keySigX, y: staffMidY),
                 ))
             }
@@ -260,7 +276,10 @@ extension LayoutEngine {
                 elements.append(.timeSignature(
                     numerator: ts.numerator,
                     denominator: ts.denominator,
-                    origin: CGPoint(x: timeSigX, y: staffMidY),
+                    origin: CGPoint(
+                        x: timeSigX,
+                        y: staffMidY + metrics.sp * geometry.centerOffsetSp,
+                    ),
                 ))
             }
             // Staff name above the staff, left-aligned at `labelX`
@@ -322,6 +341,9 @@ extension LayoutEngine {
             ),
             measures: [measure],
             staffOrigins: staffOrigins,
+            // Same staves as the template, so the geometries stay
+            // parallel to the origins borrowed from it.
+            staffGeometries: templateSystem.staffGeometries,
             // No left-side part labels: the sticky's instrument
             // names live ABOVE the staff (`.staffName` elements
             // above), where they don't compete with the measure

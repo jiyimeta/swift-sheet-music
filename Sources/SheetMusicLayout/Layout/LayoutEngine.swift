@@ -180,21 +180,7 @@ public enum LayoutEngine {
     static func shift(
         _ system: LayoutSystem, byY dy: CGFloat,
     ) -> LayoutSystem {
-        LayoutSystem(
-            origin: CGPoint(
-                x: system.origin.x, y: system.origin.y + dy,
-            ),
-            size: system.size,
-            measures: system.measures,
-            staffOrigins: system.staffOrigins,
-            staffAddresses: system.staffAddresses,
-            partLabels: system.partLabels,
-            brackets: system.brackets,
-            spanners: system.spanners,
-            sp: system.sp,
-            invisibleSpanners: system.invisibleSpanners,
-            showsInvisibleElements: system.showsInvisibleElements,
-        )
+        system.movedBy(dy: dy)
     }
 
     private static func buildTitleFrame(

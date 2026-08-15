@@ -119,31 +119,57 @@ wirelet {
             // ScoreCursor.kt, etc.). The codec output references them by name (the
             // "Wire" suffix is stripped via stripNameSuffix).
         }
+        // The score-address schema (ScoreItemID / NoteID / RestID / TupletID /
+        // VoiceElementID / StaffAddress / ClefAnchor) lives in its own SwiftPM
+        // target, SheetMusicEditWire, so ssm and Folino link one declaration of
+        // it instead of two mirrors. It used to sit under
+        // Sources/SheetMusicAndroidJNI/Audio and so came along for free with the
+        // "main" scan above; a schemaPaths entry must resolve to exactly one
+        // directory, so the second location needs a second source set rather
+        // than a second path here.
+        //
+        // Same codecPackage/modelPackage as "main" on purpose: these codecs are
+        // referenced by the generated ScoreCursorCodec / AudioExportRangeCodec
+        // and by AndroidPlaybackEngine, and their model classes are the
+        // hand-written ones under audio/model/ (ScoreItemID.kt, NoteID.kt, …).
+        // Only SheetMusicEditWire/Path is scanned — Intent/ holds the edit-intent
+        // schema, which has no Kotlin model classes here and must not be emitted.
+        register("editWire") {
+            schemaPaths.from(packageRoot.resolve("Sources/SheetMusicEditWire/Path"))
+            codecPackage.set("io.github.jiyimeta.sheetmusic.audio.serialization")
+            modelPackage.set("io.github.jiyimeta.sheetmusic.audio.model")
+            stripNameSuffix.set("Wire")
+        }
     }
 }
 
-// Wire the wirelet-generated source directory into the Android source set
+// Wire the wirelet-generated source directories into the Android source set
 // and make every Kotlin compile task depend on codegen. The wirelet plugin
 // v1 only hooks into kotlin.jvm; kotlin.android needs the same wiring added
-// manually here.
+// manually here. It also only auto-wires a source set literally named "main",
+// so "editWire" relies on this block entirely.
 val generateWireletCodecsMain = tasks.named("generateWireletCodecsMain")
+val generateWireletCodecsEditWire = tasks.named("generateWireletCodecsEditWire")
+val wireletCodegenTasks = listOf(generateWireletCodecsMain, generateWireletCodecsEditWire)
 
 android {
-    sourceSets["main"].kotlin.srcDir(
-        generateWireletCodecsMain.flatMap {
-            (it as io.github.jiyimeta.wirelet.gradle.GenerateWireletCodecs).outputDir
-        }
-    )
+    wireletCodegenTasks.forEach { codegen ->
+        sourceSets["main"].kotlin.srcDir(
+            codegen.flatMap {
+                (it as io.github.jiyimeta.wirelet.gradle.GenerateWireletCodecs).outputDir
+            }
+        )
+    }
 }
 
 tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
-    .configureEach { dependsOn(generateWireletCodecsMain) }
+    .configureEach { dependsOn(wireletCodegenTasks) }
 
-// The sources jar (withSourcesJar) packs the wirelet-generated source dir, so it
+// The sources jar (withSourcesJar) packs the wirelet-generated source dirs, so it
 // must run after codegen. Declare the dependency explicitly to satisfy Gradle's
 // task-validation — otherwise publishToMavenLocal fails on sourceReleaseJar.
 tasks.matching { it.name == "sourceReleaseJar" }
-    .configureEach { dependsOn(generateWireletCodecsMain) }
+    .configureEach { dependsOn(wireletCodegenTasks) }
 
 afterEvaluate {
     publishing {

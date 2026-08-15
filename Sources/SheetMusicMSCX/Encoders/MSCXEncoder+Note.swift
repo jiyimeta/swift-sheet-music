@@ -2,27 +2,6 @@ import Foundation
 import SheetMusicCore
 import SheetMusicXMLTools
 
-/// Encoder-internal description of a Tie spanner's `<location>`
-/// payload. MuseScore Studio interprets this in two distinct ways
-/// depending on whether `<measures>` is present:
-///
-/// * `.sameMeasure(fractions:)` — emits `<location><fractions>F</fractions></location>`.
-///   MuseScore reads this as a tick delta from the source position
-///   to the destination position within the same measure.
-///
-/// * `.crossMeasure(measures:fractions:)` — emits
-///   `<location><measures>M</measures><fractions>F</fractions></location>`
-///   (fractions omitted when nil). MuseScore reads this as
-///   `(measure delta, position-within-target-measure)`. The
-///   `<measures>` token is what disambiguates "this tie crosses a
-///   bar line" — without it, MuseScore matches the wrong chord on
-///   the source side of the bar, which is what produced the
-///   m21→m23 cross-wired ties in `test_export9.mscx`.
-enum TieLocation {
-    case sameMeasure(fractions: Fraction)
-    case crossMeasure(measures: Int, fractions: Fraction?)
-}
-
 extension Note {
     /// Build a `<Note>` element. Emits pitch / tpc / optional
     /// accidental / optional headType, plus `<Spanner type="Tie">`
@@ -34,8 +13,8 @@ extension Note {
     /// `chord()->el()` for chord lines matching the note); chord-level
     /// ones stay under `<Chord>`.
     func encode(
-        tieForwardLocation: TieLocation? = nil,
-        tieBackLocation: TieLocation? = nil,
+        tieForwardEndpoint: TieEndpoint? = nil,
+        tieBackEndpoint: TieEndpoint? = nil,
         options: MSCXEncoderOptions = .init(),
         drumDefaultHead: String? = nil,
         chordLines: [ChordLine] = [],
@@ -63,12 +42,12 @@ extension Note {
         }
         if tieForward != nil {
             children.append(tieSpanner(
-                side: "next", location: tieForwardLocation,
+                side: "next", endpoint: tieForwardEndpoint,
             ))
         }
         if tieBack != nil {
             children.append(tieSpanner(
-                side: "prev", location: tieBackLocation,
+                side: "prev", endpoint: tieBackEndpoint,
             ))
         }
         if let glissando {
@@ -138,12 +117,12 @@ extension Note {
         ))
     }
 
-    private func tieSpanner(side: String, location: TieLocation?) -> XMLTreeNode {
+    private func tieSpanner(side: String, endpoint: TieEndpoint?) -> XMLTreeNode {
         var inner: [XMLTreeNode] = []
         if side == "next" { inner.append(XMLTreeNode(name: "Tie")) }
         var sideChildren: [XMLTreeNode] = []
-        if let location {
-            sideChildren.append(locationElement(from: location))
+        if let endpoint {
+            sideChildren.append(locationElement(from: endpoint))
         }
         inner.append(XMLTreeNode(name: side, children: sideChildren))
         return XMLTreeNode(
@@ -153,15 +132,29 @@ extension Note {
         )
     }
 
-    private func locationElement(from location: TieLocation) -> XMLTreeNode {
+    private func locationElement(from endpoint: TieEndpoint) -> XMLTreeNode {
         // Element order matches MuseScore Studio's own writer:
-        // `<measures>` precedes `<fractions>`. MuseScore's parser
-        // appears tolerant of either order, but matching upstream
-        // keeps diffs against MuseScore-saved files clean.
+        // `<measures>` precedes `<fractions>`, which precede `<grace>`,
+        // which precedes `<notes>` (`TWrite::write(const Location*, …)`,
+        // `rw/write/twrite.cpp:2229-2243`). MuseScore's parser appears
+        // tolerant of any order, but matching upstream keeps diffs
+        // against MuseScore-saved files clean.
         var children: [XMLTreeNode] = []
-        switch location {
+        switch endpoint.location {
         case let .sameMeasure(fractions):
-            children.append(fractionsNode(fractions))
+            // MuseScore elides `<fractions>` when the value is the
+            // `Location::relative()` default (`0/1`) — `TWrite::write
+            // (const Location*, …)`, `rw/write/twrite.cpp:2238`, calls
+            // `xml.tagFraction("fractions", item->frac().reduced(),
+            // relDefaults.frac())`, and `relDefaults.frac()` is `0/1`.
+            // A same-measure tie's fraction is never actually zero
+            // except `TieLocation.graceZeroDelta`, so this only ever
+            // fires there — matching upstream byte-for-byte for that
+            // case rather than emitting a functionally-equivalent but
+            // needlessly explicit `<fractions>0/1</fractions>`.
+            if fractions.numerator != 0 {
+                children.append(fractionsNode(fractions))
+            }
         case let .crossMeasure(measures, fractions):
             children.append(XMLTreeNode(
                 name: "measures", text: String(measures),
@@ -169,6 +162,36 @@ extension Note {
             if let fractions {
                 children.append(fractionsNode(fractions))
             }
+        case let .graceIndexed(index):
+            // `<fractions>`/`<measures>` are both zero here too (the
+            // grace shares its parent's tick, same as `graceZeroDelta`)
+            // and elided the same way; `<grace>` has no zero-elision —
+            // its "no value" sentinel is `INT_MIN`, not `0`
+            // (`Location::relative()`, `dom/location.h:51`), so index
+            // `0` is written explicitly. The exact shape
+            // `<next><location><grace>0</grace></location></next>` was
+            // directly observed in a genuine MuseScore Studio fixture —
+            // `midirenderer_bend_data/bend_release_twice.mscx:135-139`
+            // in the upstream engraving test resources — on a
+            // `<Spanner type="GuitarBend">`, not a Tie; no Tie-into-
+            // grace fixture was found. The shape generalizes because
+            // `Location` read/write is spanner-generic — one
+            // `TWrite::write(const Location*, …)` (this same function's
+            // caller) and one `TRead::read(Location*, …)`
+            // (`rw/read460/tread.cpp:3130-3153`) serve every connector
+            // type, GuitarBend and Tie alike; neither branches on which
+            // spanner it's serializing.
+            children.append(XMLTreeNode(name: "grace", text: String(index)))
+        }
+        // `<notes>` elides at its `0` default, so a tie between two
+        // notes that share a pitch rank — every tie whose endpoints are
+        // both alone in their chords, and most ties between equal-shaped
+        // chords — writes exactly what it wrote before this field
+        // existed here. See `TieEndpoint`.
+        if endpoint.notesDelta != 0 {
+            children.append(XMLTreeNode(
+                name: "notes", text: String(endpoint.notesDelta),
+            ))
         }
         return XMLTreeNode(name: "location", children: children)
     }

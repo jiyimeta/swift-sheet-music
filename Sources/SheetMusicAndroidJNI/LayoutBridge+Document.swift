@@ -49,9 +49,7 @@ extension LayoutBridge {
         options optionsWire: LayoutOptionsWire,
     ) -> (document: LayoutDocument, encoded: Data, filteredScore: Score) {
         let mmToPt = 72.0 / 25.4
-        let ptToMM = 25.4 / 72.0
         let pageWidthPt = CGFloat(pageWidthMM * mmToPt)
-        let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
 
         // Clef overrides BEFORE hiding staves (override map keyed on the
         // pre-filter address). Transposition sits between the two, matching the
@@ -63,46 +61,82 @@ extension LayoutBridge {
             .transposed(bySemitones: optionsWire.transposeDelta)
             .filtered(hidingStaves: optionsWire.hiddenStaffAddresses)
 
-        let breakPolicy: LayoutBreakPolicy = optionsWire.honorLayoutBreaks == 1 ? .honor : .ignoreAll
-
+        let layout: LayoutDocument
         switch optionsWire.mode {
-        case .vertical:
+        case .vertical, .page:
             let opts = scoreViewOptions(from: optionsWire, wrap: true, title: true)
-            let layout = LayoutEngine.layout(score: prepared, options: opts, availableWidth: pageWidthPt)
-            let page = EncodablePage(
-                widthMM: pageWidthMM,
-                heightMM: Double(layout.size.height) * ptToMM,
-                commands: buildCommands(layout: layout),
-            )
-            return (layout, DrawProgramCodec.encode(pages: [page]), prepared)
-
+            layout = LayoutEngine.layout(score: prepared, options: opts, availableWidth: pageWidthPt)
         case .horizontal:
             let opts = scoreViewOptions(from: optionsWire, wrap: false, title: false)
             let natural = LayoutEngine.naturalContentWidth(score: prepared, options: opts)
-            let layout = LayoutEngine.layout(score: prepared, options: opts, availableWidth: natural)
-            let page = EncodablePage(
-                widthMM: Double(layout.size.width) * ptToMM,
-                heightMM: Double(layout.size.height) * ptToMM,
-                commands: buildCommands(layout: layout),
-            )
-            return (layout, DrawProgramCodec.encode(pages: [page]), prepared)
+            layout = LayoutEngine.layout(score: prepared, options: opts, availableWidth: natural)
+        }
+
+        let pages = encodePages(
+            document: layout, options: optionsWire, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
+        )
+        return (layout, DrawProgramCodec.encode(pages: pages), prepared)
+    }
+
+    /// Assembles the encoded pages for an already-laid-out `document`, per `options`' layout mode — the
+    /// shared "page assembly" step between a fresh `computeWithDocument` layout and
+    /// `nativeEncodeDrawProgram`'s re-encode of an already-cached layout (`EditGeometryBridge.swift`). Does
+    /// no relayout of its own: `document` is used exactly as given, and `.page` mode's pagination /
+    /// subdocument slicing are geometry-only cuts over `document.systems`, not a second `LayoutEngine.layout`
+    /// pass.
+    ///
+    /// `tint` threads straight through to `buildCommands(layout:tint:)` for every page — `nil` (the default)
+    /// reproduces `computeWithDocument`'s own untinted bytes exactly, since that is the only caller that
+    /// passes no tint.
+    ///
+    /// - `.vertical` — one page, `pageWidthMM` wide (the caller's viewport — not `document.size.width`, which
+    ///   is the narrower rendered content extent) by the document's own laid-out height.
+    /// - `.horizontal` — one page sized to `document.size` (both dimensions), since horizontal layout has no
+    ///   separate viewport concept — the document *is* the page.
+    /// - `.page` — `document.systems` paginated by `LayoutPaginator` at `pageHeightMM`, each page a
+    ///   `pageWidthMM` × `pageHeightMM` slice with its first system lifted to y ≈ 0 (mirrors the original
+    ///   inline implementation this was extracted from — see the two comments below for why).
+    static func encodePages(
+        document: LayoutDocument,
+        options optionsWire: LayoutOptionsWire,
+        pageWidthMM: Double,
+        pageHeightMM: Double,
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
+    ) -> [EncodablePage] {
+        let ptToMM = 25.4 / 72.0
+
+        switch optionsWire.mode {
+        case .vertical:
+            return [EncodablePage(
+                widthMM: pageWidthMM,
+                heightMM: Double(document.size.height) * ptToMM,
+                commands: buildCommands(layout: document, tint: tint),
+            )]
+
+        case .horizontal:
+            return [EncodablePage(
+                widthMM: Double(document.size.width) * ptToMM,
+                heightMM: Double(document.size.height) * ptToMM,
+                commands: buildCommands(layout: document, tint: tint),
+            )]
 
         case .page:
-            let opts = scoreViewOptions(from: optionsWire, wrap: true, title: true)
-            let layout = LayoutEngine.layout(score: prepared, options: opts, availableWidth: pageWidthPt)
+            let mmToPt = 72.0 / 25.4
+            let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
+            let breakPolicy: LayoutBreakPolicy = optionsWire.honorLayoutBreaks == 1 ? .honor : .ignoreAll
             let ranges = LayoutPaginator.paginate(
-                systems: layout.systems, pageHeight: pageHeightPt, policy: breakPolicy,
+                systems: document.systems, pageHeight: pageHeightPt, policy: breakPolicy,
             )
-            let pages: [EncodablePage] = ranges.map { range in
+            return ranges.map { range in
                 // Lift each page's first system to y ≈ 0. The first page keeps
                 // y = 0 (so the title frame stays visible); later pages shift
                 // by the previous system's bottom so the gap above the new
                 // page's first system renders on the new page.
                 let pageTop: CGFloat = range.lowerBound == 0
                     ? 0
-                    : layout.systems[range.lowerBound - 1].origin.y
-                    + layout.systems[range.lowerBound - 1].size.height
-                let sub = layout.subdocument(systems: range, yOffset: -pageTop)
+                    : document.systems[range.lowerBound - 1].origin.y
+                    + document.systems[range.lowerBound - 1].size.height
+                let sub = document.subdocument(systems: range, yOffset: -pageTop)
                 // `subdocument` drops the title frame; only the first page (at
                 // y = 0) carries it, so re-attach it there. Without this the
                 // title block never renders in `.page` mode — the systems were
@@ -110,16 +144,15 @@ extension LayoutBridge {
                 let pageDoc = range.lowerBound == 0
                     ? LayoutDocument(
                         size: sub.size, systems: sub.systems,
-                        metrics: sub.metrics, titleFrame: layout.titleFrame,
+                        metrics: sub.metrics, titleFrame: document.titleFrame,
                     )
                     : sub
                 return EncodablePage(
                     widthMM: pageWidthMM,
                     heightMM: pageHeightMM,
-                    commands: buildCommands(layout: pageDoc),
+                    commands: buildCommands(layout: pageDoc, tint: tint),
                 )
             }
-            return (layout, DrawProgramCodec.encode(pages: pages), prepared)
         }
     }
 

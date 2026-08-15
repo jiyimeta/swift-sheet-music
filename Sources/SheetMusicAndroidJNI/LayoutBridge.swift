@@ -4,10 +4,12 @@ import SheetMusicCore
 import SheetMusicLayout
 
 #if !canImport(CoreGraphics)
-    /// On Android, Foundation's CoreGraphics shims also export `CGPoint`,
-    /// clashing with SheetMusicLayout's stub. Anchor to the Layout definition
-    /// so that `LayoutElement` associated values match the parameter type.
+    /// On Android, Foundation's CoreGraphics shims also export `CGPoint`
+    /// and `CGFloat`, clashing with SheetMusicLayout's stubs. Anchor to the
+    /// Layout definitions so that `LayoutElement` associated values and
+    /// `StaffLineGeometry`'s arguments match the parameter types.
     private typealias CGPoint = SheetMusicLayout.CGPoint
+    private typealias CGFloat = SheetMusicLayout.CGFloat
 #endif
 
 /// Converts a `Score` into a binary draw-program payload for the Android
@@ -29,7 +31,8 @@ import SheetMusicLayout
 ///
 /// ### Draw commands emitted
 /// For each `LayoutSystem` the bridge emits:
-/// 1. Five staff lines per staff origin (moveTo + lineTo + stroke triples).
+/// 1. Each staff's own lines — `StaffLineGeometry.lineCount` of them, which
+///    is five only for a standard staff (moveTo + lineTo + stroke triples).
 /// 2. Per `LayoutMeasure`: its elements — clef glyphs, time-sig glyphs,
 ///    note-head glyphs, rest glyphs, and barline strokes. Unknown/unhandled
 ///    element types fall back to a small `fillRect` placeholder.
@@ -64,7 +67,15 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
     // MARK: - Command builder
 
     // swiftlint:disable:next function_body_length
-    static func buildCommands(layout: LayoutDocument) -> [DrawCommand] {
+    static func buildCommands(
+        layout: LayoutDocument,
+        // Selection re-encode: `nil` (the default) reproduces today's output byte-for-byte — every
+        // `tintColor(for:tint:)` lookup below short-circuits to `nil` and no `.setColor` bracket is emitted
+        // that wasn't already. Non-nil brackets the draw commands for every `ScoreItemID` in `ids` with
+        // `.setColor(argb: argb)` … `.setColor(argb: blackARGB)`. `ids` is expected to already be expanded
+        // (see `LayoutBridge+Selection.swift`'s doc comment) — this function does no expansion of its own.
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
+    ) -> [DrawCommand] {
         var out: [DrawCommand] = []
         let metrics = layout.metrics
         let context = MetricsContext(
@@ -74,7 +85,6 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             stemThickness: Double(metrics.stemThickness),
         )
         let staffLineThickness = Double(metrics.staffLineThickness)
-        let staffHeight = Double(metrics.staffHeight)
 
         // ── 0. Title block ──────────────────────────────────────────────────
         // The leading `<VBox>` (title / subtitle / composer / lyricist) sits at
@@ -93,12 +103,15 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             let endX = Double(BarLineGeometry.staffLineEndX(for: system))
 
             // ── 1. Staff lines ──────────────────────────────────────────────
-            for staffOrigin in system.staffOrigins {
+            for (staffIndex, staffOrigin) in system.staffOrigins.enumerated() {
                 let ox = Double(staffOrigin.x) + sysOriginX
                 let oy = Double(staffOrigin.y) + sysOriginY
                 let rightX = endX + sysOriginX
-                for line in 0 ..< 5 {
-                    let y = oy + Double(line) * context.sp
+                let geometry = system.geometry(atFlatIndex: staffIndex)
+                for line in 0 ..< geometry.lineCount {
+                    let y = oy + Double(
+                        geometry.lineY(line, sp: CGFloat(context.sp)),
+                    )
                     out.append(.moveTo(
                         x: ox * ptToMM,
                         y: y * ptToMM,
@@ -123,6 +136,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                         measureOriginY: moy,
                         metrics: context,
                         showsInvisible: system.showsInvisibleElements,
+                        tint: tint,
                         into: &out,
                     )
                 }
@@ -139,6 +153,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                         measureOriginY: moy,
                         metrics: context,
                         showsInvisible: system.showsInvisibleElements,
+                        tint: tint,
                         into: &out,
                     )
                 }
@@ -157,6 +172,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     measureOriginY: sysOriginY,
                     metrics: context,
                     showsInvisible: system.showsInvisibleElements,
+                    tint: tint,
                     into: &out,
                 )
             }
@@ -170,7 +186,6 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 sysOriginY: sysOriginY,
                 sp: context.sp,
                 staffLineThickness: staffLineThickness,
-                staffHeight: staffHeight,
                 into: &out,
             )
 
@@ -180,6 +195,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 systemOriginX: sysOriginX,
                 systemOriginY: sysOriginY,
                 metrics: context,
+                tint: tint,
                 into: &out,
             )
         }
@@ -201,6 +217,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         systemOriginX sysOriginX: Double,
         systemOriginY sysOriginY: Double,
         metrics context: MetricsContext,
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
         into out: inout [DrawCommand],
     ) {
         let hasInvisible = system.measures.contains { !$0.invisibleElements.isEmpty }
@@ -217,6 +234,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     measureOriginY: moy,
                     metrics: context,
                     showsInvisible: true,
+                    tint: tint,
                     into: &out,
                 )
             }
@@ -228,6 +246,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 measureOriginY: sysOriginY,
                 metrics: context,
                 showsInvisible: true,
+                tint: tint,
                 into: &out,
             )
         }
@@ -264,6 +283,9 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // (the caller has already set the ambient color for the invisible
         // pass); when false they are dropped. Only chord/graceChord consult it.
         showsInvisible: Bool,
+        // Selection re-encode — see `buildCommands(layout:tint:)`'s doc comment. Threaded down so
+        // chord/graceChord/rest/tupletLabel can bracket their own draw commands with `.setColor`.
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
         into out: inout [DrawCommand],
     ) {
         let sp = ctx.sp
@@ -292,10 +314,11 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .keySignature(sharps, flats, origin):
+        case let .keySignature(sharps, flats, clef, origin):
             encodeKeySignature(
                 sharps: sharps,
                 flats: flats,
+                clef: clef,
                 originX: mox + Double(origin.x),
                 originY: moy + Double(origin.y),
                 sp: sp,
@@ -312,7 +335,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 isBeamed: isBeamed, stemExtension: Double(stemExtension),
                 mag: Double(mag),
                 measureOriginX: mox, measureOriginY: moy,
-                metrics: ctx, showsInvisible: showsInvisible, into: &out,
+                metrics: ctx, showsInvisible: showsInvisible, tint: tint, into: &out,
             )
 
         case let .graceChord(notes, duration, stem, stemOrigin, _, hasSlash, mag, _):
@@ -322,7 +345,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 isBeamed: false, stemExtension: 0,
                 mag: Double(mag),
                 measureOriginX: mox, measureOriginY: moy,
-                metrics: ctx, showsInvisible: showsInvisible, into: &out,
+                metrics: ctx, showsInvisible: showsInvisible, tint: tint, into: &out,
             )
             // Acciaccatura slash across the (reduced) grace stem.
             if hasSlash {
@@ -333,7 +356,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .rest(duration, origin, _, _, hasLegerLine):
+        case let .rest(duration, origin, _, restID, hasLegerLine):
             // Split base duration + dot count, mirroring `encodeChord` and
             // iOS `ScoreCanvas`. `RestGlyph.codepoint` only understands base
             // durations; passing a dotted `.fraction(...)` straight through
@@ -341,6 +364,12 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             // augmentation dots separately. iOS uses `onStaffLine: true` for
             // all rest dots, so match that.
             let (baseDur, dotCount) = DurationInterpretation.split(duration)
+            // Selection tint brackets the rest glyph only, never its augmentation dots — mirrors Apple's
+            // `drawRest` (`ScoreLayerBuilder+Notation.swift`), which returns only the glyph layer for
+            // `+Element.swift` to `context.attach` to `.rest(rid)`; `drawRest`'s own `drawDots` call is a
+            // sibling that attaches nothing, so a selected rest's dots stay at the ambient color on Apple too.
+            let restArgb = LayoutBridge.tintColor(for: .rest(restID), tint: tint)
+            if let restArgb { out.append(.setColor(argb: restArgb)) }
             emitCenterAnchoredGlyph(
                 codepoint: RestGlyph.codepoint(
                     duration: baseDur, hasLegerLine: hasLegerLine,
@@ -350,6 +379,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 sizePt: glyphSize,
                 into: &out,
             )
+            if restArgb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
             if dotCount > 0 {
                 emitAugmentationDots(
                     anchorX: mox + Double(origin.x),
@@ -361,12 +391,15 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .barLine(_, origin):
-            // Barline origin sits at the staff middle; strokes extend
-            // ±2 sp from that point. Width = 0.15 sp (the thin-stroke
-            // engraving default). Subtype-specific extras (double,
-            // end, repeat dots) are a follow-up.
-            let halfHeight = Double(BarLineGeometry.halfHeightSp) * sp
+        case let .barLine(_, origin, halfHeightPt):
+            // Barline origin sits at the middle of its own stroke, and
+            // the engine hands over the half-height so the span follows
+            // the staff's line count (4 sp tall on five lines, 2 sp on
+            // three, and 4 sp centered on the line for one). Width =
+            // 0.15 sp (the thin-stroke engraving default).
+            // Subtype-specific extras (double, end, repeat dots) are a
+            // follow-up.
+            let halfHeight = Double(halfHeightPt)
             let bx = (mox + Double(origin.x)) * ptToMM
             let byMid = (moy + Double(origin.y)) * ptToMM
             out.append(.moveTo(x: bx, y: byMid - halfHeight * ptToMM))
@@ -374,6 +407,21 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             out.append(.stroke(
                 width: Double(BarLineGeometry.thinThicknessSp) * sp * ptToMM,
             ))
+
+        case let .ledgerLine(from, to, thickness):
+            // `LedgerLinePass` owns the geometry (it is the only place
+            // that can see the staff's line count), so the bridge just
+            // strokes the segment it was handed — the same
+            // moveTo / lineTo / stroke triple used for staff lines.
+            out.append(.moveTo(
+                x: (mox + Double(from.x)) * ptToMM,
+                y: (moy + Double(from.y)) * ptToMM,
+            ))
+            out.append(.lineTo(
+                x: (mox + Double(to.x)) * ptToMM,
+                y: (moy + Double(to.y)) * ptToMM,
+            ))
+            out.append(.stroke(width: Double(thickness) * ptToMM))
 
         case let .beam(fromOrigin, toOrigin, direction, level, color):
             // Each beam emit at a given level: shift Y by the level
@@ -597,7 +645,12 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             out.append(.lineTo(x: tx, y: ty))
             out.append(.stroke(width: sp * 0.13 * ptToMM))
 
-        case let .tupletLabel(fromOrigin, toOrigin, text, hasBracket, isAbove, _):
+        case let .tupletLabel(fromOrigin, toOrigin, text, hasBracket, isAbove, tid):
+            // The whole tuplet marking (number + bracket hooks/segments) is one visual unit under a single
+            // `.tuplet(tid)` ID — matches Apple's `ScoreLayerBuilder.drawTuplet`, which attaches every one of
+            // those layers to the same ID (see `ScoreLayerBuilder+Misc.swift`'s `drawTuplet`).
+            let tupletArgb = tid.flatMap { LayoutBridge.tintColor(for: .tuplet($0), tint: tint) }
+            if let tupletArgb { out.append(.setColor(argb: tupletArgb)) }
             encodeTupletBracket(
                 fromX: mox + Double(fromOrigin.x),
                 fromY: moy + Double(fromOrigin.y),
@@ -609,6 +662,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 sp: sp,
                 into: &out,
             )
+            if tupletArgb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
 
         case let .harmony(lh):
             encodeHarmony(

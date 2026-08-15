@@ -228,4 +228,68 @@ struct ScoreTransposeTests {
         let score = makeModulatingScore([(0, 2), (7, 2)])
         #expect(keySignatures(score.transposed(bySemitones: 1)) == [-5, 2]) // Db, D
     }
+
+    // MARK: - Chord symbols
+
+    /// A chord symbol names the same harmony the notes spell, so it has
+    /// to move with them. Leaving `.harmony` out of the transform put a
+    /// transposed lead sheet's symbols a whole interval away from the
+    /// notes and key signature under them. MuseScore transposes the
+    /// harmony root / bass by the same fifths (`Transpose::transposeTpc`).
+    private func makeLeadSheet(concertKey: Int, harmony: Harmony) -> Score {
+        let note = Note(pitch: 60, tpc: 14)
+        let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+        let voice = Voice(elements: [
+            .keySignature(KeySignature(concertKey: concertKey)),
+            .harmony(harmony),
+            .chord(chord),
+        ])
+        return Score(division: 480, parts: [Part(
+            id: "p0",
+            instrument: Instrument(id: "i", longName: "i"),
+            staves: [Staff(measures: [Measure(voices: [voice])])],
+        )])
+    }
+
+    private func firstHarmony(_ score: Score) -> Harmony? {
+        guard case let .harmony(h) = score.parts[0].staves[0]
+            .measures[0].voices[0].elements[1] else { return nil }
+        return h
+    }
+
+    @Test func harmonyRootAndBassTransposeWithTheNotes() {
+        // C major, Cmaj7/F (root TPC 14, bass 13) up 2 → D major,
+        // Dmaj7/G (16 / 15).
+        let score = makeLeadSheet(
+            concertKey: 0,
+            harmony: Harmony(name: "maj7", rootTpc: 14, bassTpc: 13),
+        )
+        let out = score.transposed(bySemitones: 2)
+        #expect(firstHarmony(out)?.rootTpc == 16)
+        #expect(firstHarmony(out)?.bassTpc == 15)
+        // …and the name suffix is untouched.
+        #expect(firstHarmony(out)?.name == "maj7")
+    }
+
+    @Test func harmonyMovesByTheSameFifthsAsTheKey() {
+        // E♭ major (−3), Fm7 (root TPC 13) down 2 → D♭ major (−5),
+        // E♭m7 (11). The root keeps its degree in the key.
+        let score = makeLeadSheet(
+            concertKey: -3, harmony: Harmony(name: "m7", rootTpc: 13),
+        )
+        let out = score.transposed(bySemitones: -2)
+        #expect(firstKey(out) == -5)
+        #expect(firstHarmony(out)?.rootTpc == 11)
+    }
+
+    @Test func textOnlyHarmonyIsLeftAlone() {
+        // No root TPC — the symbol is literal text MuseScore could not
+        // parse, so there is nothing to transpose.
+        let score = makeLeadSheet(
+            concertKey: 0, harmony: Harmony(name: "N.C."),
+        )
+        let out = score.transposed(bySemitones: 3)
+        #expect(firstHarmony(out)?.rootTpc == nil)
+        #expect(firstHarmony(out)?.name == "N.C.")
+    }
 }

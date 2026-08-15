@@ -178,14 +178,35 @@
             )
         }
 
+        /// Mapping only. `staffRect` used to take `staffMidY` and derive
+        /// the band as `staffMidY ∓ 2 sp`, and these two tests pinned
+        /// that arithmetic; it now takes both edges ready-made, so all
+        /// they can do is check that the two numbers reach the rect
+        /// unaltered. The derivation moved to the caller —
+        /// `LayoutEngine+SystemBuild.swift`'s `staffTopLocal` /
+        /// `staffBottomLocal` — and is covered end to end by
+        /// `StaffLineCountSkylineTests`.
         @Test func staffRectSpansTheStaffHeight() {
             let r = LayoutElementShape.staffRect(
-                xMin: 0, xMax: 500, staffMidY: 28, metrics: metrics,
+                xMin: 0, xMax: 500, staffTop: 14, staffBottom: 42,
             )
             #expect(r.item.kind == .staff)
-            #expect(r.rect.minY == 14) // staffMidY − 2 sp
-            #expect(r.rect.maxY == 42) // staffMidY + 2 sp
+            #expect(r.rect.minY == 14)
+            #expect(r.rect.maxY == 42)
             #expect(r.rect.width == 500)
+        }
+
+        /// A one-line staff's top and bottom line are the same line, so
+        /// equal edges must yield a degenerate rect rather than a
+        /// clamped or inverted one — `staffRect` computes its height
+        /// through `max(0, …)`, and this is the row that reaches that
+        /// branch.
+        @Test func staffRectCollapsesOnAOneLineStaff() {
+            let r = LayoutElementShape.staffRect(
+                xMin: 0, xMax: 500, staffTop: 14, staffBottom: 14,
+            )
+            #expect(r.rect.minY == 14)
+            #expect(r.rect.height == 0)
         }
     }
 

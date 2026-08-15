@@ -11,10 +11,15 @@ extension Chord {
     /// `<Spanner type="Tie"><location>` payload for ties on this
     /// chord. `Voice.encode` decides which form to use based on
     /// whether the partner chord lives in the same measure or
-    /// crosses the bar line.
+    /// crosses the bar line. A note whose tie actually targets one of
+    /// this chord's own graces overrides the corresponding argument
+    /// per-note — see `graceBeforeTieBackEndpoints()` and
+    /// `graceAfterTieForwardEndpoints()`.
     func encodeAsChord(
         tieForwardLocation: TieLocation? = nil,
         tieBackLocation: TieLocation? = nil,
+        tieForwardPartnerNotes: ChordNotes? = nil,
+        tieBackPartnerNotes: ChordNotes? = nil,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
@@ -80,10 +85,30 @@ extension Chord {
         for lyric in lyrics where !lyric.text.isEmpty {
             children.append(lyric.encode(options: options))
         }
+        // Per-note overrides for a tie whose partner is one of this
+        // chord's own graces rather than the neighbouring real chord
+        // the `tieForwardLocation` / `tieBackLocation` arguments were
+        // computed against — see `graceBeforeTieBackEndpoints()` and
+        // `graceAfterTieForwardEndpoints()`. Both are empty whenever
+        // this chord has no grace-tie partner, so a chord without
+        // graces (or whose graces carry no matching tie) takes the
+        // fallback on every note and this loop's output is unchanged.
+        let graceTieBackOverrides = graceBeforeTieBackEndpoints()
+        let graceTieForwardOverrides = graceAfterTieForwardEndpoints()
         for (noteIndex, note) in notes.enumerated() {
             children.append(note.encode(
-                tieForwardLocation: tieForwardLocation,
-                tieBackLocation: tieBackLocation,
+                tieForwardEndpoint: graceTieForwardOverrides[noteIndex]
+                    ?? tieForwardLocation.map {
+                        TieEndpoint($0, notesDelta: notesDelta(
+                            forPitch: note.pitch, partner: tieForwardPartnerNotes,
+                        ))
+                    },
+                tieBackEndpoint: graceTieBackOverrides[noteIndex]
+                    ?? tieBackLocation.map {
+                        TieEndpoint($0, notesDelta: notesDelta(
+                            forPitch: note.pitch, partner: tieBackPartnerNotes,
+                        ))
+                    },
                 options: options,
                 drumDefaultHead: isPercussionV3 ? "normal" : nil,
                 chordLines: chordLines.filter { $0.noteIndex == noteIndex },
@@ -91,6 +116,22 @@ extension Chord {
         }
         children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Chord", children: children)
+    }
+
+    /// The `<notes>` half of an ordinary chord-to-chord tie's
+    /// `<location>`: `Location::note(partner) − Location::note(self)`.
+    /// A tie's two notes always share a pitch, so the partner is found
+    /// by pitch; both indices are ranks by pitch within their own chord
+    /// (`MSCXLocationNoteIndex`). Zero — and so elided — whenever both
+    /// chords give that pitch the same rank, which covers every tie
+    /// between two single-note chords and every tie between two chords
+    /// of the same shape. `nil` partner means the neighbouring chord is
+    /// unknown (the encoder has no look-ahead past the next measure),
+    /// which falls back to the pre-`<notes>` behaviour.
+    private func notesDelta(forPitch pitch: Int, partner: ChordNotes?) -> Int {
+        guard let partner, !partner.isEmpty else { return 0 }
+        return MSCXLocationNoteIndex.index(ofPitch: pitch, in: partner)
+            - MSCXLocationNoteIndex.index(ofPitch: pitch, in: notes)
     }
 
     /// Encode as a `<Rest>` (notes-empty representation). Traps via

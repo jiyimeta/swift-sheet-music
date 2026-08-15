@@ -282,6 +282,53 @@ swift package resolve
 # Open Android/ or Examples/Android/ in Android Studio and Run
 ```
 
+### Toolchain: cross-compiling needs the swift.org Swift, not Xcode's
+
+Building for Apple platforms works with whatever Swift ships in Xcode.
+**Cross-compiling does not.** Apple's fork rejects the Android SDK's
+pre-built Foundation module (`compiled module was created by a different
+version of the compiler`), so a Swift SDK build needs the open-source
+[swift.org toolchain](https://www.swift.org/install/macos/) — and the
+toolchain and SDK versions have to match exactly.
+
+Install the `.pkg`; it lands in `/Library/Developer/Toolchains/`. Then
+**put it first on `PATH`** — do not use `TOOLCHAINS`, which the `swiftly`
+shim ignores if you have swiftly installed:
+
+```bash
+export PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH"
+swift --version
+```
+
+The version banner is how you tell the two apart, and it is worth
+checking before assuming a build failure is real:
+
+| banner | which Swift | cross-compiles? |
+|---|---|---|
+| `Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 …)` | Xcode's fork | no |
+| `Apple Swift version 6.3.3 (swift-6.3.3-RELEASE)` | swift.org build | yes |
+
+`Scripts/android-build-libs.sh`, `Scripts/android-test.sh` and
+`Scripts/preflight.sh` prepend that path themselves, so they work without
+the `export`. Ad-hoc `swift build --swift-sdk …` invocations do not.
+
+Install the Android SDK with the matching toolchain version:
+
+```bash
+swift sdk install \
+    https://download.swift.org/swift-6.3.3-release/android-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_android.artifactbundle.tar.gz \
+    --checksum d160cc3206dd1886dae3fef2337af5e25ec034692cd0ec225721c56cc69da7f5
+```
+
+`swift sdk list` should then report `swift-6.3.3-RELEASE_android`. The
+NDK sysroot also needs a one-time setup step (NDK r27d or later) — see
+`CLAUDE.md` for that and for the `WIRELET_PAT` / `gpr.key` credentials
+the Gradle side needs.
+
+Local development also expects `swiftlint`, `swiftformat` and
+`pre-commit` on `PATH` (`brew install swiftlint swiftformat pre-commit`);
+the repository's pre-commit hooks run the first two on every commit.
+
 Android codegen relies on the
 [`io.github.jiyimeta.wirelet`](https://github.com/jiyimeta/swift-wirelet)
 Gradle plugin to generate Kotlin codecs from Swift `@WireFormat`
@@ -306,6 +353,9 @@ semantic-equivalence comparison: `midi01`–`midi03`, `midiPortExport`,
 Major features supported by the renderer:
 
 - multi-staff / multi-part scores, with per-instrument MIDI channel/port
+- per-staff line counts (`<StaffType><lines>`), e.g. 1- and 3-line
+  percussion staves, with line-count-aware barline spans, ledger-line
+  bounds, rest placement and percussion-clef / time-signature centering
 - multiple `<Channel>` flavours per instrument (normal, pizzicato, …)
 - multi-voice measures with same-pitch overlap resolution ("muted unison")
 - `<startRepeat>` / `<endRepeat>` expansion + Volta-aware playback filtering
@@ -332,7 +382,9 @@ design rationale lives in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - **Source code (`Sources/`)**: MIT — see [LICENSE](LICENSE).
 - **Test fixtures (`Tests/SheetMusicTests/Resources/`)**: GPL-3.0, copied
-  from the upstream MuseScore repository — see
+  from the upstream MuseScore repository — except the hand-authored
+  fixtures listed as MIT in that directory's own notice, which is
+  authoritative for the per-file split. See
   [Tests/SheetMusicTests/Resources/LICENSE](Tests/SheetMusicTests/Resources/LICENSE).
 - See [NOTICE](NOTICE) for full provenance and trademark disclosure.
 

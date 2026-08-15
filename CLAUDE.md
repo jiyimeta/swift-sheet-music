@@ -403,6 +403,15 @@ plugin's `swiftPackagePath` follows along automatically. Run
     `MSCZReader.parseWithDiagnostics(...)`.
   - **Cosmetic** (color, offset, font, stroke style): silent default
     to the model's neutral value.
+
+  `SheetMusicMusicXML` has no diagnostic channel of its own — there is
+  no `mscxDecoderWarn` equivalent and no `parseWithDiagnostics` — so the
+  embellishment-tier corrections MSCX warns about are made silently
+  there (e.g. `<staff-details><staff-lines>` clamps to `1...16` and an
+  out-of-range `number` falls back to staff 0 with nothing reported).
+  Giving the MusicXML importer the same two-result surface is the known
+  follow-up; until then, apply the same correction MSCX would and say so
+  in a doc comment.
 - **Errors via `throws`.** Single error enum `SheetMusicError`; no
   `Result` types; no Optional return for "failed" cases.
 - **`MIDIRenderer` algorithm choices mirror MuseScore.** When you
@@ -525,3 +534,26 @@ MuseScore repository root.
   path. A type declared outside it produces no codec and no error or
   warning — the build just silently omits it. Keep every `@WireFormat`
   type under the registered scan directory.
+
+  **Moving a `@WireFormat` type between directories therefore breaks the
+  Kotlin build, and nothing on the Apple side notices.** `swift build` /
+  `swift test` / the Apple CI job all stay green; the missing codec only
+  surfaces as `Unresolved reference '…Codec'` in the Android Gradle
+  build, which runs post-merge. Commit `3ef12313` moved the score-address
+  schema into `Sources/SheetMusicEditWire` and left `Android audio module`
+  red across a whole release cycle that way. When you relocate a
+  `@WireFormat` type, either keep it inside the scanned directory or add a
+  source set for its new home in the same commit.
+
+  A `schemaPaths` entry must resolve to exactly one directory (the plugin
+  throws otherwise), so a second scan root needs a second
+  `sources { register("…") }` — see `:SheetMusicAudioAndroid`, which
+  registers `main` (`Sources/SheetMusicAndroidJNI/Audio`) plus `editWire`
+  (`Sources/SheetMusicEditWire/Path`) under one codec/model package pair.
+  The plugin only auto-wires a source set literally named `main` into the
+  Android variants, so any other name needs its output dir added to
+  `sourceSets["main"].kotlin` and a `dependsOn` on the compile tasks by
+  hand. `Sources/SheetMusicEditWire` is split into `Path/` (scanned,
+  Kotlin models exist under `audio/model/`) and `Intent/` (not scanned) for
+  exactly this reason — adding a type to `Path/` emits a Kotlin codec that
+  expects a hand-written model class of the same name.

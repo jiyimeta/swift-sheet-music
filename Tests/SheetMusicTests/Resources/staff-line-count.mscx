@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-authored fixture for the per-staff line count feature
+  (`<StaffType><lines>`). NOT derived from MuseScore's GPL-3.0 test
+  fixtures — see the "MIT-licensed fixtures" section of
+  Tests/SheetMusicTests/Resources/LICENSE.
+
+  Three parts, one staff each, drawing 5 / 3 / 1 lines. The five-line
+  staff omits `<lines>` on purpose: 5 is the default, and the fixture
+  should prove the default still reads as 5 rather than only proving
+  that an explicit value is honored.
+
+  Every staff carries two 4/4 measures:
+
+    * Measure 1 — four quarter notes chosen so that ONE sits below the
+      staff's own bottom line and ONE sits above its top line, at every
+      line count. Steps are counted from the reference five-line middle
+      line (B4 = step 0, +1 per half space upward); `topStep` is 4 for
+      all three staves, `bottomStep` is 4 - 2 * (lines - 1).
+
+        5 lines (top F5 = 4, bottom E4 = -4)
+          C4 (step -6) ledger below · B4 (0) · F5 (4) · A5 (6) ledger above
+        3 lines (top F5 = 4, bottom B4 = 0)
+          G4 (step -2) ledger below · B4 (0) · D5 (2) · A5 (6) ledger above
+        1 line  (the single line is F5 = 4)
+          D5 (step 2) ledger below · F5 (4) on the line · F5 (4) ·
+          A5 (6) ledger above
+
+      Each note is one ledger position outside its staff, so the ledger
+      count is 1 in every case and a bound that ignored `lineCount`
+      would visibly draw the wrong number.
+
+    * Measure 2 — empty. A measure rest is the one element whose
+      vertical placement is line-count dependent in two ways at once
+      (`naturalRestLine` and `wholeRestLineMove`), and the one-line
+      staff is the case where MuseScore leaves the whole rest ON the
+      line instead of hanging it from the line above.
+
+  Both measures end with an explicit `<BarLine>` so the barline span
+  (top line to bottom line, but ±2 sp about the single line of a
+  one-line staff) is exercised through the explicit-barline path in
+  `LayoutEngine+Placement`, not only through the implicit trailing one.
+-->
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part id="1">
+      <Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>G</defaultClef></Staff>
+      <trackName>Flute</trackName>
+      <Instrument id="flute"><longName>Flute</longName><shortName>Fl.</shortName></Instrument>
+    </Part>
+    <Part id="2">
+      <Staff id="2"><StaffType group="percussion"><name>perc3Line</name><lines>3</lines></StaffType><defaultClef>PERC</defaultClef></Staff>
+      <trackName>Tom-toms</trackName>
+      <Instrument id="tom-toms"><longName>Tom-toms</longName><shortName>Toms</shortName></Instrument>
+    </Part>
+    <Part id="3">
+      <Staff id="3"><StaffType group="percussion"><name>perc1Line</name><lines>1</lines></StaffType><defaultClef>PERC</defaultClef></Staff>
+      <trackName>Woodblock</trackName>
+      <Instrument id="woodblock"><longName>Woodblock</longName><shortName>Wd.bl.</shortName></Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Chord><durationType>quarter</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>71</pitch><tpc>19</tpc></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>77</pitch><tpc>13</tpc></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>81</pitch><tpc>17</tpc></Note></Chord>
+          <BarLine/>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+          <BarLine><subtype>end</subtype></BarLine>
+        </voice>
+      </Measure>
+    </Staff>
+    <Staff id="2">
+      <Measure>
+        <voice>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Chord><durationType>quarter</durationType><Note><pitch>67</pitch><tpc>15</tpc></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>71</pitch><tpc>19</tpc></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>74</pitch><tpc>16</tpc></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>81</pitch><tpc>17</tpc></Note></Chord>
+          <BarLine/>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+          <BarLine><subtype>end</subtype></BarLine>
+        </voice>
+      </Measure>
+    </Staff>
+    <Staff id="3">
+      <Measure>
+        <voice>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Chord><durationType>quarter</durationType><Note><pitch>74</pitch><tpc>16</tpc></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>77</pitch><tpc>13</tpc></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>77</pitch><tpc>13</tpc></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>81</pitch><tpc>17</tpc></Note></Chord>
+          <BarLine/>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+          <BarLine><subtype>end</subtype></BarLine>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

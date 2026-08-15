@@ -3,13 +3,18 @@ import SwiftUI
 
 @available(macOS 15.0, *)
 enum BarLineRenderer {
+    /// `halfHeight` is the distance from `origin.y` to each end of the
+    /// stroke, carried on `LayoutElement.barLine` — half the staff's
+    /// drawn height, or 2 sp on a one-line staff. Do not re-derive it
+    /// from `metrics`: `metrics` describes the five-line reference
+    /// staff and knows nothing about this staff's line count.
     static func draw(
         context: inout GraphicsContext,
         subtype: String?,
         origin: CGPoint,
+        halfHeight: CGFloat,
         metrics: StaffMetrics,
     ) {
-        let halfHeight = BarLineGeometry.halfHeightSp * metrics.sp
         let top = CGPoint(x: origin.x, y: origin.y - halfHeight)
         let bot = CGPoint(x: origin.x, y: origin.y + halfHeight)
         func line(dx: CGFloat, width: CGFloat) {

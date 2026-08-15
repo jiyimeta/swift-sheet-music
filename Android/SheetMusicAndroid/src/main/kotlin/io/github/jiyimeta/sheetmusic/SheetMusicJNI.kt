@@ -350,4 +350,139 @@ object SheetMusicJNI {
     fun nativeReleasePdfGeometry(handle: Long) {
         SwiftJavaJNI.nativeReleasePdfGeometry(handle)
     }
+
+    /**
+     * Opens a mirror edit session over the score behind [scoreHandle]. Returns `false` for an
+     * unknown handle. Idempotent: opening twice replaces the session, which is what a host
+     * restarting a session wants.
+     */
+    fun nativeBeginEditSession(scoreHandle: Long): Boolean =
+        SwiftJavaJNI.nativeBeginEditSession(scoreHandle)
+
+    /**
+     * Relays one edit intent into the mirror session behind [scoreHandle]. Returns `false` when
+     * no session is open, the bytes don't decode, or the engine refused the edit.
+     *
+     * Treat `false` here as an anomaly, not a benign no-op: the authoritative side only ever emits
+     * an intent it has already applied, so a refused edit produces no intent and nothing is
+     * relayed in the first place. Every intent that reaches this call was already accepted
+     * upstream, so `false` can only mean no session is open, the bytes were corrupted in transit,
+     * the handle was released mid-edit, or the mirror has already diverged from the authoritative
+     * copy. All four call for a resync now, not a log line and a shrug.
+     */
+    fun nativeApplyEditIntent(scoreHandle: Long, intentBytes: ByteArray): Boolean {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeApplyEditIntent(scoreHandle, SwiftData.fromByteArray(intentBytes, arena))
+    }
+
+    /** Undoes the session's last applied intent. Returns `false` when there is no session or nothing to undo. */
+    fun nativeEditUndo(scoreHandle: Long): Boolean =
+        SwiftJavaJNI.nativeEditUndo(scoreHandle)
+
+    /** Redoes the session's last undone intent. Returns `false` when there is no session or nothing to redo. */
+    fun nativeEditRedo(scoreHandle: Long): Boolean =
+        SwiftJavaJNI.nativeEditRedo(scoreHandle)
+
+    /**
+     * Drops the session behind [scoreHandle]. The score keeps whatever the session last wrote —
+     * ending a session is not a revert. A no-op for a handle with no session.
+     */
+    fun nativeEndEditSession(scoreHandle: Long) {
+        SwiftJavaJNI.nativeEndEditSession(scoreHandle)
+    }
+
+    /**
+     * The digest the host compares against its own copy of [scoreHandle]. `0` for an unknown
+     * handle — a value no real score produces often enough to matter, and the host treats
+     * "unknown handle" as a mismatch anyway.
+     */
+    fun nativeScoreFingerprint(scoreHandle: Long): Long =
+        SwiftJavaJNI.nativeScoreFingerprint(scoreHandle)
+
+    /** This image's build identity. A host compares it with its own before opening a session. */
+    fun nativeEngineVersionStamp(): Long =
+        SwiftJavaJNI.nativeEngineVersionStamp()
+
+    /**
+     * Editing hit-test at a tap ([xMm], [yMm], document/mm) within the cached (filtered) layout of
+     * [scoreHandle], preferring [activeVoice] within the tap's slop box when the raw hit belongs to a
+     * different voice. [optionsBytes] is kept for signature parity with [nativeComputeLayout] but is
+     * **reserved and ignored**: the hidden-staves set used to re-address the hit against the full score comes
+     * from the cache entry the layout was actually computed from, not from this parameter — a caller passing
+     * a set that doesn't match what produced the cached layout must not be able to re-address against a
+     * mismatched staff set.
+     *
+     * Returns a `ScoreItemID` wire payload, re-addressed against the full (unfiltered) score so it can be
+     * fed straight into an edit intent — or an empty array when the handle is unknown, the layout is not
+     * cached, or the tap hit no selectable item.
+     *
+     * Exception: a tuplet hit keeps its FILTERED staff address (a pre-existing gap in the shared Swift
+     * `engineCursorForFilteredTap` re-addressing helper, not specific to this call) — building a tuplet edit
+     * intent from this handle with a hidden staff ahead of it in the same part would target the wrong staff.
+     * Note/rest hits are unaffected.
+     */
+    fun nativeEditingHitTest(
+        scoreHandle: Long,
+        xMm: Double,
+        yMm: Double,
+        activeVoice: Int,
+        optionsBytes: ByteArray,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEditingHitTest(
+            scoreHandle,
+            xMm,
+            yMm,
+            activeVoice,
+            SwiftData.fromByteArray(optionsBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * Insertion-caret rect (document/mm) for [itemBytes] (a `ScoreItemID` wire payload, full-score
+     * addressed — the same value [nativeEditingHitTest] returns) within the cached layout of
+     * [scoreHandle], narrowed to the item's own staff band. [minimumWidthMm] floors a zero-width frame;
+     * pass 0 for no floor.
+     *
+     * Returns an `EditCaretFrameWire` payload (`xMm`/`yMm`/`widthMm`/`heightMm`), or an empty array when
+     * the handle is unknown, the layout is not cached, the item bytes fail to decode, or the item doesn't
+     * resolve to a laid-out frame (e.g. a stale ID right after an edit reflows the document).
+     */
+    fun nativeEditingCaretFrame(
+        scoreHandle: Long,
+        itemBytes: ByteArray,
+        minimumWidthMm: Double,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEditingCaretFrame(
+            scoreHandle,
+            SwiftData.fromByteArray(itemBytes, arena),
+            minimumWidthMm,
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * Re-encodes the ALREADY-CACHED layout of [scoreHandle] as a draw-program payload with
+     * [selectionBytes] (a `SelectionTintCodec` payload: packed ARGB color + full-score-addressed
+     * `ScoreItemID`s) tinted — a tuplet selection is expanded to every member note/rest its bracket spans.
+     * Never relayouts: an empty cache (no prior [nativeComputeLayout] call for this handle) returns an
+     * empty array, so call [nativeComputeLayout] first. Same wire format [nativeComputeLayout] returns, and
+     * reproduces its page count and per-page dimensions exactly in every layout mode (the cache carries the
+     * `LayoutOptionsWire` and page size [nativeComputeLayout] was called with, so `.vertical`'s viewport
+     * width and `.page`'s multi-page split are replayed, not approximated) — an empty selection reproduces
+     * [nativeComputeLayout]'s bytes exactly.
+     */
+    fun nativeEncodeDrawProgram(
+        scoreHandle: Long,
+        selectionBytes: ByteArray,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEncodeDrawProgram(
+            scoreHandle,
+            SwiftData.fromByteArray(selectionBytes, arena),
+            arena,
+        ).toByteArray()
+    }
 }

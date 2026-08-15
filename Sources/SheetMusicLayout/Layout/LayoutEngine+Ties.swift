@@ -60,6 +60,14 @@ extension LayoutEngine {
         }
         var open: [TieKey: (origin: CGPoint, above: Bool)] = [:]
         let sp = document.metrics.sp
+        // REFERENCE frame, not staff extent: the candidate below is
+        // compared against `noteMidYLocal`, a notehead's Y walked back
+        // to `step == 0`. `step` is anchored to the five-line reference
+        // staff for every line count (`StaffLineGeometry.topStep`), so
+        // step 0 sits `metrics.staffHeight / 2` below EVERY staff's
+        // origin — including a one-line one, whose drawn height is 0.
+        // Using the drawn height here would put the candidate on the
+        // single line and mis-assign every tie on such a staff.
         let staffMidOffset = document.metrics.staffHeight / 2
         for system in document.systems {
             // Per-system staff midlines (system-local). Used to pick
@@ -237,19 +245,7 @@ extension LayoutEngine {
         }
 
         return systems.enumerated().map { idx, system in
-            LayoutSystem(
-                origin: system.origin,
-                size: system.size,
-                measures: system.measures,
-                staffOrigins: system.staffOrigins,
-                staffAddresses: system.staffAddresses,
-                partLabels: system.partLabels,
-                brackets: system.brackets,
-                spanners: system.spanners + extraPerSystem[idx],
-                sp: system.sp,
-                invisibleSpanners: system.invisibleSpanners,
-                showsInvisibleElements: system.showsInvisibleElements,
-            )
+            system.addingSpanners(extraPerSystem[idx])
         }
     }
 

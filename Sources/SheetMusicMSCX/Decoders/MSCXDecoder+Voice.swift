@@ -57,11 +57,18 @@ extension Voice {
         // `Tuplet` range at `<endTuplet>`.
         var tupletStack: [OpenTuplet] = []
         // Buffer for `<Chord><acciaccatura/>...` etc. encountered
-        // before the next ordinary chord in this voice. Cleared
-        // whenever attached to the next main `Chord`. Stranded
-        // entries (left over at end-of-voice) are dropped — MuseScore
-        // doesn't play them either.
-        var pendingGracesBefore: [GraceChord] = []
+        // before the next ordinary chord in this voice — every
+        // grace-type chord, after-graces included, since MuseScore
+        // writes the two types into one run ahead of their shared
+        // parent (`MeasureRead::readVoice`,
+        // `rw/read460/measureread.cpp:261-286`; see
+        // `Chord.mscxFileOrderedGraces`). Cleared whenever attached to
+        // the next main `Chord`, which is also where the run is split
+        // by grace-type tag. Stranded entries (left over at
+        // end-of-voice) are dropped — MuseScore's own buffer is
+        // per-measure and never flushed, so it doesn't keep them
+        // either.
+        var pendingGraces: [GraceChord] = []
         // Measure-relative position of the next chord/rest, in
         // fractions-of-whole-note. Advances by each chord/rest's
         // tuplet-scaled duration. Used to compute `MeasurePosition`
@@ -113,36 +120,33 @@ extension Voice {
                     // graces don't consume tuplet time — see
                     // CompatMidiRender::renderGraceNotesBefore.
                     let inner = try Chord.decode(child)
-                    let g = GraceChord(
+                    pendingGraces.append(GraceChord(
                         graceType: graceType,
                         duration: inner.duration,
                         notes: inner.notes,
-                    )
-                    if graceType.isAfter {
-                        // Attach to the most recently emitted chord.
-                        // Walk backwards because dynamic / location
-                        // elements may sit between the grace and its
-                        // parent chord.
-                        for i in stride(from: elements.count - 1, through: 0, by: -1) {
-                            if case var .chord(parent) = elements[i] {
-                                parent.graceNotesAfter.append(g)
-                                elements[i] = .chord(parent)
-                                break
-                            }
-                        }
-                        // No preceding chord → drop silently.
-                    } else {
-                        pendingGracesBefore.append(g)
-                    }
+                    ))
                     continue
                 }
                 var chord = try Chord.decode(child)
                 chord.duration = scaled(
                     chord.duration, by: tupletFractions(),
                 )
-                if !pendingGracesBefore.isEmpty {
-                    chord.graceNotesBefore = pendingGracesBefore
-                    pendingGracesBefore.removeAll(keepingCapacity: true)
+                if !pendingGraces.isEmpty {
+                    // Split the buffered run by grace-type tag, exactly
+                    // as `Chord::graceNotesBefore()` / `graceNotesAfter()`
+                    // split MuseScore's single `m_graceNotes` vector —
+                    // the before side forward, the after side reversed.
+                    // See `Chord.mscxFileOrderedGraces` for the citation
+                    // trail, including the upstream playback test that
+                    // pins the after-run's reversal.
+                    chord.graceNotesBefore = pendingGraces
+                        .filter { !$0.graceType.isAfter }
+                    chord.graceNotesAfter = Array(
+                        pendingGraces
+                            .filter(\.graceType.isAfter)
+                            .reversed(),
+                    )
+                    pendingGraces.removeAll(keepingCapacity: true)
                 }
                 chord.beamVisible = takePendingBeamVisible()
                 appendVoiceElement(.chord(chord))
@@ -285,7 +289,7 @@ extension Voice {
                 continue
             }
         }
-        // Stranded `pendingGracesBefore` (no following chord in this
+        // Stranded `pendingGraces` (no following chord in this
         // voice) intentionally dropped — see comment on the buffer.
         // A trailing `pendingShift` with no following element has no
         // semantic effect and is discarded.

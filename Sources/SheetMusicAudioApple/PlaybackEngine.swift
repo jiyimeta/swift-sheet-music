@@ -190,15 +190,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// against a different score, the sequencer is torn down so
     /// the next `play` rebuilds it.
     private var sequencerScore: Score?
-    /// Backend count-in pre-roll length in seconds. `> 0` means the loaded
-    /// backend SMF is a count-in build whose score content is delayed by this
-    /// much; `backendTickCursor` subtracts it (and pins the cursor while still
-    /// inside it). `0` means a normal (un-shifted) build. Unused on the
+    /// True when the metronome sequence currently loaded on the backend is a
+    /// count-in build (pre-roll clicks in front of the shifted body). The score
+    /// transport's own SMF is never shifted on this path, so only the metronome
+    /// side has to be swapped back before an ordinary play. Unused on the
     /// AUMIDISynth path, which drives its pre-roll through `SequenceMap`.
-    private var backendPreRollSeconds: TimeInterval = 0
-    /// Score tick the backend count-in resumes real playback at (the start
-    /// position); the post-pre-roll cursor offsets from here.
-    private var backendCountInBaseTick = 0
+    private var backendMetronomeHasPreRoll = false
     /// Translates the sequencer's raw tick space to the score's. A
     /// count-in play shifts all score content forward past a pre-roll
     /// region (`SequenceMap(preRollTicks:baseTick:)`); a normal play
@@ -302,13 +299,34 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// replayed the moment the backend reports ready.
     private var pendingBackendPlay: (cursor: ScoreCursor?, score: Score, countIn: Bool)?
 
+    /// How this engine treats the process-wide `AVAudioSession`. See `AudioSessionPolicy`. `internal` so the
+    /// `+AudioSession` extension can branch on it.
+    let audioSessionPolicy: AudioSessionPolicy
+
+    /// `true` once a `.mixUntilPlay` engine has taken the session exclusively for a `play(...)`. Keeps a re-prepare
+    /// (SoundFont hot-swap) from demoting the session back to mixing, and keeps the escalation to one write per engine
+    /// lifetime. Cleared by `teardown()` and by an interruption. `internal` for the `+AudioSession` extension.
+    var hasEscalatedAudioSession = false
+
+    /// `true` between an interruption deactivating the session and the next thing that needs to sound. A session
+    /// survives an interruption with its *category* intact, so re-activating it — which `AVAudioEngine.start()` does
+    /// implicitly — would silence the interrupter all over again if that category were the exclusive one a
+    /// `play(...)` escalated to. See `prepareAudioSessionForPreview()`. `internal` for the `+AudioSession` extension.
+    var needsAudioSessionReactivation = false
+
+    /// Holder for the block-based `AVAudioSession.interruptionNotification` observer token. `internal` for the
+    /// `+AudioSession` extension that fills it in; see `startObservingAudioSessionInterruptions()`.
+    let interruptionObserver = AudioSessionInterruptionObserver()
+
     public init(
         soundfontResolver: SoundfontResolver,
         metronomeClickProvider metronomeClickProvider0: MetronomeClickProvider? = nil,
         backend: (any SynthBackend)? = nil,
+        audioSessionPolicy: AudioSessionPolicy = .exclusiveOnPrepare,
     ) {
         resolver = soundfontResolver
         self.backend = backend
+        self.audioSessionPolicy = audioSessionPolicy
         metronomeClickProvider = metronomeClickProvider0
         clickResolver = MetronomeClickResolver(
             provider: metronomeClickProvider0,
@@ -319,6 +337,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // is not itself boosted by the master gain.
         metronome = MetronomeController(engine: engine, output: sumMixer)
         buildMasterChain()
+        startObservingAudioSessionInterruptions()
     }
 
     /// Scale playback speed. `1.0` is the score's native tempo;
@@ -539,6 +558,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     func setMetronomeVolume(_ volume: Float) {
         metronome.volume = volume
+        // The injected backend mixes its own click, so the strip's volume has to
+        // reach it too — the AUMIDISynth metronome above is silent on that path.
+        backend?.setMetronomeVolume(volume)
     }
 
     func replaceMixerChannels(_ channels: [MixerChannel]) {
@@ -564,7 +586,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// No-op if the engine isn't prepared, or for drum staves (the
     /// program byte is ignored on MIDI channel 9).
     func loadProgram(forStaff idx: Int, program: UInt8) {
-        guard let midiCh = staffMIDIChannels[idx], midiCh != 9 else { return }
+        guard let midiCh = staffMIDIChannels[idx] else { return }
         loadProgram(onMIDIChannel: midiCh, program: program)
     }
 
@@ -573,24 +595,35 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// instrument) strip, which for a multi-instrument part is not the
     /// same thing as any one staff.
     func loadProgram(forChannel id: MixerChannel.Kind, program: UInt8) {
-        guard let midiCh = instrumentMIDIChannels[id], midiCh != 9 else { return }
+        guard let midiCh = instrumentMIDIChannels[id] else { return }
         loadProgram(onMIDIChannel: midiCh, program: program)
     }
 
+    /// A program change on the GM drum channel selects the KIT, so it is
+    /// routed to the percussion unit's bank 128 rather than to a melodic
+    /// preset in bank 0. Both this and its callers used to refuse
+    /// channel 9 outright, which had two consequences: a host's drum-kit
+    /// picker changed nothing, and the score's OWN authored kit never
+    /// arrived either — `postProcessForMIDISynth` strips the SMF's
+    /// tick-0 program for every mixer-managed channel, and the drum
+    /// channel is one, so nothing was left to send it.
     private func loadProgram(onMIDIChannel midiCh: UInt8, program: UInt8) {
         if let backend {
             backend.setProgram(channel: midiCh, program: program)
             return
         }
-        guard let melodicSynth else { return }
+        // 9 is the GM drum channel. Named locally rather than reaching for
+        // `MidiRenderer.drumChannel`, which is internal to SheetMusicMIDI.
+        let isDrum = midiCh == 9
+        guard let unit = isDrum ? percussionSynth : melodicSynth else { return }
         MIDISynthBuilder.preloadPreset(
-            into: melodicSynth,
-            bankMSB: 0, bankLSB: 0, program: program,
+            into: unit,
+            bankMSB: isDrum ? 128 : 0, bankLSB: 0, program: program,
             onChannel: midiCh,
         )
         let pcStatus = UInt32(0xC0) | UInt32(midiCh & 0x0F)
         _ = MusicDeviceMIDIEvent(
-            melodicSynth.audioUnit, pcStatus, UInt32(program), 0, 0,
+            unit.audioUnit, pcStatus, UInt32(program), 0, 0,
         )
     }
 
@@ -635,6 +668,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         sequencerScore = nil
         sequenceMap = .identity
         sequencerHasPreRoll = false
+        backendMetronomeHasPreRoll = false
         renderedMidiCache = nil
         let preparedTimeline = PlaybackTimeline(score: score)
         timeline = preparedTimeline
@@ -667,34 +701,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         instrumentMIDIChannels.removeAll()
         staffChannelSwitches.removeAll()
 
-        #if os(iOS) || os(tvOS) || os(watchOS)
-            let session = AVAudioSession.sharedInstance()
-            // Best-effort: a host that manages its own session — e.g. a tuner holding `.playAndRecord` with the mic
-            // active for live pitch tracking — can have iOS reject this `.playback` switch with
-            // `AVAudioSessionError.insufficientPriority`. A hard `try` there would throw out of `prepare(score:)`
-            // BEFORE the synths are built (`prepareSynth` below), leaving every voice silent while only the
-            // already-prepared metronome sounds. Treat the session setup as advisory so synth creation always
-            // proceeds; the engine adapts to whatever route the host left active (`connect` uses `format: nil`).
-            try? session.setCategory(.playback, mode: .default, options: [])
-            // Request a concrete hardware sample rate before activating.
-            // iOS's audio HAL can get its system-wide I/O rate stuck at an
-            // odd value (e.g. 24 kHz left over from another app's Bluetooth
-            // HFP call), and a session that simply adopts whatever rate the
-            // system hands back then renders the whole graph against that
-            // stale clock — heard as playback that is both sped up and
-            // pitched up, and which survives an app relaunch because the
-            // wedge lives in the system audio daemon, not our process.
-            // Asking for a definite rate makes `setActive` reconfigure the
-            // HAL toward it, which un-sticks that state without a reboot.
-            // 48 kHz is the native rate of modern iOS output hardware, so on
-            // a healthy device this is a no-op (no forced resample); it only
-            // takes effect when the system was parked somewhere unexpected.
-            // Best-effort: the route may clamp or ignore it (the graph still
-            // adapts because every `connect` uses `format: nil`), so a
-            // failure here must not abort score preparation.
-            try? session.setPreferredSampleRate(48000)
-            try? session.setActive(true, options: [])
-        #endif
+        // Category / activation per `audioSessionPolicy` — see `PlaybackEngine+AudioSession`. Deliberately BEFORE
+        // `prepareSynth`: the synths are built against whatever route the session ends up on.
+        configureAudioSessionForPrepare()
 
         try prepareSynth(score: score)
 
@@ -889,7 +898,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                     self?.handleBackendReady(ready)
                 }
             }
-            backend.prepare(soundfontURL: url, drumChannels: drumChannels)
+            // The backend renders the metronome on its own synth, so it needs the
+            // resolved click sound too — the AUMIDISynth `MetronomeController`
+            // prepared above never sounds on the backend path. The resolver
+            // caches its generated SF2, so asking twice costs nothing.
+            backend.prepare(
+                soundfontURL: url,
+                metronomeSoundfontURL: clickResolver.resolvedSoundFontURL(),
+                drumChannels: drumChannels,
+            )
             // The fresh synth resets tuning/rate; push the engine's persisted
             // A4 calibration, transpose, and playback rate back onto it.
             backend.setTuning(
@@ -1064,6 +1081,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         velocity: UInt8 = 96,
     ) {
         guard state != .exporting else { return }
+        // An audition is not a claim on the audio route: sound it on a mixing session rather than letting
+        // `engine.start()` below re-activate an exclusive one a previous `play(...)` took. No-op when the session is
+        // already mixing. See `PlaybackEngine+AudioSession`.
+        prepareAudioSessionForPreview()
         guard let pitch = pitch(for: noteID, in: score) else { return }
         let flatIdx = score.allStaves.firstIndex(where: {
             $0.address == noteID.staff
@@ -1175,6 +1196,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         pitch: UInt8, onStaff flatStaffIndex: Int, velocity: UInt8 = 96, atTick tick: Int = 0,
     ) {
         guard state != .exporting else { return }
+        // Same as `playPreview`: an audition sounds on a mixing session, never on the exclusive one playback took.
+        prepareAudioSessionForPreview()
         guard let midiChannel = midiChannel(forStaff: flatStaffIndex, atTick: tick) else { return }
         // Resolve the AU instrument (AUMIDISynth path only) BEFORE any side
         // effect below, so an invalid staff index bails out cleanly instead of
@@ -1290,6 +1313,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     ) {
         guard state != .exporting else { return }
         guard let timeline else { return }
+        // A `.mixUntilPlay` host has been sharing output with whatever else was playing since `prepare(score:)`; this
+        // is the moment it asked for playback, so take the session exclusively. Ahead of both transport paths and of
+        // the not-ready deferral below, so the claim lands on the user's press rather than on the SoundFont finishing
+        // to load. No-op under the other policies. See `PlaybackEngine+AudioSession`.
+        escalateAudioSessionForPlayback()
         if usingBackend {
             if let backend, !backend.isReady {
                 // SoundFont still loading — remember the request and start it the
@@ -1416,12 +1444,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// backend-agnostic `PlaybackTimeline`; loop wrap stays host-driven in
     /// `backendTickCursor`.
     ///
-    /// Count-in: when requested (and no loop is active — a loop's per-wrap seek
-    /// can't re-enter a shifted pre-roll SMF), the score is delayed behind an
-    /// always-on click track baked into the SMF. The backend clock stays in
-    /// seconds, so `backendPreRollSeconds` / `backendCountInBaseTick` let
-    /// `backendTickCursor` pin the cursor through the pre-roll and offset the
-    /// body — the seconds-space analogue of the AUMIDISynth `SequenceMap`.
+    /// Count-in: the score's own SMF is left un-shifted and the count is played
+    /// by the METRONOME transport, which the backend starts ahead of the score
+    /// (`play(afterCountInSeconds:)`). That keeps every score-tick read — seek,
+    /// loop wrap, end detection, the cursor — in one coordinate space, so a
+    /// count-in composes with an active loop instead of being suppressed by it,
+    /// and it puts the click on the metronome synth, which is the one holding
+    /// the host's click SoundFont. See `startBackendCountIn`.
     private func backendPlay(
         from cursor: ScoreCursor?, in score: Score, countIn: Bool,
         timeline: PlaybackTimeline,
@@ -1432,35 +1461,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 cursor: cursor, isStopped: state == .stopped,
                 currentCursor: currentCursor,
             )
-            let baseTick = startCursor
-                .flatMap { timeline.frame(forCursor: $0)?.tick } ?? 0
-            // Count-in only without an active loop: a loop wrap seeks in score
-            // ticks, which a pre-roll-shifted SMF would misplace.
-            let plan = (countIn && loopRange == nil)
-                ? CountInBeats.compute(score: score, startCursor: startCursor)
-                : nil
-            let rendered = try cachedRender(score)
-
-            if let plan {
-                try startBackendCountIn(
-                    backend: backend, score: score, plan: plan,
-                    baseTick: baseTick, rendered: rendered, timeline: timeline,
-                )
-                return
-            }
-
-            // Normal (un-shifted) build. Reload the score + metronome transports
-            // when the score changed or a prior count-in left a shifted SMF
-            // loaded.
-            if sequencerScore != score || sequenceMap != .identity {
-                loadBackendNormalSequence(
-                    backend: backend, score: score,
-                    rendered: rendered, timeline: timeline,
-                )
-            }
-            backend.setMetronomeMuted(!metronome.isEnabled)
-            if !engine.isRunning { try engine.start() }
-            // Resolve the start tick (loop-clamped), seek, and pin the cursor.
+            // Resolve the start tick (loop-clamped) once, before deciding on a
+            // count-in: with a loop active, playback begins at the loop's start,
+            // so that — not the stale cursor outside it — is what to count into.
             var targetTick = startCursor
                 .flatMap { timeline.frame(forCursor: $0)?.tick }
             if state == .stopped, targetTick == nil { targetTick = 0 }
@@ -1470,6 +1473,37 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                     targetTick = loop.startTick
                 }
             }
+            let rendered = try cachedRender(score)
+
+            if countIn {
+                let baseTick = targetTick ?? backend.currentTick
+                let countInCursor = timeline.frame(atTick: baseTick)?.cursor ?? startCursor
+                if let plan = CountInBeats.compute(
+                    score: score, startCursor: countInCursor,
+                ) {
+                    try startBackendCountIn(
+                        backend: backend, score: score, plan: plan,
+                        baseTick: baseTick, rendered: rendered, timeline: timeline,
+                    )
+                    return
+                }
+            }
+
+            // Normal build. Reload the score transport only when the score
+            // changed; a prior count-in leaves the score SMF untouched, so only
+            // its metronome sequence has to be swapped back.
+            if sequencerScore != score {
+                loadBackendNormalSequence(
+                    backend: backend, score: score,
+                    rendered: rendered, timeline: timeline,
+                )
+            } else if backendMetronomeHasPreRoll {
+                loadBackendMetronomeSequence(
+                    backend: backend, rendered: rendered,
+                )
+            }
+            backend.setMetronomeMuted(!metronome.isEnabled)
+            if !engine.isRunning { try engine.start() }
             if let tick = targetTick {
                 backend.seek(toTick: tick)
                 currentCursor = timeline.frame(atTick: tick)?.cursor
@@ -1499,50 +1533,75 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             ),
             timeline: timeline,
         )
+        loadBackendMetronomeSequence(backend: backend, rendered: rendered)
+        sequencerScore = score
+        sequenceMap = .identity
+    }
+
+    /// (Re)load the plain body metronome — no count-in, no offset.
+    private func loadBackendMetronomeSequence(
+        backend: any SynthBackend, rendered: MidiFile,
+    ) {
         backend.loadMetronomeSequence(
             PreRollSequenceAssembler.metronomeOnly(
                 rendered: rendered, metronomeBeats: metronomeBeats,
             ),
+            offsetSeconds: 0,
         )
-        sequencerScore = score
-        sequenceMap = .identity
-        backendPreRollSeconds = 0
+        backendMetronomeHasPreRoll = false
     }
 
-    /// Load + start a count-in playback: the shifted score SMF (carrying the
-    /// always-on pre-roll click) on the score transport and the shifted body
-    /// metronome on the metronome transport. Both start at sequencer tick 0;
-    /// the cursor stays pinned at `baseTick` until the pre-roll elapses (see
-    /// `backendTickCursor`, which reads the seconds-space offset below).
+    /// Load + start a count-in playback the way the Android engine does it: the
+    /// score's SMF is the ordinary un-shifted build, and the count lives
+    /// entirely on the metronome transport — `plan.beats` fill `[0,
+    /// preRollTicks)` ahead of the body's own clicks. The backend parks the
+    /// score transport at the start position and holds it for `preRollSeconds`
+    /// while that transport counts (`play(afterCountInSeconds:)`).
+    ///
+    /// Two bugs died with the older design, which shifted the score SMF behind a
+    /// click track baked into it:
+    ///
+    ///   * the baked click sounded on the SCORE synth, i.e. in the score's
+    ///     SoundFont — GM wood blocks, not the host's click samples, which only
+    ///     the metronome synth loads;
+    ///   * every score-tick read (seek, loop wrap) had to be translated out of
+    ///     the shifted space, so a count-in was simply suppressed whenever a
+    ///     loop was active — including "repeat whole score".
+    ///
+    /// The metronome transport ends up running `offsetSeconds` ahead of the
+    /// score's for the rest of the playback (its SMF carries a pre-roll the
+    /// score's does not); the backend adds that to its own metronome seeks.
     private func startBackendCountIn(
         backend: any SynthBackend, score: Score, plan: CountInBeats.Result,
         baseTick: Int, rendered: MidiFile, timeline: PlaybackTimeline,
     ) throws {
-        backend.loadSequence(
-            PreRollSequenceAssembler.assemble(
-                rendered: rendered, metronomeBeats: [],
-                mixerManagedChannels: mixerManagedChannels,
-                plan: plan, baseTick: baseTick,
-            ).midi,
-            timeline: timeline,
-        )
+        let preRollSeconds = Double(plan.preRollTicks)
+            * (60.0 / plan.quarterBpm) / Double(timeline.division)
+        if sequencerScore != score {
+            loadBackendNormalSequence(
+                backend: backend, score: score,
+                rendered: rendered, timeline: timeline,
+            )
+        }
+        if !engine.isRunning { try engine.start() }
+        // Park the score transport at the start position FIRST: `seek` moves both
+        // transports, and the metronome's own load right after re-parks it at
+        // tick 0 — the first click of the count.
+        backend.seek(toTick: baseTick)
         backend.loadMetronomeSequence(
             PreRollSequenceAssembler.metronomeOnly(
                 rendered: rendered, metronomeBeats: metronomeBeats,
-                plan: plan, baseTick: baseTick,
+                plan: plan, baseTick: baseTick, includingPreRollClicks: true,
             ),
+            // Where the body's `baseTick` sits on the metronome's clock, minus
+            // where it sits on the score's. Expressed in the same notated-seconds
+            // space `SynthBackend.seek(toTick:)` uses, so the two agree.
+            offsetSeconds: preRollSeconds - timeline.seconds(atTick: Double(baseTick)),
         )
-        sequencerScore = score
-        sequenceMap = SequenceMap(preRollTicks: plan.preRollTicks, baseTick: baseTick)
-        backendCountInBaseTick = baseTick
-        backendPreRollSeconds = Double(plan.preRollTicks)
-            * (60.0 / plan.quarterBpm) / Double(timeline.division)
+        backendMetronomeHasPreRoll = true
         backend.setMetronomeMuted(!metronome.isEnabled)
-        // `loadSequence` positions the transport at 0 (the pre-roll start), so
-        // no seek is needed. Pin the cursor at the start position.
         currentCursor = timeline.frame(atTick: baseTick)?.cursor
-        if !engine.isRunning { try engine.start() }
-        backend.play()
+        backend.play(afterCountInSeconds: preRollSeconds)
         reapplyMixerPrograms()
         applyMixerState()
         state = .playing
@@ -1602,36 +1661,16 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         if pendingBackendPlay != nil { pendingBackendPlay?.cursor = cursor }
         let tick = snapTickToLoop(frame.tick)
         if let backend {
-            // A click-to-seek must never keep a count-in pre-roll loaded: its
-            // score SMF is shifted, so a plain score-tick seek would misplace.
-            // Drop to the normal build (score + separate metronome transport)
-            // anchored at the target, preserving the play/pause state (a seek
-            // never inserts — or removes — playback).
-            if backendPreRollSeconds > 0, let score = sequencerScore,
+            // The score transport is never shifted on this path, so a seek is a
+            // plain score-tick seek (which also ends any count-in still owed —
+            // see `SwiftySynthBackend.seek`). Only the metronome sequence can
+            // still be a count-in build; swap it back for the plain one so a
+            // target before the count-in's start position gets its clicks too.
+            if backendMetronomeHasPreRoll, let score = sequencerScore,
                let rendered = try? cachedRender(score)
             {
-                let wasPlaying = state == .playing
-                backend.loadSequence(
-                    PreRollSequenceAssembler.assembleNormal(
-                        rendered: rendered, metronomeBeats: [],
-                        mixerManagedChannels: mixerManagedChannels,
-                    ),
-                    timeline: timeline,
-                )
-                backend.loadMetronomeSequence(
-                    PreRollSequenceAssembler.metronomeOnly(
-                        rendered: rendered, metronomeBeats: metronomeBeats,
-                    ),
-                )
-                sequenceMap = .identity
-                backendPreRollSeconds = 0
+                loadBackendMetronomeSequence(backend: backend, rendered: rendered)
                 backend.setMetronomeMuted(!metronome.isEnabled)
-                backend.seek(toTick: tick)
-                reapplyMixerPrograms()
-                applyMixerState()
-                currentCursor = timeline.frame(atTick: tick)?.cursor
-                if wasPlaying { backend.play() }
-                return
             }
             backend.seek(toTick: tick)
             // Re-assert the mixer for the same reason the pre-roll branch above, the loop wrap in
@@ -2317,24 +2356,6 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// score-tick space (normal play uses the un-shifted assembled SMF), so no
     /// `SequenceMap` translation is needed. Same loop-wrap / end-stop decisions
     /// as the AUMIDISynth `tickCursor`.
-    /// The backend transport's position on the UNROLLED sequence's seconds clock — the one
-    /// coordinate space every backend read starts from. `nil` while a count-in pre-roll is
-    /// still sounding, i.e. before the body has begun.
-    ///
-    /// With a pre-roll the loaded SMF is the unrolled render shifted by `preRollTicks`, so the
-    /// body's elapsed time has to be re-anchored at the play's start position — and in
-    /// UNROLLED coordinates, which is why the notated start time is projected through
-    /// `unrolledSeconds(fromNotated:)` first rather than added to notated seconds directly.
-    private func backendUnrolledSeconds(
-        _ backend: any SynthBackend, timeline: PlaybackTimeline,
-    ) -> TimeInterval? {
-        guard backendPreRollSeconds > 0 else { return backend.currentPositionSeconds }
-        let bodySeconds = backend.currentPositionSeconds - backendPreRollSeconds
-        guard bodySeconds >= 0 else { return nil }
-        let baseNotated = timeline.seconds(atTick: Double(backendCountInBaseTick))
-        return unrolledTimeMap.unrolledSeconds(fromNotated: baseNotated) + bodySeconds
-    }
-
     /// Fold a NOTATED time into the active A-B loop region — the seconds counterpart of
     /// `foldTickForLoop`, for readers whose clock is time-based. Pass-through with no loop.
     private func foldSecondsForLoop(_ seconds: TimeInterval) -> TimeInterval {
@@ -2346,15 +2367,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     }
 
     /// The backend transport's position expressed in NOTATED timeline seconds, loop-folded —
-    /// what every host-facing elapsed-time reader wants. Zero while a pre-roll is sounding, so
-    /// a scrubber sits at the start rather than jumping.
+    /// what every host-facing elapsed-time reader wants. During a count-in the score transport
+    /// is parked at the start position, so this reports that position and a scrubber sits still
+    /// rather than jumping.
     private func backendNotatedSeconds(
-        _ backend: any SynthBackend, timeline: PlaybackTimeline,
+        _ backend: any SynthBackend, timeline _: PlaybackTimeline,
     ) -> TimeInterval {
-        guard let unrolled = backendUnrolledSeconds(backend, timeline: timeline) else {
-            return timeline.seconds(atTick: Double(backendCountInBaseTick))
-        }
-        return foldSecondsForLoop(unrolledTimeMap.notatedSeconds(fromUnrolled: unrolled))
+        foldSecondsForLoop(
+            unrolledTimeMap.notatedSeconds(fromUnrolled: backend.currentPositionSeconds),
+        )
     }
 
     private func backendTickCursor(
@@ -2367,17 +2388,25 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // `totalTicks` are offsets), which is why comparing against the tick never fired:
         // playback stayed `.playing` with the cursor parked on the last note, and a
         // whole-score repeat never wrapped.
-        guard let scoreSeconds = backendUnrolledSeconds(backend, timeline: timeline) else {
-            // Still inside a count-in pre-roll — the cursor stays pinned at the start
-            // position (set at play time) and nothing is decided yet.
-            return
-        }
+        // During a count-in this is the held start position, so the cursor stays pinned there
+        // and neither branch below can fire early: the transport hasn't moved yet.
+        let scoreSeconds = backend.currentPositionSeconds
         // `seconds(atTick:)` extrapolates across the final `[lastTick, totalTicks]` →
         // `[lastTime, totalSeconds]` segment, so an offset-valued `endTick` maps to a
         // reachable time even though it has no frame of its own.
         if let loop = loopRange,
            scoreSeconds >= timeline.seconds(atTick: Double(loop.endTick))
         {
+            // The count is over once the first pass is: swap the count-in metronome sequence for
+            // the plain one so the wrapped pass clicks from the loop's start (that sequence keeps
+            // only the beats from the count-in's start position onward, offset to sit behind the
+            // pre-roll — a wrap to an earlier tick has nothing there to play).
+            if backendMetronomeHasPreRoll, let score = sequencerScore,
+               let rendered = try? cachedRender(score)
+            {
+                loadBackendMetronomeSequence(backend: backend, rendered: rendered)
+                backend.setMetronomeMuted(!metronome.isEnabled)
+            }
             backend.seek(toTick: loop.startTick)
             reapplyMixerPrograms()
             applyMixerState()
@@ -2455,6 +2484,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// teardown-on-dealloc, and is a no-op on an already-stopped engine —
     /// so an explicit `teardown()` first leaves this harmless.
     deinit {
+        // The interruption observer needs no unregistering here — `AudioSessionInterruptionObserver` removes it in
+        // its own (unisolated) deinit as this instance releases it.
         engine.stop()
     }
 
@@ -2505,5 +2536,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         instrumentMIDIChannels.removeAll()
         staffChannelSwitches.removeAll()
         metronome.teardown()
+        // The engine no longer holds any audio, so the exclusive claim a `.mixUntilPlay` host escalated to is spent:
+        // a later `prepare(score:)` on this same instance is a fresh score load and starts out mixing again. Hosts
+        // typically deactivate the session around here too, which is theirs to do — the engine only forgets that it
+        // escalated.
+        hasEscalatedAudioSession = false
+        needsAudioSessionReactivation = false
     }
 }

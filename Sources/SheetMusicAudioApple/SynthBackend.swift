@@ -34,6 +34,15 @@ public protocol SynthBackend: AnyObject {
     /// that should render as percussion. Called from `prepare(score:)` and
     /// again from `reloadSoundfont(...)` (with a new URL).
     ///
+    /// `metronomeSoundfontURL` is the click sound resolved from the host's
+    /// `MetronomeClickProvider` (a generated click SF2, a host SF2, or `nil` for
+    /// the GM drum-kit fallback). A backend that renders the metronome on its own
+    /// synth MUST load it there when non-`nil`; passing only `soundfontURL` would
+    /// click with the score font's GM wood blocks (notes 76 / 77) and silently
+    /// ignore the host's click samples. It arrives here rather than through a
+    /// second call so one `prepare` remains one atomic (possibly asynchronous)
+    /// load.
+    ///
     /// May load the SoundFont asynchronously (off the main actor) — a large
     /// General-MIDI font is tens of MB and parsing it on the main actor would
     /// freeze the UI. A backend that loads asynchronously reports `isReady ==
@@ -46,7 +55,9 @@ public protocol SynthBackend: AnyObject {
     /// this by deferring play until ready and re-asserting mixer + tuning state on
     /// the next `backendPlay`; a direct caller must await readiness before driving
     /// the transport.
-    func prepare(soundfontURL: URL?, drumChannels: Set<UInt8>)
+    func prepare(
+        soundfontURL: URL?, metronomeSoundfontURL: URL?, drumChannels: Set<UInt8>,
+    )
 
     /// `false` while an asynchronous SoundFont load kicked by `prepare` is still
     /// in flight; `true` once the synth is playable. A synchronously-loading
@@ -69,12 +80,24 @@ public protocol SynthBackend: AnyObject {
     /// the backend's separate metronome transport, kept in lockstep with the
     /// score. Muting it (`setMetronomeMuted`) is then a live flag flip — no
     /// score-SMF reload, so a toggle never resets the score synth's voices.
-    func loadMetronomeSequence(_ midi: MidiFile)
+    ///
+    /// `offsetSeconds` is how far AHEAD of the score transport this sequence
+    /// runs. It is `0` for the ordinary body metronome and `> 0` for a count-in
+    /// sequence, which carries a pre-roll the score's SMF does not: the backend
+    /// adds it to every metronome seek so the two transports stay aligned once
+    /// the pre-roll has elapsed.
+    func loadMetronomeSequence(_ midi: MidiFile, offsetSeconds: TimeInterval)
 
     /// Silence / restore the metronome without reloading anything. The
     /// metronome transport keeps advancing while muted so an un-mute lands on
     /// the beat.
     func setMetronomeMuted(_ muted: Bool)
+
+    /// Linear gain for the backend's own metronome mix (the mixer's metronome
+    /// strip). Separate from `setMetronomeMuted` — a backend that only honors
+    /// the mute can be silenced but not turned down. Persisted by the backend
+    /// across sequence / SoundFont reloads, like `setRate` / `setTuning`.
+    func setMetronomeVolume(_ volume: Float)
 
     /// Transport control. `currentTick` is the SMF-tick clock the cursor timer
     /// polls; `seek` and loop-wrap both move the transport in tick space.
@@ -83,6 +106,18 @@ public protocol SynthBackend: AnyObject {
     func stop()
     func seek(toTick tick: Int)
     var currentTick: Int { get }
+
+    /// Start playing, but hold the SCORE transport for `seconds` first while the
+    /// metronome transport — already loaded with a count-in sequence — plays the
+    /// pre-roll. The count MUST be audible during that window whatever
+    /// `setMetronomeMuted` says: counting in is an explicit request, not the
+    /// metronome toggle.
+    ///
+    /// The wait belongs to the backend rather than the engine because it is the
+    /// only place with a sample clock: a main-actor timer would quantize the
+    /// downbeat to whichever render buffer happened to notice the deadline had
+    /// passed, which is audible as an unsteady count.
+    func play(afterCountInSeconds seconds: TimeInterval)
 
     /// Raw transport position in seconds on the backend's own clock, before
     /// any score-tick mapping. `currentTick` is the identity-mapped
@@ -139,6 +174,18 @@ extension SynthBackend {
         get { nil }
         set { _ = newValue } // synchronous backend never fires readiness changes
     }
+
+    /// Default for a backend that can't hold its score transport: it simply
+    /// starts, i.e. plays without a count-in rather than mis-timing one. Keeps
+    /// transport-only test doubles source-compatible.
+    public func play(afterCountInSeconds _: TimeInterval) {
+        play()
+    }
+
+    /// Default for a backend that renders its metronome at a fixed level: the
+    /// strip's volume is dropped rather than mis-applied. Keeps existing
+    /// conformers — including transport-only test doubles — source-compatible.
+    public func setMetronomeVolume(_: Float) {}
 
     /// Default for a backend with no end-of-sequence signal of its own: never
     /// reports the end, so the engine simply doesn't auto-stop it. Chosen over

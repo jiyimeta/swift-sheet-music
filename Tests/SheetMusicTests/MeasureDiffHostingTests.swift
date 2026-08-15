@@ -73,7 +73,9 @@
                 origin: original.origin,
                 width: original.width,
                 elements: original.elements
-                    + [.barLine(subtype: token, origin: .zero)],
+                    + [.barLine(
+                        subtype: token, origin: .zero, halfHeight: 4,
+                    )],
                 markers: original.markers,
                 jumps: original.jumps,
                 lineBreak: original.lineBreak,

@@ -112,6 +112,27 @@ var targets: [Target] = [
             // `/Encoding`. Until then the registry is simply empty there.
         ] : [],
     ),
+    // Always built (like SheetMusicAndroidJNI itself below): SheetMusicTests depends on it in both the
+    // Android and non-Android shapes, and SheetMusicAndroidJNI's own sources import it unconditionally.
+    // Only its *product* (below, in the `if isAndroid` block) is Android-gated — the same split
+    // SheetMusicAndroidJNI's target/product pair already uses.
+    //
+    // The `Path/` and `Intent/` subdirectories are load-bearing for the Kotlin side, not just tidiness:
+    // wirelet's Gradle codegen scans exactly one directory per source set, and `:SheetMusicAudioAndroid`
+    // scans `Path/` to emit the ScoreItemID / NoteID / StaffAddress / ClefAnchor codecs its playback engine
+    // needs. Adding an `@WireFormat` type to `Path/` therefore emits a Kotlin codec into
+    // `io.github.jiyimeta.sheetmusic.audio.serialization` that expects a hand-written model class of the same
+    // name; put anything the audio module does not need in `Intent/`.
+    .target(
+        name: "SheetMusicEditWire",
+        dependencies: [
+            "SheetMusicCore",
+            .product(name: "Wirelet", package: "swift-wirelet"),
+        ],
+        swiftSettings: [
+            .swiftLanguageMode(.v5),
+        ],
+    ),
     .target(
         name: "SheetMusicAndroidJNI",
         dependencies: [
@@ -122,6 +143,7 @@ var targets: [Target] = [
             "SheetMusicLayout",
             "SheetMusicMIDI",
             "SheetMusicAudioCore",
+            "SheetMusicEditWire",
             .product(name: "Wirelet", package: "swift-wirelet"),
             .product(name: "SwiftJava", package: "swift-java"),
         ],
@@ -149,6 +171,7 @@ var targets: [Target] = [
             "SheetMusicMusicXML",
             "SheetMusicLayout",
             "SheetMusicAndroidJNI",
+            "SheetMusicEditWire",
             "SheetMusicAudioCore",
             .product(name: "Wirelet", package: "swift-wirelet"),
             "SheetMusicXMLTools",
@@ -161,6 +184,7 @@ var targets: [Target] = [
             "SheetMusicMusicXML",
             "SheetMusicLayout",
             "SheetMusicAndroidJNI",
+            "SheetMusicEditWire",
             "SheetMusicLayoutApple",
             "SheetMusicUI",
             "SheetMusicAudio",
@@ -259,6 +283,14 @@ if isAndroid {
             name: "SheetMusicAndroidJNI",
             type: .dynamic,
             targets: ["SheetMusicAndroidJNI"],
+        ),
+        // Not `.dynamic`: Folino's `FolinoEditorJNI` and this package's `SheetMusicAndroidJNI` are separate
+        // `.so`s, each linking its own copy of the wire code. That's fine — the wire is pure code with no
+        // shared state, and what must match between the two images is the *schema*, which now has exactly
+        // one declaration instead of two hand-maintained copies.
+        .library(
+            name: "SheetMusicEditWire",
+            targets: ["SheetMusicEditWire"],
         ),
     ]
     targets += [

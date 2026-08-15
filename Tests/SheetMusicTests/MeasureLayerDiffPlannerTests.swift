@@ -23,7 +23,9 @@
                 measureIndex: index,
                 origin: CGPoint(x: originX, y: 0),
                 width: 100,
-                elements: [.barLine(subtype: contentToken, origin: .zero)],
+                elements: [.barLine(
+                    subtype: contentToken, origin: .zero, halfHeight: 4,
+                )],
             )
         }
 
@@ -148,7 +150,9 @@
             let next = system(measures: [
                 LayoutMeasure(
                     measureIndex: 0, origin: .zero, width: 100, elements: [],
-                    invisibleElements: [.barLine(subtype: nil, origin: .zero)],
+                    invisibleElements: [.barLine(
+                        subtype: nil, origin: .zero, halfHeight: 4,
+                    )],
                 ),
             ])
 
@@ -172,7 +176,7 @@
             // so moving that one would be caught by the `staffLineEndX`
             // conjunct too and this case would not isolate the fix.
             let hidden: [LayoutElement] = [
-                .barLine(subtype: "hidden", origin: .zero),
+                .barLine(subtype: "hidden", origin: .zero, halfHeight: 4),
             ]
             func middle(originX: CGFloat) -> LayoutMeasure {
                 LayoutMeasure(
@@ -248,7 +252,10 @@
                 LayoutMeasure(
                     measureIndex: 1, origin: CGPoint(x: 100, y: 0),
                     width: 100,
-                    elements: [.barLine(subtype: nil, origin: CGPoint(x: 100, y: 0))],
+                    elements: [.barLine(
+                        subtype: nil, origin: CGPoint(x: 100, y: 0),
+                        halfHeight: 4,
+                    )],
                 ),
             ])
             let next = system(measures: [
@@ -256,7 +263,10 @@
                 LayoutMeasure(
                     measureIndex: 1, origin: CGPoint(x: 100, y: 0),
                     width: 100,
-                    elements: [.barLine(subtype: "end", origin: CGPoint(x: 100, y: 0))],
+                    elements: [.barLine(
+                        subtype: "end", origin: CGPoint(x: 100, y: 0),
+                        halfHeight: 4,
+                    )],
                 ),
             ])
 
@@ -324,8 +334,13 @@
                     LayoutMeasure(
                         measureIndex: 1, origin: CGPoint(x: 100, y: 0),
                         width: 100,
-                        elements: [.barLine(subtype: nil, origin: CGPoint(x: 100, y: 0))],
-                        invisibleElements: [.barLine(subtype: "hidden", origin: .zero)],
+                        elements: [.barLine(
+                            subtype: nil, origin: CGPoint(x: 100, y: 0),
+                            halfHeight: 4,
+                        )],
+                        invisibleElements: [.barLine(
+                            subtype: "hidden", origin: .zero, halfHeight: 4,
+                        )],
                     ),
                 ],
                 staffOrigins: [CGPoint(x: 0, y: 0), CGPoint(x: 0, y: 40)],
@@ -459,7 +474,10 @@
                         measureIndex: m.measureIndex, origin: m.origin, width: m.width,
                         elements: m.elements,
                         invisibleElements: m.invisibleElements
-                            + [.barLine(subtype: "extra-invisible", origin: .zero)],
+                            + [.barLine(
+                                subtype: "extra-invisible", origin: .zero,
+                                halfHeight: 4,
+                            )],
                     )
                 case .trailingBarLine:
                     // Same `size` — the `wrapToViewWidth`-reachable
@@ -468,7 +486,10 @@
                     // `BarLineGeometry.staffLineEndX`.
                     LayoutMeasure(
                         measureIndex: m.measureIndex, origin: m.origin, width: m.width,
-                        elements: [.barLine(subtype: "final", origin: CGPoint(x: m.width, y: 0))],
+                        elements: [.barLine(
+                            subtype: "final", origin: CGPoint(x: m.width, y: 0),
+                            halfHeight: 4,
+                        )],
                         invisibleElements: m.invisibleElements,
                     )
                 default:

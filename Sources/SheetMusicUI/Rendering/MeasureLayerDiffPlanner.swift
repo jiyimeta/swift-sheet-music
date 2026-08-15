@@ -91,7 +91,7 @@ enum MeasureLayerDiffPlanner {
     /// shift; see `invisibleLayerIsUnchanged`.
     ///
     /// Also compares `BarLineGeometry.staffLineEndX(for:)`: `drawStaves`
-    /// (via `StaffRenderer.endX(for:)`) clips the five staff lines to
+    /// (via `StaffRenderer.endX(for:)`) clips the staff lines to
     /// that X, which is derived from the LAST measure's `origin.x` and
     /// its trailing barline's subtype (`LayoutSystem.trailingBarLine`)
     /// — a system-level draw input that lives outside every measure

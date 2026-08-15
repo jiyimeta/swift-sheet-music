@@ -14,7 +14,10 @@
                 origin: CGPoint(x: x, y: y),
                 width: 40,
                 elements: [
-                    .barLine(subtype: nil, origin: CGPoint(x: barlineX, y: 5)),
+                    .barLine(
+                        subtype: nil, origin: CGPoint(x: barlineX, y: 5),
+                        halfHeight: 4,
+                    ),
                 ],
             )
         }

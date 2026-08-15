@@ -5,7 +5,7 @@ import SwiftUI
 
 @available(macOS 15.0, *)
 enum StaffRenderer {
-    /// Right edge (in system-local coords) for the five staff lines.
+    /// Right edge (in system-local coords) for the staff lines.
     /// Forwards to the shared `BarLineGeometry.staffLineEndX` so the
     /// Apple renderer and the Android bridge agree on where the staff
     /// terminates.
@@ -13,17 +13,20 @@ enum StaffRenderer {
         BarLineGeometry.staffLineEndX(for: system)
     }
 
-    /// Draw five horizontal staff lines. `origin` is the top-left of the
-    /// top line; `width` is how far they run. The fifth (bottom) line lies
-    /// at `origin.y + 4 * sp`.
+    /// Draw this staff's horizontal lines — `geometry.lineCount` of
+    /// them, not always five. `origin` is the top-left of the top line;
+    /// `width` is how far they run. The bottom line lies at
+    /// `origin.y + geometry.height(sp:)`, so a one-line staff draws a
+    /// single line right at `origin.y`.
     static func draw(
         context: inout GraphicsContext,
         origin: CGPoint,
         width: CGFloat,
+        geometry: StaffLineGeometry,
         metrics: StaffMetrics,
     ) {
-        for i in 0 ..< 5 {
-            let y = origin.y + CGFloat(i) * metrics.sp
+        for i in 0 ..< geometry.lineCount {
+            let y = origin.y + geometry.lineY(i, sp: metrics.sp)
             var path = Path()
             path.move(to: CGPoint(x: origin.x, y: y))
             path.addLine(to: CGPoint(x: origin.x + width, y: y))

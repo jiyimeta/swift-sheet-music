@@ -257,22 +257,29 @@ public enum HarmonyRendering {
     }
 
     /// MuseScore TPC → letter + ASCII accidental (`b` / `#`).
-    /// Convention (`engraving/dom/pitchspelling.cpp`): the cycle of
-    /// fifths starts at F♭♭ = 0 and ascends in fifths, so
-    ///     row = floor(tpc / 7) - 2 → -2 / -1 / 0 / 1 / 2
+    ///
+    /// The line of fifths is anchored at the NATURALS, which
+    /// `Tpc` (`engraving/dom/pitchspelling.h:40-51`) places at
+    /// `F = 13, C = 14, G = 15, D = 16, A = 17, E = 18, B = 19` — the
+    /// enum starts at `TPC_F_BBB = -8`, three alteration rows below
+    /// the naturals. So
+    ///     letter = (tpc + 1) mod 7 → 0=F, 1=C, 2=G, 3=D, 4=A, 5=E, 6=B
+    ///     row    = floor((tpc - 13) / 7) → -2 / -1 / 0 / 1 / 2
     ///         (double-flat / flat / natural / sharp / double-sharp)
-    ///     letter = tpc mod 7 → 0=F, 1=C, 2=G, 3=D, 4=A, 5=E, 6=B.
-    /// `tpc < 0` (TPC_INVALID) is normalized to `nil` at decode time
-    /// and never reaches here.
+    /// which is the same origin `SheetMusicCore.PitchSpelling` and
+    /// `PitchStaffPosition.tpcLetters` use. Anchoring one step away
+    /// (F = 14) spells every root a fifth flatward — an imported
+    /// F minor 7 rendered as B♭m7.
+    ///
+    /// `tpc == -1` (legacy TPC_INVALID) is normalized to `nil` at
+    /// decode time and never reaches here.
     private static func tpcToText(_ tpc: Int) -> String {
         let letters: [Character] = ["F", "C", "G", "D", "A", "E", "B"]
-        let letter = letters[((tpc % 7) + 7) % 7]
+        let letter = letters[(((tpc + 1) % 7) + 7) % 7]
         // Floor division — Swift's `/` truncates toward zero, which
-        // gives the wrong sign for negative TPCs. We never see
-        // negative TPCs in practice (decoder normalizes -1 → nil),
-        // but using floor keeps the math correct if someone ever
-        // passes a raw value through.
-        let row = Int((Double(tpc) / 7.0).rounded(.down)) - 2
+        // gives the wrong sign for the flatward rows (every TPC below
+        // 13, i.e. every flat spelling).
+        let row = Int((Double(tpc - 13) / 7.0).rounded(.down))
         switch row {
         case -2: return "\(letter)bb"
         case -1: return "\(letter)b"
