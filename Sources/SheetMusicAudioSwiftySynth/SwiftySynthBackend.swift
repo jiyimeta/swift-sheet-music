@@ -70,7 +70,12 @@ public final class SwiftySynthBackend: SynthBackend {
     /// in `scratchCapacity`-frame slices, so any `frameCount` is handled.
     static let scratchCapacity = 4096
 
-    private let sampleRate: Double
+    /// The rate every `Synthesizer` this backend builds renders at, fixed at
+    /// init. `internal` (not `private`) only so a test can assert that
+    /// `makeOfflineInstance` honors the export's requested rate — an unattached
+    /// `AVAudioNode` reports the hardware format, not the one it was built with,
+    /// so the node itself can't answer that.
+    let sampleRate: Double
     /// Tick↔seconds for the loaded score (SwiftySynth's clock is seconds).
     private var timeline: PlaybackTimeline?
 
@@ -507,6 +512,18 @@ public final class SwiftySynthBackend: SynthBackend {
         lock.withLockUnchecked {
             $0.synthesizer?.noteOff(key: Int(pitch), on: Int(channel))
         }
+    }
+
+    /// A second, independent backend for an offline export render, built at the
+    /// export's own `sampleRate` — SwiftySynth fixes its render rate when the
+    /// `Synthesizer` is created, so this is the only place the export's rate can
+    /// be honored. Everything else (SoundFont, sequence, mixer, tuning) is pushed
+    /// onto it by `PlaybackEngine+ExportBackend` from the export snapshot.
+    ///
+    /// Cheap to make: `init` only builds the `AVAudioSourceNode`; the SoundFont
+    /// isn't touched until `prepare`.
+    public func makeOfflineInstance(sampleRate: Double) -> (any SynthBackend)? {
+        SwiftySynthBackend(sampleRate: sampleRate)
     }
 
     public func teardown() {

@@ -158,6 +158,29 @@ public protocol SynthBackend: AnyObject {
 
     /// Tear down synth + transport before the engine is released.
     func teardown()
+
+    /// A fresh, independent instance of this same backend, configured to render
+    /// at `sampleRate`, for an offline audio-file export — or `nil` if this
+    /// backend can't render offline, in which case the export falls back to the
+    /// built-in AUMIDISynth pipeline.
+    ///
+    /// Why a second instance rather than the live one: `exportAudioFile` renders
+    /// on a DEDICATED `AVAudioEngine` in manual-rendering mode, because
+    /// `enableManualRenderingMode` is a per-engine global flag that doesn't
+    /// compose with concurrent hardware-routed playback. A backend node can only
+    /// be attached to one engine, and its transport carries live position /
+    /// mixer state the export must not disturb, so the export needs its own.
+    ///
+    /// `sampleRate` is the export's output format rate, which is chosen by the
+    /// host per file format and generally differs from the live engine's. A
+    /// backend that fixes its render format at init (as `SwiftySynthBackend`
+    /// does) MUST honor it here — a mismatch would resample the whole export.
+    ///
+    /// Returning `nil` is not a soft failure: exports then sound like the
+    /// AUMIDISynth path, i.e. with the voice stealing this backend exists to
+    /// avoid. Only leave the default in place for backends that genuinely can't
+    /// render offline (and for transport-only test doubles).
+    func makeOfflineInstance(sampleRate: Double) -> (any SynthBackend)?
 }
 
 extension SynthBackend {
@@ -186,6 +209,14 @@ extension SynthBackend {
     /// strip's volume is dropped rather than mis-applied. Keeps existing
     /// conformers — including transport-only test doubles — source-compatible.
     public func setMetronomeVolume(_: Float) {}
+
+    /// Default for a backend that can't render offline: the export falls back to
+    /// the built-in AUMIDISynth pipeline. Chosen over a required member so
+    /// existing conformers — including transport-only test doubles — stay
+    /// source-compatible.
+    public func makeOfflineInstance(sampleRate _: Double) -> (any SynthBackend)? {
+        nil
+    }
 
     /// Default for a backend with no end-of-sequence signal of its own: never
     /// reports the end, so the engine simply doesn't auto-stop it. Chosen over
