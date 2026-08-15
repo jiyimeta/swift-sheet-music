@@ -1863,6 +1863,52 @@ class AndroidPlaybackEngineTest {
         assertTrue("encoder.finish() should have been called", encoder.finished)
     }
 
+    @Test
+    fun `exportAudioFile carries the live calibration and transpose onto the offline synth`() = runTest {
+        // The exporter's own tuning behaviour is pinned by AudioExporterTuningTest, which builds the
+        // snapshot by hand. This case exists for the half that one cannot see: that the ENGINE puts
+        // its live pitch state into the snapshot at all. Zeroing either field there is invisible to
+        // every other test in this module.
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(0L, 0L),
+        )
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+        engine.setMasterTuning(100.0)
+        engine.setTranspose(3)
+
+        val synth = FakeSynthDriver()
+        val (player, _) = FakePlayerDriver.create()
+        val exporter = AudioExporter(
+            resolver = StubSoundfontResolver(),
+            context = null,
+            synthFactory = { _ -> synth },
+            playerFactory = { _ -> player },
+            encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
+        )
+        engine.exportAudioFileWith(
+            outputFd = null,
+            scoreHandle = 1L,
+            format = AudioFileFormat.Wav(),
+            range = AudioExportRange.Full,
+            progress = null,
+            exporterFactory = { exporter },
+        )
+
+        // 100 cents of calibration + 3 semitones = 400 cents, so the coarse master-tuning RPN is
+        // 64 + 4 = 68. Written out rather than recomputed, and chosen so that BOTH fields have to
+        // arrive: calibration alone would send 65 and the transpose alone 67.
+        assertTrue(
+            "the offline synth must be retuned by calibration + transpose, got ${synth.calls}",
+            synth.calls.containsAll(
+                listOf("cc(0,101,0)", "cc(0,100,2)", "cc(0,6,68)", "cc(0,38,0)"),
+            ),
+        )
+    }
+
     @Test(expected = AudioBackendException.RangeNotInTimeline::class)
     fun `exportAudioFile throws RangeNotInTimeline when JNI returns -1`() = runTest {
         val bridge = FakeJniBridge(

@@ -1241,6 +1241,11 @@ class AndroidPlaybackEngine internal constructor(
             metronomeSmfBytes = jniBridge.renderMetronomeMidi(scoreHandle),
             rate = _currentRate.value,
             metronomeResolution = clickResolver.resolve(),
+            // Pitch state travels with the snapshot for the same reason the mixer does: the offline
+            // render builds a fresh synth at concert pitch, and the SMF it loads carries the AUTHORED
+            // pitches because transposed playback is a tuning shift and never a re-render.
+            masterTuningCents = masterTuningCents,
+            transposeSemitones = transposeSemitones,
         )
 
         val smfBytes = jniBridge.renderMidi(scoreHandle)
