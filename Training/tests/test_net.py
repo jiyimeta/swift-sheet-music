@@ -1,7 +1,19 @@
 import pytest
 import torch
 
-from model import net
+from model import net, prep
+
+
+def test_symbol_net_default_num_classes_matches_the_frozen_vocabulary():
+    # `net.SymbolNet`'s `num_classes: int = 62` default is NOT sourced
+    # from `prep.VOCABULARY` (the module deliberately does not import
+    # `prep` — a detector architecture module has no business depending
+    # on the label vocabulary module). Nothing else pins the two
+    # together, so an append to `prep.VOCABULARY` — the frozen
+    # trainable-class table — would silently drift out of sync with the
+    # heatmap head's channel count with no error anywhere. This test
+    # (not `net.py` itself) is what should go loud in that case.
+    assert net.SymbolNet().heatmap_head.out_channels == len(prep.VOCABULARY)
 
 
 def test_the_heads_are_stride_four_and_the_right_width():

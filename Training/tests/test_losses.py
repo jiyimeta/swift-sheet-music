@@ -31,7 +31,24 @@ def test_focal_loss_punishes_a_false_positive_less_near_a_peak_than_far_from_one
 
 
 def test_masked_l1_ignores_everything_outside_the_mask():
-    pred = torch.ones(1, 4, 3, 3) * 5
+    # `pred` must differ INSIDE vs OUTSIDE the masked cell, or deleting
+    # the masking entirely (comparing the whole tensor instead of just
+    # the masked cell) produces the same answer by coincidence: a
+    # uniform `pred = 5` / `target = 0` fixture has every element's
+    # error equal to 5, so the masked mean and the unmasked mean are
+    # both 5.0 regardless of whether masking runs at all. Verified by
+    # deletion: replacing `masked_l1` with a straight
+    # `(pred - target).abs().mean()` (i.e. deleting the masking) turns
+    # this test's result from 5.0 to ~1.4444 (mean over all 36
+    # (cell, channel) pairs instead of just the 4 masked ones) — see
+    # the fix report.
+    pred = torch.ones(1, 4, 3, 3)
+    pred[:, :, 1, 1] = 5
     target = torch.zeros(1, 4, 3, 3)
     mask = torch.zeros(1, 1, 3, 3); mask[0, 0, 1, 1] = 1
+    # An unbroadcast normalizer (`n = mask.sum()` computed BEFORE
+    # `mask.expand_as(pred)`, i.e. `n == 1` instead of `4`) would give
+    # `diff.sum() / n == 20.0 / 1 == 20.0` here, since the masked cell's
+    # error is 5 across all 4 channels — this fixture still catches
+    # that bug too.
     assert float(losses.masked_l1(pred, target, mask)) == pytest.approx(5.0)
