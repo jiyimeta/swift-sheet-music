@@ -85,6 +85,10 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
                     // transpose is a separate tuning shift
                     // (AndroidPlaybackEngine.setTranspose), never a re-render.
                     transposeSemitones = 0,
+                    // 1 = engrave sung text. 0 removes the whole lyric row —
+                    // syllables, hyphens and melisma rules — and shortens the
+                    // engraved page accordingly.
+                    showsLyrics = 1u,
                 ),
             )
             val programBytes = withContext(Dispatchers.Default) {

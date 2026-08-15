@@ -24,6 +24,15 @@ public struct LayoutOptionsWire {
     /// This is the NOTATION half only. Transposed *playback* is a tuning shift on the melodic channels
     /// (`AndroidPlaybackEngine.setTranspose`), never a re-render — matching the Apple engine.
     public var transposeSemitones: Int32
+    /// Whether sung text is engraved at all. `0` hides it, anything else shows it — a host that
+    /// omitted the field would otherwise hide lyrics by accident, and showing them is the behaviour
+    /// every release before this one had.
+    ///
+    /// Hiding is a display choice, not MuseScore's per-element `visible` flag: the whole row goes,
+    /// including the hyphens and the melisma rules, and `showsInvisibleElements` does not bring it
+    /// back. The engraved document is genuinely SHORTER as a result, which is what a host reserving
+    /// a fixed-height notation strip depends on.
+    public var showsLyrics: UInt8
 }
 
 @WireFormat
@@ -62,12 +71,18 @@ extension LayoutOptionsWire {
         max(-7, min(7, Int(transposeSemitones)))
     }
 
+    /// Whether the engraver should lay lyrics out. Anything other than an explicit `0` shows them,
+    /// so the safe direction for a host that has not been updated is the pre-existing behaviour.
+    public var lyricsVisible: Bool {
+        showsLyrics != 0
+    }
+
     /// Default for the legacy no-options LayoutBridge.compute path + tests.
     public static var verticalDefault: LayoutOptionsWire {
         LayoutOptionsWire(
             layoutMode: 0, staffSize: 28,
             honorLayoutBreaks: 1, collapseMultiMeasureRests: 0, showsInvisibleElements: 0,
-            hiddenStaves: [], clefOverrides: [], transposeSemitones: 0,
+            hiddenStaves: [], clefOverrides: [], transposeSemitones: 0, showsLyrics: 1,
         )
     }
 }

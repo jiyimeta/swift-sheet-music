@@ -929,6 +929,17 @@ extension LayoutEngine {
                     // across measures of the same system.
                     let chordLyricCenterY = voiceMaxLyricCenterY
                     for (verseIdx, lyric) in chord.lyrics.enumerated() {
+                        // A host that hides lyrics loses the WHOLE row:
+                        // syllable, hyphens and melisma rule alike, because
+                        // every decoration below is emitted only alongside a
+                        // syllable that reached this point (the incoming
+                        // continuations from an earlier measure are gated on
+                        // the same flag where they are emitted). Nothing is
+                        // routed to `invisibleOut` either — this is a display
+                        // choice by the host, not the element's own `visible`
+                        // flag, so `showsInvisibleElements` must not bring it
+                        // back.
+                        guard options.lyricsVisible else { break }
                         guard !lyric.text.isEmpty else { continue }
                         // Hidden lyrics: drop entirely when toggle is
                         // off (print-by-default); when toggle is on
@@ -1885,7 +1896,12 @@ extension LayoutEngine {
                 halfHeight: barLineHalfHeight,
             ))
         }
-        for continuation in incomingMelismas {
+        // Melisma rules whose anchor syllable is in an earlier measure. Gated
+        // on the same host toggle as the syllables themselves: a rule trailing
+        // across a system with no syllable anywhere in sight reads as a stray
+        // horizontal line, and it would also keep the below-staff extent the
+        // hidden row was supposed to give back.
+        for continuation in incomingMelismas where options.lyricsVisible {
             emitMelismaContinuation(
                 continuation: continuation,
                 staffMidY: staffMidY,
