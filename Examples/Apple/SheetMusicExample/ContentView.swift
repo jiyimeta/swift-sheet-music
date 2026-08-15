@@ -187,6 +187,10 @@
                 .presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $isExportAudioPresented) {
+                // Deliberately the *untransposed* score: audio transpose is a
+                // tuning shift the offline render reproduces from the engine's
+                // snapshot, never a re-render. Transposing here too would
+                // double it.
                 if let score {
                     NavigationStack {
                         AudioExportSheet(engine: playbackEngine, score: score)
@@ -195,8 +199,14 @@
             }
         }
 
+        /// The score a PDF export should engrave: what the view is showing, i.e. with the active transpose applied.
+        /// Exporting the raw `score` would silently revert the PDF to the authored key.
+        private var scoreForPDFExport: Score? {
+            score.map { $0.transposed(bySemitones: transposeSemitones) }
+        }
+
         private func exportPDF() {
-            guard let score else { return }
+            guard let score = scoreForPDFExport else { return }
             do {
                 let data = try PDFExporter.export(
                     score: score,

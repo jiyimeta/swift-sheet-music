@@ -7,6 +7,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **Apple example apps:** exporting while a transposition was active wrote the
+  file in the *authored* key. Every export entry point handed the raw loaded
+  score to the serializer, so `Score.transposed(bySemitones:)` only ever reached
+  the on-screen engraving — PDF, MSCX (MS4 / MS3), MSCZ and MIDI all silently
+  reverted. The macOS app now serializes the transposed score for the file
+  exports and the full display transform for PDF (a PDF is a rendering, so it
+  matches the view, hidden staves and all; a saved `.mscx` / `.mscz` keeps the
+  staves the source file marked `<show>0</show>` rather than dropping music on
+  save). The iOS app's PDF export takes the same transform. Audio export is
+  deliberately unchanged — the offline render reproduces transposition as a
+  tuning shift from the engine snapshot, so transposing the score there too
+  would double it.
+
+  The library itself was never affected; `TransposedScoreExportTests` now pins
+  that (transpose → encode → reparse keeps the keys and pitches for MSCX, MSCZ
+  and MIDI) so a future regression is unambiguously attributable.
+
 ## [1.14.0] - 2026-08-14
 
 ### Added
