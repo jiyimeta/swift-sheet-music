@@ -121,7 +121,7 @@ enum FermataRanges {
     /// Group by (startTick, endTick); within each group keep the
     /// largest stretch. Returns ranges sorted by startTick then
     /// endTick — required by the sweep-merge consumer.
-    private static func dedupeMaxStretch(_ ranges: [FermataRange]) -> [FermataRange] {
+    static func dedupeMaxStretch(_ ranges: [FermataRange]) -> [FermataRange] {
         var bestByKey: [DedupeKey: FermataRange] = [:]
         for r in ranges {
             let key = DedupeKey(startTick: r.startTick, endTick: r.endTick)
