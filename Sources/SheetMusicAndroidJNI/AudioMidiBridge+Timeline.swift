@@ -149,6 +149,21 @@ extension AudioMidiBridge {
         guard let frame = timeline.frame(forCursor: cursor) else { return Data() }
         return FrameCodec.encode(frame)
     }
+
+    /// The UNROLLED transport tick a NOTATED score tick sits at — the WRITE
+    /// direction, and the inverse of the translation `frameAtTick` performs on
+    /// the read side.
+    ///
+    /// Everything the Kotlin engine hands the FluidSynth player (`seekTick`)
+    /// or reads back from it (`currentTick`) is unrolled, while every tick it
+    /// gets out of `frameForCursor` / `itemEndTick` / `totalTicks` is notated.
+    /// One of the two has to be projected before they meet, and this is that
+    /// projection. `PlaybackUnroll.firstUnrolledTick(forNotated:)` is the same
+    /// rule the Apple engine schedules by, so the two platforms cannot drift.
+    static func unrolledTickForNotated(score: Score, notatedTick: Int64) -> Int64 {
+        let unroll = MidiRenderer.playbackUnroll(score: score)
+        return Int64(unroll.firstUnrolledTick(forNotated: Int(notatedTick)))
+    }
 }
 
 // MARK: - swift-java entry points
@@ -221,6 +236,20 @@ public func nativeFrameAtTick(scoreHandle: Int64, tick: Int64) -> Data {
 public func nativeSecondsAtTick(scoreHandle: Int64, unrolledTick: Double) -> Double {
     guard let score = scoreTable.value(for: scoreHandle) else { return -1 }
     return AudioMidiBridge.secondsAtTick(score: score, unrolledTick: unrolledTick)
+}
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeUnrolledTickForNotated(...)` call site: the
+/// UNROLLED transport tick a NOTATED score tick sits at.
+///
+/// Returns **−1** for an unknown handle or a negative input, neither of which
+/// a real scheduling target is; the Kotlin caller keeps its notated tick in
+/// that case, which is exactly the old behavior and correct on any score
+/// without a repeat.
+public func nativeUnrolledTickForNotated(scoreHandle: Int64, notatedTick: Int64) -> Int64 {
+    guard let score = scoreTable.value(for: scoreHandle) else { return -1 }
+    guard notatedTick >= 0 else { return -1 }
+    return AudioMidiBridge.unrolledTickForNotated(score: score, notatedTick: notatedTick)
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin

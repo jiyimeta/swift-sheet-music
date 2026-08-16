@@ -101,6 +101,33 @@ public struct PlaybackUnroll: Sendable, Equatable {
         }
         return result
     }
+
+    /// The single UNROLLED tick a scheduling move should target for a NOTATED
+    /// score tick: its FIRST occurrence in playback order.
+    ///
+    /// The read direction (`notatedTick(fromUnrolled:)`) is a function; this
+    /// one is not — a bar inside a repeat sits at one unrolled tick per pass,
+    /// and `unrolledTicks(forNotated:)` returns them all. Seek, play-from and
+    /// the loop wrap all target the first, which is the rule the rest of
+    /// scheduling already follows.
+    ///
+    /// A tick that falls inside no span extrapolates off the LAST measure-play
+    /// rather than failing: that is the end-of-score offset tick a half-open
+    /// region hands in (a loop's exclusive end, `totalTicks`), which by
+    /// construction has no frame of its own. This mirrors
+    /// `notatedTick(fromUnrolled:)`'s own last-segment fallthrough in the
+    /// opposite direction. Identity for a plan-less score, so a caller that
+    /// routes every scheduling tick through this is unchanged on any score
+    /// without a repeat.
+    ///
+    /// Both platforms call this rather than restating it: the Apple engine
+    /// through `PlaybackEngine`, the Android engine through the
+    /// `nativeUnrolledTickForNotated` JNI entry point.
+    public func firstUnrolledTick(forNotated notated: Int) -> Int {
+        if let first = unrolledTicks(forNotated: notated).first { return first }
+        guard let last = spans.last else { return notated }
+        return last.unrolledStart + (notated - last.notatedStart)
+    }
 }
 
 extension MidiRenderer {

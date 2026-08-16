@@ -1847,13 +1847,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// The UNROLLED transport tick a NOTATED score tick sits at — its first occurrence in playback
     /// order, which is the coordinate scheduling (seek, play-from, loop wrap) targets. Identity for
     /// a score with no repeat plan.
+    ///
+    /// The rule itself lives on `PlaybackUnroll` so the Android engine reaches the same one through
+    /// JNI (`nativeUnrolledTickForNotated`) instead of restating it in Kotlin.
     private func unrolledTick(forNotated tick: Int) -> Int {
-        if let first = unroll.unrolledTicks(forNotated: tick).first { return first }
-        // No span covers it — an end-of-score offset tick (a loop's exclusive end, `totalTicks`).
-        // Extrapolate off the last measure-play, mirroring `notatedTick(fromUnrolled:)`'s own
-        // last-segment fallthrough in the opposite direction.
-        guard let last = unroll.spans.last else { return tick }
-        return last.unrolledStart + (tick - last.notatedStart)
+        unroll.firstUnrolledTick(forNotated: tick)
     }
 
     /// Clamp `tick` into the active loop region. Returns `tick`

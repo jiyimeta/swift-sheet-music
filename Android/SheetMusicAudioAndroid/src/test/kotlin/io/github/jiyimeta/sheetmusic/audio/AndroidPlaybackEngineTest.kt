@@ -1461,6 +1461,121 @@ class AndroidPlaybackEngineTest {
         }
     }
 
+    // Loop bounds against the transport's UNROLLED clock (repeats / jumps)
+
+    /**
+     * A four-measure score whose first two bars sit inside a repeat, so the transport plays
+     * `[m0, m1, m0, m1, m2, m3]`. Notated bar starts are 0 / 1920 / 3840 / 5760 with a notated total
+     * of 7680; the unrolled render runs to 11520, and the two clocks agree only up to the repeat.
+     *
+     * This is the shape that distinguishes the two coordinate systems BY CONSTRUCTION: bar 2 notates
+     * at 3840, but the player does not reach it until 7680. A score without a repeat cannot tell the
+     * two apart at all, which is why every earlier loop test passed over this.
+     */
+    private fun repeatedScoreBridge(): FakeJniBridge = object : FakeJniBridge(
+        timelineSummaryResult = longArrayOf(7680L, 8_000_000L, 480L, 11520L),
+        staffParamsResult = oneStaffPayload(),
+        renderMidiResult = minimalSmf,
+    ) {
+        override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
+            val cursor = ScoreCursorCodec.decode(cursorBytes) as? ScoreCursor.Beat
+                ?: return byteArrayOf()
+            val m = cursor.measureIndex
+            // Beat(4, 0) does not resolve — measures 0..3 exist — so `setLoopMeasures(2, 3)` takes
+            // its last-measure fallback and ends the loop at the notated `totalTicks`.
+            return if (m in 0..3) {
+                encodeFrameBytes(tick = m * 1920L, timeMicros = m * 1920L * 1000L, cursor = cursor)
+            } else {
+                byteArrayOf()
+            }
+        }
+
+        /**
+         * `PlaybackUnroll.firstUnrolledTick(forNotated:)` for the plan above, tabulated: each bar's
+         * first occurrence in playback order, plus the end-of-score offset tick that a half-open
+         * region's exclusive end supplies (extrapolated off the last measure-play).
+         */
+        override fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long =
+            when (notatedTick) {
+                0L -> 0L
+                1920L -> 1920L
+                3840L -> 7680L
+                5760L -> 9600L
+                7680L -> 11520L
+                else -> notatedTick
+            }
+    }
+
+    @Test
+    fun `loop after a repeat wraps on the transport clock not the notated one`() =
+        runTest(testDispatcher) {
+            val bridge = repeatedScoreBridge()
+            val bindings = RecordingBindings()
+            val engine = newEngineForTests(bridge = bridge, playerBindings = bindings)
+            try {
+                engine.prepare(1L)
+                engine.setLoopMeasures(fromMeasure = 2, toMeasure = 3)
+                // The host still sees the SCORE's own coordinates: a LoopRange is a region of the
+                // score, and notated ticks are what the host persists and maps back through its own
+                // measure table. Only the engine's internal projection is in transport space.
+                assertEquals(3840L, engine.loopRange.value?.startTick)
+                assertEquals(7680L, engine.loopRange.value?.endTick)
+
+                engine.play()
+                // The transport has just reached bar 2 — the very first tick of the looped region,
+                // and the moment the region's first note sounds. It is also the loop's NOTATED end
+                // (7680), so folding against that end wrapped HERE: the region was cut before a
+                // note of it played, and the seek went to unrolled 3840, which is the repeat's
+                // second take of bar 0. The loop then cycled two bars the user had not selected and
+                // never reached the ones they had.
+                bindings.tickToReturn = 7680L
+                advanceTimeBy(200)
+                assertTrue(
+                    "a loop must not wrap at the instant its own region begins",
+                    bindings.seekTicks.isEmpty(),
+                )
+
+                // End of bar 3 — the loop's real end on the transport, 7680 + the 3840-tick span.
+                bindings.tickToReturn = 11520L
+                advanceTimeBy(200)
+                assertEquals(
+                    "the wrap seeks the loop start's UNROLLED position, not its notated tick",
+                    7680L,
+                    bindings.seekTicks.firstOrNull(),
+                )
+            } finally {
+                engine.teardown()
+            }
+        }
+
+    @Test
+    fun `clearLoop drops the transport projection too`() = runTest(testDispatcher) {
+        // The projection is cached alongside `loopRange`, so it has to be dropped with it —
+        // a surviving one would keep wrapping a transport the host has already unlooped.
+        val bridge = repeatedScoreBridge()
+        val bindings = RecordingBindings()
+        val engine = newEngineForTests(bridge = bridge, playerBindings = bindings)
+        try {
+            engine.prepare(1L)
+            engine.setLoopMeasures(fromMeasure = 2, toMeasure = 3)
+            engine.clearLoop()
+            engine.play()
+            bindings.tickToReturn = 11520L
+            advanceTimeBy(200)
+            assertFalse(
+                "no wrap to the loop start once the loop is cleared",
+                bindings.seekTicks.contains(7680L),
+            )
+            assertEquals(
+                "and the unrolled end of score now stops playback",
+                PlaybackState.STOPPED,
+                engine.state.value,
+            )
+        } finally {
+            engine.teardown()
+        }
+    }
+
     // T44 — setRate / currentRate
 
     @Test

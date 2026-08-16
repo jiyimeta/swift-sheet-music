@@ -366,6 +366,42 @@
             #expect(seconds(-1) == 0)
         }
 
+        @Test func unrolledTickForNotatedProjectsScheduleTargetsOntoTheTransport() {
+            // The Android engine gets notated ticks out of `frameForCursor` / `itemEndTick` /
+            // `totalTicks` and hands them to a FluidSynth player that runs the UNROLLED render.
+            // This is the projection between the two, and a score with a repeat is the only shape
+            // that can tell them apart: `[m0, m1(:||x2), m2]` plays as `[m0, m1, m1, m2]`.
+            let chord = Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)])
+            func bar(startRepeat: Bool = false, endRepeat: Int? = nil) -> Measure {
+                Measure(
+                    voices: [Voice(elements: [.chord(chord)])],
+                    startRepeat: startRepeat,
+                    endRepeatCount: endRepeat,
+                )
+            }
+            let score = Score(division: 480, parts: [Part(
+                id: "P0",
+                instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
+                staves: [Staff(measures: [
+                    bar(), bar(startRepeat: true, endRepeat: 2), bar(),
+                ])],
+            )])
+
+            func project(_ notated: Int64) -> Int64 {
+                AudioMidiBridge.unrolledTickForNotated(score: score, notatedTick: notated)
+            }
+
+            // Before the repeat the two clocks agree, which is exactly why every score without one
+            // is unaffected by routing scheduling through this.
+            #expect(project(0) == 0)
+            #expect(project(1920) == 1920)
+            // AFTER it they do not: the third bar notates at 3840 and plays at 5760.
+            #expect(project(3840) == 5760)
+            // And the notated total — a half-open region's exclusive end, which belongs to no bar —
+            // extrapolates rather than failing.
+            #expect(project(5760) == 7680)
+        }
+
         @Test func staffParamsCarriesTheStaffGroup() throws {
             // The bridge is the only place `Staff.group` reaches the wire, and the codec's own
             // round-trip cannot see a population site that never reads it — a bridge hardcoding

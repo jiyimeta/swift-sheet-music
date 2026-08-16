@@ -146,4 +146,40 @@ struct PlaybackUnrollTests {
         // silently dropped for a score without a computed repeat plan.
         #expect(PlaybackUnroll.identity.unrolledTicks(forNotated: 1234) == [1234])
     }
+
+    // MARK: - firstUnrolledTick(forNotated:) — the single scheduling target,
+    // shared by the Apple engine and (through `nativeUnrolledTickForNotated`)
+    // the Android one.
+
+    @Test func firstUnrolledTickPicksTheFirstOccurrence() {
+        // Plan [0,1,1,2] again. A tick inside the repeated bar has two
+        // occurrences; scheduling targets the earlier one, so a loop over a
+        // repeated bar covers that bar's own pass instead of swallowing the
+        // repeat's second take.
+        let unroll = MidiRenderer.playbackUnroll(score: Self.score([
+            Self.measure(), Self.measure(startRepeat: true, endRepeat: 2), Self.measure(),
+        ]))
+        #expect(unroll.unrolledTicks(forNotated: 2020) == [2020, 3940])
+        #expect(unroll.firstUnrolledTick(forNotated: 2020) == 2020)
+        // A bar AFTER the repeat is where the two clocks genuinely diverge:
+        // m2 notates at 3840 but the transport does not reach it until 5760.
+        #expect(unroll.firstUnrolledTick(forNotated: 3840) == 5760)
+    }
+
+    @Test func firstUnrolledTickExtrapolatesTheEndOfScoreOffset() {
+        // `totalTicks` — a half-open region's exclusive end — falls inside no
+        // span, so it has to extrapolate off the last measure-play rather than
+        // fail. Notated total is 3 * span = 5760; the transport's is 7680.
+        let unroll = MidiRenderer.playbackUnroll(score: Self.score([
+            Self.measure(), Self.measure(startRepeat: true, endRepeat: 2), Self.measure(),
+        ]))
+        #expect(unroll.unrolledTicks(forNotated: 3 * Self.span).isEmpty)
+        #expect(unroll.firstUnrolledTick(forNotated: 3 * Self.span) == 4 * Self.span)
+    }
+
+    @Test func firstUnrolledTickIdentityPassesThrough() {
+        // Identity for a plan-less score, so routing every scheduling tick
+        // through it changes nothing on a score without a repeat.
+        #expect(PlaybackUnroll.identity.firstUnrolledTick(forNotated: 1234) == 1234)
+    }
 }

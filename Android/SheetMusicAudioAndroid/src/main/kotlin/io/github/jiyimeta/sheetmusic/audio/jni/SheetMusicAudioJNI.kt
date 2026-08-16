@@ -63,6 +63,14 @@ internal object SheetMusicAudioJNI {
         return SwiftJavaJNI.nativeFrameAtTick(scoreHandle, tick, arena).toByteArray()
     }
 
+    /**
+     * The UNROLLED transport tick a NOTATED score tick sits at — the write-side inverse of
+     * [nativeFrameAtTick]'s read-side translation. Returns -1 for an unknown handle or a negative
+     * input; the caller keeps its notated tick in that case.
+     */
+    fun nativeUnrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long =
+        SwiftJavaJNI.nativeUnrolledTickForNotated(scoreHandle, notatedTick)
+
     fun nativeFrameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeFrameForCursor(
