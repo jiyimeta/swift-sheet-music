@@ -9,6 +9,32 @@ and this project adheres to
 
 ### Fixed
 
+- A `<MeasureRepeat>` bar now occupies its bar on `PlaybackTimeline`'s measure
+  spine. The spine counted chords and breath pauses only, while
+  `MidiRenderer.measureTicks` counts the marker's own duration, so every measure
+  after a `𝄎` started a full bar early on the cursor's timeline and the playhead
+  ran a measure ahead of the audio for the rest of the piece. `totalTicks` was
+  short by a bar for a score ending on one, too.
+
+- An A-B loop is now projected onto the transport's own coordinates before it is
+  compared against or seeked with. `LoopRange` is a region of the score, so it is
+  stored (and handed back to the host) in notated ticks — but the transport plays
+  `MidiRenderer.render`'s UNROLLED sequence, where the same bar sits at one
+  position per pass and generally at none of its notated ticks. On a score with a
+  repeat, a region after it therefore wrapped a measure-play early and then
+  replayed from wherever the sequence happened to be that many notated seconds
+  in, i.e. a different passage than the one the host had highlighted. The new
+  projection resolves the region's first occurrence and carries the span across,
+  so a loop over a repeated bar covers that bar's own pass rather than swallowing
+  the repeat's second take.
+
+  The same confusion ran through every other transport move — `seek(to:)`,
+  `play(from:)`, the count-in's base position and its metronome offset — which
+  all handed a notated tick straight to the sequencer. `SynthBackend` gains
+  `setUnrolledTimeMap(_:)` (default no-op, so existing conformers are unaffected)
+  and `SwiftySynthBackend` runs both `seek(toTick:)` and `currentTick` through it,
+  which is what lets the engine keep speaking notated ticks throughout.
+
 - **Apple example apps:** exporting while a transposition was active wrote the
   file in the *authored* key. Every export entry point handed the raw loaded
   score to the serializer, so `Score.transposed(bySemitones:)` only ever reached
