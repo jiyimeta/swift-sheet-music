@@ -91,6 +91,39 @@ and this project adheres to
 
 ### Fixed
 
+- **Android:** the playback transport no longer confuses the notated score
+  clock with the unrolled render it actually plays. `AndroidPlaybackEngine`
+  reads notated ticks out of `frameForCursor`, `itemEndTick` and the timeline
+  summary's `totalTicks`, but everything it hands the FluidSynth player
+  (`seekTick`) or reads back from it (`currentTick`) is in the repeat- and
+  jump-expanded coordinates of the rendered SMF — and the two were used
+  interchangeably. The read direction was already translated (`frameAtTick`
+  maps the player's tick back through the unroll); the write direction was not.
+  On a score with a repeat this made A-B looping unusable rather than
+  inaccurate: an A-B region placed *after* a repeat had its end compared against
+  a player position that was already past it, so the wrap fired the instant the
+  repeat finished — before a note of the selected region had sounded — and then
+  seeked to the notated start tick, which in transport coordinates lands inside
+  the repeat. The result cycled two bars the user had not selected and never
+  reached the ones they had. `setLoopFullScore` truncated the same way, and the
+  same misprojection sent `seek(ScoreCursor)`, `seek(toTimeSeconds)` and `skip`
+  to the wrong measure once a repeat had been passed, while `skip` additionally
+  fed a notated estimate to `frameAtTick`, which takes unrolled ticks. A score
+  without a repeat plan is unaffected — the two clocks are the same map there,
+  which is why this survived the Apple-side fix and every existing loop test.
+  `loopRange` is unchanged and still notated: it is a region of the *score*, so
+  that is what a host persists and maps back through its own measure table. The
+  engine now caches the region's projection onto the transport alongside it,
+  deriving the end as `start + notated span` rather than projecting the end tick
+  separately, so a loop over a repeated bar covers that bar's own pass instead
+  of swallowing the repeat's second take. The projection itself is
+  `PlaybackUnroll.firstUnrolledTick(forNotated:)` — the rule the Apple engine
+  already schedules by, now hoisted out of `PlaybackEngine` so both platforms
+  share one implementation — reached through the new
+  `nativeUnrolledTickForNotated` JNI entry point. `JniBridge` gains a matching
+  member with an identity default, so a bridge predating the entry point keeps
+  today's behaviour.
+
 - **Android:** an offline audio export now reproduces the live engine's
   transpose and A4 calibration. Transposed playback is a tuning shift on the
   melodic channels rather than a re-render, so the SMF the exporter loads holds
