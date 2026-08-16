@@ -27,6 +27,16 @@ data class StaffParams(
     val instrumentLongName: String = "",
     val channelVolume: UByte = 100u,
     val defaultClefType: String = "",
+    /**
+     * MuseScore `<StaffType group="…">` — "pitched" or "percussion".
+     *
+     * Not the same question as [isDrums], which comes from the PART's `useDrumset` and therefore
+     * says "this staff plays on the percussion bank". A pitched-percussion staff (timpani,
+     * glockenspiel) has `isDrums == false` and `groupRawValue == "percussion"`, so a host offering a
+     * drum-kit picker on [isDrums] alone over-offers exactly the staves Apple hides. Carried as the
+     * raw string because MuseScore's field has more values than the two this release reads.
+     */
+    val groupRawValue: String = "pitched",
 ) {
     /** Secondary constructor for call sites that pass Int literals. */
     constructor(

@@ -42,6 +42,18 @@ public struct StaffParams: Equatable, Sendable {
     /// Staff's authored `defaultClefType` (e.g. "G", "F", "PERC"), or "" when
     /// absent. Surfaced for a future Android visual inspector.
     public let defaultClefType: String
+    /// MuseScore `<StaffType group="…">` for this staff — "pitched" or
+    /// "percussion" (`Staff.group`), defaulting to "pitched".
+    ///
+    /// The only percussion signal the wire carried before this was `isDrums`,
+    /// which is derived from the PART's `instrument.useDrumset` alone. A
+    /// pitched-percussion staff (timpani, glockenspiel) is therefore
+    /// `isDrums == false` while its staff type still says "percussion", so a
+    /// host keying its drum-kit UI on `isDrums` over-offers exactly the
+    /// staves Apple hides. Carrying the raw string rather than a Bool keeps
+    /// the wire honest about a MuseScore field that has more values than the
+    /// two this release reads.
+    public let groupRawValue: String
 
     public init(
         staffIndex: Int,
@@ -56,6 +68,7 @@ public struct StaffParams: Equatable, Sendable {
         instrumentLongName: String = "",
         channelVolume: UInt8 = 100,
         defaultClefType: String = "",
+        groupRawValue: String = "pitched",
     ) {
         self.staffIndex = staffIndex
         self.bankLSB = bankLSB
@@ -69,6 +82,7 @@ public struct StaffParams: Equatable, Sendable {
         self.instrumentLongName = instrumentLongName
         self.channelVolume = channelVolume
         self.defaultClefType = defaultClefType
+        self.groupRawValue = groupRawValue
     }
 
     /// Convenience factory that derives `partAddressHash` from a
@@ -109,6 +123,7 @@ public struct StaffParams: Equatable, Sendable {
 ///   str instrumentLongName        ← "" = absent
 ///   u8  channelVolume             ← MIDI CC7 (0...127)
 ///   str defaultClefType           ← "" = absent
+///   str groupRawValue             ← MuseScore staff type: "pitched" / "percussion"
 /// }
 /// ```
 /// New fields are appended (tags ≥ 6) so the original five tags keep their
@@ -137,6 +152,7 @@ struct StaffParamsWire {
     var instrumentLongName: String
     var channelVolume: UInt8
     var defaultClefType: String
+    var groupRawValue: String
 
     init(from params: StaffParams) {
         staffIndex = Int32(params.staffIndex)
@@ -151,6 +167,7 @@ struct StaffParamsWire {
         instrumentLongName = params.instrumentLongName
         channelVolume = params.channelVolume
         defaultClefType = params.defaultClefType
+        groupRawValue = params.groupRawValue
     }
 
     func decoded() -> StaffParams {
@@ -167,6 +184,7 @@ struct StaffParamsWire {
             instrumentLongName: instrumentLongName,
             channelVolume: channelVolume,
             defaultClefType: defaultClefType,
+            groupRawValue: groupRawValue,
         )
     }
 }

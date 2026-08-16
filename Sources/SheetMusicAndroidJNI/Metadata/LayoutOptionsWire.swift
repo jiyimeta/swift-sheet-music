@@ -15,7 +15,7 @@ public struct LayoutOptionsWire {
     public var showsInvisibleElements: UInt8 // 0/1
     public var hiddenStaves: [HiddenStaffWire]
     public var clefOverrides: [ClefOverrideWire]
-    /// Whole-score notation transposition in semitones, clamped to −7…+7 by `transposeDelta`. `0` = concert pitch.
+    /// Whole-score notation transposition in semitones, clamped to −12…+12 by `transposeDelta`. `0` = concert pitch.
     ///
     /// Rides on the display options rather than on its own bridge because it is exactly that: a re-spelling of the
     /// score before layout, which the host already re-runs whenever these options change. Note IDs and ticks survive
@@ -24,6 +24,15 @@ public struct LayoutOptionsWire {
     /// This is the NOTATION half only. Transposed *playback* is a tuning shift on the melodic channels
     /// (`AndroidPlaybackEngine.setTranspose`), never a re-render — matching the Apple engine.
     public var transposeSemitones: Int32
+    /// Whether sung text is engraved at all. `0` hides it, anything else shows it — a host that
+    /// omitted the field would otherwise hide lyrics by accident, and showing them is the behaviour
+    /// every release before this one had.
+    ///
+    /// Hiding is a display choice, not MuseScore's per-element `visible` flag: the whole row goes,
+    /// including the hyphens and the melisma rules, and `showsInvisibleElements` does not bring it
+    /// back. The engraved document is genuinely SHORTER as a result, which is what a host reserving
+    /// a fixed-height notation strip depends on.
+    public var showsLyrics: UInt8
 }
 
 @WireFormat
@@ -55,11 +64,23 @@ extension LayoutOptionsWire {
         })
     }
 
-    /// The transposition to apply, clamped to the range the engine supports (−7…+7, a diminished fifth either way —
-    /// the same clamp the Apple `PlaybackEngine.setTranspose` and the Reader's stepper use). A wire value outside it
-    /// is pinned rather than rejected, so a host that has not clamped can never produce an absurd re-spelling.
+    /// The transposition to apply, clamped to the range the engine supports (−12…+12, an octave either way — the
+    /// same clamp the Apple `PlaybackEngine.setTranspose` and `AndroidPlaybackEngine.setTranspose` use). A wire
+    /// value outside it is pinned rather than rejected, so a host that has not clamped can never produce an absurd
+    /// re-spelling.
+    ///
+    /// THIS CLAMP AND THE TWO AUDIO ONES MOVE TOGETHER. This is the notation half; the audio half is a tuning
+    /// shift on the melodic channels. Widening only the audio side leaves the score sounding transposed past the
+    /// narrower bound while still LOOKING like the written key — which is the failure the three-way symmetry exists
+    /// to prevent.
     public var transposeDelta: Int {
-        max(-7, min(7, Int(transposeSemitones)))
+        max(-12, min(12, Int(transposeSemitones)))
+    }
+
+    /// Whether the engraver should lay lyrics out. Anything other than an explicit `0` shows them,
+    /// so the safe direction for a host that has not been updated is the pre-existing behaviour.
+    public var lyricsVisible: Bool {
+        showsLyrics != 0
     }
 
     /// Default for the legacy no-options LayoutBridge.compute path + tests.
@@ -67,7 +88,7 @@ extension LayoutOptionsWire {
         LayoutOptionsWire(
             layoutMode: 0, staffSize: 28,
             honorLayoutBreaks: 1, collapseMultiMeasureRests: 0, showsInvisibleElements: 0,
-            hiddenStaves: [], clefOverrides: [], transposeSemitones: 0,
+            hiddenStaves: [], clefOverrides: [], transposeSemitones: 0, showsLyrics: 1,
         )
     }
 }

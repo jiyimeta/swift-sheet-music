@@ -7,6 +7,7 @@ import io.github.jiyimeta.sheetmusic.CountInWireCodec
 import io.github.jiyimeta.sheetmusic.audio.export.AudioExporter
 import io.github.jiyimeta.sheetmusic.audio.export.ExportEngineSnapshot
 import io.github.jiyimeta.sheetmusic.audio.jni.SheetMusicAudioJNI
+import io.github.jiyimeta.sheetmusic.audio.model.AudioClockPosition
 import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
@@ -277,6 +278,30 @@ class AndroidPlaybackEngine internal constructor(
     private val _loopRange = MutableStateFlow<LoopRange?>(null)
     val loopRange: StateFlow<LoopRange?> = _loopRange.asStateFlow()
 
+    /**
+     * The transport's position paired with the device's AUDIO clock, or `null` when the output
+     * cannot supply a timestamp (before playback starts, after teardown, or on a route that does
+     * not report one — `AudioTrack.getTimestamp` is best-effort by contract).
+     *
+     * A read, deliberately, and not a flow: [currentTimeSeconds] is written from a 33 ms poll, so
+     * its value is stale by an unknown fraction of that interval whenever a host looks at it. This
+     * asks the audio output where it actually is AT THE MOMENT OF THE CALL, so a host smoothing a
+     * playhead can extrapolate from `nanoTime` rather than from whenever the poll last fired.
+     * Publishing it as a flow would put it back on the poll's cadence and lose the whole point.
+     *
+     * Purely additive: [currentTimeSeconds] and [currentCursor] are untouched and a host that never
+     * calls this behaves exactly as before.
+     */
+    fun audioClockPosition(): AudioClockPosition? {
+        val sample = oboeStream?.audioTimestamp() ?: return null
+        val tick = playerDriver?.currentTick ?: return null
+        return AudioClockPosition(
+            unrolledTick = tick,
+            framePosition = sample.framePosition,
+            nanoTime = sample.nanoTime,
+        )
+    }
+
     // ── Internal mutable state (assembled by prepare) ────────────────
 
     private val prepareMutex = Mutex()
@@ -338,7 +363,7 @@ class AndroidPlaybackEngine internal constructor(
     @Volatile private var pendingRate: Float = 1.0f
     @Volatile private var masterTuningCents: Double = 0.0
 
-    /** Live whole-score transpose (−7…+7). Combined with [masterTuningCents] by `applyTuning`. */
+    /** Live whole-score transpose (−12…+12). Combined with [masterTuningCents] by `applyTuning`. */
     @Volatile private var transposeSemitones: Int = 0
 
     /**
@@ -1084,7 +1109,7 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * Live whole-score transpose in [semitones], clamped to −7…+7. Persists across prepare.
+     * Live whole-score transpose in [semitones], clamped to −12…+12. Persists across prepare.
      * No-op when [state] is [PlaybackState.EXPORTING].
      *
      * Implemented as a tuning shift, not a re-render: [FluidSynthEngine.setMasterTuning] retunes the
@@ -1098,7 +1123,7 @@ class AndroidPlaybackEngine internal constructor(
      */
     fun setTranspose(semitones: Int) {
         if (_state.value == PlaybackState.EXPORTING) return
-        transposeSemitones = semitones.coerceIn(-7, 7)
+        transposeSemitones = semitones.coerceIn(-12, 12)
         applyTuning()
     }
 
@@ -1241,6 +1266,11 @@ class AndroidPlaybackEngine internal constructor(
             metronomeSmfBytes = jniBridge.renderMetronomeMidi(scoreHandle),
             rate = _currentRate.value,
             metronomeResolution = clickResolver.resolve(),
+            // Pitch state travels with the snapshot for the same reason the mixer does: the offline
+            // render builds a fresh synth at concert pitch, and the SMF it loads carries the AUTHORED
+            // pitches because transposed playback is a tuning shift and never a re-render.
+            masterTuningCents = masterTuningCents,
+            transposeSemitones = transposeSemitones,
         )
 
         val smfBytes = jniBridge.renderMidi(scoreHandle)

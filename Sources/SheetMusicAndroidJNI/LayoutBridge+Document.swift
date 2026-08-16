@@ -177,6 +177,7 @@ extension LayoutBridge {
             breakIndicatorVisibility: .none,
             multiMeasureRest: mmrPolicy,
             showsInvisibleElements: optionsWire.showsInvisibleElements == 1,
+            lyricsVisible: optionsWire.lyricsVisible,
         )
     }
 }

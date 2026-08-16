@@ -322,6 +322,66 @@
                 #expect(decoded[idx].isDrums == expectedDrums)
             }
         }
+
+        @Test func secondsAtTickAgreesWithTheFrameAtAFrameTickAndInterpolatesBetweenTwo() throws {
+            let score = try loadFixtureScore()
+            let timeline = PlaybackTimeline(score: score)
+            let frames = timeline.frames
+            #expect(frames.count >= 2)
+            let lower = frames[0]
+            let upper = frames[1]
+
+            func seconds(_ tick: Double) -> Double {
+                AudioMidiBridge.secondsAtTick(score: score, unrolledTick: tick)
+            }
+
+            // AT a frame tick the two agree — otherwise the smooth read and the snapped one would
+            // disagree at every note onset and the cursor would jump each time playback crossed one.
+            #expect(abs(seconds(Double(lower.tick)) - lower.timeSeconds) < 1e-9)
+            #expect(abs(seconds(Double(upper.tick)) - upper.timeSeconds) < 1e-9)
+
+            // BETWEEN two frame ticks it must differ from BOTH. This is the half that matters: an
+            // implementation that simply delegated to `frame(atTick:)` would return the lower frame's
+            // time here and pass every "at a frame tick" assertion above.
+            let midTick = Double(lower.tick + upper.tick) / 2.0
+            let mid = seconds(midTick)
+            #expect(mid > lower.timeSeconds)
+            #expect(mid < upper.timeSeconds)
+
+            // And it must move CONTINUOUSLY, not in one step at the midpoint: a quarter of the way
+            // across is strictly earlier than halfway. A two-valued approximation passes the pair
+            // above and fails here.
+            let quarterTick = Double(lower.tick) + (Double(upper.tick - lower.tick) / 4.0)
+            #expect(seconds(quarterTick) < mid)
+
+            // A FRACTIONAL tick must move the answer. The unroll map is integer-valued, so an
+            // implementation that translated `Int(unrolledTick)` and dropped the remainder is exact
+            // at every whole tick and silently quantizes everything else — and every assertion above
+            // samples whole ticks only, so nothing so far can see it.
+            #expect(seconds(Double(lower.tick) + 0.5) > seconds(Double(lower.tick)))
+
+            // Unknown handles are the JNI wrapper's concern, but the sentinel is worth stating once:
+            // a negative tick is not a position and yields the score's start rather than a
+            // backwards-extrapolated time.
+            #expect(seconds(-1) == 0)
+        }
+
+        @Test func staffParamsCarriesTheStaffGroup() throws {
+            // The bridge is the only place `Staff.group` reaches the wire, and the codec's own
+            // round-trip cannot see a population site that never reads it — a bridge hardcoding
+            // "pitched" would leave every codec test green.
+            var score = try loadFixtureScore()
+            #expect(score.parts[0].staves[0].group == "pitched")
+            score.parts[0].staves[0].group = "percussion"
+            let decoded = try StaffParamsCodec.decodeArray(
+                AudioMidiBridge.staffParams(score: score),
+            )
+            #expect(decoded[0].groupRawValue == "percussion")
+            // The staff type is not the same question as the part's drum flag; the fixture's part
+            // does not declare `useDrumset`, so a bridge that derived the group FROM `isDrums`
+            // would report "pitched" here.
+            #expect(decoded[0].isDrums == false)
+        }
     }
 
     // MARK: - T18: pitchAndStaffOfNote + earliestOf

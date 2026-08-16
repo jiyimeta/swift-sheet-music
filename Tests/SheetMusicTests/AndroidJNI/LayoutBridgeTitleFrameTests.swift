@@ -134,6 +134,7 @@
                 hiddenStaves: [],
                 clefOverrides: [],
                 transposeSemitones: 0,
+                showsLyrics: 1,
             )
             let options = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(options.mode == .page)

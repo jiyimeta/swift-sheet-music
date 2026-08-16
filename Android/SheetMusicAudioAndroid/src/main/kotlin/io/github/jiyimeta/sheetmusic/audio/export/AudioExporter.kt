@@ -7,6 +7,7 @@ import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
 import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthDriver
+import io.github.jiyimeta.sheetmusic.audio.synth.MasterTuning
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeMixer
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeSf2Loader
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
@@ -67,6 +68,7 @@ internal class AudioExporter(
         var lastProgressEmitMs = 0L
         try {
             applyStripProgramsAndMixer(synth, strips, snapshot)
+            applyMasterTuning(synth, snapshot)
             if (player.load(smfBytes) != 0) {
                 throw AudioBackendException.EngineSetupFailed("player.load returned non-zero")
             }
@@ -173,6 +175,31 @@ internal class AudioExporter(
                 val audible = if (soloed) chan.isSoloed else !chan.isMuted
                 val gain = if (audible) chan.volume else 0f
                 synth.cc(chan.liveChannel, 7, (gain * 127).toInt().coerceIn(0, 127))
+            }
+        }
+    }
+
+    /**
+     * Reproduces the live engine's pitch state on the offline synth via MIDI Master Tuning RPN.
+     *
+     * Melodic channels take calibration + transpose (100 cents per semitone); percussion takes the
+     * calibration alone, so a transposed score's drums stay where they were written. That is the same
+     * split Apple's exporter makes in `PlaybackEngine+Export.buildScoreSynth`.
+     *
+     * This is not a nicety: transposed playback is a tuning shift and never a re-render, so the SMF
+     * this exporter loads carries the AUTHORED pitches. With no tuning applied, a score transposed on
+     * screen exports in its original key — silently, on every device.
+     *
+     * Zero is skipped rather than sent as a no-op RPN, mirroring the live engine's own
+     * `if (effectiveTuningCents != 0.0)` guard at prepare.
+     */
+    private fun applyMasterTuning(synth: SynthDriver, snapshot: ExportEngineSnapshot) {
+        val melodicCents = snapshot.masterTuningCents + snapshot.transposeSemitones * 100.0
+        for (chan in snapshot.mixerChannels) {
+            val cents = if (chan.isDrums) snapshot.masterTuningCents else melodicCents
+            if (cents == 0.0) continue
+            for (cc in MasterTuning.rpnControlChanges(cents)) {
+                synth.cc(chan.liveChannel, cc.controller, cc.value)
             }
         }
     }

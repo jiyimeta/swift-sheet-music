@@ -93,7 +93,14 @@
 
         static let canonicalStaffParams: [StaffParams] = [
             StaffParams(staffIndex: 0, bankLSB: 0, program: 0, isDrums: false, partAddressHash: 0),
-            StaffParams(staffIndex: 1, bankLSB: 0, program: 0, isDrums: true, partAddressHash: 1001),
+            // Entry 1 carries a non-default `groupRawValue` so the golden bytes discriminate: with
+            // both entries at "pitched" the field's tag would still be present but its payload would
+            // be the same string twice, and a swap with `defaultClefType` (also a trailing string)
+            // would survive the comparison.
+            StaffParams(
+                staffIndex: 1, bankLSB: 0, program: 0, isDrums: true, partAddressHash: 1001,
+                groupRawValue: "percussion",
+            ),
         ]
 
         // cursorFrame-v1.bin: CGRect(x: 10.5, y: 20.0, width: 4.0, height: 80.5)
