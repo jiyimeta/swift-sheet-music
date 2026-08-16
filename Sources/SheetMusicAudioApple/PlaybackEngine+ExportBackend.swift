@@ -43,7 +43,7 @@ extension PlaybackEngine {
         // same channels the mixer snapshot was keyed against.
         let plan = LiveChannelPlan.build(score: score)
 
-        let (scoreGainMixer, _) = buildOutputChain(
+        let scoreGainMixer = buildOutputChain(
             engine: engine,
             gain: snapshot.masterGain,
             stage: snapshot.masterOutputStage,
@@ -51,9 +51,8 @@ extension PlaybackEngine {
         backend.attach(to: engine)
         // Into `scoreGainMixer`, exactly as the live engine connects it in
         // `prepareSynth`. The backend mixes its own metronome inside its render
-        // block, so the click rides the master gain here — matching live, which
-        // is the point of this path (the AU export puts its separate metronome
-        // sampler on `sumMixer` instead).
+        // block, so the click rides the master gain here — as it does on the AU
+        // path, whose separate metronome sampler lands on the same node.
         engine.connect(backend.outputNode, to: scoreGainMixer, format: nil)
 
         backend.prepare(

@@ -101,12 +101,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// instrument.
     private var staffChannelSwitches: [Int: [(tick: Int, channel: UInt8)]] = [:]
 
-    /// Master output stage. The score synth feeds `scoreGainMixer`,
-    /// whose `outputVolume` is the user's master gain (`0...`). Its
-    /// output is summed with the metronome at `sumMixer`, passed through
-    /// `softClip` and `limiter` — both bypassed unless
+    /// Master output stage. The score synth and the metronome both feed
+    /// `scoreGainMixer`, whose `outputVolume` is the user's master gain
+    /// (`0...`). Its output passes through `sumMixer`, then `softClip`
+    /// and `limiter` — both bypassed unless
     /// `masterOutputStage` selects one — then routed into
-    /// `mainMixerNode`. Built once in
+    /// `mainMixerNode`. `sumMixer` no longer sums anything the gain
+    /// stage didn't already; it stays as the metering tap point (see
+    /// `+Metering`), which must read the post-gain mix. Built once in
     /// `init` and reused across every `prepare(score:)`, so `masterGain`
     /// survives score reloads. `internal` so the `+Master` / `+Export`
     /// extensions in sibling files can reach the nodes directly.
@@ -332,10 +334,21 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             provider: metronomeClickProvider0,
             soundfontResolver: soundfontResolver,
         )
-        // The metronome joins the master stage at `sumMixer` (post-gain,
-        // pre-limiter) so it is limited along with the boosted score but
-        // is not itself boosted by the master gain.
-        metronome = MetronomeController(engine: engine, output: sumMixer)
+        // The metronome joins the master stage at `scoreGainMixer`, i.e. the
+        // click IS scaled by the master gain, along with the score.
+        //
+        // It used to land on `sumMixer` (post-gain) so the click stayed a fixed
+        // reference while the score was boosted. That was only ever true on the
+        // AUMIDISynth path: an injected `SynthBackend` mixes its own click
+        // inside its render block and hands back ONE node, which connects here
+        // to `scoreGainMixer` — so on the backend path the click has always
+        // tracked the gain. Rather than give backends a second output node to
+        // keep a split nobody asked for, the two paths are unified on the
+        // backend's behavior, which is also the more useful one: `masterGain`
+        // is documented as calibration for a quiet backend
+        // (see `setMasterGain`), and a click that ignored it would silently
+        // rebalance score-against-click every time the user calibrated.
+        metronome = MetronomeController(engine: engine, output: scoreGainMixer)
         buildMasterChain()
         startObservingAudioSessionInterruptions()
     }
@@ -439,6 +452,18 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             transposeSemitones: transposeSemitones,
             masterTuningCents: masterTuningCents,
         )
+    }
+
+    /// Test-only read-back of the node the live metronome's synth actually
+    /// feeds, so a test can assert the click joins the master chain AT the
+    /// gain stage (`scoreGainMixer`) rather than after it. Read from the
+    /// engine's own connection table, not from what `MetronomeController` was
+    /// handed, so a rewiring that never reached the graph would still fail.
+    /// `nil` until `prepare(score:)` has built the synth.
+    var metronomeOutputDestination: AVAudioNode? {
+        guard let sampler = metronome.attachedSampler else { return nil }
+        return engine.outputConnectionPoints(for: sampler, outputBus: 0)
+            .first?.node
     }
 
     // MARK: Internal accessors for `PlaybackEngine+Mixer`

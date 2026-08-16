@@ -149,7 +149,7 @@
                     msczURL: URL(fileURLWithPath: swiftySynthShinogonoPath),
                 )
                 let engine = PlaybackEngine(
-                    soundfontResolver: FixedResolver(
+                    soundfontResolver: FixedSoundfontResolver(
                         url: URL(fileURLWithPath: swiftySynthSoundfontPath),
                     ),
                     backend: SwiftySynthBackend(),
@@ -169,26 +169,7 @@
                         to: .beat(measureIndex: 2, tickInMeasure: 0),
                     ),
                 )
-                #expect(try peakAmplitude(of: url) > 0.001)
-            }
-
-            /// Largest absolute sample in `url`, so "did anything sound" is a
-            /// single number rather than a scan the tests repeat.
-            private func peakAmplitude(of url: URL) throws -> Float {
-                let file = try AVAudioFile(forReading: url)
-                let buffer = try #require(AVAudioPCMBuffer(
-                    pcmFormat: file.processingFormat,
-                    frameCapacity: AVAudioFrameCount(file.length),
-                ))
-                try file.read(into: buffer)
-                guard let channels = buffer.floatChannelData else { return 0 }
-                var peak: Float = 0
-                for channel in 0 ..< Int(buffer.format.channelCount) {
-                    for frame in 0 ..< Int(buffer.frameLength) {
-                        peak = max(peak, abs(channels[channel][frame]))
-                    }
-                }
-                return peak
+                #expect(try AudioExportProbe.peakAmplitude(of: url) > 0.001)
             }
 
             private func loadScore() throws -> Score {
@@ -199,8 +180,7 @@
             }
 
             private func temporaryWAV() -> URL {
-                FileManager.default.temporaryDirectory
-                    .appendingPathComponent("smexpbk-\(UUID().uuidString).wav")
+                AudioExportProbe.temporaryWAV()
             }
         }
     }
@@ -266,16 +246,4 @@
         }
     }
 
-    /// One SF2 for everything — enough for the audible end-to-end export.
-    private struct FixedResolver: SoundfontResolver {
-        let url: URL
-
-        func soundfontURL(forBank _: UInt8, program _: UInt8, isDrums _: Bool) -> URL? {
-            url
-        }
-
-        var defaultGMSoundfontURL: URL? {
-            url
-        }
-    }
 #endif

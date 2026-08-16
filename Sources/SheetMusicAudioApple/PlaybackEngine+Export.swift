@@ -191,7 +191,7 @@ extension PlaybackEngine {
         // Master output chain — mirrors the live engine's
         // (PlaybackEngine.buildMasterChain). Rebuilt here so exported
         // files reflect the chosen master gain and shaping stage.
-        let (scoreGainMixer, sumMixer) = buildOutputChain(
+        let scoreGainMixer = buildOutputChain(
             engine: engine,
             gain: snapshot.masterGain,
             stage: snapshot.masterOutputStage,
@@ -206,9 +206,11 @@ extension PlaybackEngine {
             scoreSynth: exportSynth, channels: snapshot.mixerChannels,
         )
 
-        // 2. Optional metronome synth / track.
+        // 2. Optional metronome synth / track. Onto `scoreGainMixer`, like
+        //    the score — the click is scaled by the master gain, matching
+        //    the live engine (see `PlaybackEngine.init`).
         let metronomeSampler = buildMetronomeSampler(
-            snapshot: snapshot, engine: engine, output: sumMixer,
+            snapshot: snapshot, engine: engine, output: scoreGainMixer,
         )
 
         // 3. Render MIDI bytes (score tracks + optional metronome
@@ -216,7 +218,7 @@ extension PlaybackEngine {
         //    fresh engine.
         let sequencer = try makeExportSequencer(
             score: score, plan: plan, snapshot: snapshot, engine: engine,
-            sumMixer: sumMixer, exportSynth: exportSynth,
+            metronomeOutput: scoreGainMixer, exportSynth: exportSynth,
             metronomeSampler: metronomeSampler,
         )
 
@@ -256,7 +258,7 @@ extension PlaybackEngine {
         plan: LiveChannelPlan,
         snapshot: ExportEngineSnapshot,
         engine: AVAudioEngine,
-        sumMixer: AVAudioMixerNode,
+        metronomeOutput: AVAudioMixerNode,
         exportSynth: ScoreSynth,
         metronomeSampler: AVAudioUnitMIDIInstrument?,
     ) throws -> AVAudioSequencer {
@@ -271,12 +273,13 @@ extension PlaybackEngine {
         if metronomeSampler != nil {
             // This controller is used only to generate the metronome
             // MIDI track; `prepare(soundfontURL:)` is never called on it,
-            // so `output` is never connected. Pass `sumMixer` anyway (not
-            // `mainMixerNode`) so that if a future change does call
-            // `prepare`, the metronome stays inside the master stage
-            // rather than silently bypassing the limiter.
+            // so `output` is never connected. Pass the real metronome
+            // output anyway (not `mainMixerNode`) so that if a future
+            // change does call `prepare`, the click lands where the live
+            // engine puts it rather than silently bypassing the gain
+            // stage and the limiter.
             let metronome = MetronomeController(
-                engine: engine, output: sumMixer,
+                engine: engine, output: metronomeOutput,
             )
             midi.tracks.append(metronome.metronomeTrack(
                 beats: snapshot.metronomeBeats, division: midi.division,
@@ -337,8 +340,10 @@ extension PlaybackEngine {
     /// (scoreGainMixer → sumMixer → softClip → PeakLimiter →
     /// mainMixerNode) to `engine`, seed `scoreGainMixer.outputVolume`
     /// with `gain`, and bypass whichever shaping nodes `stage` does not
-    /// select. Returns `(scoreGainMixer, sumMixer)` so callers can route
-    /// the score synth and metronome sampler through the same chain.
+    /// select. Returns `scoreGainMixer` — the chain's entry point, which
+    /// both the score synth and the metronome sampler feed. `sumMixer` is
+    /// wired but not handed back: nothing joins the chain after the gain
+    /// stage, and live it exists only as the metering tap point.
     /// Mirrors `PlaybackEngine.buildMasterChain` from `+Master.swift`.
     /// `internal` (not `private`) so the backend pipeline in
     /// `PlaybackEngine+ExportBackend` builds the identical master stage.
@@ -346,7 +351,7 @@ extension PlaybackEngine {
         engine: AVAudioEngine,
         gain: Float,
         stage: MasterOutputStage,
-    ) -> (scoreGainMixer: AVAudioMixerNode, sumMixer: AVAudioMixerNode) {
+    ) -> AVAudioMixerNode {
         let scoreGainMixer = AVAudioMixerNode()
         let sumMixer = AVAudioMixerNode()
         let softClip = SoftClipAudioUnit.makeNode()
@@ -362,7 +367,7 @@ extension PlaybackEngine {
         engine.connect(softClip, to: limiter, format: nil)
         engine.connect(limiter, to: engine.mainMixerNode, format: nil)
         scoreGainMixer.outputVolume = gain
-        return (scoreGainMixer, sumMixer)
+        return scoreGainMixer
     }
 
     private struct ScoreSynth {
