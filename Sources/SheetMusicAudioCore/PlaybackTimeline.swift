@@ -35,11 +35,26 @@ public struct PlaybackTimeline: Sendable, Equatable {
         public let tick: Int
         public let timeSeconds: TimeInterval
         public let cursor: ScoreCursor
+        /// When this frame's item is actually HEARD, which is `timeSeconds` for everything except a
+        /// chord swing pushes off the beat: swing starts an up-beat late without moving any bar or
+        /// beat, so the tick↔seconds clock is unaffected and only the audible onset moves.
+        ///
+        /// `frame(atTime:)` — the cursor's own lookup — searches on this, so the playhead steps onto
+        /// a swung eighth when it sounds rather than up to a tenth of a beat early. Everything that
+        /// addresses the score by position (`frame(atTick:)`, `seconds(atTick:)`, `totalSeconds`,
+        /// the loop and seek plumbing built on them) keeps using `timeSeconds` and is unchanged.
+        public let soundedTimeSeconds: TimeInterval
 
-        public init(tick: Int, timeSeconds: TimeInterval, cursor: ScoreCursor) {
+        public init(
+            tick: Int,
+            timeSeconds: TimeInterval,
+            cursor: ScoreCursor,
+            soundedTimeSeconds: TimeInterval? = nil,
+        ) {
             self.tick = tick
             self.timeSeconds = timeSeconds
             self.cursor = cursor
+            self.soundedTimeSeconds = soundedTimeSeconds ?? timeSeconds
         }
     }
 
@@ -71,20 +86,25 @@ public struct PlaybackTimeline: Sendable, Equatable {
     /// tick column.
     public let measureStartTicks: [Int]
 
-    /// Latest frame whose `timeSeconds` is at or before `t`. Used by
-    /// the cursor poller — returns `nil` for `t` before the first
+    /// Latest frame whose `soundedTimeSeconds` is at or before `t`. Used
+    /// by the cursor poller — returns `nil` for `t` before the first
     /// event so the cursor can stay hidden until playback actually
     /// starts.
+    ///
+    /// Searches the AUDIBLE onset rather than the grid one so a swung
+    /// eighth is highlighted when it is heard; the two are identical on
+    /// any score without swing. `init` keeps the sequence non-decreasing
+    /// in this key, so the binary search stays valid.
     public func frame(atTime t: TimeInterval) -> Frame? {
-        guard !frames.isEmpty, t >= frames[0].timeSeconds else {
+        guard !frames.isEmpty, t >= frames[0].soundedTimeSeconds else {
             return nil
         }
         // Binary search for the largest index i with
-        // frames[i].timeSeconds <= t.
+        // frames[i].soundedTimeSeconds <= t.
         var lo = 0, hi = frames.count - 1, best = 0
         while lo <= hi {
             let mid = (lo + hi) / 2
-            if frames[mid].timeSeconds <= t {
+            if frames[mid].soundedTimeSeconds <= t {
                 best = mid
                 lo = mid + 1
             } else {
@@ -572,19 +592,44 @@ extension PlaybackTimeline {
             lastTick = targetTick
         }
 
+        // Swing moves an up-beat's ATTACK without moving the beat it belongs to, so it changes no
+        // tick and no tempo — only when the frame's own item is heard. Carried on the frame rather
+        // than folded into `currentTime`, so the tick↔seconds clock every other caller reads is
+        // untouched.
+        let swingShifts = MidiRenderer.swingOnsetShifts(score: score)
         for entry in pending {
             advance(to: entry.tick)
             if entry.tick != lastEmittedTick {
+                var sounded = currentTime
+                if case let .item(id) = entry.cursor, let shift = swingShifts[id], shift > 0 {
+                    sounded += secondsForTicks(shift, mpq: currentMpq, division: division)
+                }
                 frames.append(Frame(
                     tick: entry.tick,
                     timeSeconds: currentTime,
                     cursor: entry.cursor,
+                    soundedTimeSeconds: sounded,
                 ))
                 lastEmittedTick = entry.tick
             }
         }
         // End time: advance to the last tick reached by any voice.
         advance(to: maxEndTick)
+
+        // Keep `soundedTimeSeconds` non-decreasing so `frame(atTime:)`'s binary search stays valid.
+        // A shift is bounded by half its swung pair and the next frame is at least the pair's
+        // midpoint away, so this only bites on a pathological swing ratio — but the search must not
+        // depend on that.
+        for index in frames.indices.dropFirst() where
+            frames[index].soundedTimeSeconds < frames[index - 1].soundedTimeSeconds
+        {
+            frames[index] = Frame(
+                tick: frames[index].tick,
+                timeSeconds: frames[index].timeSeconds,
+                cursor: frames[index].cursor,
+                soundedTimeSeconds: frames[index - 1].soundedTimeSeconds,
+            )
+        }
 
         self.frames = frames
         totalSeconds = currentTime

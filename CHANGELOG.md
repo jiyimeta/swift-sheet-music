@@ -9,6 +9,25 @@ and this project adheres to
 
 ### Added
 
+- `Score.fermataHolds()` — every fermata resolved to the chord it holds, merged across staves. It
+  is now the single derivation of that anchoring: `MidiRenderer`'s tempo bookends and the
+  notated-time API both read it, so the SMF's idea of a hold and the score's cannot drift apart.
+- `MidiRenderer.swingOnsetShifts(score:)` — how far swing pushes each sounding chord's onset, for
+  callers that need the audible attack without the renderer.
+
+### Fixed
+
+- `notatedDurationSeconds`, `seconds(at:)` and `cursor(atSeconds:)` count fermata holds. They summed
+  each bar's tick length at its governing tempo and stopped there, so a score with fermatas reported
+  as shorter than it plays and every elapsed / total readout drawn from them ran short by the sum of
+  every hold.
+- `PlaybackTimeline.frame(atTime:)` — the cursor's own lookup — follows the AUDIBLE onset, so the
+  playhead steps onto a swung eighth when it sounds rather than up to a tenth of a beat early. The
+  new `Frame.soundedTimeSeconds` carries it; `timeSeconds`, `frame(atTick:)`, `seconds(atTick:)` and
+  `totalSeconds` are unchanged, so nothing that addresses the score by position moves.
+
+### Added
+
 - `sheet-music-compose-android` is published. Its publication block has been
   complete since the module landed, but every release so far ran only the two
   other publish tasks, so the module existed at no released coordinate and a
