@@ -1,6 +1,16 @@
 // swiftlint:disable file_length
 import Foundation
 import SheetMusicCore
+import SheetMusicMIDI
+
+/// Precedence of two tempo changes landing on the same tick, lowest applied first. Mirrors the
+/// close → `<Tempo>` → open ordering `MidiRenderer.renderTrack`'s stable sort gives the SMF, so the
+/// notated timeline resolves a collision exactly as the audio does.
+private enum TempoRank {
+    static let fermataClose = 0
+    static let score = 1
+    static let fermataOpen = 2
+}
 
 /// A pre-computed map from playback time → cursor position, used by
 /// `PlaybackEngine` to drive a MuseScore-style cursor that snaps
@@ -227,8 +237,10 @@ extension PlaybackTimeline {
             let cursor: ScoreCursor
         }
         var pending: [Pending] = []
-        // (tick, microseconds-per-quarter). Default 120 BPM = 500_000.
-        var tempoEvents: [(tick: Int, mpq: Int)] = []
+        // (tick, microseconds-per-quarter, rank). Default 120 BPM =
+        // 500_000. `rank` breaks ties at one tick the way the
+        // renderer's stable sort does — see `TempoRank`.
+        var tempoEvents: [(tick: Int, mpq: Int, rank: Int)] = []
         var maxEndTick = 0
         var itemTicks: [ScoreItemID: Int] = [:]
         var itemEndTicks: [ScoreItemID: Int] = [:]
@@ -288,6 +300,16 @@ extension PlaybackTimeline {
                     switch el {
                     case let .chord(c):
                         spineTick += c.duration
+                            .resolved(in: measureDuration)
+                            .ticks(division: division)
+                    case let .measureRepeat(r):
+                        // A measure-repeat bar carries no chords of its own — `MidiRenderer`
+                        // splices the source measure's notes in at render time and
+                        // `measureTicks` counts the marker's own duration. Counting it here
+                        // too is what keeps `measureStarts` equal to the MIDI measure bases;
+                        // without it every measure after a `𝄎` sat one bar's worth of ticks
+                        // early, so the cursor ran a whole measure ahead of the audio.
+                        spineTick += r.duration
                             .resolved(in: measureDuration)
                             .ticks(division: division)
                     case let .breath(b) where b.pause > 0:
@@ -426,6 +448,16 @@ extension PlaybackTimeline {
                                 (b.pause * bps * Double(division))
                                     .rounded(),
                             )
+                        case let .measureRepeat(r):
+                            // No frame: the bar engraves a `𝄎` rather than notes, so the
+                            // cursor's stops in it are the `.beat` entries added below. The
+                            // tick still has to advance — `maxEndTick` (and with it
+                            // `totalTicks` / `totalSeconds`) is taken from this walker, and a
+                            // score ending on a measure repeat would otherwise report its
+                            // length one bar short.
+                            tick += r.duration
+                                .resolved(in: measureDuration)
+                                .ticks(division: division)
                         default:
                             break
                         }
@@ -488,10 +520,25 @@ extension PlaybackTimeline {
                 let tick = measureStart + positioned.position.ticks(
                     division: division,
                 )
-                tempoEvents.append((tick, t.microsecondsPerQuarter))
+                tempoEvents.append((tick, t.microsecondsPerQuarter, TempoRank.score))
             }
         }
-        tempoEvents.sort { $0.tick < $1.tick }
+        // Fold in the fermata holds. A fermata carries no notated duration — the SMF
+        // `MidiRenderer.render` produces realises the hold by slowing the tempo across the held
+        // chord and restoring it after — so a timeline built from `<Tempo>` markers alone runs
+        // AHEAD of the audio by the hold's extra time, permanently, from the first fermata onward.
+        // Taking the bookends from the renderer keeps one source of truth for how long a hold is.
+        for bookend in MidiRenderer.fermataTempoBookends(score: score) {
+            tempoEvents.append((
+                bookend.tick,
+                bookend.microsecondsPerQuarter,
+                bookend.isOpen ? TempoRank.fermataOpen : TempoRank.fermataClose,
+            ))
+        }
+        // Last event at a tick wins in `advance(to:)`, so the rank order IS the precedence order:
+        // a `<Tempo>` landing where a hold ends overrides the restore, and a hold opening where one
+        // lands overrides the marker. Same resolution the renderer's stable sort gives the SMF.
+        tempoEvents.sort { ($0.tick, $0.rank) < ($1.tick, $1.rank) }
 
         // Walk pending entries, advancing time using the tempo map.
         var frames: [Frame] = []

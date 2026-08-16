@@ -38,6 +38,28 @@ public enum MidiRenderer {
         // in MuseScore (masterscore's repeatList()).
         let navigation = ScoreNavigation(score: score)
         let plan = RepeatUnwinder.plan(navigation: navigation)
+        // ONE score-global set of fermata tempo bookends, emitted into the first track only.
+        // Tempo metas are score-global once a sequencer merges the tracks, so a per-staff build was
+        // wrong twice: it duplicated every system fermata's pair across staves, and — because
+        // `filterSystemElements` hands a system-level `<Tempo>` to the canonical staff alone —
+        // staves 1…n computed their bookends against the 120 BPM default, whose CLOSE event then
+        // reset the merged tempo map to 120 BPM for the rest of the piece.
+        //
+        // Bookends are collected at original (pre-repeat) ticks; projecting them through
+        // `playbackPlan` makes each repeat iteration re-fire its own pair, so a fermata inside
+        // `<startRepeat>…<endRepeat>` holds on every take rather than only the first.
+        let bookends = fermataBookendEvents(score: score)
+        let canonicalLayout = measureBaseLayout(
+            measures: score.parts.first?.staves.first?.measures ?? [], division: score.division,
+        )
+        let projectedFermataClose = projectBookends(
+            bookends.closeEvents, plan: plan,
+            measureBases: canonicalLayout.bases, measureSpans: canonicalLayout.spans,
+        )
+        let projectedFermataOpen = projectBookends(
+            bookends.openEvents, plan: plan,
+            measureBases: canonicalLayout.bases, measureSpans: canonicalLayout.spans,
+        )
         for (partIndex, part) in score.parts.enumerated() {
             let channels = channelAssignments[partIndex]
             let route = PartChannelRoute.build(
@@ -64,6 +86,8 @@ public enum MidiRenderer {
                         ? swingMaps[trackIndex]
                         : .empty,
                     systemElementsByMeasure: systemElementsForStaff,
+                    fermataCloseEvents: trackIndex == 0 ? projectedFermataClose : [],
+                    fermataOpenEvents: trackIndex == 0 ? projectedFermataOpen : [],
                 )
                 tracks.append(track)
                 trackIndex += 1
@@ -202,6 +226,8 @@ public enum MidiRenderer {
         division: Int,
         swingMap: SwingMap,
         systemElementsByMeasure: [[PositionedSystemElement]],
+        fermataCloseEvents: [TimedMidiEvent],
+        fermataOpenEvents: [TimedMidiEvent],
     ) throws -> MidiTrack {
         var events: [TimedMidiEvent] = headerEvents(
             staff: staff,
@@ -212,39 +238,16 @@ public enum MidiRenderer {
             isTopOfPart: isTopOfPart,
         )
 
-        // Per-staff fermata ranges + tempo bookends. Built BEFORE
-        // voice walks so close events sort ahead of any same-tick
-        // `.tempo` from those walks; open events are appended AFTER
-        // so they sort after same-tick `.tempo`. The renderer's
-        // stable sort below realises the documented close → .tempo
-        // → open ordering at boundary ticks.
-        //
-        // Bookends are collected at original (pre-repeat) ticks; we
-        // project them through `playbackPlan` so each repeat
-        // iteration re-fires its own pair. Without this projection a
-        // fermata inside `<startRepeat>...<endRepeat>` would hold
-        // only on the first take.
-        let bookends = FermataRanges.tempoEvents(
-            ranges: FermataRanges.collect(from: staff, division: division),
-            timeline: TempoTimeline.build(
-                measures: staff.measures,
-                systemMeasures: systemElementsByMeasure.map {
-                    SystemMeasure(elements: $0)
-                },
-                division: division,
-            ),
-        )
-        let (measureBases, measureSpans) = measureBaseLayout(
+        // The score-global fermata bookends `render(score:)` computed, non-empty on the first track
+        // only. Close events go in BEFORE the voice walks so they sort ahead of any same-tick
+        // `.tempo` from those walks; open events are appended AFTER so they sort after one. The
+        // stable sort below realises the documented close → .tempo → open ordering at boundary
+        // ticks.
+        let measureBases = measureBaseLayout(
             measures: staff.measures, division: division,
-        )
-        let projectedClose = projectBookends(
-            bookends.closeEvents, plan: plan, measureBases: measureBases, measureSpans: measureSpans,
-        )
-        let projectedOpen = projectBookends(
-            bookends.openEvents, plan: plan, measureBases: measureBases, measureSpans: measureSpans,
-        )
+        ).bases
 
-        events.append(contentsOf: projectedClose)
+        events.append(contentsOf: fermataCloseEvents)
 
         // Mid-track `portChange` metas for a part that spans two ports.
         // Appended BEFORE the voice walks so the stable sort below puts
@@ -277,7 +280,7 @@ public enum MidiRenderer {
 
         events.append(contentsOf: lyricEvents(from: lyricAnchors))
 
-        events.append(contentsOf: projectedOpen)
+        events.append(contentsOf: fermataOpenEvents)
 
         // EoT lands one tick after the last produced event (MuseScore convention):
         // for note-bearing tracks this is final-noteOff + 1; for empty tracks it's 1.

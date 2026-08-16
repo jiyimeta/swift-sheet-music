@@ -70,9 +70,18 @@ public final class SwiftySynthBackend: SynthBackend {
     /// in `scratchCapacity`-frame slices, so any `frameCount` is handled.
     static let scratchCapacity = 4096
 
-    private let sampleRate: Double
+    /// The rate every `Synthesizer` this backend builds renders at, fixed at
+    /// init. `internal` (not `private`) only so a test can assert that
+    /// `makeOfflineInstance` honors the export's requested rate — an unattached
+    /// `AVAudioNode` reports the hardware format, not the one it was built with,
+    /// so the node itself can't answer that.
+    let sampleRate: Double
     /// Tick↔seconds for the loaded score (SwiftySynth's clock is seconds).
     private var timeline: PlaybackTimeline?
+    /// Projection between `timeline`'s NOTATED clock and the loaded SMF's UNROLLED one. Identity
+    /// until the engine supplies it (`setUnrolledTimeMap`), and identity for any score whose
+    /// repeats aren't expanded — which is why every conversion below reads the same either way.
+    private var unrolledTimeMap: UnrolledTimeMap = .identity
 
     // Persisted transport/tuning state, re-applied whenever the synth or
     // sequence is rebuilt (both reset SwiftySynth's channel/speed state).
@@ -263,6 +272,10 @@ public final class SwiftySynthBackend: SynthBackend {
         return (synth, MidiFileSequencer(synthesizer: synth))
     }
 
+    public func setUnrolledTimeMap(_ map: UnrolledTimeMap) {
+        unrolledTimeMap = map
+    }
+
     public func loadSequence(_ midi: SheetMusicMIDI.MidiFile, timeline: PlaybackTimeline) {
         self.timeline = timeline
         guard let smf = Self.parse(midi) else { return }
@@ -436,7 +449,15 @@ public final class SwiftySynthBackend: SynthBackend {
         // earlier onset) makes the target note play deterministically without
         // ever pulling in the previous one. The engine still pins the cursor
         // to `tick` itself, so the displayed position is unaffected.
-        let seconds = timeline.seconds(atTick: Double(tick) - 0.5)
+        //
+        // `tick` is a NOTATED score tick and the loaded SMF is the UNROLLED render, so the
+        // notated seconds have to be projected onto the transport's own clock before they mean
+        // anything to it. Identity on a score without repeats; on one with them this is the
+        // difference between landing on the requested measure and landing on whatever the
+        // sequence happens to be playing that many seconds in.
+        let seconds = unrolledTimeMap.unrolledSeconds(
+            fromNotated: timeline.seconds(atTick: Double(tick) - 0.5),
+        )
         lock.withLockUnchecked { shared in
             // A seek is "play from here, now": it ends any count-in still owed
             // rather than counting the user in a second time from a new spot.
@@ -464,7 +485,11 @@ public final class SwiftySynthBackend: SynthBackend {
 
     public var currentTick: Int {
         guard let timeline else { return 0 }
-        return timeline.frame(atTime: currentPositionSeconds)?.tick ?? 0
+        // The transport's clock is the UNROLLED sequence's; `timeline` is notated. Project before
+        // the lookup, or a repeat's later passes report ticks from the wrong measure-play.
+        return timeline.frame(
+            atTime: unrolledTimeMap.notatedSeconds(fromUnrolled: currentPositionSeconds),
+        )?.tick ?? 0
     }
 
     /// Forwarded straight from the transport: `MidiFileSequencer.isAtEnd` is
@@ -507,6 +532,18 @@ public final class SwiftySynthBackend: SynthBackend {
         lock.withLockUnchecked {
             $0.synthesizer?.noteOff(key: Int(pitch), on: Int(channel))
         }
+    }
+
+    /// A second, independent backend for an offline export render, built at the
+    /// export's own `sampleRate` — SwiftySynth fixes its render rate when the
+    /// `Synthesizer` is created, so this is the only place the export's rate can
+    /// be honored. Everything else (SoundFont, sequence, mixer, tuning) is pushed
+    /// onto it by `PlaybackEngine+ExportBackend` from the export snapshot.
+    ///
+    /// Cheap to make: `init` only builds the `AVAudioSourceNode`; the SoundFont
+    /// isn't touched until `prepare`.
+    public func makeOfflineInstance(sampleRate: Double) -> (any SynthBackend)? {
+        SwiftySynthBackend(sampleRate: sampleRate)
     }
 
     public func teardown() {

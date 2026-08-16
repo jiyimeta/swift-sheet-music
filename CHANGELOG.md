@@ -9,6 +9,32 @@ and this project adheres to
 
 ### Fixed
 
+- A `<MeasureRepeat>` bar now occupies its bar on `PlaybackTimeline`'s measure
+  spine. The spine counted chords and breath pauses only, while
+  `MidiRenderer.measureTicks` counts the marker's own duration, so every measure
+  after a `𝄎` started a full bar early on the cursor's timeline and the playhead
+  ran a measure ahead of the audio for the rest of the piece. `totalTicks` was
+  short by a bar for a score ending on one, too.
+
+- An A-B loop is now projected onto the transport's own coordinates before it is
+  compared against or seeked with. `LoopRange` is a region of the score, so it is
+  stored (and handed back to the host) in notated ticks — but the transport plays
+  `MidiRenderer.render`'s UNROLLED sequence, where the same bar sits at one
+  position per pass and generally at none of its notated ticks. On a score with a
+  repeat, a region after it therefore wrapped a measure-play early and then
+  replayed from wherever the sequence happened to be that many notated seconds
+  in, i.e. a different passage than the one the host had highlighted. The new
+  projection resolves the region's first occurrence and carries the span across,
+  so a loop over a repeated bar covers that bar's own pass rather than swallowing
+  the repeat's second take.
+
+  The same confusion ran through every other transport move — `seek(to:)`,
+  `play(from:)`, the count-in's base position and its metronome offset — which
+  all handed a notated tick straight to the sequencer. `SynthBackend` gains
+  `setUnrolledTimeMap(_:)` (default no-op, so existing conformers are unaffected)
+  and `SwiftySynthBackend` runs both `seek(toTick:)` and `currentTick` through it,
+  which is what lets the engine keep speaking notated ticks throughout.
+
 - **Apple example apps:** exporting while a transposition was active wrote the
   file in the *authored* key. Every export entry point handed the raw loaded
   score to the serializer, so `Score.transposed(bySemitones:)` only ever reached
@@ -25,6 +51,27 @@ and this project adheres to
   The library itself was never affected; `TransposedScoreExportTests` now pins
   that (transpose → encode → reparse keeps the keys and pitches for MSCX, MSCZ
   and MIDI) so a future regression is unambiguously attributable.
+
+- A fermata is now one score-global tempo fact rather than a per-staff one, which
+  fixes two bugs at once on any score that has both a fermata and a tempo marking.
+
+  `render(score:)` realises a fermata's hold as a pair of tempo bookends around
+  the held chord, and it used to build that pair separately for every staff,
+  against the tempo markings `filterSystemElements` routes to *that* staff. A
+  system-level `<Tempo>` goes to the canonical staff alone, so every other staff
+  computed its hold against the 120 BPM default and emitted a CLOSE event
+  restoring 120 BPM. Tempo metas are score-global once a sequencer merges the
+  tracks, so that bogus restore outranked the real marking — a score marked
+  ♩=79 after a fermata played the rest of the piece at 120 BPM. The bookends are
+  now computed once, from the union of every staff's fermatas against the whole
+  of `systemMeasures`, and emitted into the first track only.
+
+- `PlaybackTimeline` folds the same fermata bookends into its own tempo map, via
+  the new `MidiRenderer.fermataTempoBookends(score:)`. A fermata carries no
+  notated duration, so a timeline built from `<Tempo>` markings alone never held
+  — leaving the playback cursor running ahead of the audio by the hold's extra
+  time, permanently, from the first fermata onward, and taking every elapsed-time
+  read and A-B loop boundary with it.
 
 ## [1.14.0] - 2026-08-14
 
