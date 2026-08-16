@@ -7,7 +7,136 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `sheet-music-compose-android` is published. Its publication block has been
+  complete since the module landed, but every release so far ran only the two
+  other publish tasks, so the module existed at no released coordinate and a
+  consumer that wanted the score canvas or the playback-cursor overlay could not
+  resolve it at all. **All three Android coordinates must now be pinned to the
+  same version.** `DrawProgramReader` validates the draw-program version the
+  native library produces, so a mismatched pair throws at the first strip drawn
+  — on a device, in a feature nothing would connect back to a version line. The
+  module's `proguard-consumer.pro` now records *why* it contributes no consumer
+  keep rules, its keep-rule story being consumer-facing for the first time: it
+  is ordinary Kotlin and Compose with no reflective entry point, no JNI
+  registration and nothing looked up by name, and the rules that do matter
+  belong to `sheet-music-android`, which owns the JNI boundary, and to the app.
+
+- `ScoreViewOptions.lyricsVisible` (default `true`), with `showsLyrics` appended
+  to `LayoutOptionsWire` as a ninth field for the Android bridge. The engraver's
+  only lyric gate was MuseScore's per-element `visible` flag, which is the
+  score's own authoring state rather than a display choice, so a host offering a
+  "show lyrics" switch had nowhere to put it. Hiding removes the whole lyric row
+  — the syllables, the hyphens between them, the melisma rule that follows a
+  held syllable, and the continuation segments an earlier measure's melisma
+  pushes into later ones — and nothing is routed to the invisible container
+  either, so `showsInvisibleElements` cannot bring it back. The engraved
+  document is therefore genuinely shorter, which is the point: a host fitting a
+  fixed-height notation strip to the engraved height gets a different number,
+  where a gate that suppressed the glyphs but kept their vertical slot would
+  change nothing on screen. On the wire, anything other than an explicit `0`
+  shows lyrics, so a host that has not been updated keeps the behaviour every
+  earlier release had.
+
+- `groupRawValue` on the staff-params wire (tag 13), carrying `Staff.group`. The
+  only percussion signal the wire had was `isDrums`, derived from the part's
+  `instrument.useDrumset` — but a pitched-percussion staff (timpani,
+  glockenspiel) has `useDrumset == false` while its `<StaffType group="…">`
+  still reads "percussion", so an Android host keying a drum-kit UI on `isDrums`
+  alone over-offered exactly the staves Apple hides. Appending is safe for an
+  **older** consumer meeting a **newer** payload — it skips the tag — and not
+  the other way round: the generated decoder throws when a declared tag is
+  absent, so a build carrying the new decoder must not meet a native library
+  older than the field. The AAR and the `.so` ship in one artifact, so the only
+  way to produce that is a partial version pin across the three coordinates.
+
+- `nativeSecondsAtTick(scoreHandle, unrolledTick)`, bridging
+  `PlaybackTimeline.seconds(atTick:)` — public and Android-compatible for
+  several releases with no JNI symbol. The only position an Android host could
+  read was `nativeFrameAtTick`, whose `timeSeconds` snaps to a frame onset, and
+  interpolating two polled frames cannot recover the value in between because
+  those times are themselves quantized: the result steps once per note however
+  often it is sampled. The tick is in the same unrolled coordinates the
+  FluidSynth player reports, fractional ticks included. An unknown handle
+  returns `-1` rather than `0`, since `0` is a real position.
+
+- `AndroidPlaybackEngine.audioClockPosition()`, returning the transport's tick
+  together with `AudioTrack.getTimestamp()`'s frame position and the
+  `System.nanoTime()` instant that frame was presented, so a host can
+  extrapolate a playhead from the audio clock. `currentTimeSeconds` and
+  `currentCursor` are written from a 33 ms poll, so their timestamp is when the
+  poll observed the transport rather than when the audio was heard, and anything
+  smoothing between polls inherited the poll's jitter. A read rather than a
+  flow, on purpose — publishing it would put it back on the poll's cadence and
+  lose the only thing it adds. Nullable, because `getTimestamp` is best-effort
+  by contract (it reports nothing before enough audio has been written, and
+  nothing at all on routes that carry no timestamp), so a host can tell "no
+  better information" from "position zero". Purely additive: neither existing
+  flow changes, and a host that never calls it behaves exactly as before.
+
+### Changed
+
+- The whole-score transpose clamp widens from ±7 to ±12 semitones. A diminished
+  fifth either way was too narrow for what the feature exists for — moving a
+  song out of its written key for a singer routinely needs an octave — and the
+  MIDI coarse-tuning RPN carries ±64 semitones, so the old bound bought nothing.
+  The clamp lives in three places and they move together: the Apple engine's
+  `setTranspose`, `AndroidPlaybackEngine.setTranspose`, and the notation half in
+  `LayoutOptionsWire.transposeDelta`. Widening only the audio side would leave a
+  score sounding transposed past the narrower bound while still reading in the
+  written key, which is worse than either limit alone. The doc comments that
+  spelled out the old range — including the one on the wire field, which is
+  mirrored into the generated Java — move with it.
+
 ### Fixed
+
+- **Android:** an offline audio export now reproduces the live engine's
+  transpose and A4 calibration. Transposed playback is a tuning shift on the
+  melodic channels rather than a re-render, so the SMF the exporter loads holds
+  the *authored* pitches — and `ExportEngineSnapshot` carried the mixer, the
+  metronome and the rate but no pitch state at all, while the exporter builds
+  its own synth, which starts at concert pitch. A score transposed on screen
+  therefore exported in its original key, and an A4 calibration was dropped the
+  same way: silently, on every device, with the file itself the only evidence.
+  The snapshot gains `masterTuningCents` and `transposeSemitones`, populated
+  from the live engine where the mixer is captured, and `AudioExporter` applies
+  them through the same MIDI Master Tuning RPN the live engine uses — melodic
+  channels take calibration + transpose at 100 cents per semitone, percussion
+  the calibration alone, so a transposed score's kit stays where it was written.
+  That split is the one Apple's `PlaybackEngine+Export` already makes. Zero is
+  skipped rather than sent as a no-op RPN, mirroring the live engine's guard at
+  prepare, so an untuned export emits exactly the sequence it emitted before.
+
+- **Android:** a Standard MIDI File can be imported. `MidiImporter` has always
+  existed and Apple hosts call it directly, but the Android score bridge sniffed
+  ZIP, `<museScore` and `<score-partwise>`/`<score-timewise>` only, so a `.mid`
+  fell through to `loadScore`'s `.unknown` case and threw — which a host
+  surfaces as a failure to load the score. The `MThd` header chunk is now one of
+  four recognized magics and routes to `MidiImporter.parse`. This closes a
+  parity gap rather than fixing a regression: `.mid` import has never worked
+  through the Android bridge in any release. It adds no dependency and no native
+  size — `SheetMusicAndroidJNI` already depends on `SheetMusicMIDI` for MIDI
+  rendering — and the JNI signature is unchanged, so a host needs nothing beyond
+  accepting the extension at its file picker. The importer's `sourceFilename`
+  hint stays `nil`; the host titles the score from the picker's display name.
+
+- `nativeCursorFrame` and `nativeLoopHighlightRects` no longer describe payloads
+  that have not existed for several releases, in the direction that costs a
+  consumer the most: both KDocs named a byte layout precise enough to write a
+  reader from — a `u16` version word followed by microsecond `i64`s — and a
+  reader written from either decodes garbage. `nativeLoopHighlightRects` had
+  three mutually inconsistent accounts in circulation. The wire is wirelet TLV,
+  and both now name the generated codec to decode with (`DecodedFrameCodec` and
+  `RectCodec` respectively). `nativeMeasureFrame` refers to `nativeCursorFrame`
+  for its format, so it is corrected with it. No signature and no wire change.
+
+- `SheetMusicEngine.version` names this release. It still read `1.13.1` at tag
+  `1.14.0` — that release commit changed only a CHANGELOG heading. Nothing was
+  broken by it, since both images derive their stamp from the same constant and
+  so agreed with each other, but the constant feeds the Android version-skew
+  gate through `nativeEngineVersionStamp`, and a stamp that names the wrong
+  release is exactly what a skew gate cannot afford.
 
 - A `<MeasureRepeat>` bar now occupies its bar on `PlaybackTimeline`'s measure
   spine. The spine counted chords and breath pauses only, while
