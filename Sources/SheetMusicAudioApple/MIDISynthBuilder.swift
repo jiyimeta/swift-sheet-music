@@ -31,6 +31,22 @@ enum MIDISynthBuilder {
     /// no SoundFont loaded yet — call `loadSoundFont(...)` before
     /// the audio engine starts (or accept the first-note load
     /// latency).
+    ///
+    /// **Never let the engine render one of these without a real General-MIDI
+    /// SoundFont in it.** Doing so corrupts process-wide AUMIDISynth state:
+    /// the next AUMIDISynth in the process that *does* have a real font faults
+    /// with `EXC_BAD_ACCESS` inside CoreAudio's mixer render, on an unrelated
+    /// `AVAudioEngine`, arbitrarily later. Reproduced down to a bare
+    /// `AVAudioEngine` + one font-less synth: start, render, stop — and the
+    /// next loaded synth dies. A minimal hand-built SF2 is no escape (tried,
+    /// at bank 128 and bank 0, with and without a bindable preset); only a
+    /// real GM font keeps the synth out of that state, and once one has been
+    /// loaded, switching between different real fonts is fine.
+    ///
+    /// This is why `SoundfontResolver.defaultGMSoundfontURL` is documented as
+    /// a precondition rather than defended against here — see that protocol's
+    /// doc comment for why the obvious defence (don't attach the synth) trades
+    /// this for an uncatchable `AVAudioSequencer` exception instead.
     static func make() -> AVAudioUnitMIDIInstrument {
         let description = AudioComponentDescription(
             componentType: kAudioUnitType_MusicDevice,

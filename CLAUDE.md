@@ -514,6 +514,27 @@ MuseScore repository root.
 - **Xcode project drift**: `Examples/Apple/SheetMusicExample.xcodeproj` is
   gitignored. After changing example sources or `project.yml`,
   regenerate with `cd Examples/Apple && xcodegen`.
+- **Never render an AUMIDISynth with no real SoundFont loaded.** It
+  corrupts process-wide CoreAudio state: the *next* AUMIDISynth in the
+  process that does have a real GM font faults with `EXC_BAD_ACCESS`
+  inside the mixer render, on a different `AVAudioEngine`, arbitrarily
+  later. A minimal hand-built SF2 does not help (tried bank 128 and
+  bank 0, with and without a bindable preset); once a real font has been
+  loaded, switching between different real fonts is fine.
+
+  In practice this means **tests must not do a real-SoundFont export on
+  the AUMIDISynth path after any `SilentResolver`-style engine has run**
+  — which is every audio test, since `defaultGMSoundfontURL: nil` is the
+  suite's default. Follow `MetronomeClickPlaybackTests`: a `nil` resolver
+  plus a generated click WAV, so the score is silent and only the click
+  sounds. That needs no local `.sf2`, so it also runs in CI.
+
+  Not defended against in the library: keeping the preset-less synth out
+  of the graph leaves `AVAudioSequencer` with no destination, and it
+  answers `start()` with `-66720` raised as an ObjC exception that no
+  Swift `catch` can contain. It is documented as a precondition on
+  `SoundfontResolver.defaultGMSoundfontURL` instead.
+
 - **Audio file writer back-ends differ by format**: `AVAudioFile`
   natively writes WAV (URL `.wav`), AIFF (`.aiff` int / `.aifc`
   float), and M4A (settings dict `kAudioFormatMPEG4AAC`). Only
