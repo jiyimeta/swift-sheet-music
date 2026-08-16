@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-08-17
+
 ### Added
 
 - `Score.fermataHolds()` — every fermata resolved to the chord it holds, merged across staves. It
