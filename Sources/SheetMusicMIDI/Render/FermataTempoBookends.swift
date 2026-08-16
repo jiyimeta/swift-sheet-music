@@ -52,9 +52,33 @@ extension MidiRenderer {
     ///   then overrode the real tempo in the merged map for the rest of the piece.
     static func fermataBookendEvents(score: Score) -> FermataRanges.TempoEvents {
         let division = score.division
-        var ranges: [FermataRange] = []
-        for entry in score.allStaves {
-            ranges.append(contentsOf: FermataRanges.collect(from: entry.staff, division: division))
+        let holds = score.fermataHolds()
+        guard !holds.isEmpty else {
+            return FermataRanges.TempoEvents(openEvents: [], closeEvents: [])
+        }
+        // `Score.fermataHolds()` is bar-relative and already merged across staves; project it onto
+        // the absolute tick spine the renderer places notes on. Taking the holds from `Score` — the
+        // same set the notated-time API adds to a bar's length — is what stops the SMF's idea of a
+        // hold and the score's from drifting apart.
+        let measures = score.parts.first?.staves.first?.measures ?? []
+        let measureDurations = measures.effectiveMeasureDurations()
+        var bases: [Int] = []
+        var accumulated = 0
+        for (index, measure) in measures.enumerated() {
+            bases.append(accumulated)
+            accumulated += measureTicks(
+                measure: measure, division: division,
+                measureDuration: index < measureDurations.count
+                    ? measureDurations[index]
+                    : Fraction(numerator: 4, denominator: 4),
+            )
+        }
+        let ranges = holds.compactMap { hold -> FermataRange? in
+            guard bases.indices.contains(hold.measureIndex) else { return nil }
+            let start = bases[hold.measureIndex] + hold.startTickInMeasure
+            return FermataRange(
+                startTick: start, endTick: start + hold.ticks, stretch: hold.stretch,
+            )
         }
         guard !ranges.isEmpty else {
             return FermataRanges.TempoEvents(openEvents: [], closeEvents: [])
@@ -62,7 +86,7 @@ extension MidiRenderer {
         return FermataRanges.tempoEvents(
             ranges: FermataRanges.dedupeMaxStretch(ranges),
             timeline: TempoTimeline.build(
-                measures: score.parts.first?.staves.first?.measures ?? [],
+                measures: measures,
                 systemMeasures: score.systemMeasures,
                 division: division,
             ),
