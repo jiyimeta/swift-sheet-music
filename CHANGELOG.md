@@ -7,6 +7,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- A fermata is now one score-global tempo fact rather than a per-staff one, which
+  fixes two bugs at once on any score that has both a fermata and a tempo marking.
+
+  `render(score:)` realises a fermata's hold as a pair of tempo bookends around
+  the held chord, and it used to build that pair separately for every staff,
+  against the tempo markings `filterSystemElements` routes to *that* staff. A
+  system-level `<Tempo>` goes to the canonical staff alone, so every other staff
+  computed its hold against the 120 BPM default and emitted a CLOSE event
+  restoring 120 BPM. Tempo metas are score-global once a sequencer merges the
+  tracks, so that bogus restore outranked the real marking — a score marked
+  ♩=79 after a fermata played the rest of the piece at 120 BPM. The bookends are
+  now computed once, from the union of every staff's fermatas against the whole
+  of `systemMeasures`, and emitted into the first track only.
+
+- `PlaybackTimeline` folds the same fermata bookends into its own tempo map, via
+  the new `MidiRenderer.fermataTempoBookends(score:)`. A fermata carries no
+  notated duration, so a timeline built from `<Tempo>` markings alone never held
+  — leaving the playback cursor running ahead of the audio by the hold's extra
+  time, permanently, from the first fermata onward, and taking every elapsed-time
+  read and A-B loop boundary with it.
+
 ## [1.14.0] - 2026-08-14
 
 ### Added
