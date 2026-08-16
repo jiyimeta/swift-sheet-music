@@ -76,6 +76,21 @@ public protocol SynthBackend: AnyObject {
     /// time-based (e.g. SwiftySynth) rather than tick-based.
     func loadSequence(_ midi: MidiFile, timeline: PlaybackTimeline)
 
+    /// Hand the backend the projection between the NOTATED timeline the engine
+    /// speaks in and the UNROLLED SMF it just loaded — the sequence
+    /// `MidiRenderer.render` produces has repeats and jumps expanded, so the two
+    /// clocks are the same only on a score without a repeat plan.
+    ///
+    /// Every tick the engine passes (`seek(toTick:)`) is a notated score tick and
+    /// every position it reads back (`currentTick`) is expected in the same
+    /// coordinates; a time-based backend has to run both through this map or it
+    /// seeks into — and reports from — the wrong measure-play. Called right after
+    /// `loadSequence`, and always before the next transport move.
+    ///
+    /// The default is a no-op, so a backend written before this existed keeps its
+    /// previous behavior (correct for any score without repeats).
+    func setUnrolledTimeMap(_ map: UnrolledTimeMap)
+
     /// Load the metronome-only SMF (click track + the score's tempo map) onto
     /// the backend's separate metronome transport, kept in lockstep with the
     /// score. Muting it (`setMetronomeMuted`) is then a live flag flip — no
@@ -209,6 +224,11 @@ extension SynthBackend {
     /// strip's volume is dropped rather than mis-applied. Keeps existing
     /// conformers — including transport-only test doubles — source-compatible.
     public func setMetronomeVolume(_: Float) {}
+
+    /// Default for a backend that maps ticks to its transport itself, or one
+    /// written before the map existed: ignoring it is exactly the old behavior,
+    /// which is correct on every score without a repeat plan.
+    public func setUnrolledTimeMap(_: UnrolledTimeMap) {}
 
     /// Default for a backend that can't render offline: the export falls back to
     /// the built-in AUMIDISynth pipeline. Chosen over a required member so

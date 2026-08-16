@@ -302,6 +302,16 @@ extension PlaybackTimeline {
                         spineTick += c.duration
                             .resolved(in: measureDuration)
                             .ticks(division: division)
+                    case let .measureRepeat(r):
+                        // A measure-repeat bar carries no chords of its own — `MidiRenderer`
+                        // splices the source measure's notes in at render time and
+                        // `measureTicks` counts the marker's own duration. Counting it here
+                        // too is what keeps `measureStarts` equal to the MIDI measure bases;
+                        // without it every measure after a `𝄎` sat one bar's worth of ticks
+                        // early, so the cursor ran a whole measure ahead of the audio.
+                        spineTick += r.duration
+                            .resolved(in: measureDuration)
+                            .ticks(division: division)
                     case let .breath(b) where b.pause > 0:
                         // TODO: multi-tempo — sample the tempo
                         // timeline at the breath's tick instead of
@@ -438,6 +448,16 @@ extension PlaybackTimeline {
                                 (b.pause * bps * Double(division))
                                     .rounded(),
                             )
+                        case let .measureRepeat(r):
+                            // No frame: the bar engraves a `𝄎` rather than notes, so the
+                            // cursor's stops in it are the `.beat` entries added below. The
+                            // tick still has to advance — `maxEndTick` (and with it
+                            // `totalTicks` / `totalSeconds`) is taken from this walker, and a
+                            // score ending on a measure repeat would otherwise report its
+                            // length one bar short.
+                            tick += r.duration
+                                .resolved(in: measureDuration)
+                                .ticks(division: division)
                         default:
                             break
                         }
