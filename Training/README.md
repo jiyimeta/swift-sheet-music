@@ -528,6 +528,46 @@ Three of those counters answer questions the design left open:
 The degraded root is 8× the clean one on disk because degradation noise does
 not compress.
 
+**STALE as of `250764b2`: these two roots and the shipped checkpoint predate a
+target redefinition.** That fix wave commit changed `OMRPrepTargets.glyphs` so
+`advancePx`/`renderedSizePx` are derived from the label bbox's MAPPED corners
+instead of `advancePt`/`renderedSizePt` scaled directly by `dpi/72 * scale`.
+That was the right fix — the raster contract (`GlyphGeometry`'s own doc comment in
+`Sources/SheetMusicPDF/Import/Internal.swift`) defines `advance` as the ink
+bbox WIDTH and `renderedSize` as its HEIGHT, and the two were never equal:
+`renderedSizePt` (`OMRLabelSchema.swift`, `Double(g.geometry.renderedSize)`)
+comes from the vector oracle's em/rendered size — roughly 4 staff spaces for
+a notehead — while the ink bbox height is roughly 1. So the `renderedSize`
+regression channel's targets change by ~4×, on clean pages as well as
+degraded ones (the old shortcut only happened to agree with the mapped-corner
+length under an identity `label_transform`).
+
+Both prep roots above and the checkpoint (`~/omr-models/run1`) were
+exported/trained BEFORE this fix, so they carry the OLD `renderedSize`
+targets. **Every number frozen in this document is unaffected**, and stays
+reproducible against that checkpoint: `OMRPrepTargets` sits upstream of
+training only — nothing on the evaluation path calls
+`OMRPrepTargets.glyphs(...)`. `OMRDetectorFrontEnd` (what the eval harness
+runs) consumes only `OMRPrepTargets.trainableVocabulary`, the class list,
+which this fix did not touch.
+
+The hazard is the NEXT training round: retraining against `v2-prep` /
+`v2-prep-frozen` as they stand would train a new model against targets the
+code no longer produces — no error, no diagnostic, just a systematically
+wrong `renderedSize` head. **Regenerate both prep roots before the next
+training run**, same commands as above, pointed at the frozen eval set for
+the degraded root:
+
+    OMR_DATA_ROOT=$R OMR_PREP_ROOT=$R-prep \
+    OMR_PREP_EXPORT=1 swift test -c release --no-parallel \
+        --filter OMRPrepExportHarness
+
+    OMR_DATA_ROOT=$R/eval_frozen OMR_PREP_ROOT=$R-prep-frozen \
+    OMR_PREP_EXPORT=1 swift test -c release --no-parallel \
+        --filter OMRPrepExportHarness
+
+Measured cost (see "Costs, measured" below): 51 min clean, 39 min degraded.
+
 #### Measured 2026-08-15 — the first end-to-end numbers
 
 Model: `SymbolNet`, CenterNet-style, stride 4, 62 classes (the frozen 64 minus
@@ -579,8 +619,8 @@ subsample, and the frozen numbers are only ever compared within it.
 |---|---|---|
 | **P3d-G1** the detector is really in the loop | export an untrained net through the identical path and sweep first | PASS — floor detects **0** of 8520 truth glyphs, trained detects 7992. But note a zero floor makes this gate weak: anything nonzero clears it. The stronger anti-vacuity evidence is the label-replay test below |
 | **P3d-G2** preprocessing has one implementation | `swift test --filter OMRPrepExport…` plus the inference path reproducing `prep.png` byte-for-byte | PASS (23 tests) |
-| **P3d-G3** vocabulary parity | `swift test --filter OMRDetectorFrontEndTests` | PASS 4/4. The load-bearing case is the **reordered** list — a count- or set-based check passes it, full-array equality does not |
-| **P3d-G4** run twice, byte-identical | run the sweep twice, `diff` the sorted summaries | PASS with one caveat: the only differing field across two runs was `peakRSS`, a process measurement rather than a result. Strip it and the diff is empty. **The summary line should not carry a non-deterministic field that a run-twice gate diffs** — fix next round |
+| **P3d-G3** vocabulary parity | `swift test --filter OMRDetectorFrontEndTests` | PASS 5/5 in the `OMRDetectorFrontEndTests` struct itself — a fifth case (asserting the reordered-list error names the differing index and both class names, not merely that it throws) was added since this row was last recorded. The load-bearing case is still the **reordered** list — a count- or set-based check passes it, full-array equality does not. (The same filter command also sweeps the file's `OMRDetectorFrontEndNumericsTests` / `…ManifestDecodeTests` / `…ModelTests` suites — separate, non-vocabulary coverage added the same round; all pass, one skipped without `OMR_MODEL_ROOT`) |
+| **P3d-G4** run twice, byte-identical | run the sweep twice, `diff` the sorted summaries | PASS, and the caveat this row used to carry is now resolved: `[detect-seam][SUMMARY]` no longer carries `peakRSS` — it moved to its own `[detect-rss]` line (`OMRDetectorEvalTests.printSeamSummary`), specifically because this gate diffs the summary line byte-for-byte. A process measurement can no longer land inside the diffed line. Not re-measured this round; the fix removes the field that was the entire caveat |
 | **P3d-G5** vector path untouched | `PDF_REAL_CORPUS=1` corpus run, diffed against a baseline | PASS — **141 rows byte-identical**. Baseline is a scratch worktree at this round's own base commit; `main` is NOT usable, it is far ahead of the branch and `Import/` alone differs by 70+ lines |
 
 The anti-vacuity test that matters more than G1: feeding the composer a detector
@@ -603,12 +643,20 @@ result and every number the mode reports carries an unknown offset.
   *before* the seam loop, silently excluding the 2 of 34 renders that carry
   `source.mscz`. Comparing those two rows would have overstated the cost of
   degradation. Both rows above are re-measured from the same binary.
-- **Five tests in this round passed unchanged when the mechanism they named was
+- **Six tests in this round passed unchanged when the mechanism they named was
   deleted.** The most expensive was the focal loss's penalty-reduction test:
   removing `(1 - target)^4` — the term that makes a 55,675-to-16 class imbalance
   trainable — left it green, because its separation came from the `target == 1`
-  branch rather than from the weighting of two negative cells. Every test
-  guarding a mechanism now carries a recorded break-and-restore round trip.
+  branch rather than from the weighting of two negative cells. The most
+  instructive was `test_masked_l1_ignores_everything_outside_the_mask`: its
+  fixture (`pred = 5` everywhere, `target = 0` everywhere) made the masked mean
+  and the unmasked mean both exactly 5.0, so deleting the masking entirely
+  produced the same passing assertion by coincidence. Masking is what keeps
+  the offset and geom heads from being trained to regress zero at every empty
+  cell — and origin error is this round's headline number — so a test that
+  cannot tell "masked" from "not masked" apart was silently certifying the
+  one mechanism this stage's result depends on most. Every test guarding a
+  mechanism now carries a recorded break-and-restore round trip.
 
 #### Costs, measured — these are what block the parameter sweeps
 
