@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Encoder-internal description of a Tie spanner's `<location>`
 /// payload. MuseScore Studio interprets this in two distinct ways

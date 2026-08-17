@@ -232,10 +232,9 @@ carry publishing configuration:
   overlays, `DrawProgramReader`) plus the wirelet codecs generated from
   `Sources/SheetMusicBridgeCore/Draw`.
 
-**`android-publish.yml` only invokes the first two.** The Compose module
-has a `publishing` block of its own but no workflow step, so its AAR does
-not go out with a tag push even though downstream apps depend on it.
-Consider that before cutting a release.
+All three go out together — `README.md`'s artifact table still lists only
+the first two, and the Compose module is the one without a README of its
+own, but the workflow publishes it.
 
 Consumers need a GitHub PAT with `read:packages`. See
 `Android/SheetMusicAndroid/README.md` for the consumer-side
