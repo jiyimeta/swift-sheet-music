@@ -7,6 +7,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- `LayoutOptionsWire.showsLyrics` declares its compatible default, so the
+  generated Kotlin `data class` gives it one too. 1.15.0 appended the field
+  without one, and although the wire stayed readable by hosts that had never
+  heard of it, the generated constructor gained a required ninth parameter —
+  so every Kotlin host stopped compiling against a release that was supposed
+  to be compatible with it. `1` is the value the field's own documentation
+  already names as the safe direction (anything but an explicit `0` shows
+  lyrics, which is what every release before 1.15.0 did), so a host that
+  omits it gets exactly its previous behaviour. Requires swift-wirelet's
+  Kotlin emitter to carry declared defaults.
+
 ### Added
 
 - A durable playback position on the WebAssembly bridge. `playerSecondsForPosition` and

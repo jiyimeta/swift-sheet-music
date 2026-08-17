@@ -32,7 +32,13 @@ public struct LayoutOptionsWire {
     /// including the hyphens and the melisma rules, and `showsInvisibleElements` does not bring it
     /// back. The engraved document is genuinely SHORTER as a result, which is what a host reserving
     /// a fixed-height notation strip depends on.
-    public var showsLyrics: UInt8
+    ///
+    /// The default is what makes this an APPENDED field rather than a breaking one: the Kotlin
+    /// emitter carries it into the generated `data class`, so a host built before this field
+    /// existed still compiles and still gets the behaviour it had. Without it the generated
+    /// constructor gains a required parameter and every Kotlin host breaks at the source level,
+    /// even though the wire itself stayed readable.
+    public var showsLyrics: UInt8 = 1
 
     public init(
         layoutMode: UInt8,
@@ -43,7 +49,7 @@ public struct LayoutOptionsWire {
         hiddenStaves: [HiddenStaffWire],
         clefOverrides: [ClefOverrideWire],
         transposeSemitones: Int32,
-        showsLyrics: UInt8,
+        showsLyrics: UInt8 = 1,
     ) {
         self.layoutMode = layoutMode
         self.staffSize = staffSize
