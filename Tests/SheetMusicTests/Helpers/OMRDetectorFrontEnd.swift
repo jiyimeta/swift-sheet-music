@@ -128,26 +128,53 @@
 
         /// A manifest field that decodes as a syntactically valid number
         /// but is semantically nonsense (`staff_space_px: 0`, `tile: 0`,
-        /// …) does not fail to decode, so `JSONDecoder` alone lets it
-        /// through. Left unchecked, `staff_space_px: 0` makes
+        /// `std: 0`, …) does not fail to decode, so `JSONDecoder` alone
+        /// lets it through. Left unchecked, `staff_space_px: 0` makes
         /// `OMRPrepNormalize.normalize` return `nil` for every page
         /// (division by the target staff space), so `glyphs(page:
         /// analysis:)` returns `[]` everywhere and the eval harness
         /// reports a clean-looking `recall=0.0000` — indistinguishable
         /// from "the detector genuinely finds nothing" instead of "the
-        /// manifest is broken". Pure and callable with no model present,
-        /// same reasoning as `checkVocabulary`.
+        /// manifest is broken". `std: 0` reaches the same failure by a
+        /// different road: `makeInput`'s `(raw - mean) / std` divides by
+        /// zero, so every tile's input is NaN and the model's output is
+        /// NaN too, again reading as an empty, clean-looking sweep.
+        /// `overlap` is checked for sign rather than positivity — see
+        /// below. Pure and callable with no model present, same
+        /// reasoning as `checkVocabulary`.
         static func checkNumerics(_ manifest: Manifest) throws {
-            let checks: [(name: String, value: Double)] = [
+            let positiveChecks: [(name: String, value: Double)] = [
                 ("staff_space_px", manifest.staffSpacePx),
                 ("tile", Double(manifest.tile)),
                 ("stride", Double(manifest.stride)),
                 ("top_k", Double(manifest.topK)),
             ]
-            for check in checks where check.value <= 0 {
+            for check in positiveChecks where check.value <= 0 {
                 throw SheetMusicError.malformedScore(
                     reason: "OMR detector: manifest field \"\(check.name)\" must be positive, "
                         + "got \(check.value)",
+                )
+            }
+            // `OMRTiling.origins`' step is `max(1, tile - overlap)`, so a
+            // negative overlap does not fail outright — it silently
+            // widens the step past `tile`, opening a real gap between
+            // adjacent tile pixel WINDOWS. `OMRTiling.coreRange` still
+            // partitions the page by the midpoint between tile origins
+            // with no awareness of that gap, so it hands a tile's merge
+            // step a "core" region that extends past pixels that tile's
+            // window ever covered — pixels in the gap are never run
+            // through the model by ANY tile, and silently vanish from
+            // every detection, not merely a slower or redundant sweep.
+            guard manifest.overlap >= 0 else {
+                throw SheetMusicError.malformedScore(
+                    reason: "OMR detector: manifest field \"overlap\" must be non-negative, "
+                        + "got \(manifest.overlap)",
+                )
+            }
+            guard manifest.std != 0 else {
+                throw SheetMusicError.malformedScore(
+                    reason: "OMR detector: manifest field \"std\" must not be zero, "
+                        + "got \(manifest.std)",
                 )
             }
         }

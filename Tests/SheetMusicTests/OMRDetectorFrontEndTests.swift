@@ -75,15 +75,19 @@
     /// manifest field that decodes fine but is semantically nonsense
     /// (`staff_space_px: 0`) must throw at load time rather than let
     /// `glyphs(page:analysis:)` silently return `[]` on every page and
-    /// read as a clean `recall=0.0000` (task-14 brief follow-up).
+    /// read as a clean `recall=0.0000` (task-14 brief follow-up). `std`
+    /// and `overlap` reach the same class of silent failure by their own
+    /// roads — see `checkNumerics`' doc comment — and are covered here
+    /// too.
     struct OMRDetectorFrontEndNumericsTests {
         private static func sampleManifest(
-            staffSpacePx: Double = 12, tile: Int = 384, stride: Int = 4, topK: Int = 300,
+            staffSpacePx: Double = 12, tile: Int = 384, overlap: Int = 64, stride: Int = 4,
+            std: Double = 1, topK: Int = 300,
         ) -> OMRDetectorFrontEnd.Manifest {
             OMRDetectorFrontEnd.Manifest(
                 classes: OMRPrepTargets.trainableVocabulary,
-                staffSpacePx: staffSpacePx, tile: tile, overlap: 64, stride: stride,
-                mean: 0, std: 1, threshold: 0.3, topK: topK, nmsRadiusSp: 0.5,
+                staffSpacePx: staffSpacePx, tile: tile, overlap: overlap, stride: stride,
+                mean: 0, std: std, threshold: 0.3, topK: topK, nmsRadiusSp: 0.5,
                 decodeDefaultsMeasured: false, checkpoint: "random",
             )
         }
@@ -113,6 +117,29 @@
         @Test func aZeroTopKIsRejected() {
             #expect(throws: (any Error).self) {
                 try OMRDetectorFrontEnd.checkNumerics(Self.sampleManifest(topK: 0))
+            }
+        }
+
+        /// `std: 0` decodes fine but divides by zero in `makeInput`'s
+        /// `(raw - mean) / std`, turning every tile's input — and so the
+        /// model's output — into NaN. That reads exactly like the
+        /// `staff_space_px: 0` failure this gate already guards: a
+        /// clean-looking empty sweep with no diagnostic anywhere.
+        @Test func aZeroStdIsRejected() {
+            #expect(throws: (any Error).self) {
+                try OMRDetectorFrontEnd.checkNumerics(Self.sampleManifest(std: 0))
+            }
+        }
+
+        /// A negative `overlap` does not fail outright (`OMRTiling.
+        /// origins`' step clamps to `max(1, tile - overlap)`) — it
+        /// silently opens a gap between adjacent tiles' pixel windows
+        /// that `OMRTiling.coreRange`'s midpoint partition has no way to
+        /// notice, so pixels in the gap are never run through the model
+        /// by any tile and vanish from every detection.
+        @Test func aNegativeOverlapIsRejected() {
+            #expect(throws: (any Error).self) {
+                try OMRDetectorFrontEnd.checkNumerics(Self.sampleManifest(overlap: -1))
             }
         }
     }
@@ -249,9 +276,16 @@
             return (bitmap, page)
         }
 
+        // The bare `guard #available(macOS 15.0, *) else { return }` this
+        // test used to open with made it pass silently on macOS 14 — an
+        // absence with no signal, which this round's standing rule
+        // forbids. `@available` on the test declaration itself is the
+        // house pattern (see `AnacrusisTests`, `AnnotationTextClampTests`,
+        // …): Swift Testing reports the test as explicitly SKIPPED for
+        // an unmet platform requirement rather than silently passed.
         @MainActor
+        @available(macOS 15.0, *)
         @Test func aRealModelProducesGlyphsInPageSpace() async throws {
-            guard #available(macOS 15.0, *) else { return }
             let path = try #require(ProcessInfo.processInfo.environment["OMR_MODEL_ROOT"])
             let root = URL(fileURLWithPath: path, isDirectory: true)
             let frontEnd = try await OMRDetectorFrontEnd(modelRoot: root)
