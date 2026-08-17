@@ -164,6 +164,55 @@
                 #expect(engine.state == .playing) // a wrap must not stop playback
             }
 
+            /// Two 4/4 measures of measure rests: no note events, so the rendered SMF's
+            /// messages sit entirely at tick ~0 (EoT lands one tick past the last event —
+            /// MuseScore convention) and the transport reports `isAtEnd` on the very first
+            /// poll. That alone must not read as end-of-piece — the silent score still
+            /// occupies notated time. Guards the bug where playing the bundled all-rest
+            /// harmony fixture stopped ~one poll tick (~33 ms) after `play`.
+            private func makeAllRestScore() -> Score {
+                let first = Voice(elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .rest(duration: .measure),
+                ])
+                let second = Voice(elements: [.rest(duration: .measure)])
+                let part = Part(
+                    id: "p",
+                    instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
+                    staves: [Staff(measures: [
+                        Measure(voices: [first]), Measure(voices: [second]),
+                    ])],
+                )
+                return Score(division: 480, parts: [part])
+            }
+
+            @Test("an all-rest score keeps playing until the clock reaches the notated end")
+            func allRestScorePlaysToNotatedEnd() throws {
+                let backend = TransportBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                let score = makeAllRestScore()
+                try engine.prepare(score: score)
+
+                engine.play(in: score)
+                #expect(engine.state == .playing)
+
+                // First poll: the SMF is already exhausted but the piece has just begun.
+                backend.currentPositionSeconds = 0.033
+                backend.isAtEnd = true
+                engine.tickCursor()
+                #expect(engine.state == .playing)
+
+                // Halfway through the silent tail: still playing.
+                backend.currentPositionSeconds = engine.totalTimeSeconds / 2
+                engine.tickCursor()
+                #expect(engine.state == .playing)
+
+                // The clock reaches the notated end: now it stops.
+                backend.currentPositionSeconds = engine.totalTimeSeconds
+                engine.tickCursor()
+                #expect(engine.state == .stopped)
+            }
+
             @Test("a count-in playback also stops at end of score")
             func countInPlaybackStopsAtEnd() throws {
                 let backend = TransportBackend()
