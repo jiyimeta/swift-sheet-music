@@ -16,6 +16,8 @@ export type {
   DrawProgramPage,
   FontId,
 } from "./draw-program.js";
+export { drawPage, loadScoreFonts } from "./render/canvas.js";
+export type { FontURLs, ScoreFonts } from "./render/canvas.js";
 
 /** What the host shows in a title bar or a document list. */
 export interface ScoreMetadata {
