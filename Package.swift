@@ -375,6 +375,16 @@ if !isAndroid {
                     "SheetMusicMIDI",
                 ],
             ),
+            // Build-time generators for the WebAssembly package's assets. Not
+            // products: their output is committed, so a consumer never builds
+            // them, and they are macOS-only because that is where CoreText is —
+            // which is the whole reason the metrics table is generated rather
+            // than measured in the browser. See Tools/GenBravuraMetrics.
+            .executableTarget(
+                name: "GenBravuraMetrics",
+                dependencies: ["SheetMusicLayout", "SheetMusicLayoutApple"],
+                path: "Tools/GenBravuraMetrics",
+            ),
         ]
     }
 }
