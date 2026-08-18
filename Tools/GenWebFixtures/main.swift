@@ -232,6 +232,30 @@ enum GenWebFixtures {
                 + "\(expectations.pageCount) page(s), "
                 + "\(expectations.firstPageCommandCount) commands",
         )
+
+        // The playback fixture goes through the same container round trip: the
+        // browser loads a `.mscz`, so the expectations have to be computed from
+        // the score that comes back out of one rather than the one built above.
+        let repeatContainer: Data
+        let repeatReloaded: Score
+        do {
+            repeatContainer = try MSCZWriter.write(score: repeatScore)
+            repeatReloaded = try ScoreBridge.loadScore(bytes: repeatContainer)
+        } catch {
+            fail("could not round-trip the repeat score: \(error)", code: 5)
+        }
+        let playback = makePlaybackExpectations(score: repeatReloaded)
+        writePlayback(
+            container: repeatContainer, expectations: playback, to: directory,
+        )
+
+        print(
+            "wrote repeat.mscz (\(repeatContainer.count)B), repeat-playback.json — "
+                + "\(playback.measureCount) measure(s), "
+                + "notated \(playback.totalNotatedSeconds)s vs player "
+                + "\(playback.totalPlayerSeconds)s, "
+                + "midi \(playback.midiByteCount)B",
+        )
     }
 }
 

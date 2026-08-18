@@ -99,6 +99,29 @@ import SheetMusicFoundation
     return Double(result.preRollTicks) * secondsPerTick
 }
 
+/// Build a bank-128 SoundFont from two click WAVs, mapping the strong click to
+/// note 76 and the weak one to note 77 — the notes `renderMetronomeMidi`'s
+/// sequence plays.
+///
+/// Load it into the metronome's synth alongside (and ahead of) the score's GM
+/// bank to replace the General MIDI wood blocks with the host's own clicks.
+/// Without it the metronome still sounds, using whatever the GM bank has at
+/// those notes.
+///
+/// Empty when either WAV fails to parse, which a host reads as "keep the GM
+/// clicks". Accepts what `WavPcmReader` accepts: uncompressed PCM.
+///
+/// Android: `nativeBuildClickSoundFont`.
+@JS public func buildClickSoundFont(strongWav: [UInt8], weakWav: [UInt8]) -> [UInt8] {
+    guard let strong = try? WavPcmReader.read(Data(strongWav)),
+          let weak = try? WavPcmReader.read(Data(weakWav))
+    else { return [] }
+    return [UInt8](ClickSoundFontBuilder.build(
+        strong: strong.samples, strongRate: strong.sampleRate,
+        weak: weak.samples, weakRate: weak.sampleRate,
+    ))
+}
+
 // MARK: - Timeline
 
 /// What a transport UI needs before the first frame is drawn.

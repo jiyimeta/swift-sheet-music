@@ -1,0 +1,46 @@
+{
+  "cursorProbes" : [
+    {
+      "heightMM" : 9.877777777777776,
+      "measureIndex" : 0,
+      "notatedSeconds" : 0,
+      "playerSeconds" : 0,
+      "widthMM" : 1.9755555555555555,
+      "xMM" : 30.188958333333332,
+      "yMM" : 35.80694444444444
+    },
+    {
+      "heightMM" : 9.877777777777776,
+      "measureIndex" : 1,
+      "notatedSeconds" : 2,
+      "playerSeconds" : 4,
+      "widthMM" : 1.9755555555555555,
+      "xMM" : 96.65109437751002,
+      "yMM" : 35.80694444444444
+    },
+    {
+      "heightMM" : 9.877777777777776,
+      "measureIndex" : 2,
+      "notatedSeconds" : 5,
+      "playerSeconds" : 7.2,
+      "widthMM" : 1.9755555555555555,
+      "xMM" : 182.77402359437752,
+      "yMM" : 35.80694444444444
+    }
+  ],
+  "division" : 480,
+  "measureCount" : 3,
+  "measureStartPlayerSeconds" : [
+    0,
+    2,
+    6
+  ],
+  "metronomeBeatCount" : 16,
+  "metronomeMidiByteCount" : 196,
+  "metronomeMidiDigest" : 3943020001,
+  "midiByteCount" : 236,
+  "midiDigest" : 3767521393,
+  "openingQuarterBpm" : 120,
+  "totalNotatedSeconds" : 6,
+  "totalPlayerSeconds" : 8
+}
