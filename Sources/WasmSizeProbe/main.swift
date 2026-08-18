@@ -74,9 +74,21 @@ print(
         + "handle=\(handle) meta=\(metadata.count)B",
 )
 
-// The wasm bridge's own surface. `Scripts/wasm-size.sh` compresses this
-// artifact and never runs it, which is what makes the call safe: linking
-// JavaScriptKit adds imports from the JS host, and those are unresolvable under
-// wasmtime whether or not the code path executes. `WasmParityProbe`, which IS
-// run under wasmtime, must therefore never depend on this target.
-print("engine=\(engineVersionStamp())")
+// The wasm bridge's own surface, entered through the same calls a browser host
+// makes, so the gate measures what a page downloads rather than what merely
+// links. `Scripts/wasm-size.sh` compresses this artifact and never runs it,
+// which is what makes the calls safe: linking JavaScriptKit adds imports from
+// the JS host, and those are unresolvable under wasmtime whether or not the code
+// path executes. `WasmParityProbe`, which IS run under wasmtime, must therefore
+// never depend on this target.
+let wasmHandle = loadScore(bytes: [UInt8](container))
+let wasmProgram = computeLayout(handle: wasmHandle, pageWidthMM: 210, pageHeightMM: 297)
+let wasmBreaks = pageBreaks(handle: wasmHandle, pageHeightMM: 297)
+let wasmMetadata = scoreMetadata(handle: wasmHandle)
+_ = installSMuFLMetrics(bytes: [])
+print(
+    "wasm engine=\(engineVersionStamp()) handle=\(wasmHandle) "
+        + "flat=\(wasmProgram.count)B breaks=\(wasmBreaks.count) "
+        + "title=\(wasmMetadata?.title ?? "-") fp=\(scoreFingerprint(handle: wasmHandle))",
+)
+releaseScore(handle: wasmHandle)

@@ -242,6 +242,7 @@ if isWasm {
                 "SheetMusicWasmBridge",
                 "SheetMusicBridgeCore",
                 "SheetMusicCore",
+                "SheetMusicFoundation",
                 "SheetMusicMSCX",
             ],
             path: "Tests/SheetMusicWasmBridgeTests",
