@@ -20,7 +20,9 @@
 // Tests/SheetMusicTests/Resources: those fixtures are GPL-3.0 copies of
 // MuseScore's own and must stay confined to the test target — see CLAUDE.md.
 //
-//     swift run GenWebFixtures Web/sheet-music-web/test/fixtures
+//     swift run GenWebFixtures \
+//         Web/sheet-music-web/test/fixtures \
+//         Web/sheet-music-web/assets/bravura.smft
 import Foundation
 import SheetMusicBridgeCore
 import SheetMusicCore
@@ -117,16 +119,33 @@ enum GenWebFixtures {
         exit(code)
     }
 
-    /// The browser installs a CoreText-derived metrics table, so the reference
-    /// numbers have to come from the same provider or the two sides disagree for
-    /// a reason that has nothing to do with WebAssembly.
-    static func installAppleMetrics() {
+    /// Installs the same `bravura.smft` table the browser installs, NOT the
+    /// CoreText provider.
+    ///
+    /// The table is generated from CoreText but is not identical to it: values
+    /// are stored as `Float` at a 1000 pt reference size and rescaled at lookup,
+    /// so glyph positions differ in their low bits. Engraving through CoreText
+    /// here and through the table in the browser produces draw programs of the
+    /// same length and shape whose bytes differ — which is a true statement
+    /// about two different providers and says nothing about whether the
+    /// WebAssembly build is correct.
+    ///
+    /// Pinning both sides to the same provider is what makes byte equality
+    /// meaningful: any difference that survives is a difference between the
+    /// native and WebAssembly *engines*, which is what this fixture is for.
+    static func installSharedMetrics(tableURL: URL) {
         guard #available(macOS 15.0, *) else {
             fail("macOS 15 or newer required", code: 1)
         }
         _ = SheetMusicLayoutApple.install
         guard BravuraFont.register else {
             fail("Bravura failed to register with CoreText", code: 4)
+        }
+        do {
+            let table = try SMuFLMetricsTable.decode(Data(contentsOf: tableURL))
+            FontMetrics.provider = makeSMuFLMetricsTableProvider(table: table)
+        } catch {
+            fail("could not install \(tableURL.path): \(error)", code: 8)
         }
     }
 
@@ -175,12 +194,14 @@ enum GenWebFixtures {
     }
 
     static func run() {
-        guard CommandLine.arguments.count == 2 else {
-            FileHandle.standardError.write(Data("usage: GenWebFixtures <output-dir>\n".utf8))
+        guard CommandLine.arguments.count == 3 else {
+            FileHandle.standardError.write(
+                Data("usage: GenWebFixtures <output-dir> <bravura.smft>\n".utf8),
+            )
             exit(2)
         }
         let directory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
-        installAppleMetrics()
+        installSharedMetrics(tableURL: URL(fileURLWithPath: CommandLine.arguments[2]))
 
         let opcodes = DrawProgramFlat.encode(pages: [
             allOpcodesPage,

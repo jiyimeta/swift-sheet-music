@@ -9,6 +9,11 @@
 # advertised in its own `--help` but rejected as an unexpected argument in
 # JavaScriptKit 0.57.1; it applies to `js test`, which picks a host to run in.
 #
+# --package-name is pinned rather than defaulted. The default is derived from the
+# checkout's directory name, so building from a git worktree would stamp the
+# worktree's name into the emitted package.json and the generated bundle would
+# differ between two checkouts of the same commit.
+#
 # PackageToJS runs wasm-opt by default, so what lands in dist/ is the optimized
 # artifact a page actually downloads. That is NOT the number
 # `Scripts/wasm-size.sh` reports: the gate measures the whole portable graph
@@ -54,6 +59,7 @@ echo "Building sheet-music-wasm ..."
     --swift-sdk "$SDK" \
     js \
     --product sheet-music-wasm \
+    --package-name sheet-music-wasm \
     -c release
 
 rm -rf "$DEST"
