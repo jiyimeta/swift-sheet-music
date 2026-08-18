@@ -224,49 +224,75 @@ var targets: [Target] = [
         name: "SheetMusicAudioCoreTests",
         dependencies: ["SheetMusicAudioCore", "SheetMusicCore"],
     ),
-    .testTarget(
-        name: "SheetMusicTests",
-        dependencies: isAndroid ? [
-            "SheetMusic",
-            "SheetMusicCore",
-            "SheetMusicMIDI",
-            "SheetMusicMSCX",
-            "SheetMusicMusicXML",
-            "SheetMusicLayout",
-            "SheetMusicAndroidJNI",
-            "SheetMusicBridgeCore",
-            "SheetMusicEditWire",
-            "SheetMusicAudioCore",
-            .product(name: "Wirelet", package: "swift-wirelet"),
-            "SheetMusicFoundation",
-            "SheetMusicXMLTools",
-            "SheetMusicZip",
-        ] : [
-            "SheetMusic",
-            "SheetMusicCore",
-            "SheetMusicMIDI",
-            "SheetMusicMSCX",
-            "SheetMusicMusicXML",
-            "SheetMusicLayout",
-            "SheetMusicAndroidJNI",
-            "SheetMusicBridgeCore",
-            "SheetMusicEditWire",
-            "SheetMusicLayoutApple",
-            "SheetMusicUI",
-            "SheetMusicAudio",
-            .product(name: "SwiftySynth", package: "swiftysynth"),
-            "SheetMusicAudioSwiftySynth",
-            "SheetMusicPDF",
-            .product(name: "Wirelet", package: "swift-wirelet"),
-            "SheetMusicFoundation",
-            "SheetMusicXMLTools",
-            "SheetMusicZip",
-        ],
-        resources: [
-            .process("Resources"),
-        ],
-    ),
 ]
+
+// `SheetMusicAudioCoreTests` above cross-builds for WebAssembly as it stands —
+// its only dependencies are AudioCore and Core, both portable. `SheetMusicTests`
+// cannot, and not only because its Apple-framework guards are spelled
+// `#if !os(Android)`, which is true on WASI: it depends on `SheetMusicAudio`,
+// whose Apple half reaches `CSequencerHostTime` and so `AVFAudio/AVFAudio.h`,
+// and on `SheetMusicAndroidJNI`, which pulls SwiftJava. Widening the source
+// guards would not move either of those. Getting the whole suite onto wasm is
+// its own piece of work; until then the wasm-only suite below is what runs.
+if isWasm {
+    targets += [
+        .testTarget(
+            name: "SheetMusicWasmBridgeTests",
+            dependencies: [
+                "SheetMusicWasmBridge",
+                "SheetMusicBridgeCore",
+                "SheetMusicCore",
+                "SheetMusicMSCX",
+            ],
+            path: "Tests/SheetMusicWasmBridgeTests",
+        ),
+    ]
+} else {
+    targets += [
+        .testTarget(
+            name: "SheetMusicTests",
+            dependencies: isAndroid ? [
+                "SheetMusic",
+                "SheetMusicCore",
+                "SheetMusicMIDI",
+                "SheetMusicMSCX",
+                "SheetMusicMusicXML",
+                "SheetMusicLayout",
+                "SheetMusicAndroidJNI",
+                "SheetMusicBridgeCore",
+                "SheetMusicEditWire",
+                "SheetMusicAudioCore",
+                .product(name: "Wirelet", package: "swift-wirelet"),
+                "SheetMusicFoundation",
+                "SheetMusicXMLTools",
+                "SheetMusicZip",
+            ] : [
+                "SheetMusic",
+                "SheetMusicCore",
+                "SheetMusicMIDI",
+                "SheetMusicMSCX",
+                "SheetMusicMusicXML",
+                "SheetMusicLayout",
+                "SheetMusicAndroidJNI",
+                "SheetMusicBridgeCore",
+                "SheetMusicEditWire",
+                "SheetMusicLayoutApple",
+                "SheetMusicUI",
+                "SheetMusicAudio",
+                .product(name: "SwiftySynth", package: "swiftysynth"),
+                "SheetMusicAudioSwiftySynth",
+                "SheetMusicPDF",
+                .product(name: "Wirelet", package: "swift-wirelet"),
+                "SheetMusicFoundation",
+                "SheetMusicXMLTools",
+                "SheetMusicZip",
+            ],
+            resources: [
+                .process("Resources"),
+            ],
+        ),
+    ]
+}
 
 if !isAndroid {
     products += [
@@ -332,16 +358,24 @@ if !isAndroid {
                 "SheetMusicUI",
             ],
         ),
-        .testTarget(
-            name: "SheetMusicAudioAppleTests",
-            dependencies: [
-                "SheetMusicAudioApple",
-                "SheetMusicAudioCore",
-                "SheetMusicCore",
-                "SheetMusicMIDI",
-            ],
-        ),
     ]
+    // Apple-only by construction, so it is left out of the wasm shape for the
+    // same reason `SheetMusicTests` is: `swift package … js test` builds every
+    // declared test target, and one that cannot cross-compile fails the run
+    // before the portable suites get to speak.
+    if !isWasm {
+        targets += [
+            .testTarget(
+                name: "SheetMusicAudioAppleTests",
+                dependencies: [
+                    "SheetMusicAudioApple",
+                    "SheetMusicAudioCore",
+                    "SheetMusicCore",
+                    "SheetMusicMIDI",
+                ],
+            ),
+        ]
+    }
 }
 
 if isAndroid {

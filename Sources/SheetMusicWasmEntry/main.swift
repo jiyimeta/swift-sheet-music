@@ -8,4 +8,4 @@ import SheetMusicWasmBridge
 // library archive: SwiftPM only links it if something in it is referenced.
 // This call is that reference — and it is a real assertion, not a no-op, since
 // a mismatched stamp means the wrong engine got linked.
-precondition(engineVersionStamp() != 0, "engine version stamp must be non-zero")
+precondition(!engineVersionStamp().isEmpty, "engine version stamp must not be empty")
