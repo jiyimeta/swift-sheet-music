@@ -4,6 +4,10 @@ import SheetMusicFoundation
 @_exported import SheetMusicMSCX
 @_exported import SheetMusicMusicXML
 
+// Not `@_exported`: consumers reach `ScoreLoader` by importing `SheetMusicLoader` directly (Folino's JNI targets do,
+// precisely to avoid this file's re-exports), and re-exporting it here would give the same type two import paths.
+import SheetMusicLoader
+
 /// Top-level convenience façade for the SheetMusic family of libraries.
 ///
 /// `import SheetMusic` re-exports `SheetMusicCore`, `SheetMusicMSCX`,
@@ -11,6 +15,23 @@ import SheetMusicFoundation
 /// typical "load score → export MIDI" pipeline are visible without
 /// per-library imports.
 public enum SheetMusic {
+    /// Parse score bytes of any supported format, choosing the parser by sniffing the payload.
+    ///
+    /// The overload to reach for when the format is not known ahead of time — which is most of the time, since a
+    /// file extension is a claim rather than evidence. The typed overloads below stay for callers that genuinely
+    /// know what they hold.
+    ///
+    /// - Parameter sourceFilename: Title fallback for a Standard MIDI File with no Track-Name meta; see
+    ///   ``ScoreLoader/loadScore(bytes:sourceFilename:)``.
+    public static func loadScore(bytes: Data, sourceFilename: String? = nil) throws -> Score {
+        try ScoreLoader.loadScore(bytes: bytes, sourceFilename: sourceFilename)
+    }
+
+    /// Read a score file of any supported format and parse it, sniffing the payload to choose the parser.
+    public static func loadScore(contentsOf url: URL) throws -> Score {
+        try ScoreLoader.loadScore(contentsOf: url)
+    }
+
     /// Parse uncompressed `.mscx` bytes into a `Score`.
     public static func loadScore(mscxData: Data) throws -> Score {
         try MSCXParser.parse(mscxData)

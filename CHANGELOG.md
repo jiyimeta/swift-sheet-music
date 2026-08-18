@@ -99,7 +99,21 @@ and this project adheres to
 - `SheetMusicBridgeCore.PlaybackClock`: the projection between a browser sequencer's seconds clock
   and the notated score. Android round-trips through unrolled ticks because FluidSynth reports one;
   a Web Audio sequencer reports seconds, and `UnrolledTimeMap` already speaks them on both sides.
-
+- `SheetMusicLoader`, a small static product holding the one decision about
+  which parser a score payload belongs to. `ScoreLoader.sniff` /
+  `loadScore(bytes:sourceFilename:)` / `loadScore(contentsOf:)` are the logic
+  `ScoreBridge` used to own privately; `ScoreBridge` now delegates and keeps its
+  API, and `SheetMusic` gains matching `loadScore(bytes:)` /
+  `loadScore(contentsOf:)` overloads. It exists because a consumer that parses
+  score files in its own image could not reach `ScoreBridge` at all — it lives in
+  `SheetMusicBridgeCore`, which is not exported, and the one product that carries
+  it is `.dynamic`, while a `Score` cannot cross between two `SheetMusicCore`
+  copies. So such a consumer wrote the format table out again, and the copy fell
+  behind: Folino's Android edit session read every stored score as a MuseScore
+  container, and silently refused to open over the four other formats its own
+  importer accepts. A static target compiles into each image, which is what lets
+  one declaration serve them all. `sourceFilename` carries the MIDI title
+  fallback that a byte-level entry point would otherwise drop.
 - Kotlin codecs for the two editing-geometry payloads, `SelectionTint` and
   `EditCaretFrame`. `nativeEncodeDrawProgram` takes the first and
   `nativeEditingCaretFrame` answers with the second, but both live in

@@ -26,6 +26,9 @@ var products: [Product] = [
     .library(name: "SheetMusicMSCX", targets: ["SheetMusicMSCX"]),
     .library(name: "SheetMusicMusicXML", targets: ["SheetMusicMusicXML"]),
     .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
+    // Exported so a consumer that parses score files itself never has to re-spell the format table. Folino's
+    // Android JNI libraries link it directly for exactly that reason.
+    .library(name: "SheetMusicLoader", targets: ["SheetMusicLoader"]),
     .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
     .library(name: "SheetMusicAudioCore", targets: ["SheetMusicAudioCore"]),
     // Exported on Android too: the target's Android shape excludes every Apple-only file (the CGPDFScanner
@@ -94,6 +97,20 @@ var targets: [Target] = [
             .product(name: "Wirelet", package: "swift-wirelet"),
         ],
     ),
+    // The single format-dispatch. Static and unconditional: it is linked into every image that has to turn bytes
+    // into a `Score`, and on Android that is several separate `.so`s in one process, each with its own
+    // SheetMusicCore copy. A `.dynamic` product could not serve them — a `Score` cannot cross between two copies —
+    // so sharing the *decision* as source, compiled into each image, is the only shape that unifies it.
+    .target(
+        name: "SheetMusicLoader",
+        dependencies: [
+            "SheetMusicCore",
+            "SheetMusicFoundation",
+            "SheetMusicMSCX",
+            "SheetMusicMusicXML",
+            "SheetMusicMIDI",
+        ],
+    ),
     .target(
         name: "SheetMusic",
         dependencies: [
@@ -102,6 +119,7 @@ var targets: [Target] = [
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicMIDI",
+            "SheetMusicLoader",
         ],
     ),
     .target(
@@ -189,6 +207,7 @@ var targets: [Target] = [
             "SheetMusicMusicXML",
             "SheetMusicAudioCore",
             "SheetMusicEditWire",
+            "SheetMusicLoader",
             .product(name: "Wirelet", package: "swift-wirelet"),
         ],
         swiftSettings: [
@@ -236,6 +255,7 @@ if isWasm {
                 "SheetMusicMusicXML",
                 "SheetMusicLayout",
                 "SheetMusicBridgeCore",
+                "SheetMusicLoader",
                 "SheetMusicEditWire",
                 "SheetMusicAudioCore",
                 "SheetMusicFoundation",
@@ -275,6 +295,7 @@ if isWasm {
                 "SheetMusicLayout",
                 "SheetMusicAndroidJNI",
                 "SheetMusicBridgeCore",
+                "SheetMusicLoader",
                 "SheetMusicEditWire",
                 "SheetMusicAudioCore",
                 .product(name: "Wirelet", package: "swift-wirelet"),
@@ -290,6 +311,7 @@ if isWasm {
                 "SheetMusicLayout",
                 "SheetMusicAndroidJNI",
                 "SheetMusicBridgeCore",
+                "SheetMusicLoader",
                 "SheetMusicEditWire",
                 "SheetMusicLayoutApple",
                 "SheetMusicUI",
