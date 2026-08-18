@@ -24,6 +24,13 @@ export default defineConfig({
   use: {
     ...devices["Desktop Chrome"],
     baseURL: "http://localhost:8080",
+    launchOptions: {
+      // An AudioContext cannot start outside a user gesture, and Playwright's
+      // synthesized clicks do not count. This relaxes the policy for the test
+      // run only — the engine still builds its context inside a click handler,
+      // which is what a real page needs.
+      args: ["--autoplay-policy=no-user-gesture-required"],
+    },
   },
   webServer: {
     command: "../../Scripts/web-example-serve.sh 8080",

@@ -130,7 +130,11 @@ async function makeTransport(
   destination: AudioNode,
 ): Promise<SpessaTransport> {
   const synth = new module.WorkletSynthesizer(options.context);
-  await synth.soundBankManager.addSoundBank(options.soundFont, "main");
+  // A copy per synth. `addSoundBank` TRANSFERS the buffer to the worklet, which
+  // detaches it — handing the same one to the second synth fails with
+  // "ArrayBuffer at index 0 is already detached", and the metronome would be
+  // the half that broke.
+  await synth.soundBankManager.addSoundBank(options.soundFont.slice(0), "main");
   await synth.isReady;
 
   const gain = options.context.createGain();
