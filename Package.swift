@@ -370,6 +370,9 @@ if isAndroid {
 }
 
 if isWasm {
+    products += [
+        .executable(name: "sheet-music-wasm", targets: ["SheetMusicWasmEntry"]),
+    ]
     targets += [
         // Vendored zlib 1.3.1, raw-DEFLATE subset — see Sources/zlib/README.md.
         // Lowercase on purpose: the module name has to match the system
@@ -387,6 +390,32 @@ if isWasm {
                 .define("NO_GZIP"),
             ],
         ),
+        // The `@JS` entry points. A library rather than the executable because
+        // BridgeJS scans only the target it is attached to — the same residency
+        // rule jextract imposes on `SheetMusicAndroidJNI` — and keeping them in
+        // a library lets `WasmSizeProbe` link them so the size gate measures
+        // them. The thunks reach the executable's export section without being
+        // referenced from it; the library archive does not, which is what
+        // `SheetMusicWasmEntry/main.swift`'s one call is for.
+        .target(
+            name: "SheetMusicWasmBridge",
+            dependencies: [
+                "SheetMusicBridgeCore",
+                "SheetMusicCore",
+                "SheetMusicFoundation",
+                "SheetMusicLayout",
+                "SheetMusicMIDI",
+                .product(name: "JavaScriptKit", package: "JavaScriptKit"),
+            ],
+            path: "Sources/SheetMusicWasmBridge",
+            swiftSettings: [.enableExperimentalFeature("Extern")],
+            plugins: [.plugin(name: "BridgeJS", package: "JavaScriptKit")],
+        ),
+        .executableTarget(
+            name: "SheetMusicWasmEntry",
+            dependencies: ["SheetMusicWasmBridge"],
+            path: "Sources/SheetMusicWasmEntry",
+        ),
         .executableTarget(
             name: "WasmSizeProbe",
             dependencies: [
@@ -396,6 +425,7 @@ if isWasm {
                 "SheetMusicMSCX",
                 "SheetMusicEditWire",
                 "SheetMusicBridgeCore",
+                "SheetMusicWasmBridge",
             ],
             path: "Sources/WasmSizeProbe",
         ),
@@ -433,6 +463,15 @@ let packageDependencies: [Package.Dependency] = [
     .package(
         url: "https://github.com/jiyimeta/swiftysynth.git",
         exact: "0.2.0",
+    ),
+    // Declared unconditionally on purpose. A wasm-only dependency changes
+    // `Package.resolved`'s `originHash`, so the file's contents would depend on
+    // which manifest shape ran last. Apple and Android never link this, so the
+    // only cost is one fetch. `exact:` for the same reason Wirelet is pinned
+    // exactly: one `import Foundation` upstream is worth ~10 MB brotli here.
+    .package(
+        url: "https://github.com/swiftwasm/JavaScriptKit.git",
+        exact: "0.57.1",
     ),
 ]
 

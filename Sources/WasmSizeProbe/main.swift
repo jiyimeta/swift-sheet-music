@@ -15,6 +15,7 @@ import SheetMusicEditWire
 import SheetMusicLayout
 import SheetMusicMIDI
 import SheetMusicMSCX
+import SheetMusicWasmBridge
 
 let score = Score(
     division: 480,
@@ -72,3 +73,10 @@ print(
     "bridge=\(program.count)B pages=\(decodedPages.count) "
         + "handle=\(handle) meta=\(metadata.count)B",
 )
+
+// The wasm bridge's own surface. `Scripts/wasm-size.sh` compresses this
+// artifact and never runs it, which is what makes the call safe: linking
+// JavaScriptKit adds imports from the JS host, and those are unresolvable under
+// wasmtime whether or not the code path executes. `WasmParityProbe`, which IS
+// run under wasmtime, must therefore never depend on this target.
+print("engine=\(engineVersionStamp())")

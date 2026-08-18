@@ -343,7 +343,7 @@ custom_rules:
     # which has to import the umbrella — is excluded by not being listed.
     # `WasmSizeProbe` is here because an umbrella import there would fail
     # the size gate while the libraries were in fact still clean.
-    included: 'Sources/(?:SheetMusic(?:Core|XMLTools|Zip|MIDI|MSCX|MusicXML|Layout|AudioCore|EditWire|BridgeCore)?|WasmSizeProbe)/'
+    included: 'Sources/(?:SheetMusic(?:Core|XMLTools|Zip|MIDI|MSCX|MusicXML|Layout|AudioCore|EditWire|BridgeCore|WasmBridge)?|WasmSizeProbe)/'
     regex: '(?m)^[ \t]*(?:@[A-Za-z_]+[ \t]+)*import[ \t]+(?:(?:class|struct|enum|protocol|typealias|func|var|let)[ \t]+)?Foundation(?:XML|Networking)?\b'
     message: "Portable targets must import SheetMusicFoundation, not the Foundation umbrella — it links ICU into the WebAssembly binary (~13 MB brotli vs ~3.2 MB). See Sources/SheetMusicFoundation."
     severity: error

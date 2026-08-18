@@ -17,6 +17,15 @@
 //   wasmtime --dir . WasmParityProbe.wasm <path.mscz|path.mscx>
 //
 // Only built when SWIFT_SHEET_MUSIC_WASM=1 is exported.
+//
+// Do NOT add `SheetMusicWasmBridge` — or anything else reaching JavaScriptKit —
+// to this target's dependencies. Linking JavaScriptKit gives the module imports
+// from a JavaScript host, and a module with unresolvable imports cannot be
+// instantiated at all, whether or not the importing code runs. `wasmtime` would
+// refuse the artifact and this comparison, currently the only evidence that the
+// WebAssembly build parses identically to the native one, would silently stop
+// running. `WasmSizeProbe` may depend on the bridge precisely because it is
+// only ever compressed, never executed.
 import SheetMusicCore
 import SheetMusicFoundation
 import SheetMusicMSCX
