@@ -48,6 +48,30 @@ extension LayoutBridge {
         pageHeightMM: Double,
         options optionsWire: LayoutOptionsWire,
     ) -> (document: LayoutDocument, encoded: Data, filteredScore: Score) {
+        let result = computeWithPages(
+            score: score,
+            pageWidthMM: pageWidthMM,
+            pageHeightMM: pageHeightMM,
+            options: optionsWire,
+        )
+        return (result.document, DrawProgramCodec.encode(pages: result.pages), result.filteredScore)
+    }
+
+    /// `computeWithDocument`, stopping one step short: returns the assembled
+    /// `[EncodablePage]` rather than the v6 bytes. See that function for what
+    /// each layout mode does to the page model — this is the same call, and the
+    /// documentation there is the documentation for this.
+    ///
+    /// Exists because the WebAssembly bridge hands JavaScript a different
+    /// encoding (`DrawProgramFlat`) and would otherwise have to encode to v6 and
+    /// decode it straight back. `encodePages` is the expensive half of a layout
+    /// pass, so running it twice is not an alternative either.
+    package static func computeWithPages(
+        score: Score,
+        pageWidthMM: Double,
+        pageHeightMM: Double,
+        options optionsWire: LayoutOptionsWire,
+    ) -> (document: LayoutDocument, pages: [EncodablePage], filteredScore: Score) {
         let mmToPt = 72.0 / 25.4
         let pageWidthPt = CGFloat(pageWidthMM * mmToPt)
 
@@ -75,7 +99,7 @@ extension LayoutBridge {
         let pages = encodePages(
             document: layout, options: optionsWire, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM,
         )
-        return (layout, DrawProgramCodec.encode(pages: pages), prepared)
+        return (layout, pages, prepared)
     }
 
     /// Assembles the encoded pages for an already-laid-out `document`, per `options`' layout mode — the
