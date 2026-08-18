@@ -385,6 +385,21 @@ if !isAndroid {
                 dependencies: ["SheetMusicLayout", "SheetMusicLayoutApple"],
                 path: "Tools/GenBravuraMetrics",
             ),
+            // The fixtures Web/sheet-music-web/test reads: a draw program
+            // carrying every opcode, a small score, and what the Apple build
+            // computes for it. Generated rather than typed, because the point is
+            // that the two builds agree.
+            .executableTarget(
+                name: "GenWebFixtures",
+                dependencies: [
+                    "SheetMusicBridgeCore",
+                    "SheetMusicCore",
+                    "SheetMusicLayout",
+                    "SheetMusicLayoutApple",
+                    "SheetMusicMSCX",
+                ],
+                path: "Tools/GenWebFixtures",
+            ),
         ]
     }
 }
