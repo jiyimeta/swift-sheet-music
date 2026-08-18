@@ -52,6 +52,14 @@ function pageWith(commands: DrawProgramPage["commands"]): DrawProgramPage {
 const countOf = (calls: Array<[string, ...unknown[]]>, name: string) =>
   calls.filter(([called]) => called === name).length;
 
+/**
+ * `drawPage` brackets its whole run in one save/restore so a caller's transform
+ * survives, and each command that transforms adds its own pair. Counting the
+ * difference rather than the raw total keeps these tests about the commands.
+ */
+const nestedRestores = (calls: Array<[string, ...unknown[]]>) =>
+  countOf(calls, "restore") - 1;
+
 describe("drawPage", () => {
   it("scales path coordinates by pxPerMM", () => {
     const { ctx, calls } = fakeContext();
@@ -190,11 +198,11 @@ describe("drawPage", () => {
       2,
       fonts,
     );
-    expect(countOf(calls, "save")).toBe(1);
     expect(calls).toContainEqual(["translate", 10, 12]);
     expect(calls).toContainEqual(["rotate", 1]);
     expect(calls).toContainEqual(["translate", -10, -12]);
-    expect(countOf(calls, "restore")).toBe(1);
+    expect(nestedRestores(calls)).toBe(1);
+    expect(countOf(calls, "save")).toBe(countOf(calls, "restore"));
   });
 
   it("restores an unpaired rotation at the end of the page", () => {
@@ -205,7 +213,8 @@ describe("drawPage", () => {
       1,
       fonts,
     );
-    expect(countOf(calls, "restore")).toBe(1);
+    expect(nestedRestores(calls)).toBe(1);
+    expect(countOf(calls, "save")).toBe(countOf(calls, "restore"));
   });
 
   it("ignores a reset rotation that was never opened", () => {
@@ -216,7 +225,7 @@ describe("drawPage", () => {
       1,
       fonts,
     );
-    expect(countOf(calls, "restore")).toBe(0);
+    expect(nestedRestores(calls)).toBe(0);
   });
 
   it("shears italic text about its baseline and restores the transform", () => {
@@ -231,7 +240,7 @@ describe("drawPage", () => {
     );
     expect(calls).toContainEqual(["transform", 1, 0, 0.25, 1, -5, 0]);
     expect(calls).toContainEqual(["fillText", "3", 10, 20]);
-    expect(countOf(calls, "restore")).toBe(1);
+    expect(nestedRestores(calls)).toBe(1);
   });
 
   it("places a stretched glyph against its measured ink box", () => {
@@ -259,6 +268,42 @@ describe("drawPage", () => {
     expect(calls).toContainEqual(["translate", 60, 90]);
     expect(calls).toContainEqual(["scale", 2, 2]);
     expect(calls).toContainEqual(["fillText", "\u{e000}", 0, 0]);
-    expect(countOf(calls, "restore")).toBe(1);
+    expect(nestedRestores(calls)).toBe(1);
+  });
+
+  it("offsets a slice by translating rather than by moving coordinates", () => {
+    const { ctx, calls } = fakeContext();
+    drawPage(
+      ctx,
+      pageWith([{ kind: "moveTo", x: 10, y: 1000 }]),
+      2,
+      fonts,
+      { offsetMM: 900 },
+    );
+    // Commands keep their page coordinates; the context carries the offset, so
+    // the renderer stays a straight translation of the Kotlin original.
+    expect(calls).toContainEqual(["translate", 0, -1800]);
+    expect(calls).toContainEqual(["moveTo", 20, 2000]);
+  });
+
+  it("leaves the transform alone when there is no offset", () => {
+    const { ctx, calls } = fakeContext();
+    drawPage(ctx, pageWith([{ kind: "moveTo", x: 1, y: 2 }]), 1, fonts);
+    expect(calls.filter(([name]) => name === "translate")).toHaveLength(0);
+  });
+
+  it("returns the context to the caller's state", () => {
+    const { ctx, calls } = fakeContext();
+    drawPage(
+      ctx,
+      pageWith([
+        { kind: "setRotation", radians: 1, pivotX: 0, pivotY: 0 },
+        { kind: "italicText", text: "3", x: 0, y: 0, size: 4, fontId: 0 },
+      ]),
+      1,
+      fonts,
+      { offsetMM: 100 },
+    );
+    expect(countOf(calls, "save")).toBe(countOf(calls, "restore"));
   });
 });

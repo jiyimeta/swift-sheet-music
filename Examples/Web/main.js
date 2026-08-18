@@ -10,6 +10,7 @@ import {
   drawPage,
   loadScoreFonts,
   loadSheetMusic,
+  planPageTiles,
 } from "../../Web/sheet-music-web/dist-esm/index.js";
 
 const PACKAGE_ROOT = new URL("../../Web/sheet-music-web/", import.meta.url);
@@ -64,16 +65,25 @@ function render(bytes) {
 
   const pages = openScore.layout({ pageWidthMM: 210, pageHeightMM: 297 });
   pagesHost.replaceChildren();
+  let tileCount = 0;
   for (const page of pages) {
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(page.widthMM * PX_PER_MM);
-    canvas.height = Math.round(page.heightMM * PX_PER_MM);
-    canvas.style.width = `${page.widthMM * CSS_PX_PER_MM}px`;
-    const ctx = canvas.getContext("2d");
-    drawPage(ctx, page, PX_PER_MM, fonts);
-    pagesHost.append(canvas);
+    // The bridge's only layout mode is continuous, so a page is the whole
+    // document — 18 metres for a six-part score, which is 135 000 pixels here.
+    // A canvas that tall silently draws nothing, so it gets tiled.
+    for (const tile of planPageTiles(page, PX_PER_MM)) {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(page.widthMM * PX_PER_MM);
+      canvas.height = Math.round(tile.heightMM * PX_PER_MM);
+      canvas.style.width = `${page.widthMM * CSS_PX_PER_MM}px`;
+      drawPage(canvas.getContext("2d"), page, PX_PER_MM, fonts, {
+        offsetMM: tile.offsetMM,
+      });
+      pagesHost.append(canvas);
+      tileCount += 1;
+    }
   }
   document.body.dataset.pageCount = String(pages.length);
+  document.body.dataset.tileCount = String(tileCount);
 }
 
 fileInput.addEventListener("change", async () => {

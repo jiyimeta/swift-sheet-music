@@ -18,6 +18,8 @@ import type { ScoreFonts } from "./fonts.js";
 
 export type { FontURLs, ScoreFonts } from "./fonts.js";
 export { loadScoreFonts } from "./fonts.js";
+export type { PageTile } from "./tiles.js";
+export { MAX_CANVAS_DIMENSION_PX, planPageTiles } from "./tiles.js";
 
 /**
  * Minimum stroke width in device pixels. Mirrors the Kotlin renderer's
@@ -51,19 +53,38 @@ function faceFor(fontId: number, fonts: ScoreFonts): string {
   return fontId === FontId.smufl ? fonts.smufl : fonts.textRoman;
 }
 
+export interface DrawPageOptions {
+  /**
+   * Distance in document millimetres from the top of the page to the top of
+   * this canvas.
+   *
+   * Pass a tile's `offsetMM` (see `planPageTiles`) to draw one slice of a page
+   * too tall for a single canvas. Everything is still drawn — the canvas clips
+   * what falls outside — so a slice costs a full command walk. Skipping
+   * out-of-range commands would mean tracking which state opcodes
+   * (`setColor`, `setDash`, `setRotation`) precede the slice, which is what
+   * Android's `ScoreBands.kt` does and what this deliberately does not, yet.
+   */
+  readonly offsetMM?: number;
+}
+
 /**
- * Paint one page.
+ * Paint one page, or one slice of it.
  *
  * The caller owns the canvas: size its backing store to
  * `page.widthMM * pxPerMM` by `page.heightMM * pxPerMM` and clear it first if it
- * is being reused. The context is handed back in the state it arrived in.
+ * is being reused. Past `MAX_CANVAS_DIMENSION_PX` a canvas silently draws
+ * nothing, so a tall page has to be tiled — see `planPageTiles`. The context is
+ * handed back in the state it arrived in.
  */
 export function drawPage(
   ctx: CanvasRenderingContext2D,
   page: DrawProgramPage,
   pxPerMM: number,
   fonts: ScoreFonts,
+  options: DrawPageOptions = {},
 ): void {
+  const offsetPx = (options.offsetMM ?? 0) * pxPerMM;
   let currentArgb = 0xff000000;
   let dashOnPx = 0;
   let dashOffPx = 0;
@@ -181,6 +202,13 @@ export function drawPage(
     }
   };
 
+  // The slice offset rides on the context rather than being folded into every
+  // coordinate, so `paint` stays a straight translation of the Kotlin renderer.
+  // Balanced by the restore below.
+  ctx.save();
+  if (offsetPx !== 0) {
+    ctx.translate(0, -offsetPx);
+  }
   applyColor();
   ctx.beginPath();
   for (const command of page.commands) {
@@ -192,4 +220,5 @@ export function drawPage(
   if (rotationOpen) {
     ctx.restore();
   }
+  ctx.restore();
 }
