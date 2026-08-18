@@ -50,6 +50,48 @@ export interface LayoutRequest {
 }
 
 /**
+ * What a transport UI needs before the first frame is drawn.
+ *
+ * Two lengths, not one. `totalNotatedSeconds` is the score's own; the synth
+ * plays the UNROLLED sequence, whose length is `totalPlayerSeconds` and which is
+ * longer on any score with repeats. Every position this package hands back or
+ * takes in for playback is on the *player* clock unless its name says otherwise.
+ */
+export interface PlaybackSummary {
+  readonly totalNotatedSeconds: number;
+  readonly totalPlayerSeconds: number;
+  readonly measureCount: number;
+  /** Ticks per quarter note. */
+  readonly division: number;
+  /** The tempo governing the start, in quarter-note BPM. */
+  readonly openingQuarterBpm: number;
+}
+
+/**
+ * Where to draw the playback cursor, in document millimetres — the same unit
+ * the draw program uses, so one `pxPerMM` scales both.
+ */
+export interface CursorRect {
+  readonly xMM: number;
+  readonly yMM: number;
+  readonly widthMM: number;
+  readonly heightMM: number;
+  /** The measure the cursor is parked in. */
+  readonly measureIndex: number;
+  /**
+   * The position on the score's own clock — differs from the player position
+   * that produced it on any score with repeats.
+   */
+  readonly notatedSeconds: number;
+}
+
+/** A measure range to loop over. `toMeasureExclusive` may equal the count. */
+export interface MeasureRange {
+  readonly fromMeasureIndex: number;
+  readonly toMeasureExclusive: number;
+}
+
+/**
  * The raw `@JS` surface BridgeJS exposes. Not part of this package's API — the
  * generated declarations live in the built bundle, which is not present at
  * type-check time, so the shape is restated here and pinned by the parity test.
@@ -67,6 +109,48 @@ interface BridgeExports {
     pageHeightMM: number,
   ): number[] | Uint8Array;
   pageBreaks(handle: number, pageHeightMM: number): number[] | Float64Array;
+  renderMidi(handle: number): number[] | Uint8Array;
+  renderMetronomeMidi(handle: number): number[] | Uint8Array;
+  renderCountInMetronomeMidi(
+    handle: number,
+    fromMeasureIndex: number,
+  ): number[] | Uint8Array;
+  countInSeconds(handle: number, fromMeasureIndex: number): number;
+  playbackSummary(handle: number): PlaybackSummary | null;
+  metronomeBeats(handle: number): number[] | Float64Array;
+  cursorRectAtPlayerSeconds(
+    handle: number,
+    playerSeconds: number,
+  ): CursorRect | null;
+  playerSecondsForMeasure(handle: number, measureIndex: number): number;
+  measureIndexAtPlayerSeconds(handle: number, playerSeconds: number): number;
+  loopPlayerSeconds(
+    handle: number,
+    fromMeasureIndex: number,
+    toMeasureExclusive: number,
+  ): number[] | Float64Array;
+  loopHighlightRects(
+    handle: number,
+    fromMeasureIndex: number,
+    toMeasureExclusive: number,
+  ): number[] | Float64Array;
+  buildClickSoundFont(
+    strongWav: number[] | Uint8Array,
+    weakWav: number[] | Uint8Array,
+  ): number[] | Uint8Array;
+}
+
+/**
+ * BridgeJS lowers `[UInt8]` / `[Double]` as a boxed `number[]` on some paths and
+ * a typed array on others, and the generated `.d.ts` says `number[]`. Normalize
+ * once here rather than at a dozen call sites.
+ */
+function asBytes(value: number[] | Uint8Array): Uint8Array {
+  return value instanceof Uint8Array ? value : Uint8Array.from(value);
+}
+
+function asDoubles(value: number[] | Float64Array): Float64Array {
+  return value instanceof Float64Array ? value : Float64Array.from(value);
 }
 
 /**
@@ -127,7 +211,7 @@ export class Score {
     if (bytes.length === 0) {
       throw new Error("layout failed");
     }
-    return bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
+    return asBytes(bytes);
   }
 
   layout(request: LayoutRequest): DrawProgramPage[] {
@@ -143,6 +227,123 @@ export class Score {
    */
   pageBreaks(request: { readonly pageHeightMM: number }): number[] {
     return Array.from(this.bridge.pageBreaks(this.live(), request.pageHeightMM));
+  }
+
+  /**
+   * The Standard MIDI File a synth plays: the live channel plan applied, and the
+   * baked-in CC 7 / tick-0 program stripped off every mixer-owned channel so a
+   * live mixer is the sole authority.
+   */
+  renderMidi(): Uint8Array {
+    return asBytes(this.bridge.renderMidi(this.live()));
+  }
+
+  /**
+   * The metronome's own sequence — the score's tempo map plus the click track.
+   *
+   * A second sequence rather than clicks merged into the score's, because that
+   * is what makes muting the metronome a gain change: reloading a merged
+   * sequence would cut every voice sounding on the score side.
+   */
+  renderMetronomeMidi(): Uint8Array {
+    return asBytes(this.bridge.renderMetronomeMidi(this.live()));
+  }
+
+  /**
+   * The metronome sequence with a count-in in front: the pre-roll's clicks fill
+   * `[0, countInSeconds)` and the body's clicks sit behind them, so one
+   * sequencer plays the count and then the piece.
+   *
+   * Empty when the position has no count-in.
+   */
+  renderCountInMetronomeMidi(fromMeasureIndex: number): Uint8Array {
+    return asBytes(
+      this.bridge.renderCountInMetronomeMidi(this.live(), fromMeasureIndex),
+    );
+  }
+
+  /**
+   * How long the count-in for `fromMeasureIndex` lasts. `0` means "start now".
+   *
+   * Watch the metronome sequencer's own position against this rather than
+   * waiting it out with `setTimeout` — a wall-clock wait quantizes the downbeat
+   * to whichever output buffer noticed the deadline, which is audible.
+   */
+  countInSeconds(fromMeasureIndex: number): number {
+    return this.bridge.countInSeconds(this.live(), fromMeasureIndex);
+  }
+
+  playbackSummary(): PlaybackSummary | null {
+    return this.bridge.playbackSummary(this.live());
+  }
+
+  /**
+   * Click positions for a visual beat indicator, flattened as
+   * `[playerSeconds, isDownbeat, …]` — two entries per beat, the flag `1` or
+   * `0`.
+   *
+   * Only for showing beats. The clicks themselves are events in
+   * `renderMetronomeMidi`'s sequence.
+   */
+  metronomeBeats(): Float64Array {
+    return asDoubles(this.bridge.metronomeBeats(this.live()));
+  }
+
+  /**
+   * Where to draw the cursor for a position on the player's clock, or `null`
+   * when no layout has been computed for this score — the cached document is
+   * what turns a position into geometry, so call `layout()` first.
+   */
+  cursorRectAtPlayerSeconds(playerSeconds: number): CursorRect | null {
+    return this.bridge.cursorRectAtPlayerSeconds(this.live(), playerSeconds);
+  }
+
+  /**
+   * The player position a measure starts at — a seek target. `-1` for an
+   * out-of-range index, which `0` could not express: that is the top of the
+   * score, a real position.
+   */
+  playerSecondsForMeasure(measureIndex: number): number {
+    return this.bridge.playerSecondsForMeasure(this.live(), measureIndex);
+  }
+
+  /** The measure sounding at a player position, or `-1` for an empty score. */
+  measureIndexAtPlayerSeconds(playerSeconds: number): number {
+    return this.bridge.measureIndexAtPlayerSeconds(this.live(), playerSeconds);
+  }
+
+  /**
+   * `[startSeconds, endSeconds]` on the player clock for a measure-range loop,
+   * or an empty array for an empty or inverted range.
+   *
+   * The wrap is the host's job: a sequencer's own loop covers the whole
+   * sequence, not a range inside it.
+   */
+  loopPlayerSeconds(range: MeasureRange): Float64Array {
+    return asDoubles(
+      this.bridge.loopPlayerSeconds(
+        this.live(),
+        range.fromMeasureIndex,
+        range.toMeasureExclusive,
+      ),
+    );
+  }
+
+  /**
+   * Rectangles to tint for a measure-range loop, flattened as
+   * `[x, y, width, height, …]` in document millimetres — one per system the
+   * range spans, so a loop crossing a line break highlights both halves.
+   *
+   * Empty until `layout()` has run for this score.
+   */
+  loopHighlightRects(range: MeasureRange): Float64Array {
+    return asDoubles(
+      this.bridge.loopHighlightRects(
+        this.live(),
+        range.fromMeasureIndex,
+        range.toMeasureExclusive,
+      ),
+    );
   }
 
   release(): void {
@@ -175,6 +376,19 @@ export class SheetMusic {
    */
   installSMuFLMetrics(bytes: Uint8Array): boolean {
     return this.bridge.installSMuFLMetrics(bytes);
+  }
+
+  /**
+   * Build a bank-128 SoundFont from two click WAVs, mapping the strong click to
+   * note 76 and the weak one to note 77 — the notes the metronome sequence
+   * plays.
+   *
+   * Load it into the metronome's synth ahead of the score's General MIDI bank to
+   * replace the GM wood blocks with your own clicks. Empty when either WAV fails
+   * to parse, which means "keep the GM clicks".
+   */
+  buildClickSoundFont(strongWav: Uint8Array, weakWav: Uint8Array): Uint8Array {
+    return asBytes(this.bridge.buildClickSoundFont(strongWav, weakWav));
   }
 
   /**
