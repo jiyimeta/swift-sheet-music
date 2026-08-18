@@ -116,6 +116,24 @@ depends, at build time via Gradle, on:
   notice). See `Android/SheetMusicAudioAndroid/README.md`.
 - Oboe — Apache 2.0 (https://github.com/google/oboe)
 
+Browser playback dependencies
+------------------------------
+
+The browser package's playback entry point
+(`Web/sheet-music-web/src/playback/`) drives:
+
+- spessasynth_lib — Apache 2.0 (https://github.com/spessasus/spessasynth_lib),
+  together with its own dependencies spessasynth_core and stb-vorbis.
+
+It is declared as an **optional peer dependency** and reached through a
+dynamic import, so it is neither vendored here nor pulled in by a consumer
+that only views scores. Applications that do play back install it
+themselves and are the ones distributing it.
+
+The synthesizer is not part of the WebAssembly module: Swift renders the
+Standard MIDI Files and the timeline, and the browser host owns the synth —
+the same division as the Android module above.
+
 SoundFonts
 ----------
 

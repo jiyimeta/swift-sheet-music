@@ -57,6 +57,62 @@ Rasterize at a multiple of `96 / 25.4` and scale back down in CSS, as above.
 Drawing at a zoomed `pxPerMM` re-rasterizes glyphs at the target resolution;
 scaling the bitmap instead blurs them.
 
+## Playback
+
+Playback lives behind a second entry point so a viewer never downloads a synth.
+The engine is yours to install:
+
+    npm install spessasynth_lib
+
+```js
+import {
+  createPlaybackEngine,
+  createSpessaSynthHost,
+} from "@jiyimeta/sheet-music-web/playback";
+
+// Inside a click handler: an AudioContext cannot start without a user gesture,
+// and the AudioWorklet needs a secure context (https, or http://localhost).
+const host = await createSpessaSynthHost({
+  context: new AudioContext(),
+  soundFont: await (await fetch("/gm.sf2")).arrayBuffer(),
+  processorURL: "/spessasynth_processor.min.js",
+});
+
+const engine = await createPlaybackEngine({
+  score,
+  host,
+  onCursor: (rect) => drawCursorOverlay(rect),
+});
+
+await engine.play({ countIn: true });
+engine.setLoop({ fromMeasureIndex: 0, toMeasureExclusive: 4 });
+engine.setRate(0.75);
+engine.setMetronomeMuted(false);
+```
+
+Supply the SoundFont yourself — this package ships no audio samples, the same
+contract the iOS and Android libraries have. Copy spessasynth's
+`spessasynth_processor.min.js` somewhere your page can fetch it; an AudioWorklet
+module has to be a real URL, not something a bundler inlines.
+
+`onCursor` hands back a rectangle in document millimetres — the same unit the
+draw program uses, so one `pxPerMM` scales both. It is `null` when the position
+has no cursor, and it stays `null` until `score.layout(...)` has run: the cached
+document is what turns a position into geometry.
+
+Every position is on the **player** clock — the unrolled sequence the synth
+plays, which is longer than the score on anything with repeats.
+`score.playbackSummary()` reports both lengths.
+
+Loop, metronome and count-in are all optional; `createPlaybackEngine` alone gives
+you play, pause, stop, seek and the cursor.
+
+To drive a different synth, implement `SynthHost` instead of calling
+`createSpessaSynthHost`. The engine never names spessasynth.
+
+Not here yet: a mixer (per-part volume, mute, program change), master tuning,
+and audio-file export.
+
 ## Assets
 
 Three files ship in `assets/` and must be served alongside the bundle. Their
@@ -73,9 +129,10 @@ Both fonts are SIL OFL 1.1 — see `assets/Bravura.LICENSE.txt` and
 
 ## Bundling
 
-The generated glue imports its WASI shim by bare specifier. A bundler resolves
-that for you; a page loading the ESM directly needs an import map, as
-`Examples/Web/index.html` shows.
+The generated glue imports its WASI shim by bare specifier, and spessasynth's
+core imports `stb-vorbis` the same way. A bundler resolves both for you; a page
+loading the ESM directly needs an import map, as `Examples/Web/index.html`
+shows.
 
 ## Supported input
 
@@ -84,7 +141,7 @@ leading bytes.
 
 ## Not here yet
 
-Playback and editing. The Swift engine supports both; these bindings expose
-display only so far.
+Editing. The Swift engine supports it; these bindings expose display and
+playback so far.
 
 [repo]: https://github.com/jiyimeta/swift-sheet-music

@@ -424,12 +424,12 @@ render MIDI, edit, and drive the bridge layer. UI / PDF / LayoutApple /
 AudioApple are Apple-only.
 
 `SheetMusicBridgeCore` is the platform-neutral half of the old
-`SheetMusicAndroidJNI` — `LayoutBridge`, `DrawProgram`, `HandleTable`,
-`LayoutDocumentCache`, the SMuFL metrics table and the wire codecs. The
-`native*` entry points could not come with it: swift-java's jextract
-scans only `--input-swift`, the target's own source directory
-(`JExtractSwiftPlugin.swift:72`), so an entry point is a JNI symbol only
-where its file physically sits.
+`SheetMusicAndroidJNI` — `LayoutBridge`, `AudioMidiBridge`, `PlaybackClock`,
+`DrawProgram`, `HandleTable`, `LayoutDocumentCache`, `PlaybackClockCache`, the
+SMuFL metrics table and the wire codecs. The `native*` entry points could not
+come with it: swift-java's jextract scans only `--input-swift`, the target's own
+source directory (`JExtractSwiftPlugin.swift:72`), so an entry point is a JNI
+symbol only where its file physically sits.
 
 `Sources/SheetMusicWasmBridge` is the wasm counterpart of
 `Sources/SheetMusicAndroidJNI`: `@JS` entry points, one call each into
@@ -450,6 +450,37 @@ Two things about the surface, both learned the hard way:
 - **A `@JS struct` needs an explicit `public init`.** The memberwise one is
   internal, and BridgeJS generates a `@_transparent` lowering function that
   cannot reference an internal declaration.
+
+### Playback: the host owns the synth
+
+The browser owns the synthesizer, exactly as Android's Kotlin host owns
+FluidSynth. Swift hands over the two rendered SMFs (`renderMidi`,
+`renderMetronomeMidi`), a timeline, and geometry; `Web/sheet-music-web/src/playback/`
+owns the transport. The default synth is spessasynth_lib (Apache-2.0), an
+**optional peer dependency** loaded through a dynamic import so a viewer-only
+consumer never downloads a SoundFont engine — and so the wasm module never
+contains one.
+
+SwiftySynth was measured for this and rejected. It cross-compiles cleanly and
+costs ~201 KB brotli once its `Foundation` umbrella imports are shimmed (13.23 MB
+without: the usual ICU signature). The reason not to take it was not size but
+that it leaves the Web Audio plumbing to be designed from scratch — an
+AudioWorklet hosting a wasm module with a WASI shim and JavaScriptKit glue is
+unproven, and the chunk-scheduling alternative delays every live control change
+by a chunk.
+
+**A browser sequencer's clock is seconds, not ticks.** The Android bridge
+round-trips through UNROLLED ticks (`nativeFrameAtTick` /
+`nativeSecondsAtTick` / `nativeUnrolledTickForNotated`) because FluidSynth
+reports one. `PlaybackClock` goes straight through `UnrolledTimeMap`'s seconds
+conversions instead, and every position on the wasm playback surface is in
+PLAYER seconds — the unrolled sequence, longer than the score on anything with
+repeats.
+
+`PlaybackClockCache` keeps one clock per handle because building it walks the
+score twice and the cursor poll asks once per animation frame. It is used only
+by the wasm bridge; the Android bridge still builds its own each call, so this
+cannot regress a platform the Apple CI job does not exercise.
 
 `SheetMusicAudioCore` and `SheetMusicEditWire` were out of reach until
 `Wirelet` 0.4.1. Both depend on it, and its source files imported the
@@ -555,8 +586,13 @@ It reports **two** numbers and they are not interchangeable:
 
 | | what it measures |
 |---|---|
-| `brotli` | The whole portable graph through `WasmSizeProbe`, unoptimized, with MSCZWriter and EditWire deliberately linked in. The 4 MB ceiling applies to this. Currently 3,771,421 B. |
-| `shipped` | What a page downloads — the PackageToJS artifact after wasm-opt, with only the bridge's own export surface. Currently 2,516,701 B. Needs `Scripts/wasm-build-web.sh` to have run; says so when it has not. |
+| `brotli` | The whole portable graph through `WasmSizeProbe`, unoptimized, with MSCZWriter and EditWire deliberately linked in. The 4 MB ceiling applies to this. Currently 3,781,982 B. |
+| `shipped` | What a page downloads — the PackageToJS artifact after wasm-opt, with only the bridge's own export surface. Currently 2,585,745 B. Needs `Scripts/wasm-build-web.sh` to have run; says so when it has not. |
+
+Playback cost about 10 KB of the first number and 69 KB of the second — small
+because `MidiRenderer.render` was already in the probe's call chain and drags
+most of the timeline machinery along with it, and because the synth is not in
+the graph at all (see below).
 
 The gate stays on the wider number on purpose: a regression in a target the
 browser does not currently reach is still a regression, and the shipped surface
@@ -744,6 +780,20 @@ MuseScore repository root.
   bytes differ — a true statement about two providers that says nothing about
   the build under test. `Tools/GenWebFixtures` installs the table for exactly
   this reason.
+- **A playback fixture without a repeat proves nothing.** `UnrolledTimeMap` is
+  the identity on a score with no repeat plan, so the notated and player clocks
+  coincide and every conversion `PlaybackClock` performs is a no-op — an
+  implementation that dropped the projection entirely passes. `repeat.mscz`
+  exists for this: notated 6.0 s against player 8.0 s, measures starting at
+  player 0 / 2 / 6 where the notated starts are 0 / 2 / 4. Any new assertion
+  about a playback position belongs on that fixture, not on `sample.mscz`.
+- **`unrolledSeconds(fromNotated:)` answers with the FIRST occurrence.** That is
+  correct for a seek, a play-from and a loop wrap — the coordinates
+  `PlaybackUnroll` restricts scheduling to — and wrong for "where on the
+  player's clock does THIS measure-play sit". Asking it that question puts every
+  beat of a repeat's second pass back on the first pass's time.
+  `PlaybackClock.playerSecondsForUnrolledTick` resolves against the span
+  instead, which is why it keeps its own copy of the span accumulation.
 - **macOS `sed -i` syntax**: BSD sed (default on macOS) doesn't accept
   the GNU `c\` form for line replacement. Prefer `awk` for line-aware
   text rewrites.
