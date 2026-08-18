@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>swift-sheet-music — browser viewer</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1c1c1e;
+        --muted: #6c6c70;
+        --line: #d1d1d6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1c1c1e;
+          --fg: #f2f2f7;
+          --muted: #98989d;
+          --line: #3a3a3c;
+        }
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.5 -apple-system,
+          system-ui,
+          sans-serif;
+      }
+      header {
+        display: flex;
+        gap: 1rem;
+        align-items: baseline;
+        flex-wrap: wrap;
+        padding: 1rem;
+        border-bottom: 1px solid var(--line);
+      }
+      h1 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0;
+      }
+      #status {
+        color: var(--muted);
+      }
+      #pages {
+        padding: 1rem;
+        display: grid;
+        gap: 1rem;
+        justify-items: center;
+      }
+      canvas {
+        /* The engraver draws in black on nothing; the page supplies the paper. */
+        background: #ffffff;
+        box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+        max-width: 100%;
+        height: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>swift-sheet-music</h1>
+      <input
+        id="file"
+        type="file"
+        accept=".mscz,.mscx,.musicxml,.mxl,.mid,.midi"
+      />
+      <span id="status">loading engine…</span>
+    </header>
+    <main id="pages"></main>
+    <!--
+      PackageToJS's browser glue imports the WASI shim by bare specifier, which
+      a browser cannot resolve on its own — that is a bundler's job, and this
+      demo deliberately has no bundler so what runs is the package's own output.
+      An import map is the un-bundled equivalent.
+
+      A consuming app that bundles needs none of this; one that does not needs
+      the same three lines.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@bjorn3/browser_wasi_shim": "../../Web/sheet-music-web/node_modules/@bjorn3/browser_wasi_shim/dist/index.js"
+        }
+      }
+    </script>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
