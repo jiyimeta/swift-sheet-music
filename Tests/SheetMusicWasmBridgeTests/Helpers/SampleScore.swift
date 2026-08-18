@@ -40,6 +40,49 @@ enum SampleScore {
         )
     }
 
+    /// A three-measure score whose middle measure repeats.
+    ///
+    /// Playback needs one: with no repeat plan the unrolled sequence and the
+    /// notated timeline are the same clock, so every conversion the playback
+    /// bridge performs is the identity and a broken one still passes.
+    static func repeatingScore() -> Score {
+        func quarters(_ pitches: [Int]) -> [VoiceElement] {
+            pitches.map { pitch in
+                .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: pitch, tpc: 14)])))
+            }
+        }
+        return Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "1",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [
+                        Staff(measures: [
+                            Measure(voices: [Voice(elements: quarters([60, 62, 64, 65]))]),
+                            Measure(
+                                voices: [Voice(elements: quarters([67, 69, 71, 72]))],
+                                startRepeat: true,
+                                endRepeatCount: 2,
+                            ),
+                            Measure(voices: [Voice(elements: quarters([64, 62, 60, 60]))]),
+                        ]),
+                    ],
+                ),
+            ],
+            metaTags: ["workTitle": "wasm repeat", "composer": "test"],
+            titleFrame: ScoreFrame(
+                heightSp: 10,
+                texts: [FrameText(style: .title, text: "wasm repeat")],
+            ),
+        )
+    }
+
+    /// `repeatingScore()` as a `.mscz` container.
+    static func repeatingMscz() throws -> [UInt8] {
+        try [UInt8](MSCZWriter.write(score: repeatingScore()))
+    }
+
     /// The same score as a `.mscz` container, which is what a browser host
     /// actually hands `loadScore`.
     static func mscz(

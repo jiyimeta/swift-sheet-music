@@ -62,14 +62,19 @@ let scoreTable = HandleTable<Score>()
     }
 }
 
-/// Release the score behind `handle` together with its cached layout.
+/// Release the score behind `handle` together with everything cached against
+/// it — the laid-out document and the playback clock.
 ///
-/// Android: `nativeReleaseScore` — which also tears down an edit session. There
-/// are no sessions on the wasm surface yet; when editing arrives this function
-/// gains the same third call.
+/// Every cache keyed by a handle has to be listed here. Handles are allocated
+/// monotonically so one is never reused inside a page, but a leak keeps a whole
+/// engraved document and an unrolled timeline alive until the tab closes.
+///
+/// Android: `nativeReleaseScore`, which also tears down an edit session. Editing
+/// has not reached the wasm surface yet; when it does this gains a fourth call.
 @JS public func releaseScore(handle: Int) {
     scoreTable.release(Int64(handle))
     LayoutDocumentCache.release(Int64(handle))
+    PlaybackClockCache.release(Int64(handle))
 }
 
 /// Metadata for `handle`, or `nil` when the handle is unknown or released.

@@ -240,9 +240,11 @@ if isWasm {
             name: "SheetMusicWasmBridgeTests",
             dependencies: [
                 "SheetMusicWasmBridge",
+                "SheetMusicAudioCore",
                 "SheetMusicBridgeCore",
                 "SheetMusicCore",
                 "SheetMusicFoundation",
+                "SheetMusicMIDI",
                 "SheetMusicMSCX",
             ],
             path: "Tests/SheetMusicWasmBridgeTests",
@@ -392,10 +394,12 @@ if !isAndroid {
             .executableTarget(
                 name: "GenWebFixtures",
                 dependencies: [
+                    "SheetMusicAudioCore",
                     "SheetMusicBridgeCore",
                     "SheetMusicCore",
                     "SheetMusicLayout",
                     "SheetMusicLayoutApple",
+                    "SheetMusicMIDI",
                     "SheetMusicMSCX",
                 ],
                 path: "Tools/GenWebFixtures",
@@ -460,6 +464,7 @@ if isWasm {
         .target(
             name: "SheetMusicWasmBridge",
             dependencies: [
+                "SheetMusicAudioCore",
                 "SheetMusicBridgeCore",
                 "SheetMusicCore",
                 "SheetMusicFoundation",
