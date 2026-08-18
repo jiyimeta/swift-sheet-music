@@ -35,6 +35,28 @@ class FakeTransport implements SynthTransport {
   muted = false;
   loadCount = 0;
   readonly seeks: number[] = [];
+  readonly programs: { channel: number; bank: number; program: number }[] = [];
+  readonly controls: { channel: number; controller: number; value: number }[] = [];
+
+  programChange(channel: number, bank: number, program: number): void {
+    this.programs.push({ channel, bank, program });
+  }
+
+  controlChange(channel: number, controller: number, value: number): void {
+    this.controls.push({ channel, controller, value });
+  }
+
+  /** The patch in force on `channel`, or `undefined` if never set. */
+  programOn(channel: number): number | undefined {
+    return this.programs.filter((p) => p.channel === channel).at(-1)?.program;
+  }
+
+  /** The latest value of `controller` on `channel`. */
+  controlOn(channel: number, controller: number): number | undefined {
+    return this.controls
+      .filter((c) => c.channel === channel && c.controller === controller)
+      .at(-1)?.value;
+  }
 
   load(midi: Uint8Array): void {
     this.loaded = midi;
@@ -308,5 +330,137 @@ describe("PlaybackEngine", () => {
     expect(host.score.playing).toBe(true);
     // `play` is async, so its guard surfaces as a rejection, not a throw.
     await expect(engine.play()).rejects.toThrow("disposed");
+  });
+});
+
+/**
+ * The mixer, on a score whose parts are NOT all the same patch.
+ *
+ * `renderMidi` strips the tick-0 program and CC 7 from every mixer-managed
+ * channel — so a backward seek cannot replay them over a live override — which
+ * makes asserting them the engine's job. Skipping it is inaudible on a piano
+ * score and on percussion, and turns everything else into Acoustic Grand Piano.
+ */
+describe("PlaybackEngine mixer", () => {
+  let sheetMusic: SheetMusic;
+  let score: Score;
+
+  beforeAll(async () => {
+    sheetMusic = await loadSheetMusic({
+      bundleURL: new URL("../dist/", import.meta.url),
+      platform: "node",
+    });
+    expect(sheetMusic.installSMuFLMetrics(metricsBytes)).toBe(true);
+    score = sheetMusic.loadScore(
+      new Uint8Array(readFileSync(fixturePath("mixer.mscz"))),
+    );
+    score.layout({ pageWidthMM: 210, pageHeightMM: 297 });
+  });
+
+  afterAll(() => {
+    score?.release();
+  });
+
+  async function makeMixerEngine() {
+    const host = new FakeHost();
+    const scheduler = new ManualScheduler();
+    const engine = await PlaybackEngine.create({ score, host, scheduler });
+    return { engine, host, scheduler };
+  }
+
+  it("exposes one strip per part, carrying the score's patches", async () => {
+    const { engine } = await makeMixerEngine();
+    const channels = engine.mixerChannels();
+    expect(channels.map((c) => c.strip.displayName)).toEqual([
+      "Bass",
+      "Lead",
+      "Drums",
+    ]);
+    expect(channels.map((c) => c.program)).toEqual([33, 84, 0]);
+    expect(channels.map((c) => c.volume)).toEqual([92, 64, 110]);
+  });
+
+  /** The regression. Without this every melodic part sounds like a piano. */
+  it("asserts each strip's program and volume when the score loads", async () => {
+    const { engine, host } = await makeMixerEngine();
+    for (const channel of engine.mixerChannels()) {
+      const midi = channel.strip.channel;
+      expect(host.score.controlOn(midi, 7)).toBe(channel.volume);
+      if (!channel.strip.isDrums) {
+        expect(host.score.programOn(midi)).toBe(channel.program);
+      }
+    }
+  });
+
+  /** Percussion has no patch to select — channel 9 picks the drum bank. */
+  it("sends no program change for a drum strip", async () => {
+    const { engine, host } = await makeMixerEngine();
+    const drums = engine.mixerChannels().find((c) => c.strip.isDrums)!;
+    expect(host.score.programOn(drums.strip.channel)).toBeUndefined();
+    expect(host.score.controlOn(drums.strip.channel, 7)).toBe(drums.volume);
+  });
+
+  it("re-asserts after a seek, which resets the sequencer's channel state", async () => {
+    const { engine, host } = await makeMixerEngine();
+    const lead = engine.mixerChannels().find((c) => c.strip.displayName === "Lead")!;
+    const before = host.score.programs.length;
+    engine.seekToMeasure(0);
+    expect(host.score.programs.length).toBeGreaterThan(before);
+    expect(host.score.programOn(lead.strip.channel)).toBe(84);
+  });
+
+  it("re-asserts after a loop wrap", async () => {
+    const { engine, host, scheduler } = await makeMixerEngine();
+    engine.setLoop({ fromMeasureIndex: 0, toMeasureExclusive: 1 });
+    await engine.play();
+    const before = host.score.programs.length;
+    host.score.positionSeconds = 1e6;
+    scheduler.tick();
+    expect(host.score.programs.length).toBeGreaterThan(before);
+  });
+
+  it("applies a program override and keeps it across a seek", async () => {
+    const { engine, host } = await makeMixerEngine();
+    const lead = engine.mixerChannels().find((c) => c.strip.displayName === "Lead")!;
+    engine.setStripProgram(lead.strip.channel, 48);
+    expect(host.score.programOn(lead.strip.channel)).toBe(48);
+    engine.seekToMeasure(0);
+    // The whole reason the sequence carries no tick-0 program: a seek here
+    // would otherwise put the score's own patch back over the override.
+    expect(host.score.programOn(lead.strip.channel)).toBe(48);
+  });
+
+  it("ignores a program change aimed at a drum strip", async () => {
+    const { engine, host } = await makeMixerEngine();
+    const drums = engine.mixerChannels().find((c) => c.strip.isDrums)!;
+    engine.setStripProgram(drums.strip.channel, 48);
+    expect(host.score.programOn(drums.strip.channel)).toBeUndefined();
+  });
+
+  it("mutes a strip by sending CC 7 = 0, and restores its level", async () => {
+    const { engine, host } = await makeMixerEngine();
+    const bass = engine.mixerChannels().find((c) => c.strip.displayName === "Bass")!;
+    engine.setStripMuted(bass.strip.channel, true);
+    expect(host.score.controlOn(bass.strip.channel, 7)).toBe(0);
+    engine.setStripMuted(bass.strip.channel, false);
+    expect(host.score.controlOn(bass.strip.channel, 7)).toBe(92);
+  });
+
+  it("clamps a strip volume into the MIDI range", async () => {
+    const { engine, host } = await makeMixerEngine();
+    const bass = engine.mixerChannels().find((c) => c.strip.displayName === "Bass")!;
+    engine.setStripVolume(bass.strip.channel, 999);
+    expect(host.score.controlOn(bass.strip.channel, 7)).toBe(127);
+    engine.setStripVolume(bass.strip.channel, -5);
+    expect(host.score.controlOn(bass.strip.channel, 7)).toBe(0);
+  });
+
+  it("ignores a channel it has no strip for", async () => {
+    const { engine, host } = await makeMixerEngine();
+    const before = host.score.controls.length;
+    engine.setStripVolume(15, 100);
+    engine.setStripProgram(15, 100);
+    engine.setStripMuted(15, true);
+    expect(host.score.controls.length).toBe(before);
   });
 });

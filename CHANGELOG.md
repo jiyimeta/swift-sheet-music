@@ -10,11 +10,15 @@ and this project adheres to
 ### Added
 
 - **Playback in the browser.** `@jiyimeta/sheet-music-web/playback` plays a score, follows it with
-  a cursor, and supports a measure-range loop with its highlight, a metronome, a count-in and a
-  playback rate. The synth is the host's: Swift renders the score and metronome SMFs and answers
-  positional questions, and the default engine is spessasynth_lib, declared as an optional peer
-  dependency so a viewer never downloads one. A different synth can be substituted by implementing
-  `SynthHost`.
+  a cursor, and supports a measure-range loop with its highlight, a metronome, a count-in, a
+  playback rate and a mixer (per-strip patch, level and mute). The synth is the host's: Swift
+  renders the score and metronome SMFs and answers positional questions, and the default engine is
+  spessasynth_lib, declared as an optional peer dependency so a viewer never downloads one. A
+  different synth can be substituted by implementing `SynthHost`.
+- `mixerStripCount` / `mixerStrip` on the WebAssembly bridge, and `Score.mixerStrips()` on the
+  browser facade. `PlaybackEngine` asserts each strip's patch and level at load and after every
+  transport move — the sequence carries neither, by design, so that a backward seek cannot replay
+  them over a live override.
 - Eleven `@JS` entry points on the WebAssembly bridge behind that — `renderMidi`,
   `renderMetronomeMidi`, `renderCountInMetronomeMidi`, `countInSeconds`, `playbackSummary`,
   `metronomeBeats`, `cursorRectAtPlayerSeconds`, `playerSecondsForMeasure`,

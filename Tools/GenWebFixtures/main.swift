@@ -256,6 +256,8 @@ enum GenWebFixtures {
                 + "\(playback.totalPlayerSeconds)s, "
                 + "midi \(playback.midiByteCount)B",
         )
+
+        writeMixerScore(to: directory)
     }
 }
 

@@ -25,6 +25,17 @@ export interface SynthTransport {
    * has to land on the beat, which it cannot do if the clock stopped meanwhile.
    */
   setMuted(muted: boolean): void;
+  /**
+   * Select a patch on one channel.
+   *
+   * Not a convenience: the sequence carries no tick-0 program of its own — it is
+   * stripped so a backward seek cannot replay it over a live override — so a
+   * host that never calls this hears General MIDI's default patch, Acoustic
+   * Grand Piano, on every melodic channel.
+   */
+  programChange(channel: number, bank: number, program: number): void;
+  /** Send a MIDI control change. CC 7 is channel volume, CC 10 pan. */
+  controlChange(channel: number, controller: number, value: number): void;
   dispose(): void;
 }
 

@@ -482,6 +482,19 @@ score twice and the cursor poll asks once per animation frame. It is used only
 by the wasm bridge; the Android bridge still builds its own each call, so this
 cannot regress a platform the Apple CI job does not exercise.
 
+**`renderMidi`'s sequence carries no program and no CC 7, and the host has to
+supply both.** `MidiSynthPostProcess` strips the tick-0 program change and the
+channel volume from every mixer-managed channel so a backward seek cannot replay
+them over a live override — every platform's engine re-asserts them from its
+mixer instead. A host that skips this hears the score, in time, with the right
+cursor, entirely in Acoustic Grand Piano, because that is what a General MIDI
+channel defaults to. `PlaybackEngine.assertMixer` is the web side of that
+contract, driven by `mixerStrip(handle:index:)`.
+
+Percussion is what makes the mistake survivable long enough to ship: channel 9
+selects the drum bank whatever the program says, so the drums sound correct and
+the failure reads as "one odd instrument" rather than "nothing is applied".
+
 `SheetMusicAudioCore` and `SheetMusicEditWire` were out of reach until
 `Wirelet` 0.4.1. Both depend on it, and its source files imported the
 `Foundation` umbrella, which is worth ~10 MB brotli on wasm: adding
@@ -586,8 +599,8 @@ It reports **two** numbers and they are not interchangeable:
 
 | | what it measures |
 |---|---|
-| `brotli` | The whole portable graph through `WasmSizeProbe`, unoptimized, with MSCZWriter and EditWire deliberately linked in. The 4 MB ceiling applies to this. Currently 3,781,982 B. |
-| `shipped` | What a page downloads — the PackageToJS artifact after wasm-opt, with only the bridge's own export surface. Currently 2,585,745 B. Needs `Scripts/wasm-build-web.sh` to have run; says so when it has not. |
+| `brotli` | The whole portable graph through `WasmSizeProbe`, unoptimized, with MSCZWriter and EditWire deliberately linked in. The 4 MB ceiling applies to this. Currently 3,783,491 B. |
+| `shipped` | What a page downloads — the PackageToJS artifact after wasm-opt, with only the bridge's own export surface. Currently 2,588,054 B. Needs `Scripts/wasm-build-web.sh` to have run; says so when it has not. |
 
 Playback cost about 10 KB of the first number and 69 KB of the second — small
 because `MidiRenderer.render` was already in the probe's call chain and drags
@@ -787,6 +800,12 @@ MuseScore repository root.
   exists for this: notated 6.0 s against player 8.0 s, measures starting at
   player 0 / 2 / 6 where the notated starts are 0 / 2 / 4. Any new assertion
   about a playback position belongs on that fixture, not on `sample.mscz`.
+- **A fixture whose parts are all piano cannot catch a missing program.**
+  Program 0 is both what such a score asks for and what a General MIDI channel
+  falls back to when nobody asserts anything, so "the patch was applied" and
+  "nothing was applied" are the same observation. `mixer.mscz` exists for this —
+  two melodic parts on different non-zero patches plus a drum part, with three
+  different volumes. The bug it now pins shipped once already.
 - **`unrolledSeconds(fromNotated:)` answers with the FIRST occurrence.** That is
   correct for a seek, a play-from and a loop wrap — the coordinates
   `PlaybackUnroll` restricts scheduling to — and wrong for "where on the

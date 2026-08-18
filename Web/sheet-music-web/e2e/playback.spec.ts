@@ -108,6 +108,34 @@ test("a one-measure loop keeps the cursor in that measure", async ({ page }) => 
   }
 });
 
+/**
+ * The bug this suite exists for after the fact: every melodic part sounded like
+ * a piano, because `renderMidi` strips the tick-0 program and nothing put it
+ * back. What can be checked in a browser is that the engine builds a strip per
+ * part carrying the score's own patches — the mixer is what asserts them.
+ */
+test("builds a mixer strip per part, carrying the score's patches", async ({ page }) => {
+  await page.evaluate(
+    (url) => window.renderScoreFromURL(url),
+    "/Web/sheet-music-web/test/fixtures/mixer.mscz",
+  );
+  await page.evaluate(() => window.useGeneratedSoundFont());
+  await page.locator("#play").click();
+  await expect(page.locator("body")).toHaveAttribute("data-playback-state", "playing");
+  await expect(page.locator("body")).toHaveAttribute("data-mixer-strip-count", "3");
+
+  await expect(page.locator(".strip .name")).toHaveText(["Bass", "Lead", "Drums"]);
+
+  const values = (selector: string) =>
+    page.$$eval(selector, (nodes) =>
+      nodes.map((node) => (node as HTMLInputElement).value),
+    );
+  // Bass is GM 33 (finger bass) and Lead GM 84 (charang); a drum strip has no
+  // patch input at all. Reading 0 here would be the reported bug.
+  expect(await values(".strip .patch")).toEqual(["33", "84"]);
+  expect(await values(".strip .level")).toEqual(["92", "64", "110"]);
+});
+
 test("the count-in holds the score until the pre-roll ends", async ({ page }) => {
   await page.locator("#countin").check();
   await page.locator("#play").click();

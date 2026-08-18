@@ -62,6 +62,30 @@
       #transport input[type="number"] {
         width: 4rem;
       }
+      #mixer {
+        display: grid;
+        gap: 0.35rem;
+        padding: 0 1rem;
+      }
+      #mixer:not(:empty) {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .strip {
+        display: grid;
+        grid-template-columns: 10rem auto 4rem 9rem 12rem;
+        gap: 0.6rem;
+        align-items: center;
+      }
+      .strip .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .strip .channel {
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
       #pages {
         padding: 1rem;
         display: grid;
@@ -132,6 +156,7 @@
       <button id="loop-clear" type="button" disabled>Clear</button>
       <span id="playback-status"></span>
     </section>
+    <section id="mixer"></section>
     <main id="pages"></main>
     <!--
       PackageToJS's browser glue imports the WASI shim by bare specifier, which

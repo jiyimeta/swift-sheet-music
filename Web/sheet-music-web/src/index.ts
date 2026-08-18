@@ -92,6 +92,34 @@ export interface MeasureRange {
 }
 
 /**
+ * One mixer strip: a deduped (part × instrument) pair and the MIDI channel its
+ * program, volume and mute route through.
+ *
+ * **`program` and `volume` have to be asserted before playing.** The sequence
+ * `renderMidi` returns carries neither on a mixer-managed channel — both are
+ * stripped so a backward seek cannot replay them over a live override — so a
+ * host that skips this hears General MIDI's default patch, Acoustic Grand
+ * Piano, on every melodic channel. `PlaybackEngine` does it for you; a host
+ * driving a synth directly must do it itself. Percussion hides the mistake:
+ * channel 9 picks the drum bank whatever the program says.
+ */
+export interface MixerStrip {
+  readonly partIndex: number;
+  /** Index into the part's deduped instruments, in first-appearance order. */
+  readonly ordinal: number;
+  /** The MIDI channel (0–15) this strip sounds on. */
+  readonly channel: number;
+  readonly bank: number;
+  /** GM patch number, 0–127. */
+  readonly program: number;
+  /** Percussion. Its program is meaningless — do not offer a patch picker. */
+  readonly isDrums: boolean;
+  /** The score's own CC 7, 0–127 — the balance the composer wrote. */
+  readonly volume: number;
+  readonly displayName: string;
+}
+
+/**
  * The raw `@JS` surface BridgeJS exposes. Not part of this package's API — the
  * generated declarations live in the built bundle, which is not present at
  * type-check time, so the shape is restated here and pinned by the parity test.
@@ -138,6 +166,8 @@ interface BridgeExports {
     strongWav: number[] | Uint8Array,
     weakWav: number[] | Uint8Array,
   ): number[] | Uint8Array;
+  mixerStripCount(handle: number): number;
+  mixerStrip(handle: number, index: number): MixerStrip | null;
 }
 
 /**
@@ -275,6 +305,23 @@ export class Score {
 
   playbackSummary(): PlaybackSummary | null {
     return this.bridge.playbackSummary(this.live());
+  }
+
+  /**
+   * One strip per deduped (part × instrument) pair, in score order.
+   *
+   * Read this before playing: the strips carry the programs and volumes the
+   * rendered sequence deliberately does not. See `MixerStrip`.
+   */
+  mixerStrips(): MixerStrip[] {
+    const handle = this.live();
+    const count = this.bridge.mixerStripCount(handle);
+    const strips: MixerStrip[] = [];
+    for (let index = 0; index < count; index++) {
+      const strip = this.bridge.mixerStrip(handle, index);
+      if (strip !== null) strips.push(strip);
+    }
+    return strips;
   }
 
   /**

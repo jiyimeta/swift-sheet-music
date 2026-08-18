@@ -11,10 +11,26 @@
  * bridge converts; this file never does arithmetic on times beyond comparing
  * them.
  */
-import type { CursorRect, MeasureRange, PlaybackSummary, Score } from "../index.js";
+import type {
+  CursorRect,
+  MeasureRange,
+  MixerStrip,
+  PlaybackSummary,
+  Score,
+} from "../index.js";
 import type { SynthHost } from "./types.js";
 
 export type PlaybackState = "stopped" | "counting-in" | "playing" | "paused";
+
+/** A strip plus whatever the host has changed about it. */
+export interface MixerChannelState {
+  readonly strip: MixerStrip;
+  /** GM patch in force. Starts at `strip.program`. */
+  readonly program: number;
+  /** CC 7 in force, 0–127. Starts at `strip.volume`. */
+  readonly volume: number;
+  readonly muted: boolean;
+}
 
 /**
  * Injected so the poll loop can be driven by hand under test. Node has no
@@ -66,6 +82,8 @@ export class PlaybackEngine {
   private countInTarget: { measureIndex: number; seconds: number } | null = null;
   private rate = 1;
   private metronomeMuted = true;
+  /** Mixer state, keyed by MIDI channel. */
+  private readonly mixer = new Map<number, MixerChannelState>();
 
   private constructor(
     private readonly score: Score,
@@ -99,6 +117,15 @@ export class PlaybackEngine {
     engine.host.score.load(options.score.renderMidi());
     engine.host.metronome.load(options.score.renderMetronomeMidi());
     engine.host.metronome.setMuted(true);
+    for (const strip of options.score.mixerStrips()) {
+      engine.mixer.set(strip.channel, {
+        strip,
+        program: strip.program,
+        volume: strip.volume,
+        muted: false,
+      });
+    }
+    engine.assertMixer();
     return engine;
   }
 
@@ -154,6 +181,7 @@ export class PlaybackEngine {
       // No count-in at this position; fall through to an ordinary start.
     }
 
+    this.assertMixer();
     this.host.score.play();
     this.host.metronome.play();
     this.setState("playing");
@@ -210,6 +238,44 @@ export class PlaybackEngine {
     }
   }
 
+  // MARK: mixer
+
+  /** One entry per deduped (part × instrument) strip, in score order. */
+  mixerChannels(): MixerChannelState[] {
+    return [...this.mixer.values()];
+  }
+
+  /** Select a patch. Ignored for a percussion strip, whose program is inert. */
+  setStripProgram(channel: number, program: number): void {
+    this.assertLive();
+    const state = this.mixer.get(channel);
+    if (state === undefined || state.strip.isDrums) return;
+    this.mixer.set(channel, { ...state, program });
+    this.assertStrip(channel);
+  }
+
+  /** CC 7, 0–127. */
+  setStripVolume(channel: number, volume: number): void {
+    this.assertLive();
+    const state = this.mixer.get(channel);
+    if (state === undefined) return;
+    this.mixer.set(channel, { ...state, volume: Math.max(0, Math.min(127, volume)) });
+    this.assertStrip(channel);
+  }
+
+  /**
+   * Mute by sending CC 7 = 0 rather than by silencing a node: the strips share
+   * one synth, so there is no per-strip node to turn down, and a channel volume
+   * of zero is what the mixer already speaks in.
+   */
+  setStripMuted(channel: number, muted: boolean): void {
+    this.assertLive();
+    const state = this.mixer.get(channel);
+    if (state === undefined) return;
+    this.mixer.set(channel, { ...state, muted });
+    this.assertStrip(channel);
+  }
+
   /** Pass `null` to clear. An empty or inverted range also clears. */
   setLoop(range: MeasureRange | null): void {
     this.assertLive();
@@ -259,6 +325,29 @@ export class PlaybackEngine {
     this.onStateChange?.(state);
   }
 
+  /**
+   * Push every strip's program and volume at the synth.
+   *
+   * Called after the sequence is loaded and after every transport move. Once
+   * would not be enough: loading a song and seeking both reset a sequencer's
+   * channel state, and the sequence carries no program or CC 7 of its own to
+   * restore it — that is exactly what was stripped so a seek could not fight a
+   * live override. Six MIDI messages per strip-ful, which is nothing next to
+   * being on the wrong instrument.
+   */
+  private assertMixer(): void {
+    for (const channel of this.mixer.keys()) this.assertStrip(channel);
+  }
+
+  private assertStrip(channel: number): void {
+    const state = this.mixer.get(channel);
+    if (state === undefined) return;
+    if (!state.strip.isDrums) {
+      this.host.score.programChange(channel, state.strip.bank, state.program);
+    }
+    this.host.score.controlChange(channel, 7, state.muted ? 0 : state.volume);
+  }
+
   private currentMeasureIndex(): number {
     const index = this.score.measureIndexAtPlayerSeconds(
       this.host.score.positionSeconds,
@@ -269,6 +358,9 @@ export class PlaybackEngine {
   private seekBoth(seconds: number): void {
     this.host.score.seek(seconds);
     this.host.metronome.seek(seconds);
+    // A seek resets the sequencer's channel state, and the sequence has no
+    // program or CC 7 of its own to put it back.
+    this.assertMixer();
   }
 
   /**
@@ -310,6 +402,7 @@ export class PlaybackEngine {
         // The metronome sequence runs `seconds` ahead of the score's, so both
         // clocks agree from here on without any further correction.
         this.restoreBodyMetronome();
+        this.assertMixer();
         this.host.score.play();
         this.setState("playing");
       }

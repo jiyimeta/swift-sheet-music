@@ -16,6 +16,7 @@ import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicMIDI
+import SheetMusicMSCX
 
 extension GenWebFixtures {
     /// Three measures, the middle one repeated: the unrolled order is
@@ -49,6 +50,45 @@ extension GenWebFixtures {
             titleFrame: ScoreFrame(
                 heightSp: 10,
                 texts: [FrameText(style: .title, text: "web playback")],
+            ),
+        )
+    }
+
+    /// Two melodic parts on different patches plus a drum part.
+    ///
+    /// The mixer needs its own fixture because `repeatScore` is all piano, and
+    /// on a piano part program 0 is both what the score asks for and what a
+    /// channel falls back to when nobody asserts anything — the exact bug the
+    /// mixer exists to prevent would pass unnoticed. The volumes differ from
+    /// each other and from `InstrumentChannel`'s default 100 for the same
+    /// reason.
+    static var mixerScore: Score {
+        func part(id: String, name: String, program: Int, drums: Bool, volume: Int) -> Part {
+            let elements: [VoiceElement] = [60, 62, 64, 65].map { pitch in
+                .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: pitch, tpc: 14)])))
+            }
+            return Part(
+                id: id,
+                instrument: Instrument(
+                    id: id,
+                    longName: name,
+                    channels: [InstrumentChannel(program: program, volume: volume)],
+                    useDrumset: drums,
+                ),
+                staves: [Staff(measures: [Measure(voices: [Voice(elements: elements)])])],
+            )
+        }
+        return Score(
+            division: 480,
+            parts: [
+                part(id: "bass", name: "Bass", program: 33, drums: false, volume: 92),
+                part(id: "lead", name: "Lead", program: 84, drums: false, volume: 64),
+                part(id: "drums", name: "Drums", program: 0, drums: true, volume: 110),
+            ],
+            metaTags: ["workTitle": "web mixer", "composer": "swift-sheet-music"],
+            titleFrame: ScoreFrame(
+                heightSp: 10,
+                texts: [FrameText(style: .title, text: "web mixer")],
             ),
         )
     }
@@ -168,6 +208,25 @@ extension GenWebFixtures {
             measureIndex: frame.cursor.measureIndex,
             notatedSeconds: frame.timeSeconds,
         )
+    }
+
+    /// No expectations file for this one: what it has to say — the programs and
+    /// volumes — is read back through `mixerStrips()` and pinned on the Swift
+    /// side by `MixerStripTests`. The browser test only needs a score whose
+    /// parts are NOT all the same patch.
+    static func writeMixerScore(to directory: URL) {
+        let container: Data
+        do {
+            container = try MSCZWriter.write(score: mixerScore)
+        } catch {
+            fail("could not write the mixer score: \(error)", code: 5)
+        }
+        do {
+            try container.write(to: directory.appendingPathComponent("mixer.mscz"))
+        } catch {
+            fail("could not write mixer.mscz: \(error)", code: 11)
+        }
+        print("wrote mixer.mscz (\(container.count)B)")
     }
 
     static func writePlayback(

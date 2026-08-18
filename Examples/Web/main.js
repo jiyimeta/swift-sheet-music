@@ -34,6 +34,7 @@ const loopTo = document.querySelector("#loop-to");
 const loopApply = document.querySelector("#loop-apply");
 const loopClear = document.querySelector("#loop-clear");
 const playbackStatus = document.querySelector("#playback-status");
+const mixerHost = document.querySelector("#mixer");
 
 /**
  * Pixels per document millimetre. 96 dpi / 25.4 mm-per-inch is 1:1 on a
@@ -188,7 +189,76 @@ function resetPlayback() {
   loopRange = null;
   clearOverlays("cursor");
   clearOverlays("loop-highlight");
+  mixerHost.replaceChildren();
   document.body.dataset.playbackState = "stopped";
+}
+
+/**
+ * One row per mixer strip: patch, level, mute.
+ *
+ * The patch picker is a plain number input rather than a 128-entry list of GM
+ * names — the names live in `SheetMusicAudioCore.GMInstrument`, which the wasm
+ * bridge does not expose yet, and inventing a second copy of that table here is
+ * exactly the kind of drift the shared one exists to prevent.
+ */
+function buildMixer() {
+  mixerHost.replaceChildren();
+  if (!engine) return;
+  for (const channel of engine.mixerChannels()) {
+    const midi = channel.strip.channel;
+    const row = document.createElement("div");
+    row.className = "strip";
+    row.dataset.channel = String(midi);
+
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = channel.strip.displayName;
+
+    const chan = document.createElement("span");
+    chan.className = "channel";
+    chan.textContent = `ch ${midi}`;
+
+    const mute = document.createElement("label");
+    const muteBox = document.createElement("input");
+    muteBox.type = "checkbox";
+    muteBox.className = "mute";
+    muteBox.addEventListener("change", () => {
+      engine?.setStripMuted(midi, muteBox.checked);
+    });
+    mute.append(muteBox, document.createTextNode(" mute"));
+
+    const level = document.createElement("input");
+    level.type = "range";
+    level.min = "0";
+    level.max = "127";
+    level.value = String(channel.volume);
+    level.className = "level";
+    level.addEventListener("input", () => {
+      engine?.setStripVolume(midi, Number(level.value));
+    });
+
+    const patch = document.createElement("label");
+    if (channel.strip.isDrums) {
+      // Percussion has no patch to pick: channel 9 selects the drum bank
+      // whatever the program says.
+      patch.textContent = "drum kit";
+    } else {
+      const patchInput = document.createElement("input");
+      patchInput.type = "number";
+      patchInput.min = "0";
+      patchInput.max = "127";
+      patchInput.value = String(channel.program);
+      patchInput.className = "patch";
+      patchInput.addEventListener("change", () => {
+        engine?.setStripProgram(midi, Number(patchInput.value));
+      });
+      patch.append(document.createTextNode("GM patch "), patchInput);
+    }
+
+    row.append(name, chan, mute, level, patch);
+    mixerHost.append(row);
+  }
+  document.body.dataset.mixerStripCount = String(engine.mixerChannels().length);
 }
 
 function updateControls() {
@@ -231,6 +301,7 @@ async function ensureEngine() {
   });
   engine.setMetronomeMuted(!metronomeBox.checked);
   engine.setRate(Number(rateSlider.value));
+  buildMixer();
   return engine;
 }
 

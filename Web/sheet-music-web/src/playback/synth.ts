@@ -45,6 +45,8 @@ interface SpessaSynth {
   };
   connect(node: AudioNode): AudioNode;
   disconnect(node?: AudioNode): AudioNode | undefined;
+  programChange(channel: number, programNumber: number): void;
+  controllerChange(channel: number, controller: number, value: number): void;
   destroy(): void;
 }
 
@@ -111,6 +113,20 @@ class SpessaTransport implements SynthTransport {
     // Gain, not `pause()`. The transport has to keep advancing while silent, or
     // an un-mute would land wherever the clock stopped instead of on the beat.
     this.gain.gain.value = muted ? 0 : 1;
+  }
+
+  programChange(channel: number, bank: number, program: number): void {
+    // Bank MSB / LSB first: a patch outside bank 0 is selected by the bank in
+    // force when the program change arrives, not by the program alone. Every
+    // General MIDI score this package has seen is bank 0, so this is almost
+    // always a no-op — and free.
+    this.synth.controllerChange(channel, 0, 0);
+    this.synth.controllerChange(channel, 32, bank);
+    this.synth.programChange(channel, program);
+  }
+
+  controlChange(channel: number, controller: number, value: number): void {
+    this.synth.controllerChange(channel, controller, value);
   }
 
   get isMuted(): boolean {

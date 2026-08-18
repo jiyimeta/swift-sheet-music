@@ -107,11 +107,28 @@ plays, which is longer than the score on anything with repeats.
 Loop, metronome and count-in are all optional; `createPlaybackEngine` alone gives
 you play, pause, stop, seek and the cursor.
 
+### Mixer
+
+```js
+for (const channel of engine.mixerChannels()) {
+  console.log(channel.strip.displayName, channel.program, channel.volume);
+}
+engine.setStripProgram(channel, 48); // GM patch; ignored on a drum strip
+engine.setStripVolume(channel, 100); // CC 7, 0–127
+engine.setStripMuted(channel, true);
+```
+
+`PlaybackEngine` asserts every strip's patch and level itself — at load and
+after every transport move — so you get the score's own instruments without
+touching the mixer at all. That is not a nicety: the sequence `renderMidi`
+returns deliberately carries neither, so that a backward seek cannot replay them
+over one of your overrides. A host driving a synth directly, without the engine,
+has to send them itself or hear everything as Acoustic Grand Piano.
+
 To drive a different synth, implement `SynthHost` instead of calling
 `createSpessaSynthHost`. The engine never names spessasynth.
 
-Not here yet: a mixer (per-part volume, mute, program change), master tuning,
-and audio-file export.
+Not here yet: master tuning and audio-file export.
 
 ## Assets
 
