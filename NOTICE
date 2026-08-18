@@ -148,3 +148,15 @@ dependency of any other library product in this package.
 The example apps and the Android modules additionally bundle the Edwin
 text font (© 2021 MuseScore Limited, SIL Open Font License 1.1); each
 copy ships its `Edwin.LICENSE.txt` alongside.
+
+The browser package (`Web/sheet-music-web`) bundles the same two faces
+in woff2 form:
+
+    Web/sheet-music-web/assets/bravura.woff2
+    Web/sheet-music-web/assets/edwin-roman.woff2
+
+Converting to woff2 changes the container, not the font. Both remain
+under the SIL Open Font License 1.1, whose terms travel with them as
+`Web/sheet-music-web/assets/Bravura.LICENSE.txt` and
+`Web/sheet-music-web/assets/Edwin.LICENSE.txt`. Regenerate either from
+the vendored `.otf` with `Scripts/web-fonts.sh`.
