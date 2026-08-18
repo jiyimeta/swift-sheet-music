@@ -84,6 +84,23 @@ printf 'raw        %10s bytes (%.1f MB)\n' "$raw_bytes" "$(echo "$raw_bytes / 10
 printf 'brotli     %10s bytes (%.1f MB)\n' "$compressed_bytes" "$(echo "$compressed_bytes / 1048576" | bc -l)"
 printf 'ceiling    %10s bytes (%.1f MB)\n' "$CEILING_BYTES" "$(echo "$CEILING_BYTES / 1048576" | bc -l)"
 
+# The ceiling above is measured over the whole portable graph through
+# WasmSizeProbe, before wasm-opt and with MSCZWriter and EditWire deliberately
+# linked in so a regression in either stays visible. What a page downloads is the
+# PackageToJS artifact: a narrower surface, wasm-opt applied. Neither number
+# substitutes for the other, so report both — and say so when the second one is
+# absent rather than letting its silence read as zero.
+SHIPPED_DIR="$REPO_ROOT/Web/sheet-music-web/dist"
+shipped_wasm="$(find "$SHIPPED_DIR" -maxdepth 1 -name '*.wasm' 2>/dev/null | head -1)"
+if [ -n "$shipped_wasm" ]; then
+    shipped_raw=$(wc -c <"$shipped_wasm" | tr -d ' ')
+    shipped_brotli=$(brotli -q 11 -c "$shipped_wasm" | wc -c | tr -d ' ')
+    printf 'shipped    %10s bytes (%.1f MB)  raw %s\n' \
+        "$shipped_brotli" "$(echo "$shipped_brotli / 1048576" | bc -l)" "$shipped_raw"
+else
+    echo "shipped    not measured (run Scripts/wasm-build-web.sh first)"
+fi
+
 if [ "$report_only" -eq 1 ]; then
     exit 0
 fi

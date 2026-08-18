@@ -413,6 +413,11 @@ export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
 swift build --swift-sdk swift-6.3.3-RELEASE_wasm --target SheetMusicLayout
 ```
 
+Beyond the toolchain and SDK, the browser package needs three Homebrew
+formulae: `brotli` (measures the download), `binaryen` (supplies `wasm-opt`,
+which PackageToJS runs by default, so its absence fails the build rather than
+merely skipping optimization), and `woff2` (only when a font is replaced).
+
 Building today: Foundation / Core / XMLTools / Zip / MIDI / Layout /
 MSCX / MusicXML / AudioCore / EditWire / BridgeCore — parse, lay out,
 render MIDI, edit, and drive the bridge layer. UI / PDF / LayoutApple /
@@ -424,8 +429,27 @@ AudioApple are Apple-only.
 `native*` entry points could not come with it: swift-java's jextract
 scans only `--input-swift`, the target's own source directory
 (`JExtractSwiftPlugin.swift:72`), so an entry point is a JNI symbol only
-where its file physically sits. A wasm bridge writes its own entry
-points and calls the same implementation underneath.
+where its file physically sits.
+
+`Sources/SheetMusicWasmBridge` is the wasm counterpart of
+`Sources/SheetMusicAndroidJNI`: `@JS` entry points, one call each into
+`SheetMusicBridgeCore`. BridgeJS imposes the same residency rule as jextract —
+it generates a thunk only for the target it is attached to — but unlike jextract
+it can be attached to a library, and the thunks reach the executable's export
+section without being referenced from it. `Sources/SheetMusicWasmEntry` is a
+one-line executable that exists because PackageToJS packages a *product*; its
+single call is what makes SwiftPM link the library archive at all.
+
+Two things about the surface, both learned the hard way:
+
+- **`Int` is 32 bits on wasm32.** `Int(someInt64)` compiles and traps at
+  runtime. Values whose full 64 bits matter — `engineVersionStamp`,
+  `scoreFingerprint` — cross as decimal strings. `Int64` would lower to a
+  JavaScript `bigint`, which is exact but cannot be carried in the JSON parity
+  fixtures.
+- **A `@JS struct` needs an explicit `public init`.** The memberwise one is
+  internal, and BridgeJS generates a `@_transparent` lowering function that
+  cannot reference an internal declaration.
 
 `SheetMusicAudioCore` and `SheetMusicEditWire` were out of reach until
 `Wirelet` 0.4.1. Both depend on it, and its source files imported the
@@ -452,21 +476,41 @@ untouched and keep using `Compression` and the system libz respectively.
 See `Sources/zlib/README.md`; re-stage a newer upstream with
 `Scripts/vendor-zlib.sh`.
 
-`swift test` cannot target the wasm SDK directly, and the test target has
-not been cross-built (its Apple-framework guards are spelled
-`#if !os(Android)`, which is true on WASI). Parity is checked instead with
-`WasmParityProbe`, which prints `Score.stableFingerprint` for a file and is
-built for both hosts:
+### Running Swift tests on WebAssembly
+
+```bash
+SWIFT_SHEET_MUSIC_WASM=1 swift package --disable-sandbox \
+    --swift-sdk swift-6.3.3-RELEASE_wasm js test --environment node
+```
+
+**`--disable-sandbox` is not optional.** PackageToJS is a SwiftPM *command*
+plugin, SwiftPM runs command plugins under the macOS sandbox, and this one
+npm-installs the WASI shim its test host needs. Without the flag it fails with
+`ENOTFOUND registry.npmjs.org` — even when the network is fine, which makes the
+error thoroughly misleading.
+
+`isWasm` keeps only the test targets that can cross-compile:
+`SheetMusicWasmBridgeTests` and `SheetMusicAudioCoreTests`. `SheetMusicTests`
+cannot, and **not** for the reason usually given. Its Apple-framework guards are
+spelled `#if !os(Android)`, which is true on WASI — but widening those would not
+help, because the blockers are in the dependency graph: `SheetMusicAudio` →
+`SheetMusicAudioApple` → `CSequencerHostTime` → `AVFAudio/AVFAudio.h`, and
+`SheetMusicAndroidJNI` → SwiftJava. `js test` builds every declared test target,
+so one that cannot cross-compile fails the run before the portable suites speak.
+
+`WasmParityProbe` remains the wasmtime-level check that the vendored zlib
+inflates identically to the platform one:
 
 ```bash
 SWIFT_SHEET_MUSIC_WASM=1 swift run WasmParityProbe <file.mscz>
 wasmtime --dir . .build/wasm32-unknown-wasip1/debug/WasmParityProbe.wasm <file.mscz>
 ```
 
-The fingerprint is FNV-1a with fixed constants and no per-process seed, so
-the two numbers are directly comparable. A `.mscz` is DEFLATE all the way
-down, so a disagreement between the vendored inflate and the platform one
-shows up here as a differing fingerprint rather than as silent corruption.
+**Never give that target a JavaScriptKit dependency.** Linking JavaScriptKit
+adds imports from a JavaScript host, and a module with unresolvable imports
+cannot be instantiated at all — wasmtime would refuse the artifact and this
+comparison would silently stop running. `WasmSizeProbe` may depend on the bridge
+precisely because it is only ever compressed, never executed.
 
 ### Size is the constraint — two gates
 
@@ -506,6 +550,17 @@ brotli.
 Scripts/wasm-size.sh            # fails past a 4 MB brotli ceiling
 Scripts/wasm-size.sh --report   # measure only
 ```
+
+It reports **two** numbers and they are not interchangeable:
+
+| | what it measures |
+|---|---|
+| `brotli` | The whole portable graph through `WasmSizeProbe`, unoptimized, with MSCZWriter and EditWire deliberately linked in. The 4 MB ceiling applies to this. Currently 3,771,421 B. |
+| `shipped` | What a page downloads — the PackageToJS artifact after wasm-opt, with only the bridge's own export surface. Currently 2,516,701 B. Needs `Scripts/wasm-build-web.sh` to have run; says so when it has not. |
+
+The gate stays on the wider number on purpose: a regression in a target the
+browser does not currently reach is still a regression, and the shipped surface
+grows every time an entry point is added.
 
 It builds `Sources/WasmSizeProbe` (added to the manifest only when
 `SWIFT_SHEET_MUSIC_WASM=1` is exported) and brotli-compresses it. The
@@ -676,6 +731,19 @@ MuseScore repository root.
 
 ## Recurring pitfalls
 
+- **`Package.resolved` is manifest-shape dependent.** A dependency declared
+  only under `SWIFT_SHEET_MUSIC_WASM` changes `originHash`, so the file's
+  contents come to depend on which shape ran last. JavaScriptKit is therefore
+  declared unconditionally — Apple and Android never link it, and the cost is
+  one fetch. Make the same call for the next wasm-only dependency.
+- **Byte-for-byte parity between builds needs the same `FontMetricsProvider`.**
+  `bravura.smft` is generated from CoreText but is not CoreText: values are
+  stored as `Float` at a 1000 pt reference and rescaled at lookup, so glyph
+  positions differ in their low bits. Engraving through CoreText on one side and
+  the table on the other gives draw programs of identical length and shape whose
+  bytes differ — a true statement about two providers that says nothing about
+  the build under test. `Tools/GenWebFixtures` installs the table for exactly
+  this reason.
 - **macOS `sed -i` syntax**: BSD sed (default on macOS) doesn't accept
   the GNU `c\` form for line replacement. Prefer `awk` for line-aware
   text rewrites.

@@ -67,4 +67,74 @@ jobs:
       # rules would reject), but the example app is formatter-clean and
       # the pre-commit hook formats it, so CI checks it too.
       - name: SwiftFormat
-        run: swiftformat Sources Tests Examples --lint
+        run: swiftformat Sources Tests Examples Tools --lint
+
+  wasm:
+    name: Build & test (WebAssembly)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Xcode's Swift has no WebAssembly backend and crashes with "No
+      # available targets are compatible with triple wasm32-unknown-wasip1".
+      # -target CurrentUserHomeDirectory needs no administrator password;
+      # Scripts/swift-org-toolchain.sh resolves either install location.
+      - name: Install the swift.org toolchain
+        run: |
+          curl -fsSL -o toolchain.pkg \
+            https://download.swift.org/swift-6.3.3-release/xcode/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE-osx.pkg
+          installer -pkg toolchain.pkg -target CurrentUserHomeDirectory
+          "$(Scripts/swift-org-toolchain.sh)/swift" --version
+
+      - name: Install the WebAssembly SDK
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          swift sdk install \
+            https://download.swift.org/swift-6.3.3-release/wasm-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_wasm.artifactbundle.tar.gz \
+            --checksum cabfa08b73bb8ac783927ecd15fa386e99d0c139c5f232445067bcf58379cae7
+
+      # brotli measures the download; binaryen supplies wasm-opt, which
+      # PackageToJS runs by default.
+      - name: Install brotli and binaryen
+        run: brew install brotli binaryen
+
+      # Runs Swift Testing on the wasm SDK. --disable-sandbox is required:
+      # PackageToJS is a SwiftPM command plugin, SwiftPM sandboxes command
+      # plugins, and this one npm-installs the WASI shim its test host needs.
+      # Without the flag it fails with ENOTFOUND against the npm registry even
+      # when the network is fine.
+      - name: Swift Testing on WebAssembly
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          SWIFT_SHEET_MUSIC_WASM=1 swift package --disable-sandbox \
+            --swift-sdk swift-6.3.3-RELEASE_wasm js test --environment node
+
+      - name: Build the browser bundle
+        run: Scripts/wasm-build-web.sh
+
+      # Two numbers: the 4 MB ceiling over the whole portable graph, and what a
+      # page actually downloads. The build above has to come first or the second
+      # one is unmeasurable.
+      - name: Size gate
+        run: Scripts/wasm-size.sh
+
+      - name: Install the browser package
+        run: npm --prefix Web/sheet-music-web ci
+
+      - name: Build the TypeScript
+        run: npm --prefix Web/sheet-music-web run build
+
+      - name: Parity and unit tests
+        run: npm --prefix Web/sheet-music-web test
+
+      - name: Browser rendering tests
+        run: |
+          npx --prefix Web/sheet-music-web playwright install --with-deps chromium chromium-headless-shell
+          npm --prefix Web/sheet-music-web run test:e2e
+
+      - name: Upload rendering diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: Web/sheet-music-web/playwright-report

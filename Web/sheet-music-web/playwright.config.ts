@@ -9,9 +9,12 @@ import { defineConfig, devices } from "@playwright/test";
  * neither can catch a shear applied in the wrong direction or a brace positioned
  * off the staff.
  *
- * Baselines are rasterized by the runner's Chromium and font stack, so macOS and
- * Linux disagree on antialiasing. Only the Linux baselines are committed; a
- * local macOS run is informational and its snapshots are gitignored.
+ * Baselines are rasterized by the runner's Chromium and font stack, so they are
+ * per-platform. CI runs this job on macOS — the swift.org toolchain installer
+ * and `Scripts/swift-org-toolchain.sh` are both macOS-specific — so the
+ * `-darwin` snapshots are the committed ones. `maxDiffPixelRatio` leaves room
+ * for antialiasing differences between macOS versions without letting a real
+ * rendering change through.
  */
 export default defineConfig({
   testDir: "./e2e",

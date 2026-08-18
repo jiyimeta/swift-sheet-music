@@ -55,7 +55,7 @@ Web/sheet-music-web/dist-esm/
 Web/sheet-music-web/node_modules/
 Web/sheet-music-web/test-results/
 Web/sheet-music-web/playwright-report/
-# Playwright baselines are rasterized by the runner's Chromium and font stack,
-# so a macOS-generated one would never match CI's. Only the Linux baselines are
-# checked in.
-Web/sheet-music-web/e2e/**/*-darwin.png
+# Playwright baselines ARE checked in — CI runs the WebAssembly job on macOS
+# (the swift.org toolchain installer and Scripts/swift-org-toolchain.sh are both
+# macOS-specific), so the -darwin snapshots a contributor generates are the ones
+# CI compares against. A Linux runner would need its own set.
