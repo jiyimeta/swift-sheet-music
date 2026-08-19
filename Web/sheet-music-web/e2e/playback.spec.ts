@@ -147,6 +147,48 @@ test("builds a mixer strip per part, carrying the score's patches", async ({ pag
   expect(await page.locator(".strip .patch").first().locator("option")).toHaveCount(128);
 });
 
+/**
+ * The one thing only a browser can answer about the export: that an
+ * `OfflineAudioContext` really does instantiate spessasynth's worklet and render
+ * through it. Everything about the bytes themselves is pinned by
+ * `test/wav.test.ts`, which needs no browser.
+ */
+test("renders the score to a WAV faster than real time", async ({ page }) => {
+  // mixer.mscz rather than the default fixture: its drum part hits notes 76 and
+  // 77, the only two the generated click bank defines, so the render has
+  // something to be audible with. Every other score would export correct-length
+  // silence through that bank — indistinguishable from a broken render.
+  await page.evaluate(
+    (url) => window.renderScoreFromURL(url),
+    "/Web/sheet-music-web/test/fixtures/mixer.mscz",
+  );
+  await page.evaluate(() => window.useGeneratedSoundFont());
+  await page.locator("#play").click();
+  await expect(page.locator("body")).toHaveAttribute("data-playback-state", "playing");
+  await page.locator("#export").click();
+
+  await expect
+    .poll(async () => page.evaluate(() => document.body.dataset.exportError ?? ""))
+    .toBe("");
+  await expect(page.locator("body")).toHaveAttribute("data-exported-bytes", /\d+/, {
+    timeout: 30_000,
+  });
+
+  const bytes = Number(
+    await page.evaluate(() => document.body.dataset.exportedBytes),
+  );
+  // mixer.mscz is one 4/4 bar at ♩=120 — two seconds — plus a two-second tail;
+  // stereo 16-bit at 44.1 kHz is 176,400 B/s.
+  expect(bytes).toBeGreaterThan(44 + 3 * 176_400);
+
+  // And it has to contain audio. A misconfigured offline render — the snapshot
+  // not applied, the sound bank not transferred, the worklet never reached —
+  // yields a buffer of exactly the right length full of silence, which the byte
+  // count above cannot tell apart from a good one.
+  const peak = Number(await page.evaluate(() => document.body.dataset.exportedPeak));
+  expect(peak).toBeGreaterThan(1000);
+});
+
 test("the count-in holds the score until the pre-roll ends", async ({ page }) => {
   await page.locator("#countin").check();
   await page.locator("#play").click();

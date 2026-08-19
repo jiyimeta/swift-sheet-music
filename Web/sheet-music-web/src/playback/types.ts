@@ -52,5 +52,21 @@ export interface SynthHost {
   readonly context: BaseAudioContext;
   readonly score: SynthTransport;
   readonly metronome: SynthTransport;
+  /**
+   * Render the loaded score to an `AudioBuffer` faster than real time, or leave
+   * it undefined if this synth cannot.
+   *
+   * Optional for the same reason `SynthBackend.makeOfflineInstance` returns
+   * `nil` on Apple: a transport-only test double, or a synth without an offline
+   * path, is still a usable host — it just cannot export.
+   *
+   * The render starts from the top of the sequence and carries the CURRENT
+   * mixer state, so what comes out matches what is being heard. Trimming to a
+   * range is the caller's job.
+   */
+  renderOffline?(options: {
+    readonly sampleRate: number;
+    readonly seconds: number;
+  }): Promise<AudioBuffer>;
   dispose(): Promise<void>;
 }

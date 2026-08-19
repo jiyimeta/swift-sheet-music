@@ -800,6 +800,13 @@ MuseScore repository root.
   exists for this: notated 6.0 s against player 8.0 s, measures starting at
   player 0 / 2 / 6 where the notated starts are 0 / 2 / 4. Any new assertion
   about a playback position belongs on that fixture, not on `sample.mscz`.
+- **An offline render fails as correct-length silence.** A browser audio export
+  that asserts on byte count passes whether or not anything was rendered —
+  spessasynth's `startOfflineRender` takes its whole configuration up front
+  (Chromium drops worklet messages aimed at an `OfflineAudioContext`), so a
+  misconfigured one produces a buffer of exactly the right size, empty. Assert a
+  peak level too. The first version of `e2e/playback.spec.ts`'s export test
+  passed on length alone; adding the peak assert reported 0.
 - **A fixture whose parts are all piano cannot catch a missing program.**
   Program 0 is both what such a score asks for and what a General MIDI channel
   falls back to when nobody asserts anything, so "the patch was applied" and

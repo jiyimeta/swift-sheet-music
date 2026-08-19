@@ -133,7 +133,25 @@ has to send them itself or hear everything as Acoustic Grand Piano.
 To drive a different synth, implement `SynthHost` instead of calling
 `createSpessaSynthHost`. The engine never names spessasynth.
 
-Not here yet: master tuning and audio-file export.
+### Export
+
+```js
+if (engine.canExport) {
+  const wav = await engine.exportWav({ range: loopRange }); // omit for the whole score
+  const url = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
+}
+```
+
+16-bit PCM, rendered offline and faster than real time, carrying the mixer
+exactly as it stands — the file is what you are hearing. The metronome is not
+included, matching the iOS and Android exports.
+
+`canExport` is `false` when the host has no offline path; implementing
+`renderOffline` on a custom `SynthHost` is what turns it on. `encodeWav` is
+exported separately if you want the `AudioBuffer` step yourself.
+
+Not here yet: master tuning, and compressed formats. Writing M4A or MP3 in a
+browser needs WebCodecs or `MediaRecorder`; WAV needs neither, so it went first.
 
 ## Assets
 

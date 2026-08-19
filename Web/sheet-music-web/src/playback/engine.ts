@@ -19,6 +19,22 @@ import type {
   Score,
 } from "../index.js";
 import type { SynthHost } from "./types.js";
+import { encodeWav, sliceBuffer } from "./wav.js";
+
+export interface AudioExportOptions {
+  /** Defaults to 44100. */
+  readonly sampleRate?: number;
+  /**
+   * Measures to export, or the whole score when omitted. Pass the active loop's
+   * range to write exactly what is being looped.
+   */
+  readonly range?: MeasureRange;
+  /**
+   * Extra seconds rendered past the end so release tails are not cut off.
+   * Defaults to 2. Applies to the score's end, not to a range's.
+   */
+  readonly tailSeconds?: number;
+}
 
 export type PlaybackState = "stopped" | "counting-in" | "playing" | "paused";
 
@@ -303,6 +319,58 @@ export class PlaybackEngine {
   loopHighlightRects(): Float64Array {
     if (this.loopRange === null) return new Float64Array(0);
     return this.score.loopHighlightRects(this.loopRange);
+  }
+
+  // MARK: export
+
+  /** Whether this host can export at all. */
+  get canExport(): boolean {
+    return typeof this.host.renderOffline === "function";
+  }
+
+  /**
+   * Render the score to a 16-bit PCM `.wav`, faster than real time.
+   *
+   * Carries the mixer exactly as it stands, so the file matches what is being
+   * heard. The metronome does not: clicks are a rehearsal aid, and no other
+   * platform's export includes them either.
+   *
+   * A range is rendered by trimming a full-score render rather than by starting
+   * the transport inside the sequence, which an offline render cannot be asked
+   * for. The audible difference is at the leading edge: a note already ringing
+   * there is cut mid-tail instead of re-struck — the same thing looping that
+   * range sounds like.
+   *
+   * Throws when the host has no offline path (`canExport` is `false`).
+   */
+  async exportWav(options: AudioExportOptions = {}): Promise<Uint8Array> {
+    this.assertLive();
+    const renderOffline = this.host.renderOffline;
+    if (renderOffline === undefined) {
+      throw new Error("this synth host cannot render offline");
+    }
+
+    const sampleRate = options.sampleRate ?? 44_100;
+    const tail = options.tailSeconds ?? 2;
+    const bounds = options.range ? this.score.loopPlayerSeconds(options.range) : null;
+    if (options.range !== undefined && bounds !== null && bounds.length !== 2) {
+      throw new Error("the export range resolves to no measures");
+    }
+
+    const start = bounds?.at(0) ?? 0;
+    const end = bounds?.at(1) ?? this.summary.totalPlayerSeconds;
+    // The whole sequence is rendered either way — the transport cannot be
+    // started partway through — so the length asked for is always the end of
+    // the range, plus the tail when that end is the end of the score.
+    const rendersToScoreEnd = end >= this.summary.totalPlayerSeconds - 1e-9;
+    const buffer = await renderOffline.call(this.host, {
+      sampleRate,
+      seconds: end + (rendersToScoreEnd ? tail : 0),
+    });
+
+    return encodeWav(
+      start > 0 ? sliceBuffer(buffer, start, buffer.duration) : buffer,
+    );
   }
 
   dispose(): void {

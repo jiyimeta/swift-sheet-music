@@ -36,6 +36,8 @@ interface SpessaSequencer {
   loadNewSongList(songs: { binary: ArrayBuffer; fileName?: string }[]): void;
   play(): void;
   pause(): void;
+  /** The parsed sequence, which an offline render needs handed to it whole. */
+  getMIDI(): Promise<unknown>;
 }
 
 interface SpessaSynth {
@@ -47,6 +49,14 @@ interface SpessaSynth {
   disconnect(node?: AudioNode): AudioNode | undefined;
   programChange(channel: number, programNumber: number): void;
   controllerChange(channel: number, controller: number, value: number): void;
+  getSnapshot(): Promise<unknown>;
+  startOfflineRender(config: {
+    midiSequence: unknown;
+    snapshot?: unknown;
+    loopCount: number;
+    soundBankList: { bankOffset: number; soundBankBuffer: ArrayBuffer }[];
+    sequencerOptions?: { skipToFirstNoteOn?: boolean };
+  }): Promise<void>;
   destroy(): void;
 }
 
@@ -133,6 +143,11 @@ class SpessaTransport implements SynthTransport {
     return this.muted;
   }
 
+  /** The live synth and its sequencer, for the offline render to copy from. */
+  get spessa(): { synth: SpessaSynth; sequencer: SpessaSequencer } {
+    return { synth: this.synth, sequencer: this.sequencer };
+  }
+
   dispose(): void {
     this.sequencer.pause();
     this.synth.disconnect();
@@ -187,6 +202,11 @@ export async function createSpessaSynthHost(
     options.processorURL ?? "spessasynth_processor.min.js";
   await options.context.audioWorklet.addModule(processorURL.toString());
 
+  // Kept because `addSoundBank` TRANSFERS what it is given, detaching the
+  // caller's buffer. An export needs the bank again, and by then the original is
+  // gone.
+  const soundFontMaster = options.soundFont.slice(0);
+
   const destination = options.destination ?? options.context.destination;
   const score = await makeTransport(module, options, destination);
   const metronome = await makeTransport(module, options, destination);
@@ -198,6 +218,51 @@ export async function createSpessaSynthHost(
     context: options.context,
     score,
     metronome,
+
+    /**
+     * Render the score faster than real time on a throwaway
+     * `OfflineAudioContext`.
+     *
+     * Everything the offline synth needs is passed through
+     * `startOfflineRender`'s config rather than sent to it afterwards: spessasynth
+     * documents that Chromium drops worklet messages aimed at an
+     * `OfflineAudioContext`, so the ordinary "construct, then configure" path
+     * silently renders the wrong thing — or nothing.
+     *
+     * That constraint is why the mixer state travels as a `snapshot` of the LIVE
+     * synth. It also makes the export correct by construction: what is written
+     * is what is being heard, including every patch and level the host changed,
+     * with no second code path to keep in step.
+     */
+    async renderOffline({ sampleRate, seconds }) {
+      const frames = Math.max(1, Math.ceil(seconds * sampleRate));
+      const offlineContext = new OfflineAudioContext(2, frames, sampleRate);
+      await offlineContext.audioWorklet.addModule(processorURL.toString());
+
+      const offlineSynth = new module.WorkletSynthesizer(offlineContext);
+      offlineSynth.connect(offlineContext.destination);
+
+      const live = score.spessa;
+      const [midiSequence, snapshot] = await Promise.all([
+        live.sequencer.getMIDI(),
+        live.synth.getSnapshot(),
+      ]);
+
+      await offlineSynth.startOfflineRender({
+        midiSequence,
+        snapshot,
+        loopCount: 0,
+        // A fresh copy: `addSoundBank` and this both transfer the buffer.
+        soundBankList: [{ bankOffset: 0, soundBankBuffer: soundFontMaster.slice(0) }],
+        // Same reason as the live sequencer: the zero of the render has to be
+        // the zero of the sequence, or the export starts at the first note-on
+        // and every position computed against it is shifted.
+        sequencerOptions: { skipToFirstNoteOn: false },
+      });
+
+      return offlineContext.startRendering();
+    },
+
     async dispose() {
       score.dispose();
       metronome.dispose();

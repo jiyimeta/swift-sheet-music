@@ -33,6 +33,7 @@ const loopFrom = document.querySelector("#loop-from");
 const loopTo = document.querySelector("#loop-to");
 const loopApply = document.querySelector("#loop-apply");
 const loopClear = document.querySelector("#loop-clear");
+const exportButton = document.querySelector("#export");
 const playbackStatus = document.querySelector("#playback-status");
 const mixerHost = document.querySelector("#mixer");
 
@@ -290,6 +291,7 @@ function updateControls() {
   stopButton.disabled = !engine;
   loopApply.disabled = !engine;
   loopClear.disabled = !engine;
+  exportButton.disabled = !engine?.canExport;
   playButton.textContent = engine?.state === "playing" ? "Pause" : "Play";
 }
 
@@ -389,6 +391,46 @@ loopClear.addEventListener("click", () => {
   loopRange = null;
   engine?.setLoop(null);
   clearOverlays("loop-highlight");
+});
+
+exportButton.addEventListener("click", async () => {
+  if (!engine) return;
+  // Playing while rendering is not a problem for the engine, but the file would
+  // be a snapshot of a mixer the user is still moving. Stop first.
+  engine.pause();
+  exportButton.disabled = true;
+  playbackStatus.textContent = "rendering…";
+  try {
+    // The active loop, when there is one — exporting exactly what is being
+    // looped is the common case, and matches AudioExportRange.currentLoop on
+    // the other platforms.
+    const bytes = await engine.exportWav(loopRange ? { range: loopRange } : {});
+    const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${openScore?.metadata.title || "score"}.wav`;
+    link.click();
+    URL.revokeObjectURL(url);
+    playbackStatus.textContent = `exported ${(bytes.length / 1e6).toFixed(1)} MB`;
+    document.body.dataset.exportedBytes = String(bytes.length);
+    // Peak level, for the browser test. A render that was configured wrong
+    // produces a buffer of exactly the right length full of silence, which the
+    // byte count cannot tell apart from a good one.
+    const samples = new Int16Array(
+      bytes.buffer,
+      bytes.byteOffset + 44,
+      (bytes.length - 44) >> 1,
+    );
+    let peak = 0;
+    for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
+    document.body.dataset.exportedPeak = String(peak);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    playbackStatus.textContent = `export failed: ${message}`;
+    document.body.dataset.exportError = message;
+  } finally {
+    updateControls();
+  }
 });
 
 fileInput.addEventListener("change", async () => {
