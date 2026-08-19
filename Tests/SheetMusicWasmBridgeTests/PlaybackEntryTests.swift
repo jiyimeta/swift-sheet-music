@@ -37,25 +37,51 @@ struct PlaybackEntryTests {
         #expect(Array(renderMetronomeMidi(handle: handle).prefix(4)) == [0x4D, 0x54, 0x68, 0x64])
     }
 
-    @Test("renderCountInMetronomeMidi for an out-of-range measure is empty")
-    func countInSequenceOutOfRangeIsEmpty() throws {
+    /// A negative position clamps to the top rather than failing, the same way
+    /// `PlaybackClock` clamps every other read — a host that subtracts a lead-in
+    /// and goes past zero gets the count-in for the start of the score.
+    @Test("a negative start clamps to the top of the score")
+    func countInSequenceClampsNegativeStart() throws {
         let handle = try loadScore(bytes: SampleScore.mscz())
         defer { releaseScore(handle: handle) }
-        #expect(renderCountInMetronomeMidi(handle: handle, fromMeasureIndex: 9999).isEmpty)
+        let clamped = renderCountInMetronomeMidi(handle: handle, fromPlayerSeconds: -1)
+        let atTop = renderCountInMetronomeMidi(handle: handle, fromPlayerSeconds: 0)
+        #expect(clamped == atTop)
+    }
+
+    @Test("renderCountInMetronomeMidi for an unknown handle is empty")
+    func countInSequenceForUnknownHandleIsEmpty() {
+        #expect(renderCountInMetronomeMidi(handle: 999_999, fromPlayerSeconds: 0).isEmpty)
     }
 
     @Test("countInSeconds is non-negative and finite")
     func countInSecondsIsSane() throws {
         let handle = try loadScore(bytes: SampleScore.mscz())
         defer { releaseScore(handle: handle) }
-        let seconds = countInSeconds(handle: handle, fromMeasureIndex: 0)
+        let seconds = countInSeconds(handle: handle, fromPlayerSeconds: 0)
         #expect(seconds >= 0)
         #expect(seconds.isFinite)
     }
 
+    /// The reason the count-in takes seconds rather than a measure index: a
+    /// start partway through a bar gets a partial lead-in, and that is what a
+    /// tap-to-start produces.
+    @Test("a count-in starting mid-bar is shorter than one on the downbeat")
+    func midBarCountInIsShorter() throws {
+        let handle = try loadScore(bytes: SampleScore.repeatingMscz())
+        defer { releaseScore(handle: handle) }
+        let summary = try #require(playbackSummary(handle: handle))
+        let bar = summary.totalPlayerSeconds / Double(summary.measureCount)
+        let downbeat = countInSeconds(handle: handle, fromPlayerSeconds: bar)
+        let midBar = countInSeconds(handle: handle, fromPlayerSeconds: bar + bar / 2)
+        #expect(downbeat > 0)
+        #expect(midBar > 0)
+        #expect(midBar < downbeat)
+    }
+
     @Test("countInSeconds for an unknown handle is zero")
     func countInSecondsForUnknownHandleIsZero() {
-        #expect(countInSeconds(handle: 999_999, fromMeasureIndex: 0) == 0)
+        #expect(countInSeconds(handle: 999_999, fromPlayerSeconds: 0) == 0)
     }
 
     // MARK: Timeline
@@ -170,6 +196,59 @@ struct PlaybackEntryTests {
     @Test("measureIndexAtPlayerSeconds for an unknown handle is -1")
     func measureIndexForUnknownHandleIsSentinel() {
         #expect(measureIndexAtPlayerSeconds(handle: 999_999, playerSeconds: 0) == -1)
+    }
+
+    // MARK: Tap seek
+
+    @Test("a tap on the first note seeks to the top of the score")
+    func tapOnFirstNoteSeeksToTop() throws {
+        let handle = try loadScore(bytes: SampleScore.mscz())
+        defer { releaseScore(handle: handle) }
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        // Aim at the cursor rectangle the engine itself reports for second 0,
+        // rather than at coordinates guessed from the layout.
+        let rect = try #require(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0))
+        let seconds = playerSecondsAtPoint(
+            handle: handle,
+            xMM: rect.xMM + rect.widthMM / 2,
+            yMM: rect.yMM + rect.heightMM / 2,
+        )
+        #expect(seconds == 0)
+    }
+
+    @Test("a tap seeks somewhere the cursor agrees with")
+    func tapRoundTripsThroughTheCursor() throws {
+        let handle = try loadScore(bytes: SampleScore.mscz())
+        defer { releaseScore(handle: handle) }
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        let rect = try #require(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0))
+        // Well to the right of the first note: a later column on the same staff.
+        let seconds = playerSecondsAtPoint(
+            handle: handle, xMM: rect.xMM + 40, yMM: rect.yMM + rect.heightMM / 2,
+        )
+        #expect(seconds > 0)
+        let landed = try #require(
+            cursorRectAtPlayerSeconds(handle: handle, playerSeconds: seconds),
+        )
+        #expect(landed.xMM > rect.xMM)
+    }
+
+    /// Nearest, not hit-test: a tap beside the music snaps to the closest
+    /// element rather than being ignored, which is what makes tap-to-seek
+    /// usable with a finger. Above and left of everything is the first note.
+    @Test("a tap outside the music snaps to the nearest element")
+    func tapOutsideSnapsToNearest() throws {
+        let handle = try loadScore(bytes: SampleScore.mscz())
+        defer { releaseScore(handle: handle) }
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        #expect(playerSecondsAtPoint(handle: handle, xMM: -50, yMM: -50) == 0)
+    }
+
+    @Test("a tap before any layout hits nothing")
+    func tapWithoutLayoutIsSentinel() throws {
+        let handle = try loadScore(bytes: SampleScore.mscz())
+        defer { releaseScore(handle: handle) }
+        #expect(playerSecondsAtPoint(handle: handle, xMM: 30, yMM: 40) == -1)
     }
 
     // MARK: Loop

@@ -103,7 +103,7 @@ export class PlaybackEngine {
   private loopBounds: [number, number] | null = null;
   private loopRange: MeasureRange | null = null;
   /** Where a count-in-started playback begins once the count elapses. */
-  private countInTarget: { measureIndex: number; seconds: number } | null = null;
+  private countInTarget: { seconds: number } | null = null;
   private rate = 1;
   private metronomeMuted = true;
   /** Mixer state, keyed by MIDI channel. */
@@ -194,18 +194,19 @@ export class PlaybackEngine {
     }
 
     if (options?.countIn === true && this._state !== "paused") {
-      const measureIndex = this.currentMeasureIndex();
-      const sequence = this.score.renderCountInMetronomeMidi(measureIndex);
-      const seconds = this.score.countInSeconds(measureIndex);
+      // From wherever the transport actually is, not from the enclosing bar's
+      // downbeat: `CountInBeats` schedules a partial lead-in for a start partway
+      // through a measure, which is what a tap-to-start produces.
+      const from = this.host.score.positionSeconds;
+      const sequence = this.score.renderCountInMetronomeMidi(from);
+      const seconds = this.score.countInSeconds(from);
       if (sequence.length > 0 && seconds > 0) {
-        const target = this.score.playerSecondsForMeasure(measureIndex);
-        this.countInTarget = { measureIndex, seconds };
+        this.countInTarget = { seconds };
         this.host.metronome.load(sequence);
         // The count has to be audible whatever the metronome toggle says:
         // counting in is an explicit request, not the toggle.
         this.host.metronome.setMuted(false);
         this.host.metronome.setRate(this.rate);
-        this.host.score.seek(target >= 0 ? target : 0);
         this.host.metronome.play();
         this.setState("counting-in");
         this.startPolling();
@@ -246,10 +247,27 @@ export class PlaybackEngine {
 
   seekToMeasure(measureIndex: number): void {
     this.assertLive();
-    const seconds = this.score.playerSecondsForMeasure(measureIndex);
+    this.seekToPlayerSeconds(this.score.playerSecondsForMeasure(measureIndex));
+  }
+
+  /**
+   * Seek to wherever a tap landed, in document millimetres — the coordinates
+   * the cursor rectangle and the draw program already use.
+   *
+   * Nearest, not a hit-test: a tap beside a note goes to the closest playable
+   * element. Ignored only when the score has nothing playable or no layout has
+   * been computed.
+   */
+  seekToPoint(xMM: number, yMM: number): void {
+    this.assertLive();
+    this.seekToPlayerSeconds(this.score.playerSecondsAtPoint(xMM, yMM));
+  }
+
+  /** Ignores the `-1` every seek-target lookup answers with when it has none. */
+  private seekToPlayerSeconds(seconds: number): void {
     if (seconds < 0) return;
     this.seekBoth(seconds);
-    this.emitCursor();
+    this.emitCursor(seconds);
   }
 
   setRate(rate: number): void {
@@ -517,7 +535,8 @@ export class PlaybackEngine {
     }
   }
 
-  private currentMeasureIndex(): number {
+  /** The measure the transport is in — for a "now playing bar N" readout. */
+  get currentMeasureIndex(): number {
     const index = this.score.measureIndexAtPlayerSeconds(
       this.host.score.positionSeconds,
     );
@@ -583,7 +602,7 @@ export class PlaybackEngine {
       const [start, end] = this.loopBounds;
       if (this.host.score.positionSeconds >= end) {
         this.seekBoth(start);
-        this.emitCursor();
+        this.emitCursor(start);
         return;
       }
     } else if (this.host.score.isAtEnd) {
@@ -594,11 +613,19 @@ export class PlaybackEngine {
     this.emitCursor();
   }
 
-  private emitCursor(): void {
+  /**
+   * `atSeconds` overrides the transport's own reading, and a seek must pass it.
+   *
+   * Setting a sequencer's position is a message to its worklet, so the position
+   * it reports back is still the old one for a buffer or two. Drawing from that
+   * puts the cursor where playback WAS — invisible while playing, because the
+   * next frame corrects it, and permanent while paused, which is exactly when
+   * someone clicks the score to move the cursor.
+   */
+  private emitCursor(atSeconds?: number): void {
     if (this.onCursor === undefined) return;
-    this.onCursor(
-      this.score.cursorRectAtPlayerSeconds(this.host.score.positionSeconds),
-    );
+    const seconds = atSeconds ?? this.host.score.positionSeconds;
+    this.onCursor(this.score.cursorRectAtPlayerSeconds(seconds));
   }
 }
 

@@ -19,6 +19,11 @@ and this project adheres to
   browser facade. `PlaybackEngine` asserts each strip's patch and level at load and after every
   transport move — the sequence carries neither, by design, so that a backward seek cannot replay
   them over a live override.
+- Click-to-seek, and a count-in from anywhere rather than only a downbeat. `playerSecondsAtPoint`
+  resolves a point in document millimetres to the nearest playable element (`nearestEngineCursor`,
+  as on Android) and folds the cursor round trip into one call; `renderCountInMetronomeMidi` and
+  `countInSeconds` now take a position on the player's clock, which is what lets `CountInBeats`
+  schedule the partial lead-in a mid-bar start needs.
 - Solo, master tuning and a replaceable metronome click on the browser mixer.
   `setStripSoloed` silences everything not soloed while remembering each strip's own mute
   underneath; `setMasterTuning` sends the MIDI master-tuning RPN built by

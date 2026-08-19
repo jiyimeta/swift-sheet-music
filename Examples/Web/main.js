@@ -109,6 +109,21 @@ function render(bytes) {
       drawPage(canvas.getContext("2d"), page, PX_PER_MM, fonts, {
         offsetMM: tile.offsetMM,
       });
+      // Click-to-seek. The tile knows its own document-Y offset, so a click
+      // turns into document millimetres with the one scale factor already in
+      // play — the same unit the bridge answers cursor rectangles in.
+      const tileOffsetMM = tile.offsetMM;
+      canvas.addEventListener("click", (event) => {
+        if (!engine) return;
+        const box = canvas.getBoundingClientRect();
+        const xMM = (event.clientX - box.left) / CSS_PX_PER_MM;
+        const yMM = (event.clientY - box.top) / CSS_PX_PER_MM + tileOffsetMM;
+        engine.seekToPoint(xMM, yMM);
+        document.body.dataset.lastTap = `${xMM.toFixed(1)},${yMM.toFixed(1)}`;
+        document.body.dataset.lastTapSeconds = String(
+          openScore?.playerSecondsAtPoint(xMM, yMM),
+        );
+      });
       holder.append(canvas);
       pagesHost.append(holder);
       tiles.push({

@@ -88,6 +88,8 @@ await engine.play({ countIn: true });
 engine.setLoop({ fromMeasureIndex: 0, toMeasureExclusive: 4 });
 engine.setRate(0.75);
 engine.setMetronomeMuted(false);
+engine.seekToMeasure(8);
+engine.seekToPoint(xMM, yMM); // click-to-seek; nearest element, not a hit-test
 ```
 
 Supply the SoundFont yourself — this package ships no audio samples, the same

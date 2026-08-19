@@ -599,8 +599,8 @@ It reports **two** numbers and they are not interchangeable:
 
 | | what it measures |
 |---|---|
-| `brotli` | The whole portable graph through `WasmSizeProbe`, unoptimized, with MSCZWriter and EditWire deliberately linked in. The 4 MB ceiling applies to this. Currently 3,783,544 B. |
-| `shipped` | What a page downloads — the PackageToJS artifact after wasm-opt, with only the bridge's own export surface. Currently 2,588,937 B. Needs `Scripts/wasm-build-web.sh` to have run; says so when it has not. |
+| `brotli` | The whole portable graph through `WasmSizeProbe`, unoptimized, with MSCZWriter and EditWire deliberately linked in. The 4 MB ceiling applies to this. Currently 3,787,209 B. |
+| `shipped` | What a page downloads — the PackageToJS artifact after wasm-opt, with only the bridge's own export surface. Currently 2,591,296 B. Needs `Scripts/wasm-build-web.sh` to have run; says so when it has not. |
 
 Playback cost about 10 KB of the first number and 69 KB of the second — small
 because `MidiRenderer.render` was already in the probe's call chain and drags
@@ -800,6 +800,13 @@ MuseScore repository root.
   exists for this: notated 6.0 s against player 8.0 s, measures starting at
   player 0 / 2 / 6 where the notated starts are 0 / 2 / 4. Any new assertion
   about a playback position belongs on that fixture, not on `sample.mscz`.
+- **A sequencer's position is stale for a buffer or two after a seek.** Setting
+  it is a message to the worklet, so reading it straight back gives the old
+  value. Anything drawn from that reading — a cursor, a readout — shows where
+  playback *was*: invisible while playing, because the next frame corrects it,
+  and permanent while paused, which is exactly when a click-to-seek happens.
+  Draw from the position that was seeked TO. `PlaybackEngine.emitCursor` takes
+  it as a parameter for this reason.
 - **An offline render fails as correct-length silence.** A browser audio export
   that asserts on byte count passes whether or not anything was rendered —
   spessasynth's `startOfflineRender` takes its whole configuration up front

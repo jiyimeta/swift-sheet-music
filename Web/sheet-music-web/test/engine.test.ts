@@ -207,6 +207,29 @@ describe("PlaybackEngine", () => {
     expect(host.score.seeks).toHaveLength(0);
   });
 
+  /**
+   * A seek reports the cursor for where it seeked TO, not for where the
+   * transport says it is.
+   *
+   * Setting a sequencer's position is a message to its worklet, so the position
+   * it reports back is stale for a buffer or two. Drawing from that reading puts
+   * the cursor where playback was — invisible while playing, and permanent while
+   * paused, which is exactly when someone clicks the score to move it.
+   */
+  it("emits the cursor for the seek target, not the stale transport reading", async () => {
+    const host = new FakeHost();
+    // A transport that ignores seeks entirely — the worst case of the lag.
+    host.score.seek = function (seconds: number) {
+      this.seeks.push(seconds);
+    }.bind(host.score) as typeof host.score.seek;
+
+    const { engine, cursors } = await makeEngine(host);
+    engine.seekToMeasure(2);
+    const rect = cursors.at(-1) as { measureIndex: number } | null;
+    expect(rect).not.toBeNull();
+    expect(rect!.measureIndex).toBe(2);
+  });
+
   /** One transport at a different rate is clicks drifting away from the piece. */
   it("sends the rate to both transports", async () => {
     const { engine, host } = await makeEngine();

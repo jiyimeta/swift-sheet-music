@@ -147,6 +147,29 @@ test("builds a mixer strip per part, carrying the score's patches", async ({ pag
   expect(await page.locator(".strip .patch").first().locator("option")).toHaveCount(128);
 });
 
+test("clicking the score seeks the cursor there", async ({ page }) => {
+  await page.locator("#play").click();
+  await expect(page.locator("body")).toHaveAttribute("data-playback-state", "playing");
+  await expect.poll(async () => (await cursorY(page)) !== null, { timeout: 10_000 }).toBe(true);
+  await page.locator("#stop").click();
+  await page.locator("#play").click();
+  await page.locator("#play").click(); // pause, so the cursor stays where it is put
+
+  const canvas = page.locator("canvas").first();
+  const box = (await canvas.boundingBox())!;
+  // Well into the score horizontally, on the staff — nearest-element resolution
+  // means it does not have to land on a notehead.
+  await canvas.click({ position: { x: box.width * 0.7, y: box.height * 0.55 } });
+
+  // The cursor has to land there while PAUSED. Setting a sequencer's position
+  // is a message to its worklet, so the position it reports back is stale for a
+  // buffer or two — drawing the cursor from that reading leaves it where
+  // playback was, which is invisible while playing and permanent while paused.
+  await expect
+    .poll(async () => Number(await page.evaluate(() => document.body.dataset.cursorMeasure)))
+    .toBeGreaterThan(0);
+});
+
 test("solo silences the other strips, and clearing it restores them", async ({ page }) => {
   await page.evaluate(
     (url) => window.renderScoreFromURL(url),

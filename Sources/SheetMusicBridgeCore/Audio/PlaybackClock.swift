@@ -115,6 +115,23 @@ package struct PlaybackClock {
         return result
     }
 
+    /// The player position `cursor` sounds at, or `nil` when the timeline has no
+    /// frame for it.
+    ///
+    /// First occurrence, like every other seek target: a cursor inside a
+    /// repeated measure has one player position per pass, and scheduling is
+    /// restricted to the earliest.
+    package func playerSeconds(atCursor cursor: ScoreCursor) -> TimeInterval? {
+        guard let frame = timeline.frame(forCursor: cursor) else { return nil }
+        return playerSeconds(fromNotated: frame.timeSeconds)
+    }
+
+    /// The cursor sounding at a player position — what a count-in starting
+    /// anywhere but a downbeat needs.
+    package func cursor(atPlayerSeconds playerSeconds: TimeInterval) -> ScoreCursor? {
+        frame(atPlayerSeconds: playerSeconds)?.cursor
+    }
+
     /// A cursor parked on measure `measureIndex`'s downbeat, for the count-in
     /// schedule (`CountInBeats.compute(score:startCursor:)`).
     package func cursorAtMeasureStart(_ measureIndex: Int) -> ScoreCursor? {
