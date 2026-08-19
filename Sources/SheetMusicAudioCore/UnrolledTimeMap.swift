@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 import SheetMusicMIDI
 
 /// Projects a position on the UNROLLED transport's seconds clock onto the NOTATED

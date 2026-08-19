@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Measure-repeat marker (`<MeasureRepeat>` in mscx) — replays the previous N measure(s).
 /// C++: `mu::engraving::MeasureRepeat`.

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>swift-sheet-music — browser viewer</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1c1c1e;
+        --muted: #6c6c70;
+        --line: #d1d1d6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1c1c1e;
+          --fg: #f2f2f7;
+          --muted: #98989d;
+          --line: #3a3a3c;
+        }
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.5 -apple-system,
+          system-ui,
+          sans-serif;
+      }
+      header {
+        display: flex;
+        gap: 1rem;
+        align-items: baseline;
+        flex-wrap: wrap;
+        padding: 1rem;
+        border-bottom: 1px solid var(--line);
+      }
+      h1 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0;
+      }
+      #status {
+        color: var(--muted);
+      }
+      #transport {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--line);
+      }
+      #transport label {
+        display: flex;
+        gap: 0.35rem;
+        align-items: center;
+        color: var(--muted);
+      }
+      #transport input[type="number"] {
+        width: 4rem;
+      }
+      #mixer {
+        display: grid;
+        gap: 0.35rem;
+        padding: 0 1rem;
+      }
+      #mixer:not(:empty) {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .strip {
+        display: grid;
+        grid-template-columns: 10rem auto 4rem 9rem 12rem;
+        gap: 0.6rem;
+        align-items: center;
+      }
+      .strip .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .strip .channel {
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      #pages {
+        padding: 1rem;
+        display: grid;
+        gap: 1rem;
+        justify-items: center;
+      }
+      /*
+        Each tile is its own positioning context so the cursor and the loop
+        highlight can be plain absolutely-positioned elements measured against
+        the canvas they sit on. The layout is one continuous page split across
+        several canvases, so an overlay spanning the whole document would have
+        to redo that split.
+      */
+      .tile {
+        position: relative;
+        line-height: 0;
+      }
+      canvas {
+        /* The engraver draws in black on nothing; the page supplies the paper. */
+        background: #ffffff;
+        box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+        max-width: 100%;
+        height: auto;
+      }
+      .cursor {
+        position: absolute;
+        background: rgb(0 122 255 / 0.35);
+        pointer-events: none;
+      }
+      .loop-highlight {
+        position: absolute;
+        background: rgb(255 204 0 / 0.22);
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>swift-sheet-music</h1>
+      <input
+        id="file"
+        type="file"
+        accept=".mscz,.mscx,.musicxml,.mxl,.mid,.midi"
+      />
+      <span id="status">loading engine…</span>
+    </header>
+    <section id="transport">
+      <label>
+        SoundFont
+        <input id="soundfont" type="file" accept=".sf2,.sf3,.dls" />
+      </label>
+      <button id="play" type="button" disabled>Play</button>
+      <button id="stop" type="button" disabled>Stop</button>
+      <label><input id="countin" type="checkbox" /> count-in</label>
+      <label><input id="metronome" type="checkbox" /> metronome</label>
+      <label>
+        rate
+        <input id="rate" type="range" min="0.25" max="2" step="0.05" value="1" />
+        <span id="rate-readout">1.00×</span>
+      </label>
+      <label>
+        loop
+        <input id="loop-from" type="number" min="1" value="1" />
+        –
+        <input id="loop-to" type="number" min="1" value="1" />
+      </label>
+      <button id="loop-apply" type="button" disabled>Set loop</button>
+      <button id="loop-clear" type="button" disabled>Clear</button>
+      <span id="playback-status"></span>
+    </section>
+    <section id="mixer"></section>
+    <main id="pages"></main>
+    <!--
+      PackageToJS's browser glue imports the WASI shim by bare specifier, which
+      a browser cannot resolve on its own — that is a bundler's job, and this
+      demo deliberately has no bundler so what runs is the package's own output.
+      An import map is the un-bundled equivalent.
+
+      A consuming app that bundles needs none of this; one that does not needs
+      the same three lines.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@bjorn3/browser_wasi_shim": "../../Web/sheet-music-web/node_modules/@bjorn3/browser_wasi_shim/dist/index.js",
+          "spessasynth_lib": "../../Web/sheet-music-web/node_modules/spessasynth_lib/dist/index.js",
+          "spessasynth_core": "../../Web/sheet-music-web/node_modules/spessasynth_core/dist/index.js",
+          "stb-vorbis": "../../Web/sheet-music-web/node_modules/stb-vorbis/dist/index.js"
+        }
+      }
+    </script>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

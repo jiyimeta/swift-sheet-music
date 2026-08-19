@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// The north (above-staff) and south (below-staff) silhouettes of
 /// everything already placed on one staff of one system.

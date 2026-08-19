@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A selectable score item — a specific notehead (`NoteID`), a
 /// rest (`RestID`), a tuplet bracket (`TupletID`), or a clef

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Per-measure container for elements that apply to the whole
 /// system at a given measure position (tempo, rehearsal mark,

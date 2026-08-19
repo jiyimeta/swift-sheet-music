@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Change the duration of a rest with the same MuseScore-equivalent
 /// rebalancing rules as `SetChordDuration`. Shortening fills the

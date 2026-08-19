@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Errors raised by SheetMusic libraries when reading mscx data, building
 /// the score model, or rendering MIDI.
@@ -22,14 +22,23 @@ public enum SheetMusicError: Error, Sendable {
     case invalidEdit(reason: String)
 }
 
-/// Surface the case-specific reason via `localizedDescription` — without this,
-/// callers (and SwiftUI alerts that just print `error.localizedDescription`)
-/// only see "SheetMusicError error N" with no diagnostic payload.
-extension SheetMusicError: LocalizedError {
+// Surface the case-specific reason via `localizedDescription` — without this,
+// callers (and SwiftUI alerts that just print `error.localizedDescription`)
+// only see "SheetMusicError error N" with no diagnostic payload.
+//
+// `LocalizedError` lives in the `Foundation` umbrella, so on platforms that
+// only have `FoundationEssentials` (WebAssembly) the conformance is dropped
+// and `errorDescription` stands on its own. Nothing in the library reads it
+// through the protocol.
+#if !canImport(FoundationEssentials)
+    extension SheetMusicError: LocalizedError {}
+#endif
+
+extension SheetMusicError {
     public var errorDescription: String? {
         switch self {
         case let .invalidXML(underlying):
-            return "Invalid XML: \(underlying.localizedDescription)"
+            return "Invalid XML: \(Self.describe(underlying))"
         case let .malformedScore(reason):
             return reason
         case let .unsupportedFeature(name, location):
@@ -40,9 +49,20 @@ extension SheetMusicError: LocalizedError {
         case let .corruptedContainer(reason):
             return "Corrupted archive: \(reason)"
         case let .ioError(url, underlying):
-            return "I/O error reading \(url.lastPathComponent): \(underlying.localizedDescription)"
+            return "I/O error reading \(url.lastPathComponent): \(Self.describe(underlying))"
         case let .invalidEdit(reason):
             return "Invalid edit: \(reason)"
         }
+    }
+
+    /// `Error.localizedDescription` comes from the `Foundation` umbrella's
+    /// bridging. Without it, fall back to the error's own description — the
+    /// error types this library wraps are `CustomStringConvertible`.
+    private static func describe(_ error: Error) -> String {
+        #if canImport(FoundationEssentials)
+            String(describing: error)
+        #else
+            error.localizedDescription
+        #endif
     }
 }

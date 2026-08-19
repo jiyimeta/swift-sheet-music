@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// An instrument definition attached to a part. C++: `mu::engraving::Instrument`.
 public struct Instrument: Sendable, Equatable {

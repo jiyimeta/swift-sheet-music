@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 extension Score {
     /// Walk forward in the same staff + voice from `voiceElementID`

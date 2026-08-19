@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A4 master-tuning math shared by the Apple and Android playback engines.
 ///

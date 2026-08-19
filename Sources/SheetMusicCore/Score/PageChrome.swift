@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Page-level chrome — headers, footers, and the standalone
 /// page-number renderer that pre-4.4 MuseScore conflated with the

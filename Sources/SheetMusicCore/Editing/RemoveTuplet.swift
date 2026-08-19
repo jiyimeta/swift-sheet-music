@@ -1,5 +1,5 @@
 // swiftlint:disable file_length
-import Foundation
+import SheetMusicFoundation
 
 /// Drop the tuplet that contains the element at `location` and
 /// replace its members with a single chord/rest of the same total

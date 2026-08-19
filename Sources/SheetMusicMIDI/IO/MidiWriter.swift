@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Serializes a `MidiFile` into SMF bytes (format 0/1).
 public enum MidiWriter {

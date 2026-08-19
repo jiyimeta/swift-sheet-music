@@ -1,5 +1,3 @@
-// swiftlint:disable file_length
-import Foundation
 import SheetMusicCore
 import SheetMusicMIDI
 
@@ -11,6 +9,9 @@ private enum TempoRank {
     static let score = 1
     static let fermataOpen = 2
 }
+
+// swiftlint:disable file_length
+import SheetMusicFoundation
 
 /// A pre-computed map from playback time → cursor position, used by
 /// `PlaybackEngine` to drive a MuseScore-style cursor that snaps

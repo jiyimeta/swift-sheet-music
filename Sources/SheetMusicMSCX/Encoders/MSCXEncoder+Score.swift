@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Score {
@@ -187,9 +187,6 @@ extension Score {
     ]
 
     fileprivate static var todayISODate: String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate]
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        return formatter.string(from: Date())
+        ISODate.fullDate(secondsSince1970: Date().timeIntervalSince1970)
     }
 }

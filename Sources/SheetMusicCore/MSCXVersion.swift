@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// MuseScore wire-format major version targeted by the MSCX encoder
 /// and recognized by the MSCX decoder.

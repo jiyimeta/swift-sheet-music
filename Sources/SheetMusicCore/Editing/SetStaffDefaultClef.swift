@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Sets `Staff.defaultClefType` for the staff at `staff`.
 ///

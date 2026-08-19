@@ -2,6 +2,7 @@
     import CoreGraphics
     import Foundation
     @testable import SheetMusicAndroidJNI
+    @testable import SheetMusicBridgeCore
     import SheetMusicCore
     @testable import SheetMusicLayout
     import Testing

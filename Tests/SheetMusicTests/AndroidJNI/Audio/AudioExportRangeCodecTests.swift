@@ -2,6 +2,7 @@
     import Foundation
     @testable import SheetMusicAndroidJNI
     import SheetMusicAudioCore
+    @testable import SheetMusicBridgeCore
     import SheetMusicCore
     import Testing
     import Wirelet

@@ -50,7 +50,7 @@ wirelet {
     swiftPackagePath.set(File(packageRoot, ".build/checkouts/swift-wirelet"))
     sources {
         register("main") {
-            schemaPaths.from(packageRoot.resolve("Sources/SheetMusicAndroidJNI/Draw"))
+            schemaPaths.from(packageRoot.resolve("Sources/SheetMusicBridgeCore/Draw"))
             codecPackage.set("io.github.jiyimeta.sheetmusic.compose.draw")
             modelPackage.set("io.github.jiyimeta.sheetmusic.compose.draw.model")
             // Hand-written model classes are moved into draw/model/ in a later task,

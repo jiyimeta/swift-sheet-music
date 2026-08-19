@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Grace-note category. Subset of MuseScore's `NoteType` (the
 /// non-grace cases — `NORMAL`, `INVALID` — are out of scope here).

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 extension Accidental {
     /// Semitone shift from the natural pitch of the same diatonic letter.

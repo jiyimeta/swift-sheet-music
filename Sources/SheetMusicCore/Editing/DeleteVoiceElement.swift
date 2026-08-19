@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Replaces the chord or rest at `location` with a rest of the same
 /// duration, preserving the measure's tick total. Used for the

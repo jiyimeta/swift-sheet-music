@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Runtime-measured vertical anchoring offset for the SMuFL articulation
 /// glyphs in Bravura.

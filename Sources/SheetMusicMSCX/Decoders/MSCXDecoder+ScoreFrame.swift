@@ -1,11 +1,22 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
-#else
-    // On non-Apple platforms (Android, Linux), swift-corelibs-foundation
-    // provides CGFloat / CGPoint via Foundation.
+#elseif !os(WASI)
+    // Android and Linux take `CGFloat` / `CGPoint` from
+    // swift-corelibs-foundation, and only the umbrella carries them —
+    // `SheetMusicFoundation` resolves to `FoundationEssentials` on both
+    // platforms, which has neither. Same gate, and the same reason, as
+    // `SheetMusicCore`'s own `ScoreFrame.swift`: the Android JNI bridge
+    // depends on those exact types rather than a structurally identical
+    // local copy.
+    //
+    // WASI needs no branch: `SheetMusicCore` declares its own CG types
+    // under `os(WASI)` and this file imports that module, so the umbrella
+    // never reaches the wasm binary.
+    // swiftlint:disable:next no_foundation_umbrella
+    import Foundation
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension ScoreFrame {
@@ -79,5 +90,5 @@ private func stripInlineMarkup(_ s: String) -> String {
         if char == ">" { inTag = false; continue }
         if !inTag { result.append(char) }
     }
-    return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    return result.trimmingWhitespaceAndNewlines()
 }

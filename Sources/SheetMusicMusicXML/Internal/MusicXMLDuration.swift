@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 /// Derives a `NoteDuration` from MusicXML `<type>`, `<dot>`, `<time-modification>`

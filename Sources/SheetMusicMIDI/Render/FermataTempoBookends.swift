@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiRenderer {
     /// One synthesized tempo change bracketing a fermata hold, at a NOTATED (pre-repeat) tick.

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Tiny mutable byte buffer with big-endian append helpers.
 struct BinaryEncoder {

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension LiveChannelPlan {
     /// What a host calls a strip.

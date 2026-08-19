@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// TPC ↔ MIDI helpers for pitch-edit commands.
 ///

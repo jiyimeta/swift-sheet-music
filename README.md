@@ -282,6 +282,25 @@ swift package resolve
 # Open Android/ or Examples/Android/ in Android Studio and Run
 ```
 
+## Browser (WebAssembly)
+
+The same engraver runs in a browser. `Web/sheet-music-web` is an npm package
+wrapping the wasm build with a Canvas2D renderer; see
+[its README](Web/sheet-music-web/README.md) for the consumer-side API, and
+[`Examples/Web/`](Examples/Web/) for a viewer you can open locally.
+
+Display only so far — playback and editing are not exposed to JavaScript yet.
+
+```bash
+Scripts/wasm-build-web.sh                    # wasm + JavaScript glue
+npm --prefix Web/sheet-music-web install
+npm --prefix Web/sheet-music-web run build
+Scripts/web-example-serve.sh                 # http://localhost:8080/Examples/Web/
+```
+
+The download is about 2.4 MB brotli. Cross-compiling needs the same swift.org
+toolchain the Android build does, plus the WebAssembly SDK and `binaryen`.
+
 ### Toolchain: cross-compiling needs the swift.org Swift, not Xcode's
 
 Building for Apple platforms works with whatever Swift ships in Xcode.

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Apply (or clear) an explicit accidental on a note. Mirrors the
 /// accidental tool buttons in MuseScore's toolbar: clicking ♯ on a

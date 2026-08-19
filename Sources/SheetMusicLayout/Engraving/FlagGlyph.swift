@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Pick the SMuFL flag glyph for an unbeamed note of the given duration
 /// and stem direction.

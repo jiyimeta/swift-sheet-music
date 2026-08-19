@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Vibrato line subtype. Controls which SMuFL glyph is repeated along
 /// the vibrato marking and maps to the `<Vibrato><subtype>` token in

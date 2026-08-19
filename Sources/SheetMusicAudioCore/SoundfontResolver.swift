@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Maps a `(bank, program)` tuple to the SoundFont (.sf2) file the
 /// `PlaybackEngine` should load for that voice. App authors implement

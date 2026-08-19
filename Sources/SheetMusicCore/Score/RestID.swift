@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Path-based identity of a rest inside a `Score`.
 public struct RestID: Hashable, Sendable {

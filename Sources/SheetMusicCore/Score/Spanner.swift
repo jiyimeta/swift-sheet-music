@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Generic spanner anchored at one tick and ending at a future tick (next measures away).
 /// Subtypes mscx encodes here: Volta, Slur, HairPin, Pedal, etc.

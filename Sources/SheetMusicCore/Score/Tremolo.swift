@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Beamed-stem tremolo notation. Attached to a `Chord`; for two-note
 /// tremolo, the value is held by the *first* chord of the pair and the

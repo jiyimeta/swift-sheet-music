@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Tempo change. mscx `<tempo>` is in beats per second (a float).
 /// C++: `mu::engraving::TempoText` / `mu::engraving::Tempo`.

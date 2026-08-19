@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension Chord {
     /// This chord's grace chords in the order MuseScore Studio writes

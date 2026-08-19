@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Shared post-processing applied to a rendered `MidiFile` before it is handed to a software MIDI
 /// synth for *playback* (both the Apple `AVAudioSequencer` path and the Android FluidSynth path).

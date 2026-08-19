@@ -7,6 +7,38 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Playback in the browser.** `@jiyimeta/sheet-music-web/playback` plays a score, follows it with
+  a cursor, and supports a measure-range loop with its highlight, a metronome, a count-in, a
+  playback rate and a mixer (per-strip patch, level and mute). The synth is the host's: Swift
+  renders the score and metronome SMFs and answers positional questions, and the default engine is
+  spessasynth_lib, declared as an optional peer dependency so a viewer never downloads one. A
+  different synth can be substituted by implementing `SynthHost`.
+- `mixerStripCount` / `mixerStrip` on the WebAssembly bridge, and `Score.mixerStrips()` on the
+  browser facade. `PlaybackEngine` asserts each strip's patch and level at load and after every
+  transport move — the sequence carries neither, by design, so that a backward seek cannot replay
+  them over a live override.
+- `gmInstrumentNames` / `gmInstrumentFamilies` on the WebAssembly bridge, and
+  `SheetMusic.gmInstruments()` on the browser facade: the 128 General MIDI patches with their
+  families, for a mixer's patch picker. Read out of `SheetMusicAudioCore.GMInstrument`, the same
+  table the iOS and Android mixers show — Android loads it over JNI for the same reason.
+- Eleven `@JS` entry points on the WebAssembly bridge behind that — `renderMidi`,
+  `renderMetronomeMidi`, `renderCountInMetronomeMidi`, `countInSeconds`, `playbackSummary`,
+  `metronomeBeats`, `cursorRectAtPlayerSeconds`, `playerSecondsForMeasure`,
+  `measureIndexAtPlayerSeconds`, `loopPlayerSeconds`, `loopHighlightRects` — plus
+  `buildClickSoundFont`, which the Android bridge has had since the metronome landed.
+- `SheetMusicBridgeCore.PlaybackClock`: the projection between a browser sequencer's seconds clock
+  and the notated score. Android round-trips through unrolled ticks because FluidSynth reports one;
+  a Web Audio sequencer reports seconds, and `UnrolledTimeMap` already speaks them on both sides.
+
+### Changed
+
+- `AudioMidiBridge` and `LoopHighlightTickResolver` moved from `SheetMusicAndroidJNI` to
+  `SheetMusicBridgeCore`, so Android and WebAssembly share one implementation. The `native*` entry
+  points stayed behind — jextract only makes a JNI symbol where the declaration physically sits.
+  No behaviour change on Android.
+
 ## [1.15.0] - 2026-08-17
 
 ### Added

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiRenderer {
     /// How far swing pushes each sounding chord's onset, in ticks, keyed by the chord's

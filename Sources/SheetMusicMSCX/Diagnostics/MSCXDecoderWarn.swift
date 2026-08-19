@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 #if canImport(os)
     import os
 #endif

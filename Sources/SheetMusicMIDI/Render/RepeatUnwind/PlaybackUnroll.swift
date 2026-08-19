@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Maps the sequencer's UNROLLED tick space — the coordinates of the
 /// SMF `MidiRenderer.render(score:)` produces, where repeats and

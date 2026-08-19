@@ -1,6 +1,7 @@
-// swiftlint:disable file_length
-import Foundation
 import SheetMusicCore
+
+// swiftlint:disable file_length
+import SheetMusicFoundation
 import Wirelet
 
 /// Codec for `EditIntent` — the only thing that crosses the JNI boundary during an edit session.

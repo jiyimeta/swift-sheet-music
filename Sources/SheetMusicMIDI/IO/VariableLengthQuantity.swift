@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// SMF variable-length quantity: 7-bit groups, big-endian, MSB set on continuation bytes.
 enum VariableLengthQuantity {

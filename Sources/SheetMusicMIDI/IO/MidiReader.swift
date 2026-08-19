@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Reads SMF (format 0/1) bytes back into a `MidiFile`. Supports
 /// running status, every channel-voice event the renderer can emit,
@@ -159,7 +159,7 @@ public enum MidiReader {
             // which is the permissive behavior we want for SMF.
             // swiftlint:disable:next non_optional_string_data_conversion optional_data_string_conversion
             let name = String(decoding: payload, as: UTF8.self)
-                .trimmingCharacters(in: .controlCharacters)
+                .trimmingControlCharacters()
             events.append(TimedMidiEvent(tick: tick, event: .meta(.trackName(name))))
         case 0x05:
             // Lyrics are decoded verbatim (no control-character trim) so
@@ -171,7 +171,7 @@ public enum MidiReader {
         case 0x06:
             // swiftlint:disable:next non_optional_string_data_conversion optional_data_string_conversion
             let text = String(decoding: payload, as: UTF8.self)
-                .trimmingCharacters(in: .controlCharacters)
+                .trimmingControlCharacters()
             events.append(TimedMidiEvent(tick: tick, event: .meta(.marker(text))))
         case 0x21 where payload.count == 1:
             events.append(TimedMidiEvent(

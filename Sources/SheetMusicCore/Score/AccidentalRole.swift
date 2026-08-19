@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Provenance of a note's accidental: did the engraver compute it
 /// automatically, or did the user force it explicitly?

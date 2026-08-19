@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Non-fatal anomaly observed while parsing a score. Collected by
 /// `MSCXParser.parseWithDiagnostics(...)` / `MSCZReader.parseWithDiagnostics(...)`

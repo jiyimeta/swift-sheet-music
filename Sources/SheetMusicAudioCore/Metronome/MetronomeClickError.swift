@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Errors raised while turning host-supplied click WAVs into a SoundFont.
 ///

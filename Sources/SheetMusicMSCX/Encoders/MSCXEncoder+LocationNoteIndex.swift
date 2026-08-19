@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// MuseScore's `Location::note` — the `<notes>` half of a
 /// `<location>`, identifying *which* note of a chord a connector

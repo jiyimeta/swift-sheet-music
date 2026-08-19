@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// One fermata's hold, expressed against the bar it sits in.
 ///

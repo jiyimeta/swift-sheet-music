@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Inverse of `AddNoteToChord`: drop one note from a chord at the
 /// given `NoteID`. Removing the last note leaves the chord with an

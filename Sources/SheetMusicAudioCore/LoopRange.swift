@@ -1,5 +1,5 @@
 // Sources/SheetMusicAudio/LoopRange.swift
-import Foundation
+import SheetMusicFoundation
 
 /// Half-open tick range `[startTick, endTick)` the engine should
 /// loop while playing. Tick-based rather than cursor-based because

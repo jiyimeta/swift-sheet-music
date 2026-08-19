@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Post-processes a staff's parsed measures to drop `tieForward`/`tieBack`
 /// markers that don't connect to the immediately-following chord of the same

@@ -219,13 +219,22 @@ cross-compile fails with `'semaphore.h' file not found` /
 ### Distribution
 
 The Android libraries are published to GitHub Packages on `v*` tag
-push via `.github/workflows/android-publish.yml`. Two artifacts:
+push via `.github/workflows/android-publish.yml`. Three Gradle modules
+carry publishing configuration:
 
 - `io.github.jiyimeta:sheet-music-android:<v>` — JNI bridge + bundled
   `libSheetMusicJNI.so` (the new home for what used to be the
   example-app's `com.example.sheetmusic.jni` package).
 - `io.github.jiyimeta:sheet-music-audio-android:<v>` — FluidSynth +
   Oboe audio playback. Has `api` dep on `sheet-music-android`.
+- `io.github.jiyimeta:sheet-music-compose-android:<v>` — Compose
+  rendering (`ScorePage`, `BandedScorePage`, the cursor / loop-highlight
+  overlays, `DrawProgramReader`) plus the wirelet codecs generated from
+  `Sources/SheetMusicBridgeCore/Draw`.
+
+All three go out together — `README.md`'s artifact table still lists only
+the first two, and the Compose module is the one without a README of its
+own, but the workflow publishes it.
 
 Consumers need a GitHub PAT with `read:packages`. See
 `Android/SheetMusicAndroid/README.md` for the consumer-side
@@ -383,8 +392,272 @@ SwiftPM swaps the checkout dir for the edit path, and the Gradle
 plugin's `swiftPackagePath` follows along automatically. Run
 `swift package unedit Wirelet` to revert.
 
+## WebAssembly build
+
+WebAssembly is an official swift.org Swift SDK, installed the same way
+as the Android one. The toolchain and SDK versions must match exactly:
+
+```bash
+swift sdk install \
+    https://download.swift.org/swift-6.3.3-release/wasm-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_wasm.artifactbundle.tar.gz \
+    --checksum cabfa08b73bb8ac783927ecd15fa386e99d0c139c5f232445067bcf58379cae7
+```
+
+**Use the open-source swift.org toolchain, not Xcode's** — exactly the
+same trap as the Android build. Xcode's `swift-frontend` has no
+WebAssembly backend and crashes with `No available targets are
+compatible with triple wasm32-unknown-wasip1`:
+
+```bash
+export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+swift build --swift-sdk swift-6.3.3-RELEASE_wasm --target SheetMusicLayout
+```
+
+Beyond the toolchain and SDK, the browser package needs three Homebrew
+formulae: `brotli` (measures the download), `binaryen` (supplies `wasm-opt`,
+which PackageToJS runs by default, so its absence fails the build rather than
+merely skipping optimization), and `woff2` (only when a font is replaced).
+
+Building today: Foundation / Core / XMLTools / Zip / MIDI / Layout /
+MSCX / MusicXML / AudioCore / EditWire / BridgeCore — parse, lay out,
+render MIDI, edit, and drive the bridge layer. UI / PDF / LayoutApple /
+AudioApple are Apple-only.
+
+`SheetMusicBridgeCore` is the platform-neutral half of the old
+`SheetMusicAndroidJNI` — `LayoutBridge`, `AudioMidiBridge`, `PlaybackClock`,
+`DrawProgram`, `HandleTable`, `LayoutDocumentCache`, `PlaybackClockCache`, the
+SMuFL metrics table and the wire codecs. The `native*` entry points could not
+come with it: swift-java's jextract scans only `--input-swift`, the target's own
+source directory (`JExtractSwiftPlugin.swift:72`), so an entry point is a JNI
+symbol only where its file physically sits.
+
+`Sources/SheetMusicWasmBridge` is the wasm counterpart of
+`Sources/SheetMusicAndroidJNI`: `@JS` entry points, one call each into
+`SheetMusicBridgeCore`. BridgeJS imposes the same residency rule as jextract —
+it generates a thunk only for the target it is attached to — but unlike jextract
+it can be attached to a library, and the thunks reach the executable's export
+section without being referenced from it. `Sources/SheetMusicWasmEntry` is a
+one-line executable that exists because PackageToJS packages a *product*; its
+single call is what makes SwiftPM link the library archive at all.
+
+Two things about the surface, both learned the hard way:
+
+- **`Int` is 32 bits on wasm32.** `Int(someInt64)` compiles and traps at
+  runtime. Values whose full 64 bits matter — `engineVersionStamp`,
+  `scoreFingerprint` — cross as decimal strings. `Int64` would lower to a
+  JavaScript `bigint`, which is exact but cannot be carried in the JSON parity
+  fixtures.
+- **A `@JS struct` needs an explicit `public init`.** The memberwise one is
+  internal, and BridgeJS generates a `@_transparent` lowering function that
+  cannot reference an internal declaration.
+
+### Playback: the host owns the synth
+
+The browser owns the synthesizer, exactly as Android's Kotlin host owns
+FluidSynth. Swift hands over the two rendered SMFs (`renderMidi`,
+`renderMetronomeMidi`), a timeline, and geometry; `Web/sheet-music-web/src/playback/`
+owns the transport. The default synth is spessasynth_lib (Apache-2.0), an
+**optional peer dependency** loaded through a dynamic import so a viewer-only
+consumer never downloads a SoundFont engine — and so the wasm module never
+contains one.
+
+SwiftySynth was measured for this and rejected. It cross-compiles cleanly and
+costs ~201 KB brotli once its `Foundation` umbrella imports are shimmed (13.23 MB
+without: the usual ICU signature). The reason not to take it was not size but
+that it leaves the Web Audio plumbing to be designed from scratch — an
+AudioWorklet hosting a wasm module with a WASI shim and JavaScriptKit glue is
+unproven, and the chunk-scheduling alternative delays every live control change
+by a chunk.
+
+**A browser sequencer's clock is seconds, not ticks.** The Android bridge
+round-trips through UNROLLED ticks (`nativeFrameAtTick` /
+`nativeSecondsAtTick` / `nativeUnrolledTickForNotated`) because FluidSynth
+reports one. `PlaybackClock` goes straight through `UnrolledTimeMap`'s seconds
+conversions instead, and every position on the wasm playback surface is in
+PLAYER seconds — the unrolled sequence, longer than the score on anything with
+repeats.
+
+`PlaybackClockCache` keeps one clock per handle because building it walks the
+score twice and the cursor poll asks once per animation frame. It is used only
+by the wasm bridge; the Android bridge still builds its own each call, so this
+cannot regress a platform the Apple CI job does not exercise.
+
+**`renderMidi`'s sequence carries no program and no CC 7, and the host has to
+supply both.** `MidiSynthPostProcess` strips the tick-0 program change and the
+channel volume from every mixer-managed channel so a backward seek cannot replay
+them over a live override — every platform's engine re-asserts them from its
+mixer instead. A host that skips this hears the score, in time, with the right
+cursor, entirely in Acoustic Grand Piano, because that is what a General MIDI
+channel defaults to. `PlaybackEngine.assertMixer` is the web side of that
+contract, driven by `mixerStrip(handle:index:)`.
+
+Percussion is what makes the mistake survivable long enough to ship: channel 9
+selects the drum bank whatever the program says, so the drums sound correct and
+the failure reads as "one odd instrument" rather than "nothing is applied".
+
+`SheetMusicAudioCore` and `SheetMusicEditWire` were out of reach until
+`Wirelet` 0.4.1. Both depend on it, and its source files imported the
+`Foundation` umbrella, which is worth ~10 MB brotli on wasm: adding
+`SheetMusicEditWire` to the size probe took it from 3,514,776 to
+13,654,329 bytes, and the upstream shim brought it back to 3,547,591. The
+codecs themselves cost ~33 KB; everything else was ICU arriving through a
+dependency whose own source never mentions it.
+
+`exact: "0.4.1"` in `Package.swift` is therefore load-bearing, not
+housekeeping. Read the comment there before lowering it.
+
+**Measure wasm sizes from a clean build when a dependency changed.** After
+`swift package edit` swapped the Wirelet checkout, three incremental runs
+in a row reported the unshimmed 13.65 MB from an already-fixed tree — the
+edit path was genuinely in use, verified by injecting a type error the
+compiler duly reported. `rm -rf .build/wasm32-unknown-wasip1` gave 3.55 MB.
+A size that does not move when you expect it to is the symptom.
+
+`SheetMusicZip` needs `zlib`, which the wasm SDK does not ship. The
+raw-DEFLATE subset is vendored at `Sources/zlib` and added to the package
+**only under `SWIFT_SHEET_MUSIC_WASM=1`**, so Apple and Android builds are
+untouched and keep using `Compression` and the system libz respectively.
+See `Sources/zlib/README.md`; re-stage a newer upstream with
+`Scripts/vendor-zlib.sh`.
+
+### Running Swift tests on WebAssembly
+
+```bash
+SWIFT_SHEET_MUSIC_WASM=1 swift package --disable-sandbox \
+    --swift-sdk swift-6.3.3-RELEASE_wasm js test --environment node
+```
+
+**`--disable-sandbox` is not optional.** PackageToJS is a SwiftPM *command*
+plugin, SwiftPM runs command plugins under the macOS sandbox, and this one
+npm-installs the WASI shim its test host needs. Without the flag it fails with
+`ENOTFOUND registry.npmjs.org` — even when the network is fine, which makes the
+error thoroughly misleading.
+
+`isWasm` keeps only the test targets that can cross-compile:
+`SheetMusicWasmBridgeTests` and `SheetMusicAudioCoreTests`. `SheetMusicTests`
+cannot, and **not** for the reason usually given. Its Apple-framework guards are
+spelled `#if !os(Android)`, which is true on WASI — but widening those would not
+help, because the blockers are in the dependency graph: `SheetMusicAudio` →
+`SheetMusicAudioApple` → `CSequencerHostTime` → `AVFAudio/AVFAudio.h`, and
+`SheetMusicAndroidJNI` → SwiftJava. `js test` builds every declared test target,
+so one that cannot cross-compile fails the run before the portable suites speak.
+
+`WasmParityProbe` remains the wasmtime-level check that the vendored zlib
+inflates identically to the platform one:
+
+```bash
+SWIFT_SHEET_MUSIC_WASM=1 swift run WasmParityProbe <file.mscz>
+wasmtime --dir . .build/wasm32-unknown-wasip1/debug/WasmParityProbe.wasm <file.mscz>
+```
+
+**Never give that target a JavaScriptKit dependency.** Linking JavaScriptKit
+adds imports from a JavaScript host, and a module with unresolvable imports
+cannot be instantiated at all — wasmtime would refuse the artifact and this
+comparison would silently stop running. `WasmSizeProbe` may depend on the bridge
+precisely because it is only ever compressed, never executed.
+
+### Size is the constraint — two gates
+
+The `Foundation` umbrella carries ICU and costs ~13 MB brotli;
+`FoundationEssentials` costs ~2.9 MB. The portable targets therefore
+import `SheetMusicFoundation` (see Conventions) and the measured probe
+lands at **3,672,043 bytes brotli** — parse, layout, MIDI, the ZIP
+container, the vendored zlib, the edit-intent codecs and the bridge layer
+together, against a 4 MB ceiling. MSCX and Zip are worth about 166 KB of
+that, the codecs another 33 KB, and `SheetMusicBridgeCore` 124 KB, which
+is what makes keeping the umbrella out the whole ballgame: one file's
+worth of umbrella is two orders of magnitude more than any of them.
+
+**A single plain `import Foundation` anywhere in the portable graph
+undoes all of it**, and nothing in the compiler objects — it builds fine,
+it just quadruples the download. This happened twice while the migration
+was being written, both times from one file, and once from an import
+nested inside a `#if` block.
+
+**First gate — the `no_foundation_umbrella` SwiftLint rule.** Path-scoped
+to the portable targets, `severity: error`, and deliberately blind to
+`#if`, so a conditional import is caught the same as a top-level one. It
+runs in CI, in `Scripts/preflight.sh`, and on commit through
+`pre-commit`, needs no cross-compilation toolchain, and names the file
+and line. A genuinely platform-scoped umbrella import carries a
+`// swiftlint:disable:next no_foundation_umbrella` and a reason —
+`ScoreFrame.swift` is the only one, and the reason there is that Android
+needs corelibs Foundation's own `CGFloat`.
+
+**Second gate — `Scripts/wasm-size.sh`.** Measures rather than reads, so
+it also catches weight arriving through a dependency (`Wirelet` imports
+the umbrella unconditionally) or through an API that pulls ICU without a
+new import. Slower: it needs the swift.org toolchain, the wasm SDK, and
+brotli.
+
+```bash
+Scripts/wasm-size.sh            # fails past a 4 MB brotli ceiling
+Scripts/wasm-size.sh --report   # measure only
+```
+
+It reports **two** numbers and they are not interchangeable:
+
+| | what it measures |
+|---|---|
+| `brotli` | The whole portable graph through `WasmSizeProbe`, unoptimized, with MSCZWriter and EditWire deliberately linked in. The 4 MB ceiling applies to this. Currently 3,785,924 B. |
+| `shipped` | What a page downloads — the PackageToJS artifact after wasm-opt, with only the bridge's own export surface. Currently 2,588,239 B. Needs `Scripts/wasm-build-web.sh` to have run; says so when it has not. |
+
+Playback cost about 10 KB of the first number and 69 KB of the second — small
+because `MidiRenderer.render` was already in the probe's call chain and drags
+most of the timeline machinery along with it, and because the synth is not in
+the graph at all (see below).
+
+The gate stays on the wider number on purpose: a regression in a target the
+browser does not currently reach is still a regression, and the shipped surface
+grows every time an entry point is added.
+
+It builds `Sources/WasmSizeProbe` (added to the manifest only when
+`SWIFT_SHEET_MUSIC_WASM=1` is exported) and brotli-compresses it. The
+probe lays out a score, renders MIDI, then writes and re-reads a `.mscz`,
+so nothing in the measured graph can be stripped as unreachable — a probe
+that merely imports the libraries reports a number that means nothing.
+Anything you add to the wasm surface belongs in that call chain, or the
+gate stops seeing it.
+
+Neither gate subsumes the other: lint catches what the size script cannot
+attribute, and the size script catches what no import scan can see.
+
 ## Conventions
 
+- **Portable targets import `SheetMusicFoundation`, never `Foundation`.**
+  That internal target re-exports `FoundationEssentials` where it exists
+  (WASI, Linux, Android) and `Foundation` on Apple, plus the platform C
+  library — `Foundation` re-exports Darwin/Glibc, so `cos` and friends
+  came along with it and would otherwise vanish. Applies to Core,
+  XMLTools, Zip, MIDI, MSCX, MusicXML, Layout, AudioCore, EditWire,
+  BridgeCore and the `SheetMusic` umbrella. Apple-only targets
+  (LayoutApple, UI, Audio, AudioApple, PDF, RenderPreviews) and
+  `SheetMusicAndroidJNI` keep plain `Foundation`. See "WebAssembly build"
+  for why it matters and how it is enforced.
+  - **`Dispatch` is a re-export too.** The umbrella supplies
+    `DispatchQueue` the same way it supplies `cos`, so dropping it takes
+    both. Use `SerialLock` from `SheetMusicFoundation`, which is a
+    `DispatchQueue` on Apple and Android and a reentrancy-checked flag on
+    WASI, where wasip1 has neither threads nor Dispatch. Its `withLock`
+    closure is synchronous on purpose — that is what makes the WASI
+    branch correct, not merely convenient. Read the file before adding an
+    `async` variant or before building for `wasip1-threads`
+    (`Scripts/wasm-size.sh` refuses that triple).
+  - `CGFloat` / `CGRect` / `CGPoint` are not in `FoundationEssentials`
+    either, and Android used to borrow swift-corelibs-foundation's. A
+    portable file that needs them either anchors to
+    `SheetMusicLayout`'s stubs with a file-scoped
+    `private typealias` under `#if !canImport(CoreGraphics)`, or puts the
+    CoreGraphics-typed API behind `#if canImport(CoreGraphics)` when it
+    is an Apple convenience overload (see `CursorFrameCodec`).
+  - `CharacterSet` is not in `FoundationEssentials`. Use
+    `trimmingHorizontalWhitespace()` / `trimmingWhitespaceAndNewlines()` /
+    `trimmingControlCharacters()` from `SheetMusicFoundation` instead of
+    `trimmingCharacters(in:)`. They are pinned against Foundation's own
+    behaviour by a sweep over every BMP scalar.
+  - `String(format:)`, `ISO8601DateFormatter`, `LocalizedError` and
+    `NSObject` are umbrella-only too. `FormatG`, `ISODate`, and the
+    hand-written XML scanner exist because of that.
 - **Idiomatic Swift naming.** Don't transliterate C++ names. When the
   rename is non-obvious, leave the original as a doc comment, e.g.
   `/// C++: mu::engraving::MasterScore`.
@@ -507,6 +780,39 @@ MuseScore repository root.
 
 ## Recurring pitfalls
 
+- **`Package.resolved` is manifest-shape dependent.** A dependency declared
+  only under `SWIFT_SHEET_MUSIC_WASM` changes `originHash`, so the file's
+  contents come to depend on which shape ran last. JavaScriptKit is therefore
+  declared unconditionally — Apple and Android never link it, and the cost is
+  one fetch. Make the same call for the next wasm-only dependency.
+- **Byte-for-byte parity between builds needs the same `FontMetricsProvider`.**
+  `bravura.smft` is generated from CoreText but is not CoreText: values are
+  stored as `Float` at a 1000 pt reference and rescaled at lookup, so glyph
+  positions differ in their low bits. Engraving through CoreText on one side and
+  the table on the other gives draw programs of identical length and shape whose
+  bytes differ — a true statement about two providers that says nothing about
+  the build under test. `Tools/GenWebFixtures` installs the table for exactly
+  this reason.
+- **A playback fixture without a repeat proves nothing.** `UnrolledTimeMap` is
+  the identity on a score with no repeat plan, so the notated and player clocks
+  coincide and every conversion `PlaybackClock` performs is a no-op — an
+  implementation that dropped the projection entirely passes. `repeat.mscz`
+  exists for this: notated 6.0 s against player 8.0 s, measures starting at
+  player 0 / 2 / 6 where the notated starts are 0 / 2 / 4. Any new assertion
+  about a playback position belongs on that fixture, not on `sample.mscz`.
+- **A fixture whose parts are all piano cannot catch a missing program.**
+  Program 0 is both what such a score asks for and what a General MIDI channel
+  falls back to when nobody asserts anything, so "the patch was applied" and
+  "nothing was applied" are the same observation. `mixer.mscz` exists for this —
+  two melodic parts on different non-zero patches plus a drum part, with three
+  different volumes. The bug it now pins shipped once already.
+- **`unrolledSeconds(fromNotated:)` answers with the FIRST occurrence.** That is
+  correct for a seek, a play-from and a loop wrap — the coordinates
+  `PlaybackUnroll` restricts scheduling to — and wrong for "where on the
+  player's clock does THIS measure-play sit". Asking it that question puts every
+  beat of a repeat's second pass back on the first pass's time.
+  `PlaybackClock.playerSecondsForUnrolledTick` resolves against the span
+  instead, which is why it keeps its own copy of the span accumulation.
 - **macOS `sed -i` syntax**: BSD sed (default on macOS) doesn't accept
   the GNU `c\` form for line replacement. Prefer `awk` for line-aware
   text rewrites.
@@ -555,7 +861,7 @@ MuseScore repository root.
 - **wirelet `schemaPaths` scans exactly one directory**: each module's
   `wirelet { sources { register("main") { schemaPaths.from(...) } } }`
   block (e.g. `Android/SheetMusicAndroid/build.gradle.kts`, which
-  points at `Sources/SheetMusicAndroidJNI/Metadata`) generates Kotlin
+  points at `Sources/SheetMusicBridgeCore/Metadata`) generates Kotlin
   codecs only for `@WireFormat` types physically located under that
   path. A type declared outside it produces no codec and no error or
   warning — the build just silently omits it. Keep every `@WireFormat`
@@ -574,7 +880,7 @@ MuseScore repository root.
   A `schemaPaths` entry must resolve to exactly one directory (the plugin
   throws otherwise), so a second scan root needs a second
   `sources { register("…") }` — see `:SheetMusicAudioAndroid`, which
-  registers `main` (`Sources/SheetMusicAndroidJNI/Audio`) plus `editWire`
+  registers `main` (`Sources/SheetMusicBridgeCore/Audio`) plus `editWire`
   (`Sources/SheetMusicEditWire/Path`) under one codec/model package pair.
   The plugin only auto-wires a source set literally named `main` into the
   Android variants, so any other name needs its output dir added to
@@ -583,3 +889,40 @@ MuseScore repository root.
   Kotlin models exist under `audio/model/`) and `Intent/` (not scanned) for
   exactly this reason — adding a type to `Path/` emits a Kotlin codec that
   expects a hand-written model class of the same name.
+
+  **Find every scanner before moving a directory, and do it by searching,
+  not by listing modules you remember.** Four Gradle files scan Swift
+  directories, and one of them is outside `Android/`:
+
+      grep -rn "Sources/SheetMusic" --include="*.kts" Android Examples
+
+  `:SheetMusicAndroid` (`Metadata`), `:SheetMusicAudioAndroid` (`Audio` +
+  `SheetMusicEditWire/Path`), `:SheetMusicComposeAndroid` (`Draw`) and
+  `Examples/Android/app` (`Draw`). Extracting `SheetMusicBridgeCore`
+  updated the first two and broke the other two, because the search was
+  two named files rather than the tree.
+
+  **A green Gradle run is not evidence that a `schemaPaths` change took
+  effect.** `schemaPaths` is `@Internal`; what Gradle tracks is
+  `swiftSourceFiles`, a `FileTree` under it with
+  `@PathSensitive(PathSensitivity.RELATIVE)`
+  (`GenerateWireletCodecs.kt:43-55`). Move the same file names with the
+  same contents to a different parent and the fingerprint is unchanged, so
+  the task stays `UP-TO-DATE` and the old output is reused — correctly, but
+  proving nothing. When you move a scan directory, delete
+  `Android/*/build/generated/wirelet/` first, then diff the regenerated
+  `*.kt` against a snapshot taken before the move.
+
+- **`Scripts/android-build-libs.sh` mirrors a directory SwiftPM never
+  cleans.** It `rm -rf`s
+  `Android/SheetMusicAndroid/src/main/java-generated/` and re-copies from
+  the jextract prebuild-plugin output under
+  `.build/plugins/outputs/.../JExtractSwiftPlugin/`. SwiftPM does not
+  remove stale files from *that* directory, so classes whose Swift
+  declarations have been deleted or moved keep being staged, and the local
+  tree ends up with generated Java that a clean checkout would never
+  produce. `java-generated/` is gitignored, so nothing flags it. After a
+  refactor that removes public declarations, `rm -rf` the plugin output
+  directory and rebuild before believing the staged set. Extracting
+  `SheetMusicBridgeCore` took the real output from 39 files to 3; the
+  stale copies were only visible by mtime.

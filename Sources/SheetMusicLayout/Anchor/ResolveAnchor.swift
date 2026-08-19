@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Continuous musical position resolved from a document-space point — the inverse of `anchorReferencePoint`. Unlike
 /// `nearestCursor`, it never snaps to a playable event and never returns `nil` for empty measures: it yields the

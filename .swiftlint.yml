@@ -234,6 +234,16 @@ analyzer_rules:
 included:
   - Sources
   - Tests
+  # Build-time generators for the WebAssembly package's assets. Not products,
+  # but Swift source that CI should hold to the same rules — without this the
+  # argument-less invocation CI uses skips them entirely.
+  - Tools
+  # The manifest is Swift source too, and the pre-commit hook lints it
+  # either way — it passes staged paths explicitly, so `included:` does not
+  # apply there. Listing it keeps CI and the hook looking at the same set;
+  # without it a manifest violation only ever surfaces on the machine that
+  # happens to have the hook installed.
+  - Package.swift
 
 excluded:
   - "**/.build"
@@ -310,4 +320,34 @@ custom_rules:
     match_kinds:
       - comment
     message: "Disable/enable pair blocks are not allowed; use :next / :previous / :this to scope individual lines."
+    severity: error
+  # The portable targets reach Foundation through `SheetMusicFoundation`,
+  # which resolves to `FoundationEssentials` on WASI / Linux / Android and
+  # to `Foundation` on Apple. Importing the umbrella directly links ICU
+  # into the WebAssembly binary: measured at ~13 MB brotli against ~3.2 MB,
+  # from as little as one file. Nothing in the compiler objects — it builds
+  # on every platform, it just quadruples the download — so this rule is
+  # the fast half of the gate and `Scripts/wasm-size.sh` is the slow half
+  # that also catches regressions coming in through a dependency.
+  #
+  # Deliberately blind to `#if`: both regressions during the migration came
+  # from imports that were nested in a conditional, and one of them was
+  # under a branch that is live on WASI. A genuinely platform-scoped import
+  # is rare enough to carry a `// swiftlint:disable:next` and a reason.
+  #
+  # `Foundation\b` does not match `FoundationEssentials` or
+  # `SheetMusicFoundation`, so only the umbrella and its two satellite
+  # modules trip this.
+  no_foundation_umbrella:
+    name: "Foundation Umbrella In Portable Target"
+    # One regex rather than an alternation list so the trailing slash can
+    # do the disambiguating: `SheetMusicLayout/` is in scope while
+    # `SheetMusicLayoutApple/` is not, `SheetMusicAudioCore/` is while
+    # `SheetMusicAudio/` is not, and `SheetMusicFoundation/` — the shim,
+    # which has to import the umbrella — is excluded by not being listed.
+    # `WasmSizeProbe` is here because an umbrella import there would fail
+    # the size gate while the libraries were in fact still clean.
+    included: 'Sources/(?:SheetMusic(?:Core|XMLTools|Zip|MIDI|MSCX|MusicXML|Layout|AudioCore|EditWire|BridgeCore|WasmBridge)?|WasmSizeProbe)/'
+    regex: '(?m)^[ \t]*(?:@[A-Za-z_]+[ \t]+)*import[ \t]+(?:(?:class|struct|enum|protocol|typealias|func|var|let)[ \t]+)?Foundation(?:XML|Networking)?\b'
+    message: "Portable targets must import SheetMusicFoundation, not the Foundation umbrella — it links ICU into the WebAssembly binary (~13 MB brotli vs ~3.2 MB). See Sources/SheetMusicFoundation."
     severity: error

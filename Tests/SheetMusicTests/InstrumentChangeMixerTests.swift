@@ -3,6 +3,7 @@
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicAudioApple
     @testable import SheetMusicAudioCore
+    @testable import SheetMusicBridgeCore
     @testable import SheetMusicCore
     @testable import SheetMusicMIDI
     @testable import SheetMusicMSCX

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A rehearsal letter / number ("A", "B", "1サビ", …) attached to a
 /// position within a voice. Visually drawn once per system above the

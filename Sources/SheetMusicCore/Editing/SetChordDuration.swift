@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Change the duration of a chord, mirroring MuseScore's
 /// `Score::changeCRlen` (`engraving/editing/cmd.cpp:1692`):

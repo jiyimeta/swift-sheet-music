@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// One strip in the mixer — a per-(part × instrument) channel or the
 /// metronome. The host app reads the array to render UI and calls

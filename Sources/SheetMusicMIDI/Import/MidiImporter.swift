@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Public façade for reading SMF bytes into a `Score`.
 ///

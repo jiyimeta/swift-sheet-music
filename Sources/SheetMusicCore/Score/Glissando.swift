@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A glissando attached to a note, pointing at the next chord's note.
 /// C++: `mu::engraving::Glissando` (subset).

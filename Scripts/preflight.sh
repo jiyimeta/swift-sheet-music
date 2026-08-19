@@ -8,8 +8,9 @@
 # for Android changes, which CI only verifies post-merge to main.
 #
 # Usage:
-#   Scripts/preflight.sh              # full suite (Apple + Android)
+#   Scripts/preflight.sh              # full suite (Apple + wasm + Android)
 #   Scripts/preflight.sh --apple      # Apple/SwiftPM tests only (fast)
+#   Scripts/preflight.sh --wasm       # WebAssembly: Swift tests, size gate, browser package
 #   Scripts/preflight.sh --android    # Android cross-compile + Kotlin tests + AAR
 #
 # Requirements for the Android stage mirror CLAUDE.md "Android build":
@@ -21,12 +22,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 
 run_apple=1
+run_wasm=1
 run_android=1
 case "${1:-}" in
-    --apple)   run_android=0 ;;
-    --android) run_apple=0 ;;
+    --apple)   run_wasm=0; run_android=0 ;;
+    --wasm)    run_apple=0; run_android=0 ;;
+    --android) run_apple=0; run_wasm=0 ;;
     "")        ;;
-    *) echo "usage: $0 [--apple|--android]" >&2; exit 2 ;;
+    *) echo "usage: $0 [--apple|--wasm|--android]" >&2; exit 2 ;;
 esac
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
@@ -52,13 +55,50 @@ if [[ "$run_apple" == 1 ]]; then
     # the example app is formatter-clean and the pre-commit hook formats
     # it, so check it here too.
     step "Apple / SwiftPM: swiftformat"
-    (cd "$ROOT" && swiftformat Sources Tests Examples --lint)
+    (cd "$ROOT" && swiftformat Sources Tests Examples Tools --lint)
 
     step "Apple / SwiftPM: swift build"
     swift build --package-path "$ROOT"
 
     step "Apple / SwiftPM: swift test"
     swift test --package-path "$ROOT"
+fi
+
+if [[ "$run_wasm" == 1 ]]; then
+    if TOOLCHAIN_BIN="$("$ROOT/Scripts/swift-org-toolchain.sh")"; then
+        export PATH="$TOOLCHAIN_BIN:$PATH"
+    fi
+
+    # --disable-sandbox is required: PackageToJS is a SwiftPM command plugin,
+    # SwiftPM sandboxes command plugins, and this one npm-installs the WASI
+    # shim its test host needs. Without the flag it fails with ENOTFOUND
+    # against the npm registry even when the network is fine.
+    step "WebAssembly: Swift Testing on the wasm SDK"
+    SWIFT_SHEET_MUSIC_WASM=1 swift package --package-path "$ROOT" \
+        --disable-sandbox --swift-sdk swift-6.3.3-RELEASE_wasm \
+        js test --environment node
+
+    # Before the size gate, which reports the shipped artifact's size and can
+    # only do so once this has produced one.
+    step "WebAssembly: build the browser bundle"
+    "$ROOT/Scripts/wasm-build-web.sh"
+
+    step "WebAssembly: size gate"
+    "$ROOT/Scripts/wasm-size.sh"
+
+    step "WebAssembly: browser package tests"
+    npm --prefix "$ROOT/Web/sheet-music-web" run build
+    npm --prefix "$ROOT/Web/sheet-music-web" test
+
+    # Playwright's browsers are a 180 MB download, so this stage assumes they
+    # are already installed rather than fetching them on every preflight:
+    #   npx --prefix Web/sheet-music-web playwright install chromium chromium-headless-shell
+    if [[ -d "$HOME/Library/Caches/ms-playwright" ]]; then
+        step "WebAssembly: browser rendering tests"
+        npm --prefix "$ROOT/Web/sheet-music-web" run test:e2e
+    else
+        step "WebAssembly: skipping rendering tests — Playwright browsers not installed"
+    fi
 fi
 
 if [[ "$run_android" == 1 ]]; then
@@ -94,9 +134,16 @@ if [[ "$run_android" == 1 ]]; then
     "$ROOT/Android/gradlew" -p "$ROOT/Android" \
         :SheetMusicAudioAndroid:testDebugUnitTest
 
-    step "Android: assemble release AAR"
+    # Every published module, not just the one that transitively pulls the others in.
+    # :SheetMusicAudioAndroid depends on :SheetMusicAndroid, so those two were covered
+    # by the single call this replaced — :SheetMusicComposeAndroid depends on neither and
+    # was therefore never built by any gate, local or CI, despite being published and
+    # consumed. Extracting SheetMusicBridgeCore moved the directory its wirelet
+    # `schemaPaths` scans and nothing noticed; the module is in the list for that reason.
+    step "Android: assemble release AARs"
     "$ROOT/Android/gradlew" -p "$ROOT/Android" \
-        :SheetMusicAudioAndroid:assembleRelease
+        :SheetMusicAudioAndroid:assembleRelease \
+        :SheetMusicComposeAndroid:assembleRelease
 fi
 
 printf '\n\033[1;32m✓ preflight passed\033[0m\n'

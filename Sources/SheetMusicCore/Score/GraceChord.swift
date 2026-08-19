@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A grace-note chord that rides on a `Chord`'s `graceNotesBefore`
 /// or `graceNotesAfter` rather than living in `Voice.elements`.

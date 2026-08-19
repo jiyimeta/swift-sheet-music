@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A deterministic 64-bit digest of everything score *editing* can change, for comparing two copies of a score that
 /// live in different processes or — on Android — in two separately linked images of this module.

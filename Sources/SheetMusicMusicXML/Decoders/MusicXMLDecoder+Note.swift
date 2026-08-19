@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 /// Decodes one MusicXML `<note>` element. Returns either a new `VoiceElement`

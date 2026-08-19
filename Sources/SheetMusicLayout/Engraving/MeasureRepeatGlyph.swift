@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// SMuFL codepoint selection for the standard measure-repeat glyphs
 /// (1, 2, or 4 bars). Unknown counts fall back to the 1-bar symbol,

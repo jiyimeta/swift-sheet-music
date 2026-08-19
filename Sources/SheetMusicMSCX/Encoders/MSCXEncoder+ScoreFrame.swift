@@ -4,8 +4,8 @@
     // On non-Apple platforms (Android, Linux), swift-corelibs-foundation
     // provides CGFloat / CGPoint via Foundation.
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension ScoreFrame {
@@ -16,7 +16,7 @@ extension ScoreFrame {
         var children: [XMLTreeNode] = [
             XMLTreeNode(
                 name: "height",
-                text: String(format: "%g", Double(heightSp)),
+                text: FormatG.string(Double(heightSp)),
             ),
         ]
         for text in texts {
@@ -41,15 +41,15 @@ extension FrameText {
         if let fontSize {
             children.append(XMLTreeNode(
                 name: "size",
-                text: String(format: "%g", fontSize),
+                text: FormatG.string(fontSize),
             ))
         }
         if let offsetMm {
             children.append(XMLTreeNode(
                 name: "offset",
                 attributes: [
-                    "x": String(format: "%g", Double(offsetMm.x)),
-                    "y": String(format: "%g", Double(offsetMm.y)),
+                    "x": FormatG.string(Double(offsetMm.x)),
+                    "y": FormatG.string(Double(offsetMm.y)),
                 ],
             ))
         }

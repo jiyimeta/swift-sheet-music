@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// SMuFL codepoint selector for chord-articulation glyphs (staccato,
 /// staccatissimo, tenuto, accent, marcato, plus the accent+staccato

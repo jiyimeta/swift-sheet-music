@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension LayoutDocument {
     /// Document-space reference point for the `(measure, tick, staff)` part of a musical anchor: the x of the tick

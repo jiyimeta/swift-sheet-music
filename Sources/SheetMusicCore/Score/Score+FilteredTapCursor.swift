@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 extension Score {
     /// `nearestCursor` runs against a `LayoutDocument` built from the filtered score, so the

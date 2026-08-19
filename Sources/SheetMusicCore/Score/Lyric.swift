@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Where a syllable sits inside a hyphenated word. Mirrors
 /// MuseScore's `<syllabic>` mscx element.

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A single, undoable mutation applied to a `Score`.
 ///

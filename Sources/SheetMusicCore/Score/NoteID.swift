@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Path-based identity of a `Note` inside a `Score`. Walks
 /// `score.parts[staff.partIndex].staves[staff.staffIndexInPart]

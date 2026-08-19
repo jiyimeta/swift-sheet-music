@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Jump / marker (D.C. / D.S. / Fine / Coda) handling for
 /// `RepeatUnwinder`. Swift reimplementation — studied from, not

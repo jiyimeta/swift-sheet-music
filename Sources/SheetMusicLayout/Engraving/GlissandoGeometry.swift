@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Glissando line geometry: straight or wavy line between two
 /// noteheads, with an optional centered text label whose baseline

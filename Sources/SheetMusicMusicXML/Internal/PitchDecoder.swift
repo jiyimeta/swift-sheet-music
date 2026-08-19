@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 /// Converts MusicXML `<pitch>` elements to MuseScore-style `(midi, tpc)` pairs.

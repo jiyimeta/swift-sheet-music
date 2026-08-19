@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Builds a ZIP archive in memory. Scope mirrors ZipReader's accepted
 /// feature set: STORED or DEFLATE entries, UTF-8 names (gp bit 11 set),
