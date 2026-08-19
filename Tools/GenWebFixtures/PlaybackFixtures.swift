@@ -62,9 +62,16 @@ extension GenWebFixtures {
     /// mixer exists to prevent would pass unnoticed. The volumes differ from
     /// each other and from `InstrumentChannel`'s default 100 for the same
     /// reason.
+    /// The drum part plays notes 76 and 77 on purpose. They are the two the
+    /// browser test's generated click bank defines, so an export of this score
+    /// through that bank produces audible samples — which is what lets the test
+    /// tell a broken offline render from a correct one. Every other note in a
+    /// two-sample bank is silent, and a silent render of the right length is
+    /// exactly what a misconfigured `startOfflineRender` produces.
     static var mixerScore: Score {
         func part(id: String, name: String, program: Int, drums: Bool, volume: Int) -> Part {
-            let elements: [VoiceElement] = [60, 62, 64, 65].map { pitch in
+            let pitches = drums ? [76, 77, 76, 77] : [60, 62, 64, 65]
+            let elements: [VoiceElement] = pitches.map { pitch in
                 .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: pitch, tpc: 14)])))
             }
             return Part(

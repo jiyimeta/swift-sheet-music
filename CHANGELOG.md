@@ -19,6 +19,13 @@ and this project adheres to
   browser facade. `PlaybackEngine` asserts each strip's patch and level at load and after every
   transport move — the sequence carries neither, by design, so that a backward seek cannot replay
   them over a live override.
+- **Audio export in the browser.** `PlaybackEngine.exportWav()` renders the score — or a measure
+  range — to 16-bit PCM offline and faster than real time, carrying the mixer as it stands. The
+  mixer travels as a snapshot of the live synth rather than being re-applied, so the file cannot
+  drift from what is being heard. `encodeWav` is exported separately, and `SynthHost.renderOffline`
+  is the optional seam a custom synth implements — the counterpart of Apple's
+  `SynthBackend.makeOfflineInstance`. WAV only for now: M4A and MP3 need WebCodecs or
+  `MediaRecorder`.
 - `gmInstrumentNames` / `gmInstrumentFamilies` on the WebAssembly bridge, and
   `SheetMusic.gmInstruments()` on the browser facade: the 128 General MIDI patches with their
   families, for a mixer's patch picker. Read out of `SheetMusicAudioCore.GMInstrument`, the same

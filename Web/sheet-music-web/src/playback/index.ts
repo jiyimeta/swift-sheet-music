@@ -13,11 +13,13 @@
  */
 export { createPlaybackEngine, PlaybackEngine } from "./engine.js";
 export type {
+  AudioExportOptions,
   FrameScheduler,
   MixerChannelState,
   PlaybackEngineOptions,
   PlaybackState,
 } from "./engine.js";
+export { encodeWav, sliceBuffer } from "./wav.js";
 export { createSpessaSynthHost } from "./synth.js";
 export type { SpessaSynthHostOptions } from "./synth.js";
 export type { SynthHost, SynthTransport } from "./types.js";
