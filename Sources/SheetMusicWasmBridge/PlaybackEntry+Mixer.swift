@@ -1,4 +1,5 @@
 import JavaScriptKit
+import SheetMusicAudioCore
 import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicFoundation
@@ -62,6 +63,26 @@ import SheetMusicMIDI
         self.volume = volume
         self.displayName = displayName
     }
+}
+
+/// The 128 General MIDI patch names, in program order — index 0 is program 0.
+///
+/// Single-sourced from `SheetMusicAudioCore.GMInstrument` for the same reason
+/// Android loads it over JNI (`nativeGMInstrumentList`) rather than keeping a
+/// Kotlin copy: a second transcription of 128 names is a second thing to get
+/// wrong, and nothing would notice for a long time.
+///
+/// Takes no handle — it is a constant table, not a property of a score. Call it
+/// once and cache it; the strings cross the bridge each time.
+@JS public func gmInstrumentNames() -> [String] {
+    GMInstrument.all.map(\.name)
+}
+
+/// The GM family each program belongs to, parallel to `gmInstrumentNames()` —
+/// index 0 is program 0's family. Sixteen distinct strings, repeated; for
+/// grouping a patch picker into "Piano", "Bass", "Synth Lead" and so on.
+@JS public func gmInstrumentFamilies() -> [String] {
+    GMInstrument.all.map(\.family.rawValue)
 }
 
 /// How many mixer strips `handle` has. `0` for an unknown handle.

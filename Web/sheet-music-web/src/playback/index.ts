@@ -23,6 +23,7 @@ export type { SpessaSynthHostOptions } from "./synth.js";
 export type { SynthHost, SynthTransport } from "./types.js";
 export type {
   CursorRect,
+  GMInstrument,
   MeasureRange,
   MixerStrip,
   PlaybackSummary,

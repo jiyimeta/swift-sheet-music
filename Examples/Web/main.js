@@ -194,13 +194,41 @@ function resetPlayback() {
 }
 
 /**
- * One row per mixer strip: patch, level, mute.
+ * The 128 General MIDI patches, grouped by family, built once.
  *
- * The patch picker is a plain number input rather than a 128-entry list of GM
- * names — the names live in `SheetMusicAudioCore.GMInstrument`, which the wasm
- * bridge does not expose yet, and inventing a second copy of that table here is
- * exactly the kind of drift the shared one exists to prevent.
+ * Read out of the engine rather than transcribed here — it is the same table
+ * the iOS and Android mixers show, and a second copy would drift silently.
  */
+let gmOptionGroups = null;
+
+function gmPatchSelect(selected) {
+  if (gmOptionGroups === null) {
+    gmOptionGroups = new Map();
+    for (const instrument of sheetMusic.gmInstruments()) {
+      if (!gmOptionGroups.has(instrument.family)) {
+        gmOptionGroups.set(instrument.family, []);
+      }
+      gmOptionGroups.get(instrument.family).push(instrument);
+    }
+  }
+  const select = document.createElement("select");
+  select.className = "patch";
+  for (const [family, instruments] of gmOptionGroups) {
+    const group = document.createElement("optgroup");
+    group.label = family;
+    for (const instrument of instruments) {
+      const option = document.createElement("option");
+      option.value = String(instrument.program);
+      option.textContent = `${instrument.program}. ${instrument.name}`;
+      group.append(option);
+    }
+    select.append(group);
+  }
+  select.value = String(selected);
+  return select;
+}
+
+/** One row per mixer strip: patch, level, mute. */
 function buildMixer() {
   mixerHost.replaceChildren();
   if (!engine) return;
@@ -243,16 +271,11 @@ function buildMixer() {
       // whatever the program says.
       patch.textContent = "drum kit";
     } else {
-      const patchInput = document.createElement("input");
-      patchInput.type = "number";
-      patchInput.min = "0";
-      patchInput.max = "127";
-      patchInput.value = String(channel.program);
-      patchInput.className = "patch";
-      patchInput.addEventListener("change", () => {
-        engine?.setStripProgram(midi, Number(patchInput.value));
+      const select = gmPatchSelect(channel.program);
+      select.addEventListener("change", () => {
+        engine?.setStripProgram(midi, Number(select.value));
       });
-      patch.append(document.createTextNode("GM patch "), patchInput);
+      patch.append(select);
     }
 
     row.append(name, chan, mute, level, patch);

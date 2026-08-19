@@ -19,6 +19,10 @@ and this project adheres to
   browser facade. `PlaybackEngine` asserts each strip's patch and level at load and after every
   transport move — the sequence carries neither, by design, so that a backward seek cannot replay
   them over a live override.
+- `gmInstrumentNames` / `gmInstrumentFamilies` on the WebAssembly bridge, and
+  `SheetMusic.gmInstruments()` on the browser facade: the 128 General MIDI patches with their
+  families, for a mixer's patch picker. Read out of `SheetMusicAudioCore.GMInstrument`, the same
+  table the iOS and Android mixers show — Android loads it over JNI for the same reason.
 - Eleven `@JS` entry points on the WebAssembly bridge behind that — `renderMidi`,
   `renderMetronomeMidi`, `renderCountInMetronomeMidi`, `countInSeconds`, `playbackSummary`,
   `metronomeBeats`, `cursorRectAtPlayerSeconds`, `playerSecondsForMeasure`,

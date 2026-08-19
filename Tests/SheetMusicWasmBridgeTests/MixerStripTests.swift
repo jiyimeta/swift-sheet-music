@@ -103,6 +103,24 @@ struct MixerStripTests {
         #expect(drumChannels == [9])
     }
 
+    /// The patch names a mixer's picker shows, single-sourced from the engine
+    /// rather than transcribed on each host.
+    @Test("the General MIDI table crosses the bridge intact")
+    func gmTableCrossesIntact() {
+        let names = gmInstrumentNames()
+        let families = gmInstrumentFamilies()
+        #expect(names.count == 128)
+        #expect(families.count == 128)
+        // Spot-checks at both ends and on the two patches the reported bug was
+        // about, so a mis-indexed table cannot read as correct.
+        #expect(names.first == "Acoustic Grand Piano")
+        #expect(names[33] == "Electric Bass (finger)")
+        #expect(names[84] == "Lead 5 (charang)")
+        #expect(families[33] == "Bass")
+        #expect(families[84] == "Synth Lead")
+        #expect(Set(families).count == 16)
+    }
+
     /// Pins the premise. If the renderer ever stopped stripping, the host would
     /// be asserting programs on top of a sequence that already sets them, and a
     /// backward seek would start fighting the mixer.

@@ -131,9 +131,20 @@ test("builds a mixer strip per part, carrying the score's patches", async ({ pag
       nodes.map((node) => (node as HTMLInputElement).value),
     );
   // Bass is GM 33 (finger bass) and Lead GM 84 (charang); a drum strip has no
-  // patch input at all. Reading 0 here would be the reported bug.
+  // patch picker at all. Reading 0 here would be the reported bug.
   expect(await values(".strip .patch")).toEqual(["33", "84"]);
   expect(await values(".strip .level")).toEqual(["92", "64", "110"]);
+
+  // The picker shows the engine's own General MIDI table, grouped by family,
+  // rather than bare patch numbers or a second transcription of the names.
+  const selected = await page.$$eval(".strip .patch", (nodes) =>
+    nodes.map((node) => {
+      const select = node as HTMLSelectElement;
+      return select.options[select.selectedIndex]?.textContent ?? "";
+    }),
+  );
+  expect(selected).toEqual(["33. Electric Bass (finger)", "84. Lead 5 (charang)"]);
+  expect(await page.locator(".strip .patch").first().locator("option")).toHaveCount(128);
 });
 
 test("the count-in holds the score until the pre-roll ends", async ({ page }) => {

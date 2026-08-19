@@ -168,6 +168,16 @@ interface BridgeExports {
   ): number[] | Uint8Array;
   mixerStripCount(handle: number): number;
   mixerStrip(handle: number, index: number): MixerStrip | null;
+  gmInstrumentNames(): string[];
+  gmInstrumentFamilies(): string[];
+}
+
+/** One General MIDI patch: its program number, name and family. */
+export interface GMInstrument {
+  readonly program: number;
+  readonly name: string;
+  /** One of the sixteen GM families — "Piano", "Bass", "Synth Lead", … */
+  readonly family: string;
 }
 
 /**
@@ -436,6 +446,26 @@ export class SheetMusic {
    */
   buildClickSoundFont(strongWav: Uint8Array, weakWav: Uint8Array): Uint8Array {
     return asBytes(this.bridge.buildClickSoundFont(strongWav, weakWav));
+  }
+
+  /**
+   * The 128 General MIDI patches, in program order — for a mixer's patch
+   * picker.
+   *
+   * The same table the iOS and Android libraries use, read out of the engine
+   * rather than transcribed here: a second copy of 128 names is a second thing
+   * to get wrong, and it would take a long time for anyone to notice.
+   *
+   * A constant, so cache the result — every call re-crosses the bridge.
+   */
+  gmInstruments(): GMInstrument[] {
+    const names = this.bridge.gmInstrumentNames();
+    const families = this.bridge.gmInstrumentFamilies();
+    return names.map((name, program) => ({
+      program,
+      name,
+      family: families[program] ?? "",
+    }));
   }
 
   /**

@@ -116,6 +116,11 @@ for (const channel of engine.mixerChannels()) {
 engine.setStripProgram(channel, 48); // GM patch; ignored on a drum strip
 engine.setStripVolume(channel, 100); // CC 7, 0–127
 engine.setStripMuted(channel, true);
+
+// The 128 GM patches for a picker, grouped by family. A constant — cache it.
+for (const { program, name, family } of sheetMusic.gmInstruments()) {
+  console.log(program, name, family); // 33 "Electric Bass (finger)" "Bass"
+}
 ```
 
 `PlaybackEngine` asserts every strip's patch and level itself — at load and
