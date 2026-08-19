@@ -88,6 +88,8 @@ await engine.play({ countIn: true });
 engine.setLoop({ fromMeasureIndex: 0, toMeasureExclusive: 4 });
 engine.setRate(0.75);
 engine.setMetronomeMuted(false);
+engine.seekToMeasure(8);
+engine.seekToPoint(xMM, yMM); // click-to-seek; nearest element, not a hit-test
 ```
 
 Supply the SoundFont yourself — this package ships no audio samples, the same
@@ -107,6 +109,16 @@ plays, which is longer than the score on anything with repeats.
 Loop, metronome and count-in are all optional; `createPlaybackEngine` alone gives
 you play, pause, stop, seek and the cursor.
 
+The metronome's click is General MIDI's wood blocks unless you replace it:
+
+```js
+const sf2 = sheetMusic.buildClickSoundFont(strongWav, weakWav); // 16-bit PCM WAVs
+await engine.setMetronomeClickSoundFont(sf2.slice().buffer);
+```
+
+That bank is layered ahead of the score's on the metronome synth only, so
+nothing else changes sound.
+
 ### Mixer
 
 ```js
@@ -116,6 +128,8 @@ for (const channel of engine.mixerChannels()) {
 engine.setStripProgram(channel, 48); // GM patch; ignored on a drum strip
 engine.setStripVolume(channel, 100); // CC 7, 0–127
 engine.setStripMuted(channel, true);
+engine.setStripSoloed(channel, true); // others go silent; their mutes survive
+engine.setMasterTuning(-13); // cents from A4=440, on every channel
 
 // The 128 GM patches for a picker, grouped by family. A constant — cache it.
 for (const { program, name, family } of sheetMusic.gmInstruments()) {
@@ -150,8 +164,8 @@ included, matching the iOS and Android exports.
 `renderOffline` on a custom `SynthHost` is what turns it on. `encodeWav` is
 exported separately if you want the `AudioBuffer` step yourself.
 
-Not here yet: master tuning, and compressed formats. Writing M4A or MP3 in a
-browser needs WebCodecs or `MediaRecorder`; WAV needs neither, so it went first.
+Not here yet: compressed formats. Writing M4A or MP3 in a browser needs WebCodecs
+or `MediaRecorder`; WAV needs neither, so it went first.
 
 ## Assets
 

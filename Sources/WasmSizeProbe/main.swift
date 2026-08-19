@@ -121,7 +121,7 @@ print(
 // the browser does not actually download.
 let smf = renderMidi(handle: wasmHandle)
 let clickSmf = renderMetronomeMidi(handle: wasmHandle)
-let countInSmf = renderCountInMetronomeMidi(handle: wasmHandle, fromMeasureIndex: 0)
+let countInSmf = renderCountInMetronomeMidi(handle: wasmHandle, fromPlayerSeconds: 0)
 let summary = playbackSummary(handle: wasmHandle)
 let beats = metronomeBeats(handle: wasmHandle)
 let cursor = cursorRectAtPlayerSeconds(handle: wasmHandle, playerSeconds: 0)
@@ -131,13 +131,27 @@ let loopSeconds = loopPlayerSeconds(
 let loopRects = loopHighlightRects(
     handle: wasmHandle, fromMeasureIndex: 0, toMeasureExclusive: 1,
 )
-print(
-    "playback smf=\(smf.count)B click=\(clickSmf.count)B countIn=\(countInSmf.count)B "
-        + "measures=\(summary?.measureCount ?? -1) beats=\(beats.count) "
-        + "cursorY=\(cursor?.yMM ?? -1) loop=\(loopSeconds.count) rects=\(loopRects.count) "
-        + "seek=\(playerSecondsForMeasure(handle: wasmHandle, measureIndex: 1)) "
-        + "at=\(measureIndexAtPlayerSeconds(handle: wasmHandle, playerSeconds: 0)) "
-        + "countInSeconds=\(countInSeconds(handle: wasmHandle, fromMeasureIndex: 0))",
-)
+let tapSeconds = playerSecondsAtPoint(handle: wasmHandle, xMM: 30, yMM: 40)
+let seekSeconds = playerSecondsForMeasure(handle: wasmHandle, measureIndex: 1)
+let atMeasure = measureIndexAtPlayerSeconds(handle: wasmHandle, playerSeconds: 0)
+let preRoll = countInSeconds(handle: wasmHandle, fromPlayerSeconds: 0)
+
+// The mixer and its General MIDI table, which are the only paths that reach
+// `LiveChannelPlan`'s labelling and `GMInstrument`.
+let stripCount = mixerStripCount(handle: wasmHandle)
+let firstStrip = mixerStrip(handle: wasmHandle, index: 0)
+let gmNames = gmInstrumentNames()
+let gmFamilies = gmInstrumentFamilies()
+let tuning = masterTuningControlChanges(cents: -13)
+let clickBank = buildClickSoundFont(strongWav: [], weakWav: [])
+
+// Split across several statements on purpose: one interpolation with a dozen
+// operands is enough to time out the type checker.
+print("playback smf=\(smf.count)B click=\(clickSmf.count)B countIn=\(countInSmf.count)B")
+print("playback measures=\(summary?.measureCount ?? -1) beats=\(beats.count)")
+print("playback cursorY=\(cursor?.yMM ?? -1) loop=\(loopSeconds.count) rects=\(loopRects.count)")
+print("playback tap=\(tapSeconds) seek=\(seekSeconds) at=\(atMeasure) preRoll=\(preRoll)")
+print("mixer strips=\(stripCount) first=\(firstStrip?.displayName ?? "-")")
+print("mixer gm=\(gmNames.count)/\(gmFamilies.count) tuning=\(tuning.count) click=\(clickBank.count)B")
 
 releaseScore(handle: wasmHandle)

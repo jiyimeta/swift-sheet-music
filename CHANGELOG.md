@@ -19,6 +19,17 @@ and this project adheres to
   browser facade. `PlaybackEngine` asserts each strip's patch and level at load and after every
   transport move — the sequence carries neither, by design, so that a backward seek cannot replay
   them over a live override.
+- Click-to-seek, and a count-in from anywhere rather than only a downbeat. `playerSecondsAtPoint`
+  resolves a point in document millimetres to the nearest playable element (`nearestEngineCursor`,
+  as on Android) and folds the cursor round trip into one call; `renderCountInMetronomeMidi` and
+  `countInSeconds` now take a position on the player's clock, which is what lets `CountInBeats`
+  schedule the partial lead-in a mid-bar start needs.
+- Solo, master tuning and a replaceable metronome click on the browser mixer.
+  `setStripSoloed` silences everything not soloed while remembering each strip's own mute
+  underneath; `setMasterTuning` sends the MIDI master-tuning RPN built by
+  `SheetMusicAudioCore.MasterTuning`, so an A4 calibration means the same thing here as on iOS and
+  Android; `setMetronomeClickSoundFont` layers a bank from `buildClickSoundFont` ahead of the
+  score's, on the metronome synth only.
 - **Audio export in the browser.** `PlaybackEngine.exportWav()` renders the score — or a measure
   range — to 16-bit PCM offline and faster than real time, carrying the mixer as it stands. The
   mixer travels as a snapshot of the live synth rather than being re-applied, so the file cannot

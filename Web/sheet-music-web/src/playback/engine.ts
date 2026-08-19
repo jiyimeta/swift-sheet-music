@@ -46,6 +46,14 @@ export interface MixerChannelState {
   /** CC 7 in force, 0–127. Starts at `strip.volume`. */
   readonly volume: number;
   readonly muted: boolean;
+  /**
+   * Soloed. While ANY strip is soloed, every strip that is not is silent —
+   * `muted` keeps its own value underneath and comes back when the last solo is
+   * cleared.
+   */
+  readonly soloed: boolean;
+  /** Whether this strip is actually sounding, after mute and solo. */
+  readonly audible: boolean;
 }
 
 /**
@@ -95,11 +103,18 @@ export class PlaybackEngine {
   private loopBounds: [number, number] | null = null;
   private loopRange: MeasureRange | null = null;
   /** Where a count-in-started playback begins once the count elapses. */
-  private countInTarget: { measureIndex: number; seconds: number } | null = null;
+  private countInTarget: { seconds: number } | null = null;
   private rate = 1;
   private metronomeMuted = true;
   /** Mixer state, keyed by MIDI channel. */
   private readonly mixer = new Map<number, MixerChannelState>();
+  private tuningCents = 0;
+  /**
+   * Whether a tuning has ever been asked for. Until it has, the RPN is not sent
+   * at all — an untouched synth is already at A4=440, and ten control changes
+   * per channel on every seek is noise nobody asked for.
+   */
+  private tuningEverSet = false;
 
   private constructor(
     private readonly score: Score,
@@ -139,6 +154,8 @@ export class PlaybackEngine {
         program: strip.program,
         volume: strip.volume,
         muted: false,
+        soloed: false,
+        audible: true,
       });
     }
     engine.assertMixer();
@@ -177,18 +194,19 @@ export class PlaybackEngine {
     }
 
     if (options?.countIn === true && this._state !== "paused") {
-      const measureIndex = this.currentMeasureIndex();
-      const sequence = this.score.renderCountInMetronomeMidi(measureIndex);
-      const seconds = this.score.countInSeconds(measureIndex);
+      // From wherever the transport actually is, not from the enclosing bar's
+      // downbeat: `CountInBeats` schedules a partial lead-in for a start partway
+      // through a measure, which is what a tap-to-start produces.
+      const from = this.host.score.positionSeconds;
+      const sequence = this.score.renderCountInMetronomeMidi(from);
+      const seconds = this.score.countInSeconds(from);
       if (sequence.length > 0 && seconds > 0) {
-        const target = this.score.playerSecondsForMeasure(measureIndex);
-        this.countInTarget = { measureIndex, seconds };
+        this.countInTarget = { seconds };
         this.host.metronome.load(sequence);
         // The count has to be audible whatever the metronome toggle says:
         // counting in is an explicit request, not the toggle.
         this.host.metronome.setMuted(false);
         this.host.metronome.setRate(this.rate);
-        this.host.score.seek(target >= 0 ? target : 0);
         this.host.metronome.play();
         this.setState("counting-in");
         this.startPolling();
@@ -229,10 +247,27 @@ export class PlaybackEngine {
 
   seekToMeasure(measureIndex: number): void {
     this.assertLive();
-    const seconds = this.score.playerSecondsForMeasure(measureIndex);
+    this.seekToPlayerSeconds(this.score.playerSecondsForMeasure(measureIndex));
+  }
+
+  /**
+   * Seek to wherever a tap landed, in document millimetres — the coordinates
+   * the cursor rectangle and the draw program already use.
+   *
+   * Nearest, not a hit-test: a tap beside a note goes to the closest playable
+   * element. Ignored only when the score has nothing playable or no layout has
+   * been computed.
+   */
+  seekToPoint(xMM: number, yMM: number): void {
+    this.assertLive();
+    this.seekToPlayerSeconds(this.score.playerSecondsAtPoint(xMM, yMM));
+  }
+
+  /** Ignores the `-1` every seek-target lookup answers with when it has none. */
+  private seekToPlayerSeconds(seconds: number): void {
     if (seconds < 0) return;
     this.seekBoth(seconds);
-    this.emitCursor();
+    this.emitCursor(seconds);
   }
 
   setRate(rate: number): void {
@@ -289,7 +324,65 @@ export class PlaybackEngine {
     const state = this.mixer.get(channel);
     if (state === undefined) return;
     this.mixer.set(channel, { ...state, muted });
-    this.assertStrip(channel);
+    this.assertMixer();
+  }
+
+  /**
+   * Solo. While any strip is soloed the rest are silent, and each strip's own
+   * mute is remembered underneath — clearing the last solo restores exactly
+   * what was audible before, which is the behaviour that makes solo usable as a
+   * momentary check rather than an edit.
+   */
+  setStripSoloed(channel: number, soloed: boolean): void {
+    this.assertLive();
+    const state = this.mixer.get(channel);
+    if (state === undefined) return;
+    this.mixer.set(channel, { ...state, soloed });
+    // Every strip, not just this one: turning a solo on silences the others and
+    // turning the last one off brings them back.
+    this.assertMixer();
+  }
+
+  /**
+   * Retune the whole score by `cents` from A4=440.
+   *
+   * Sent as the MIDI master-tuning RPN on every sounding channel, built by
+   * `SheetMusicAudioCore.MasterTuning` — the same split iOS feeds to
+   * AUMIDISynth's global tuning params and Android sends to FluidSynth, so a
+   * calibration made on one platform means the same thing on the others.
+   *
+   * Percussion is retuned too. That is deliberate and matches the other
+   * engines: a drum kit's samples are pitched, and leaving them at concert
+   * pitch against a retuned ensemble is more wrong than moving them.
+   */
+  setMasterTuning(cents: number): void {
+    this.assertLive();
+    this.tuningCents = cents;
+    this.assertTuning();
+  }
+
+  /** The A4 offset in force, in cents. */
+  get masterTuningCents(): number {
+    return this.tuningCents;
+  }
+
+  /**
+   * Replace the metronome's click with a bank of your own — build one from two
+   * WAVs with `SheetMusic.buildClickSoundFont`.
+   *
+   * Layered ahead of the score's General MIDI bank on the metronome synth only,
+   * so the click changes and nothing else does. Without it the metronome uses
+   * whatever the GM bank has at notes 76 and 77, which is a pair of wood
+   * blocks.
+   *
+   * Resolves to `false` when the host cannot layer banks.
+   */
+  async setMetronomeClickSoundFont(soundFont: ArrayBuffer): Promise<boolean> {
+    this.assertLive();
+    const add = this.host.metronome.addSoundBankOnTop;
+    if (add === undefined) return false;
+    await add.call(this.host.metronome, soundFont, "sheet-music-click");
+    return true;
   }
 
   /** Pass `null` to clear. An empty or inverted range also clears. */
@@ -404,7 +497,15 @@ export class PlaybackEngine {
    * being on the wrong instrument.
    */
   private assertMixer(): void {
-    for (const channel of this.mixer.keys()) this.assertStrip(channel);
+    const anySoloed = [...this.mixer.values()].some((state) => state.soloed);
+    for (const [channel, state] of this.mixer) {
+      const audible = anySoloed ? state.soloed : !state.muted;
+      if (audible !== state.audible) {
+        this.mixer.set(channel, { ...state, audible });
+      }
+      this.assertStrip(channel);
+    }
+    this.assertTuning();
   }
 
   private assertStrip(channel: number): void {
@@ -413,10 +514,29 @@ export class PlaybackEngine {
     if (!state.strip.isDrums) {
       this.host.score.programChange(channel, state.strip.bank, state.program);
     }
-    this.host.score.controlChange(channel, 7, state.muted ? 0 : state.volume);
+    this.host.score.controlChange(channel, 7, state.audible ? state.volume : 0);
   }
 
-  private currentMeasureIndex(): number {
+  /**
+   * Push the master tuning at every strip's channel.
+   *
+   * Per channel rather than once, because the RPN is a channel parameter — a
+   * synth has no "all channels" form of it — and re-sent alongside the mixer
+   * because a load or a seek resets controller state along with everything else.
+   */
+  private assertTuning(): void {
+    if (this.tuningCents === 0 && !this.tuningEverSet) return;
+    this.tuningEverSet = true;
+    const flat = this.score.masterTuningControlChanges(this.tuningCents);
+    for (const channel of this.mixer.keys()) {
+      for (let i = 0; i + 1 < flat.length; i += 2) {
+        this.host.score.controlChange(channel, flat[i]!, flat[i + 1]!);
+      }
+    }
+  }
+
+  /** The measure the transport is in — for a "now playing bar N" readout. */
+  get currentMeasureIndex(): number {
     const index = this.score.measureIndexAtPlayerSeconds(
       this.host.score.positionSeconds,
     );
@@ -482,7 +602,7 @@ export class PlaybackEngine {
       const [start, end] = this.loopBounds;
       if (this.host.score.positionSeconds >= end) {
         this.seekBoth(start);
-        this.emitCursor();
+        this.emitCursor(start);
         return;
       }
     } else if (this.host.score.isAtEnd) {
@@ -493,11 +613,19 @@ export class PlaybackEngine {
     this.emitCursor();
   }
 
-  private emitCursor(): void {
+  /**
+   * `atSeconds` overrides the transport's own reading, and a seek must pass it.
+   *
+   * Setting a sequencer's position is a message to its worklet, so the position
+   * it reports back is still the old one for a buffer or two. Drawing from that
+   * puts the cursor where playback WAS — invisible while playing, because the
+   * next frame corrects it, and permanent while paused, which is exactly when
+   * someone clicks the score to move the cursor.
+   */
+  private emitCursor(atSeconds?: number): void {
     if (this.onCursor === undefined) return;
-    this.onCursor(
-      this.score.cursorRectAtPlayerSeconds(this.host.score.positionSeconds),
-    );
+    const seconds = atSeconds ?? this.host.score.positionSeconds;
+    this.onCursor(this.score.cursorRectAtPlayerSeconds(seconds));
   }
 }
 

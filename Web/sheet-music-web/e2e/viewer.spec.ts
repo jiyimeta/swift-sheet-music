@@ -49,11 +49,31 @@ test("draws ink rather than an empty canvas", async ({ page }) => {
   expect(inked).toBeGreaterThan(1000);
 });
 
+/**
+ * Compares the canvas BITMAP, not a screenshot of the element.
+ *
+ * An element screenshot is rasterized at the element's position on the page, so
+ * anything that moves it by a fraction of a device pixel — a control added to
+ * the toolbar above — re-antialiases every glyph and fails the comparison
+ * without a single drawing command having changed. That happened twice while
+ * the playback UI was being built, and each time the "fix" was to re-bless the
+ * baseline, which is how a rendering guard quietly stops guarding.
+ *
+ * `toDataURL` reads the backing store instead. It is what `drawPage` actually
+ * produced, and it is independent of where the canvas sits.
+ */
 test("engraves the fixture the same way as last time", async ({ page }) => {
   await page.evaluate((url) => window.renderScoreFromURL(url), FIXTURE);
   await expect(page.locator("body")).toHaveAttribute("data-page-count", /[1-9]/);
   // Fonts are registered before the engine reports ready, but Chromium can
   // still be rasterizing the first glyph run when the canvas is filled.
   await page.evaluate(() => document.fonts.ready);
-  await expect(page.locator("canvas").first()).toHaveScreenshot("first-page.png");
+
+  const dataURL = await page.evaluate(
+    () => (document.querySelector("canvas") as HTMLCanvasElement).toDataURL("image/png"),
+  );
+  const png = Buffer.from(dataURL.slice("data:image/png;base64,".length), "base64");
+  // Still an image comparison, so the config's maxDiffPixelRatio still absorbs
+  // the antialiasing differences between macOS versions.
+  expect(png).toMatchSnapshot("first-page.png");
 });

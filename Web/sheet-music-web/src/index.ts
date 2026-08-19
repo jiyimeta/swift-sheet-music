@@ -141,9 +141,10 @@ interface BridgeExports {
   renderMetronomeMidi(handle: number): number[] | Uint8Array;
   renderCountInMetronomeMidi(
     handle: number,
-    fromMeasureIndex: number,
+    fromPlayerSeconds: number,
   ): number[] | Uint8Array;
-  countInSeconds(handle: number, fromMeasureIndex: number): number;
+  countInSeconds(handle: number, fromPlayerSeconds: number): number;
+  playerSecondsAtPoint(handle: number, xMM: number, yMM: number): number;
   playbackSummary(handle: number): PlaybackSummary | null;
   metronomeBeats(handle: number): number[] | Float64Array;
   cursorRectAtPlayerSeconds(
@@ -170,6 +171,7 @@ interface BridgeExports {
   mixerStrip(handle: number, index: number): MixerStrip | null;
   gmInstrumentNames(): string[];
   gmInstrumentFamilies(): string[];
+  masterTuningControlChanges(cents: number): number[] | Float64Array;
 }
 
 /** One General MIDI patch: its program number, name and family. */
@@ -296,9 +298,9 @@ export class Score {
    *
    * Empty when the position has no count-in.
    */
-  renderCountInMetronomeMidi(fromMeasureIndex: number): Uint8Array {
+  renderCountInMetronomeMidi(fromPlayerSeconds: number): Uint8Array {
     return asBytes(
-      this.bridge.renderCountInMetronomeMidi(this.live(), fromMeasureIndex),
+      this.bridge.renderCountInMetronomeMidi(this.live(), fromPlayerSeconds),
     );
   }
 
@@ -309,8 +311,24 @@ export class Score {
    * waiting it out with `setTimeout` — a wall-clock wait quantizes the downbeat
    * to whichever output buffer noticed the deadline, which is audible.
    */
-  countInSeconds(fromMeasureIndex: number): number {
-    return this.bridge.countInSeconds(this.live(), fromMeasureIndex);
+  countInSeconds(fromPlayerSeconds: number): number {
+    return this.bridge.countInSeconds(this.live(), fromPlayerSeconds);
+  }
+
+  /**
+   * The player position a tap lands on, for seeking by clicking the score.
+   *
+   * Coordinates are document millimetres — the same ones the draw program and
+   * `cursorRectAtPlayerSeconds` use, so scale a pointer event by the `pxPerMM`
+   * you already render with.
+   *
+   * NEAREST, not a hit-test: a tap beside a note resolves to the closest
+   * playable element rather than to nothing, which is what makes this usable
+   * with a finger. `-1` only when no layout has been computed or the score has
+   * nothing playable in it.
+   */
+  playerSecondsAtPoint(xMM: number, yMM: number): number {
+    return this.bridge.playerSecondsAtPoint(this.live(), xMM, yMM);
   }
 
   playbackSummary(): PlaybackSummary | null {
@@ -323,6 +341,19 @@ export class Score {
    * Read this before playing: the strips carry the programs and volumes the
    * rendered sequence deliberately does not. See `MixerStrip`.
    */
+  /**
+   * The MIDI control changes that retune an RPN-honoring synth by `cents` from
+   * A4=440, flattened as `[controller, value, …]` and in send order.
+   *
+   * Send them per channel — the RPN is a channel parameter. `PlaybackEngine`
+   * does this for you through `setMasterTuning`; this is here for a host
+   * driving a synth directly. The split between coarse semitones and fine cents
+   * is the engine's, so a calibration means the same thing on iOS and Android.
+   */
+  masterTuningControlChanges(cents: number): Float64Array {
+    return asDoubles(this.bridge.masterTuningControlChanges(cents));
+  }
+
   mixerStrips(): MixerStrip[] {
     const handle = this.live();
     const count = this.bridge.mixerStripCount(handle);

@@ -55,40 +55,43 @@ import SheetMusicFoundation
 /// that is an event in the sequence lands where its tick says.
 ///
 /// Android: `nativeRenderCountInMetronomeMidi`, which takes an encoded
-/// `ScoreCursor` plus its unrolled base tick. The wasm surface takes a measure
-/// index and resolves both internally, so no cursor wire format has to exist in
-/// JavaScript.
+/// `ScoreCursor` plus its unrolled base tick. The wasm surface takes a position
+/// on the player's clock and resolves both internally, so no cursor wire format
+/// has to exist in JavaScript.
 ///
-/// Empty when the handle is unknown, the measure index is out of range, or the
-/// position has no count-in.
-@JS public func renderCountInMetronomeMidi(handle: Int, fromMeasureIndex: Int) -> [UInt8] {
+/// Seconds rather than a measure index because a count-in is not restricted to a
+/// downbeat: `CountInBeats` schedules a partial lead-in for a start partway
+/// through a bar, which is the case a tap-to-start produces. Pass
+/// `playerSecondsForMeasure(...)` for the downbeat case.
+///
+/// Empty when the handle is unknown, the position is outside the score, or it
+/// has no count-in.
+@JS public func renderCountInMetronomeMidi(handle: Int, fromPlayerSeconds: Double) -> [UInt8] {
     guard let score = scoreTable.value(for: Int64(handle)) else { return [] }
     let clock = PlaybackClockCache.clock(for: Int64(handle), score: score)
-    guard let cursor = clock.cursorAtMeasureStart(fromMeasureIndex),
-          let notatedTick = clock.measureStartTick(fromMeasureIndex)
-    else { return [] }
-    let baseTick = clock.unrolledTick(fromNotatedTick: notatedTick)
+    guard let frame = clock.frame(atPlayerSeconds: fromPlayerSeconds) else { return [] }
+    let baseTick = clock.unrolledTick(fromNotatedTick: frame.tick)
     guard let bytes = try? AudioMidiBridge.renderCountInMetronomeMidi(
-        score: score, cursor: cursor, baseTick: baseTick,
+        score: score, cursor: frame.cursor, baseTick: baseTick,
     ) else { return [] }
     return [UInt8](bytes)
 }
 
-/// How long the count-in for `fromMeasureIndex` lasts, in seconds. The host
+/// How long the count-in for `fromPlayerSeconds` lasts, in seconds. The host
 /// starts the metronome transport, watches its position, and starts the score
 /// transport on the frame this elapses.
 ///
-/// `0` when the handle is unknown, the measure index is out of range, or the
-/// position has no count-in — all of which the host reads as "start now".
+/// `0` when the handle is unknown, the position is outside the score, or it has
+/// no count-in — all of which the host reads as "start now".
 ///
 /// Android: `nativeCountIn`, which returns the whole click schedule as a
 /// `CountInWire` payload because its `MetronomeMixer` places clicks itself. The
 /// web host does not: the clicks are events in the sequence
 /// `renderCountInMetronomeMidi` returns, so only the total is needed.
-@JS public func countInSeconds(handle: Int, fromMeasureIndex: Int) -> Double {
+@JS public func countInSeconds(handle: Int, fromPlayerSeconds: Double) -> Double {
     guard let score = scoreTable.value(for: Int64(handle)) else { return 0 }
     let clock = PlaybackClockCache.clock(for: Int64(handle), score: score)
-    guard let cursor = clock.cursorAtMeasureStart(fromMeasureIndex),
+    guard let cursor = clock.cursor(atPlayerSeconds: fromPlayerSeconds),
           let result = CountInBeats.compute(score: score, startCursor: cursor),
           score.division > 0, result.quarterBpm > 0
     else { return 0 }

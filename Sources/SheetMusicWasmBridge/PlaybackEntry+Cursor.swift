@@ -10,6 +10,7 @@ import SheetMusicLayout
     /// way the bridge's other geometry files do. Swift's imports are
     /// file-scoped, so this has to be repeated per file that needs it.
     private typealias CGFloat = SheetMusicLayout.CGFloat
+    private typealias CGPoint = SheetMusicLayout.CGPoint
 #endif
 
 /// Where to draw the playback cursor, in document millimetres — the same unit
@@ -84,6 +85,46 @@ import SheetMusicLayout
         measureIndex: frame.cursor.measureIndex,
         notatedSeconds: frame.timeSeconds,
     )
+}
+
+/// The player position a tap lands on, for seeking by clicking the score.
+///
+/// `xMM` / `yMM` are in document millimetres — the same coordinates
+/// `computeLayout`'s draw program and `cursorRectAtPlayerSeconds`'s rectangle
+/// use, so a host scales a pointer event by the one `pxPerMM` it already has.
+///
+/// **Nearest, not hit-test.** A tap that lands beside a note — or in a margin —
+/// resolves to the closest playable element rather than to nothing, which is
+/// what makes tap-to-seek usable with a finger. Only a score with nothing
+/// playable in it yields no answer.
+///
+/// Returns **−1** when the handle is unknown, no layout has been computed, or
+/// the document has no playable element at all. `0` would mean the top of the
+/// score, which is a real answer.
+///
+/// Android: `nativeNearestCursor`, which returns an encoded `ScoreCursor` for
+/// Kotlin to hand back to `nativeFrameForCursor`. There is no cursor codec in
+/// JavaScript, so the two steps are folded together — the same collapse
+/// `cursorRectAtPlayerSeconds` makes in the other direction.
+///
+/// The hidden-staff set comes from the cached layout rather than from a wire
+/// payload the caller assembles, so the set the hit-test re-addresses against is
+/// necessarily the one the document was filtered with.
+@JS public func playerSecondsAtPoint(handle: Int, xMM: Double, yMM: Double) -> Double {
+    guard let score = scoreTable.value(for: Int64(handle)),
+          let entry = LayoutDocumentCache.entry(for: Int64(handle))
+    else { return -1 }
+    // mm → document points: the inverse of the pt → mm every geometry entry
+    // point applies on the way out.
+    let mmToPt = 72.0 / 25.4
+    let point = CGPoint(x: CGFloat(xMM * mmToPt), y: CGFloat(yMM * mmToPt))
+    guard #available(macOS 15.0, iOS 16.0, *) else { return -1 }
+    guard let cursor = nearestEngineCursor(
+        at: point, in: entry.document, score: score, hiddenStaves: entry.hiddenStaves,
+    ) else { return -1 }
+    let clock = PlaybackClockCache.clock(for: Int64(handle), score: score)
+    guard let seconds = clock.playerSeconds(atCursor: cursor) else { return -1 }
+    return seconds
 }
 
 /// The player position measure `measureIndex` starts at — a seek target.

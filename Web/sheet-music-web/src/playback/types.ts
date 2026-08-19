@@ -36,6 +36,16 @@ export interface SynthTransport {
   programChange(channel: number, bank: number, program: number): void;
   /** Send a MIDI control change. CC 7 is channel volume, CC 10 pan. */
   controlChange(channel: number, controller: number, value: number): void;
+  /**
+   * Load a SoundFont ahead of the ones already loaded, under `id`.
+   *
+   * Ahead, not instead: a click bank defines two percussion notes and nothing
+   * else, so the General MIDI bank underneath still has to answer for
+   * everything the click bank does not.
+   *
+   * Optional — a host without bank layering simply cannot swap the click.
+   */
+  addSoundBankOnTop?(soundFont: ArrayBuffer, id: string): Promise<void>;
   dispose(): void;
 }
 
