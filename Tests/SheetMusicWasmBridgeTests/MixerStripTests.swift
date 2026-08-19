@@ -121,6 +121,36 @@ struct MixerStripTests {
         #expect(Set(families).count == 16)
     }
 
+    /// The master-tuning RPN, built by the engine so no host has to carry the
+    /// coarse/fine split.
+    @Test("master tuning emits a closed RPN sequence")
+    func tuningEmitsClosedRPN() {
+        let flat = masterTuningControlChanges(cents: 0)
+        #expect(flat.count == 20) // ten (controller, value) pairs
+        let controllers = stride(from: 0, to: flat.count, by: 2).map { Int(flat[$0]) }
+        // RPN 2 (coarse), RPN 1 (fine), then null RPN so a stray data entry
+        // cannot land on a parameter nobody selected.
+        #expect(controllers == [101, 100, 6, 38, 101, 100, 6, 38, 101, 100])
+        #expect(Int(flat[19]) == 127)
+    }
+
+    @Test("zero cents is the neutral tuning")
+    func zeroCentsIsNeutral() {
+        let flat = masterTuningControlChanges(cents: 0)
+        // Coarse data entry is 64 (no semitone offset) and fine is 8192 in
+        // 14 bits, i.e. MSB 64 / LSB 0.
+        #expect(Int(flat[5]) == 64)
+        #expect(Int(flat[13]) == 64)
+        #expect(Int(flat[15]) == 0)
+    }
+
+    @Test("a whole semitone up moves the coarse byte, not the fine one")
+    func semitoneMovesCoarse() {
+        let flat = masterTuningControlChanges(cents: 100)
+        #expect(Int(flat[5]) == 65)
+        #expect(Int(flat[13]) == 64)
+    }
+
     /// Pins the premise. If the renderer ever stopped stripping, the host would
     /// be asserting programs on top of a sequence that already sets them, and a
     /// backward seek would start fighting the mixer.

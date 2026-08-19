@@ -46,6 +46,14 @@ export interface MixerChannelState {
   /** CC 7 in force, 0–127. Starts at `strip.volume`. */
   readonly volume: number;
   readonly muted: boolean;
+  /**
+   * Soloed. While ANY strip is soloed, every strip that is not is silent —
+   * `muted` keeps its own value underneath and comes back when the last solo is
+   * cleared.
+   */
+  readonly soloed: boolean;
+  /** Whether this strip is actually sounding, after mute and solo. */
+  readonly audible: boolean;
 }
 
 /**
@@ -100,6 +108,13 @@ export class PlaybackEngine {
   private metronomeMuted = true;
   /** Mixer state, keyed by MIDI channel. */
   private readonly mixer = new Map<number, MixerChannelState>();
+  private tuningCents = 0;
+  /**
+   * Whether a tuning has ever been asked for. Until it has, the RPN is not sent
+   * at all — an untouched synth is already at A4=440, and ten control changes
+   * per channel on every seek is noise nobody asked for.
+   */
+  private tuningEverSet = false;
 
   private constructor(
     private readonly score: Score,
@@ -139,6 +154,8 @@ export class PlaybackEngine {
         program: strip.program,
         volume: strip.volume,
         muted: false,
+        soloed: false,
+        audible: true,
       });
     }
     engine.assertMixer();
@@ -289,7 +306,65 @@ export class PlaybackEngine {
     const state = this.mixer.get(channel);
     if (state === undefined) return;
     this.mixer.set(channel, { ...state, muted });
-    this.assertStrip(channel);
+    this.assertMixer();
+  }
+
+  /**
+   * Solo. While any strip is soloed the rest are silent, and each strip's own
+   * mute is remembered underneath — clearing the last solo restores exactly
+   * what was audible before, which is the behaviour that makes solo usable as a
+   * momentary check rather than an edit.
+   */
+  setStripSoloed(channel: number, soloed: boolean): void {
+    this.assertLive();
+    const state = this.mixer.get(channel);
+    if (state === undefined) return;
+    this.mixer.set(channel, { ...state, soloed });
+    // Every strip, not just this one: turning a solo on silences the others and
+    // turning the last one off brings them back.
+    this.assertMixer();
+  }
+
+  /**
+   * Retune the whole score by `cents` from A4=440.
+   *
+   * Sent as the MIDI master-tuning RPN on every sounding channel, built by
+   * `SheetMusicAudioCore.MasterTuning` — the same split iOS feeds to
+   * AUMIDISynth's global tuning params and Android sends to FluidSynth, so a
+   * calibration made on one platform means the same thing on the others.
+   *
+   * Percussion is retuned too. That is deliberate and matches the other
+   * engines: a drum kit's samples are pitched, and leaving them at concert
+   * pitch against a retuned ensemble is more wrong than moving them.
+   */
+  setMasterTuning(cents: number): void {
+    this.assertLive();
+    this.tuningCents = cents;
+    this.assertTuning();
+  }
+
+  /** The A4 offset in force, in cents. */
+  get masterTuningCents(): number {
+    return this.tuningCents;
+  }
+
+  /**
+   * Replace the metronome's click with a bank of your own — build one from two
+   * WAVs with `SheetMusic.buildClickSoundFont`.
+   *
+   * Layered ahead of the score's General MIDI bank on the metronome synth only,
+   * so the click changes and nothing else does. Without it the metronome uses
+   * whatever the GM bank has at notes 76 and 77, which is a pair of wood
+   * blocks.
+   *
+   * Resolves to `false` when the host cannot layer banks.
+   */
+  async setMetronomeClickSoundFont(soundFont: ArrayBuffer): Promise<boolean> {
+    this.assertLive();
+    const add = this.host.metronome.addSoundBankOnTop;
+    if (add === undefined) return false;
+    await add.call(this.host.metronome, soundFont, "sheet-music-click");
+    return true;
   }
 
   /** Pass `null` to clear. An empty or inverted range also clears. */
@@ -404,7 +479,15 @@ export class PlaybackEngine {
    * being on the wrong instrument.
    */
   private assertMixer(): void {
-    for (const channel of this.mixer.keys()) this.assertStrip(channel);
+    const anySoloed = [...this.mixer.values()].some((state) => state.soloed);
+    for (const [channel, state] of this.mixer) {
+      const audible = anySoloed ? state.soloed : !state.muted;
+      if (audible !== state.audible) {
+        this.mixer.set(channel, { ...state, audible });
+      }
+      this.assertStrip(channel);
+    }
+    this.assertTuning();
   }
 
   private assertStrip(channel: number): void {
@@ -413,7 +496,25 @@ export class PlaybackEngine {
     if (!state.strip.isDrums) {
       this.host.score.programChange(channel, state.strip.bank, state.program);
     }
-    this.host.score.controlChange(channel, 7, state.muted ? 0 : state.volume);
+    this.host.score.controlChange(channel, 7, state.audible ? state.volume : 0);
+  }
+
+  /**
+   * Push the master tuning at every strip's channel.
+   *
+   * Per channel rather than once, because the RPN is a channel parameter — a
+   * synth has no "all channels" form of it — and re-sent alongside the mixer
+   * because a load or a seek resets controller state along with everything else.
+   */
+  private assertTuning(): void {
+    if (this.tuningCents === 0 && !this.tuningEverSet) return;
+    this.tuningEverSet = true;
+    const flat = this.score.masterTuningControlChanges(this.tuningCents);
+    for (const channel of this.mixer.keys()) {
+      for (let i = 0; i + 1 < flat.length; i += 2) {
+        this.host.score.controlChange(channel, flat[i]!, flat[i + 1]!);
+      }
+    }
   }
 
   private currentMeasureIndex(): number {

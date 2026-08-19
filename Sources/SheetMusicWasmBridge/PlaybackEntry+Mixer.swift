@@ -85,6 +85,33 @@ import SheetMusicMIDI
     GMInstrument.all.map(\.family.rawValue)
 }
 
+/// The MIDI control changes that retune an RPN-honoring synth by `cents` from
+/// A4=440, flattened as `[controller, value, …]` — two entries per message, in
+/// the order they must be sent.
+///
+/// Send them to every sounding channel. The sequence sets RPN 2 (coarse tune),
+/// then RPN 1 (fine tune), then closes the RPN with 127/127 so a later data
+/// entry cannot land on a parameter nobody selected.
+///
+/// The split between coarse semitones and fine cents is
+/// `SheetMusicAudioCore.MasterTuning`, the same one iOS feeds to AUMIDISynth's
+/// global tuning params and Android sends to FluidSynth. Both data-entry bytes
+/// go out per RPN because a 14-bit-strict synth ignores an MSB with no LSB.
+///
+/// Android: the Kotlin engine builds these from `MasterTuning` directly; the
+/// wasm surface hands them over already built so JavaScript needs no copy of
+/// the math.
+/// The name keeps the MIDI spec's own term: RPN 1 and 2 are "Master Fine
+/// Tuning" and "Master Coarse Tuning" there, and `SheetMusicAudioCore`'s
+/// `MasterTuning` carries the same exemption for the same reason.
+@JS public func masterTuningControlChanges( // swiftlint:disable:this inclusive_language
+    cents: Double,
+) -> [Double] {
+    MasterTuning.rpnControlChanges(cents: cents).flatMap {
+        [Double($0.controller), Double($0.value)]
+    }
+}
+
 /// How many mixer strips `handle` has. `0` for an unknown handle.
 ///
 /// Paired with `mixerStrip(handle:index:)` rather than returning the whole

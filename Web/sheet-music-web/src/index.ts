@@ -170,6 +170,7 @@ interface BridgeExports {
   mixerStrip(handle: number, index: number): MixerStrip | null;
   gmInstrumentNames(): string[];
   gmInstrumentFamilies(): string[];
+  masterTuningControlChanges(cents: number): number[] | Float64Array;
 }
 
 /** One General MIDI patch: its program number, name and family. */
@@ -323,6 +324,19 @@ export class Score {
    * Read this before playing: the strips carry the programs and volumes the
    * rendered sequence deliberately does not. See `MixerStrip`.
    */
+  /**
+   * The MIDI control changes that retune an RPN-honoring synth by `cents` from
+   * A4=440, flattened as `[controller, value, …]` and in send order.
+   *
+   * Send them per channel — the RPN is a channel parameter. `PlaybackEngine`
+   * does this for you through `setMasterTuning`; this is here for a host
+   * driving a synth directly. The split between coarse semitones and fine cents
+   * is the engine's, so a calibration means the same thing on iOS and Android.
+   */
+  masterTuningControlChanges(cents: number): Float64Array {
+    return asDoubles(this.bridge.masterTuningControlChanges(cents));
+  }
+
   mixerStrips(): MixerStrip[] {
     const handle = this.live();
     const count = this.bridge.mixerStripCount(handle);

@@ -46,6 +46,12 @@ class FakeTransport implements SynthTransport {
     this.controls.push({ channel, controller, value });
   }
 
+  readonly banks: { id: string; bytes: number }[] = [];
+
+  async addSoundBankOnTop(soundFont: ArrayBuffer, id: string): Promise<void> {
+    this.banks.push({ id, bytes: soundFont.byteLength });
+  }
+
   /** The patch in force on `channel`, or `undefined` if never set. */
   programOn(channel: number): number | undefined {
     return this.programs.filter((p) => p.channel === channel).at(-1)?.program;
@@ -462,5 +468,90 @@ describe("PlaybackEngine mixer", () => {
     engine.setStripProgram(15, 100);
     engine.setStripMuted(15, true);
     expect(host.score.controls.length).toBe(before);
+  });
+
+  // MARK: solo
+
+  it("silences every strip but the soloed one", async () => {
+    const { engine, host } = await makeMixerEngine();
+    const [bass, lead, drums] = engine.mixerChannels();
+    engine.setStripSoloed(lead!.strip.channel, true);
+    expect(host.score.controlOn(lead!.strip.channel, 7)).toBe(lead!.volume);
+    expect(host.score.controlOn(bass!.strip.channel, 7)).toBe(0);
+    expect(host.score.controlOn(drums!.strip.channel, 7)).toBe(0);
+  });
+
+  it("sounds every soloed strip, not just the last one", async () => {
+    const { engine, host } = await makeMixerEngine();
+    const [bass, lead, drums] = engine.mixerChannels();
+    engine.setStripSoloed(lead!.strip.channel, true);
+    engine.setStripSoloed(bass!.strip.channel, true);
+    expect(host.score.controlOn(lead!.strip.channel, 7)).toBe(lead!.volume);
+    expect(host.score.controlOn(bass!.strip.channel, 7)).toBe(bass!.volume);
+    expect(host.score.controlOn(drums!.strip.channel, 7)).toBe(0);
+  });
+
+  /**
+   * Solo as a momentary check, not an edit: clearing the last one has to
+   * restore exactly what was audible before, mutes included.
+   */
+  it("restores the mutes underneath when the last solo clears", async () => {
+    const { engine, host } = await makeMixerEngine();
+    const [bass, lead] = engine.mixerChannels();
+    engine.setStripMuted(bass!.strip.channel, true);
+    engine.setStripSoloed(lead!.strip.channel, true);
+    engine.setStripSoloed(lead!.strip.channel, false);
+    expect(host.score.controlOn(bass!.strip.channel, 7)).toBe(0);
+    expect(host.score.controlOn(lead!.strip.channel, 7)).toBe(lead!.volume);
+  });
+
+  it("reports audibility after mute and solo", async () => {
+    const { engine } = await makeMixerEngine();
+    const lead = engine.mixerChannels()[1]!;
+    engine.setStripSoloed(lead.strip.channel, true);
+    const after = engine.mixerChannels();
+    expect(after.map((c) => c.audible)).toEqual([false, true, false]);
+  });
+
+  // MARK: master tuning
+
+  it("sends no tuning RPN until one is asked for", async () => {
+    const { engine, host } = await makeMixerEngine();
+    engine.seekToMeasure(0);
+    expect(host.score.controls.some((c) => c.controller === 101)).toBe(false);
+  });
+
+  it("sends the master tuning RPN on every channel", async () => {
+    const { engine, host } = await makeMixerEngine();
+    engine.setMasterTuning(-13);
+    expect(engine.masterTuningCents).toBe(-13);
+    for (const channel of engine.mixerChannels()) {
+      const rpn = host.score.controls.filter(
+        (c) => c.channel === channel.strip.channel && c.controller === 101,
+      );
+      // Three RPN selects per send: coarse, fine, then the null that closes it.
+      expect(rpn.length).toBe(3);
+      expect(rpn.at(-1)!.value).toBe(127);
+    }
+  });
+
+  /** A seek resets controller state, and tuning is controller state. */
+  it("re-sends the tuning after a seek", async () => {
+    const { engine, host } = await makeMixerEngine();
+    engine.setMasterTuning(7);
+    const before = host.score.controls.filter((c) => c.controller === 101).length;
+    engine.seekToMeasure(0);
+    const after = host.score.controls.filter((c) => c.controller === 101).length;
+    expect(after).toBeGreaterThan(before);
+  });
+
+  // MARK: metronome click
+
+  it("layers a click bank onto the metronome, not the score", async () => {
+    const { engine, host } = await makeMixerEngine();
+    const applied = await engine.setMetronomeClickSoundFont(new ArrayBuffer(64));
+    expect(applied).toBe(true);
+    expect(host.metronome.banks).toEqual([{ id: "sheet-music-click", bytes: 64 }]);
+    expect(host.score.banks).toEqual([]);
   });
 });

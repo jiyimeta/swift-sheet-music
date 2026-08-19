@@ -147,6 +147,32 @@ test("builds a mixer strip per part, carrying the score's patches", async ({ pag
   expect(await page.locator(".strip .patch").first().locator("option")).toHaveCount(128);
 });
 
+test("solo silences the other strips, and clearing it restores them", async ({ page }) => {
+  await page.evaluate(
+    (url) => window.renderScoreFromURL(url),
+    "/Web/sheet-music-web/test/fixtures/mixer.mscz",
+  );
+  await page.evaluate(() => window.useGeneratedSoundFont());
+  await page.locator("#play").click();
+  await expect(page.locator("body")).toHaveAttribute("data-mixer-strip-count", "3");
+  // Channels 0, 1 and 9 — the drum part is on 9 whatever its position.
+  await expect(page.locator("body")).toHaveAttribute("data-audible-strips", "0,1,9");
+
+  await page.locator(".strip .solo").nth(1).check();
+  await expect(page.locator("body")).toHaveAttribute("data-audible-strips", "1");
+
+  await page.locator(".strip .solo").nth(1).uncheck();
+  await expect(page.locator("body")).toHaveAttribute("data-audible-strips", "0,1,9");
+});
+
+test("layers a generated click bank onto the metronome", async ({ page }) => {
+  await page.locator("#play").click();
+  await expect(page.locator("body")).toHaveAttribute("data-playback-state", "playing");
+  // `false` here would mean the synth host reported no bank layering, which is
+  // the only way the click can silently stay on General MIDI's wood blocks.
+  await expect(page.locator("body")).toHaveAttribute("data-click-bank", "custom");
+});
+
 /**
  * The one thing only a browser can answer about the export: that an
  * `OfflineAudioContext` really does instantiate spessasynth's worklet and render

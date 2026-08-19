@@ -20,7 +20,11 @@ export default defineConfig({
   testDir: "./e2e",
   // The page loads a 9 MB wasm module and two fonts before it can draw.
   timeout: 60_000,
-  expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.002 } },
+  // `toMatchSnapshot` because the rendering test compares the canvas backing
+  // store rather than a screenshot of the element — see `viewer.spec.ts`. The
+  // ratio absorbs antialiasing differences between macOS versions without
+  // letting a real change through.
+  expect: { toMatchSnapshot: { maxDiffPixelRatio: 0.002 } },
   use: {
     ...devices["Desktop Chrome"],
     baseURL: "http://localhost:8080",

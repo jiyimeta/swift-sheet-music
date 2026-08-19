@@ -599,8 +599,8 @@ It reports **two** numbers and they are not interchangeable:
 
 | | what it measures |
 |---|---|
-| `brotli` | The whole portable graph through `WasmSizeProbe`, unoptimized, with MSCZWriter and EditWire deliberately linked in. The 4 MB ceiling applies to this. Currently 3,785,924 B. |
-| `shipped` | What a page downloads — the PackageToJS artifact after wasm-opt, with only the bridge's own export surface. Currently 2,588,239 B. Needs `Scripts/wasm-build-web.sh` to have run; says so when it has not. |
+| `brotli` | The whole portable graph through `WasmSizeProbe`, unoptimized, with MSCZWriter and EditWire deliberately linked in. The 4 MB ceiling applies to this. Currently 3,783,544 B. |
+| `shipped` | What a page downloads — the PackageToJS artifact after wasm-opt, with only the bridge's own export surface. Currently 2,588,937 B. Needs `Scripts/wasm-build-web.sh` to have run; says so when it has not. |
 
 Playback cost about 10 KB of the first number and 69 KB of the second — small
 because `MidiRenderer.render` was already in the probe's call chain and drags

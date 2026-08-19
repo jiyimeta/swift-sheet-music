@@ -44,6 +44,7 @@ interface SpessaSynth {
   readonly isReady: Promise<unknown>;
   readonly soundBankManager: {
     addSoundBank(buffer: ArrayBuffer, id: string): Promise<void>;
+    priorityOrder: string[];
   };
   connect(node: AudioNode): AudioNode;
   disconnect(node?: AudioNode): AudioNode | undefined;
@@ -137,6 +138,18 @@ class SpessaTransport implements SynthTransport {
 
   controlChange(channel: number, controller: number, value: number): void {
     this.synth.controllerChange(channel, controller, value);
+  }
+
+  async addSoundBankOnTop(soundFont: ArrayBuffer, id: string): Promise<void> {
+    await this.synth.soundBankManager.addSoundBank(soundFont, id);
+    // First in the priority order wins, and a freshly added bank does not
+    // arrive there. Without this the click bank is loaded and inaudible — the
+    // General MIDI wood blocks underneath keep answering notes 76 and 77.
+    const order = this.synth.soundBankManager.priorityOrder;
+    this.synth.soundBankManager.priorityOrder = [
+      id,
+      ...order.filter((entry) => entry !== id),
+    ];
   }
 
   get isMuted(): boolean {

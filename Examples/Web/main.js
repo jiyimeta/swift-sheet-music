@@ -33,6 +33,8 @@ const loopFrom = document.querySelector("#loop-from");
 const loopTo = document.querySelector("#loop-to");
 const loopApply = document.querySelector("#loop-apply");
 const loopClear = document.querySelector("#loop-clear");
+const tuningSlider = document.querySelector("#tuning");
+const tuningReadout = document.querySelector("#tuning-readout");
 const exportButton = document.querySelector("#export");
 const playbackStatus = document.querySelector("#playback-status");
 const mixerHost = document.querySelector("#mixer");
@@ -256,6 +258,18 @@ function buildMixer() {
     });
     mute.append(muteBox, document.createTextNode(" mute"));
 
+    const solo = document.createElement("label");
+    const soloBox = document.createElement("input");
+    soloBox.type = "checkbox";
+    soloBox.className = "solo";
+    soloBox.addEventListener("change", () => {
+      engine?.setStripSoloed(midi, soloBox.checked);
+      // Solo changes what every OTHER strip is doing, so the whole panel's
+      // audible state has to be re-read rather than just this row's.
+      reflectAudibility();
+    });
+    solo.append(soloBox, document.createTextNode(" solo"));
+
     const level = document.createElement("input");
     level.type = "range";
     level.min = "0";
@@ -279,10 +293,25 @@ function buildMixer() {
       patch.append(select);
     }
 
-    row.append(name, chan, mute, level, patch);
+    row.append(name, chan, mute, solo, level, patch);
     mixerHost.append(row);
   }
   document.body.dataset.mixerStripCount = String(engine.mixerChannels().length);
+  reflectAudibility();
+}
+
+/** Dim the rows that solo has silenced, so the panel says what is sounding. */
+function reflectAudibility() {
+  if (!engine) return;
+  for (const channel of engine.mixerChannels()) {
+    const row = mixerHost.querySelector(`.strip[data-channel="${channel.strip.channel}"]`);
+    if (row) row.style.opacity = channel.audible ? "1" : "0.45";
+  }
+  document.body.dataset.audibleStrips = engine
+    .mixerChannels()
+    .filter((channel) => channel.audible)
+    .map((channel) => channel.strip.channel)
+    .join(",");
 }
 
 function updateControls() {
@@ -326,6 +355,17 @@ async function ensureEngine() {
   });
   engine.setMetronomeMuted(!metronomeBox.checked);
   engine.setRate(Number(rateSlider.value));
+  if (Number(tuningSlider.value) !== 0) {
+    engine.setMasterTuning(Number(tuningSlider.value));
+  }
+  // A generated click bank, layered ahead of the GM one on the metronome synth.
+  // Without it the metronome uses whatever the score's bank has at notes 76 and
+  // 77 — a pair of wood blocks in General MIDI.
+  const click = sheetMusic.buildClickSoundFont(clickWav(1800), clickWav(1200));
+  if (click.length > 0) {
+    const applied = await engine.setMetronomeClickSoundFont(click.slice().buffer);
+    document.body.dataset.clickBank = applied ? "custom" : "gm";
+  }
   buildMixer();
   return engine;
 }
@@ -373,6 +413,13 @@ rateSlider.addEventListener("input", () => {
   const rate = Number(rateSlider.value);
   rateReadout.textContent = `${rate.toFixed(2)}×`;
   engine?.setRate(rate);
+});
+
+tuningSlider.addEventListener("input", () => {
+  const cents = Number(tuningSlider.value);
+  const hz = 440 * 2 ** (cents / 1200);
+  tuningReadout.textContent = `${cents >= 0 ? "+" : ""}${cents}¢ (${hz.toFixed(1)} Hz)`;
+  engine?.setMasterTuning(cents);
 });
 
 loopApply.addEventListener("click", () => {
@@ -464,35 +511,42 @@ window.renderScoreFromURL = async (url) => {
  * test needs, and it sidesteps the question of which General MIDI bank may be
  * redistributed in this repository.
  */
-window.useGeneratedSoundFont = () => {
-  const wav = (frequency, seconds = 0.05, rate = 22050) => {
-    const frames = Math.round(seconds * rate);
-    const bytes = new Uint8Array(44 + frames * 2);
-    const view = new DataView(bytes.buffer);
-    const ascii = (offset, text) => {
-      for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
-    };
-    ascii(0, "RIFF");
-    view.setUint32(4, 36 + frames * 2, true);
-    ascii(8, "WAVEfmt ");
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true); // PCM
-    view.setUint16(22, 1, true); // mono
-    view.setUint32(24, rate, true);
-    view.setUint32(28, rate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    ascii(36, "data");
-    view.setUint32(40, frames * 2, true);
-    for (let i = 0; i < frames; i++) {
-      const decay = 1 - i / frames;
-      const value = Math.sin((2 * Math.PI * frequency * i) / rate) * 0.6 * decay;
-      view.setInt16(44 + i * 2, Math.round(value * 32767), true);
-    }
-    return bytes;
+/**
+ * A short decaying sine as a mono 16-bit WAV — the input
+ * `SheetMusic.buildClickSoundFont` turns into a bank-128 SoundFont.
+ *
+ * Synthesized rather than fetched so the demo needs no click assets, and so the
+ * browser test can build a valid SoundFont without one being committed.
+ */
+function clickWav(frequency, seconds = 0.05, rate = 22050) {
+  const frames = Math.round(seconds * rate);
+  const bytes = new Uint8Array(44 + frames * 2);
+  const view = new DataView(bytes.buffer);
+  const ascii = (offset, text) => {
+    for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
   };
+  ascii(0, "RIFF");
+  view.setUint32(4, 36 + frames * 2, true);
+  ascii(8, "WAVEfmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  ascii(36, "data");
+  view.setUint32(40, frames * 2, true);
+  for (let i = 0; i < frames; i++) {
+    const decay = 1 - i / frames;
+    const value = Math.sin((2 * Math.PI * frequency * i) / rate) * 0.6 * decay;
+    view.setInt16(44 + i * 2, Math.round(value * 32767), true);
+  }
+  return bytes;
+}
 
-  const sf2 = sheetMusic.buildClickSoundFont(wav(1600), wav(1200));
+window.useGeneratedSoundFont = () => {
+  const sf2 = sheetMusic.buildClickSoundFont(clickWav(1600), clickWav(1200));
   if (sf2.length === 0) throw new Error("could not build a click SoundFont");
   soundFontBytes = sf2.slice().buffer;
   synthHost = null;
