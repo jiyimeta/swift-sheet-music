@@ -73,6 +73,73 @@ Rendered MIDI intentionally omits mixer-managed program changes and CC 7.
 Browser playback must reassert instrument and volume state from the mixer after
 loads and seeks.
 
+## Playback failure modes
+
+Each of these ships green. They are recorded because a passing test suite is
+what let every one of them through once.
+
+**Missing instrument state sounds like a working build.** Rendered MIDI omits
+the mixer-managed program change and CC 7, so a host that does not reassert them
+plays the score in time, with a correct cursor, entirely in Acoustic Grand
+Piano. Percussion hides it: channel 9 selects the drum bank whatever the program
+says, so the drums are right and the failure reads as one odd instrument rather
+than as nothing being applied.
+
+**A fixture whose parts are all piano cannot catch that.** Program 0 is both
+what such a score asks for and what an unasserted General MIDI channel falls
+back to, so "applied" and "not applied" are the same observation. Playback
+fixtures need at least two melodic parts on different non-zero patches, and
+distinct volumes; `mixer.mscz` exists for this.
+
+**A fixture without a repeat cannot test the playback clock.** `UnrolledTimeMap`
+is the identity on a score with no repeat plan, so notated and player seconds
+coincide and every conversion is a no-op. An implementation that dropped the
+projection entirely would still match. `repeat.mscz` separates the two clocks.
+
+**`unrolledSeconds(fromNotated:)` answers with the FIRST occurrence.** That is
+correct for a seek, a play-from and a loop wrap, and wrong for "where on the
+player's clock does this measure-play sit" — asking it that question puts every
+beat of a repeat's second pass back on the first pass's time.
+
+**An offline render fails as correct-length silence.** `startOfflineRender`
+takes its whole configuration up front, because Chromium drops worklet messages
+aimed at an `OfflineAudioContext`. A misconfigured render therefore produces a
+buffer of exactly the expected size, empty. Assert a peak level, not a byte
+count.
+
+**A sequencer's position is stale for a buffer or two after a seek.** Setting it
+is a message to the worklet, so reading it straight back gives the old value.
+Anything drawn from that reading shows where playback was: invisible while
+playing, because the next frame corrects it, and permanent while paused — which
+is exactly when a click-to-seek happens. Draw from the position that was seeked
+to.
+
+**Adding a sound bank does not prioritize it.** A click bank layered onto the
+metronome loads and stays inaudible until it is moved to the front of the
+priority order, because the General MIDI bank underneath keeps answering the
+click notes.
+
+## Testing the browser package
+
+Three layers, each answering something the others cannot:
+
+- Swift Testing on the wasm SDK covers the bridge entrypoints.
+- Node parity tests pin rendered MIDI and draw-program bytes against the Apple
+  build. Byte equality here is what stands behind "the browser engraves and
+  renders what the app does".
+- Playwright covers what only a real browser can answer: that the AudioWorklet
+  instantiates, that the synth accepts the rendered sequence, and that its clock
+  advances. Audio itself is not asserted; the cursor stands in, since it moves
+  only if the transport does.
+
+**Compare the canvas backing store, not an element screenshot.** An element
+screenshot is rasterized at the element's position on the page, so any change to
+the surrounding chrome shifts it by a fraction of a device pixel and
+re-antialiases every glyph. The comparison then fails without a drawing command
+having changed, and the response is to re-bless the baseline — which is how a
+rendering guard stops guarding. `canvas.toDataURL()` does not care where the
+canvas sits.
+
 ## Build and test
 
 Build the browser package with:
