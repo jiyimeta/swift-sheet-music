@@ -151,8 +151,9 @@ consumes them through a JNI bridge whose wire format is generated from
 Swift `@WireFormat` types by the
 [`swift-wirelet`](https://github.com/jiyimeta/swift-wirelet) Gradle plugin
 — one source of truth for the Swift↔Kotlin codecs, no hand-maintained
-parallel serialization. See `CLAUDE.md` for the toolchain setup and the
-Android module READMEs for the consumer story.
+parallel serialization. See `docs/development/android.md` for the toolchain
+and contributor workflow, and the Android module READMEs for the consumer
+story.
 
 That bridge is split across two targets, and the seam is drawn by a
 constraint rather than by taste:

@@ -13,7 +13,7 @@
 #   Scripts/preflight.sh --wasm       # WebAssembly: Swift tests, size gate, browser package
 #   Scripts/preflight.sh --android    # Android cross-compile + Kotlin tests + AAR
 #
-# Requirements for the Android stage mirror CLAUDE.md "Android build":
+# Requirements for the Android stage mirror docs/development/android.md:
 #   - swift.org Swift 6.3.3-RELEASE toolchain (prepended to PATH by the scripts)
 #   - Swift Android SDK + NDK sysroot staged
 #   - Java 17 + the WIRELET_PAT / gpr credentials for the wirelet Gradle plugin

@@ -48,8 +48,8 @@ aborted once with the files rewritten; re-stage and commit again.
 
 The Foundation-only subset cross-compiles to Android via the official
 swift.org Swift Android SDK. The toolchain, SDK, NDK sysroot, and the
-`wirelet` GitHub-Packages PAT are documented in `CLAUDE.md` under
-"Android build". Android changes are verified with
+`wirelet` GitHub-Packages PAT are documented in
+`docs/development/android.md`. Android changes are verified with
 `Scripts/preflight.sh --android`.
 
 ## Pre-merge verification

@@ -259,6 +259,7 @@ artifacts to GitHub Packages:
 |---|---|
 | `io.github.jiyimeta:sheet-music-android` | JNI bridge + bundled `libSheetMusicJNI.so`. Score load, layout, draw-program emit. |
 | `io.github.jiyimeta:sheet-music-audio-android` | FluidSynth (via [VolcanoMobile's `.aar`](https://github.com/VolcanoMobile/fluidsynth-android)) + [Oboe](https://github.com/google/oboe) low-latency PCM. Mirrors `PlaybackEngine` API on the Kotlin side. |
+| `io.github.jiyimeta:sheet-music-compose-android` | Compose rendering, playback overlays, and generated draw-program codecs. |
 
 The published artifacts are at **v1.0.0**. Consuming them in your own
 Android app needs a `read:packages` PAT and a one-time `swiftkit-core`
@@ -269,7 +270,8 @@ for the complete `settings.gradle.kts` recipe and packaging config.
 The instructions below (`Scripts/android-build-libs.sh` etc.) are for
 **building this repository itself**, not for consuming the published AAR.
 A working Compose demo lives at `Examples/Android/` (Pixel 6 Pro
-API 36 verified). Bootstrap is documented in `CLAUDE.md` —
+API 36 verified). Bootstrap is documented in
+[`docs/development/android.md`](docs/development/android.md) —
 the short form:
 
 ```bash
@@ -289,7 +291,8 @@ wrapping the wasm build with a Canvas2D renderer; see
 [its README](Web/sheet-music-web/README.md) for the consumer-side API, and
 [`Examples/Web/`](Examples/Web/) for a viewer you can open locally.
 
-Display only so far — playback and editing are not exposed to JavaScript yet.
+The bindings expose display and playback. Editing exists in the Swift engine
+but is not exposed to JavaScript yet.
 
 ```bash
 Scripts/wasm-build-web.sh                    # wasm + JavaScript glue
@@ -299,7 +302,9 @@ Scripts/web-example-serve.sh                 # http://localhost:8080/Examples/We
 ```
 
 The download is about 2.4 MB brotli. Cross-compiling needs the same swift.org
-toolchain the Android build does, plus the WebAssembly SDK and `binaryen`.
+toolchain the Android build does, plus the WebAssembly SDK and `binaryen`. See
+[`docs/development/webassembly.md`](docs/development/webassembly.md) for the
+contributor workflow and size gates.
 
 ### Toolchain: cross-compiling needs the swift.org Swift, not Xcode's
 
@@ -353,8 +358,8 @@ swift sdk install \
 
 `swift sdk list` should then report `swift-6.3.3-RELEASE_android`. The
 NDK sysroot also needs a one-time setup step (NDK r27d or later) — see
-`CLAUDE.md` for that and for the `WIRELET_PAT` / `gpr.key` credentials
-the Gradle side needs.
+[`docs/development/android.md`](docs/development/android.md) for that and for
+the `WIRELET_PAT` / `gpr.key` credentials the Gradle side needs.
 
 Local development also expects `swiftlint`, `swiftformat` and
 `pre-commit` on `PATH` (`brew install swiftlint swiftformat pre-commit`);
