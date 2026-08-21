@@ -1,5 +1,5 @@
 {
-  "originHash" : "d7cf634780b45cbda8b4c07fa62975b496499e36f8b47c13bc317cf521ba75d5",
+  "originHash" : "0d7bf7f2596c732f7cf191fe5dc389d7ab303a18c3ee1a76ec6d6541a5e05e20",
   "pins" : [
     {
       "identity" : "swift-argument-parser",
@@ -78,8 +78,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jiyimeta/swift-wirelet.git",
       "state" : {
-        "revision" : "40519125520fc8892484c784061d1b8b8656d2f8",
-        "version" : "0.4.0"
+        "revision" : "5d50726cd49ba52ba372f63540a0ea14d9cc1ba9",
+        "version" : "0.4.1"
       }
     },
     {
