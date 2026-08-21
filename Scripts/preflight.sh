@@ -76,7 +76,8 @@ if [[ "$run_wasm" == 1 ]]; then
     step "WebAssembly: Swift Testing on the wasm SDK"
     SWIFT_SHEET_MUSIC_WASM=1 swift package --package-path "$ROOT" \
         --disable-sandbox --swift-sdk swift-6.3.3-RELEASE_wasm \
-        js test --environment node
+        js test --environment node \
+        --prelude "$ROOT/Scripts/package-to-js-test-prelude.mjs"
 
     # Before the size gate, which reports the shipped artifact's size and can
     # only do so once this has produced one.

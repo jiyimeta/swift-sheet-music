@@ -8,7 +8,7 @@ struct InstrumentChangeMSCXTests {
     /// The hand-authored MIT fixture under `Resources/own/`.
     static func fixture() throws -> Data {
         let url = try #require(
-            Bundle.module.url(
+            TestResources.url(
                 forResource: "instrument-change", withExtension: "mscx",
             ),
             "fixture not bundled: instrument-change.mscx",

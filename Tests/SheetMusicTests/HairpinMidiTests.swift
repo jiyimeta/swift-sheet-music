@@ -8,10 +8,10 @@ import Testing
 struct HairpinMidiTests {
     @Test func testSingleNoteDynamicsVelocityRamp() throws {
         let scoreURL = try #require(
-            Bundle.module.url(forResource: "testSingleNoteDynamics", withExtension: "mscx"),
+            TestResources.url(forResource: "testSingleNoteDynamics", withExtension: "mscx"),
         )
         let refURL = try #require(
-            Bundle.module.url(forResource: "testSingleNoteDynamics-ref", withExtension: "mid"),
+            TestResources.url(forResource: "testSingleNoteDynamics-ref", withExtension: "mid"),
         )
         let score = try SheetMusic.loadScore(mscxData: Data(contentsOf: scoreURL))
         let produced = try SheetMusic.exportMIDI(score: score)

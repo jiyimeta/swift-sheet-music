@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     @testable import SheetMusicAudioCore
     @testable import SheetMusicBridgeCore
     import SheetMusicCore

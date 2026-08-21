@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT
     import CoreGraphics
     import Foundation
     @testable import SheetMusicAndroidJNI
@@ -16,7 +16,7 @@
 
         @Test
         func cacheStoreAndRetrieve() throws {
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "midi01", withExtension: "mscx",
             ))
             let bytes = try Data(contentsOf: url)
@@ -39,7 +39,7 @@
 
         @Test
         func cacheReleaseRemovesEntry() throws {
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "midi01", withExtension: "mscx",
             ))
             let bytes = try Data(contentsOf: url)
@@ -65,7 +65,7 @@
         @Test
         @available(macOS 15.0, iOS 16.0, *)
         func cursorBridgeReturnsResolvableFrame() throws {
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "midi01", withExtension: "mscx",
             ))
             let bytes = try Data(contentsOf: url)
@@ -125,7 +125,7 @@
         @Test
         @available(macOS 15.0, iOS 16.0, *)
         func beatCursorBridgeRoundTrip() throws {
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "midi01", withExtension: "mscx",
             ))
             let bytes = try Data(contentsOf: url)

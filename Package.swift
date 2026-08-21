@@ -139,10 +139,10 @@ var targets: [Target] = [
             // `/Encoding`. Until then the registry is simply empty there.
         ] : [],
     ),
-    // Always built (like SheetMusicAndroidJNI itself below): SheetMusicTests depends on it in both the
-    // Android and non-Android shapes, and SheetMusicAndroidJNI's own sources import it unconditionally.
-    // Only its *product* (below, in the `if isAndroid` block) is Android-gated — the same split
-    // SheetMusicAndroidJNI's target/product pair already uses.
+    // Always declared: Android and Apple host tests reach it through SheetMusicAndroidJNI,
+    // while WebAssembly reaches it through SheetMusicBridgeCore. Only its *product*
+    // (below, in the `if isAndroid` block) is Android-gated because the Swift target
+    // itself has no JNI or Apple dependency.
     //
     // The `Path/` and `Intent/` subdirectories are load-bearing for the Kotlin side, not just tidiness:
     // wirelet's Gradle codegen scans exactly one directory per source set, and `:SheetMusicAudioAndroid`
@@ -195,31 +195,6 @@ var targets: [Target] = [
             .swiftLanguageMode(.v5),
         ],
     ),
-    .target(
-        name: "SheetMusicAndroidJNI",
-        dependencies: [
-            "SheetMusicBridgeCore",
-            "SheetMusicCore",
-            "SheetMusicPDF",
-            "SheetMusicMSCX",
-            "SheetMusicMusicXML",
-            "SheetMusicLayout",
-            "SheetMusicMIDI",
-            "SheetMusicAudioCore",
-            "SheetMusicEditWire",
-            .product(name: "Wirelet", package: "swift-wirelet"),
-            .product(name: "SwiftJava", package: "swift-java"),
-        ],
-        exclude: [
-            "swift-java.config",
-        ],
-        swiftSettings: [
-            .swiftLanguageMode(.v5),
-        ],
-        plugins: [
-            .plugin(name: "JExtractSwiftPlugin", package: "swift-java"),
-        ],
-    ),
     .testTarget(
         name: "SheetMusicAudioCoreTests",
         dependencies: ["SheetMusicAudioCore", "SheetMusicCore"],
@@ -227,14 +202,15 @@ var targets: [Target] = [
 ]
 
 // `SheetMusicAudioCoreTests` above cross-builds for WebAssembly as it stands —
-// its only dependencies are AudioCore and Core, both portable. `SheetMusicTests`
-// cannot, and not only because its Apple-framework guards are spelled
-// `#if !os(Android)`, which is true on WASI: it depends on `SheetMusicAudio`,
-// whose Apple half reaches `CSequencerHostTime` and so `AVFAudio/AVFAudio.h`,
-// and on `SheetMusicAndroidJNI`, which pulls SwiftJava. Widening the source
-// guards would not move either of those. Getting the whole suite onto wasm is
-// its own piece of work; until then the wasm-only suite below is what runs.
+// its only dependencies are AudioCore and Core, both portable. The wasm
+// `SheetMusicTests` shape below uses the Android dependency list minus
+// SheetMusicAndroidJNI and the explicit Wirelet dependency; non-portable test
+// files are excluded by the named test-support guards.
 if isWasm {
+    let sheetMusicTestsSwiftSettings: [SwiftSetting] = [
+        .define("SHEET_MUSIC_HAS_PREOPENED_TEST_RESOURCES"),
+    ]
+
     targets += [
         .testTarget(
             name: "SheetMusicWasmBridgeTests",
@@ -249,8 +225,44 @@ if isWasm {
             ],
             path: "Tests/SheetMusicWasmBridgeTests",
         ),
+        .testTarget(
+            name: "SheetMusicTests",
+            dependencies: [
+                "SheetMusic",
+                "SheetMusicCore",
+                "SheetMusicMIDI",
+                "SheetMusicMSCX",
+                "SheetMusicMusicXML",
+                "SheetMusicLayout",
+                "SheetMusicBridgeCore",
+                "SheetMusicEditWire",
+                "SheetMusicAudioCore",
+                "SheetMusicFoundation",
+                "SheetMusicXMLTools",
+                "SheetMusicZip",
+            ],
+            resources: [
+                .process("Resources"),
+            ],
+            swiftSettings: sheetMusicTestsSwiftSettings,
+        ),
     ]
 } else {
+    var sheetMusicTestsSwiftSettings: [SwiftSetting] = [
+        .define("SHEET_MUSIC_HAS_FOUNDATION_XML_REFERENCE_ORACLE"),
+        .define("SHEET_MUSIC_HAS_LOCALIZED_ERROR_DESCRIPTION_BRIDGING"),
+    ]
+
+    if !isAndroid {
+        sheetMusicTestsSwiftSettings += [
+            .define("SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT"),
+            // JNI bridge tests currently run in the Apple-host SheetMusicTests shape.
+            // The Android cross-build links SheetMusicAndroidJNI to compile portable
+            // callers, but it does not execute the Swift JNI test files there.
+            .define("SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT"),
+        ]
+    }
+
     targets += [
         .testTarget(
             name: "SheetMusicTests",
@@ -293,6 +305,7 @@ if isWasm {
             resources: [
                 .process("Resources"),
             ],
+            swiftSettings: sheetMusicTestsSwiftSettings,
         ),
     ]
 }
@@ -406,6 +419,36 @@ if !isAndroid {
             ),
         ]
     }
+}
+
+if !isWasm {
+    targets += [
+        .target(
+            name: "SheetMusicAndroidJNI",
+            dependencies: [
+                "SheetMusicBridgeCore",
+                "SheetMusicCore",
+                "SheetMusicPDF",
+                "SheetMusicMSCX",
+                "SheetMusicMusicXML",
+                "SheetMusicLayout",
+                "SheetMusicMIDI",
+                "SheetMusicAudioCore",
+                "SheetMusicEditWire",
+                .product(name: "Wirelet", package: "swift-wirelet"),
+                .product(name: "SwiftJava", package: "swift-java"),
+            ],
+            exclude: [
+                "swift-java.config",
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v5),
+            ],
+            plugins: [
+                .plugin(name: "JExtractSwiftPlugin", package: "swift-java"),
+            ],
+        ),
+    ]
 }
 
 if isAndroid {

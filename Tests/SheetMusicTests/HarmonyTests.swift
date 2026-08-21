@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import Foundation
     @testable import SheetMusic
     @testable import SheetMusicCore
@@ -430,7 +430,7 @@
 
         @available(macOS 15.0, iOS 16.0, *)
         @Test func layoutEmitsHarmonyAboveStaff() throws {
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "harmony-basic", withExtension: "mscx",
             ))
             let score = try SheetMusic.loadScore(mscxURL: url)
@@ -639,7 +639,7 @@
         }
 
         @Test func basicFixtureExposesFiveHarmonies() throws {
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "harmony-basic", withExtension: "mscx",
             ))
             let score = try SheetMusic.loadScore(mscxURL: url)

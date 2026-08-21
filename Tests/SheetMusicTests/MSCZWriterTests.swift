@@ -7,7 +7,7 @@ import Testing
 struct MSCZWriterTests {
     @Test func roundTripDefaultMainName() throws {
         let mscx = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
         )
         let mscxData = try Data(contentsOf: mscx)
         let msczData = try MSCZWriter.write(mscxData: mscxData)
@@ -18,7 +18,7 @@ struct MSCZWriterTests {
 
     @Test func roundTripCustomMainName() throws {
         let mscx = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
         )
         let mscxData = try Data(contentsOf: mscx)
         let msczData = try MSCZWriter.write(
@@ -62,7 +62,7 @@ struct MSCZWriterTests {
 
     @Test func writeToURLThenReadBack() throws {
         let mscx = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
         )
         let mscxData = try Data(contentsOf: mscx)
 
@@ -78,7 +78,7 @@ struct MSCZWriterTests {
 
     @Test func outputContainsContainerXMLPointingAtMainEntry() throws {
         let mscx = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
         )
         let mscxData = try Data(contentsOf: mscx)
         let msczData = try MSCZWriter.write(

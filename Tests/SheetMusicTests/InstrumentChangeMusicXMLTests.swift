@@ -9,7 +9,7 @@ import Testing
 struct InstrumentChangeMusicXMLTests {
     static func fixture() throws -> Score {
         let url = try #require(
-            Bundle.module.url(
+            TestResources.url(
                 forResource: "instrument-change", withExtension: "musicxml",
             ),
             "fixture not bundled: instrument-change.musicxml",
@@ -57,7 +57,7 @@ struct InstrumentChangeMusicXMLTests {
     @Test("midi-instrument unit conversions are correct for both instruments")
     func midiInstrumentConversionsForBothInstruments() throws {
         let url = try #require(
-            Bundle.module.url(forResource: "instrument-change", withExtension: "musicxml"),
+            TestResources.url(forResource: "instrument-change", withExtension: "musicxml"),
         )
         let root = try XMLTreeParser.parse(Data(contentsOf: url))
         let scorePart = try #require(root.first("part-list")?.first("score-part"))
@@ -204,7 +204,7 @@ struct InstrumentChangeMusicXMLTests {
     @Test("a part whose notes never switch id gets no change")
     func noSpuriousChanges() throws {
         let url = try #require(
-            Bundle.module.url(forResource: "glissando-wavy", withExtension: "musicxml"),
+            TestResources.url(forResource: "glissando-wavy", withExtension: "musicxml"),
         )
         let score = try MusicXMLParser.parse(Data(contentsOf: url))
         let changes = score.systemMeasures.flatMap(\.elements).count {

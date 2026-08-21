@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import CoreGraphics
     import Foundation
     @testable import SheetMusicCore
@@ -12,7 +12,7 @@
         @available(macOS 15.0, iOS 16.0, *)
         @Test func staffDefaultAnchor() throws {
             let url = try #require(
-                Bundle.module.url(
+                TestResources.url(
                     forResource: "multiPartMixedStaves",
                     withExtension: "mscx",
                 ),
@@ -42,7 +42,7 @@
         @Test("sticky-header clef has nil anchor")
         func stickyHeaderHasNilAnchor() throws {
             let url = try #require(
-                Bundle.module.url(
+                TestResources.url(
                     forResource: "multiPartMixedStaves",
                     withExtension: "mscx",
                 ),
@@ -90,7 +90,7 @@
             // here) is short enough that it always fits in one system,
             // so it can't exercise the continuation-system path.
             let url = try #require(
-                Bundle.module.url(
+                TestResources.url(
                     forResource: "harmony-basic",
                     withExtension: "mscx",
                 ),

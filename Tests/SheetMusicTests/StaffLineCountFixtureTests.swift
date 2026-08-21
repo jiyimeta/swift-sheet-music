@@ -29,7 +29,7 @@
 
         /// `Resources/staff-line-count.mscx`, parsed and laid out.
         private func fixtureLayout() throws -> (score: Score, system: LayoutSystem) {
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "staff-line-count", withExtension: "mscx",
             ))
             let score = try MSCXParser.parse(Data(contentsOf: url))

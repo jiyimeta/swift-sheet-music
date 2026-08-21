@@ -15,7 +15,7 @@ import Testing
 /// silently dropped (permissive parser).
 struct MusicXMLGlissandoTests {
     @Test func wavy_glissando_attaches_to_start_note_as_chromatic_wavy() throws {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "glissando-wavy", withExtension: "musicxml",
         ))
         let score = try MusicXMLParser.parse(Data(contentsOf: url))
@@ -26,7 +26,7 @@ struct MusicXMLGlissandoTests {
     }
 
     @Test func slide_attaches_as_portamento() throws {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "slide-portamento", withExtension: "musicxml",
         ))
         let score = try MusicXMLParser.parse(Data(contentsOf: url))
@@ -36,7 +36,7 @@ struct MusicXMLGlissandoTests {
     }
 
     @Test func unmatched_stop_does_not_attach_or_crash() throws {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "glissando-unmatched-stop", withExtension: "musicxml",
         ))
         let score = try MusicXMLParser.parse(Data(contentsOf: url))

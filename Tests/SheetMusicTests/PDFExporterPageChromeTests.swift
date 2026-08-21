@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import CoreGraphics
     import Foundation
     import PDFKit
@@ -16,7 +16,7 @@
         /// the footer's `$C` copyright (empty in our synthetic score).
         @Test func defaultHeaderHiddenOnFirstPage() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "testArpeggio", withExtension: "mscx",
             ))
             let score = try MSCXParser.parse(

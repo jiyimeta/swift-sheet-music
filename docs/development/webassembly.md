@@ -154,11 +154,54 @@ Run the portable Swift tests through PackageToJS:
 
 ```bash
 SWIFT_SHEET_MUSIC_WASM=1 swift package --disable-sandbox \
-    --swift-sdk swift-6.3.3-RELEASE_wasm js test --environment node
+    --swift-sdk swift-6.3.3-RELEASE_wasm js test --environment node \
+    --prelude Scripts/package-to-js-test-prelude.mjs
 ```
 
 `--disable-sandbox` is required because the command plugin installs the WASI
 JavaScript shim used by the test host.
+The prelude populates PackageToJS's in-memory WASI filesystem from SwiftPM's
+generated `SheetMusicTests` resource bundle under `.build/wasm32-unknown-wasip1`;
+it does not copy fixtures from `Tests/SheetMusicTests/Resources`.
+Swift tests should read fixtures through `Tests/SheetMusicTests/Helpers/TestResources.swift`:
+native platforms still use `Bundle.module`, while WASI reads the preopened
+bundle path. This keeps the GPL fixtures confined to the SwiftPM test target;
+do not make the prelude copy from the source fixture tree.
+
+As of the wasm test-suite migration, the collected surface is:
+
+- Apple: 2908 tests.
+- wasm: 1571 tests.
+- Net gap: 1337 tests, with 62 wasm-only bridge tests offsetting 1399 Apple
+  tests absent from wasm.
+
+The absent Apple tests break down by cause:
+
+- 875 tests: whole-file `SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT` guards
+  for Apple frameworks/products or Apple font/audio/PDF test support.
+- 9 tests: scoped `SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT` guards.
+- 239 tests: `SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT` guards for JNI/Wirelet
+  bridge tests that currently run only in the Apple-host test shape.
+- 242 tests: legacy platform guards not yet migrated to named predicates.
+- 10 tests: scoped legacy platform guards.
+- 13 tests: whole `SheetMusicAudioAppleTests` target, absent from the wasm
+  manifest shape.
+- 11 tests: individually predicated host capabilities or reference-oracle checks
+  unavailable in the current wasm test host.
+
+Some checks are still intentionally deferred rather than weakened:
+
+- `SheetMusicError.localizedDescription` on WASI currently falls back to a
+  generic FoundationEssentials string instead of `SheetMusicError.errorDescription`.
+  Fix this on `SheetMusicError` itself by adding a portable message surface for
+  the single error type required by this repository. `CustomStringConvertible`
+  is the likely vehicle because `LocalizedError` is unavailable under
+  FoundationEssentials; JavaScript-facing APIs should use that portable string
+  instead of relying on Foundation bridging.
+- `XMLTreeParserDifferentialTests` still run this package's parser on WASI, but
+  skip comparison against the FoundationXML reference oracle there. FoundationXML
+  on WASI drops CDATA text and accepts multiple roots, so it is not a trustworthy
+  oracle for the portable parser.
 
 Run the direct zlib parity probe with:
 

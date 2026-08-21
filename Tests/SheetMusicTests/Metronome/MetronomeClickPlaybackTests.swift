@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import AVFoundation
     import Foundation
     @testable import SheetMusicAudioApple
@@ -29,7 +29,7 @@
             }
 
             private func loadMidi01() throws -> Score {
-                let url = try #require(Bundle.module.url(forResource: "midi01", withExtension: "mscx"))
+                let url = try #require(TestResources.url(forResource: "midi01", withExtension: "mscx"))
                 return try MSCXParser.parse(contentsOf: url)
             }
 

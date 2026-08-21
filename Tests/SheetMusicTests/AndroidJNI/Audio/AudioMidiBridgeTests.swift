@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT
     import Foundation
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicAudioCore
@@ -11,7 +11,7 @@
     // MARK: - Fixture helper
 
     private func loadFixtureScore() throws -> Score {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "midi01",
             withExtension: "mscx",
         ))
@@ -27,7 +27,7 @@
     /// `takeLiveChannel()`, giving a remap that is provably not the
     /// identity map (see `renderMidiChannelsFollowLiveChannelPlan`).
     private func loadInstrumentChangeFixtureScore() throws -> Score {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "instrument-change",
             withExtension: "mscx",
         ))

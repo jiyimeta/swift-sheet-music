@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT
     import Foundation
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicAudioApple
@@ -13,7 +13,7 @@
     struct InstrumentChangeMixerTests {
         static func fixtureScore() throws -> Score {
             let url = try #require(
-                Bundle.module.url(
+                TestResources.url(
                     forResource: "instrument-change", withExtension: "mscx",
                 ),
             )

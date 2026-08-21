@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import Foundation
     @testable import SheetMusicCore
     @testable import SheetMusicLayout
@@ -61,7 +61,7 @@
         @Test("a visible change is one spatium above where a staff text on the same staff would land")
         func emitsElement() throws {
             let url = try #require(
-                Bundle.module.url(
+                TestResources.url(
                     forResource: "instrument-change", withExtension: "mscx",
                 ),
             )
@@ -122,7 +122,7 @@
         @Test("an invisible change is not drawn by default")
         func invisibleChangeIsNotDrawnByDefault() throws {
             let url = try #require(
-                Bundle.module.url(
+                TestResources.url(
                     forResource: "instrument-change", withExtension: "mscx",
                 ),
             )

@@ -7,7 +7,7 @@ import Testing
 
 struct MidiReaderRoundTripTests {
     @Test func readsMidi01Reference() throws {
-        let url = try #require(Bundle.module.url(forResource: "midi01-ref", withExtension: "mid"))
+        let url = try #require(TestResources.url(forResource: "midi01-ref", withExtension: "mid"))
         let file = try MidiReader.read(Data(contentsOf: url))
         #expect(file.format == 1)
         #expect(file.division == 480)

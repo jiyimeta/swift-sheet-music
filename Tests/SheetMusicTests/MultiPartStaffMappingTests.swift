@@ -5,7 +5,7 @@ import Testing
 
 struct MultiPartStaffMappingTests {
     private static func loadMixed() throws -> Score {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "multiPartMixedStaves",
             withExtension: "mscx",
         ))
@@ -34,7 +34,7 @@ struct MultiPartStaffMappingTests {
     }
 
     @Test func midi01IdLessFallback() throws {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "midi01", withExtension: "mscx",
         ))
         let s = try MSCXParser.parse(contentsOf: url)

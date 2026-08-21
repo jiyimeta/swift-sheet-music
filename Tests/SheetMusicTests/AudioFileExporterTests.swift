@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import AVFoundation
     @testable import SheetMusicAudio
     @testable import SheetMusicAudioApple
@@ -214,7 +214,7 @@
     }
 
     private func loadMidi01() throws -> Score {
-        guard let url = Bundle.module.url(
+        guard let url = TestResources.url(
             forResource: "midi01", withExtension: "mscx",
         ) else {
             struct MissingFixture: Error {}

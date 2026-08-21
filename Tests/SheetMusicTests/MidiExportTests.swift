@@ -55,8 +55,8 @@ struct MidiExportTests {
     }
 
     private func assertExportMatchesReference(name: String) throws {
-        let scoreURL = try #require(Bundle.module.url(forResource: name, withExtension: "mscx"))
-        let refURL = try #require(Bundle.module.url(forResource: "\(name)-ref", withExtension: "mid"))
+        let scoreURL = try #require(TestResources.url(forResource: name, withExtension: "mscx"))
+        let refURL = try #require(TestResources.url(forResource: "\(name)-ref", withExtension: "mid"))
 
         let score = try SheetMusic.loadScore(mscxData: Data(contentsOf: scoreURL))
         let produced = try SheetMusic.exportMIDI(score: score)

@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import Foundation
     @testable import SheetMusicCore
     @testable import SheetMusicMSCX
@@ -23,7 +23,7 @@
         @Test(arguments: fixtures)
         func mscxRoundTripsThroughPDF(name: String) throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
-            let mscxURL = try #require(Bundle.module.url(
+            let mscxURL = try #require(TestResources.url(
                 forResource: name, withExtension: "mscx",
             ))
             let mscxData = try Data(contentsOf: mscxURL)

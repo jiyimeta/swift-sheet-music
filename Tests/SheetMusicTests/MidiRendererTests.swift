@@ -7,7 +7,7 @@ import Testing
 
 struct MidiRendererTests {
     @Test func rendersMidi01HeaderAndNotes() throws {
-        let url = try #require(Bundle.module.url(forResource: "midi01", withExtension: "mscx"))
+        let url = try #require(TestResources.url(forResource: "midi01", withExtension: "mscx"))
         let score = try MSCXParser.parse(Data(contentsOf: url))
         let file = try MidiRenderer.render(score: score)
 
