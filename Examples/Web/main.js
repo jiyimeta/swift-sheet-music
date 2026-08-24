@@ -26,6 +26,7 @@ const fileInput = document.querySelector("#file");
 const soundFontInput = document.querySelector("#soundfont");
 const playButton = document.querySelector("#play");
 const stopButton = document.querySelector("#stop");
+const editModeBox = document.querySelector("#edit-mode");
 const countInBox = document.querySelector("#countin");
 const metronomeBox = document.querySelector("#metronome");
 const rateSlider = document.querySelector("#rate");
@@ -59,6 +60,30 @@ let soundFontBytes = null;
 let synthHost = null;
 let engine = null;
 let loopRange = null;
+let editMode = false;
+let selectedItem = null;
+let selectedPitch = null;
+let editCount = 0;
+
+const CHROMATIC_SHARP_TPCS = [14, 21, 16, 23, 18, 13, 20, 15, 22, 17, 24, 19];
+const LETTER_PITCH_CLASSES = new Map([
+  ["C", 0],
+  ["D", 2],
+  ["E", 4],
+  ["F", 5],
+  ["G", 7],
+  ["A", 9],
+  ["B", 11],
+]);
+const DIGIT_DURATIONS = new Map([
+  ["1", "whole"],
+  ["2", "half"],
+  ["3", "quarter"],
+  ["4", "eighth"],
+  ["5", "sixteenth"],
+  ["6", "thirtySecond"],
+  ["7", "sixtyFourth"],
+]);
 
 async function boot() {
   sheetMusic = await loadSheetMusic({
@@ -86,12 +111,27 @@ async function boot() {
 function render(bytes) {
   openScore?.release();
   openScore = sheetMusic.loadScore(bytes);
+  selectedItem = null;
+  selectedPitch = null;
+  editCount = 0;
+  document.body.dataset.editRefusal = "";
+  if (editMode) {
+    openScore.beginEditing();
+  }
   const { title, composer, partCount, staffCount, openingQuarterBpm } =
     openScore.metadata;
   status.textContent =
     `${title || "untitled"}${composer ? ` — ${composer}` : ""} · ` +
     `${partCount} part(s), ${staffCount} stave(s), ♩ = ${Math.round(openingQuarterBpm)}`;
 
+  drawOpenScore();
+  resetPlayback();
+  updateEditDataset();
+  updateControls();
+}
+
+function drawOpenScore() {
+  if (!openScore) return;
   const pages = openScore.layout({ pageWidthMM: 210, pageHeightMM: 297 });
   pagesHost.replaceChildren();
   tiles = [];
@@ -108,6 +148,8 @@ function render(bytes) {
     for (const tile of planPageTiles(page, PX_PER_MM)) {
       const holder = document.createElement("div");
       holder.className = "tile";
+      holder.dataset.offsetMm = String(tile.offsetMM);
+      holder.dataset.heightMm = String(tile.heightMM);
       const canvas = document.createElement("canvas");
       canvas.width = Math.round(page.widthMM * PX_PER_MM);
       canvas.height = Math.round(tile.heightMM * PX_PER_MM);
@@ -125,10 +167,14 @@ function render(bytes) {
       // play — the same unit the bridge answers cursor rectangles in.
       const tileOffsetMM = tile.offsetMM;
       canvas.addEventListener("click", (event) => {
-        if (!engine) return;
         const box = canvas.getBoundingClientRect();
         const xMM = (event.clientX - box.left) / CSS_PX_PER_MM;
         const yMM = (event.clientY - box.top) / CSS_PX_PER_MM + tileOffsetMM;
+        if (editMode) {
+          selectAtPoint(xMM, yMM);
+          return;
+        }
+        if (!engine) return;
         engine.seekToPoint(xMM, yMM);
         document.body.dataset.lastTap = `${xMM.toFixed(1)},${yMM.toFixed(1)}`;
         document.body.dataset.lastTapSeconds = String(
@@ -155,8 +201,6 @@ function render(bytes) {
   loopFrom.max = String(summary?.measureCount ?? 1);
   loopTo.max = String(summary?.measureCount ?? 1);
   loopTo.value = String(summary?.measureCount ?? 1);
-  resetPlayback();
-  updateControls();
 }
 
 // MARK: overlays
@@ -210,6 +254,226 @@ function drawLoopHighlight() {
     const element = document.createElement("div");
     element.className = "loop-highlight";
     placeOnTile(element, rects[i], rects[i + 1], rects[i + 2], rects[i + 3]);
+  }
+}
+
+function drawSelectionAndCaret() {
+  clearOverlays("selection");
+  clearOverlays("caret");
+  document.body.dataset.caretX = "";
+  document.body.dataset.caretY = "";
+  if (!openScore || !selectedItem) return;
+  const rect = openScore.caretRect(selectedItem, 3);
+  if (!rect) return;
+
+  const selection = document.createElement("div");
+  selection.className = "selection";
+  placeOnTile(selection, rect.xMM, rect.yMM, rect.widthMM, rect.heightMM);
+
+  const caret = document.createElement("div");
+  caret.className = "caret";
+  if (placeOnTile(caret, rect.xMM, rect.yMM, 0.45, rect.heightMM)) {
+    document.body.dataset.caretX = rect.xMM.toFixed(3);
+    document.body.dataset.caretY = rect.yMM.toFixed(3);
+  }
+}
+
+function selectedItemToken(item) {
+  if (!item) return "";
+  return (
+    `${item.kind}:` +
+    [
+      item.partIndex,
+      item.staffIndexInPart,
+      item.measureIndex,
+      item.voiceIndex,
+      item.elementIndex,
+      item.noteIndexInChord,
+    ].join("/")
+  );
+}
+
+function updateEditDataset() {
+  const state = openScore?.editState();
+  document.body.dataset.editMode = editMode ? "true" : "";
+  document.body.dataset.selectedItem = selectedItemToken(selectedItem);
+  document.body.dataset.selectedPitch =
+    selectedItem?.kind === "note" && selectedPitch !== null ? String(selectedPitch) : "";
+  document.body.dataset.editCount = String(editCount);
+  document.body.dataset.canUndo = state?.canUndo ? "true" : "";
+  document.body.dataset.canRedo = state?.canRedo ? "true" : "";
+  document.body.dataset.fingerprint = openScore?.fingerprint ?? "";
+}
+
+function clearSelection() {
+  selectedItem = null;
+  selectedPitch = null;
+  clearOverlays("selection");
+  clearOverlays("caret");
+  updateEditDataset();
+}
+
+function selectAtPoint(xMM, yMM) {
+  if (!openScore) return;
+  const item = openScore.hitTest(xMM, yMM, 0);
+  if (!item) {
+    clearSelection();
+    return;
+  }
+  selectedItem = item;
+  selectedPitch = item.kind === "note" ? item.pitch : null;
+  drawSelectionAndCaret();
+  document.body.dataset.editRefusal = "";
+  updateEditDataset();
+}
+
+function relayoutAfterAcceptedEdit(keepSelection) {
+  drawOpenScore();
+  if (!keepSelection) {
+    selectedItem = null;
+    selectedPitch = null;
+  }
+  drawSelectionAndCaret();
+  updateEditDataset();
+  updateControls();
+}
+
+function applyDemoEdit(intent) {
+  if (!openScore) return false;
+  const outcome = openScore.applyEdit(intent);
+  document.body.dataset.editRefusal = outcome.accepted ? "" : outcome.code;
+  if (!outcome.accepted) {
+    updateEditDataset();
+    return false;
+  }
+  editCount += 1;
+  relayoutAfterAcceptedEdit(true);
+  return true;
+}
+
+function runUndoRedo(operation) {
+  if (!openScore) return;
+  const outcome = operation === "undo" ? openScore.undo() : openScore.redo();
+  document.body.dataset.editRefusal = outcome.accepted ? "" : outcome.code;
+  if (!outcome.accepted) {
+    updateEditDataset();
+    return;
+  }
+  editCount += 1;
+  relayoutAfterAcceptedEdit(false);
+}
+
+function noteRef(item) {
+  return {
+    partIndex: item.partIndex,
+    staffIndexInPart: item.staffIndexInPart,
+    measureIndex: item.measureIndex,
+    voiceIndex: item.voiceIndex,
+    elementIndex: item.elementIndex,
+    noteIndexInChord: item.noteIndexInChord,
+  };
+}
+
+function elementRef(item) {
+  return {
+    partIndex: item.partIndex,
+    staffIndexInPart: item.staffIndexInPart,
+    measureIndex: item.measureIndex,
+    voiceIndex: item.voiceIndex,
+    elementIndex: item.elementIndex,
+  };
+}
+
+function pitchNear(letter, referencePitch) {
+  const pitchClass = LETTER_PITCH_CLASSES.get(letter);
+  if (pitchClass === undefined) return referencePitch;
+  let pitch = Math.floor(referencePitch / 12) * 12 + pitchClass;
+  while (pitch - referencePitch > 6) pitch -= 12;
+  while (referencePitch - pitch > 6) pitch += 12;
+  return pitch;
+}
+
+function handleEditKey(event) {
+  if (!editMode || !openScore) return;
+  const undoKey = event.key.toLowerCase() === "z" && (event.metaKey || event.ctrlKey);
+  if (undoKey) {
+    event.preventDefault();
+    runUndoRedo(event.shiftKey ? "redo" : "undo");
+    return;
+  }
+  if (!selectedItem) return;
+
+  if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+    if (selectedItem.kind !== "note" || selectedPitch === null) return;
+    event.preventDefault();
+    const pitch = selectedPitch + (event.key === "ArrowUp" ? 1 : -1);
+    if (
+      applyDemoEdit({
+        type: "setNotePitch",
+        at: noteRef(selectedItem),
+        pitch,
+        tpc: CHROMATIC_SHARP_TPCS[((pitch % 12) + 12) % 12],
+        accidental: null,
+      })
+    ) {
+      selectedPitch = pitch;
+      selectedItem = {
+        ...selectedItem,
+        pitch,
+        tpc: CHROMATIC_SHARP_TPCS[((pitch % 12) + 12) % 12],
+      };
+      updateEditDataset();
+    }
+    return;
+  }
+
+  const letter = event.key.toUpperCase();
+  if (LETTER_PITCH_CLASSES.has(letter)) {
+    if (selectedItem.kind !== "note" && selectedItem.kind !== "rest") return;
+    event.preventDefault();
+    const pitch = pitchNear(letter, selectedPitch ?? 60);
+    const intent =
+      selectedItem.kind === "rest"
+        ? {
+            type: "inputNote",
+            at: elementRef(selectedItem),
+            pitch,
+            tpc: CHROMATIC_SHARP_TPCS[pitch % 12],
+          }
+        : {
+            type: "writeNote",
+            at: elementRef(selectedItem),
+            pitch,
+            tpc: CHROMATIC_SHARP_TPCS[pitch % 12],
+          };
+    if (applyDemoEdit(intent)) {
+      selectedItem = {
+        ...selectedItem,
+        kind: "note",
+        pitch,
+        tpc: CHROMATIC_SHARP_TPCS[pitch % 12],
+      };
+      selectedPitch = pitch;
+      updateEditDataset();
+    }
+    return;
+  }
+
+  const duration = DIGIT_DURATIONS.get(event.key);
+  if (duration) {
+    if (selectedItem.kind !== "note" && selectedItem.kind !== "rest") return;
+    event.preventDefault();
+    applyDemoEdit({
+      type: selectedItem.kind === "note" ? "setChordDuration" : "setRestDuration",
+      at: elementRef(selectedItem),
+      duration,
+    });
+    return;
+  }
+
+  if (event.key === "Backspace") {
+    event.preventDefault();
+    applyDemoEdit({ type: "delete", at: elementRef(selectedItem) });
   }
 }
 
@@ -345,12 +609,31 @@ function reflectAudibility() {
 
 function updateControls() {
   const ready = Boolean(openScore) && Boolean(soundFontBytes);
-  playButton.disabled = !ready;
-  stopButton.disabled = !engine;
-  loopApply.disabled = !engine;
-  loopClear.disabled = !engine;
-  exportButton.disabled = !engine?.canExport;
+  playButton.disabled = !ready || editMode;
+  stopButton.disabled = !engine || editMode;
+  loopApply.disabled = !engine || editMode;
+  loopClear.disabled = !engine || editMode;
+  exportButton.disabled = !engine?.canExport || editMode;
   playButton.textContent = engine?.state === "playing" ? "Pause" : "Play";
+}
+
+function setEditMode(enabled) {
+  if (editMode === enabled) return;
+  editMode = enabled;
+  resetPlayback();
+  selectedItem = null;
+  selectedPitch = null;
+  if (openScore) {
+    if (enabled) {
+      openScore.beginEditing();
+    } else {
+      openScore.endEditing();
+    }
+  }
+  clearOverlays("selection");
+  clearOverlays("caret");
+  updateEditDataset();
+  updateControls();
 }
 
 /**
@@ -468,6 +751,12 @@ loopClear.addEventListener("click", () => {
   engine?.setLoop(null);
   clearOverlays("loop-highlight");
 });
+
+editModeBox.addEventListener("change", () => {
+  setEditMode(editModeBox.checked);
+});
+
+document.addEventListener("keydown", handleEditKey);
 
 exportButton.addEventListener("click", async () => {
   if (!engine) return;

@@ -120,6 +120,18 @@
         background: rgb(255 204 0 / 0.22);
         pointer-events: none;
       }
+      .selection {
+        position: absolute;
+        box-sizing: border-box;
+        border: 1px solid rgb(0 122 255 / 0.65);
+        background: rgb(0 122 255 / 0.12);
+        pointer-events: none;
+      }
+      .caret {
+        position: absolute;
+        background: rgb(0 122 255 / 0.75);
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
@@ -139,6 +151,7 @@
       </label>
       <button id="play" type="button" disabled>Play</button>
       <button id="stop" type="button" disabled>Stop</button>
+      <label><input id="edit-mode" type="checkbox" /> edit</label>
       <label><input id="countin" type="checkbox" /> count-in</label>
       <label><input id="metronome" type="checkbox" /> metronome</label>
       <label>
