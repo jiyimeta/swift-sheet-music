@@ -9,6 +9,12 @@ and this project adheres to
 
 ### Added
 
+- **Editing in the browser.** `Score` gains `beginEditing` / `endEditing`, a typed `applyEdit` over all
+  thirteen scalar `EditIntent` cases, `applyEditIntentBytes` for a relayed composite, `undo` / `redo`,
+  `editState`, `hitTest` and `caretRect`. An accepted edit publishes back into the same handle, so
+  every downstream consumer keeps working across it. `EditReplayScript`'s fourteen steps now replay
+  through the browser facade against the same fingerprint chain the Apple host and the Android device
+  assert, so "the browser edits what the app does" is pinned rather than assumed.
 - **Band culling in the browser renderer.** `splitIntoBands` slices a page's draw program into
   self-contained horizontal bands — a port of Android's `ScoreBands.kt` — and `drawTile` paints a
   tile from only the bands whose ink reaches it. A page too tall for one canvas previously walked
@@ -62,6 +68,17 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking.** A tapped `.tuplet` now crosses `Score.engineCursorForFilteredTap` and
+  `translateCursorForHiddenStaves` re-addressed like `.note` and `.rest`, instead of passing through
+  in the rendered document's numbering. With a hidden staff ahead of a tuplet's own staff in the same
+  part, a hit-test result fed into an edit intent named the wrong staff. Hosts holding a tuplet id
+  across a visibility change now hold the full-score address; the `.tuplet` special-cases in the
+  Android geometry bridge are gone with the mixed contract that forced them.
+- `LayoutDocument.editingCaretRect` resolves a caret for a selected tuplet, anchored to the column of
+  the bracket's first member. It previously returned nil, because it goes through `cursorFrame` and a
+  playback head never sits on a bracket — correct for a playback head, wrong for an editing caret.
+- `releaseScore` on the WebAssembly bridge also ends any open edit session, so a session cannot
+  outlive its handle.
 - **Breaking.** `computeLayout` on the WebAssembly bridge takes a `LayoutOptions` argument. There is
   no options-less overload: two entry points into the same engraver drift, and the browser facade
   supplies the defaults instead.

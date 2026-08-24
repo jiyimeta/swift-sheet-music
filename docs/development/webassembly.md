@@ -129,6 +129,50 @@ metronome loads and stays inaudible until it is moved to the front of the
 priority order, because the General MIDI bank underneath keeps answering the
 click notes.
 
+## Editing
+
+Android's edit surface is a relay: the host keeps the authoritative score in a
+second Swift image, encodes an intent there, and Kotlin couriers the bytes. A
+browser has no second Swift image, so JavaScript authors the edit. Each of the
+thirteen leaf `EditIntent` cases has its own entry point taking lowered scalars,
+and Swift builds the intent. `.composite` is the exception — it has nowhere to go
+in a flat argument list — and rides `applyEditIntentBytes`, which is Android's
+relay contract verbatim.
+
+A session is keyed by the score handle the caller already holds; no second handle
+is minted. `beginEditSession` is idempotent and drops the undo stack when
+re-opened. Ending a session is not a revert.
+
+**Every accepted edit must invalidate the layout cache AND the playback clock
+cache.** Android only needs the first because it rebuilds its timeline per query.
+Leave `PlaybackClockCache` in place here and `cursorRectAtPlayerSeconds`,
+`playerSecondsForMeasure` and `playbackSummary` keep answering from the timeline
+of a score that no longer exists — no exception, just a cursor that stops
+agreeing with the notation.
+
+**The host order is: accepted, then `layout()`, then geometry.** Publishing drops
+the cached document, so `editingCaretRect`, `editingHitTest`, `pageBreaks` and
+the cursor calls all answer nil or empty between an accepted edit and the next
+`computeLayout`. That is the contract, not a bug.
+
+**An edit during playback desynchronizes silently.** The wasm caches are dropped
+correctly, but a `PlaybackEngine` built earlier still holds the SMF it rendered,
+the summary it read and the mixer map it seeded. The sequencer then performs the
+old score while the cursor tracks the new one. `Score.editGeneration` counts
+accepted edits and the engine refuses `play` / `seekToMeasure` / `seekToPoint` /
+`exportWav` once it has moved — a loud error in place of a slow divergence.
+
+**A hit test is not a nearest match.** `editingHitTest` answers nil on empty
+paper so a tap can deselect; `playerSecondsAtPoint` next door always resolves,
+because a seek has to go somewhere. Unifying them would break deselection.
+
+No lock guards whole operations. Android holds one because JNI entry points
+arrive on arbitrary threads; wasm32-wasip1 is single-threaded and an exported
+function runs to completion on the JavaScript main thread. The session table's
+`SerialLock` is there for Swift 6's global-mutable-state checking, not for
+protection. A Worker rendering path must keep this true by giving each Worker its
+own wasm instance rather than adopting shared-memory threads.
+
 ## Testing the browser package
 
 Three layers, each answering something the others cannot:
@@ -137,6 +181,14 @@ Three layers, each answering something the others cannot:
 - Node parity tests pin rendered MIDI and draw-program bytes against the Apple
   build. Byte equality here is what stands behind "the browser engraves and
   renders what the app does".
+- The edit replay does the same for editing, in fingerprints rather than bytes:
+  `EditReplayScript.standard`'s fourteen steps run on an Apple host, on an
+  Android device, and through the browser facade, all pinned to the same fifteen
+  fingerprints in `assets/editReplay/goldens.txt`. There are no wire bytes on the
+  browser path to compare — it authors intents from scalars — so fingerprint
+  equality is the claim. Assert each step was accepted as well as its
+  fingerprint: a step that silently refused leaves the previous step's value in
+  place, and a golden recorded from the same broken run matches it.
 - Playwright covers what only a real browser can answer: that the AudioWorklet
   instantiates, that the synth accepts the rendered sequence, and that its clock
   advances. Audio itself is not asserted; the cursor stands in, since it moves
