@@ -12,11 +12,18 @@ extension Score {
             break
         case "score-timewise":
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: unsupported <score-timewise> variant",
+                ScoreFault(
+                    code: "musicxml.root.unsupportedTimewise",
+                    message: "MusicXML: unsupported <score-timewise> variant",
+                    location: "score-timewise",
+                ),
             )
         default:
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <score-partwise> root element not found",
+                ScoreFault(
+                    code: "musicxml.root.missingScorePartwise",
+                    message: "MusicXML: <score-partwise> root element not found",
+                ),
             )
         }
 
@@ -24,7 +31,11 @@ extension Score {
 
         guard let partList = root.first("part-list") else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <part-list> is required",
+                ScoreFault(
+                    code: "musicxml.partList.missing",
+                    message: "MusicXML: <part-list> is required",
+                    location: "part-list",
+                ),
             )
         }
         let (parts, systemMeasures) = try decodeParts(root: root, partList: partList)
@@ -162,7 +173,11 @@ extension Score {
             ?? (index < scoreParts.count ? scoreParts[index] : nil)
         else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <part id='\(id)'> has no matching <score-part>",
+                ScoreFault(
+                    code: "musicxml.part.missingScorePart",
+                    message: "MusicXML: <part id='\(id)'> has no matching <score-part>",
+                    location: id,
+                ),
             )
         }
         // Build the percussion table from the score-part header BEFORE

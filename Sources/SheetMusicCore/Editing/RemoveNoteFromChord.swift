@@ -33,17 +33,11 @@ public struct RemoveNoteFromChord: EditCommand {
     public func apply(to score: inout Score) throws -> any EditCommand {
         let veID = VoiceElementID(location)
         guard case var .chord(chord) = score[veID] else {
-            throw SheetMusicError.invalidEdit(
-                reason: "RemoveNoteFromChord: element at \(veID) "
-                    + "is not a chord",
-            )
+            throw Self.refused(.wrongElementKind(at: veID, expected: .chord))
         }
         guard chord.notes.indices.contains(location.noteIndexInChord)
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "RemoveNoteFromChord: chord has no note "
-                    + "at index \(location.noteIndexInChord)",
-            )
+            throw Self.refused(.noteNotFound(location))
         }
         let original = chord
         chord.notes.remove(at: location.noteIndexInChord)

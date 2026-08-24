@@ -43,23 +43,17 @@ public struct SetChordDuration: EditCommand {
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "SetChordDuration: location \(location) "
-                    + "doesn't resolve to a voice element",
-            )
+            throw Self.refused(.targetNotFound(location))
         }
         guard case var .chord(chord)
             = voice.elements[location.elementIndex]
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "SetChordDuration: element at \(location) "
-                    + "is not a chord",
-            )
+            throw Self.refused(.wrongElementKind(at: location, expected: .chord))
         }
         try DurationChangeAlgorithm.ensureNotInsideTuplet(
             voice: voice,
-            elementIdx: location.elementIndex,
-            label: "SetChordDuration",
+            at: location,
+            operation: "SetChordDuration",
         )
         let division = score.division
         let srcTicks = chord.duration.ticks(division: division)
@@ -82,6 +76,8 @@ public struct SetChordDuration: EditCommand {
                 dstTicks: dstTicks,
                 targetRtick: targetRtick,
                 division: division,
+                baseLocation: location,
+                operation: "SetChordDuration",
             )
         let replace = ReplaceVoiceElements(
             staff: location.staff,

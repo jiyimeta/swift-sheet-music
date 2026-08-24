@@ -5,10 +5,18 @@ import SheetMusicXMLTools
 extension Note {
     static func decode(_ node: XMLTreeNode) throws -> Note {
         guard let pitchText = node.first("pitch")?.text, let pitch = Int(pitchText) else {
-            throw SheetMusicError.malformedScore(reason: "Note missing <pitch>")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "mscx.note.missingPitch",
+                message: "Note missing <pitch>",
+                location: "Note",
+            ))
         }
         guard let tpcText = node.first("tpc")?.text, let tpc = Int(tpcText) else {
-            throw SheetMusicError.malformedScore(reason: "Note missing <tpc>")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "mscx.note.missingTpc",
+                message: "Note missing <tpc>",
+                location: "Note",
+            ))
         }
         let (accidental, accidentalBracket, accidentalRole) = decodeAccidentalNode(node)
         // MuseScore 5.x encodes ties inside `<Note>` as

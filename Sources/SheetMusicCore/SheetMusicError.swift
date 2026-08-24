@@ -6,23 +6,42 @@ public enum SheetMusicError: Error, Sendable {
     /// XML was syntactically invalid (could not be parsed by Foundation `XMLParser`).
     case invalidXML(underlying: Error)
     /// XML parsed but a required element/attribute was missing or malformed.
-    case malformedScore(reason: String)
+    case malformedScore(ScoreFault)
     /// A score element exists in the file but is not yet supported by the library.
     case unsupportedFeature(name: String, location: String?)
     /// An `.mscz` / ZIP container is unreadable: bytes are not a valid ZIP,
     /// the archive has no main `.mscx` entry, an entry failed to
     /// decompress, or archive creation failed on the writer side.
-    case corruptedContainer(reason: String)
+    case corruptedContainer(ScoreFault)
     /// Wrapping for `Data(contentsOf:)` / `Data.write(to:)` failures in
     /// the URL-based API overloads. The original error is preserved.
     case ioError(url: URL, underlying: Error)
     /// An `EditCommand` could not be applied — typically because the
     /// target path no longer resolves, or the element at that path
     /// is the wrong kind for the command.
-    case invalidEdit(reason: String)
+    case invalidEdit(EditRefusal)
 }
 
 extension SheetMusicError {
+    /// Stable dotted identifier for every case. Never parsed back; never shown
+    /// as UI copy.
+    public var code: String {
+        switch self {
+        case .invalidXML:
+            "xml.invalid"
+        case let .malformedScore(fault):
+            fault.code
+        case .unsupportedFeature:
+            "feature.unsupported"
+        case let .corruptedContainer(fault):
+            fault.code
+        case .ioError:
+            "io.failed"
+        case let .invalidEdit(refusal):
+            refusal.code
+        }
+    }
+
     /// Developer-facing diagnostic text for logs, tests, and sample-app
     /// fallback UI. These English literals are not localized resources: there
     /// is no `.strings` catalog and no bundle lookup. Keep presentation and
@@ -33,19 +52,19 @@ extension SheetMusicError {
         switch self {
         case let .invalidXML(underlying):
             return "Invalid XML: \(Self.describe(underlying))"
-        case let .malformedScore(reason):
-            return reason
+        case let .malformedScore(fault):
+            return fault.developerDescription
         case let .unsupportedFeature(name, location):
             if let location {
                 return "Unsupported feature \(name) at \(location)"
             }
             return "Unsupported feature \(name)"
-        case let .corruptedContainer(reason):
-            return "Corrupted archive: \(reason)"
+        case let .corruptedContainer(fault):
+            return "Corrupted archive: \(fault.developerDescription)"
         case let .ioError(url, underlying):
             return "I/O error reading \(url.lastPathComponent): \(Self.describe(underlying))"
-        case let .invalidEdit(reason):
-            return "Invalid edit: \(reason)"
+        case let .invalidEdit(refusal):
+            return "Invalid edit: \(refusal.developerDescription)"
         }
     }
 

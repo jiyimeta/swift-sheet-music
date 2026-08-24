@@ -39,11 +39,11 @@ struct MSCZReaderTests {
             _ = try MSCZReader.parse(empty)
             Issue.record("expected throw")
         } catch let error as SheetMusicError {
-            guard case let .corruptedContainer(reason) = error else {
+            guard case let .corruptedContainer(fault) = error else {
                 Issue.record("wrong case: \(error)")
                 return
             }
-            #expect(reason.lowercased().contains("mscx"))
+            #expect(fault.code == "mscz.noMainEntry")
         } catch {
             Issue.record("unexpected error: \(error)")
         }

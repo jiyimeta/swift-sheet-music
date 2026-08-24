@@ -16,7 +16,11 @@ extension Part {
         let id = raw.isEmpty ? String(fallbackIndex) : raw
         let declared = node.all("Staff").map { Staff.declared($0) }
         guard let instrNode = node.first("Instrument") else {
-            throw SheetMusicError.malformedScore(reason: "Part missing <Instrument>")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "mscx.part.missingInstrument",
+                message: "Part missing <Instrument>",
+                location: id,
+            ))
         }
         let instrument = try Instrument.decode(instrNode)
         // MuseScore `<Part><show>` — instrument visibility in the main score.

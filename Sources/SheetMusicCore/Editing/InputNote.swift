@@ -41,9 +41,7 @@ public struct InputNote: EditCommand {
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let rest = score[location] else {
-            throw SheetMusicError.invalidEdit(
-                reason: "InputNote: no rest at \(location)",
-            )
+            throw Self.refused(.targetNotFound(VoiceElementID(location)))
         }
         let chord = Chord(
             duration: rest.duration.resolved(

@@ -47,7 +47,10 @@ extension MidiRenderer {
         case .between:
             guard let follower = followerChord else {
                 throw SheetMusicError.malformedScore(
-                    reason: "Two-note tremolo missing follower at render time",
+                    ScoreFault(
+                        code: "midi.tremolo.missingFollower",
+                        message: "Two-note tremolo missing follower at render time",
+                    ),
                 )
             }
             // Pair sounds for BOTH nominal durations combined, alternating.

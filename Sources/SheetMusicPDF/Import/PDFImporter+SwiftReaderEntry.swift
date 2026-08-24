@@ -69,10 +69,16 @@ extension PDFImporter {
         pdfData: Data,
     ) throws -> (content: WalkedContent, pageCount: Int, pageSizes: [Int: CGSize], attributes: [String: Any]?) {
         guard !pdfData.isEmpty else {
-            throw SheetMusicError.malformedScore(reason: "PDFImporter: empty data")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "pdf.data.empty",
+                message: "PDFImporter: empty data",
+            ))
         }
         guard let walk = walkWithSwiftReader(pdfData: pdfData) else {
-            throw SheetMusicError.malformedScore(reason: "PDFImporter: not a valid PDF")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "pdf.data.invalidPDF",
+                message: "PDFImporter: not a valid PDF",
+            ))
         }
         return walk
     }

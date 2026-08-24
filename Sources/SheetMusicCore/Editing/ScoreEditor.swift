@@ -47,7 +47,10 @@ public final class ScoreEditor {
     /// it, pushing *its* inverse onto the redo stack.
     public func undo() throws {
         guard let inverse = undoStack.popLast() else {
-            throw SheetMusicError.invalidEdit(reason: "undo: empty stack")
+            throw SheetMusicError.invalidEdit(EditRefusal(
+                operation: "undo",
+                reason: .nothingToUndo,
+            ))
         }
         let redo = try inverse.apply(to: &score)
         redoStack.append(redo)
@@ -57,7 +60,10 @@ public final class ScoreEditor {
     /// Symmetric counterpart of `undo()`.
     public func redo() throws {
         guard let command = redoStack.popLast() else {
-            throw SheetMusicError.invalidEdit(reason: "redo: empty stack")
+            throw SheetMusicError.invalidEdit(EditRefusal(
+                operation: "redo",
+                reason: .nothingToRedo,
+            ))
         }
         let inverse = try command.apply(to: &score)
         undoStack.append(inverse)

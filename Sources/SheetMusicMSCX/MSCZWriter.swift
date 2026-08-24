@@ -34,7 +34,10 @@ public enum MSCZWriter {
             try writer.add(path: mainFileName, data: mscxData, method: .deflate)
         } catch let error as ZipError {
             throw SheetMusicError.corruptedContainer(
-                reason: "failed to add entry: \(error)",
+                ScoreFault(
+                    code: error.faultCode,
+                    message: "failed to add entry: \(error)",
+                ),
             )
         }
         return writer.finish()
@@ -96,12 +99,19 @@ public enum MSCZWriter {
     private static func validate(mainFileName: String) throws {
         guard !mainFileName.isEmpty else {
             throw SheetMusicError.corruptedContainer(
-                reason: "mainFileName must not be empty",
+                ScoreFault(
+                    code: "mscz.mainFileName.empty",
+                    message: "mainFileName must not be empty",
+                ),
             )
         }
         guard !mainFileName.contains("/") else {
             throw SheetMusicError.corruptedContainer(
-                reason: "mainFileName must not contain '/': \(mainFileName)",
+                ScoreFault(
+                    code: "mscz.mainFileName.containsSlash",
+                    message: "mainFileName must not contain '/': \(mainFileName)",
+                    location: mainFileName,
+                ),
             )
         }
     }

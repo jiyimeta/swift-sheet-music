@@ -35,6 +35,15 @@ public struct VoiceElementID: Hashable, Sendable {
             elementIndex: id.elementIndex,
         )
     }
+
+    func withElementIndex(_ elementIndex: Int) -> VoiceElementID {
+        VoiceElementID(
+            staff: staff,
+            measureIndex: measureIndex,
+            voiceIndex: voiceIndex,
+            elementIndex: elementIndex,
+        )
+    }
 }
 
 extension Score {

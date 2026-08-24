@@ -41,15 +41,18 @@ struct ScoreEditSessionTests {
         #expect(session.canUndo == false)
     }
 
-    @Test("a refusal's reason is captured, and a later success clears it")
-    func lastRefusalReasonTracksApplyOutcome() {
+    @Test("a refusal is captured structurally, and a later success clears it")
+    func lastRefusalTracksApplyOutcome() {
         let session = ScoreEditSession(score: EditingFixtures.fourQuarterRests())
-        #expect(session.lastRefusalReason == nil)
+        #expect(session.lastRefusal == nil)
         let outOfRange = VoiceElementID(staff: Self.staff, measureIndex: 99, voiceIndex: 0, elementIndex: 0)
         #expect(session.apply(.delete(at: outOfRange)) == false)
-        #expect(session.lastRefusalReason?.contains("DeleteVoiceElement") == true)
+        #expect(session.lastRefusal == EditRefusal(
+            operation: "DeleteVoiceElement",
+            reason: .targetNotFound(outOfRange),
+        ))
         #expect(session.apply(.inputNote(at: Self.restAt1, pitch: 60, tpc: 14, duration: nil)))
-        #expect(session.lastRefusalReason == nil)
+        #expect(session.lastRefusal == nil)
     }
 
     /// Mirrors `EditIntentCodecTests.deeplyNestedCompositeThrows` at the domain layer rather than the wire layer:
@@ -63,7 +66,7 @@ struct ScoreEditSessionTests {
             intent = .composite([intent])
         }
         #expect(session.apply(intent) == false)
-        #expect(session.lastRefusalReason?.contains("depth limit") == true)
+        #expect(session.lastRefusal?.reason == .compositeTooDeep(limit: 8))
     }
 
     @Test("composite applies as one undo step")
@@ -194,7 +197,10 @@ struct ScoreEditSessionTests {
         let slot = VoiceElementID(EditingFixtures.restID(element: 1))
         #expect(!session.apply(.createTuplet(at: slot, actualNotes: 1, normalNotes: 2)))
         #expect(!session.apply(.createTuplet(at: slot, actualNotes: 3, normalNotes: 0)))
-        #expect(session.lastRefusalReason != nil)
+        #expect(session.lastRefusal?.reason == .invalidTupletRatio(
+            actualNotes: 3,
+            normalNotes: 0,
+        ))
     }
 
     @Test func `a pitch change lands and undoes`() throws {

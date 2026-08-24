@@ -82,13 +82,22 @@ extension PDFImporter {
 extension PDFImporter {
     static func openDocument(_ pdfData: Data) throws -> PDFDocument {
         guard !pdfData.isEmpty else {
-            throw SheetMusicError.malformedScore(reason: "PDFImporter: empty data")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "pdf.data.empty",
+                message: "PDFImporter: empty data",
+            ))
         }
         guard let document = PDFDocument(data: pdfData) else {
-            throw SheetMusicError.malformedScore(reason: "PDFImporter: not a valid PDF")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "pdf.data.invalidPDF",
+                message: "PDFImporter: not a valid PDF",
+            ))
         }
         guard document.pageCount > 0 else {
-            throw SheetMusicError.malformedScore(reason: "PDFImporter: zero pages")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "pdf.pages.zero",
+                message: "PDFImporter: zero pages",
+            ))
         }
         return document
     }
