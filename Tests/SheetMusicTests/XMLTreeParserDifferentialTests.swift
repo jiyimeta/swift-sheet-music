@@ -4,43 +4,74 @@ import Foundation
 import Testing
 
 /// `XMLTreeParser` was reimplemented in pure Swift to get `SheetMusicXMLTools`
-/// off the `Foundation` umbrella. These tests hold it to the tree the previous
-/// Foundation-backed implementation produced, which is what every MSCX and
-/// MusicXML decoder — and the byte-identical export corpus gate — is written
-/// against.
-@Suite("XMLTreeParser matches the Foundation implementation")
+/// off the `Foundation` umbrella. Checked-in `XMLTreeNode` expectations are the
+/// portable specification; the FoundationXML oracle remains a corroborating
+/// historical reference only where its platform behavior is trustworthy.
+@Suite("XMLTreeParser matches checked-in XML tree expectations")
 struct XMLTreeParserDifferentialTests {
-    private static let adversarialInputs: [String] = [
-        "<r>plain</r>",
-        "<r></r>",
-        "<r/>",
-        "<r>   </r>",
-        "<r>&amp;&lt;&gt;&quot;&apos;</r>",
-        "<r>&#38;&#x26;&#x3c;</r>",
-        "<r a=\"&amp;&quot;\" b='single'/>",
-        "<r a = \"spaced\"/>",
-        "<t>a <b>x</b> c</t>",
-        "<t>a\r\nb</t>",
-        "<t>a\rb</t>",
-        "<t>a\nb</t>",
-        "<r a=\"x\ty\"/>",
-        "<r a=\"x\r\ny\"/>",
-        "<r a=\"x&#x9;y\"/>",
-        "<r a=\"x&#xA;y\"/>",
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?><r>x</r>",
-        "<?xml version=\"1.0\" standalone=\"no\"?><r>x</r>",
-        "<!-- lead --><r>x</r><!-- trail -->",
-        "<r><!-- inner -->x</r>",
-        "<r><?target data?>x</r>",
-        "<!DOCTYPE r SYSTEM \"r.dtd\"><r>x</r>",
-        "<!DOCTYPE r PUBLIC \"-//X//DTD Y//EN\" \"http://example/y.dtd\"><r>x</r>",
-        "<r>\u{3000}full width\u{3000}</r>",
-        "<r>\u{00A0}nbsp\u{00A0}</r>",
-        "<r>ピアノ — Étude</r>",
-        "<r><![CDATA[raw <x> & ]]></r>",
-        "<r>a<![CDATA[b]]>c</r>",
-        "<r><x/><x/><y/></r>",
-        "<r>\n  <x>1</x>\n  <x>2</x>\n</r>",
+    private static let adversarialCases: [(input: String, expected: XMLTreeNode)] = [
+        ("<r>plain</r>", XMLTreeNode(name: "r", text: "plain")),
+        ("<r></r>", XMLTreeNode(name: "r")),
+        ("<r/>", XMLTreeNode(name: "r")),
+        ("<r>   </r>", XMLTreeNode(name: "r")),
+        ("<r>&amp;&lt;&gt;&quot;&apos;</r>", XMLTreeNode(name: "r", text: "&<>\"'")),
+        ("<r>&#38;&#x26;&#x3c;</r>", XMLTreeNode(name: "r", text: "&&<")),
+        (
+            "<r a=\"&amp;&quot;\" b='single'/>",
+            XMLTreeNode(name: "r", attributes: ["a": "&\"", "b": "single"]),
+        ),
+        ("<r a = \"spaced\"/>", XMLTreeNode(name: "r", attributes: ["a": "spaced"])),
+        (
+            "<t>a <b>x</b> c</t>",
+            XMLTreeNode(
+                name: "t",
+                text: "a  c",
+                children: [XMLTreeNode(name: "b", text: "x")],
+            ),
+        ),
+        ("<t>a\r\nb</t>", XMLTreeNode(name: "t", text: "a\nb")),
+        ("<t>a\rb</t>", XMLTreeNode(name: "t", text: "a\nb")),
+        ("<t>a\nb</t>", XMLTreeNode(name: "t", text: "a\nb")),
+        ("<r a=\"x\ty\"/>", XMLTreeNode(name: "r", attributes: ["a": "x y"])),
+        ("<r a=\"x\r\ny\"/>", XMLTreeNode(name: "r", attributes: ["a": "x y"])),
+        ("<r a=\"x&#x9;y\"/>", XMLTreeNode(name: "r", attributes: ["a": "x\ty"])),
+        ("<r a=\"x&#xA;y\"/>", XMLTreeNode(name: "r", attributes: ["a": "x\ny"])),
+        ("<?xml version=\"1.0\" encoding=\"UTF-8\"?><r>x</r>", XMLTreeNode(name: "r", text: "x")),
+        ("<?xml version=\"1.0\" standalone=\"no\"?><r>x</r>", XMLTreeNode(name: "r", text: "x")),
+        ("<!-- lead --><r>x</r><!-- trail -->", XMLTreeNode(name: "r", text: "x")),
+        ("<r><!-- inner -->x</r>", XMLTreeNode(name: "r", text: "x")),
+        ("<r><?target data?>x</r>", XMLTreeNode(name: "r", text: "x")),
+        ("<!DOCTYPE r SYSTEM \"r.dtd\"><r>x</r>", XMLTreeNode(name: "r", text: "x")),
+        (
+            "<!DOCTYPE r PUBLIC \"-//X//DTD Y//EN\" \"http://example/y.dtd\"><r>x</r>",
+            XMLTreeNode(name: "r", text: "x"),
+        ),
+        ("<r>\u{3000}full width\u{3000}</r>", XMLTreeNode(name: "r", text: "full width")),
+        ("<r>\u{00A0}nbsp\u{00A0}</r>", XMLTreeNode(name: "r", text: "nbsp")),
+        ("<r>ピアノ — Étude</r>", XMLTreeNode(name: "r", text: "ピアノ — Étude")),
+        ("<r><![CDATA[raw <x> & ]]></r>", XMLTreeNode(name: "r", text: "raw <x> &")),
+        ("<r>a<![CDATA[b]]>c</r>", XMLTreeNode(name: "r", text: "abc")),
+        (
+            "<r><x/><x/><y/></r>",
+            XMLTreeNode(
+                name: "r",
+                children: [
+                    XMLTreeNode(name: "x"),
+                    XMLTreeNode(name: "x"),
+                    XMLTreeNode(name: "y"),
+                ],
+            ),
+        ),
+        (
+            "<r>\n  <x>1</x>\n  <x>2</x>\n</r>",
+            XMLTreeNode(
+                name: "r",
+                children: [
+                    XMLTreeNode(name: "x", text: "1"),
+                    XMLTreeNode(name: "x", text: "2"),
+                ],
+            ),
+        ),
     ]
 
     private static let malformedInputs: [String] = [
@@ -73,6 +104,9 @@ struct XMLTreeParserDifferentialTests {
 
         for fixture in fixtures {
             let actual = try XMLTreeParser.parse(fixture.data)
+            // On wasm, this sweep still proves every XML fixture parses. Its
+            // tree parity check is intentionally limited to platforms with the
+            // trusted FoundationXML reference oracle.
             guard foundationXMLReferenceOracleAvailable else { continue }
 
             let reference: XMLTreeNode
@@ -92,11 +126,13 @@ struct XMLTreeParserDifferentialTests {
 
     // MARK: - Adversarial inputs
 
-    @Test("entity and whitespace handling matches the reference parser")
+    @Test("adversarial corpus matches checked-in tree expectations")
     func adversarialAgreement() throws {
-        for input in Self.adversarialInputs {
+        for (input, expected) in Self.adversarialCases {
             let data = Data(input.utf8)
             let actual = try XMLTreeParser.parse(data)
+            #expect(actual == expected, "tree differs from expected for \(input.debugDescription)")
+
             guard foundationXMLReferenceOracleAvailable else { continue }
             let reference = try ReferenceXMLTreeParser.parse(data)
             #expect(actual == reference, "tree differs for \(input.debugDescription)")
