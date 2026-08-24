@@ -83,6 +83,86 @@ enum SampleScore {
         try [UInt8](MSCZWriter.write(score: repeatingScore()))
     }
 
+    /// A score with enough systems for `.page` layout to paginate.
+    static func longScore(measureCount: Int = 40) -> Score {
+        let measures = (0 ..< measureCount).map { index in
+            Measure(
+                voices: [
+                    Voice(elements: [
+                        .chord(Chord(
+                            duration: .whole,
+                            notes: ChordNotes([Note(pitch: 60 + index % 8, tpc: 14)]),
+                        )),
+                    ]),
+                ],
+            )
+        }
+        return Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "1",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [Staff(measures: measures)],
+                ),
+            ],
+            metaTags: ["workTitle": "wasm long", "composer": "test"],
+        )
+    }
+
+    /// A score with an authored page break in the middle.
+    static func pageBreakScore() -> Score {
+        let measures = (0 ..< 3).map { index in
+            Measure(
+                voices: [
+                    Voice(elements: [
+                        .chord(Chord(
+                            duration: .whole,
+                            notes: ChordNotes([Note(pitch: 60 + index, tpc: 14)]),
+                        )),
+                    ]),
+                ],
+                pageBreak: index == 1,
+            )
+        }
+        return Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "1",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [Staff(measures: measures)],
+                ),
+            ],
+            metaTags: ["workTitle": "wasm page break", "composer": "test"],
+        )
+    }
+
+    /// A two-staff score, used to prove hidden-staff options reach layout.
+    static func twoStaffScore() -> Score {
+        let upper = [
+            Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 72, tpc: 14)]))),
+            ])]),
+        ]
+        let lower = [
+            Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 48, tpc: 14)]))),
+            ])]),
+        ]
+        return Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "1",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [Staff(measures: upper), Staff(measures: lower)],
+                ),
+            ],
+            metaTags: ["workTitle": "wasm hidden staves", "composer": "test"],
+        )
+    }
+
     /// The same score as a `.mscz` container, which is what a browser host
     /// actually hands `loadScore`.
     static func mscz(
@@ -93,5 +173,9 @@ enum SampleScore {
         try [UInt8](
             MSCZWriter.write(score: score(title: title, composer: composer, pitches: pitches)),
         )
+    }
+
+    static func mscz(score: Score) throws -> [UInt8] {
+        try [UInt8](MSCZWriter.write(score: score))
     }
 }

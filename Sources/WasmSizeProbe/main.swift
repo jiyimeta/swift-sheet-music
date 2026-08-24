@@ -107,7 +107,22 @@ print(
 // path executes. `WasmParityProbe`, which IS run under wasmtime, must therefore
 // never depend on this target.
 let wasmHandle = loadScore(bytes: JSUint8Array([UInt8](container)))
-let wasmProgram = computeLayout(handle: wasmHandle, pageWidthMM: 210, pageHeightMM: 297)
+let wasmProgram = computeLayout(
+    handle: wasmHandle,
+    pageWidthMM: 210,
+    pageHeightMM: 297,
+    options: LayoutOptions(
+        layoutMode: 0,
+        staffSize: 28,
+        honorLayoutBreaks: true,
+        collapseMultiMeasureRests: false,
+        showsInvisibleElements: false,
+        showsLyrics: true,
+        transposeSemitones: 0,
+        hiddenStaves: [],
+        clefOverrides: [],
+    ),
+)
 let wasmBreaks = pageBreaks(handle: wasmHandle, pageHeightMM: 297)
 let wasmMetadata = scoreMetadata(handle: wasmHandle)
 _ = installSMuFLMetrics(bytes: JSUint8Array(length: 0))

@@ -33,12 +33,39 @@ public struct LayoutOptionsWire {
     /// back. The engraved document is genuinely SHORTER as a result, which is what a host reserving
     /// a fixed-height notation strip depends on.
     public var showsLyrics: UInt8
+
+    public init(
+        layoutMode: UInt8,
+        staffSize: Double,
+        honorLayoutBreaks: UInt8,
+        collapseMultiMeasureRests: UInt8,
+        showsInvisibleElements: UInt8,
+        hiddenStaves: [HiddenStaffWire],
+        clefOverrides: [ClefOverrideWire],
+        transposeSemitones: Int32,
+        showsLyrics: UInt8,
+    ) {
+        self.layoutMode = layoutMode
+        self.staffSize = staffSize
+        self.honorLayoutBreaks = honorLayoutBreaks
+        self.collapseMultiMeasureRests = collapseMultiMeasureRests
+        self.showsInvisibleElements = showsInvisibleElements
+        self.hiddenStaves = hiddenStaves
+        self.clefOverrides = clefOverrides
+        self.transposeSemitones = transposeSemitones
+        self.showsLyrics = showsLyrics
+    }
 }
 
 @WireFormat
 public struct HiddenStaffWire {
     public var partIndex: Int32
     public var staffIndexInPart: Int32
+
+    public init(partIndex: Int32, staffIndexInPart: Int32) {
+        self.partIndex = partIndex
+        self.staffIndexInPart = staffIndexInPart
+    }
 }
 
 @WireFormat
@@ -46,6 +73,12 @@ public struct ClefOverrideWire {
     public var partIndex: Int32
     public var staffIndexInPart: Int32
     public var rawType: String
+
+    public init(partIndex: Int32, staffIndexInPart: Int32, rawType: String) {
+        self.partIndex = partIndex
+        self.staffIndexInPart = staffIndexInPart
+        self.rawType = rawType
+    }
 }
 
 extension LayoutOptionsWire {

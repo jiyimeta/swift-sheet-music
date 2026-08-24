@@ -156,7 +156,7 @@ struct PlaybackEntryTests {
     func cursorRectResolvesAfterLayout() throws {
         let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
-        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions())
         let rect = try #require(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0))
         #expect(rect.heightMM > 0)
         #expect(rect.measureIndex == 0)
@@ -207,7 +207,7 @@ struct PlaybackEntryTests {
     func tapOnFirstNoteSeeksToTop() throws {
         let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
-        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions())
         // Aim at the cursor rectangle the engine itself reports for second 0,
         // rather than at coordinates guessed from the layout.
         let rect = try #require(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0))
@@ -223,7 +223,7 @@ struct PlaybackEntryTests {
     func tapRoundTripsThroughTheCursor() throws {
         let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
-        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions())
         let rect = try #require(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0))
         // Well to the right of the first note: a later column on the same staff.
         let seconds = playerSecondsAtPoint(
@@ -243,7 +243,7 @@ struct PlaybackEntryTests {
     func tapOutsideSnapsToNearest() throws {
         let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
-        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions())
         #expect(playerSecondsAtPoint(handle: handle, xMM: -50, yMM: -50) == 0)
     }
 
@@ -272,7 +272,7 @@ struct PlaybackEntryTests {
     func invertedLoopRangeIsEmpty() throws {
         let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
         defer { releaseScore(handle: handle) }
-        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions())
         #expect(loopPlayerSeconds(handle: handle, fromMeasureIndex: 2, toMeasureExclusive: 1).isEmpty)
         #expect(loopPlayerSeconds(handle: handle, fromMeasureIndex: 1, toMeasureExclusive: 1).isEmpty)
         #expect(loopHighlightRects(handle: handle, fromMeasureIndex: 2, toMeasureExclusive: 1).isEmpty)
@@ -282,7 +282,7 @@ struct PlaybackEntryTests {
     func loopHighlightRectsIsQuads() throws {
         let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
         defer { releaseScore(handle: handle) }
-        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions())
         let summary = try #require(playbackSummary(handle: handle))
         let rects = loopHighlightRects(
             handle: handle, fromMeasureIndex: 0, toMeasureExclusive: summary.measureCount,
@@ -307,12 +307,26 @@ struct PlaybackEntryTests {
     @Test("everything answers empty after the handle is released")
     func releasedHandleAnswersEmpty() throws {
         let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
-        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions())
         releaseScore(handle: handle)
         #expect(renderMidi(handle: handle).isEmpty)
         #expect(playbackSummary(handle: handle) == nil)
         #expect(metronomeBeats(handle: handle).isEmpty)
         #expect(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0) == nil)
         #expect(playerSecondsForMeasure(handle: handle, measureIndex: 0) == -1)
+    }
+
+    private func layoutOptions() -> LayoutOptions {
+        LayoutOptions(
+            layoutMode: 0,
+            staffSize: 28,
+            honorLayoutBreaks: true,
+            collapseMultiMeasureRests: false,
+            showsInvisibleElements: false,
+            showsLyrics: true,
+            transposeSemitones: 0,
+            hiddenStaves: [],
+            clefOverrides: [],
+        )
     }
 }

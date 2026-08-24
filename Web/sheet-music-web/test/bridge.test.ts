@@ -18,6 +18,26 @@ const fixturePath = (name: string) =>
   fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 
 const scoreBytes = new Uint8Array(readFileSync(fixturePath("sample.mscz")));
+const pageBreakMeasures = Array.from(
+  { length: 12 },
+  (_, index) => `<Measure>
+        <LayoutBreak><subtype>page</subtype></LayoutBreak>
+        <voice><Chord><durationType>whole</durationType><Note><pitch>${60 + (index % 8)}</pitch><tpc>14</tpc></Note></Chord></voice>
+      </Measure>`,
+).join("");
+const pageBreakScoreBytes = new TextEncoder().encode(`<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part id="1">
+      <Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType></Staff>
+      <Instrument id="i"><longName>Piano</longName></Instrument>
+    </Part>
+    <Staff id="1">
+      ${pageBreakMeasures}
+    </Staff>
+  </Score>
+</museScore>`);
 const expectations = JSON.parse(
   readFileSync(fixturePath("sample-expectations.json"), "utf8"),
 ) as {
@@ -52,6 +72,18 @@ function digest(bytes: Uint8Array): number {
   }
   return hash >>> 0;
 }
+
+const defaultLayoutOptions = {
+  layoutMode: 0,
+  staffSize: 28,
+  honorLayoutBreaks: true,
+  collapseMultiMeasureRests: false,
+  showsInvisibleElements: false,
+  showsLyrics: true,
+  transposeSemitones: 0,
+  hiddenStaves: [],
+  clefOverrides: [],
+};
 
 describe("wasm bridge parity with the Apple build", () => {
   let sheetMusic: SheetMusic;
@@ -141,6 +173,27 @@ describe("wasm bridge parity with the Apple build", () => {
     }
   });
 
+  it("uses the cached layout options for page boundaries", () => {
+    const score = sheetMusic.loadScore(pageBreakScoreBytes);
+    try {
+      score.layout({
+        pageWidthMM: 60,
+        pageHeightMM: 297,
+        options: { honorLayoutBreaks: false },
+      });
+      expect(score.pageBreaks({ pageHeightMM: 10_000 })).toHaveLength(2);
+
+      score.layout({
+        pageWidthMM: 60,
+        pageHeightMM: 297,
+        options: { honorLayoutBreaks: true },
+      });
+      expect(score.pageBreaks({ pageHeightMM: 10_000 }).length).toBeGreaterThan(2);
+    } finally {
+      score.release();
+    }
+  });
+
   it("reports no page boundaries before a layout", () => {
     const score = sheetMusic.loadScore(scoreBytes);
     try {
@@ -172,7 +225,7 @@ describe("wasm bridge parity with the Apple build", () => {
     expect(bridge.installSMuFLMetrics(metricsBytes)).toBe(true);
     const handle = bridge.loadScore(scoreBytes);
     try {
-      const raw = bridge.computeLayout(handle, 210, 297);
+      const raw = bridge.computeLayout(handle, 210, 297, defaultLayoutOptions);
       expect(raw).toBeInstanceOf(Uint8Array);
       expect(Array.isArray(raw)).toBe(false);
     } finally {
@@ -181,7 +234,7 @@ describe("wasm bridge parity with the Apple build", () => {
 
     expect(declarationText).toContain("loadScore(bytes: Uint8Array): number");
     expect(declarationText).toContain(
-      "computeLayout(handle: number, pageWidthMM: number, pageHeightMM: number): Uint8Array",
+      "computeLayout(handle: number, pageWidthMM: number, pageHeightMM: number, options: LayoutOptions): Uint8Array",
     );
   });
 });

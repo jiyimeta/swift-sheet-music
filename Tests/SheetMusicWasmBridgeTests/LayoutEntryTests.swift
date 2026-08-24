@@ -9,7 +9,9 @@ struct LayoutEntryTests {
     func computeLayoutReturnsFlatBytes() throws {
         let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
-        let bytes = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        let bytes = computeLayout(
+            handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions(),
+        )
         #expect(!bytes.isEmpty)
         let pages = try DrawProgramFlat.decode(bytes.bridgedData)
         let first = try #require(pages.first)
@@ -19,14 +21,20 @@ struct LayoutEntryTests {
 
     @Test("computeLayout for an unknown handle returns empty")
     func computeLayoutForUnknownHandleIsEmpty() {
-        #expect(computeLayout(handle: 999_999, pageWidthMM: 210, pageHeightMM: 297).isEmpty)
+        #expect(
+            computeLayout(
+                handle: 999_999, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions(),
+            ).isEmpty,
+        )
     }
 
     @Test("pageBreaks reports one more boundary than pages")
     func pageBreaksShape() throws {
         let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
-        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        _ = computeLayout(
+            handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions(),
+        )
         let breaks = pageBreaks(handle: handle, pageHeightMM: 297)
         try #require(breaks.count >= 2)
         #expect(breaks[0] == 0)
@@ -47,9 +55,82 @@ struct LayoutEntryTests {
     @Test("releasing a score drops its cached layout")
     func releaseDropsTheCachedLayout() throws {
         let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
-        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
+        _ = computeLayout(
+            handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions(),
+        )
         releaseScore(handle: handle)
         #expect(pageBreaks(handle: handle, pageHeightMM: 297).isEmpty)
+    }
+
+    @Test("page layout can produce multiple pages")
+    func pageLayoutCanProduceMultiplePages() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.longScore())))
+        defer { releaseScore(handle: handle) }
+        let bytes = computeLayout(
+            handle: handle,
+            pageWidthMM: 210,
+            pageHeightMM: 80,
+            options: layoutOptions(layoutMode: 2),
+        )
+        let pages = try DrawProgramFlat.decode(bytes.bridgedData)
+        #expect(pages.count > 1)
+    }
+
+    @Test("pageBreaks follows the cached layout break policy")
+    func pageBreaksFollowsCachedBreakPolicy() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.pageBreakScore())))
+        defer { releaseScore(handle: handle) }
+
+        _ = computeLayout(
+            handle: handle,
+            pageWidthMM: 210,
+            pageHeightMM: 297,
+            options: layoutOptions(honorLayoutBreaks: false),
+        )
+        #expect(pageBreaks(handle: handle, pageHeightMM: 10000).count == 2)
+
+        _ = computeLayout(
+            handle: handle,
+            pageWidthMM: 210,
+            pageHeightMM: 297,
+            options: layoutOptions(honorLayoutBreaks: true),
+        )
+        #expect(pageBreaks(handle: handle, pageHeightMM: 10000).count == 3)
+    }
+
+    @Test("transpose and hidden staves change flat bytes")
+    func optionsAffectFlatBytes() throws {
+        let transposedHandle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
+        defer { releaseScore(handle: transposedHandle) }
+        let normal = computeLayout(
+            handle: transposedHandle,
+            pageWidthMM: 210,
+            pageHeightMM: 297,
+            options: layoutOptions(),
+        ).bridgedData
+        let transposed = computeLayout(
+            handle: transposedHandle,
+            pageWidthMM: 210,
+            pageHeightMM: 297,
+            options: layoutOptions(transposeSemitones: 2),
+        ).bridgedData
+        #expect(transposed != normal)
+
+        let hiddenHandle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.twoStaffScore())))
+        defer { releaseScore(handle: hiddenHandle) }
+        let visibleStaves = computeLayout(
+            handle: hiddenHandle,
+            pageWidthMM: 210,
+            pageHeightMM: 297,
+            options: layoutOptions(),
+        ).bridgedData
+        let hiddenStaff = computeLayout(
+            handle: hiddenHandle,
+            pageWidthMM: 210,
+            pageHeightMM: 297,
+            options: layoutOptions(hiddenStaves: [HiddenStaff(partIndex: 0, staffIndexInPart: 1)]),
+        ).bridgedData
+        #expect(hiddenStaff != visibleStaves)
     }
 
     @Test("installSMuFLMetrics rejects an empty payload")
@@ -93,5 +174,29 @@ struct LayoutEntryTests {
         f32(295)
         f32(250)
         #expect(installSMuFLMetrics(bytes: jsBytes(bytes)) == true)
+    }
+
+    private func layoutOptions(
+        layoutMode: Int = 0,
+        staffSize: Double = 28,
+        honorLayoutBreaks: Bool = true,
+        collapseMultiMeasureRests: Bool = false,
+        showsInvisibleElements: Bool = false,
+        showsLyrics: Bool = true,
+        transposeSemitones: Int = 0,
+        hiddenStaves: [HiddenStaff] = [],
+        clefOverrides: [ClefOverride] = [],
+    ) -> LayoutOptions {
+        LayoutOptions(
+            layoutMode: layoutMode,
+            staffSize: staffSize,
+            honorLayoutBreaks: honorLayoutBreaks,
+            collapseMultiMeasureRests: collapseMultiMeasureRests,
+            showsInvisibleElements: showsInvisibleElements,
+            showsLyrics: showsLyrics,
+            transposeSemitones: transposeSemitones,
+            hiddenStaves: hiddenStaves,
+            clefOverrides: clefOverrides,
+        )
     }
 }

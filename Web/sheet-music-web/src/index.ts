@@ -47,6 +47,48 @@ export interface LayoutRequest {
   readonly pageWidthMM: number;
   /** Page height in document millimetres. */
   readonly pageHeightMM: number;
+  readonly options?: LayoutOptions;
+}
+
+export type LayoutMode = "vertical" | "horizontal" | "page";
+
+export interface HiddenStaff {
+  readonly partIndex: number;
+  readonly staffIndexInPart: number;
+}
+
+export interface ClefOverride {
+  readonly partIndex: number;
+  readonly staffIndexInPart: number;
+  readonly clef: string;
+}
+
+/**
+ * Display settings for one layout pass. All fields are optional; omitted values
+ * resolve to `LayoutOptionsWire.verticalDefault`.
+ */
+export interface LayoutOptions {
+  readonly layoutMode?: LayoutMode;
+  readonly staffSize?: number;
+  readonly honorLayoutBreaks?: boolean;
+  readonly collapseMultiMeasureRests?: boolean;
+  readonly showsInvisibleElements?: boolean;
+  readonly showsLyrics?: boolean;
+  readonly transposeSemitones?: number;
+  readonly hiddenStaves?: readonly HiddenStaff[];
+  readonly clefOverrides?: readonly ClefOverride[];
+}
+
+interface ResolvedLayoutOptions {
+  readonly layoutMode: number;
+  readonly staffSize: number;
+  readonly honorLayoutBreaks: boolean;
+  readonly collapseMultiMeasureRests: boolean;
+  readonly showsInvisibleElements: boolean;
+  readonly showsLyrics: boolean;
+  readonly transposeSemitones: number;
+  readonly hiddenStaves: readonly HiddenStaff[];
+  readonly clefOverrides: readonly ClefOverride[];
 }
 
 /**
@@ -135,6 +177,7 @@ interface BridgeExports {
     handle: number,
     pageWidthMM: number,
     pageHeightMM: number,
+    options: ResolvedLayoutOptions,
   ): Uint8Array;
   pageBreaks(handle: number, pageHeightMM: number): number[] | Float64Array;
   renderMidi(handle: number): Uint8Array;
@@ -181,6 +224,32 @@ export interface GMInstrument {
 
 function asDoubles(value: number[] | Float64Array): Float64Array {
   return value instanceof Float64Array ? value : Float64Array.from(value);
+}
+
+function resolveLayoutMode(mode: LayoutMode | undefined): number {
+  switch (mode) {
+    case undefined:
+    case "vertical":
+      return 0;
+    case "horizontal":
+      return 1;
+    case "page":
+      return 2;
+  }
+}
+
+function resolveOptions(options: LayoutOptions | undefined): ResolvedLayoutOptions {
+  return {
+    layoutMode: resolveLayoutMode(options?.layoutMode),
+    staffSize: options?.staffSize ?? 28,
+    honorLayoutBreaks: options?.honorLayoutBreaks ?? true,
+    collapseMultiMeasureRests: options?.collapseMultiMeasureRests ?? false,
+    showsInvisibleElements: options?.showsInvisibleElements ?? false,
+    showsLyrics: options?.showsLyrics ?? true,
+    transposeSemitones: options?.transposeSemitones ?? 0,
+    hiddenStaves: options?.hiddenStaves ?? [],
+    clefOverrides: options?.clefOverrides ?? [],
+  };
 }
 
 /**
@@ -237,6 +306,7 @@ export class Score {
       this.live(),
       request.pageWidthMM,
       request.pageHeightMM,
+      resolveOptions(request.options),
     );
     if (bytes.length === 0) {
       throw new Error("layout failed");
