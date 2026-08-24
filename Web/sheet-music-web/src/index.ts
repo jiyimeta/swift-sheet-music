@@ -10,12 +10,33 @@ import {
   decodeDrawProgram,
   type DrawProgramPage,
 } from "./draw-program.js";
+import {
+  applyEditIntentCall,
+  type CaretRect,
+  type EditIntent,
+  type EditOutcome,
+  type EditSessionState,
+  type SelectedItem,
+  type SelectedItemKind,
+} from "./edit.js";
 
 export type {
   DrawCommand,
   DrawProgramPage,
   FontId,
 } from "./draw-program.js";
+export type {
+  AccidentalSpec,
+  CaretRect,
+  EditIntent,
+  EditOutcome,
+  EditSessionState,
+  ElementRef,
+  NoteDurationSpec,
+  NoteRef,
+  SelectedItem,
+  SelectedItemKind,
+} from "./edit.js";
 export {
   drawPage,
   drawTile,
@@ -169,7 +190,188 @@ export interface MixerStrip {
  * generated declarations live in the built bundle, which is not present at
  * type-check time, so the shape is restated here and pinned by the parity test.
  */
-interface BridgeExports {
+interface BridgeEditSessionState {
+  readonly active: boolean;
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  readonly hasLastAffected: boolean;
+  readonly lastAffectedPartIndex: number;
+  readonly lastAffectedStaffIndexInPart: number;
+  readonly lastAffectedMeasureIndex: number;
+  readonly lastAffectedVoiceIndex: number;
+  readonly lastAffectedElementIndex: number;
+}
+
+export interface BridgeExports {
+  applyEditIntentBytes(handle: number, intentBytes: Uint8Array): EditOutcome;
+  editingHitTest(
+    handle: number,
+    xMM: number,
+    yMM: number,
+    activeVoice: number,
+  ): SelectedItem | null;
+  editingCaretRect(
+    handle: number,
+    kind: string,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    noteIndexInChord: number,
+    minimumWidthMM: number,
+  ): CaretRect | null;
+  editInputNote(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    pitch: number,
+    tpc: number,
+    durationKind: number,
+    durationNumerator: number,
+    durationDenominator: number,
+  ): EditOutcome;
+  editWriteNote(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    pitch: number,
+    tpc: number,
+    durationKind: number,
+    durationNumerator: number,
+    durationDenominator: number,
+  ): EditOutcome;
+  editSetNotePitch(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    noteIndexInChord: number,
+    pitch: number,
+    tpc: number,
+    accidental: string,
+  ): EditOutcome;
+  editSetAccidental(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    noteIndexInChord: number,
+    accidental: string,
+  ): EditOutcome;
+  editAddNoteToChord(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    pitch: number,
+    tpc: number,
+    accidental: string,
+  ): EditOutcome;
+  editRemoveNoteFromChord(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    noteIndexInChord: number,
+  ): EditOutcome;
+  editSetTie(
+    handle: number,
+    fromPartIndex: number,
+    fromStaffIndexInPart: number,
+    fromMeasureIndex: number,
+    fromVoiceIndex: number,
+    fromElementIndex: number,
+    fromNoteIndexInChord: number,
+    toPartIndex: number,
+    toStaffIndexInPart: number,
+    toMeasureIndex: number,
+    toVoiceIndex: number,
+    toElementIndex: number,
+    toNoteIndexInChord: number,
+    hasSourceTieForward: number,
+    sourceTieForward: number,
+    hasTargetTieBack: number,
+    targetTieBack: number,
+  ): EditOutcome;
+  editWriteRest(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    durationKind: number,
+    durationNumerator: number,
+    durationDenominator: number,
+  ): EditOutcome;
+  editSetRestDuration(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    durationKind: number,
+    durationNumerator: number,
+    durationDenominator: number,
+  ): EditOutcome;
+  editSetChordDuration(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    durationKind: number,
+    durationNumerator: number,
+    durationDenominator: number,
+  ): EditOutcome;
+  editDelete(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+  ): EditOutcome;
+  editCreateTuplet(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    actualNotes: number,
+    normalNotes: number,
+  ): EditOutcome;
+  editRemoveTuplet(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+  ): EditOutcome;
+  beginEditSession(handle: number): boolean;
+  endEditSession(handle: number): void;
+  editUndo(handle: number): EditOutcome;
+  editRedo(handle: number): EditOutcome;
+  editSessionState(handle: number): BridgeEditSessionState;
   engineVersionStamp(): string;
   loadScore(bytes: Uint8Array): number;
   releaseScore(handle: number): void;
@@ -255,6 +457,10 @@ function resolveOptions(options: LayoutOptions | undefined): ResolvedLayoutOptio
   };
 }
 
+function isSelectedItemKind(kind: string): kind is SelectedItemKind {
+  return kind === "note" || kind === "rest" || kind === "tuplet";
+}
+
 /**
  * One loaded score.
  *
@@ -265,6 +471,7 @@ function resolveOptions(options: LayoutOptions | undefined): ResolvedLayoutOptio
  */
 export class Score {
   private handle: number;
+  private editGenerationValue = 0;
 
   constructor(
     private readonly bridge: BridgeExports,
@@ -301,6 +508,115 @@ export class Score {
    */
   get fingerprint(): string {
     return this.bridge.scoreFingerprint(this.live());
+  }
+
+  /**
+   * Monotonic generation for the mutable score behind this handle.
+   *
+   * Bumps on every accepted apply / bytes relay / undo / redo. Playback engines
+   * pin the value they were created with so a pre-edit SMF cannot keep sounding
+   * while post-edit cursor geometry is queried from wasm.
+   */
+  get editGeneration(): number {
+    return this.editGenerationValue;
+  }
+
+  /**
+   * Android: nativeBeginEditSession. Idempotent; re-begin drops the undo stack.
+   */
+  beginEditing(): void {
+    if (!this.bridge.beginEditSession(this.live())) {
+      throw new Error("failed to begin edit session");
+    }
+  }
+
+  /** Not a revert — the score keeps its last published state. */
+  endEditing(): void {
+    this.bridge.endEditSession(this.live());
+  }
+
+  /** One method over the typed union; routes to the per-case bridge entry point. */
+  applyEdit(intent: EditIntent): EditOutcome {
+    return this.bumpGenerationIfAccepted(
+      applyEditIntentCall(this.bridge, this.live(), intent),
+    );
+  }
+
+  /**
+   * Relay path for EditIntentCodec bytes authored elsewhere. This is the only
+   * way JavaScript can apply a composite intent.
+   */
+  applyEditIntentBytes(bytes: Uint8Array): EditOutcome {
+    return this.bumpGenerationIfAccepted(
+      this.bridge.applyEditIntentBytes(this.live(), bytes),
+    );
+  }
+
+  undo(): EditOutcome {
+    return this.bumpGenerationIfAccepted(this.bridge.editUndo(this.live()));
+  }
+
+  redo(): EditOutcome {
+    return this.bumpGenerationIfAccepted(this.bridge.editRedo(this.live()));
+  }
+
+  editState(): EditSessionState {
+    const state = this.bridge.editSessionState(this.live());
+    return {
+      active: state.active,
+      canUndo: state.canUndo,
+      canRedo: state.canRedo,
+      lastAffected: state.hasLastAffected
+        ? {
+            partIndex: state.lastAffectedPartIndex,
+            staffIndexInPart: state.lastAffectedStaffIndexInPart,
+            measureIndex: state.lastAffectedMeasureIndex,
+            voiceIndex: state.lastAffectedVoiceIndex,
+            elementIndex: state.lastAffectedElementIndex,
+          }
+        : null,
+    };
+  }
+
+  /**
+   * Editing hit-test, in document millimetres.
+   *
+   * This is a HIT-TEST with slop rescue, not the nearest-match
+   * `playerSecondsAtPoint`: empty paper returns `null` so a tap can deselect.
+   */
+  hitTest(xMM: number, yMM: number, activeVoice = 0): SelectedItem | null {
+    const item = this.bridge.editingHitTest(
+      this.live(),
+      xMM,
+      yMM,
+      activeVoice,
+    );
+    if (item === null) return null;
+    if (!isSelectedItemKind(item.kind)) {
+      throw new Error(`unknown edit hit kind: ${item.kind}`);
+    }
+    return item;
+  }
+
+  /**
+   * Caret geometry for a full-score-addressed selected item.
+   *
+   * Returns `null` until `layout()` has run since the last accepted edit. The
+   * bridge drops its layout cache on publish, so host order is accepted edit,
+   * then `layout()`, then geometry.
+   */
+  caretRect(item: SelectedItem, minimumWidthMM = 0): CaretRect | null {
+    return this.bridge.editingCaretRect(
+      this.live(),
+      item.kind,
+      item.partIndex,
+      item.staffIndexInPart,
+      item.measureIndex,
+      item.voiceIndex,
+      item.elementIndex,
+      item.noteIndexInChord,
+      minimumWidthMM,
+    );
   }
 
   /** The `DrawProgramFlat` bytes, undecoded. Useful for parity checks. */
@@ -501,6 +817,13 @@ export class Score {
       this.bridge.releaseScore(this.handle);
       this.handle = 0;
     }
+  }
+
+  private bumpGenerationIfAccepted(outcome: EditOutcome): EditOutcome {
+    if (outcome.accepted) {
+      this.editGenerationValue += 1;
+    }
+    return outcome;
   }
 }
 

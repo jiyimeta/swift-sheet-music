@@ -120,6 +120,7 @@ export class PlaybackEngine {
     private readonly score: Score,
     private readonly host: SynthHost,
     private readonly summary: PlaybackSummary,
+    private readonly constructionGeneration: number,
     private readonly scheduler: FrameScheduler,
     private readonly onCursor?: (rect: CursorRect | null) => void,
     private readonly onStateChange?: (state: PlaybackState) => void,
@@ -128,9 +129,9 @@ export class PlaybackEngine {
   /**
    * Load both sequences and park at the top.
    *
-   * Rendering the SMFs is the expensive part and happens once here rather than
-   * per play, because the score does not change under playback — editing has not
-   * reached this surface.
+   * Rendering the SMFs is the expensive part and happens once here. If the
+   * score is edited afterward, mutating transport entry points throw so the
+   * pre-edit sequence cannot drift away from post-edit cursor geometry.
    */
   static async create(options: PlaybackEngineOptions): Promise<PlaybackEngine> {
     const summary = options.score.playbackSummary();
@@ -141,6 +142,7 @@ export class PlaybackEngine {
       options.score,
       options.host,
       summary,
+      options.score.editGeneration,
       options.scheduler ?? defaultScheduler(),
       options.onCursor,
       options.onStateChange,
@@ -186,6 +188,7 @@ export class PlaybackEngine {
    */
   async play(options?: { countIn?: boolean }): Promise<void> {
     this.assertLive();
+    this.assertScoreUnedited();
     if (this._state === "playing" || this._state === "counting-in") return;
 
     const context = this.host.context as AudioContext;
@@ -247,6 +250,7 @@ export class PlaybackEngine {
 
   seekToMeasure(measureIndex: number): void {
     this.assertLive();
+    this.assertScoreUnedited();
     this.seekToPlayerSeconds(this.score.playerSecondsForMeasure(measureIndex));
   }
 
@@ -260,6 +264,7 @@ export class PlaybackEngine {
    */
   seekToPoint(xMM: number, yMM: number): void {
     this.assertLive();
+    this.assertScoreUnedited();
     this.seekToPlayerSeconds(this.score.playerSecondsAtPoint(xMM, yMM));
   }
 
@@ -438,6 +443,7 @@ export class PlaybackEngine {
    */
   async exportWav(options: AudioExportOptions = {}): Promise<Uint8Array> {
     this.assertLive();
+    this.assertScoreUnedited();
     const renderOffline = this.host.renderOffline;
     if (renderOffline === undefined) {
       throw new Error("this synth host cannot render offline");
@@ -477,6 +483,14 @@ export class PlaybackEngine {
   private assertLive(): void {
     if (this.disposed) {
       throw new Error("playback engine has been disposed");
+    }
+  }
+
+  private assertScoreUnedited(): void {
+    if (this.score.editGeneration !== this.constructionGeneration) {
+      throw new Error(
+        "score was edited after this engine was created; dispose it and create a new one",
+      );
     }
   }
 
