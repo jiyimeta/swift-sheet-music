@@ -209,6 +209,7 @@ enum GenWebFixtures {
         opcodes: Data,
         container: Data,
         expectations: Expectations,
+        editExpectations: SampleEditExpectations,
         to directory: URL,
     ) {
         let encoder = JSONEncoder()
@@ -221,6 +222,8 @@ enum GenWebFixtures {
             try container.write(to: directory.appendingPathComponent("sample.mscz"))
             try encoder.encode(expectations)
                 .write(to: directory.appendingPathComponent("sample-expectations.json"))
+            try encoder.encode(editExpectations)
+                .write(to: directory.appendingPathComponent("sample-edit-expectations.json"))
         } catch {
             fail("could not write fixtures to \(directory.path): \(error)", code: 7)
         }
@@ -298,13 +301,18 @@ enum GenWebFixtures {
         )
         let flat = DrawProgramFlat.encode(pages: result.pages)
         let expectations = makeExpectations(score: reloaded, pages: result.pages, flat: flat)
+        let editExpectations = makeSampleEditExpectations(score: reloaded, document: result.document)
         write(
-            opcodes: opcodes, container: container, expectations: expectations, to: directory,
+            opcodes: opcodes,
+            container: container,
+            expectations: expectations,
+            editExpectations: editExpectations,
+            to: directory,
         )
 
         print(
             "wrote all-opcodes.smdf (\(opcodes.count)B), sample.mscz (\(container.count)B), "
-                + "sample-expectations.json — \(flat.count)B flat over "
+                + "sample-expectations.json, sample-edit-expectations.json — \(flat.count)B flat over "
                 + "\(expectations.pageCount) page(s), "
                 + "\(expectations.firstPageCommandCount) commands",
         )
