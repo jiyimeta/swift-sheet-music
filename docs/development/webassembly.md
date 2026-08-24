@@ -189,12 +189,17 @@ The absent Apple tests break down by cause:
 - 10 tests: individually predicated host capabilities or reference-oracle checks
   unavailable in the current wasm test host.
 
-Some checks are still intentionally deferred rather than weakened:
+The XML reference-oracle boundary is intentional:
 
-- `XMLTreeParserDifferentialTests` still run this package's parser on WASI, but
-  skip comparison against the FoundationXML reference oracle there. FoundationXML
-  on WASI drops CDATA text and accepts multiple roots, so it is not a trustworthy
-  oracle for the portable parser.
+- The differential oracle is Apple's Foundation `XMLParser`, the historical
+  implementation that `XMLTreeParser` replaced and that the byte-identical MSCX
+  corpus gates encode. swift-corelibs-foundation's WASI `XMLParser` is a
+  different implementation, not that reference: it drops CDATA text and accepts
+  multiple roots. The comparison therefore stays confined to the manifest shape
+  where `SHEET_MUSIC_HAS_FOUNDATION_XML_REFERENCE_ORACLE` is defined, instead
+  of changing the production parser to match the WASI implementation. The
+  adversarial XML corpus now carries checked-in `XMLTreeNode` expectations
+  asserted on every platform, so the wasm side is no longer assertion-free.
 
 Run the direct zlib parity probe with:
 
