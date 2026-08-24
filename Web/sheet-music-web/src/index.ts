@@ -126,23 +126,23 @@ export interface MixerStrip {
  */
 interface BridgeExports {
   engineVersionStamp(): string;
-  loadScore(bytes: number[] | Uint8Array): number;
+  loadScore(bytes: Uint8Array): number;
   releaseScore(handle: number): void;
   scoreMetadata(handle: number): ScoreMetadata | null;
   scoreFingerprint(handle: number): string;
-  installSMuFLMetrics(bytes: number[] | Uint8Array): boolean;
+  installSMuFLMetrics(bytes: Uint8Array): boolean;
   computeLayout(
     handle: number,
     pageWidthMM: number,
     pageHeightMM: number,
-  ): number[] | Uint8Array;
+  ): Uint8Array;
   pageBreaks(handle: number, pageHeightMM: number): number[] | Float64Array;
-  renderMidi(handle: number): number[] | Uint8Array;
-  renderMetronomeMidi(handle: number): number[] | Uint8Array;
+  renderMidi(handle: number): Uint8Array;
+  renderMetronomeMidi(handle: number): Uint8Array;
   renderCountInMetronomeMidi(
     handle: number,
     fromPlayerSeconds: number,
-  ): number[] | Uint8Array;
+  ): Uint8Array;
   countInSeconds(handle: number, fromPlayerSeconds: number): number;
   playerSecondsAtPoint(handle: number, xMM: number, yMM: number): number;
   playbackSummary(handle: number): PlaybackSummary | null;
@@ -163,10 +163,7 @@ interface BridgeExports {
     fromMeasureIndex: number,
     toMeasureExclusive: number,
   ): number[] | Float64Array;
-  buildClickSoundFont(
-    strongWav: number[] | Uint8Array,
-    weakWav: number[] | Uint8Array,
-  ): number[] | Uint8Array;
+  buildClickSoundFont(strongWav: Uint8Array, weakWav: Uint8Array): Uint8Array;
   mixerStripCount(handle: number): number;
   mixerStrip(handle: number, index: number): MixerStrip | null;
   gmInstrumentNames(): string[];
@@ -180,15 +177,6 @@ export interface GMInstrument {
   readonly name: string;
   /** One of the sixteen GM families — "Piano", "Bass", "Synth Lead", … */
   readonly family: string;
-}
-
-/**
- * BridgeJS lowers `[UInt8]` / `[Double]` as a boxed `number[]` on some paths and
- * a typed array on others, and the generated `.d.ts` says `number[]`. Normalize
- * once here rather than at a dozen call sites.
- */
-function asBytes(value: number[] | Uint8Array): Uint8Array {
-  return value instanceof Uint8Array ? value : Uint8Array.from(value);
 }
 
 function asDoubles(value: number[] | Float64Array): Float64Array {
@@ -253,7 +241,7 @@ export class Score {
     if (bytes.length === 0) {
       throw new Error("layout failed");
     }
-    return asBytes(bytes);
+    return bytes;
   }
 
   layout(request: LayoutRequest): DrawProgramPage[] {
@@ -277,7 +265,7 @@ export class Score {
    * live mixer is the sole authority.
    */
   renderMidi(): Uint8Array {
-    return asBytes(this.bridge.renderMidi(this.live()));
+    return this.bridge.renderMidi(this.live());
   }
 
   /**
@@ -288,7 +276,7 @@ export class Score {
    * sequence would cut every voice sounding on the score side.
    */
   renderMetronomeMidi(): Uint8Array {
-    return asBytes(this.bridge.renderMetronomeMidi(this.live()));
+    return this.bridge.renderMetronomeMidi(this.live());
   }
 
   /**
@@ -299,8 +287,9 @@ export class Score {
    * Empty when the position has no count-in.
    */
   renderCountInMetronomeMidi(fromPlayerSeconds: number): Uint8Array {
-    return asBytes(
-      this.bridge.renderCountInMetronomeMidi(this.live(), fromPlayerSeconds),
+    return this.bridge.renderCountInMetronomeMidi(
+      this.live(),
+      fromPlayerSeconds,
     );
   }
 
@@ -476,7 +465,7 @@ export class SheetMusic {
    * to parse, which means "keep the GM clicks".
    */
   buildClickSoundFont(strongWav: Uint8Array, weakWav: Uint8Array): Uint8Array {
-    return asBytes(this.bridge.buildClickSoundFont(strongWav, weakWav));
+    return this.bridge.buildClickSoundFont(strongWav, weakWav);
   }
 
   /**

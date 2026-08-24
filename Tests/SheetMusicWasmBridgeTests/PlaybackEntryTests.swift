@@ -17,7 +17,7 @@ struct PlaybackEntryTests {
 
     @Test("renderMidi returns a Standard MIDI File")
     func renderMidiReturnsSMF() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         let bytes = renderMidi(handle: handle)
         #expect(bytes.count > 14)
@@ -32,7 +32,7 @@ struct PlaybackEntryTests {
 
     @Test("renderMetronomeMidi returns a Standard MIDI File")
     func renderMetronomeMidiReturnsSMF() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         #expect(Array(renderMetronomeMidi(handle: handle).prefix(4)) == [0x4D, 0x54, 0x68, 0x64])
     }
@@ -42,11 +42,14 @@ struct PlaybackEntryTests {
     /// and goes past zero gets the count-in for the start of the score.
     @Test("a negative start clamps to the top of the score")
     func countInSequenceClampsNegativeStart() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         let clamped = renderCountInMetronomeMidi(handle: handle, fromPlayerSeconds: -1)
         let atTop = renderCountInMetronomeMidi(handle: handle, fromPlayerSeconds: 0)
-        #expect(clamped == atTop)
+        // `.bridgedData`, not the arrays themselves: these are two distinct
+        // JavaScript objects, and `JSUint8Array` inherits `JSObject`'s identity
+        // equality, which would report them unequal however their bytes compare.
+        #expect(clamped.bridgedData == atTop.bridgedData)
     }
 
     @Test("renderCountInMetronomeMidi for an unknown handle is empty")
@@ -56,7 +59,7 @@ struct PlaybackEntryTests {
 
     @Test("countInSeconds is non-negative and finite")
     func countInSecondsIsSane() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         let seconds = countInSeconds(handle: handle, fromPlayerSeconds: 0)
         #expect(seconds >= 0)
@@ -68,7 +71,7 @@ struct PlaybackEntryTests {
     /// tap-to-start produces.
     @Test("a count-in starting mid-bar is shorter than one on the downbeat")
     func midBarCountInIsShorter() throws {
-        let handle = try loadScore(bytes: SampleScore.repeatingMscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
         defer { releaseScore(handle: handle) }
         let summary = try #require(playbackSummary(handle: handle))
         let bar = summary.totalPlayerSeconds / Double(summary.measureCount)
@@ -88,7 +91,7 @@ struct PlaybackEntryTests {
 
     @Test("playbackSummary reports a positive length and a measure count")
     func playbackSummaryIsPopulated() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         let summary = try #require(playbackSummary(handle: handle))
         #expect(summary.totalNotatedSeconds > 0)
@@ -102,7 +105,7 @@ struct PlaybackEntryTests {
     /// repeats they coincide, which is why this asserts on the repeating one.
     @Test("the repeat makes the player clock longer than the notated one")
     func repeatLengthensThePlayerClock() throws {
-        let handle = try loadScore(bytes: SampleScore.repeatingMscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
         defer { releaseScore(handle: handle) }
         let summary = try #require(playbackSummary(handle: handle))
         #expect(summary.totalPlayerSeconds > summary.totalNotatedSeconds)
@@ -115,7 +118,7 @@ struct PlaybackEntryTests {
 
     @Test("metronomeBeats is a flat pair array")
     func metronomeBeatsIsPairs() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         let beats = metronomeBeats(handle: handle)
         #expect(!beats.isEmpty)
@@ -131,7 +134,7 @@ struct PlaybackEntryTests {
     /// at the repeat boundary and stall a beat indicator for a whole measure.
     @Test("metronome beat positions never run backwards across a repeat")
     func metronomeBeatsAreMonotonic() throws {
-        let handle = try loadScore(bytes: SampleScore.repeatingMscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
         defer { releaseScore(handle: handle) }
         let beats = metronomeBeats(handle: handle)
         #expect(beats.count > 2)
@@ -151,7 +154,7 @@ struct PlaybackEntryTests {
 
     @Test("a cursor rect resolves once a layout has been computed")
     func cursorRectResolvesAfterLayout() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
         let rect = try #require(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0))
@@ -164,21 +167,21 @@ struct PlaybackEntryTests {
     /// starts playback before laying out gets `nil` rather than a wrong rect.
     @Test("a cursor rect is nil before any layout is computed")
     func cursorRectIsNilWithoutLayout() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         #expect(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0) == nil)
     }
 
     @Test("measure 0 starts the player at zero")
     func firstMeasureStartsAtZero() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         #expect(playerSecondsForMeasure(handle: handle, measureIndex: 0) == 0)
     }
 
     @Test("an out-of-range measure seeks to -1 rather than to the top")
     func outOfRangeMeasureIsSentinel() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         #expect(playerSecondsForMeasure(handle: handle, measureIndex: 9999) == -1)
         #expect(playerSecondsForMeasure(handle: handle, measureIndex: -1) == -1)
@@ -186,7 +189,7 @@ struct PlaybackEntryTests {
 
     @Test("a seek target round-trips back to its own measure")
     func seekTargetRoundTrips() throws {
-        let handle = try loadScore(bytes: SampleScore.repeatingMscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
         defer { releaseScore(handle: handle) }
         let seconds = playerSecondsForMeasure(handle: handle, measureIndex: 2)
         #expect(seconds > 0)
@@ -202,7 +205,7 @@ struct PlaybackEntryTests {
 
     @Test("a tap on the first note seeks to the top of the score")
     func tapOnFirstNoteSeeksToTop() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
         // Aim at the cursor rectangle the engine itself reports for second 0,
@@ -218,7 +221,7 @@ struct PlaybackEntryTests {
 
     @Test("a tap seeks somewhere the cursor agrees with")
     func tapRoundTripsThroughTheCursor() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
         let rect = try #require(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0))
@@ -238,7 +241,7 @@ struct PlaybackEntryTests {
     /// usable with a finger. Above and left of everything is the first note.
     @Test("a tap outside the music snaps to the nearest element")
     func tapOutsideSnapsToNearest() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
         #expect(playerSecondsAtPoint(handle: handle, xMM: -50, yMM: -50) == 0)
@@ -246,7 +249,7 @@ struct PlaybackEntryTests {
 
     @Test("a tap before any layout hits nothing")
     func tapWithoutLayoutIsSentinel() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         #expect(playerSecondsAtPoint(handle: handle, xMM: 30, yMM: 40) == -1)
     }
@@ -255,7 +258,7 @@ struct PlaybackEntryTests {
 
     @Test("loopPlayerSeconds returns an ordered pair")
     func loopPlayerSecondsIsOrderedPair() throws {
-        let handle = try loadScore(bytes: SampleScore.repeatingMscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
         defer { releaseScore(handle: handle) }
         let summary = try #require(playbackSummary(handle: handle))
         let pair = loopPlayerSeconds(
@@ -267,7 +270,7 @@ struct PlaybackEntryTests {
 
     @Test("an inverted or empty loop range yields nothing")
     func invertedLoopRangeIsEmpty() throws {
-        let handle = try loadScore(bytes: SampleScore.repeatingMscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
         defer { releaseScore(handle: handle) }
         _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
         #expect(loopPlayerSeconds(handle: handle, fromMeasureIndex: 2, toMeasureExclusive: 1).isEmpty)
@@ -277,7 +280,7 @@ struct PlaybackEntryTests {
 
     @Test("loopHighlightRects is a flat quad array once a layout exists")
     func loopHighlightRectsIsQuads() throws {
-        let handle = try loadScore(bytes: SampleScore.repeatingMscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
         defer { releaseScore(handle: handle) }
         _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
         let summary = try #require(playbackSummary(handle: handle))
@@ -290,7 +293,7 @@ struct PlaybackEntryTests {
 
     @Test("loopHighlightRects is empty before any layout is computed")
     func loopHighlightRectsNeedsLayout() throws {
-        let handle = try loadScore(bytes: SampleScore.repeatingMscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
         defer { releaseScore(handle: handle) }
         #expect(loopHighlightRects(handle: handle, fromMeasureIndex: 0, toMeasureExclusive: 3).isEmpty)
     }
@@ -303,7 +306,7 @@ struct PlaybackEntryTests {
     /// why nothing else would catch it.
     @Test("everything answers empty after the handle is released")
     func releasedHandleAnswersEmpty() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
         releaseScore(handle: handle)
         #expect(renderMidi(handle: handle).isEmpty)

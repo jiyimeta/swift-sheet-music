@@ -7,11 +7,11 @@ import Testing
 struct LayoutEntryTests {
     @Test("computeLayout returns decodable flat bytes")
     func computeLayoutReturnsFlatBytes() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         let bytes = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
         #expect(!bytes.isEmpty)
-        let pages = try DrawProgramFlat.decode(Data(bytes))
+        let pages = try DrawProgramFlat.decode(bytes.bridgedData)
         let first = try #require(pages.first)
         #expect(first.widthMM == 210)
         #expect(!first.commands.isEmpty)
@@ -24,7 +24,7 @@ struct LayoutEntryTests {
 
     @Test("pageBreaks reports one more boundary than pages")
     func pageBreaksShape() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
         let breaks = pageBreaks(handle: handle, pageHeightMM: 297)
@@ -39,14 +39,14 @@ struct LayoutEntryTests {
     /// predictable.
     @Test("pageBreaks before a layout returns empty")
     func pageBreaksWithoutLayoutIsEmpty() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         #expect(pageBreaks(handle: handle, pageHeightMM: 297).isEmpty)
     }
 
     @Test("releasing a score drops its cached layout")
     func releaseDropsTheCachedLayout() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297)
         releaseScore(handle: handle)
         #expect(pageBreaks(handle: handle, pageHeightMM: 297).isEmpty)
@@ -54,12 +54,12 @@ struct LayoutEntryTests {
 
     @Test("installSMuFLMetrics rejects an empty payload")
     func installRejectsEmpty() {
-        #expect(installSMuFLMetrics(bytes: []) == false)
+        #expect(installSMuFLMetrics(bytes: jsBytes([])) == false)
     }
 
     @Test("installSMuFLMetrics rejects garbage")
     func installRejectsGarbage() {
-        #expect(installSMuFLMetrics(bytes: [0xFF, 0xFF, 0xFF, 0xFF]) == false)
+        #expect(installSMuFLMetrics(bytes: jsBytes([0xFF, 0xFF, 0xFF, 0xFF])) == false)
     }
 
     @Test("installSMuFLMetrics accepts a well-formed table")
@@ -92,6 +92,6 @@ struct LayoutEntryTests {
         f32(-125)
         f32(295)
         f32(250)
-        #expect(installSMuFLMetrics(bytes: bytes) == true)
+        #expect(installSMuFLMetrics(bytes: jsBytes(bytes)) == true)
     }
 }

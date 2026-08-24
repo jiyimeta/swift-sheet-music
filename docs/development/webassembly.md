@@ -58,6 +58,16 @@ genuinely platform-scoped exception needs a local disable and an explanation.
   internal.
 - BridgeJS generates a thunk only for the target to which it is attached. Keep
   exported entrypoints physically in `SheetMusicWasmBridge`.
+- Byte blobs cross as `JSUint8Array`, not `[UInt8]`. A `[UInt8]` parameter is
+  lowered one wasm import call per byte, and a `[UInt8]` return is lifted into a
+  boxed JavaScript `Array`; `JSUint8Array` is a single object id with one bulk
+  copy each way, and the generated TypeScript says `Uint8Array`. The `[Double]`
+  faces stay boxed on purpose — their payloads are hundreds of bytes crossed
+  once per user action, where an object id's lifetime costs more than it saves.
+- `JSUint8Array` is a `JSObject` subclass, so `==` on two of them compares
+  object identity, not bytes. Two calls returning identical blobs are not equal.
+  Compare `.bridgedData`. This fails quietly in the worst way: a test written as
+  `#expect(a == b)` compiles, reads correctly, and asserts the wrong thing.
 - `WasmParityProbe` must not depend on JavaScriptKit because it runs directly in
   wasmtime, where JavaScript-host imports cannot be resolved.
 - `SheetMusicZip` uses the vendored raw-DEFLATE implementation under

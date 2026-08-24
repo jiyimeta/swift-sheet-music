@@ -53,7 +53,7 @@ struct MixerStripTests {
 
     @Test("every part gets a strip")
     func stripPerPart() throws {
-        let handle = try loadScore(bytes: Self.mscz())
+        let handle = try loadScore(bytes: jsBytes(Self.mscz()))
         defer { releaseScore(handle: handle) }
         #expect(mixerStripCount(handle: handle) == 3)
     }
@@ -66,7 +66,7 @@ struct MixerStripTests {
 
     @Test("an out-of-range index is nil")
     func outOfRangeIndexIsNil() throws {
-        let handle = try loadScore(bytes: Self.mscz())
+        let handle = try loadScore(bytes: jsBytes(Self.mscz()))
         defer { releaseScore(handle: handle) }
         #expect(mixerStrip(handle: handle, index: -1) == nil)
         #expect(mixerStrip(handle: handle, index: 3) == nil)
@@ -76,7 +76,7 @@ struct MixerStripTests {
     /// score's own patches, because the sequence no longer does.
     @Test("the strips carry the score's programs and volumes")
     func stripsCarryProgramsAndVolumes() throws {
-        let handle = try loadScore(bytes: Self.mscz())
+        let handle = try loadScore(bytes: jsBytes(Self.mscz()))
         defer { releaseScore(handle: handle) }
         var strips: [MixerStrip] = []
         for index in 0 ..< mixerStripCount(handle: handle) {
@@ -92,7 +92,7 @@ struct MixerStripTests {
     /// part's index — the drum part is on channel 9 whatever its position.
     @Test("each strip names the channel its part actually sounds on")
     func stripsNameTheLiveChannel() throws {
-        let handle = try loadScore(bytes: Self.mscz())
+        let handle = try loadScore(bytes: jsBytes(Self.mscz()))
         defer { releaseScore(handle: handle) }
         var strips: [MixerStrip] = []
         for index in 0 ..< mixerStripCount(handle: handle) {
@@ -156,7 +156,7 @@ struct MixerStripTests {
     /// backward seek would start fighting the mixer.
     @Test("the rendered sequence carries no program change of its own")
     func renderedSequenceHasNoProgramChanges() throws {
-        let handle = try loadScore(bytes: Self.mscz())
+        let handle = try loadScore(bytes: jsBytes(Self.mscz()))
         defer { releaseScore(handle: handle) }
         let bytes = renderMidi(handle: handle)
         #expect(!bytes.isEmpty)

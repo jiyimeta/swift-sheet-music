@@ -53,10 +53,11 @@ let scoreTable = HandleTable<Score>()
 /// Handles are `Int64` in `HandleTable`, but they are allocated monotonically
 /// from 1, so an i32 cannot run out inside one page. Narrowing here keeps the
 /// JavaScript side off `bigint` for a value it only ever passes back in.
-@JS public func loadScore(bytes: [UInt8]) -> Int {
-    guard !bytes.isEmpty else { return 0 }
+@JS public func loadScore(bytes: JSUint8Array) -> Int {
+    let data = bytes.bridgedData
+    guard !data.isEmpty else { return 0 }
     do {
-        return try Int(scoreTable.insert(ScoreBridge.loadScore(bytes: Data(bytes))))
+        return try Int(scoreTable.insert(ScoreBridge.loadScore(bytes: data)))
     } catch {
         return 0
     }

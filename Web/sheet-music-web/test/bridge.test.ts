@@ -38,6 +38,10 @@ const expectations = JSON.parse(
 const metricsBytes = new Uint8Array(
   readFileSync(fileURLToPath(new URL("../assets/bravura.smft", import.meta.url))),
 );
+const declarationText = readFileSync(
+  fileURLToPath(new URL("../dist/bridge-js.d.ts", import.meta.url)),
+  "utf8",
+);
 
 /** FNV-1a, 32-bit — the same walk `GenWebFixtures.digest` does in Swift. */
 function digest(bytes: Uint8Array): number {
@@ -159,5 +163,25 @@ describe("wasm bridge parity with the Apple build", () => {
     const score = sheetMusic.loadScore(scoreBytes);
     score.release();
     score.release();
+  });
+
+  it("keeps byte blob bridge faces on Uint8Array", async () => {
+    const { instantiate } = await import("../dist/instantiate.js");
+    const { defaultNodeSetup } = await import("../dist/platforms/node.js");
+    const { exports: bridge } = await instantiate(await defaultNodeSetup({}));
+    expect(bridge.installSMuFLMetrics(metricsBytes)).toBe(true);
+    const handle = bridge.loadScore(scoreBytes);
+    try {
+      const raw = bridge.computeLayout(handle, 210, 297);
+      expect(raw).toBeInstanceOf(Uint8Array);
+      expect(Array.isArray(raw)).toBe(false);
+    } finally {
+      bridge.releaseScore(handle);
+    }
+
+    expect(declarationText).toContain("loadScore(bytes: Uint8Array): number");
+    expect(declarationText).toContain(
+      "computeLayout(handle: number, pageWidthMM: number, pageHeightMM: number): Uint8Array",
+    );
   });
 });

@@ -9,6 +9,7 @@
 //
 // Only built when SWIFT_SHEET_MUSIC_WASM=1 is exported, so the normal package
 // shape is unaffected.
+import JavaScriptKit
 import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicEditWire
@@ -105,14 +106,14 @@ print(
 // the JS host, and those are unresolvable under wasmtime whether or not the code
 // path executes. `WasmParityProbe`, which IS run under wasmtime, must therefore
 // never depend on this target.
-let wasmHandle = loadScore(bytes: [UInt8](container))
+let wasmHandle = loadScore(bytes: JSUint8Array([UInt8](container)))
 let wasmProgram = computeLayout(handle: wasmHandle, pageWidthMM: 210, pageHeightMM: 297)
 let wasmBreaks = pageBreaks(handle: wasmHandle, pageHeightMM: 297)
 let wasmMetadata = scoreMetadata(handle: wasmHandle)
-_ = installSMuFLMetrics(bytes: [])
+_ = installSMuFLMetrics(bytes: JSUint8Array(length: 0))
 print(
     "wasm engine=\(engineVersionStamp()) handle=\(wasmHandle) "
-        + "flat=\(wasmProgram.count)B breaks=\(wasmBreaks.count) "
+        + "flat=\(wasmProgram.length)B breaks=\(wasmBreaks.count) "
         + "title=\(wasmMetadata?.title ?? "-") fp=\(scoreFingerprint(handle: wasmHandle))",
 )
 // The playback surface. `SheetMusicAudioCore` reaches the linked image only
@@ -143,15 +144,15 @@ let firstStrip = mixerStrip(handle: wasmHandle, index: 0)
 let gmNames = gmInstrumentNames()
 let gmFamilies = gmInstrumentFamilies()
 let tuning = masterTuningControlChanges(cents: -13)
-let clickBank = buildClickSoundFont(strongWav: [], weakWav: [])
+let clickBank = buildClickSoundFont(strongWav: JSUint8Array(length: 0), weakWav: JSUint8Array(length: 0))
 
 // Split across several statements on purpose: one interpolation with a dozen
 // operands is enough to time out the type checker.
-print("playback smf=\(smf.count)B click=\(clickSmf.count)B countIn=\(countInSmf.count)B")
+print("playback smf=\(smf.length)B click=\(clickSmf.length)B countIn=\(countInSmf.length)B")
 print("playback measures=\(summary?.measureCount ?? -1) beats=\(beats.count)")
 print("playback cursorY=\(cursor?.yMM ?? -1) loop=\(loopSeconds.count) rects=\(loopRects.count)")
 print("playback tap=\(tapSeconds) seek=\(seekSeconds) at=\(atMeasure) preRoll=\(preRoll)")
 print("mixer strips=\(stripCount) first=\(firstStrip?.displayName ?? "-")")
-print("mixer gm=\(gmNames.count)/\(gmFamilies.count) tuning=\(tuning.count) click=\(clickBank.count)B")
+print("mixer gm=\(gmNames.count)/\(gmFamilies.count) tuning=\(tuning.count) click=\(clickBank.length)B")
 
 releaseScore(handle: wasmHandle)

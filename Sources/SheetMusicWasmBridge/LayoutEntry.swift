@@ -24,11 +24,12 @@ import SheetMusicLayout
 /// Without a table the engraver falls back to `StubFontMetricsProvider`'s
 /// rectangle approximations and the spacing is visibly wrong, so a host that
 /// ignores the `false` will notice.
-@JS public func installSMuFLMetrics(bytes: [UInt8]) -> Bool {
-    guard !bytes.isEmpty else { return false }
+@JS public func installSMuFLMetrics(bytes: JSUint8Array) -> Bool {
+    let data = bytes.bridgedData
+    guard !data.isEmpty else { return false }
     do {
         FontMetrics.provider = try makeSMuFLMetricsTableProvider(
-            table: SMuFLMetricsTable.decode(Data(bytes)),
+            table: SMuFLMetricsTable.decode(data),
         )
         return true
     } catch {
@@ -47,8 +48,8 @@ import SheetMusicLayout
 /// The laid-out document is stored in `LayoutDocumentCache` so `pageBreaks` —
 /// and, once playback and editing arrive, cursor and hit-test lookups — do not
 /// re-engrave.
-@JS public func computeLayout(handle: Int, pageWidthMM: Double, pageHeightMM: Double) -> [UInt8] {
-    guard let score = scoreTable.value(for: Int64(handle)) else { return [] }
+@JS public func computeLayout(handle: Int, pageWidthMM: Double, pageHeightMM: Double) -> JSUint8Array {
+    guard let score = scoreTable.value(for: Int64(handle)) else { return JSUint8Array(length: 0) }
     let options = LayoutOptionsWire.verticalDefault
     let result = LayoutBridge.computeWithPages(
         score: score, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM, options: options,
@@ -62,7 +63,7 @@ import SheetMusicLayout
         pageWidthMM: pageWidthMM,
         pageHeightMM: pageHeightMM,
     )
-    return [UInt8](DrawProgramFlat.encode(pages: result.pages))
+    return DrawProgramFlat.encode(pages: result.pages).bridgedUint8Array
 }
 
 /// Page-boundary document-Y offsets in millimetres for the cached layout of
