@@ -142,11 +142,10 @@ struct MusicXMLUnpitchedTests {
         #expect(score.parts.first?.instrument.useDrumset == true)
     }
 
-    /// Without `LocalizedError`, MusicXML parse errors used to surface in
-    /// SwiftUI as opaque "SheetMusicError error 1" messages. The error must
-    /// expose the case-specific reason via `errorDescription`.
-    @Test(.enabled(if: isLocalizedErrorBridgingAvailable))
-    func errorDescriptionShowsReason() throws {
+    /// MusicXML parse errors should expose their case-specific reason through
+    /// SheetMusicError's developer-facing string surface, independent of
+    /// Foundation's `LocalizedError` bridging.
+    @Test func developerDescriptionShowsReason() throws {
         let badXML = """
         <?xml version="1.0" encoding="UTF-8"?>
         <score-partwise version="4.0">
@@ -165,19 +164,11 @@ struct MusicXMLUnpitchedTests {
             _ = try SheetMusic.loadScore(musicXMLData: Data(badXML.utf8))
             Issue.record("expected parse failure")
         } catch let e as SheetMusicError {
-            let description = e.localizedDescription
+            let description = e.developerDescription
             #expect(
                 description.contains("MusicXML"),
-                "errorDescription should expose the reason, got: \(description)",
+                "developerDescription should expose the reason, got: \(description)",
             )
         }
-    }
-
-    private static var isLocalizedErrorBridgingAvailable: Bool {
-        #if SHEET_MUSIC_HAS_LOCALIZED_ERROR_DESCRIPTION_BRIDGING
-            true
-        #else
-            false
-        #endif
     }
 }

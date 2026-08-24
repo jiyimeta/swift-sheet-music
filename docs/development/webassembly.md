@@ -186,18 +186,11 @@ The absent Apple tests break down by cause:
 - 10 tests: scoped legacy platform guards.
 - 13 tests: whole `SheetMusicAudioAppleTests` target, absent from the wasm
   manifest shape.
-- 11 tests: individually predicated host capabilities or reference-oracle checks
+- 10 tests: individually predicated host capabilities or reference-oracle checks
   unavailable in the current wasm test host.
 
 Some checks are still intentionally deferred rather than weakened:
 
-- `SheetMusicError.localizedDescription` on WASI currently falls back to a
-  generic FoundationEssentials string instead of `SheetMusicError.errorDescription`.
-  Fix this on `SheetMusicError` itself by adding a portable message surface for
-  the single error type required by this repository. `CustomStringConvertible`
-  is the likely vehicle because `LocalizedError` is unavailable under
-  FoundationEssentials; JavaScript-facing APIs should use that portable string
-  instead of relying on Foundation bridging.
 - `XMLTreeParserDifferentialTests` still run this package's parser on WASI, but
   skip comparison against the FoundationXML reference oracle there. FoundationXML
   on WASI drops CDATA text and accepts multiple roots, so it is not a trustworthy

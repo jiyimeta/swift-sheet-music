@@ -250,7 +250,6 @@ if isWasm {
 } else {
     var sheetMusicTestsSwiftSettings: [SwiftSetting] = [
         .define("SHEET_MUSIC_HAS_FOUNDATION_XML_REFERENCE_ORACLE"),
-        .define("SHEET_MUSIC_HAS_LOCALIZED_ERROR_DESCRIPTION_BRIDGING"),
     ]
 
     if !isAndroid {

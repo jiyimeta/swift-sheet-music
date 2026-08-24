@@ -62,7 +62,12 @@ targets) are resolved inside rendering passes, not stored in the types.
   (e.g. `MidiRenderer` → `MidiRenderer+Voice.swift`, `+Repeats.swift`,
   `+Header.swift`), not left to sprawl.
 - **Errors via `throws`.** A single `SheetMusicError` enum; no `Result`
-  types and no Optional-return-means-failure conventions.
+  types and no Optional-return-means-failure conventions. `SheetMusicError`
+  deliberately does not conform to `LocalizedError` or
+  `CustomStringConvertible`: its built-in English `developerDescription` is a
+  diagnostic string for logs and tests, not locale-sensitive UI copy. Apps
+  should switch over the enum cases and provide their own presentation and
+  localization.
 
 ## Parser policy (MSCX / MusicXML)
 
