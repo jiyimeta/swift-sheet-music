@@ -52,6 +52,12 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking.** `SheetMusicError.malformedScore` and
+  `SheetMusicError.corruptedContainer` now carry a structured `ScoreFault`
+  instead of a free-text reason, and `SheetMusicError.invalidEdit` now carries
+  an `EditRefusal` with a typed refusal `reason`. Hosts should switch over the
+  structured payloads and use their stable codes for presentation instead of
+  matching English strings.
 - `AudioMidiBridge` and `LoopHighlightTickResolver` moved from `SheetMusicAndroidJNI` to
   `SheetMusicBridgeCore`, so Android and WebAssembly share one implementation. The `native*` entry
   points stayed behind — jextract only makes a JNI symbol where the declaration physically sits.

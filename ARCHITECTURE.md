@@ -67,7 +67,10 @@ targets) are resolved inside rendering passes, not stored in the types.
   `CustomStringConvertible`: its built-in English `developerDescription` is a
   diagnostic string for logs and tests, not locale-sensitive UI copy. Apps
   should switch over the enum cases and provide their own presentation and
-  localization.
+  localization. Parser and container failures carry a `ScoreFault`, whose
+  stable dotted `code` is the localization key and whose English `message` is
+  log-only context. Editing failures carry an `EditRefusal`, whose typed
+  `reason` lets hosts branch without string-matching prose.
 
 ## Parser policy (MSCX / MusicXML)
 

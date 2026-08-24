@@ -51,6 +51,11 @@ if [[ "$run_apple" == 1 ]]; then
     # and repeating them makes SwiftLint lint each file twice.
     (cd "$ROOT" && swiftlint lint --strict --quiet)
 
+    # Cheap, and it catches what the type system cannot: an authored
+    # `.unexpected` refusal, or an `operation` name written as a sentence.
+    step "Apple / SwiftPM: error-code gates"
+    "$ROOT/Scripts/gate-error-codes.sh"
+
     # Wider than swiftlint: .swiftlint.yml excludes Examples/Apple, but
     # the example app is formatter-clean and the pre-commit hook formats
     # it, so check it here too.
