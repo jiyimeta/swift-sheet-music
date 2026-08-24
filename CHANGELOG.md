@@ -9,6 +9,16 @@ and this project adheres to
 
 ### Added
 
+- **Band culling in the browser renderer.** `splitIntoBands` slices a page's draw program into
+  self-contained horizontal bands — a port of Android's `ScoreBands.kt` — and `drawTile` paints a
+  tile from only the bands whose ink reaches it. A page too tall for one canvas previously walked
+  its whole command list once per tile; on a 1757 mm fixture a 100 mm tile now walks 10% of the
+  page. `drawPage` is unchanged for pages that fit a single canvas.
+- **Layout options on the WebAssembly bridge.** `computeLayout` takes a `LayoutOptions` struct —
+  layout mode, staff size, break handling, multi-measure rests, invisible elements, lyrics,
+  transposition, hidden staves and clef overrides — reaching the settings Android's display
+  inspector has had. The browser facade fills every field from the vertical default, so a caller
+  that passes none gets what it got before.
 - **Playback in the browser.** `@jiyimeta/sheet-music-web/playback` plays a score, follows it with
   a cursor, and supports a measure-range loop with its highlight, a metronome, a count-in, a
   playback rate and a mixer (per-strip patch, level and mute). The synth is the host's: Swift
@@ -52,6 +62,17 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking.** `computeLayout` on the WebAssembly bridge takes a `LayoutOptions` argument. There is
+  no options-less overload: two entry points into the same engraver drift, and the browser facade
+  supplies the defaults instead.
+- **Breaking.** The WebAssembly bridge's byte-blob faces take and return `Uint8Array` rather than
+  `number[]`. BridgeJS lowered a `[UInt8]` parameter one wasm import call per byte and lifted a
+  `[UInt8]` return into a boxed JavaScript array; `loadScore` on a 1 MB score went from 41.8 ms to
+  16.6 ms. The `[Double]` faces are unchanged — their payloads are small and cross once per user
+  action.
+- `pageBreaks` on the WebAssembly bridge derives its break policy from the options the document was
+  laid out with, as Android does, instead of always honouring layout breaks. Previously unobservable
+  because options could not be set; now it would answer with boundaries the document does not have.
 - **Breaking.** `SheetMusicError.malformedScore` and
   `SheetMusicError.corruptedContainer` now carry a structured `ScoreFault`
   instead of a free-text reason, and `SheetMusicError.invalidEdit` now carries

@@ -150,6 +150,40 @@ having changed, and the response is to re-bless the baseline — which is how a
 rendering guard stops guarding. `canvas.toDataURL()` does not care where the
 canvas sits.
 
+## Tiles and bands
+
+They are different units and they compose:
+
+- A **tile** is a canvas allocation unit. `planPageTiles` divides a page into
+  equal, contiguous, non-overlapping slices, because a canvas taller than 65,535
+  px silently draws nothing in Chromium and a seam that repeats or drops a row of
+  pixels is visible on a staff line.
+- A **band** is a command-culling unit. `splitIntoBands` walks the command stream
+  once and cuts at the first boundary past 80 mm of painted height where cutting
+  is safe — no path mid-construction, no rotation open. Bands have variable
+  height, follow the ink rather than a grid, and may overlap.
+
+`drawTile` selects the bands whose painted extent reaches a tile and walks only
+those. `drawPage` still walks everything and lets the canvas clip; that is the
+right choice for a page that fits one canvas.
+
+Two things to keep in mind when touching this:
+
+- **A band restates its paint state.** It opens with the colour and dash in force
+  where it starts, so it can be replayed alone. The commands walked for a tile
+  are therefore the page's plus up to two per band drawn — never assume the sum
+  over bands equals the page's command count.
+- **Glyph bounds are deliberately generous** (`y − 2·size … y + size`, from the
+  Kotlin), because measuring would need a typeface and a split has to stay a pure
+  function. Over-reporting costs a little culling efficiency; under-reporting
+  would clip real ink. `stretchedGlyph` is exact.
+
+`bands.ts` is a port of `Android/SheetMusicComposeAndroid/.../ScoreBands.kt` and
+divergence from it is a bug, the same contract `canvas.ts` holds against
+`ScoreCanvas.kt`. Android does not need `drawTile`: it gives each band its own
+Compose layer and the framework rejects the off-screen ones. Canvas2D has no
+display list, so the selection is explicit here.
+
 ## Build and test
 
 Build the browser package with:

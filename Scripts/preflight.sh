@@ -70,6 +70,16 @@ if [[ "$run_apple" == 1 ]]; then
 fi
 
 if [[ "$run_wasm" == 1 ]]; then
+    # Fail here rather than at the end. The browser-package stage needs these,
+    # but it runs last — so in a fresh worktree the missing dependency surfaced
+    # as `tsc: command not found` only after the ~6 min wasm build, the Swift
+    # test run and the size gate had all passed.
+    if [[ ! -d "$ROOT/Web/sheet-music-web/node_modules" ]]; then
+        echo "error: Web/sheet-music-web/node_modules is missing." >&2
+        echo "       run: npm install --prefix Web/sheet-music-web" >&2
+        exit 1
+    fi
+
     if TOOLCHAIN_BIN="$("$ROOT/Scripts/swift-org-toolchain.sh")"; then
         export PATH="$TOOLCHAIN_BIN:$PATH"
     fi
