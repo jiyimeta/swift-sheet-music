@@ -110,6 +110,40 @@
             )
         }
 
+        private func tupletOnSecondStaffSample() -> Score {
+            let hiddenVoice = Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 48, tpc: 14)])),
+                .rest(duration: .quarter),
+                .rest(duration: .quarter),
+                .rest(duration: .quarter),
+            ])
+            let third = NoteDuration.fraction(Fraction(numerator: 1, denominator: 12))
+            let visibleVoice = Voice(
+                elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .chord(Chord(duration: third, notes: [Note(pitch: 60, tpc: 14)])),
+                    .chord(Chord(duration: third, notes: [Note(pitch: 62, tpc: 16)])),
+                    .chord(Chord(duration: third, notes: [Note(pitch: 64, tpc: 18)])),
+                    .rest(duration: .quarter),
+                    .rest(duration: .quarter),
+                    .rest(duration: .quarter),
+                ],
+                tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)],
+            )
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [
+                        Staff(measures: [Measure(voices: [hiddenVoice])]),
+                        Staff(measures: [Measure(voices: [visibleVoice])]),
+                    ],
+                )],
+            )
+        }
+
         private func layout(_ score: Score, staffSize: CGFloat = 28) -> LayoutDocument {
             var options = ScoreViewOptions()
             options.staffSize = staffSize
@@ -396,6 +430,41 @@
             #expect(tester.itemIDs(in: slop).contains(.note(id)))
 
             #expect(doc.editingHitTest(at: probe, activeVoice: 0) == nil)
+        }
+
+        @Test("Tuplet hit after a hidden earlier staff re-addresses to the full-score staff")
+        func tupletHitPastHiddenStaffReturnsFullScoreAddress() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let score = tupletOnSecondStaffSample()
+            let hidden: Set<StaffAddress> = [StaffAddress(partIndex: 0, staffIndexInPart: 0)]
+            let doc = layout(score.filtered(hidingStaves: hidden))
+            let system = try #require(doc.systems.first)
+            let measure = try #require(system.measures.first)
+
+            var tapPoint: CGPoint?
+            var filteredTupletID: TupletID?
+            for element in measure.elements {
+                guard case let .tupletLabel(from, to, _, _, _, tupletID) = element,
+                      let tupletID
+                else { continue }
+                let base = CGPoint(x: system.origin.x + measure.origin.x, y: system.origin.y + measure.origin.y)
+                tapPoint = CGPoint(x: base.x + (from.x + to.x) / 2, y: base.y + (from.y + to.y) / 2)
+                filteredTupletID = tupletID
+                break
+            }
+            let point = try #require(tapPoint)
+            let filteredID = try #require(filteredTupletID)
+            #expect(filteredID.staff == StaffAddress(partIndex: 0, staffIndexInPart: 0))
+
+            let filteredHit = try #require(doc.editingHitTest(at: point, activeVoice: 0))
+            #expect(filteredHit == .tuplet(filteredID))
+
+            let fullCursor = score.engineCursorForFilteredTap(.item(filteredHit), hiddenStaves: hidden)
+            guard case let .item(.tuplet(fullID)) = fullCursor else {
+                Issue.record("expected a tuplet cursor, got \(fullCursor)")
+                return
+            }
+            #expect(fullID.staff == StaffAddress(partIndex: 0, staffIndexInPart: 1))
         }
     }
 #endif

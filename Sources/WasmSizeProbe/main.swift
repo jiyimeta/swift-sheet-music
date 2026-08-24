@@ -125,6 +125,18 @@ let wasmProgram = computeLayout(
 )
 let wasmBreaks = pageBreaks(handle: wasmHandle, pageHeightMM: 297)
 let wasmMetadata = scoreMetadata(handle: wasmHandle)
+let editHit = editingHitTest(handle: wasmHandle, xMM: 30, yMM: 40, activeVoice: 0)
+let editCaret = editingCaretRect(
+    handle: wasmHandle,
+    kind: "note",
+    partIndex: 0,
+    staffIndexInPart: 0,
+    measureIndex: 0,
+    voiceIndex: 0,
+    elementIndex: 0,
+    noteIndexInChord: 0,
+    minimumWidthMM: 1,
+)
 _ = installSMuFLMetrics(bytes: JSUint8Array(length: 0))
 print(
     "wasm engine=\(engineVersionStamp()) handle=\(wasmHandle) "
@@ -240,6 +252,7 @@ print("playback smf=\(smf.length)B click=\(clickSmf.length)B countIn=\(countInSm
 print("playback measures=\(summary?.measureCount ?? -1) beats=\(beats.count)")
 print("playback cursorY=\(cursor?.yMM ?? -1) loop=\(loopSeconds.count) rects=\(loopRects.count)")
 print("playback tap=\(tapSeconds) seek=\(seekSeconds) at=\(atMeasure) preRoll=\(preRoll)")
+print("edit geometry hit=\(editHit?.kind ?? "-") caret=\(editCaret?.heightMM ?? -1)")
 print("mixer strips=\(stripCount) first=\(firstStrip?.displayName ?? "-")")
 print("mixer gm=\(gmNames.count)/\(gmFamilies.count) tuning=\(tuning.count) click=\(clickBank.length)B")
 print(
