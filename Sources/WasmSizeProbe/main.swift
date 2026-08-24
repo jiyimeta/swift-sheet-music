@@ -161,6 +161,17 @@ let gmFamilies = gmInstrumentFamilies()
 let tuning = masterTuningControlChanges(cents: -13)
 let clickBank = buildClickSoundFont(strongWav: JSUint8Array(length: 0), weakWav: JSUint8Array(length: 0))
 
+// The edit session lifecycle and bytes relay. Scalar edit entry points are
+// added by the next slice; this slice reaches only the session/outcome surface
+// and opaque `EditIntentCodec` relay.
+let editOpened = beginEditSession(handle: wasmHandle)
+let editInitialState = editSessionState(handle: wasmHandle)
+let editIntentBytes = EditIntentCodec.encode(.composite([]))
+let editBytesOutcome = applyEditIntentBytes(handle: wasmHandle, intentBytes: JSUint8Array([UInt8](editIntentBytes)))
+let editUndoOutcome = editUndo(handle: wasmHandle)
+let editRedoOutcome = editRedo(handle: wasmHandle)
+endEditSession(handle: wasmHandle)
+
 // Split across several statements on purpose: one interpolation with a dozen
 // operands is enough to time out the type checker.
 print("playback smf=\(smf.length)B click=\(clickSmf.length)B countIn=\(countInSmf.length)B")
@@ -169,5 +180,9 @@ print("playback cursorY=\(cursor?.yMM ?? -1) loop=\(loopSeconds.count) rects=\(l
 print("playback tap=\(tapSeconds) seek=\(seekSeconds) at=\(atMeasure) preRoll=\(preRoll)")
 print("mixer strips=\(stripCount) first=\(firstStrip?.displayName ?? "-")")
 print("mixer gm=\(gmNames.count)/\(gmFamilies.count) tuning=\(tuning.count) click=\(clickBank.length)B")
+print(
+    "edit open=\(editOpened) active=\(editInitialState.active) "
+        + "bytes=\(editBytesOutcome.accepted) undo=\(editUndoOutcome.code) redo=\(editRedoOutcome.code)",
+)
 
 releaseScore(handle: wasmHandle)

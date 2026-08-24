@@ -1,4 +1,5 @@
 import JavaScriptKit
+import SheetMusicFoundation
 @testable import SheetMusicWasmBridge
 
 /// Builds the argument the byte-blob entry points now take, in one bulk copy.
@@ -9,6 +10,10 @@ import JavaScriptKit
 /// Tests that compare contents say `.bridgedData` and compare `Data`.
 func jsBytes(_ bytes: [UInt8]) -> JSUint8Array {
     JSUint8Array(bytes)
+}
+
+func jsBytes(_ data: Data) -> JSUint8Array {
+    JSUint8Array(Array(data))
 }
 
 /// Read-only conveniences so an assertion about a returned blob reads the way
