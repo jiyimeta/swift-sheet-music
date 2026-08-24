@@ -114,6 +114,39 @@ enum GenWebFixtures {
         let firstPageCommandCount: Int
     }
 
+    struct TallExpectations: Encodable {
+        let flatByteCount: Int
+        let flatDigest: UInt32
+        let pageCount: Int
+        let pageHeightMM: Double
+        let commandCount: Int
+    }
+
+    /// A single-staff score tall enough for band culling to be observable.
+    static var tallScore: Score {
+        let measures = (0 ..< 200).map { index in
+            Measure(voices: [
+                Voice(elements: [
+                    .chord(Chord(
+                        duration: .whole,
+                        notes: ChordNotes([Note(pitch: 60 + index % 8, tpc: 14)]),
+                    )),
+                ]),
+            ])
+        }
+        return Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "1",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [Staff(measures: measures)],
+                ),
+            ],
+            metaTags: ["workTitle": "web tall", "composer": "swift-sheet-music"],
+        )
+    }
+
     static func fail(_ message: String, code: Int32) -> Never {
         FileHandle.standardError.write(Data("error: \(message)\n".utf8))
         exit(code)
@@ -193,6 +226,49 @@ enum GenWebFixtures {
         }
     }
 
+    static func writeTallScore(to directory: URL) {
+        let container: Data
+        let reloaded: Score
+        do {
+            container = try MSCZWriter.write(score: tallScore)
+            reloaded = try ScoreBridge.loadScore(bytes: container)
+        } catch {
+            fail("could not round-trip the tall score: \(error)", code: 5)
+        }
+
+        let result = LayoutBridge.computeWithPages(
+            score: reloaded, pageWidthMM: 210, pageHeightMM: 297, options: .verticalDefault,
+        )
+        guard let page = result.pages.first else {
+            fail("the tall score laid out to no pages", code: 6)
+        }
+        let flat = DrawProgramFlat.encode(pages: result.pages)
+        let expectations = TallExpectations(
+            flatByteCount: flat.count,
+            flatDigest: digest(flat),
+            pageCount: result.pages.count,
+            pageHeightMM: page.heightMM,
+            commandCount: page.commands.count,
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        do {
+            try container.write(to: directory.appendingPathComponent("tall.mscz"))
+            try flat.write(to: directory.appendingPathComponent("tall.smdf"))
+            try encoder.encode(expectations)
+                .write(to: directory.appendingPathComponent("tall-expectations.json"))
+        } catch {
+            fail("could not write tall fixtures to \(directory.path): \(error)", code: 12)
+        }
+
+        print(
+            "wrote tall.mscz (\(container.count)B), tall.smdf (\(flat.count)B), "
+                + "tall-expectations.json — \(expectations.pageHeightMM)mm, "
+                + "\(expectations.commandCount) commands",
+        )
+    }
+
     static func run() {
         guard CommandLine.arguments.count == 3 else {
             FileHandle.standardError.write(
@@ -258,6 +334,7 @@ enum GenWebFixtures {
         )
 
         writeMixerScore(to: directory)
+        writeTallScore(to: directory)
     }
 }
 

@@ -25,6 +25,20 @@ test("reports a ready engine", async ({ page }) => {
 test("reads the score's metadata", async ({ page }) => {
   await page.evaluate((url) => window.renderScoreFromURL(url), FIXTURE);
   await expect(page.locator("body")).toHaveAttribute("data-page-count", /[1-9]/);
+  await expect(page.locator("body")).toHaveAttribute("data-band-count", /[1-9]/);
+  // Wiring only — the culling gate proper is `bridge.test.ts`'s ratio check
+  // against the tall fixture. This page is short enough to be a single band, so
+  // there is nothing here for culling to remove.
+  //
+  // Not `walked <= total`: a band opens by restating the paint state in force
+  // where it starts, so the commands actually walked are the page's plus up to
+  // a `setColor` and a `setDash` per band drawn. The bound below is what that
+  // makes true, and it still catches a walk that has run away.
+  const walked = Number(await page.locator("body").getAttribute("data-walked-commands"));
+  const total = Number(await page.locator("body").getAttribute("data-total-commands"));
+  const bands = Number(await page.locator("body").getAttribute("data-band-count"));
+  expect(walked).toBeGreaterThan(0);
+  expect(walked).toBeLessThanOrEqual(total + 2 * bands);
   await expect(page.locator("#status")).toContainText("web parity");
   await expect(page.locator("#status")).toContainText("♩ = 120");
 });

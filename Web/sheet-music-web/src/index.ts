@@ -18,14 +18,17 @@ export type {
 } from "./draw-program.js";
 export {
   drawPage,
+  drawTile,
   loadScoreFonts,
   MAX_CANVAS_DIMENSION_PX,
   planPageTiles,
+  splitIntoBands,
 } from "./render/canvas.js";
 export type {
   DrawPageOptions,
   FontURLs,
   PageTile,
+  ScoreBand,
   ScoreFonts,
 } from "./render/canvas.js";
 

@@ -14,8 +14,12 @@
  */
 import type { DrawCommand, DrawProgramPage } from "../draw-program.js";
 import { FontId } from "../draw-program.js";
+import type { ScoreBand } from "./bands.js";
 import type { ScoreFonts } from "./fonts.js";
+import type { PageTile } from "./tiles.js";
 
+export type { ScoreBand } from "./bands.js";
+export { DEFAULT_BAND_HEIGHT_MM, splitIntoBands } from "./bands.js";
 export type { FontURLs, ScoreFonts } from "./fonts.js";
 export { loadScoreFonts } from "./fonts.js";
 export type { PageTile } from "./tiles.js";
@@ -60,31 +64,19 @@ export interface DrawPageOptions {
    *
    * Pass a tile's `offsetMM` (see `planPageTiles`) to draw one slice of a page
    * too tall for a single canvas. Everything is still drawn — the canvas clips
-   * what falls outside — so a slice costs a full command walk. Skipping
-   * out-of-range commands would mean tracking which state opcodes
-   * (`setColor`, `setDash`, `setRotation`) precede the slice, which is what
-   * Android's `ScoreBands.kt` does and what this deliberately does not, yet.
+   * what falls outside — so a slice costs a full command walk. Use `drawTile`
+   * with bands from `splitIntoBands` when a host needs command culling.
    */
   readonly offsetMM?: number;
 }
 
-/**
- * Paint one page, or one slice of it.
- *
- * The caller owns the canvas: size its backing store to
- * `page.widthMM * pxPerMM` by `page.heightMM * pxPerMM` and clear it first if it
- * is being reused. Past `MAX_CANVAS_DIMENSION_PX` a canvas silently draws
- * nothing, so a tall page has to be tiled — see `planPageTiles`. The context is
- * handed back in the state it arrived in.
- */
-export function drawPage(
+function drawCommandList(
   ctx: CanvasRenderingContext2D,
-  page: DrawProgramPage,
+  commands: readonly DrawCommand[],
   pxPerMM: number,
   fonts: ScoreFonts,
-  options: DrawPageOptions = {},
+  offsetPx: number,
 ): void {
-  const offsetPx = (options.offsetMM ?? 0) * pxPerMM;
   let currentArgb = 0xff000000;
   let dashOnPx = 0;
   let dashOffPx = 0;
@@ -211,7 +203,7 @@ export function drawPage(
   }
   applyColor();
   ctx.beginPath();
-  for (const command of page.commands) {
+  for (const command of commands) {
     paint(command);
   }
   // A page may end with a rotation still open — the Kotlin renderer's save-count
@@ -221,4 +213,48 @@ export function drawPage(
     ctx.restore();
   }
   ctx.restore();
+}
+
+/**
+ * Paint one page, or one slice of it.
+ *
+ * The caller owns the canvas: size its backing store to
+ * `page.widthMM * pxPerMM` by `page.heightMM * pxPerMM` and clear it first if it
+ * is being reused. Past `MAX_CANVAS_DIMENSION_PX` a canvas silently draws
+ * nothing, so a tall page has to be tiled — see `planPageTiles`. The context is
+ * handed back in the state it arrived in.
+ */
+export function drawPage(
+  ctx: CanvasRenderingContext2D,
+  page: DrawProgramPage,
+  pxPerMM: number,
+  fonts: ScoreFonts,
+  options: DrawPageOptions = {},
+): void {
+  const offsetPx = (options.offsetMM ?? 0) * pxPerMM;
+  drawCommandList(ctx, page.commands, pxPerMM, fonts, offsetPx);
+}
+
+/**
+ * Paint one tile of a page from its bands, walking only the bands whose painted
+ * extent reaches the tile.
+ *
+ * Each band is self-contained (it restates its paint state), so bands can be
+ * drawn independently in any order; a command belongs to exactly one band, so
+ * overlapping band extents never double-paint.
+ */
+export function drawTile(
+  ctx: CanvasRenderingContext2D,
+  bands: readonly ScoreBand[],
+  pxPerMM: number,
+  fonts: ScoreFonts,
+  tile: PageTile,
+): void {
+  const tileBottomMM = tile.offsetMM + tile.heightMM;
+  const offsetPx = tile.offsetMM * pxPerMM;
+  for (const band of bands) {
+    if (band.topMM >= tileBottomMM) continue;
+    if (band.topMM + band.heightMM <= tile.offsetMM) continue;
+    drawCommandList(ctx, band.commands, pxPerMM, fonts, offsetPx);
+  }
 }

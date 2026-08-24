@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
-import { loadSheetMusic, type SheetMusic } from "../src/index.js";
+import { loadSheetMusic, splitIntoBands, type SheetMusic } from "../src/index.js";
 
 /**
  * Pins the WebAssembly build against the Apple one.
@@ -18,6 +18,7 @@ const fixturePath = (name: string) =>
   fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 
 const scoreBytes = new Uint8Array(readFileSync(fixturePath("sample.mscz")));
+const tallScoreBytes = new Uint8Array(readFileSync(fixturePath("tall.mscz")));
 const pageBreakMeasures = Array.from(
   { length: 12 },
   (_, index) => `<Measure>
@@ -52,6 +53,15 @@ const expectations = JSON.parse(
   pageCount: number;
   firstPageWidthMM: number;
   firstPageCommandCount: number;
+};
+const tallExpectations = JSON.parse(
+  readFileSync(fixturePath("tall-expectations.json"), "utf8"),
+) as {
+  flatByteCount: number;
+  flatDigest: number;
+  pageCount: number;
+  pageHeightMM: number;
+  commandCount: number;
 };
 
 /** The metrics table the browser installs, so both sides measure alike. */
@@ -236,5 +246,32 @@ describe("wasm bridge parity with the Apple build", () => {
     expect(declarationText).toContain(
       "computeLayout(handle: number, pageWidthMM: number, pageHeightMM: number, options: LayoutOptions): Uint8Array",
     );
+  });
+
+  it("walks a bounded fraction of commands for a tall tile", () => {
+    const score = sheetMusic.loadScore(tallScoreBytes);
+    try {
+      const raw = score.layoutBytes({ pageWidthMM: 210, pageHeightMM: 297 });
+      expect(raw.length).toBe(tallExpectations.flatByteCount);
+      expect(digest(raw)).toBe(tallExpectations.flatDigest);
+      const page = score.layout({ pageWidthMM: 210, pageHeightMM: 297 })[0]!;
+      expect(page.heightMM).toBeCloseTo(tallExpectations.pageHeightMM, 9);
+      expect(page.commands).toHaveLength(tallExpectations.commandCount);
+
+      const bands = splitIntoBands(page);
+      const tile = { offsetMM: 0.4 * page.heightMM, heightMM: 100 };
+      const tileBottomMM = tile.offsetMM + tile.heightMM;
+      const walked = bands
+        .filter(
+          (band) =>
+            band.topMM < tileBottomMM && band.topMM + band.heightMM > tile.offsetMM,
+        )
+        .reduce((sum, band) => sum + band.commands.length, 0);
+
+      expect(bands.length).toBeGreaterThanOrEqual(4);
+      expect(walked / page.commands.length).toBeLessThanOrEqual(0.6);
+    } finally {
+      score.release();
+    }
   });
 });

@@ -7,10 +7,11 @@
 //   Scripts/wasm-build-web.sh
 //   npm --prefix Web/sheet-music-web run build
 import {
-  drawPage,
+  drawTile,
   loadScoreFonts,
   loadSheetMusic,
   planPageTiles,
+  splitIntoBands,
 } from "../../Web/sheet-music-web/dist-esm/index.js";
 import {
   createPlaybackEngine,
@@ -95,10 +96,15 @@ function render(bytes) {
   pagesHost.replaceChildren();
   tiles = [];
   let tileCount = 0;
+  let bandCount = 0;
+  let walkedCommands = 0;
+  let totalCommands = 0;
   for (const page of pages) {
     // The bridge's only layout mode is continuous, so a page is the whole
     // document — 18 metres for a six-part score, which is 135 000 pixels here.
     // A canvas that tall silently draws nothing, so it gets tiled.
+    const bands = splitIntoBands(page);
+    bandCount += bands.length;
     for (const tile of planPageTiles(page, PX_PER_MM)) {
       const holder = document.createElement("div");
       holder.className = "tile";
@@ -106,9 +112,14 @@ function render(bytes) {
       canvas.width = Math.round(page.widthMM * PX_PER_MM);
       canvas.height = Math.round(tile.heightMM * PX_PER_MM);
       canvas.style.width = `${page.widthMM * CSS_PX_PER_MM}px`;
-      drawPage(canvas.getContext("2d"), page, PX_PER_MM, fonts, {
-        offsetMM: tile.offsetMM,
-      });
+      drawTile(canvas.getContext("2d"), bands, PX_PER_MM, fonts, tile);
+      const tileBottomMM = tile.offsetMM + tile.heightMM;
+      for (const band of bands) {
+        if (band.topMM < tileBottomMM && band.topMM + band.heightMM > tile.offsetMM) {
+          walkedCommands += band.commands.length;
+        }
+      }
+      totalCommands += page.commands.length;
       // Click-to-seek. The tile knows its own document-Y offset, so a click
       // turns into document millimetres with the one scale factor already in
       // play — the same unit the bridge answers cursor rectangles in.
@@ -136,6 +147,9 @@ function render(bytes) {
   }
   document.body.dataset.pageCount = String(pages.length);
   document.body.dataset.tileCount = String(tileCount);
+  document.body.dataset.bandCount = String(bandCount);
+  document.body.dataset.walkedCommands = String(walkedCommands);
+  document.body.dataset.totalCommands = String(totalCommands);
 
   const summary = openScore.playbackSummary();
   loopFrom.max = String(summary?.measureCount ?? 1);
