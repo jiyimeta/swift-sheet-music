@@ -6,7 +6,7 @@ import Testing
 
 struct MSCXDiagnosticsTests {
     @Test func cleanFile_yieldsEmptyDiagnostics_mscx() throws {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "midi01", withExtension: "mscx",
         ))
         let result = try MSCXParser.parseWithDiagnostics(contentsOf: url)
@@ -15,7 +15,7 @@ struct MSCXDiagnosticsTests {
     }
 
     @Test func cleanFile_yieldsEmptyDiagnostics_mscz() throws {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "midi01", withExtension: "mscz",
         ))
         let result = try MSCZReader.parseWithDiagnostics(contentsOf: url)
@@ -24,7 +24,7 @@ struct MSCXDiagnosticsTests {
     }
 
     @Test func diagnostic_fixture_resource_resolves() {
-        let url = Bundle.module.url(
+        let url = TestResources.url(
             forResource: "diagnostics-tremolo-unknown-subtype",
             withExtension: "mscx",
         )
@@ -32,7 +32,7 @@ struct MSCXDiagnosticsTests {
     }
 
     @Test func unknownTremoloSubtype_emitsDiagnostic_andDropsTremolo() throws {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "diagnostics-tremolo-unknown-subtype",
             withExtension: "mscx",
         ))
@@ -74,7 +74,7 @@ struct MSCXDiagnosticsTests {
 
     @Test func plainParse_alsoLoadsFileWithUnknownTremolo() throws {
         // The non-diagnostics API must also load (it just discards warnings).
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "diagnostics-tremolo-unknown-subtype",
             withExtension: "mscx",
         ))
@@ -88,7 +88,7 @@ struct MSCXDiagnosticsTests {
         // Construct the XML in-line by stripping the <subtype> child from
         // the bundled fixture — keeps the assertion targeted on the
         // missing-subtype path.
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "diagnostics-tremolo-unknown-subtype",
             withExtension: "mscx",
         ))
@@ -109,7 +109,7 @@ struct MSCXDiagnosticsTests {
         // emitter drifts from it, callers' downstream filters break
         // silently. Verify a few known codes round-trip through a real
         // parse.
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "diagnostics-tremolo-unknown-subtype",
             withExtension: "mscx",
         ))

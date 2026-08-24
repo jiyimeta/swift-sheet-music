@@ -509,7 +509,7 @@
                 layoutMode = .originalPDF
             } catch {
                 errorMessage =
-                    "PDF import failed: " + error.localizedDescription
+                    "PDF import failed: " + exampleErrorDescription(error)
             }
         }
 
@@ -544,7 +544,7 @@
                 // without hunting through Finder.
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
-                errorMessage = "PDF export failed: \(error.localizedDescription)"
+                errorMessage = "PDF export failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -575,7 +575,7 @@
                 )
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
-                errorMessage = "MSCX export failed: \(error.localizedDescription)"
+                errorMessage = "MSCX export failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -595,7 +595,7 @@
                 try data.write(to: url)
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
-                errorMessage = "MIDI export failed: \(error.localizedDescription)"
+                errorMessage = "MIDI export failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -618,7 +618,7 @@
                 )
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
-                errorMessage = "MSCZ export failed: \(error.localizedDescription)"
+                errorMessage = "MSCZ export failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -888,7 +888,7 @@
                     try controller.undo()
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
                 return
             }
             // Defer @State mutations to the next runloop tick.
@@ -1127,7 +1127,7 @@
                 )
                 errorMessage = "Inserted \(String(letter).uppercased())\(controller.inputOctave) (MIDI \(mapped.pitch)). Click another rest to keep typing."
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
             return true
         }
@@ -1219,7 +1219,7 @@
                     : "Lyric set"
                 return true
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
                 return false
             }
         }
@@ -1328,7 +1328,7 @@
                 )
                 errorMessage = "Added \(mapped.pitch) to chord"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -1361,7 +1361,7 @@
                 errorMessage = "Duration changed"
                 scrollToAffectedMeasure(measureIndex: noteID.measureIndex)
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -1382,7 +1382,7 @@
                 errorMessage = "Duration changed"
                 scrollToAffectedMeasure(measureIndex: restID.measureIndex)
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -1416,7 +1416,7 @@
                 adoptEditedScore(controller.score)
                 errorMessage = alreadyTied ? "Tie removed" : "Tied"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -1696,7 +1696,7 @@
                     )))
                     errorMessage = "Cut"
                 } catch {
-                    errorMessage = error.localizedDescription
+                    errorMessage = exampleErrorDescription(error)
                 }
                 return true
             case let .range(anchor, target):
@@ -1781,7 +1781,7 @@
                     errorMessage = "Cut \(total) element"
                         + (total == 1 ? "" : "s")
                 } catch {
-                    errorMessage = error.localizedDescription
+                    errorMessage = exampleErrorDescription(error)
                 }
                 return true
             default:
@@ -1852,7 +1852,7 @@
                     )
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
             return true
         }
@@ -2448,7 +2448,7 @@
                     at: id, firstElement: firstElement,
                 )
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
             return true
         }
@@ -2474,7 +2474,7 @@
                     "Set accidental: \($0)"
                 } ?? "Cleared accidental"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -2527,7 +2527,7 @@
                 adoptEditedScore(controller.score)
             } catch {
                 errorMessage = "Failed to change clef: " +
-                    error.localizedDescription
+                    exampleErrorDescription(error)
             }
             clefPopover = nil
             selection = .none
@@ -2586,7 +2586,7 @@
                 }
                 errorMessage = "Removed note"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -2631,7 +2631,7 @@
                     )))
                     errorMessage = "Tuplet deleted"
                 } catch {
-                    errorMessage = error.localizedDescription
+                    errorMessage = exampleErrorDescription(error)
                 }
                 return
             }
@@ -2662,7 +2662,7 @@
                 selection = .single(.rest(newRest))
                 errorMessage = "Deleted"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -2717,7 +2717,7 @@
                 scrollToAffectedMeasure(measureIndex: noteID.measureIndex)
                 errorMessage = "Shifted to MIDI \(shifted.pitch)"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -3032,7 +3032,7 @@
                 let loaded = try ScoreLoader.loadBundled()
                 adoptLoadedScore(loaded, sourceName: "test.mscx")
             } catch {
-                errorMessage = "Failed: \(error.localizedDescription)"
+                errorMessage = "Failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -3043,7 +3043,7 @@
                     loaded, sourceName: "harmony-basic.mscx",
                 )
             } catch {
-                errorMessage = "Failed: \(error.localizedDescription)"
+                errorMessage = "Failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -3059,7 +3059,7 @@
             } catch {
                 errorMessage =
                     "Could not load \(url.lastPathComponent): "
-                        + error.localizedDescription
+                        + exampleErrorDescription(error)
             }
         }
 

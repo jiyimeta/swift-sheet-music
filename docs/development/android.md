@@ -91,8 +91,9 @@ Use `--build-tests` to compile the test targets. The SDK bundle form
 triples to control architecture and API level.
 
 Tests importing Apple frameworks or Apple-only sub-libraries must be guarded
-from Android. `Scripts/gate-android-tests.sh` can add guards to new test files,
-but review its diff because its heuristic can over-wrap portable tests.
+from manifest shapes that do not link Apple-platform test support.
+`Scripts/gate-test-support-guards.sh` can add guards to new test files, but
+review its diff because its heuristic can over-wrap portable tests.
 
 After editing `Package.swift`, verify both manifest shapes resolve: ordinary
 SwiftPM and a build with `SWIFT_SHEET_MUSIC_ANDROID=1`.

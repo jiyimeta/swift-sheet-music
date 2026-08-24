@@ -79,8 +79,8 @@ Scripts/preflight.sh --apple    # Apple / SwiftPM only (fast)
 - New tests use **Swift Testing** (`@Test` / `#expect`), not XCTest
   (except UI tests that need `XCUIApplication`).
 - Tests importing an Apple framework or an Apple-only sub-library must be
-  wrapped in `#if !os(Android)`; run `Scripts/gate-android-tests.sh` after
-  adding test files.
+  wrapped in `#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT`; run
+  `Scripts/gate-test-support-guards.sh` after adding test files.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design rationale behind
 these conventions.

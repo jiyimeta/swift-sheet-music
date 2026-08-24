@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT
     import Foundation
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicBridgeCore
@@ -11,7 +11,7 @@
         func midi01EmitsNoFlagsButPureSurvivedTo10Stroke() throws {
             // midi01 has 4 quarter notes — no eighth/16th durations
             // → expect 0 flag glyphs.
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "midi01", withExtension: "mscx",
             ))
             let bytes = try Data(contentsOf: url)

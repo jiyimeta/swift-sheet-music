@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import CoreGraphics
     import Foundation
     import PDFKit
@@ -15,7 +15,7 @@
         /// A4-sized paper.
         @Test func mediaBoxMatchesScorePageSize() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "testArpeggio", withExtension: "mscx",
             ))
             let score = try MSCXParser.parse(
@@ -36,7 +36,7 @@
         /// spatium that's ~20.0 pt.
         @Test func staffSizeFollowsSpatium() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "testArpeggio", withExtension: "mscx",
             ))
             let score = try MSCXParser.parse(

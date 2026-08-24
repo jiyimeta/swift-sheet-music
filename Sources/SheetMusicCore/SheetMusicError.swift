@@ -22,20 +22,14 @@ public enum SheetMusicError: Error, Sendable {
     case invalidEdit(reason: String)
 }
 
-// Surface the case-specific reason via `localizedDescription` — without this,
-// callers (and SwiftUI alerts that just print `error.localizedDescription`)
-// only see "SheetMusicError error N" with no diagnostic payload.
-//
-// `LocalizedError` lives in the `Foundation` umbrella, so on platforms that
-// only have `FoundationEssentials` (WebAssembly) the conformance is dropped
-// and `errorDescription` stands on its own. Nothing in the library reads it
-// through the protocol.
-#if !canImport(FoundationEssentials)
-    extension SheetMusicError: LocalizedError {}
-#endif
-
 extension SheetMusicError {
-    public var errorDescription: String? {
+    /// Developer-facing diagnostic text for logs, tests, and sample-app
+    /// fallback UI. These English literals are not localized resources: there
+    /// is no `.strings` catalog and no bundle lookup. Keep presentation and
+    /// localization in the consuming app, which can switch over the enum cases
+    /// and provide locale-sensitive copy without depending on Foundation's
+    /// `LocalizedError` bridging.
+    public var developerDescription: String {
         switch self {
         case let .invalidXML(underlying):
             return "Invalid XML: \(Self.describe(underlying))"
@@ -55,14 +49,14 @@ extension SheetMusicError {
         }
     }
 
-    /// `Error.localizedDescription` comes from the `Foundation` umbrella's
-    /// bridging. Without it, fall back to the error's own description — the
-    /// error types this library wraps are `CustomStringConvertible`.
+    /// Foreign errors can carry OS-provided localized text. Use it when
+    /// Foundation is available, and fall back to Swift's diagnostic rendering
+    /// on FoundationEssentials-only platforms.
     private static func describe(_ error: Error) -> String {
         #if canImport(FoundationEssentials)
             String(describing: error)
         #else
-            error.localizedDescription
+            (error as NSError).localizedDescription
         #endif
     }
 }

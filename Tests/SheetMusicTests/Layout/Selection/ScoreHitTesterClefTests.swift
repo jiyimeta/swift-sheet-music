@@ -14,7 +14,7 @@
         private func loadDoc(width: CGFloat = 2000) throws
             -> (LayoutDocument, Score)
         {
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "multiPartMixedStaves",
                 withExtension: "mscx",
             ))

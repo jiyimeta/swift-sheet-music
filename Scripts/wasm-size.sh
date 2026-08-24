@@ -24,6 +24,7 @@ set -euo pipefail
 CEILING_BYTES=$((4 * 1024 * 1024))
 SDK="swift-6.3.3-RELEASE_wasm"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SIZE_BUILD_DIR="$REPO_ROOT/.build/wasm-size"
 
 report_only=0
 if [ "${1:-}" = "--report" ]; then
@@ -66,12 +67,14 @@ export SWIFT_SHEET_MUSIC_WASM=1
 echo "Building WasmSizeProbe for $SDK ..."
 "$TOOLCHAIN/swift" build \
     --package-path "$REPO_ROOT" \
+    --scratch-path "$SIZE_BUILD_DIR" \
+    --disable-sandbox \
     --swift-sdk "$SDK" \
     --product WasmSizeProbe \
     -c release \
     -Xswiftc -gnone
 
-WASM="$REPO_ROOT/.build/wasm32-unknown-wasip1/release/WasmSizeProbe.wasm"
+WASM="$SIZE_BUILD_DIR/wasm32-unknown-wasip1/release/WasmSizeProbe.wasm"
 if [ ! -f "$WASM" ]; then
     echo "error: expected artifact not found at $WASM" >&2
     exit 1

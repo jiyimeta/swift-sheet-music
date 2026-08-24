@@ -58,7 +58,7 @@ struct Phase3ArpeggioTests {
 
 // MARK: - Layout honoring (Apple-only: needs CoreGraphics + SheetMusicLayout)
 
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import CoreGraphics
     @testable import SheetMusicLayout
 

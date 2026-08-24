@@ -70,7 +70,7 @@ struct AccidentalDecodeTests {
 // Safety-net: every Accidental case's rawValue (= SymId name) must exist in the
 // SMuFL byName resolver. A failure here means a typo'd SymId name — fix the table.
 // Apple-only because SheetMusicLayout is not Android-compatible.
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     @testable import SheetMusicLayout
 
     struct AccidentalSymIdSafetyNetTests {

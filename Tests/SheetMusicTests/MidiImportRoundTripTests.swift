@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import Foundation
     @testable import SheetMusic
     @testable import SheetMusicAudio
@@ -133,7 +133,7 @@
         }
 
         @Test func midi01FixtureRoundTrips() throws {
-            guard let url = Bundle.module.url(forResource: "midi01", withExtension: "mscx") else {
+            guard let url = TestResources.url(forResource: "midi01", withExtension: "mscx") else {
                 Issue.record("midi01.mscx fixture missing")
                 return
             }
@@ -179,7 +179,7 @@
             // Full playback path: render → append metronome → write.
             // PlaybackEngine.buildSequencer does this; user reports it
             // fires the MidiWriter precondition for imported scores.
-            guard let url = Bundle.module.url(forResource: "midi01", withExtension: "mscx") else {
+            guard let url = TestResources.url(forResource: "midi01", withExtension: "mscx") else {
                 Issue.record("midi01.mscx fixture missing")
                 return
             }
@@ -208,7 +208,7 @@
                 "testMeasureRepeats",
             ]
             for name in fixtures {
-                guard let url = Bundle.module.url(forResource: name, withExtension: "mscx") else {
+                guard let url = TestResources.url(forResource: name, withExtension: "mscx") else {
                     continue
                 }
                 let mscxData = try Data(contentsOf: url)

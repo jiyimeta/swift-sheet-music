@@ -28,7 +28,7 @@ import Testing
 /// full diagnosis and a verified one-line candidate fix.
 struct RepeatUnwindFixtureTests {
     private static func planIndices(fixture name: String) throws -> [Int] {
-        let url = try #require(Bundle.module.url(forResource: name, withExtension: "mscx"))
+        let url = try #require(TestResources.url(forResource: name, withExtension: "mscx"))
         let score = try MSCXParser.parse(contentsOf: url)
         let navigation = ScoreNavigation(score: score)
         return RepeatUnwinder.plan(navigation: navigation).map(\.measureIndex)

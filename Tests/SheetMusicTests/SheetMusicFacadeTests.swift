@@ -6,10 +6,10 @@ import Foundation
 import Testing
 
 struct SheetMusicFacadeTests {
-    #if !os(Android)
+    #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
         @Test func loadScoreMSCZData() throws {
             let url = try #require(
-                Bundle.module.url(forResource: "midi01", withExtension: "mscz"),
+                TestResources.url(forResource: "midi01", withExtension: "mscz"),
             )
             let bytes = try Data(contentsOf: url)
             let score = try SheetMusic.loadScore(msczData: bytes)
@@ -19,7 +19,7 @@ struct SheetMusicFacadeTests {
 
     @Test func loadScoreMSCXData() throws {
         let url = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
         )
         let bytes = try Data(contentsOf: url)
         let score = try SheetMusic.loadScore(mscxData: bytes)
@@ -29,16 +29,16 @@ struct SheetMusicFacadeTests {
 
     @Test func loadScoreMSCXURL() throws {
         let url = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
         )
         let score = try SheetMusic.loadScore(mscxURL: url)
         #expect(score.parts.count == 1)
     }
 
-    #if !os(Android)
+    #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
         @Test func loadScoreMSCZURL() throws {
             let url = try #require(
-                Bundle.module.url(forResource: "midi01", withExtension: "mscz"),
+                TestResources.url(forResource: "midi01", withExtension: "mscz"),
             )
             let score = try SheetMusic.loadScore(msczURL: url)
             #expect(score.parts.count == 1)
@@ -46,7 +46,7 @@ struct SheetMusicFacadeTests {
 
         @Test func saveMSCZDataRoundTrip() throws {
             let mscx = try #require(
-                Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+                TestResources.url(forResource: "midi01", withExtension: "mscx"),
             )
             let mscxData = try Data(contentsOf: mscx)
             let msczData = try SheetMusic.saveMSCZ(mscxData: mscxData)
@@ -57,7 +57,7 @@ struct SheetMusicFacadeTests {
 
         @Test func saveMSCZURLRoundTrip() throws {
             let mscx = try #require(
-                Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+                TestResources.url(forResource: "midi01", withExtension: "mscx"),
             )
             let mscxData = try Data(contentsOf: mscx)
             let tmp = URL(fileURLWithPath: NSTemporaryDirectory())

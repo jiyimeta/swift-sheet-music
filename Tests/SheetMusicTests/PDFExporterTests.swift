@@ -85,7 +85,7 @@
         @Test("Real fixture (midi01.mscx) round-trips through a CGPDFDocument")
         func realFixture() throws {
             guard #available(macOS 15.0, *) else { return }
-            guard let url = Bundle.module.url(
+            guard let url = TestResources.url(
                 forResource: "midi01", withExtension: "mscx",
             )
             else {

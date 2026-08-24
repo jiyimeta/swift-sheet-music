@@ -55,8 +55,9 @@ Scripts/wasm-size.sh               # WebAssembly portable-graph size gate
 - New tests use Swift Testing (`@Test`, `#expect`), not XCTest, except UI tests
   that require `XCUIApplication`.
 - Tests importing Apple frameworks or Apple-only products must be excluded from
-  Android. Run `Scripts/gate-android-tests.sh` after adding such test files and
-  review its diff because its heuristic can over-wrap files.
+  Android and other manifest shapes without Apple-platform test support. Run
+  `Scripts/gate-test-support-guards.sh` after adding such test files and review
+  its diff because its heuristic can over-wrap files.
 
 ## Project invariants
 

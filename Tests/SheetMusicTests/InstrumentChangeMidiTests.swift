@@ -8,7 +8,7 @@ import Testing
 struct InstrumentChangeMidiTests {
     static func fixtureScore() throws -> Score {
         let url = try #require(
-            Bundle.module.url(
+            TestResources.url(
                 forResource: "instrument-change", withExtension: "mscx",
             ),
         )
@@ -226,7 +226,7 @@ struct InstrumentChangeMidiTests {
     @Test("a score with no changes renders exactly as before")
     func noChangeScoreIsUnaffected() throws {
         let url = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
         )
         let score = try MSCXParser.parse(Data(contentsOf: url))
         let midi = try MidiRenderer.render(score: score)

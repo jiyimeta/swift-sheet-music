@@ -107,7 +107,8 @@ jobs:
         run: |
           export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
           SWIFT_SHEET_MUSIC_WASM=1 swift package --disable-sandbox \
-            --swift-sdk swift-6.3.3-RELEASE_wasm js test --environment node
+            --swift-sdk swift-6.3.3-RELEASE_wasm js test --environment node \
+            --prelude Scripts/package-to-js-test-prelude.mjs
 
       - name: Build the browser bundle
         run: Scripts/wasm-build-web.sh

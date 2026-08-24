@@ -147,7 +147,7 @@
                 "testRepeatsWithKeySigs",
             ]
             for name in fixtures {
-                guard let url = Bundle.module.url(
+                guard let url = TestResources.url(
                     forResource: name, withExtension: "mscx",
                 ) else {
                     Issue.record("Missing fixture: \(name).mscx")
@@ -179,7 +179,7 @@
         @Test("Real mscx fixture: warm call is fully cached at system level")
         func realFixtureWarmHitRate() throws {
             guard #available(macOS 15.0, *) else { return }
-            guard let url = Bundle.module.url(
+            guard let url = TestResources.url(
                 forResource: "midi01", withExtension: "mscx",
             ) else {
                 Issue.record("Missing fixture: midi01.mscx")
@@ -213,7 +213,7 @@
         @Test("Changing staffSize invalidates the entire cache")
         func staffSizeChangeInvalidates() throws {
             guard #available(macOS 15.0, *) else { return }
-            guard let url = Bundle.module.url(
+            guard let url = TestResources.url(
                 forResource: "midi01", withExtension: "mscx",
             ) else {
                 Issue.record("Missing fixture: midi01.mscx")

@@ -86,6 +86,13 @@ enum ScoreLoader {
     }
 }
 
+func exampleErrorDescription(_ error: Error) -> String {
+    if let error = error as? SheetMusicError {
+        return error.developerDescription
+    }
+    return error.localizedDescription
+}
+
 extension PlaybackEngine {
     /// Off-main sampler prep. SoundFont parsing can take tens of ms
     /// per file; deferring via `Task` keeps the current view body

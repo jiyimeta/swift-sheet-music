@@ -6,14 +6,14 @@ import Testing
 
 @Suite("LayoutEngine — Android-compatible smoke")
 struct LayoutEngineAndroidSmokeTests {
-    #if !os(Android)
+    #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
         private let _installApple = TestSupport.installApple
     #endif
 
     @available(macOS 15.0, *)
     @Test func midi01ScoreProducesNonEmptyLayoutDocument() throws {
         let url = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
         )
         let data = try Data(contentsOf: url)
         let score = try MSCXParser.parse(data)

@@ -39,7 +39,7 @@ struct MidiLyricFixtureTests {
 
     private func loadFixture() throws -> Score {
         let url = try #require(
-            Bundle.module.url(forResource: "test_lyrics", withExtension: "mscz"),
+            TestResources.url(forResource: "test_lyrics", withExtension: "mscz"),
         )
         return try MSCZReader.parse(Data(contentsOf: url))
     }
