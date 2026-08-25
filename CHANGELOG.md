@@ -7,6 +7,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `Score.blank(_:)` + `BlankScoreTemplate`: build an empty solo/grand-staff score in code.
+
 ## [2.0.0] - 2026-08-25
 
 ### Fixed
