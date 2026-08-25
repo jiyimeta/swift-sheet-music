@@ -24,6 +24,12 @@ export type { FontURLs, ScoreFonts } from "./fonts.js";
 export { loadScoreFonts } from "./fonts.js";
 export type { PageTile } from "./tiles.js";
 export { MAX_CANVAS_DIMENSION_PX, planPageTiles } from "./tiles.js";
+export type { MountWindow } from "./viewport.js";
+export {
+  DEFAULT_TILE_HEIGHT_PX,
+  planViewportTiles,
+  reconcileMounts,
+} from "./viewport.js";
 
 /**
  * Minimum stroke width in device pixels. Mirrors the Kotlin renderer's

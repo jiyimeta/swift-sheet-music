@@ -40,14 +40,18 @@ export type {
 export {
   drawPage,
   drawTile,
+  DEFAULT_TILE_HEIGHT_PX,
   loadScoreFonts,
   MAX_CANVAS_DIMENSION_PX,
   planPageTiles,
+  planViewportTiles,
+  reconcileMounts,
   splitIntoBands,
 } from "./render/canvas.js";
 export type {
   DrawPageOptions,
   FontURLs,
+  MountWindow,
   PageTile,
   ScoreBand,
   ScoreFonts,
