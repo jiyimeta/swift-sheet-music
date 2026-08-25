@@ -5,8 +5,10 @@ import Testing
 /// Covers what `ScoreLoader` adds over the sniffing it inherited from `ScoreBridge` (whose own suite still exercises
 /// the delegation): the MIDI title fallback, the URL convenience, and the ZIP ambiguity.
 struct ScoreLoaderTests {
+    /// Through `TestResources`, not `Bundle.module`: under WASI the fixtures come from PackageToJS's
+    /// preopened directory rather than a bundle, and reaching for the bundle directly returns nil there.
     private func fixture(_ name: String, _ ext: String) throws -> URL {
-        try #require(Bundle.module.url(forResource: name, withExtension: ext))
+        try #require(TestResources.url(forResource: name, withExtension: ext))
     }
 
     @Test
