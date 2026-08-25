@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-25
+
 ### Fixed
 
 - `LayoutOptionsWire.showsLyrics` declares its compatible default, so the
@@ -1916,7 +1918,8 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.13.1...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.0...HEAD
+[2.0.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.15.0...2.0.0
 [1.13.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.13.0...1.13.1
 [1.13.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.12.0...1.13.0
 [1.12.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.11.0...1.12.0
