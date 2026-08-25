@@ -27,7 +27,12 @@ export default defineConfig({
   expect: { toMatchSnapshot: { maxDiffPixelRatio: 0.002 } },
   use: {
     ...devices["Desktop Chrome"],
-    baseURL: "http://localhost:8080",
+    // 127.0.0.1 rather than localhost, deliberately. The server is
+    // `python3 -m http.server`, which binds IPv4 only; a runner that resolves
+    // `localhost` to ::1 first gets connection refused and Playwright simply
+    // waits out its readiness timeout, reporting a start-up timeout for a
+    // server that started fine.
+    baseURL: "http://127.0.0.1:8080",
     launchOptions: {
       // An AudioContext cannot start outside a user gesture, and Playwright's
       // synthesized clicks do not count. This relaxes the policy for the test
@@ -38,8 +43,11 @@ export default defineConfig({
   },
   webServer: {
     command: "../../Scripts/web-example-serve.sh 8080",
-    url: "http://localhost:8080/Examples/Web/",
+    url: "http://127.0.0.1:8080/Examples/Web/",
     reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    // Generous because this runs straight after a twenty-minute wasm build on
+    // a shared runner, where a cold python3 and a busy filesystem are both
+    // plausible. It costs nothing when the server is ready in a second.
+    timeout: 120_000,
   },
 });

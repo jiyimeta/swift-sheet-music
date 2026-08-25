@@ -26,14 +26,32 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      # The package needs Swift 6.3: swift-wirelet 0.4.1 declares tools version
+      # 6.3.0, and dependency resolution fails outright below it — before a
+      # single file is compiled. No released Xcode ships it yet; `latest-stable`
+      # on this runner is Xcode 26.3 with Swift 6.2.4. So the Apple job installs
+      # the same swift.org toolchain the wasm and Android jobs already do, which
+      # is also what CONTRIBUTING and the README tell contributors to use.
+      - name: Install the swift.org toolchain
+        run: |
+          curl -fsSL -o toolchain.pkg \
+            https://download.swift.org/swift-6.3.3-release/xcode/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE-osx.pkg
+          installer -pkg toolchain.pkg -target CurrentUserHomeDirectory
+
       - name: Swift version
-        run: swift --version
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          swift --version
 
       - name: Build
-        run: swift build
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          swift build
 
       - name: Test
-        run: swift test
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          swift test
 
   lint:
     name: Lint
