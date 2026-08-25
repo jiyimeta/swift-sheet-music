@@ -589,7 +589,7 @@ let packageDependencies: [Package.Dependency] = [
     // SheetMusicEditWire — see CLAUDE.md "WebAssembly build".
     .package(
         url: "https://github.com/jiyimeta/swift-wirelet.git",
-        exact: "0.4.1",
+        exact: "0.5.0",
     ),
     .package(
         url: "https://github.com/jiyimeta/swiftysynth.git",
