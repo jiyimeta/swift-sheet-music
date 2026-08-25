@@ -236,6 +236,57 @@ divergence from it is a bug, the same contract `canvas.ts` holds against
 Compose layer and the framework rejects the off-screen ones. Canvas2D has no
 display list, so the selection is explicit here.
 
+## Virtualized rendering
+
+A viewer keeps canvases only for the tiles near the viewport. Before that, the
+example rasterized every tile of every page at load: measured in Chromium, 80.4
+MB of canvas for the 1,757 mm test fixture and 151.8 MB for a 149-part score,
+linear in the score's length with nothing bounding it. After, both sit between
+18 and 37 MB whatever the score's length.
+
+`planViewportTiles` cuts to a target height rather than only at the canvas
+dimension limit, so there is something to mount granularly; `reconcileMounts`
+decides what to mount and drop. Both are pure, which is what lets the gate assert
+in vitest that two documents of different lengths mount the same number of tiles.
+
+**Scroll must not redraw.** Tiles are DOM canvases and the compositor pans them
+on the GPU with no JavaScript involved. Scroll events drive mounting and nothing
+else. Redrawing per frame would replace a free pan with work — that is Compose's
+situation, not a browser's.
+
+**Mount and unmount thresholds differ on purpose.** Mount reaches one viewport
+beyond the visible range, unmount only past two. With one threshold, a tile edge
+landing on it thrashes: mounting the tile does not move the scroll position, so
+the next scroll event re-tests the same boundary.
+
+**Zoom re-rasterizes; `staffSize` re-engraves.** The draw program is in document
+millimetres and resolution-independent, so magnification only changes `pxPerMM`
+and never crosses the bridge. They are separate controls, and folding them
+together makes every zoom step pay for a layout it does not need.
+
+**Zoom has to restore its anchor.** Record the document millimetre at the top of
+the viewport, change the scale, then put it back. Without it the view lands
+wherever the new scroll height happens to put it — measured at 813 mm of drift
+on a mid-document zoom, and nothing errors.
+
+**Overlays are positioned in document space, not against a tile.** A tile can
+unmount while a caret sits over it. One overlay layer the size of the spacer,
+everything absolutely positioned inside it.
+
+**A click's document position comes from the spacer's bounding rect on both
+axes.** That rect is already in viewport coordinates and already shifted by the
+scroll. Composing the vertical half out of `scrollTop`, the container's rect and
+`offsetTop` double-counts the scroll container's padding, and a few millimetres
+is enough for a tap to miss the staff it was aimed at.
+
+There is no Worker, and the reason is a measurement rather than a preference: a
+viewport-sized redraw costs 0–0.1 ms (1.4 ms worst) and decode plus band split
+costs 3.3 ms, so a renderer Worker would have nothing to protect. The only real
+stall is `computeLayout` at 10–22 ms, which lives in the bridge and happens on
+load and on edits rather than per frame. Moving that would mean moving the whole
+bridge, which turns every cursor, hit-test and caret query into a postMessage
+round trip and breaks the synchronous facade the editing surface is built on.
+
 ## Build and test
 
 Build the browser package with:

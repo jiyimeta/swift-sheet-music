@@ -9,6 +9,13 @@ and this project adheres to
 
 ### Added
 
+- **A virtualized viewer, with zoom.** The browser example keeps canvases only for the tiles near the
+  viewport and drops the rest, so what it rasterizes is bounded by the viewport rather than by the
+  score: 80.4 MB of canvas for a 1,757 mm fixture and 151.8 MB for a 149-part score become 18–37 MB
+  for both. `planViewportTiles` and `reconcileMounts` are exported for hosts that want the same
+  policy. Zoom re-rasterizes at the new scale instead of upscaling a bitmap, and preserves the
+  document position under the top of the viewport; `staffSize` remains the separate control that
+  re-engraves. Scrolling still does not redraw — the compositor pans the mounted canvases.
 - **Editing in the browser.** `Score` gains `beginEditing` / `endEditing`, a typed `applyEdit` over all
   thirteen scalar `EditIntent` cases, `applyEditIntentBytes` for a relayed composite, `undo` / `redo`,
   `editState`, `hitTest` and `caretRect`. An accepted edit publishes back into the same handle, so
