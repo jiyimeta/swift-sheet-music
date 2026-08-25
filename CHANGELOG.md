@@ -10,6 +10,11 @@ and this project adheres to
 ### Added
 
 - `Score.blank(_:)` + `BlankScoreTemplate`: build an empty solo/grand-staff score in code.
+- `InsertMeasure` / `DeleteMeasure`: structural edit commands that insert or remove a full measure column
+  (every staff plus the parallel `SystemMeasure`), each other's inverse. Inserting or deleting bar 0
+  re-homes the score-start key/time/clef signatures onto the new first bar, mirroring MuseScore, and both
+  commands fix up any `Spanner.nextMeasuresOffset` that spans the edit point. `DeleteMeasure` refuses to
+  remove a score's last measure (`EditRefusal.Reason.cannotDeleteOnlyMeasure`).
 
 ## [2.0.0] - 2026-08-25
 

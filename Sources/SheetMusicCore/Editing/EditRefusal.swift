@@ -42,6 +42,8 @@ public struct EditRefusal: Sendable, Hashable {
         case nothingToRedo
         case compositeTooDeep(limit: Int)
         case nothingToApply
+        /// A score must keep at least one measure; `DeleteMeasure` refuses when it would remove the last one.
+        case cannotDeleteOnlyMeasure
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -84,6 +86,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.compositeTooDeep"
         case .nothingToApply:
             "edit.nothingToApply"
+        case .cannotDeleteOnlyMeasure:
+            "edit.cannotDeleteOnlyMeasure"
         case .unexpected:
             "edit.unexpected"
         }
@@ -128,6 +132,8 @@ public struct EditRefusal: Sendable, Hashable {
             "composite edit exceeded depth limit \(limit)"
         case .nothingToApply:
             "intent resolved to nothing to apply"
+        case .cannotDeleteOnlyMeasure:
+            "a score must keep at least one measure"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
