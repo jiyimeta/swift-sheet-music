@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DrawProgramPage } from "../src/draw-program.js";
-import { drawPage } from "../src/render/canvas.js";
+import { drawPage, drawTile } from "../src/render/canvas.js";
+import type { ScoreBand } from "../src/render/bands.js";
 import type { ScoreFonts } from "../src/render/fonts.js";
 
 /**
@@ -47,6 +48,10 @@ const fonts: ScoreFonts = { smufl: "Bravura", textRoman: "Edwin" };
 
 function pageWith(commands: DrawProgramPage["commands"]): DrawProgramPage {
   return { widthMM: 210, heightMM: 297, commands };
+}
+
+function rect(y: number): DrawProgramPage["commands"][number] {
+  return { kind: "fillRect", x: 0, y, w: 10, h: 1 };
 }
 
 const countOf = (calls: Array<[string, ...unknown[]]>, name: string) =>
@@ -304,6 +309,52 @@ describe("drawPage", () => {
       fonts,
       { offsetMM: 100 },
     );
+    expect(countOf(calls, "save")).toBe(countOf(calls, "restore"));
+  });
+});
+
+describe("drawTile", () => {
+  it("walks only the bands whose painted extent reaches the tile", () => {
+    const { ctx, calls } = fakeContext();
+    const bands: ScoreBand[] = [
+      {
+        topMM: 0,
+        heightMM: 50,
+        commands: [rect(0), rect(10)],
+      },
+      {
+        topMM: 100,
+        heightMM: 50,
+        commands: [rect(100), rect(110), rect(120)],
+      },
+    ];
+
+    drawTile(ctx, bands, 2, fonts, { offsetMM: 90, heightMM: 70 });
+    expect(countOf(calls, "fillRect")).toBe(3);
+  });
+
+  it("walks every band when the tile reaches every band", () => {
+    const { ctx, calls } = fakeContext();
+    const bands: ScoreBand[] = [
+      { topMM: 0, heightMM: 50, commands: [rect(0), rect(10)] },
+      { topMM: 100, heightMM: 50, commands: [rect(100), rect(110), rect(120)] },
+    ];
+
+    drawTile(ctx, bands, 1, fonts, { offsetMM: 0, heightMM: 200 });
+    expect(countOf(calls, "fillRect")).toBe(5);
+  });
+
+  it("applies the tile offset with balanced save and restore", () => {
+    const { ctx, calls } = fakeContext();
+    drawTile(
+      ctx,
+      [{ topMM: 100, heightMM: 10, commands: [rect(100)] }],
+      2,
+      fonts,
+      { offsetMM: 90, heightMM: 70 },
+    );
+
+    expect(calls).toContainEqual(["translate", 0, -180]);
     expect(countOf(calls, "save")).toBe(countOf(calls, "restore"));
   });
 });

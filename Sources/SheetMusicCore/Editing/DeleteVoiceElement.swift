@@ -38,18 +38,13 @@ public struct DeleteVoiceElement: EditCommand {
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let original = score[location] else {
-            throw SheetMusicError.invalidEdit(
-                reason: "DeleteVoiceElement: no element at \(location)",
-            )
+            throw Self.refused(.targetNotFound(location))
         }
         let duration: NoteDuration
         switch original {
         case let .chord(c): duration = c.duration
         default:
-            throw SheetMusicError.invalidEdit(
-                reason: "DeleteVoiceElement: element at \(location) "
-                    + "is not a chord or rest (\(original))",
-            )
+            throw Self.refused(.wrongElementKind(at: location, expected: .chordOrRest))
         }
         score[location] = .rest(duration: duration)
         return ReplaceVoiceElement(at: location, with: original)

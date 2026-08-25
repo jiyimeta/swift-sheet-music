@@ -43,9 +43,7 @@ public enum PDFImporter {
         // display flips; only consumed on the geometry-capture path.
         geometry?.setPageSizes(pageSizes)
         guard !walked.glyphs.isEmpty || !walked.texts.isEmpty || !walked.paths.isEmpty else {
-            throw SheetMusicError.malformedScore(
-                reason: "PDFImporter: no glyphs/paths found",
-            )
+            throw malformedPDF(code: "pdf.content.empty", message: "PDFImporter: no glyphs/paths found")
         }
         let classified = walked.glyphs
         emitUnknownGlyphDiagnostics(classified, options: options)
@@ -80,9 +78,7 @@ public enum PDFImporter {
             systemsAllPages.append(contentsOf: systems)
         }
         guard !systemsAllPages.isEmpty else {
-            throw SheetMusicError.malformedScore(
-                reason: "PDFImporter: no staff detected on any page",
-            )
+            throw malformedPDF(code: "pdf.staff.noneDetected", message: "PDFImporter: no staff detected on any page")
         }
 
         // Expand collapsed "N-bar" multi-measure rests (H-bar + count) back
@@ -183,5 +179,9 @@ public enum PDFImporter {
                 ))
             }
         }
+    }
+
+    private static func malformedPDF(code: String, message: String) -> SheetMusicError {
+        .malformedScore(ScoreFault(code: code, message: message))
     }
 }

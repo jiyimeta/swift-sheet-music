@@ -333,7 +333,11 @@ extension Voice {
                   case var .chord(follower) = elements[fIdx]
             else {
                 throw SheetMusicError.malformedScore(
-                    reason: "Two-note tremolo at element \(i) has no follower chord",
+                    ScoreFault(
+                        code: "mscx.tremolo.missingFollower",
+                        message: "Two-note tremolo at element \(i) has no follower chord",
+                        location: "element \(i)",
+                    ),
                 )
             }
             follower.tremolo = nil

@@ -87,6 +87,30 @@ import SheetMusicLayout
     )
 }
 
+/// The bounding rectangle of `measureIndex`, flattened as
+/// `[xMM, yMM, widthMM, heightMM]`.
+///
+/// Empty when the handle is unknown, no layout has been computed, or the
+/// measure is not present in the cached document.
+@JS public func measureFrame(handle: Int, measureIndex: Int) -> [Double] {
+    guard measureIndex >= 0,
+          scoreTable.value(for: Int64(handle)) != nil,
+          let document = LayoutDocumentCache.value(for: Int64(handle))
+    else { return [] }
+    for system in document.systems {
+        guard let measure = system.measures
+            .first(where: { $0.measureIndex == measureIndex }) else { continue }
+        let ptToMM = 25.4 / 72.0
+        return [
+            Double(system.origin.x + measure.origin.x) * ptToMM,
+            Double(system.origin.y + measure.origin.y) * ptToMM,
+            Double(measure.width) * ptToMM,
+            Double(system.size.height) * ptToMM,
+        ]
+    }
+    return []
+}
+
 /// The player position a tap lands on, for seeking by clicking the score.
 ///
 /// `xMM` / `yMM` are in document millimetres — the same coordinates
@@ -137,6 +161,44 @@ import SheetMusicLayout
     guard let score = scoreTable.value(for: Int64(handle)) else { return -1 }
     let clock = PlaybackClockCache.clock(for: Int64(handle), score: score)
     return clock.playerSeconds(atMeasureIndex: measureIndex) ?? -1
+}
+
+/// Player seconds for a durable musical position.
+///
+/// Returns **−1** for an unknown handle or a position that does not resolve.
+/// `0` would be indistinguishable from the top of the score, which is a real
+/// position.
+@JS public func playerSecondsForPosition(
+    handle: Int, measureIndex: Int, tickInMeasure: Int,
+) -> Double {
+    guard measureIndex >= 0,
+          tickInMeasure >= 0,
+          let score = scoreTable.value(for: Int64(handle))
+    else { return -1 }
+    let clock = PlaybackClockCache.clock(for: Int64(handle), score: score)
+    let cursor = ScoreCursor.beat(measureIndex: measureIndex, tickInMeasure: tickInMeasure)
+    return clock.playerSeconds(atCursor: cursor) ?? -1
+}
+
+/// The durable musical position sounding at `playerSeconds`, flattened as
+/// `[measureIndex, tickInMeasure]`.
+///
+/// Empty for an unknown handle or a position that does not resolve. The clock
+/// may return an `.item` cursor at a note/rest onset; JavaScript still gets the
+/// beat-shaped address by deriving that item's tick inside its measure.
+@JS public func positionAtPlayerSeconds(handle: Int, playerSeconds: Double) -> [Double] {
+    guard playerSeconds.isFinite,
+          playerSeconds >= 0,
+          let score = scoreTable.value(for: Int64(handle))
+    else { return [] }
+    let clock = PlaybackClockCache.clock(for: Int64(handle), score: score)
+    guard playerSeconds <= clock.totalPlayerSeconds,
+          let cursor = clock.cursor(atPlayerSeconds: playerSeconds)
+    else { return [] }
+    return [
+        Double(cursor.measureIndex),
+        Double(score.tickInMeasure(of: cursor)),
+    ]
 }
 
 /// The measure sounding at `playerSeconds` — what a "loop from here" button

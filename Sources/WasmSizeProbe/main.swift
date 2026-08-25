@@ -9,6 +9,7 @@
 //
 // Only built when SWIFT_SHEET_MUSIC_WASM=1 is exported, so the normal package
 // shape is unaffected.
+import JavaScriptKit
 import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicEditWire
@@ -105,14 +106,41 @@ print(
 // the JS host, and those are unresolvable under wasmtime whether or not the code
 // path executes. `WasmParityProbe`, which IS run under wasmtime, must therefore
 // never depend on this target.
-let wasmHandle = loadScore(bytes: [UInt8](container))
-let wasmProgram = computeLayout(handle: wasmHandle, pageWidthMM: 210, pageHeightMM: 297)
+let wasmHandle = loadScore(bytes: JSUint8Array([UInt8](container)))
+let wasmProgram = computeLayout(
+    handle: wasmHandle,
+    pageWidthMM: 210,
+    pageHeightMM: 297,
+    options: LayoutOptions(
+        layoutMode: 0,
+        staffSize: 28,
+        honorLayoutBreaks: true,
+        collapseMultiMeasureRests: false,
+        showsInvisibleElements: false,
+        showsLyrics: true,
+        transposeSemitones: 0,
+        hiddenStaves: [],
+        clefOverrides: [],
+    ),
+)
 let wasmBreaks = pageBreaks(handle: wasmHandle, pageHeightMM: 297)
 let wasmMetadata = scoreMetadata(handle: wasmHandle)
-_ = installSMuFLMetrics(bytes: [])
+let editHit = editingHitTest(handle: wasmHandle, xMM: 30, yMM: 40, activeVoice: 0)
+let editCaret = editingCaretRect(
+    handle: wasmHandle,
+    kind: "note",
+    partIndex: 0,
+    staffIndexInPart: 0,
+    measureIndex: 0,
+    voiceIndex: 0,
+    elementIndex: 0,
+    noteIndexInChord: 0,
+    minimumWidthMM: 1,
+)
+_ = installSMuFLMetrics(bytes: JSUint8Array(length: 0))
 print(
     "wasm engine=\(engineVersionStamp()) handle=\(wasmHandle) "
-        + "flat=\(wasmProgram.count)B breaks=\(wasmBreaks.count) "
+        + "flat=\(wasmProgram.length)B breaks=\(wasmBreaks.count) "
         + "title=\(wasmMetadata?.title ?? "-") fp=\(scoreFingerprint(handle: wasmHandle))",
 )
 // The playback surface. `SheetMusicAudioCore` reaches the linked image only
@@ -125,6 +153,7 @@ let countInSmf = renderCountInMetronomeMidi(handle: wasmHandle, fromPlayerSecond
 let summary = playbackSummary(handle: wasmHandle)
 let beats = metronomeBeats(handle: wasmHandle)
 let cursor = cursorRectAtPlayerSeconds(handle: wasmHandle, playerSeconds: 0)
+let measureRect = measureFrame(handle: wasmHandle, measureIndex: 0)
 let loopSeconds = loopPlayerSeconds(
     handle: wasmHandle, fromMeasureIndex: 0, toMeasureExclusive: 1,
 )
@@ -133,8 +162,16 @@ let loopRects = loopHighlightRects(
 )
 let tapSeconds = playerSecondsAtPoint(handle: wasmHandle, xMM: 30, yMM: 40)
 let seekSeconds = playerSecondsForMeasure(handle: wasmHandle, measureIndex: 1)
+let seekPositionSeconds = playerSecondsForPosition(
+    handle: wasmHandle, measureIndex: 1, tickInMeasure: 480,
+)
+let seekPosition = positionAtPlayerSeconds(handle: wasmHandle, playerSeconds: seekPositionSeconds)
 let atMeasure = measureIndexAtPlayerSeconds(handle: wasmHandle, playerSeconds: 0)
 let preRoll = countInSeconds(handle: wasmHandle, fromPlayerSeconds: 0)
+let markCount = rehearsalMarkCount(handle: wasmHandle)
+let firstMark = rehearsalMark(handle: wasmHandle, index: 0)
+let staffCount = staffDescriptorCount(handle: wasmHandle)
+let firstStaff = staffDescriptor(handle: wasmHandle, index: 0)
 
 // The mixer and its General MIDI table, which are the only paths that reach
 // `LiveChannelPlan`'s labelling and `GMInstrument`.
@@ -143,15 +180,115 @@ let firstStrip = mixerStrip(handle: wasmHandle, index: 0)
 let gmNames = gmInstrumentNames()
 let gmFamilies = gmInstrumentFamilies()
 let tuning = masterTuningControlChanges(cents: -13)
-let clickBank = buildClickSoundFont(strongWav: [], weakWav: [])
+let clickBank = buildClickSoundFont(strongWav: JSUint8Array(length: 0), weakWav: JSUint8Array(length: 0))
+
+// The edit session lifecycle, scalar intent surface and bytes relay.
+let editOpened = beginEditSession(handle: wasmHandle)
+let editInitialState = editSessionState(handle: wasmHandle)
+let editWriteRestOutcome = editWriteRest(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 0,
+    voiceIndex: 0, elementIndex: 0,
+    durationKind: 3, durationNumerator: 0, durationDenominator: 0,
+)
+let editInputNoteOutcome = editInputNote(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 0,
+    voiceIndex: 0, elementIndex: 0, pitch: 60, tpc: 14,
+    durationKind: 0, durationNumerator: 0, durationDenominator: 0,
+)
+let editSetRestDurationOutcome = editSetRestDuration(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 1,
+    voiceIndex: 0, elementIndex: 0,
+    durationKind: 4, durationNumerator: 0, durationDenominator: 0,
+)
+let editSetChordDurationOutcome = editSetChordDuration(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 0,
+    voiceIndex: 0, elementIndex: 1,
+    durationKind: 4, durationNumerator: 0, durationDenominator: 0,
+)
+let editWriteNoteOutcome = editWriteNote(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 0,
+    voiceIndex: 0, elementIndex: 1, pitch: 62, tpc: 16,
+    durationKind: 5, durationNumerator: 0, durationDenominator: 0,
+)
+let editSetNotePitchOutcome = editSetNotePitch(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 0,
+    voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
+    pitch: 64, tpc: 18, accidental: "",
+)
+let editSetAccidentalOutcome = editSetAccidental(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 0,
+    voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
+    accidental: "accidentalSharp",
+)
+let editAddNoteOutcome = editAddNoteToChord(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 0,
+    voiceIndex: 0, elementIndex: 1, pitch: 67, tpc: 15, accidental: "",
+)
+let editRemoveNoteOutcome = editRemoveNoteFromChord(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 0,
+    voiceIndex: 0, elementIndex: 1, noteIndexInChord: 1,
+)
+let editSetTieOutcome = editSetTie(
+    handle: wasmHandle,
+    fromPartIndex: 0, fromStaffIndexInPart: 0, fromMeasureIndex: 0,
+    fromVoiceIndex: 0, fromElementIndex: 1, fromNoteIndexInChord: 0,
+    toPartIndex: 0, toStaffIndexInPart: 0, toMeasureIndex: 0,
+    toVoiceIndex: 0, toElementIndex: 2, toNoteIndexInChord: 0,
+    hasSourceTieForward: 1, sourceTieForward: 1,
+    hasTargetTieBack: 1, targetTieBack: 1,
+)
+let editCreateTupletOutcome = editCreateTuplet(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 1,
+    voiceIndex: 0, elementIndex: 1, actualNotes: 3, normalNotes: 2,
+)
+let editRemoveTupletOutcome = editRemoveTuplet(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 1,
+    voiceIndex: 0, elementIndex: 1,
+)
+let editDeleteOutcome = editDelete(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0, measureIndex: 0,
+    voiceIndex: 0, elementIndex: 3,
+)
+let editIntentBytes = EditIntentCodec.encode(.composite([]))
+let editBytesOutcome = applyEditIntentBytes(handle: wasmHandle, intentBytes: JSUint8Array([UInt8](editIntentBytes)))
+let editUndoOutcome = editUndo(handle: wasmHandle)
+let editRedoOutcome = editRedo(handle: wasmHandle)
+endEditSession(handle: wasmHandle)
 
 // Split across several statements on purpose: one interpolation with a dozen
 // operands is enough to time out the type checker.
-print("playback smf=\(smf.count)B click=\(clickSmf.count)B countIn=\(countInSmf.count)B")
+print("playback smf=\(smf.length)B click=\(clickSmf.length)B countIn=\(countInSmf.length)B")
 print("playback measures=\(summary?.measureCount ?? -1) beats=\(beats.count)")
 print("playback cursorY=\(cursor?.yMM ?? -1) loop=\(loopSeconds.count) rects=\(loopRects.count)")
-print("playback tap=\(tapSeconds) seek=\(seekSeconds) at=\(atMeasure) preRoll=\(preRoll)")
+print(
+    "playback tap=\(tapSeconds) seek=\(seekSeconds) "
+        + "posSeek=\(seekPositionSeconds) pos=\(seekPosition.count) "
+        + "at=\(atMeasure) preRoll=\(preRoll)",
+)
+print(
+    "score marks=\(markCount) firstMark=\(firstMark?.text ?? "-") "
+        + "staves=\(staffCount) firstStaff=\(firstStaff?.defaultClefRawType ?? "-") "
+        + "measureRect=\(measureRect.count)",
+)
+print("edit geometry hit=\(editHit?.kind ?? "-") caret=\(editCaret?.heightMM ?? -1)")
 print("mixer strips=\(stripCount) first=\(firstStrip?.displayName ?? "-")")
-print("mixer gm=\(gmNames.count)/\(gmFamilies.count) tuning=\(tuning.count) click=\(clickBank.count)B")
+print("mixer gm=\(gmNames.count)/\(gmFamilies.count) tuning=\(tuning.count) click=\(clickBank.length)B")
+print(
+    "edit open=\(editOpened) active=\(editInitialState.active) "
+        + "bytes=\(editBytesOutcome.accepted) undo=\(editUndoOutcome.code) redo=\(editRedoOutcome.code)",
+)
+print(
+    "edit scalars input=\(editInputNoteOutcome.accepted) rest=\(editSetRestDurationOutcome.accepted) "
+        + "chord=\(editSetChordDurationOutcome.accepted) delete=\(editDeleteOutcome.accepted)",
+)
+print(
+    "edit notes writeRest=\(editWriteRestOutcome.accepted) writeNote=\(editWriteNoteOutcome.accepted) "
+        + "pitch=\(editSetNotePitchOutcome.accepted) accidental=\(editSetAccidentalOutcome.accepted)",
+)
+print(
+    "edit chord add=\(editAddNoteOutcome.accepted) remove=\(editRemoveNoteOutcome.accepted) "
+        + "tie=\(editSetTieOutcome.accepted) tuplet=\(editCreateTupletOutcome.accepted)/"
+        + "\(editRemoveTupletOutcome.accepted)",
+)
 
 releaseScore(handle: wasmHandle)

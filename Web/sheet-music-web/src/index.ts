@@ -10,22 +10,50 @@ import {
   decodeDrawProgram,
   type DrawProgramPage,
 } from "./draw-program.js";
+import {
+  applyEditIntentCall,
+  type CaretRect,
+  type EditIntent,
+  type EditOutcome,
+  type EditSessionState,
+  type SelectedItem,
+  type SelectedItemKind,
+} from "./edit.js";
 
 export type {
   DrawCommand,
   DrawProgramPage,
   FontId,
 } from "./draw-program.js";
+export type {
+  AccidentalSpec,
+  CaretRect,
+  EditIntent,
+  EditOutcome,
+  EditSessionState,
+  ElementRef,
+  NoteDurationSpec,
+  NoteRef,
+  SelectedItem,
+  SelectedItemKind,
+} from "./edit.js";
 export {
   drawPage,
+  drawTile,
+  DEFAULT_TILE_HEIGHT_PX,
   loadScoreFonts,
   MAX_CANVAS_DIMENSION_PX,
   planPageTiles,
+  planViewportTiles,
+  reconcileMounts,
+  splitIntoBands,
 } from "./render/canvas.js";
 export type {
   DrawPageOptions,
   FontURLs,
+  MountWindow,
   PageTile,
+  ScoreBand,
   ScoreFonts,
 } from "./render/canvas.js";
 
@@ -47,6 +75,48 @@ export interface LayoutRequest {
   readonly pageWidthMM: number;
   /** Page height in document millimetres. */
   readonly pageHeightMM: number;
+  readonly options?: LayoutOptions;
+}
+
+export type LayoutMode = "vertical" | "horizontal" | "page";
+
+export interface HiddenStaff {
+  readonly partIndex: number;
+  readonly staffIndexInPart: number;
+}
+
+export interface ClefOverride {
+  readonly partIndex: number;
+  readonly staffIndexInPart: number;
+  readonly clef: string;
+}
+
+/**
+ * Display settings for one layout pass. All fields are optional; omitted values
+ * resolve to `LayoutOptionsWire.verticalDefault`.
+ */
+export interface LayoutOptions {
+  readonly layoutMode?: LayoutMode;
+  readonly staffSize?: number;
+  readonly honorLayoutBreaks?: boolean;
+  readonly collapseMultiMeasureRests?: boolean;
+  readonly showsInvisibleElements?: boolean;
+  readonly showsLyrics?: boolean;
+  readonly transposeSemitones?: number;
+  readonly hiddenStaves?: readonly HiddenStaff[];
+  readonly clefOverrides?: readonly ClefOverride[];
+}
+
+interface ResolvedLayoutOptions {
+  readonly layoutMode: number;
+  readonly staffSize: number;
+  readonly honorLayoutBreaks: boolean;
+  readonly collapseMultiMeasureRests: boolean;
+  readonly showsInvisibleElements: boolean;
+  readonly showsLyrics: boolean;
+  readonly transposeSemitones: number;
+  readonly hiddenStaves: readonly HiddenStaff[];
+  readonly clefOverrides: readonly ClefOverride[];
 }
 
 /**
@@ -67,6 +137,12 @@ export interface PlaybackSummary {
   readonly openingQuarterBpm: number;
 }
 
+/** Durable playback position in notated score coordinates. */
+export interface ScorePosition {
+  readonly measureIndex: number;
+  readonly tickInMeasure: number;
+}
+
 /**
  * Where to draw the playback cursor, in document millimetres — the same unit
  * the draw program uses, so one `pxPerMM` scales both.
@@ -83,6 +159,30 @@ export interface CursorRect {
    * that produced it on any score with repeats.
    */
   readonly notatedSeconds: number;
+}
+
+/** One rehearsal mark with its player-clock seek target. */
+export interface RehearsalMarkInfo {
+  readonly text: string;
+  readonly measureIndex: number;
+  readonly playerSeconds: number;
+}
+
+/** One staff flattened out of the score's part -> staves descriptor. */
+export interface StaffDescriptor {
+  readonly partIndex: number;
+  readonly staffIndexInPart: number;
+  readonly partName: string;
+  readonly isPartVisibleInScore: boolean;
+  readonly defaultClefRawType: string;
+}
+
+/** A document rectangle in millimetres. */
+export interface MeasureFrame {
+  readonly xMM: number;
+  readonly yMM: number;
+  readonly widthMM: number;
+  readonly heightMM: number;
 }
 
 /** A measure range to loop over. `toMeasureExclusive` may equal the count. */
@@ -124,25 +224,211 @@ export interface MixerStrip {
  * generated declarations live in the built bundle, which is not present at
  * type-check time, so the shape is restated here and pinned by the parity test.
  */
-interface BridgeExports {
+interface BridgeEditSessionState {
+  readonly active: boolean;
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  readonly hasLastAffected: boolean;
+  readonly lastAffectedPartIndex: number;
+  readonly lastAffectedStaffIndexInPart: number;
+  readonly lastAffectedMeasureIndex: number;
+  readonly lastAffectedVoiceIndex: number;
+  readonly lastAffectedElementIndex: number;
+}
+
+export interface BridgeExports {
+  applyEditIntentBytes(handle: number, intentBytes: Uint8Array): EditOutcome;
+  editingHitTest(
+    handle: number,
+    xMM: number,
+    yMM: number,
+    activeVoice: number,
+  ): SelectedItem | null;
+  editingCaretRect(
+    handle: number,
+    kind: string,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    noteIndexInChord: number,
+    minimumWidthMM: number,
+  ): CaretRect | null;
+  editInputNote(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    pitch: number,
+    tpc: number,
+    durationKind: number,
+    durationNumerator: number,
+    durationDenominator: number,
+  ): EditOutcome;
+  editWriteNote(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    pitch: number,
+    tpc: number,
+    durationKind: number,
+    durationNumerator: number,
+    durationDenominator: number,
+  ): EditOutcome;
+  editSetNotePitch(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    noteIndexInChord: number,
+    pitch: number,
+    tpc: number,
+    accidental: string,
+  ): EditOutcome;
+  editSetAccidental(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    noteIndexInChord: number,
+    accidental: string,
+  ): EditOutcome;
+  editAddNoteToChord(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    pitch: number,
+    tpc: number,
+    accidental: string,
+  ): EditOutcome;
+  editRemoveNoteFromChord(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    noteIndexInChord: number,
+  ): EditOutcome;
+  editSetTie(
+    handle: number,
+    fromPartIndex: number,
+    fromStaffIndexInPart: number,
+    fromMeasureIndex: number,
+    fromVoiceIndex: number,
+    fromElementIndex: number,
+    fromNoteIndexInChord: number,
+    toPartIndex: number,
+    toStaffIndexInPart: number,
+    toMeasureIndex: number,
+    toVoiceIndex: number,
+    toElementIndex: number,
+    toNoteIndexInChord: number,
+    hasSourceTieForward: number,
+    sourceTieForward: number,
+    hasTargetTieBack: number,
+    targetTieBack: number,
+  ): EditOutcome;
+  editWriteRest(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    durationKind: number,
+    durationNumerator: number,
+    durationDenominator: number,
+  ): EditOutcome;
+  editSetRestDuration(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    durationKind: number,
+    durationNumerator: number,
+    durationDenominator: number,
+  ): EditOutcome;
+  editSetChordDuration(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    durationKind: number,
+    durationNumerator: number,
+    durationDenominator: number,
+  ): EditOutcome;
+  editDelete(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+  ): EditOutcome;
+  editCreateTuplet(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    actualNotes: number,
+    normalNotes: number,
+  ): EditOutcome;
+  editRemoveTuplet(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+  ): EditOutcome;
+  beginEditSession(handle: number): boolean;
+  endEditSession(handle: number): void;
+  editUndo(handle: number): EditOutcome;
+  editRedo(handle: number): EditOutcome;
+  editSessionState(handle: number): BridgeEditSessionState;
   engineVersionStamp(): string;
-  loadScore(bytes: number[] | Uint8Array): number;
+  loadScore(bytes: Uint8Array): number;
   releaseScore(handle: number): void;
   scoreMetadata(handle: number): ScoreMetadata | null;
+  rehearsalMarkCount(handle: number): number;
+  rehearsalMark(handle: number, index: number): RehearsalMarkInfo | null;
+  staffDescriptorCount(handle: number): number;
+  staffDescriptor(handle: number, index: number): StaffDescriptor | null;
   scoreFingerprint(handle: number): string;
-  installSMuFLMetrics(bytes: number[] | Uint8Array): boolean;
+  installSMuFLMetrics(bytes: Uint8Array): boolean;
   computeLayout(
     handle: number,
     pageWidthMM: number,
     pageHeightMM: number,
-  ): number[] | Uint8Array;
+    options: ResolvedLayoutOptions,
+  ): Uint8Array;
   pageBreaks(handle: number, pageHeightMM: number): number[] | Float64Array;
-  renderMidi(handle: number): number[] | Uint8Array;
-  renderMetronomeMidi(handle: number): number[] | Uint8Array;
+  renderMidi(handle: number): Uint8Array;
+  renderMetronomeMidi(handle: number): Uint8Array;
   renderCountInMetronomeMidi(
     handle: number,
     fromPlayerSeconds: number,
-  ): number[] | Uint8Array;
+  ): Uint8Array;
   countInSeconds(handle: number, fromPlayerSeconds: number): number;
   playerSecondsAtPoint(handle: number, xMM: number, yMM: number): number;
   playbackSummary(handle: number): PlaybackSummary | null;
@@ -151,7 +437,17 @@ interface BridgeExports {
     handle: number,
     playerSeconds: number,
   ): CursorRect | null;
+  measureFrame(handle: number, measureIndex: number): number[] | Float64Array;
   playerSecondsForMeasure(handle: number, measureIndex: number): number;
+  playerSecondsForPosition(
+    handle: number,
+    measureIndex: number,
+    tickInMeasure: number,
+  ): number;
+  positionAtPlayerSeconds(
+    handle: number,
+    playerSeconds: number,
+  ): number[] | Float64Array;
   measureIndexAtPlayerSeconds(handle: number, playerSeconds: number): number;
   loopPlayerSeconds(
     handle: number,
@@ -163,10 +459,7 @@ interface BridgeExports {
     fromMeasureIndex: number,
     toMeasureExclusive: number,
   ): number[] | Float64Array;
-  buildClickSoundFont(
-    strongWav: number[] | Uint8Array,
-    weakWav: number[] | Uint8Array,
-  ): number[] | Uint8Array;
+  buildClickSoundFont(strongWav: Uint8Array, weakWav: Uint8Array): Uint8Array;
   mixerStripCount(handle: number): number;
   mixerStrip(handle: number, index: number): MixerStrip | null;
   gmInstrumentNames(): string[];
@@ -182,17 +475,38 @@ export interface GMInstrument {
   readonly family: string;
 }
 
-/**
- * BridgeJS lowers `[UInt8]` / `[Double]` as a boxed `number[]` on some paths and
- * a typed array on others, and the generated `.d.ts` says `number[]`. Normalize
- * once here rather than at a dozen call sites.
- */
-function asBytes(value: number[] | Uint8Array): Uint8Array {
-  return value instanceof Uint8Array ? value : Uint8Array.from(value);
-}
-
 function asDoubles(value: number[] | Float64Array): Float64Array {
   return value instanceof Float64Array ? value : Float64Array.from(value);
+}
+
+function resolveLayoutMode(mode: LayoutMode | undefined): number {
+  switch (mode) {
+    case undefined:
+    case "vertical":
+      return 0;
+    case "horizontal":
+      return 1;
+    case "page":
+      return 2;
+  }
+}
+
+function resolveOptions(options: LayoutOptions | undefined): ResolvedLayoutOptions {
+  return {
+    layoutMode: resolveLayoutMode(options?.layoutMode),
+    staffSize: options?.staffSize ?? 28,
+    honorLayoutBreaks: options?.honorLayoutBreaks ?? true,
+    collapseMultiMeasureRests: options?.collapseMultiMeasureRests ?? false,
+    showsInvisibleElements: options?.showsInvisibleElements ?? false,
+    showsLyrics: options?.showsLyrics ?? true,
+    transposeSemitones: options?.transposeSemitones ?? 0,
+    hiddenStaves: options?.hiddenStaves ?? [],
+    clefOverrides: options?.clefOverrides ?? [],
+  };
+}
+
+function isSelectedItemKind(kind: string): kind is SelectedItemKind {
+  return kind === "note" || kind === "rest" || kind === "tuplet";
 }
 
 /**
@@ -205,6 +519,7 @@ function asDoubles(value: number[] | Float64Array): Float64Array {
  */
 export class Score {
   private handle: number;
+  private editGenerationValue = 0;
 
   constructor(
     private readonly bridge: BridgeExports,
@@ -243,17 +558,127 @@ export class Score {
     return this.bridge.scoreFingerprint(this.live());
   }
 
+  /**
+   * Monotonic generation for the mutable score behind this handle.
+   *
+   * Bumps on every accepted apply / bytes relay / undo / redo. Playback engines
+   * pin the value they were created with so a pre-edit SMF cannot keep sounding
+   * while post-edit cursor geometry is queried from wasm.
+   */
+  get editGeneration(): number {
+    return this.editGenerationValue;
+  }
+
+  /**
+   * Android: nativeBeginEditSession. Idempotent; re-begin drops the undo stack.
+   */
+  beginEditing(): void {
+    if (!this.bridge.beginEditSession(this.live())) {
+      throw new Error("failed to begin edit session");
+    }
+  }
+
+  /** Not a revert — the score keeps its last published state. */
+  endEditing(): void {
+    this.bridge.endEditSession(this.live());
+  }
+
+  /** One method over the typed union; routes to the per-case bridge entry point. */
+  applyEdit(intent: EditIntent): EditOutcome {
+    return this.bumpGenerationIfAccepted(
+      applyEditIntentCall(this.bridge, this.live(), intent),
+    );
+  }
+
+  /**
+   * Relay path for EditIntentCodec bytes authored elsewhere. This is the only
+   * way JavaScript can apply a composite intent.
+   */
+  applyEditIntentBytes(bytes: Uint8Array): EditOutcome {
+    return this.bumpGenerationIfAccepted(
+      this.bridge.applyEditIntentBytes(this.live(), bytes),
+    );
+  }
+
+  undo(): EditOutcome {
+    return this.bumpGenerationIfAccepted(this.bridge.editUndo(this.live()));
+  }
+
+  redo(): EditOutcome {
+    return this.bumpGenerationIfAccepted(this.bridge.editRedo(this.live()));
+  }
+
+  editState(): EditSessionState {
+    const state = this.bridge.editSessionState(this.live());
+    return {
+      active: state.active,
+      canUndo: state.canUndo,
+      canRedo: state.canRedo,
+      lastAffected: state.hasLastAffected
+        ? {
+            partIndex: state.lastAffectedPartIndex,
+            staffIndexInPart: state.lastAffectedStaffIndexInPart,
+            measureIndex: state.lastAffectedMeasureIndex,
+            voiceIndex: state.lastAffectedVoiceIndex,
+            elementIndex: state.lastAffectedElementIndex,
+          }
+        : null,
+    };
+  }
+
+  /**
+   * Editing hit-test, in document millimetres.
+   *
+   * This is a HIT-TEST with slop rescue, not the nearest-match
+   * `playerSecondsAtPoint`: empty paper returns `null` so a tap can deselect.
+   */
+  hitTest(xMM: number, yMM: number, activeVoice = 0): SelectedItem | null {
+    const item = this.bridge.editingHitTest(
+      this.live(),
+      xMM,
+      yMM,
+      activeVoice,
+    );
+    if (item === null) return null;
+    if (!isSelectedItemKind(item.kind)) {
+      throw new Error(`unknown edit hit kind: ${item.kind}`);
+    }
+    return item;
+  }
+
+  /**
+   * Caret geometry for a full-score-addressed selected item.
+   *
+   * Returns `null` until `layout()` has run since the last accepted edit. The
+   * bridge drops its layout cache on publish, so host order is accepted edit,
+   * then `layout()`, then geometry.
+   */
+  caretRect(item: SelectedItem, minimumWidthMM = 0): CaretRect | null {
+    return this.bridge.editingCaretRect(
+      this.live(),
+      item.kind,
+      item.partIndex,
+      item.staffIndexInPart,
+      item.measureIndex,
+      item.voiceIndex,
+      item.elementIndex,
+      item.noteIndexInChord,
+      minimumWidthMM,
+    );
+  }
+
   /** The `DrawProgramFlat` bytes, undecoded. Useful for parity checks. */
   layoutBytes(request: LayoutRequest): Uint8Array {
     const bytes = this.bridge.computeLayout(
       this.live(),
       request.pageWidthMM,
       request.pageHeightMM,
+      resolveOptions(request.options),
     );
     if (bytes.length === 0) {
       throw new Error("layout failed");
     }
-    return asBytes(bytes);
+    return bytes;
   }
 
   layout(request: LayoutRequest): DrawProgramPage[] {
@@ -277,7 +702,7 @@ export class Score {
    * live mixer is the sole authority.
    */
   renderMidi(): Uint8Array {
-    return asBytes(this.bridge.renderMidi(this.live()));
+    return this.bridge.renderMidi(this.live());
   }
 
   /**
@@ -288,7 +713,7 @@ export class Score {
    * sequence would cut every voice sounding on the score side.
    */
   renderMetronomeMidi(): Uint8Array {
-    return asBytes(this.bridge.renderMetronomeMidi(this.live()));
+    return this.bridge.renderMetronomeMidi(this.live());
   }
 
   /**
@@ -299,8 +724,9 @@ export class Score {
    * Empty when the position has no count-in.
    */
   renderCountInMetronomeMidi(fromPlayerSeconds: number): Uint8Array {
-    return asBytes(
-      this.bridge.renderCountInMetronomeMidi(this.live(), fromPlayerSeconds),
+    return this.bridge.renderCountInMetronomeMidi(
+      this.live(),
+      fromPlayerSeconds,
     );
   }
 
@@ -366,6 +792,36 @@ export class Score {
   }
 
   /**
+   * Rehearsal marks in score order, with player-clock seek targets.
+   *
+   * Every mark the score carries is listed. `playerSeconds` is `-1` for one
+   * whose cursor does not resolve — the list is a navigation index, so a
+   * missing letter would be worse than an entry that cannot be seeked to.
+   */
+  rehearsalMarks(): RehearsalMarkInfo[] {
+    const handle = this.live();
+    const count = this.bridge.rehearsalMarkCount(handle);
+    const marks: RehearsalMarkInfo[] = [];
+    for (let index = 0; index < count; index++) {
+      const mark = this.bridge.rehearsalMark(handle, index);
+      if (mark !== null) marks.push(mark);
+    }
+    return marks;
+  }
+
+  /** Staff descriptors flattened across parts in score order. */
+  staffDescriptors(): StaffDescriptor[] {
+    const handle = this.live();
+    const count = this.bridge.staffDescriptorCount(handle);
+    const descriptors: StaffDescriptor[] = [];
+    for (let index = 0; index < count; index++) {
+      const descriptor = this.bridge.staffDescriptor(handle, index);
+      if (descriptor !== null) descriptors.push(descriptor);
+    }
+    return descriptors;
+  }
+
+  /**
    * Click positions for a visual beat indicator, flattened as
    * `[playerSeconds, isDownbeat, …]` — two entries per beat, the flag `1` or
    * `0`.
@@ -387,12 +843,54 @@ export class Score {
   }
 
   /**
+   * The bounding rectangle of a measure in document millimetres, or `null`
+   * until `layout()` has run or when the index is outside the document.
+   */
+  measureFrame(measureIndex: number): MeasureFrame | null {
+    const frame = asDoubles(this.bridge.measureFrame(this.live(), measureIndex));
+    if (frame.length !== 4) return null;
+    return {
+      xMM: frame[0]!,
+      yMM: frame[1]!,
+      widthMM: frame[2]!,
+      heightMM: frame[3]!,
+    };
+  }
+
+  /**
    * The player position a measure starts at — a seek target. `-1` for an
    * out-of-range index, which `0` could not express: that is the top of the
    * score, a real position.
    */
   playerSecondsForMeasure(measureIndex: number): number {
     return this.bridge.playerSecondsForMeasure(this.live(), measureIndex);
+  }
+
+  /**
+   * The player-clock seconds for a durable score position. `-1` means the
+   * position does not resolve.
+   */
+  playerSecondsForPosition(position: ScorePosition): number {
+    return this.bridge.playerSecondsForPosition(
+      this.live(),
+      position.measureIndex,
+      position.tickInMeasure,
+    );
+  }
+
+  /**
+   * The durable score position sounding at `playerSeconds`, or `null` when it
+   * does not resolve.
+   */
+  positionAtPlayerSeconds(playerSeconds: number): ScorePosition | null {
+    const position = asDoubles(
+      this.bridge.positionAtPlayerSeconds(this.live(), playerSeconds),
+    );
+    if (position.length !== 2) return null;
+    return {
+      measureIndex: position[0]!,
+      tickInMeasure: position[1]!,
+    };
   }
 
   /** The measure sounding at a player position, or `-1` for an empty score. */
@@ -440,6 +938,13 @@ export class Score {
       this.handle = 0;
     }
   }
+
+  private bumpGenerationIfAccepted(outcome: EditOutcome): EditOutcome {
+    if (outcome.accepted) {
+      this.editGenerationValue += 1;
+    }
+    return outcome;
+  }
 }
 
 export class SheetMusic {
@@ -476,7 +981,7 @@ export class SheetMusic {
    * to parse, which means "keep the GM clicks".
    */
   buildClickSoundFont(strongWav: Uint8Array, weakWav: Uint8Array): Uint8Array {
-    return asBytes(this.bridge.buildClickSoundFont(strongWav, weakWav));
+    return this.bridge.buildClickSoundFont(strongWav, weakWav);
   }
 
   /**

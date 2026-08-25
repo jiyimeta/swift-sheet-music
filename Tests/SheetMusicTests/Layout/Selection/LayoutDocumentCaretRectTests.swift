@@ -203,5 +203,76 @@
 
             #expect(rect.width == floor)
         }
+
+        /// One voice: a G clef and a quarter triplet — the tuplet caret's fixture. The bracket's first member
+        /// is the chord at element index 1 (after the clef).
+        private func tripletSample() -> Score {
+            let third = NoteDuration.fraction(Fraction(numerator: 1, denominator: 12))
+            let measure = Measure(voices: [
+                Voice(
+                    elements: [
+                        .clef(Clef(concertClefType: "G")),
+                        .chord(Chord(duration: third, notes: [Note(pitch: 60, tpc: 14)])),
+                        .chord(Chord(duration: third, notes: [Note(pitch: 62, tpc: 16)])),
+                        .chord(Chord(duration: third, notes: [Note(pitch: 64, tpc: 18)])),
+                    ],
+                    tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)],
+                ),
+            ])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [Staff(
+                        staffType: "stdNormal",
+                        group: "pitched",
+                        defaultClefType: "G",
+                        measures: [measure],
+                    )],
+                )],
+            )
+        }
+
+        /// A `.tuplet` has no laid-out column of its own (`CursorFrame.itemX` answers `nil` for brackets —
+        /// they aren't playback tick anchors), so `editingCaretRect` anchors its caret to the bracket's FIRST
+        /// member chord/rest. Asserting the exact X range of that member's own cursor frame (not just non-nil)
+        /// pins the anchor's identity: any other resolution — the bracket midpoint, a later member, a fallback
+        /// column — moves X.
+        @Test("A tuplet's caret anchors to its first member's column")
+        func tupletCaretAnchorsToFirstMember() throws {
+            let score = tripletSample()
+            let doc = layout(score)
+            let tuplet = ScoreItemID.tuplet(TupletID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                measureIndex: 0, voiceIndex: 0, startElementIndex: 1,
+            ))
+            let firstMember = ScoreItemID.note(NoteID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                measureIndex: 0, voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
+            ))
+            let memberFrame = try #require(doc.cursorFrame(for: .item(firstMember), in: score))
+
+            let rect = try #require(doc.editingCaretRect(for: tuplet, in: score))
+
+            #expect(rect.minX == memberFrame.minX)
+            #expect(rect.maxX == memberFrame.maxX)
+            #expect(rect == doc.editingCaretRect(for: firstMember, in: score))
+        }
+
+        /// The stale-ID contract holds for the tuplet anchor too: a `startElementIndex` that no longer names a
+        /// chord/rest in the score (here: past the voice's end, as after a delete reflowed the measure) refuses
+        /// with `nil` instead of resolving against some other element's column.
+        @Test("A tuplet whose start element can't be resolved returns nil")
+        func staleTupletReturnsNil() {
+            let score = tripletSample()
+            let doc = layout(score)
+            let stale = ScoreItemID.tuplet(TupletID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                measureIndex: 0, voiceIndex: 0, startElementIndex: 99,
+            ))
+
+            #expect(doc.editingCaretRect(for: stale, in: score) == nil)
+        }
     }
 #endif

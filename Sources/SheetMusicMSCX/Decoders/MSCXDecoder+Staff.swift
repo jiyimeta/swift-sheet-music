@@ -104,7 +104,11 @@ extension MSCXTopLevelStaff {
     static func decode(_ node: XMLTreeNode) throws -> MSCXTopLevelStaff {
         guard let id = node.attributes["id"] else {
             throw SheetMusicError.malformedScore(
-                reason: "top-level <Staff> missing id attribute",
+                ScoreFault(
+                    code: "mscx.staff.missingID",
+                    message: "top-level <Staff> missing id attribute",
+                    location: "Staff",
+                ),
             )
         }
         let measureNodes = node.all("Measure")
@@ -173,9 +177,12 @@ func assembleParts( // swiftlint:disable:this function_body_length
             if let id = declared.mscxID {
                 guard let tl = byID[id] else {
                     throw SheetMusicError.malformedScore(
-                        reason:
-                        "Part '\(dp.partID)' declares <Staff id=\"\(id)\">"
-                            + " but no top-level <Staff> with that id was found",
+                        ScoreFault(
+                            code: "mscx.staff.declaredIDNotFound",
+                            message: "Part '\(dp.partID)' declares <Staff id=\"\(id)\">"
+                                + " but no top-level <Staff> with that id was found",
+                            location: id,
+                        ),
                     )
                 }
                 topLevelStaff = tl
@@ -190,9 +197,12 @@ func assembleParts( // swiftlint:disable:this function_body_length
                       let tl = byID[head]
                 else {
                     throw SheetMusicError.malformedScore(
-                        reason:
-                        "Part '\(dp.partID)' has an id-less <Staff> declaration"
-                            + " but no remaining top-level <Staff> to consume",
+                        ScoreFault(
+                            code: "mscx.staff.noTopLevelStaffRemaining",
+                            message: "Part '\(dp.partID)' has an id-less <Staff> declaration"
+                                + " but no remaining top-level <Staff> to consume",
+                            location: dp.partID,
+                        ),
                     )
                 }
                 topLevelStaff = tl
@@ -222,8 +232,11 @@ func assembleParts( // swiftlint:disable:this function_body_length
     let leftover = orderedIDs.filter { !consumed.contains($0) }
     if !leftover.isEmpty {
         throw SheetMusicError.malformedScore(
-            reason:
-            "top-level <Staff id=\"\(leftover.joined(separator: ","))\"> not claimed by any Part",
+            ScoreFault(
+                code: "mscx.staff.unclaimedTopLevelStaff",
+                message: "top-level <Staff id=\"\(leftover.joined(separator: ","))\"> not claimed by any Part",
+                location: leftover.joined(separator: ","),
+            ),
         )
     }
 

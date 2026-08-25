@@ -113,6 +113,12 @@ extension LayoutDocument {
     /// one `sp` above the staff top to one `sp` below its bottom. Narrowed, unlike the playback head, because
     /// editing happens in one staff at a time.
     ///
+    /// A `.tuplet` item has no laid-out column of its own (`CursorFrame.itemX` deliberately answers `nil` for
+    /// brackets — they are display-only selection targets, not playback tick anchors), so its caret anchors to
+    /// the column of the bracket's FIRST member chord/rest instead — the same element a selection expansion
+    /// starts from, and where an edit targeting the tuplet lands. The wasm editing spec (§7.1) requires a
+    /// selected tuplet to caret like any other selectable item.
+    ///
     /// `nil` when the item doesn't resolve to a laid-out frame (a stale ID right after an edit reflows the
     /// document) or names a staff/measure this document doesn't contain.
     ///
@@ -121,10 +127,38 @@ extension LayoutDocument {
     public func editingCaretRect(
         for item: ScoreItemID, in score: Score, minimumWidth: CGFloat = 2,
     ) -> CGRect? {
-        guard let frame = cursorFrame(for: .item(item), in: score),
+        guard let anchor = Self.caretAnchor(for: item, in: score),
+              let frame = cursorFrame(for: .item(anchor), in: score),
               let band = staffBand(for: item.staff, measureIndex: item.measureIndex)
         else { return nil }
         return CGRect(x: frame.minX, y: band.top, width: max(frame.width, minimumWidth), height: band.height)
+    }
+
+    /// The item whose laid-out column anchors `item`'s caret. Notes and rests (and clefs, which never resolve
+    /// anyway) anchor to themselves; a `.tuplet` anchors to the chord/rest at its `startElementIndex` — see
+    /// `editingCaretRect`'s doc comment. `nil` when a tuplet's start element can't be resolved to a chord/rest
+    /// in `score` (a stale ID after an edit), which `editingCaretRect` folds into its existing stale-ID `nil`.
+    private static func caretAnchor(for item: ScoreItemID, in score: Score) -> ScoreItemID? {
+        guard case let .tuplet(tid) = item else { return item }
+        guard let staff = score[tid.staff],
+              staff.measures.indices.contains(tid.measureIndex)
+        else { return nil }
+        let voices = staff.measures[tid.measureIndex].voices
+        guard voices.indices.contains(tid.voiceIndex) else { return nil }
+        let elements = voices[tid.voiceIndex].elements
+        guard elements.indices.contains(tid.startElementIndex),
+              case let .chord(chord) = elements[tid.startElementIndex]
+        else { return nil }
+        if chord.notes.isEmpty {
+            return .rest(RestID(
+                staff: tid.staff, measureIndex: tid.measureIndex,
+                voiceIndex: tid.voiceIndex, elementIndex: tid.startElementIndex,
+            ))
+        }
+        return .note(NoteID(
+            staff: tid.staff, measureIndex: tid.measureIndex, voiceIndex: tid.voiceIndex,
+            elementIndex: tid.startElementIndex, noteIndexInChord: 0,
+        ))
     }
 
     /// Vertical band (document coords) spanning `staff`'s own drawn lines, one `sp` clear on each side, within the

@@ -176,8 +176,8 @@
         /// Mirror of `tripletOnHiddenStaffScore()`: staff 0 (to be hidden) carries a plain note, staff 1
         /// (visible) carries the triplet. Used to prove a tuplet on a VISIBLE staff still tints/carets when a
         /// DIFFERENT, earlier staff is hidden — the filtered document renumbers staff 1 down to filtered index
-        /// 0, which collides numerically with the hidden set's full-score `(0, 0)` entry and must not be
-        /// mistaken for it.
+        /// 0, so the id only resolves if the bridge re-addresses it (full staff 1 → filtered staff 0) the same
+        /// way it does for notes and rests.
         private static func tripletOnVisibleStaffScore() -> Score {
             let hiddenVoice = Voice(elements: [
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
@@ -207,11 +207,15 @@
             )
         }
 
-        /// Filtered-addressed: staff 1 becomes filtered staff index 0 once staff 0 is hidden, so this is `staff0`
-        /// numerically — the same value `hiddenTripletID` uses, but this time it denotes the surviving,
-        /// VISIBLE staff rather than the hidden one.
+        /// FULL-score-addressed (staff 1) — the convention `nativeEditingHitTest` returns for every kind,
+        /// `.tuplet` included (`Score.engineCursorForFilteredTap` re-addresses it like `.note`/`.rest`), and
+        /// therefore the id a host holds as its selection and feeds back into `nativeEditingCaretFrame` /
+        /// `nativeEncodeDrawProgram`. Its FILTERED address once staff 0 is hidden is numerically `staff0` —
+        /// the same value `hiddenTripletID` uses for the actually-hidden staff — which is exactly why the
+        /// old mixed contract (`.tuplet` filtered, everything else full-score) couldn't survive a hidden-set
+        /// membership test and needed bridge special-cases, since removed.
         private static let visibleTripletID = TupletID(
-            staff: staff0, measureIndex: 0, voiceIndex: 0, startElementIndex: 1,
+            staff: staff1, measureIndex: 0, voiceIndex: 0, startElementIndex: 1,
         )
 
         private static func verticalOptionsBytes() -> Data {
@@ -465,20 +469,17 @@
             #expect(wire.widthMm > 0)
         }
 
-        /// Pins `nativeEditingCaretFrame`'s behavior for a `.tuplet` id on a VISIBLE staff when a DIFFERENT,
-        /// earlier staff is hidden — the same addressing collision the draw-program mirror test above
-        /// (`encodeDrawProgramTintsTupletOnVisibleStaffPastHiddenStaff`) exercises.
-        ///
-        /// Unlike that mirror test, this one can't observe a red→green transition from the addressing fix: a
-        /// `.tuplet` id NEVER resolves to a caret rect, hidden staff or not — `CursorFrame.itemX` returns `nil`
-        /// for `.tuplet` unconditionally ("Playback cursor never positions on a tuplet bracket... these are
-        /// display-only selection targets, not tick anchors"), so `editingCaretRect` is `nil` and this bridge
-        /// returns empty `Data` on BOTH the buggy and the fixed `translateCursorForHiddenStaves` path. This test
-        /// exists to pin that the fix doesn't change that (no crash, no accidental resolution against the wrong
-        /// element) — the real regression coverage for this bug is the draw-program mirror test above, whose
-        /// tint DOES flip from absent to present across the fix.
-        @Test("nativeEditingCaretFrame still returns empty Data for a tuplet id, hidden-staff collision or not")
-        func caretFrameStillEmptyForTupletOnVisibleStaffPastHiddenStaff() {
+        /// The `.tuplet` twin of `caretFrameTranslatesPastHiddenStaff` above, and the caret half of the
+        /// draw-program mirror test (`encodeDrawProgramTintsTupletOnVisibleStaffPastHiddenStaff`): the
+        /// full-score-addressed tuplet id a host got from `nativeEditingHitTest` (staff 1) must survive
+        /// `translateCursorForHiddenStaves` (→ filtered staff 0) and resolve a caret anchored to the
+        /// bracket's first member chord (`LayoutDocument.editingCaretRect`'s `.tuplet` anchor). Two distinct
+        /// regressions would turn this empty: skipping the translation (staff 1 doesn't exist in the filtered
+        /// document, so nothing resolves), or re-treating the id as filtered-addressed (numerically `staff0`,
+        /// which the hidden set contains, so it would be refused as hidden — the collision that forced the
+        /// old bridge special-cases).
+        @Test("nativeEditingCaretFrame resolves a tuplet id on a visible staff past a hidden earlier staff")
+        func caretFrameResolvesTupletOnVisibleStaffPastHiddenStaff() throws {
             let handle = scoreTable.insert(Self.tripletOnVisibleStaffScore())
             defer { scoreTable.release(handle); LayoutDocumentCache.release(handle) }
             _ = nativeComputeLayout(
@@ -488,7 +489,9 @@
 
             let itemBytes = ScoreItemIDCodec.encode(.tuplet(Self.visibleTripletID))
             let result = nativeEditingCaretFrame(scoreHandle: handle, itemBytes: itemBytes, minimumWidthMm: 0)
-            #expect(result.isEmpty)
+            let wire = try EditCaretFrameCodec.decode(result)
+            #expect(wire.heightMm > 0)
+            #expect(wire.widthMm > 0)
         }
 
         @Test("nativeEditingCaretFrame with an unknown handle returns empty Data")
@@ -739,13 +742,14 @@
 
         /// Mirror of `encodeDrawProgramDropsHiddenStaffSelection` above: the true-positive this bug needs. The
         /// triplet here lives on the VISIBLE staff (`tripletOnVisibleStaffScore()`'s staff 1), with a
-        /// DIFFERENT, earlier staff (0) hidden. `visibleTripletID`'s filtered address is numerically `staff0`
-        /// (staff 1 renumbers down to filtered index 0), which is also what the hidden set carries for the
-        /// actually-hidden staff 0 — so a `.tuplet` id that gets re-translated by
-        /// `translateCursorForHiddenStaves` (instead of passed through, as `.tuplet` ids from a real hit test
-        /// already are) is wrongly treated as hidden and silently dropped. Asserting 4 brackets (not just 1)
-        /// proves both that the tuplet itself tints AND that `SelectionExpansion` still ran to tint its three
-        /// member notes.
+        /// DIFFERENT, earlier staff (0) hidden, and `visibleTripletID` carries the full-score address (staff 1)
+        /// a host got from `nativeEditingHitTest` — every kind full-score-addressed, `.tuplet` included, now
+        /// that `Score.engineCursorForFilteredTap` re-addresses it like `.note`/`.rest`. The bridge must
+        /// translate it (staff 1 → filtered staff 0) before expanding: skipping the translation — the old
+        /// pass-through contract — leaves staff 1, which the one-staff filtered document can't resolve, so
+        /// `SelectionExpansion.expand` degenerates to the bare id and NOTHING tints. Asserting 4 brackets (not
+        /// just 1) proves both that the tuplet itself tints AND that `SelectionExpansion` still ran to tint its
+        /// three member notes.
         @Test("nativeEncodeDrawProgram tints a tuplet selection on a visible staff when an earlier staff is hidden")
         func encodeDrawProgramTintsTupletOnVisibleStaffPastHiddenStaff() throws {
             let handle = scoreTable.insert(Self.tripletOnVisibleStaffScore())

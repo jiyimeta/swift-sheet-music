@@ -109,6 +109,18 @@ correction policy and document the silent fallback when adding one.
 Local worktrees live under `.claude/worktrees/` regardless of whether Claude or
 Codex is operating in them.
 
+A fresh worktree has no `Web/sheet-music-web/node_modules`. Install them before
+running a wasm preflight there:
+
+```bash
+npm install --prefix Web/sheet-music-web
+```
+
+`Scripts/preflight.sh --wasm` now checks for them up front, but installing first
+saves the round trip. If npm adds a `peerDependencies` block to
+`package-lock.json`, restore it — that is local npm-version normalization, not a
+change that belongs in a diff.
+
 The Apple example's `Sounds/` directory and its large SoundFont are gitignored.
 When the Apple example is in scope inside a secondary worktree, run once:
 

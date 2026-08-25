@@ -16,13 +16,16 @@ struct SheetMusicErrorTests {
         #expect(location == "Voice")
     }
 
-    @Test func corruptedContainerCarriesReason() {
-        let error = SheetMusicError.corruptedContainer(reason: "bad zip")
-        guard case let .corruptedContainer(reason) = error else {
+    @Test func corruptedContainerCarriesFault() {
+        let fault = ScoreFault(code: "zip.corrupted", message: "bad zip")
+        let error = SheetMusicError.corruptedContainer(fault)
+        guard case let .corruptedContainer(payload) = error else {
             Issue.record("expected corruptedContainer")
             return
         }
-        #expect(reason == "bad zip")
+        #expect(payload == fault)
+        #expect(error.code == "zip.corrupted")
+        #expect(error.developerDescription == "Corrupted archive: bad zip")
     }
 
     @Test func ioErrorPreservesURLAndUnderlying() {

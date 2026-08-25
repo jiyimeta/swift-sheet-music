@@ -6,24 +6,24 @@ import Testing
 struct ScoreEntryTests {
     @Test("an empty payload yields the invalid handle")
     func emptyPayloadIsInvalid() {
-        #expect(loadScore(bytes: []) == 0)
+        #expect(loadScore(bytes: jsBytes([])) == 0)
     }
 
     @Test("garbage yields the invalid handle")
     func garbageIsInvalid() {
-        #expect(loadScore(bytes: [0x00, 0x01, 0x02, 0x03]) == 0)
+        #expect(loadScore(bytes: jsBytes([0x00, 0x01, 0x02, 0x03])) == 0)
     }
 
     @Test("a valid mscz yields a live handle")
     func validPayloadLoads() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         #expect(handle != 0)
         releaseScore(handle: handle)
     }
 
     @Test("metadata comes back")
     func metadataComesBack() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         let metadata = try #require(scoreMetadata(handle: handle))
         #expect(metadata.title == "wasm bridge")
@@ -38,7 +38,7 @@ struct ScoreEntryTests {
 
     @Test("a released handle stops resolving")
     func releaseInvalidatesTheHandle() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         releaseScore(handle: handle)
         #expect(scoreMetadata(handle: handle) == nil)
     }
@@ -51,8 +51,8 @@ struct ScoreEntryTests {
     @Test("the fingerprint is stable across two loads of the same bytes")
     func fingerprintIsStable() throws {
         let bytes = try SampleScore.mscz()
-        let a = loadScore(bytes: bytes)
-        let b = loadScore(bytes: bytes)
+        let a = loadScore(bytes: jsBytes(bytes))
+        let b = loadScore(bytes: jsBytes(bytes))
         defer {
             releaseScore(handle: a)
             releaseScore(handle: b)
@@ -66,7 +66,7 @@ struct ScoreEntryTests {
     /// whole value survived rather than half of it.
     @Test("the fingerprint survives the string round trip as a 64-bit value")
     func fingerprintRoundTripsAsInt64() throws {
-        let handle = try loadScore(bytes: SampleScore.mscz())
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         let score = try #require(scoreTable.value(for: Int64(handle)))
         #expect(Int64(scoreFingerprint(handle: handle)) == score.stableFingerprint)
@@ -82,8 +82,8 @@ struct ScoreEntryTests {
     /// to be.
     @Test("scores with different notes fingerprint differently")
     func differentNotesDiffer() throws {
-        let a = try loadScore(bytes: SampleScore.mscz(pitches: [60, 62, 64, 65]))
-        let b = try loadScore(bytes: SampleScore.mscz(pitches: [60, 62, 64, 67]))
+        let a = try loadScore(bytes: jsBytes(SampleScore.mscz(pitches: [60, 62, 64, 65])))
+        let b = try loadScore(bytes: jsBytes(SampleScore.mscz(pitches: [60, 62, 64, 67])))
         defer {
             releaseScore(handle: a)
             releaseScore(handle: b)
@@ -98,8 +98,8 @@ struct ScoreEntryTests {
     /// that only shows up as a stale cache being trusted.
     @Test("metadata is outside the fingerprint's scope")
     func metadataDoesNotAffectTheFingerprint() throws {
-        let a = try loadScore(bytes: SampleScore.mscz(title: "one"))
-        let b = try loadScore(bytes: SampleScore.mscz(title: "two"))
+        let a = try loadScore(bytes: jsBytes(SampleScore.mscz(title: "one")))
+        let b = try loadScore(bytes: jsBytes(SampleScore.mscz(title: "two")))
         defer {
             releaseScore(handle: a)
             releaseScore(handle: b)

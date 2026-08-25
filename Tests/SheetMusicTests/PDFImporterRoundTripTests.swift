@@ -47,9 +47,9 @@
                 // detected")`. Record it as a non-fatal note and pass
                 // the test; rethrow anything else.
                 switch error {
-                case let .malformedScore(reason):
+                case let .malformedScore(fault):
                     Issue.record(
-                        "PDF roundtrip degraded for \(name): \(reason)",
+                        "PDF roundtrip degraded for \(name): \(fault.developerDescription)",
                     )
                     return
                 default:

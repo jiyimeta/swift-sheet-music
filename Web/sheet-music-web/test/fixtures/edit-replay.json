@@ -1,0 +1,184 @@
+{
+  "fingerprints" : [
+    "951475697371637870",
+    "7075944237884773876",
+    "7531035533109761199",
+    "7531035533109761199",
+    "7531035533109761199",
+    "-1046527837963253102",
+    "1773961180201349831",
+    "6206683824324110935",
+    "7610158848810424951",
+    "-6956814878787350851",
+    "-4008493877204000937",
+    "-8314552463152433651",
+    "-4638831709360180291",
+    "-8314552463152433651",
+    "-4638831709360180291"
+  ],
+  "steps" : [
+    {
+      "at" : {
+        "elementIndex" : 3,
+        "measureIndex" : 0,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "op" : "inputNote",
+      "pitch" : 61,
+      "tpc" : 21
+    },
+    {
+      "accidental" : "accidentalNatural",
+      "at" : {
+        "elementIndex" : 3,
+        "measureIndex" : 0,
+        "noteIndexInChord" : 0,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "op" : "setNotePitch",
+      "pitch" : 60,
+      "tpc" : 14
+    },
+    {
+      "at" : {
+        "elementIndex" : 3,
+        "measureIndex" : 0,
+        "noteIndexInChord" : 0,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "op" : "setAccidental"
+    },
+    {
+      "base64" : "NAQKMQovHAcKGQoMCgQIABAAEAAYACAGEIABGCQiBAgAEgARCAoOCgQIABAAEAAYACAGKAI=",
+      "op" : "intentBytes"
+    },
+    {
+      "actualNotes" : 3,
+      "at" : {
+        "elementIndex" : 4,
+        "measureIndex" : 0,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "normalNotes" : 2,
+      "op" : "createTuplet"
+    },
+    {
+      "at" : {
+        "elementIndex" : 5,
+        "measureIndex" : 0,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "duration" : {
+        "value" : "eighth"
+      },
+      "op" : "inputNote",
+      "pitch" : 67,
+      "tpc" : 15
+    },
+    {
+      "from" : {
+        "elementIndex" : 2,
+        "measureIndex" : 0,
+        "noteIndexInChord" : 0,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "op" : "setTie",
+      "sourceTieForward" : 1,
+      "targetTieBack" : 1,
+      "to" : {
+        "elementIndex" : 3,
+        "measureIndex" : 0,
+        "noteIndexInChord" : 0,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      }
+    },
+    {
+      "at" : {
+        "elementIndex" : 7,
+        "measureIndex" : 0,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "duration" : {
+        "value" : "half"
+      },
+      "op" : "inputNote",
+      "pitch" : 69,
+      "tpc" : 17
+    },
+    {
+      "at" : {
+        "elementIndex" : 3,
+        "measureIndex" : 1,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "duration" : {
+        "value" : "eighth"
+      },
+      "op" : "setRestDuration"
+    },
+    {
+      "at" : {
+        "elementIndex" : 1,
+        "measureIndex" : 2,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "duration" : {
+        "value" : "eighth"
+      },
+      "op" : "setChordDuration"
+    },
+    {
+      "at" : {
+        "elementIndex" : 1,
+        "measureIndex" : 2,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "op" : "delete"
+    },
+    {
+      "at" : {
+        "elementIndex" : 4,
+        "measureIndex" : 0,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "op" : "removeTuplet"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "at" : {
+        "elementIndex" : 4,
+        "measureIndex" : 0,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "op" : "removeTuplet"
+    }
+  ]
+}

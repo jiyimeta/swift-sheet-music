@@ -328,7 +328,10 @@
                   let staff = template.staves.first,
                   !staff.measures.isEmpty
             else {
-                throw SheetMusicError.malformedScore(reason: "empty fixture")
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "test.fixture.empty",
+                    message: "empty fixture",
+                ))
             }
 
             var measures: [Measure] = []

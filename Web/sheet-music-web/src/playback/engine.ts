@@ -17,6 +17,7 @@ import type {
   MixerStrip,
   PlaybackSummary,
   Score,
+  ScorePosition,
 } from "../index.js";
 import type { SynthHost } from "./types.js";
 import { encodeWav, sliceBuffer } from "./wav.js";
@@ -103,7 +104,9 @@ export class PlaybackEngine {
   private loopBounds: [number, number] | null = null;
   private loopRange: MeasureRange | null = null;
   /** Where a count-in-started playback begins once the count elapses. */
-  private countInTarget: { seconds: number } | null = null;
+  private countInTarget: { position: ScorePosition; preRollSeconds: number } | null = null;
+  /** Durable musical address for the parked transport position. */
+  private currentPosition: ScorePosition = { measureIndex: 0, tickInMeasure: 0 };
   private rate = 1;
   private metronomeMuted = true;
   /** Mixer state, keyed by MIDI channel. */
@@ -120,6 +123,7 @@ export class PlaybackEngine {
     private readonly score: Score,
     private readonly host: SynthHost,
     private readonly summary: PlaybackSummary,
+    private readonly constructionGeneration: number,
     private readonly scheduler: FrameScheduler,
     private readonly onCursor?: (rect: CursorRect | null) => void,
     private readonly onStateChange?: (state: PlaybackState) => void,
@@ -128,9 +132,9 @@ export class PlaybackEngine {
   /**
    * Load both sequences and park at the top.
    *
-   * Rendering the SMFs is the expensive part and happens once here rather than
-   * per play, because the score does not change under playback — editing has not
-   * reached this surface.
+   * Rendering the SMFs is the expensive part and happens once here. If the
+   * score is edited afterward, mutating transport entry points throw so the
+   * pre-edit sequence cannot drift away from post-edit cursor geometry.
    */
   static async create(options: PlaybackEngineOptions): Promise<PlaybackEngine> {
     const summary = options.score.playbackSummary();
@@ -141,6 +145,7 @@ export class PlaybackEngine {
       options.score,
       options.host,
       summary,
+      options.score.editGeneration,
       options.scheduler ?? defaultScheduler(),
       options.onCursor,
       options.onStateChange,
@@ -168,6 +173,10 @@ export class PlaybackEngine {
 
   /** The current position on the player clock. */
   get playerSeconds(): number {
+    if (this._state !== "playing" && this._state !== "counting-in") {
+      const seconds = this.secondsForPosition(this.currentPosition);
+      if (seconds !== null) return seconds;
+    }
     return this.host.score.positionSeconds;
   }
 
@@ -186,6 +195,7 @@ export class PlaybackEngine {
    */
   async play(options?: { countIn?: boolean }): Promise<void> {
     this.assertLive();
+    this.assertScoreUnedited();
     if (this._state === "playing" || this._state === "counting-in") return;
 
     const context = this.host.context as AudioContext;
@@ -197,12 +207,16 @@ export class PlaybackEngine {
       // From wherever the transport actually is, not from the enclosing bar's
       // downbeat: `CountInBeats` schedules a partial lead-in for a start partway
       // through a measure, which is what a tap-to-start produces.
-      const from = this.host.score.positionSeconds;
+      const from = this.playerSeconds;
       const sequence = this.score.renderCountInMetronomeMidi(from);
       const seconds = this.score.countInSeconds(from);
       if (sequence.length > 0 && seconds > 0) {
-        this.countInTarget = { seconds };
+        this.countInTarget = {
+          position: this.currentPosition,
+          preRollSeconds: seconds,
+        };
         this.host.metronome.load(sequence);
+        this.seekScoreToPosition(this.currentPosition);
         // The count has to be audible whatever the metronome toggle says:
         // counting in is an explicit request, not the toggle.
         this.host.metronome.setMuted(false);
@@ -216,6 +230,7 @@ export class PlaybackEngine {
     }
 
     this.assertMixer();
+    this.seekBothToPosition(this.currentPosition);
     this.host.score.play();
     this.host.metronome.play();
     this.setState("playing");
@@ -228,6 +243,7 @@ export class PlaybackEngine {
     this.host.score.pause();
     this.host.metronome.pause();
     this.stopPolling();
+    this.syncCurrentPositionFromPlayerSeconds(this.host.score.positionSeconds);
     this.setState("paused");
     this.emitCursor();
   }
@@ -240,14 +256,15 @@ export class PlaybackEngine {
     this.stopPolling();
     this.countInTarget = null;
     this.restoreBodyMetronome();
-    this.seekBoth(this.loopBounds ? this.loopBounds[0] : 0);
+    this.seekToPlayerSeconds(this.loopBounds ? this.loopBounds[0] : 0);
     this.setState("stopped");
     this.onCursor?.(null);
   }
 
   seekToMeasure(measureIndex: number): void {
     this.assertLive();
-    this.seekToPlayerSeconds(this.score.playerSecondsForMeasure(measureIndex));
+    this.assertScoreUnedited();
+    this.seekToPosition({ measureIndex, tickInMeasure: 0 });
   }
 
   /**
@@ -260,12 +277,22 @@ export class PlaybackEngine {
    */
   seekToPoint(xMM: number, yMM: number): void {
     this.assertLive();
+    this.assertScoreUnedited();
     this.seekToPlayerSeconds(this.score.playerSecondsAtPoint(xMM, yMM));
   }
 
   /** Ignores the `-1` every seek-target lookup answers with when it has none. */
   private seekToPlayerSeconds(seconds: number): void {
     if (seconds < 0) return;
+    const position = this.score.positionAtPlayerSeconds(seconds);
+    if (position === null) return;
+    this.seekToPosition(position);
+  }
+
+  private seekToPosition(position: ScorePosition): void {
+    const seconds = this.secondsForPosition(position);
+    if (seconds === null) return;
+    this.currentPosition = position;
     this.seekBoth(seconds);
     this.emitCursor(seconds);
   }
@@ -438,6 +465,7 @@ export class PlaybackEngine {
    */
   async exportWav(options: AudioExportOptions = {}): Promise<Uint8Array> {
     this.assertLive();
+    this.assertScoreUnedited();
     const renderOffline = this.host.renderOffline;
     if (renderOffline === undefined) {
       throw new Error("this synth host cannot render offline");
@@ -477,6 +505,16 @@ export class PlaybackEngine {
   private assertLive(): void {
     if (this.disposed) {
       throw new Error("playback engine has been disposed");
+    }
+  }
+
+  private assertScoreUnedited(): void {
+    if (this.score.editGeneration !== this.constructionGeneration) {
+      // The parked transport position is now a durable score position, but the
+      // rendered SMF and mixer map still belong to the pre-edit score.
+      throw new Error(
+        "score was edited after this engine was created; dispose it and create a new one",
+      );
     }
   }
 
@@ -551,6 +589,38 @@ export class PlaybackEngine {
     this.assertMixer();
   }
 
+  private seekScoreToPosition(position: ScorePosition): void {
+    const seconds = this.secondsForPosition(position);
+    if (seconds === null) return;
+    if (Math.abs(this.host.score.positionSeconds - seconds) < 1e-9) return;
+    this.host.score.seek(seconds);
+    this.assertMixer();
+  }
+
+  private seekBothToPosition(position: ScorePosition): void {
+    const seconds = this.secondsForPosition(position);
+    if (seconds === null) return;
+    if (
+      Math.abs(this.host.score.positionSeconds - seconds) < 1e-9 &&
+      Math.abs(this.host.metronome.positionSeconds - seconds) < 1e-9
+    ) {
+      return;
+    }
+    this.seekBoth(seconds);
+  }
+
+  private secondsForPosition(position: ScorePosition): number | null {
+    const seconds = this.score.playerSecondsForPosition(position);
+    return seconds >= 0 ? seconds : null;
+  }
+
+  private syncCurrentPositionFromPlayerSeconds(seconds: number): void {
+    const position = this.score.positionAtPlayerSeconds(seconds);
+    if (position !== null) {
+      this.currentPosition = position;
+    }
+  }
+
   /**
    * Swap the count-in sequence back out for the plain body one and re-apply the
    * host's metronome toggle. Idempotent, so `stop()` can call it unconditionally.
@@ -586,11 +656,15 @@ export class PlaybackEngine {
   private poll(): void {
     if (this._state === "counting-in") {
       const target = this.countInTarget;
-      if (target !== null && this.host.metronome.positionSeconds >= target.seconds) {
+      if (
+        target !== null &&
+        this.host.metronome.positionSeconds >= target.preRollSeconds
+      ) {
         // The metronome sequence runs `seconds` ahead of the score's, so both
         // clocks agree from here on without any further correction.
         this.restoreBodyMetronome();
         this.assertMixer();
+        this.seekScoreToPosition(target.position);
         this.host.score.play();
         this.setState("playing");
       }
@@ -601,8 +675,7 @@ export class PlaybackEngine {
     if (this.loopBounds !== null) {
       const [start, end] = this.loopBounds;
       if (this.host.score.positionSeconds >= end) {
-        this.seekBoth(start);
-        this.emitCursor(start);
+        this.seekToPlayerSeconds(start);
         return;
       }
     } else if (this.host.score.isAtEnd) {
@@ -624,7 +697,7 @@ export class PlaybackEngine {
    */
   private emitCursor(atSeconds?: number): void {
     if (this.onCursor === undefined) return;
-    const seconds = atSeconds ?? this.host.score.positionSeconds;
+    const seconds = atSeconds ?? this.playerSeconds;
     this.onCursor(this.score.cursorRectAtPlayerSeconds(seconds));
   }
 }

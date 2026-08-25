@@ -9,6 +9,43 @@ and this project adheres to
 
 ### Added
 
+- A durable playback position on the WebAssembly bridge. `playerSecondsForPosition` and
+  `positionAtPlayerSeconds` convert between player seconds and a `{measureIndex, tickInMeasure}`
+  musical address, and `PlaybackEngine` now parks its transport on the address rather than on a time.
+  Seconds depend on the tempo map and on note durations, so an edit changes what a stored second
+  means; an address does not. Android already carried this — `ScoreCursor` crosses its JNI boundary
+  in both directions — and the wasm surface lost it when the cursor round trip was folded into a
+  single call.
+- Rehearsal marks, staff descriptors and measure frames on the WebAssembly bridge, closing the three
+  gaps against the Android surface that had no recorded reason to exist. `rehearsalMarkCount` /
+  `rehearsalMark` carry each mark's text, measure and player-clock seek target — every mark the score
+  has, with `-1` seconds for one whose cursor does not resolve, because a navigation index missing a
+  letter is worse than an entry that cannot be seeked to. `staffDescriptorCount` /
+  `staffDescriptor` flatten the parts/staves tree the way `mixerStrip` indexes. `measureFrame` takes
+  a measure index rather than Android's encoded cursor, since a browser host holds one.
+- **A virtualized viewer, with zoom.** The browser example keeps canvases only for the tiles near the
+  viewport and drops the rest, so what it rasterizes is bounded by the viewport rather than by the
+  score: 80.4 MB of canvas for a 1,757 mm fixture and 151.8 MB for a 149-part score become 18–37 MB
+  for both. `planViewportTiles` and `reconcileMounts` are exported for hosts that want the same
+  policy. Zoom re-rasterizes at the new scale instead of upscaling a bitmap, and preserves the
+  document position under the top of the viewport; `staffSize` remains the separate control that
+  re-engraves. Scrolling still does not redraw — the compositor pans the mounted canvases.
+- **Editing in the browser.** `Score` gains `beginEditing` / `endEditing`, a typed `applyEdit` over all
+  thirteen scalar `EditIntent` cases, `applyEditIntentBytes` for a relayed composite, `undo` / `redo`,
+  `editState`, `hitTest` and `caretRect`. An accepted edit publishes back into the same handle, so
+  every downstream consumer keeps working across it. `EditReplayScript`'s fourteen steps now replay
+  through the browser facade against the same fingerprint chain the Apple host and the Android device
+  assert, so "the browser edits what the app does" is pinned rather than assumed.
+- **Band culling in the browser renderer.** `splitIntoBands` slices a page's draw program into
+  self-contained horizontal bands — a port of Android's `ScoreBands.kt` — and `drawTile` paints a
+  tile from only the bands whose ink reaches it. A page too tall for one canvas previously walked
+  its whole command list once per tile; on a 1757 mm fixture a 100 mm tile now walks 10% of the
+  page. `drawPage` is unchanged for pages that fit a single canvas.
+- **Layout options on the WebAssembly bridge.** `computeLayout` takes a `LayoutOptions` struct —
+  layout mode, staff size, break handling, multi-measure rests, invisible elements, lyrics,
+  transposition, hidden staves and clef overrides — reaching the settings Android's display
+  inspector has had. The browser facade fills every field from the vertical default, so a caller
+  that passes none gets what it got before.
 - **Playback in the browser.** `@jiyimeta/sheet-music-web/playback` plays a score, follows it with
   a cursor, and supports a measure-range loop with its highlight, a metronome, a count-in, a
   playback rate and a mixer (per-strip patch, level and mute). The synth is the host's: Swift
@@ -52,6 +89,34 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking.** A tapped `.tuplet` now crosses `Score.engineCursorForFilteredTap` and
+  `translateCursorForHiddenStaves` re-addressed like `.note` and `.rest`, instead of passing through
+  in the rendered document's numbering. With a hidden staff ahead of a tuplet's own staff in the same
+  part, a hit-test result fed into an edit intent named the wrong staff. Hosts holding a tuplet id
+  across a visibility change now hold the full-score address; the `.tuplet` special-cases in the
+  Android geometry bridge are gone with the mixed contract that forced them.
+- `LayoutDocument.editingCaretRect` resolves a caret for a selected tuplet, anchored to the column of
+  the bracket's first member. It previously returned nil, because it goes through `cursorFrame` and a
+  playback head never sits on a bracket — correct for a playback head, wrong for an editing caret.
+- `releaseScore` on the WebAssembly bridge also ends any open edit session, so a session cannot
+  outlive its handle.
+- **Breaking.** `computeLayout` on the WebAssembly bridge takes a `LayoutOptions` argument. There is
+  no options-less overload: two entry points into the same engraver drift, and the browser facade
+  supplies the defaults instead.
+- **Breaking.** The WebAssembly bridge's byte-blob faces take and return `Uint8Array` rather than
+  `number[]`. BridgeJS lowered a `[UInt8]` parameter one wasm import call per byte and lifted a
+  `[UInt8]` return into a boxed JavaScript array; `loadScore` on a 1 MB score went from 41.8 ms to
+  16.6 ms. The `[Double]` faces are unchanged — their payloads are small and cross once per user
+  action.
+- `pageBreaks` on the WebAssembly bridge derives its break policy from the options the document was
+  laid out with, as Android does, instead of always honouring layout breaks. Previously unobservable
+  because options could not be set; now it would answer with boundaries the document does not have.
+- **Breaking.** `SheetMusicError.malformedScore` and
+  `SheetMusicError.corruptedContainer` now carry a structured `ScoreFault`
+  instead of a free-text reason, and `SheetMusicError.invalidEdit` now carries
+  an `EditRefusal` with a typed refusal `reason`. Hosts should switch over the
+  structured payloads and use their stable codes for presentation instead of
+  matching English strings.
 - `AudioMidiBridge` and `LoopHighlightTickResolver` moved from `SheetMusicAndroidJNI` to
   `SheetMusicBridgeCore`, so Android and WebAssembly share one implementation. The `native*` entry
   points stayed behind — jextract only makes a JNI symbol where the declaration physically sits.

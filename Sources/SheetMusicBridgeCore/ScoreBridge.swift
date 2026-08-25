@@ -76,7 +76,10 @@ public enum ScoreBridge {
             return try MidiImporter.parse(bytes)
         case .unknown:
             throw SheetMusicError.malformedScore(
-                reason: "unrecognized score format (not mscx/mscz/musicxml/mxl/mid)",
+                ScoreFault(
+                    code: "bridge.scoreFormat.unrecognized",
+                    message: "unrecognized score format (not mscx/mscz/musicxml/mxl/mid)",
+                ),
             )
         }
     }

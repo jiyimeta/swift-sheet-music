@@ -58,35 +58,26 @@ public struct CreateTuplet: EditCommand {
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "CreateTuplet: no element at \(location)",
-            )
+            throw Self.refused(.targetNotFound(location))
         }
         if voice.tuplets.contains(where: {
             $0.startIndex <= location.elementIndex
                 && location.elementIndex <= $0.endIndex
         }) {
-            throw SheetMusicError.invalidEdit(
-                reason: "CreateTuplet: target at \(location) "
-                    + "already sits inside another tuplet",
-            )
+            throw Self.refused(.insideTuplet(at: location))
         }
         guard case let .chord(target)
             = voice.elements[location.elementIndex]
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "CreateTuplet: target at \(location) "
-                    + "is not a chord or rest",
-            )
+            throw Self.refused(.wrongElementKind(at: location, expected: .chordOrRest))
         }
         let division = score.division
         let targetTicks = target.duration.ticks(division: division)
         guard targetTicks % actualNotes == 0 else {
-            throw SheetMusicError.invalidEdit(
-                reason: "CreateTuplet: target's \(targetTicks) "
-                    + "ticks don't divide evenly into "
-                    + "\(actualNotes) members",
-            )
+            throw Self.refused(.indivisibleTuplet(
+                targetTicks: targetTicks,
+                actualNotes: actualNotes,
+            ))
         }
         let memberTicks = targetTicks / actualNotes
         let memberDuration: NoteDuration = .fraction(Fraction(

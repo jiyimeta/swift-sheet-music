@@ -31,9 +31,7 @@ enum MusicXMLNoteDecoder {
         let isChord = node.children.contains(where: { $0.name == "chord" })
 
         guard let duration = MusicXMLDuration.decode(note: node, divisions: divisions) else {
-            throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <note> missing a usable <duration> or <type>",
-            )
+            throw missingUsableDuration()
         }
 
         let fermata = decodeFermata(node)
@@ -70,9 +68,7 @@ enum MusicXMLNoteDecoder {
                 (midi, tpc) = try PitchDecoder.decodeUnpitched(unpitchedNode)
             }
         } else {
-            throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <note> has neither <pitch>, <unpitched>, nor <rest>",
-            )
+            throw missingNoteBody()
         }
         let accidental = decodeAccidental(node)
         let (tieForward, tieBack) = decodeTies(node)
@@ -117,6 +113,22 @@ enum MusicXMLNoteDecoder {
         }
         let velocity = Int((percent * 0.9).rounded())
         return velocity > 0 ? velocity : 0
+    }
+
+    private static func missingUsableDuration() -> SheetMusicError {
+        .malformedScore(ScoreFault(
+            code: "musicxml.note.missingUsableDuration",
+            message: "MusicXML: <note> missing a usable <duration> or <type>",
+            location: "note",
+        ))
+    }
+
+    private static func missingNoteBody() -> SheetMusicError {
+        .malformedScore(ScoreFault(
+            code: "musicxml.note.missingPitchUnpitchedOrRest",
+            message: "MusicXML: <note> has neither <pitch>, <unpitched>, nor <rest>",
+            location: "note",
+        ))
     }
 
     /// MusicXML encodes breath marks and caesuras under

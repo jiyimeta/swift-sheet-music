@@ -7,10 +7,12 @@
 //   Scripts/wasm-build-web.sh
 //   npm --prefix Web/sheet-music-web run build
 import {
-  drawPage,
+  drawTile,
   loadScoreFonts,
   loadSheetMusic,
-  planPageTiles,
+  planViewportTiles,
+  reconcileMounts,
+  splitIntoBands,
 } from "../../Web/sheet-music-web/dist-esm/index.js";
 import {
   createPlaybackEngine,
@@ -20,15 +22,23 @@ import {
 const PACKAGE_ROOT = new URL("../../Web/sheet-music-web/", import.meta.url);
 const status = document.querySelector("#status");
 const pagesHost = document.querySelector("#pages");
+const scoreSpacer = document.querySelector("#score-spacer");
+const tileLayer = document.querySelector("#tile-layer");
+const overlayLayer = document.querySelector("#overlay-layer");
 const fileInput = document.querySelector("#file");
 
 const soundFontInput = document.querySelector("#soundfont");
 const playButton = document.querySelector("#play");
 const stopButton = document.querySelector("#stop");
+const editModeBox = document.querySelector("#edit-mode");
 const countInBox = document.querySelector("#countin");
 const metronomeBox = document.querySelector("#metronome");
 const rateSlider = document.querySelector("#rate");
 const rateReadout = document.querySelector("#rate-readout");
+const zoomSlider = document.querySelector("#zoom");
+const zoomReadout = document.querySelector("#zoom-readout");
+const staffSizeSlider = document.querySelector("#staff-size");
+const staffSizeReadout = document.querySelector("#staff-size-readout");
 const loopFrom = document.querySelector("#loop-from");
 const loopTo = document.querySelector("#loop-to");
 const loopApply = document.querySelector("#loop-apply");
@@ -45,19 +55,54 @@ const mixerHost = document.querySelector("#mixer");
  * which is what keeps them sharp — the CSS width below scales the canvas back
  * down rather than scaling the bitmap up.
  */
-const PX_PER_MM = (96 / 25.4) * 2;
-const CSS_PX_PER_MM = 96 / 25.4;
+const BASE_CSS_PX_PER_MM = 96 / 25.4;
+const BASE_RASTER_SCALE = 2;
+const DEFAULT_ZOOM = 1;
+let zoom = DEFAULT_ZOOM;
+let pxPerMM = BASE_CSS_PX_PER_MM * BASE_RASTER_SCALE * zoom;
 
 let sheetMusic;
 let fonts;
 let openScore;
 
-/** One entry per drawn canvas, so an overlay can be placed on the right tile. */
+let pageModels = [];
 let tiles = [];
+let mountedTiles = new Map();
+let canvasPool = [];
+let documentHeightMM = 0;
+let documentWidthMM = 0;
+let bandCount = 0;
+let totalCommands = 0;
+let lastEditGeneration = 0;
 let soundFontBytes = null;
 let synthHost = null;
 let engine = null;
 let loopRange = null;
+let lastCursorRect = null;
+let editMode = false;
+let selectedItem = null;
+let selectedPitch = null;
+let editCount = 0;
+
+const CHROMATIC_SHARP_TPCS = [14, 21, 16, 23, 18, 13, 20, 15, 22, 17, 24, 19];
+const LETTER_PITCH_CLASSES = new Map([
+  ["C", 0],
+  ["D", 2],
+  ["E", 4],
+  ["F", 5],
+  ["G", 7],
+  ["A", 9],
+  ["B", 11],
+]);
+const DIGIT_DURATIONS = new Map([
+  ["1", "whole"],
+  ["2", "half"],
+  ["3", "quarter"],
+  ["4", "eighth"],
+  ["5", "sixteenth"],
+  ["6", "thirtySecond"],
+  ["7", "sixtyFourth"],
+]);
 
 async function boot() {
   sheetMusic = await loadSheetMusic({
@@ -85,94 +130,250 @@ async function boot() {
 function render(bytes) {
   openScore?.release();
   openScore = sheetMusic.loadScore(bytes);
+  selectedItem = null;
+  selectedPitch = null;
+  editCount = 0;
+  document.body.dataset.editRefusal = "";
+  if (editMode) {
+    openScore.beginEditing();
+  }
   const { title, composer, partCount, staffCount, openingQuarterBpm } =
     openScore.metadata;
   status.textContent =
     `${title || "untitled"}${composer ? ` — ${composer}` : ""} · ` +
     `${partCount} part(s), ${staffCount} stave(s), ♩ = ${Math.round(openingQuarterBpm)}`;
 
-  const pages = openScore.layout({ pageWidthMM: 210, pageHeightMM: 297 });
-  pagesHost.replaceChildren();
+  drawOpenScore();
+  resetPlayback();
+  updateEditDataset();
+  updateControls();
+}
+
+function cssPxPerMM() {
+  return BASE_CSS_PX_PER_MM * zoom;
+}
+
+function layoutRequest() {
+  return {
+    pageWidthMM: 210,
+    pageHeightMM: 297,
+    options: { staffSize: Number(staffSizeSlider.value) },
+  };
+}
+
+function currentScrollTopMM() {
+  return pagesHost.scrollTop / cssPxPerMM();
+}
+
+function buildPageModels(pages) {
+  pageModels = [];
   tiles = [];
-  let tileCount = 0;
+  documentHeightMM = 0;
+  documentWidthMM = 0;
+  bandCount = 0;
+  totalCommands = 0;
+
   for (const page of pages) {
-    // The bridge's only layout mode is continuous, so a page is the whole
-    // document — 18 metres for a six-part score, which is 135 000 pixels here.
-    // A canvas that tall silently draws nothing, so it gets tiled.
-    for (const tile of planPageTiles(page, PX_PER_MM)) {
-      const holder = document.createElement("div");
-      holder.className = "tile";
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(page.widthMM * PX_PER_MM);
-      canvas.height = Math.round(tile.heightMM * PX_PER_MM);
-      canvas.style.width = `${page.widthMM * CSS_PX_PER_MM}px`;
-      drawPage(canvas.getContext("2d"), page, PX_PER_MM, fonts, {
-        offsetMM: tile.offsetMM,
-      });
-      // Click-to-seek. The tile knows its own document-Y offset, so a click
-      // turns into document millimetres with the one scale factor already in
-      // play — the same unit the bridge answers cursor rectangles in.
-      const tileOffsetMM = tile.offsetMM;
-      canvas.addEventListener("click", (event) => {
-        if (!engine) return;
-        const box = canvas.getBoundingClientRect();
-        const xMM = (event.clientX - box.left) / CSS_PX_PER_MM;
-        const yMM = (event.clientY - box.top) / CSS_PX_PER_MM + tileOffsetMM;
-        engine.seekToPoint(xMM, yMM);
-        document.body.dataset.lastTap = `${xMM.toFixed(1)},${yMM.toFixed(1)}`;
-        document.body.dataset.lastTapSeconds = String(
-          openScore?.playerSecondsAtPoint(xMM, yMM),
-        );
-      });
-      holder.append(canvas);
-      pagesHost.append(holder);
+    const bands = splitIntoBands(page);
+    const pageOffsetMM = documentHeightMM;
+    const pageTiles = planViewportTiles(page, pxPerMM);
+    pageModels.push({ page, bands, pageOffsetMM });
+    bandCount += bands.length;
+    documentHeightMM += page.heightMM;
+    documentWidthMM = Math.max(documentWidthMM, page.widthMM);
+    for (const tile of pageTiles) {
       tiles.push({
-        holder,
-        offsetMM: tile.offsetMM,
+        page,
+        bands,
+        pageOffsetMM,
+        tile,
+        offsetMM: pageOffsetMM + tile.offsetMM,
         heightMM: tile.heightMM,
       });
-      tileCount += 1;
+      totalCommands += page.commands.length;
     }
   }
-  document.body.dataset.pageCount = String(pages.length);
-  document.body.dataset.tileCount = String(tileCount);
+}
+
+function replanTiles() {
+  tiles = [];
+  totalCommands = 0;
+  for (const model of pageModels) {
+    for (const tile of planViewportTiles(model.page, pxPerMM)) {
+      tiles.push({
+        page: model.page,
+        bands: model.bands,
+        pageOffsetMM: model.pageOffsetMM,
+        tile,
+        offsetMM: model.pageOffsetMM + tile.offsetMM,
+        heightMM: tile.heightMM,
+      });
+      totalCommands += model.page.commands.length;
+    }
+  }
+}
+
+function resizeDocument() {
+  const scale = cssPxPerMM();
+  scoreSpacer.style.width = `${documentWidthMM * scale}px`;
+  scoreSpacer.style.height = `${documentHeightMM * scale}px`;
+}
+
+function takeCanvas() {
+  return canvasPool.pop() ?? document.createElement("canvas");
+}
+
+function releaseCanvas(canvas) {
+  canvas.width = 0;
+  canvas.height = 0;
+  canvas.removeAttribute("style");
+  canvasPool.push(canvas);
+}
+
+function dropMountedTiles() {
+  for (const mounted of mountedTiles.values()) {
+    mounted.holder.remove();
+    releaseCanvas(mounted.canvas);
+  }
+  mountedTiles = new Map();
+}
+
+function tileBandCommandCount(tileInfo) {
+  const tileBottomMM = tileInfo.tile.offsetMM + tileInfo.tile.heightMM;
+  let count = 0;
+  for (const band of tileInfo.bands) {
+    if (band.topMM < tileBottomMM && band.topMM + band.heightMM > tileInfo.tile.offsetMM) {
+      count += band.commands.length;
+    }
+  }
+  return count;
+}
+
+function mountTile(index) {
+  if (mountedTiles.has(index)) return;
+  const tileInfo = tiles[index];
+  if (!tileInfo) return;
+
+  const scale = cssPxPerMM();
+  const holder = document.createElement("div");
+  holder.className = "tile";
+  holder.dataset.offsetMm = String(tileInfo.offsetMM);
+  holder.dataset.heightMm = String(tileInfo.heightMM);
+  holder.style.left = "0";
+  holder.style.top = `${tileInfo.offsetMM * scale}px`;
+  holder.style.width = `${tileInfo.page.widthMM * scale}px`;
+  holder.style.height = `${tileInfo.heightMM * scale}px`;
+
+  const canvas = takeCanvas();
+  canvas.width = Math.round(tileInfo.page.widthMM * pxPerMM);
+  canvas.height = Math.round(tileInfo.heightMM * pxPerMM);
+  canvas.style.width = `${tileInfo.page.widthMM * scale}px`;
+  canvas.style.height = `${tileInfo.heightMM * scale}px`;
+  drawTile(canvas.getContext("2d"), tileInfo.bands, pxPerMM, fonts, tileInfo.tile);
+
+  holder.append(canvas);
+  tileLayer.append(holder);
+  mountedTiles.set(index, {
+    holder,
+    canvas,
+    pixels: canvas.width * canvas.height,
+    walkedCommands: tileBandCommandCount(tileInfo),
+  });
+}
+
+function unmountTile(index) {
+  const mounted = mountedTiles.get(index);
+  if (!mounted) return;
+  mounted.holder.remove();
+  releaseCanvas(mounted.canvas);
+  mountedTiles.delete(index);
+}
+
+function reconcileVisibleTiles() {
+  const window = {
+    scrollTopMM: currentScrollTopMM(),
+    viewportMM: pagesHost.clientHeight / cssPxPerMM(),
+  };
+  const next = reconcileMounts(tiles, window, new Set(mountedTiles.keys()));
+  for (const index of next.unmount) unmountTile(index);
+  for (const index of next.mount) mountTile(index);
+  updateViewportDataset();
+}
+
+function updateRenderDataset() {
+  document.body.dataset.pageCount = String(pageModels.length);
+  document.body.dataset.tileCount = String(tiles.length);
+  document.body.dataset.bandCount = String(bandCount);
+  document.body.dataset.totalCommands = String(totalCommands);
+}
+
+function updateViewportDataset() {
+  let mountedPixels = 0;
+  let walkedCommands = 0;
+  for (const mounted of mountedTiles.values()) {
+    mountedPixels += mounted.pixels;
+    walkedCommands += mounted.walkedCommands;
+  }
+  document.body.dataset.mountedTiles = String(mountedTiles.size);
+  document.body.dataset.mountedPixels = String(mountedPixels);
+  document.body.dataset.scrollTopMm = currentScrollTopMM().toFixed(3);
+  document.body.dataset.pxPerMm = pxPerMM.toFixed(6);
+  document.body.dataset.walkedCommands = String(walkedCommands);
+}
+
+function redrawOverlays() {
+  drawCursor(lastCursorRect);
+  drawLoopHighlight();
+  drawSelectionAndCaret();
+}
+
+function rebuildRaster({ anchorMM }) {
+  dropMountedTiles();
+  replanTiles();
+  resizeDocument();
+  pagesHost.scrollTop = anchorMM * cssPxPerMM();
+  reconcileVisibleTiles();
+  redrawOverlays();
+  updateRenderDataset();
+  updateViewportDataset();
+}
+
+function drawOpenScore({ preserveScroll = false } = {}) {
+  if (!openScore) return;
+  const anchorMM = preserveScroll ? currentScrollTopMM() : 0;
+  const pages = openScore.layout(layoutRequest());
+  lastEditGeneration = openScore.editGeneration;
+  buildPageModels(pages);
+  resizeDocument();
+  dropMountedTiles();
+  pagesHost.scrollTop = anchorMM * cssPxPerMM();
+  reconcileVisibleTiles();
+  redrawOverlays();
+  updateRenderDataset();
 
   const summary = openScore.playbackSummary();
   loopFrom.max = String(summary?.measureCount ?? 1);
   loopTo.max = String(summary?.measureCount ?? 1);
   loopTo.value = String(summary?.measureCount ?? 1);
-  resetPlayback();
-  updateControls();
 }
 
 // MARK: overlays
 
-/**
- * Places `element` at a document-millimetre rectangle, on whichever tile that
- * rectangle starts in. A rectangle straddling a tile boundary is clipped to the
- * tile it starts on — the tiling exists because a canvas taller than 65 535 px
- * silently draws nothing, and a highlight losing its bottom edge at that seam is
- * a smaller problem than the machinery to split it.
- */
-function placeOnTile(element, xMM, yMM, widthMM, heightMM) {
-  const tile = tiles.find(
-    (candidate) =>
-      yMM >= candidate.offsetMM && yMM < candidate.offsetMM + candidate.heightMM,
-  );
-  if (!tile) return false;
-  element.style.left = `${xMM * CSS_PX_PER_MM}px`;
-  element.style.top = `${(yMM - tile.offsetMM) * CSS_PX_PER_MM}px`;
-  element.style.width = `${widthMM * CSS_PX_PER_MM}px`;
-  element.style.height = `${heightMM * CSS_PX_PER_MM}px`;
-  tile.holder.append(element);
-  return true;
+function clearOverlays(className) {
+  for (const node of overlayLayer.querySelectorAll(`.${className}`)) node.remove();
 }
 
-function clearOverlays(className) {
-  for (const node of pagesHost.querySelectorAll(`.${className}`)) node.remove();
+function placeInDocument(element, xMM, yMM, widthMM, heightMM) {
+  const scale = cssPxPerMM();
+  element.style.left = `${xMM * scale}px`;
+  element.style.top = `${yMM * scale}px`;
+  element.style.width = `${widthMM * scale}px`;
+  element.style.height = `${heightMM * scale}px`;
+  overlayLayer.append(element);
 }
 
 function drawCursor(rect) {
+  lastCursorRect = rect;
   clearOverlays("cursor");
   if (!rect) {
     document.body.dataset.cursorY = "";
@@ -180,12 +381,11 @@ function drawCursor(rect) {
   }
   const element = document.createElement("div");
   element.className = "cursor";
-  if (placeOnTile(element, rect.xMM, rect.yMM, rect.widthMM, rect.heightMM)) {
-    // Playwright reads these rather than pixels: what matters is that the
-    // cursor advances, and sampling the canvas would also pick up the notes.
-    document.body.dataset.cursorY = rect.yMM.toFixed(3);
-    document.body.dataset.cursorMeasure = String(rect.measureIndex);
-  }
+  placeInDocument(element, rect.xMM, rect.yMM, rect.widthMM, rect.heightMM);
+  // Playwright reads these rather than pixels: what matters is that the cursor
+  // advances, and sampling the canvas would also pick up the notes.
+  document.body.dataset.cursorY = rect.yMM.toFixed(3);
+  document.body.dataset.cursorMeasure = String(rect.measureIndex);
 }
 
 function drawLoopHighlight() {
@@ -195,7 +395,228 @@ function drawLoopHighlight() {
   for (let i = 0; i + 3 < rects.length; i += 4) {
     const element = document.createElement("div");
     element.className = "loop-highlight";
-    placeOnTile(element, rects[i], rects[i + 1], rects[i + 2], rects[i + 3]);
+    placeInDocument(element, rects[i], rects[i + 1], rects[i + 2], rects[i + 3]);
+  }
+}
+
+function drawSelectionAndCaret() {
+  clearOverlays("selection");
+  clearOverlays("caret");
+  document.body.dataset.caretX = "";
+  document.body.dataset.caretY = "";
+  if (!openScore || !selectedItem) return;
+  const rect = openScore.caretRect(selectedItem, 3);
+  if (!rect) return;
+
+  const selection = document.createElement("div");
+  selection.className = "selection";
+  placeInDocument(selection, rect.xMM, rect.yMM, rect.widthMM, rect.heightMM);
+
+  const caret = document.createElement("div");
+  caret.className = "caret";
+  placeInDocument(caret, rect.xMM, rect.yMM, 0.45, rect.heightMM);
+  document.body.dataset.caretX = rect.xMM.toFixed(3);
+  document.body.dataset.caretY = rect.yMM.toFixed(3);
+}
+
+function selectedItemToken(item) {
+  if (!item) return "";
+  return (
+    `${item.kind}:` +
+    [
+      item.partIndex,
+      item.staffIndexInPart,
+      item.measureIndex,
+      item.voiceIndex,
+      item.elementIndex,
+      item.noteIndexInChord,
+    ].join("/")
+  );
+}
+
+function updateEditDataset() {
+  const state = openScore?.editState();
+  document.body.dataset.editMode = editMode ? "true" : "";
+  document.body.dataset.selectedItem = selectedItemToken(selectedItem);
+  document.body.dataset.selectedPitch =
+    selectedItem?.kind === "note" && selectedPitch !== null ? String(selectedPitch) : "";
+  document.body.dataset.editCount = String(editCount);
+  document.body.dataset.canUndo = state?.canUndo ? "true" : "";
+  document.body.dataset.canRedo = state?.canRedo ? "true" : "";
+  document.body.dataset.fingerprint = openScore?.fingerprint ?? "";
+}
+
+function clearSelection() {
+  selectedItem = null;
+  selectedPitch = null;
+  clearOverlays("selection");
+  clearOverlays("caret");
+  updateEditDataset();
+}
+
+function selectAtPoint(xMM, yMM) {
+  if (!openScore) return;
+  const item = openScore.hitTest(xMM, yMM, 0);
+  if (!item) {
+    clearSelection();
+    return;
+  }
+  selectedItem = item;
+  selectedPitch = item.kind === "note" ? item.pitch : null;
+  drawSelectionAndCaret();
+  document.body.dataset.editRefusal = "";
+  updateEditDataset();
+}
+
+function relayoutAfterAcceptedEdit(keepSelection) {
+  if (openScore?.editGeneration !== lastEditGeneration) {
+    drawOpenScore({ preserveScroll: true });
+  }
+  if (!keepSelection) {
+    selectedItem = null;
+    selectedPitch = null;
+  }
+  drawSelectionAndCaret();
+  updateEditDataset();
+  updateControls();
+}
+
+function applyDemoEdit(intent) {
+  if (!openScore) return false;
+  const outcome = openScore.applyEdit(intent);
+  document.body.dataset.editRefusal = outcome.accepted ? "" : outcome.code;
+  if (!outcome.accepted) {
+    updateEditDataset();
+    return false;
+  }
+  editCount += 1;
+  relayoutAfterAcceptedEdit(true);
+  return true;
+}
+
+function runUndoRedo(operation) {
+  if (!openScore) return;
+  const outcome = operation === "undo" ? openScore.undo() : openScore.redo();
+  document.body.dataset.editRefusal = outcome.accepted ? "" : outcome.code;
+  if (!outcome.accepted) {
+    updateEditDataset();
+    return;
+  }
+  editCount += 1;
+  relayoutAfterAcceptedEdit(false);
+}
+
+function noteRef(item) {
+  return {
+    partIndex: item.partIndex,
+    staffIndexInPart: item.staffIndexInPart,
+    measureIndex: item.measureIndex,
+    voiceIndex: item.voiceIndex,
+    elementIndex: item.elementIndex,
+    noteIndexInChord: item.noteIndexInChord,
+  };
+}
+
+function elementRef(item) {
+  return {
+    partIndex: item.partIndex,
+    staffIndexInPart: item.staffIndexInPart,
+    measureIndex: item.measureIndex,
+    voiceIndex: item.voiceIndex,
+    elementIndex: item.elementIndex,
+  };
+}
+
+function pitchNear(letter, referencePitch) {
+  const pitchClass = LETTER_PITCH_CLASSES.get(letter);
+  if (pitchClass === undefined) return referencePitch;
+  let pitch = Math.floor(referencePitch / 12) * 12 + pitchClass;
+  while (pitch - referencePitch > 6) pitch -= 12;
+  while (referencePitch - pitch > 6) pitch += 12;
+  return pitch;
+}
+
+function handleEditKey(event) {
+  if (!editMode || !openScore) return;
+  const undoKey = event.key.toLowerCase() === "z" && (event.metaKey || event.ctrlKey);
+  if (undoKey) {
+    event.preventDefault();
+    runUndoRedo(event.shiftKey ? "redo" : "undo");
+    return;
+  }
+  if (!selectedItem) return;
+
+  if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+    if (selectedItem.kind !== "note" || selectedPitch === null) return;
+    event.preventDefault();
+    const pitch = selectedPitch + (event.key === "ArrowUp" ? 1 : -1);
+    if (
+      applyDemoEdit({
+        type: "setNotePitch",
+        at: noteRef(selectedItem),
+        pitch,
+        tpc: CHROMATIC_SHARP_TPCS[((pitch % 12) + 12) % 12],
+        accidental: null,
+      })
+    ) {
+      selectedPitch = pitch;
+      selectedItem = {
+        ...selectedItem,
+        pitch,
+        tpc: CHROMATIC_SHARP_TPCS[((pitch % 12) + 12) % 12],
+      };
+      updateEditDataset();
+    }
+    return;
+  }
+
+  const letter = event.key.toUpperCase();
+  if (LETTER_PITCH_CLASSES.has(letter)) {
+    if (selectedItem.kind !== "note" && selectedItem.kind !== "rest") return;
+    event.preventDefault();
+    const pitch = pitchNear(letter, selectedPitch ?? 60);
+    const intent =
+      selectedItem.kind === "rest"
+        ? {
+            type: "inputNote",
+            at: elementRef(selectedItem),
+            pitch,
+            tpc: CHROMATIC_SHARP_TPCS[pitch % 12],
+          }
+        : {
+            type: "writeNote",
+            at: elementRef(selectedItem),
+            pitch,
+            tpc: CHROMATIC_SHARP_TPCS[pitch % 12],
+          };
+    if (applyDemoEdit(intent)) {
+      selectedItem = {
+        ...selectedItem,
+        kind: "note",
+        pitch,
+        tpc: CHROMATIC_SHARP_TPCS[pitch % 12],
+      };
+      selectedPitch = pitch;
+      updateEditDataset();
+    }
+    return;
+  }
+
+  const duration = DIGIT_DURATIONS.get(event.key);
+  if (duration) {
+    if (selectedItem.kind !== "note" && selectedItem.kind !== "rest") return;
+    event.preventDefault();
+    applyDemoEdit({
+      type: selectedItem.kind === "note" ? "setChordDuration" : "setRestDuration",
+      at: elementRef(selectedItem),
+      duration,
+    });
+    return;
+  }
+
+  if (event.key === "Backspace") {
+    event.preventDefault();
+    applyDemoEdit({ type: "delete", at: elementRef(selectedItem) });
   }
 }
 
@@ -205,6 +626,7 @@ function resetPlayback() {
   engine?.dispose();
   engine = null;
   loopRange = null;
+  lastCursorRect = null;
   clearOverlays("cursor");
   clearOverlays("loop-highlight");
   mixerHost.replaceChildren();
@@ -331,12 +753,31 @@ function reflectAudibility() {
 
 function updateControls() {
   const ready = Boolean(openScore) && Boolean(soundFontBytes);
-  playButton.disabled = !ready;
-  stopButton.disabled = !engine;
-  loopApply.disabled = !engine;
-  loopClear.disabled = !engine;
-  exportButton.disabled = !engine?.canExport;
+  playButton.disabled = !ready || editMode;
+  stopButton.disabled = !engine || editMode;
+  loopApply.disabled = !engine || editMode;
+  loopClear.disabled = !engine || editMode;
+  exportButton.disabled = !engine?.canExport || editMode;
   playButton.textContent = engine?.state === "playing" ? "Pause" : "Play";
+}
+
+function setEditMode(enabled) {
+  if (editMode === enabled) return;
+  editMode = enabled;
+  resetPlayback();
+  selectedItem = null;
+  selectedPitch = null;
+  if (openScore) {
+    if (enabled) {
+      openScore.beginEditing();
+    } else {
+      openScore.endEditing();
+    }
+  }
+  clearOverlays("selection");
+  clearOverlays("caret");
+  updateEditDataset();
+  updateControls();
 }
 
 /**
@@ -453,6 +894,65 @@ loopClear.addEventListener("click", () => {
   loopRange = null;
   engine?.setLoop(null);
   clearOverlays("loop-highlight");
+});
+
+editModeBox.addEventListener("change", () => {
+  setEditMode(editModeBox.checked);
+});
+
+document.addEventListener("keydown", handleEditKey);
+
+pagesHost.addEventListener("scroll", () => {
+  reconcileVisibleTiles();
+});
+
+pagesHost.addEventListener("click", (event) => {
+  if (!openScore) return;
+  // The spacer's bounding rect is already in viewport coordinates and already
+  // shifted by the scroll, so both axes are one subtraction. Reaching for
+  // `scrollTop` and `offsetTop` instead double-counts the scroll container's
+  // own padding, which puts every tap a few millimetres off — far enough to
+  // miss the staff it was aimed at.
+  const spacerBox = scoreSpacer.getBoundingClientRect();
+  const scale = cssPxPerMM();
+  const xMM = (event.clientX - spacerBox.left) / scale;
+  const yMM = (event.clientY - spacerBox.top) / scale;
+  if (xMM < 0 || yMM < 0 || xMM > documentWidthMM || yMM > documentHeightMM) {
+    if (editMode) clearSelection();
+    return;
+  }
+  if (editMode) {
+    selectAtPoint(xMM, yMM);
+    return;
+  }
+  if (!engine) return;
+  engine.seekToPoint(xMM, yMM);
+  document.body.dataset.lastTap = `${xMM.toFixed(1)},${yMM.toFixed(1)}`;
+  document.body.dataset.lastTapSeconds = String(
+    openScore?.playerSecondsAtPoint(xMM, yMM),
+  );
+});
+
+zoomSlider.addEventListener("input", () => {
+  const anchorMM = currentScrollTopMM();
+  zoom = Number(zoomSlider.value);
+  pxPerMM = BASE_CSS_PX_PER_MM * BASE_RASTER_SCALE * zoom;
+  zoomReadout.textContent = `${zoom.toFixed(2)}×`;
+  if (pageModels.length > 0) {
+    rebuildRaster({ anchorMM });
+  } else {
+    updateViewportDataset();
+  }
+});
+
+staffSizeSlider.addEventListener("input", () => {
+  staffSizeReadout.textContent = staffSizeSlider.value;
+});
+
+staffSizeSlider.addEventListener("change", () => {
+  if (openScore) {
+    drawOpenScore({ preserveScroll: true });
+  }
 });
 
 exportButton.addEventListener("click", async () => {

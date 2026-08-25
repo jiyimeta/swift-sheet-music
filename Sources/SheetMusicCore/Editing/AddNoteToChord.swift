@@ -47,22 +47,14 @@ public struct AddNoteToChord: EditCommand {
         guard case var .chord(chord) = score[location],
               !chord.notes.isEmpty
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "AddNoteToChord: element at \(location) "
-                    + "is not a chord (need at least one existing "
-                    + "note; use ReplaceVoiceElement to seed a "
-                    + "chord onto a rest)",
-            )
+            throw Self.refused(.wrongElementKind(at: location, expected: .chord))
         }
         let original = chord
         let added = chord.notes.tryAppend(Note(
             pitch: pitch, tpc: tpc, accidental: accidental,
         ))
         guard added else {
-            throw SheetMusicError.invalidEdit(
-                reason: "AddNoteToChord: chord already contains a "
-                    + "note at MIDI pitch \(pitch)",
-            )
+            throw Self.refused(.duplicatePitch(pitch))
         }
         score[location] = .chord(chord)
         return ReplaceVoiceElement(

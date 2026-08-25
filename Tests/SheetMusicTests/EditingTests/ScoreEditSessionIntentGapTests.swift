@@ -146,7 +146,7 @@ struct ScoreEditSessionIntentGapTests {
         #expect(!session.apply(.writeNote(at: slot, pitch: 62, tpc: 16, duration: .quarter)))
 
         #expect(session.score == score)
-        #expect(session.lastRefusalReason != nil)
+        #expect(session.lastRefusal != nil)
     }
 
     /// The whole chain is one undo step, like every other intent.

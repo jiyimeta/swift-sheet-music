@@ -21,11 +21,11 @@ import SheetMusicFoundation
 /// mixer-owned channel so a live mixer is the sole authority.
 ///
 /// Android: `nativeRenderMidi`. Empty for an unknown handle or a render failure.
-@JS public func renderMidi(handle: Int) -> [UInt8] {
+@JS public func renderMidi(handle: Int) -> JSUint8Array {
     guard let score = scoreTable.value(for: Int64(handle)),
           let bytes = try? AudioMidiBridge.renderMidi(score: score)
-    else { return [] }
-    return [UInt8](bytes)
+    else { return JSUint8Array(length: 0) }
+    return bytes.bridgedUint8Array
 }
 
 /// The metronome's own sequence — the score's tempo map plus the click track —
@@ -38,11 +38,11 @@ import SheetMusicFoundation
 ///
 /// Android: `nativeRenderMetronomeMidi`. Empty for an unknown handle or a
 /// render failure — the host then simply runs without a metronome.
-@JS public func renderMetronomeMidi(handle: Int) -> [UInt8] {
+@JS public func renderMetronomeMidi(handle: Int) -> JSUint8Array {
     guard let score = scoreTable.value(for: Int64(handle)),
           let bytes = try? AudioMidiBridge.renderMetronomeMidi(score: score)
-    else { return [] }
-    return [UInt8](bytes)
+    else { return JSUint8Array(length: 0) }
+    return bytes.bridgedUint8Array
 }
 
 /// The metronome sequence with a count-in in front of it: the pre-roll's clicks
@@ -66,15 +66,15 @@ import SheetMusicFoundation
 ///
 /// Empty when the handle is unknown, the position is outside the score, or it
 /// has no count-in.
-@JS public func renderCountInMetronomeMidi(handle: Int, fromPlayerSeconds: Double) -> [UInt8] {
-    guard let score = scoreTable.value(for: Int64(handle)) else { return [] }
+@JS public func renderCountInMetronomeMidi(handle: Int, fromPlayerSeconds: Double) -> JSUint8Array {
+    guard let score = scoreTable.value(for: Int64(handle)) else { return JSUint8Array(length: 0) }
     let clock = PlaybackClockCache.clock(for: Int64(handle), score: score)
-    guard let frame = clock.frame(atPlayerSeconds: fromPlayerSeconds) else { return [] }
+    guard let frame = clock.frame(atPlayerSeconds: fromPlayerSeconds) else { return JSUint8Array(length: 0) }
     let baseTick = clock.unrolledTick(fromNotatedTick: frame.tick)
     guard let bytes = try? AudioMidiBridge.renderCountInMetronomeMidi(
         score: score, cursor: frame.cursor, baseTick: baseTick,
-    ) else { return [] }
-    return [UInt8](bytes)
+    ) else { return JSUint8Array(length: 0) }
+    return bytes.bridgedUint8Array
 }
 
 /// How long the count-in for `fromPlayerSeconds` lasts, in seconds. The host
@@ -115,14 +115,14 @@ import SheetMusicFoundation
 /// clicks". Accepts what `WavPcmReader` accepts: uncompressed PCM.
 ///
 /// Android: `nativeBuildClickSoundFont`.
-@JS public func buildClickSoundFont(strongWav: [UInt8], weakWav: [UInt8]) -> [UInt8] {
-    guard let strong = try? WavPcmReader.read(Data(strongWav)),
-          let weak = try? WavPcmReader.read(Data(weakWav))
-    else { return [] }
-    return [UInt8](ClickSoundFontBuilder.build(
+@JS public func buildClickSoundFont(strongWav: JSUint8Array, weakWav: JSUint8Array) -> JSUint8Array {
+    guard let strong = try? WavPcmReader.read(strongWav.bridgedData),
+          let weak = try? WavPcmReader.read(weakWav.bridgedData)
+    else { return JSUint8Array(length: 0) }
+    return ClickSoundFontBuilder.build(
         strong: strong.samples, strongRate: strong.sampleRate,
         weak: weak.samples, weakRate: weak.sampleRate,
-    ))
+    ).bridgedUint8Array
 }
 
 // MARK: - Timeline

@@ -18,7 +18,11 @@ enum MXLReader {
             return try reader.read(path: chosen.path)
         } catch let error as ZipError {
             throw SheetMusicError.corruptedContainer(
-                reason: "MXL: failed to extract \(chosen.path): \(error)",
+                ScoreFault(
+                    code: error.faultCode,
+                    message: "MXL: failed to extract \(chosen.path): \(error)",
+                    location: chosen.path,
+                ),
             )
         }
     }
@@ -33,7 +37,10 @@ enum MXLReader {
             return try ZipReader(data: data)
         } catch let error as ZipError {
             throw SheetMusicError.corruptedContainer(
-                reason: "MXL: could not open ZIP: \(error)",
+                ScoreFault(
+                    code: error.faultCode,
+                    message: "MXL: could not open ZIP: \(error)",
+                ),
             )
         }
     }
@@ -41,7 +48,11 @@ enum MXLReader {
     private static func readRootFiles(in reader: ZipReader) throws -> [MusicXMLContainer.RootFile] {
         guard reader.contains(path: containerPath) else {
             throw SheetMusicError.corruptedContainer(
-                reason: "MXL: container.xml missing or has no rootfiles",
+                ScoreFault(
+                    code: "mxl.container.missingRootfiles",
+                    message: "MXL: container.xml missing or has no rootfiles",
+                    location: containerPath,
+                ),
             )
         }
         let data: Data
@@ -49,21 +60,21 @@ enum MXLReader {
             data = try reader.read(path: containerPath)
         } catch let error as ZipError {
             throw SheetMusicError.corruptedContainer(
-                reason: "MXL: failed to extract container.xml: \(error)",
+                ScoreFault(
+                    code: error.faultCode,
+                    message: "MXL: failed to extract container.xml: \(error)",
+                    location: containerPath,
+                ),
             )
         }
         let root: XMLTreeNode
         do {
             root = try XMLTreeParser.parse(data)
         } catch {
-            throw SheetMusicError.corruptedContainer(
-                reason: "MXL: container.xml is not valid XML: \(error)",
-            )
+            throw invalidContainerXML(error)
         }
         guard root.name == "container" else {
-            throw SheetMusicError.corruptedContainer(
-                reason: "MXL: container.xml root is <\(root.name)>, expected <container>",
-            )
+            throw wrongContainerRoot(root.name)
         }
         let rootsNode = root.first("rootfiles")
         let entries = rootsNode?.all("rootfile") ?? []
@@ -77,18 +88,46 @@ enum MXLReader {
             )
         }
         guard !result.isEmpty else {
-            throw SheetMusicError.corruptedContainer(
-                reason: "MXL: container.xml has no <rootfile> entries",
-            )
+            throw noRootfiles()
         }
         // Verify each rootfile actually exists in the archive — preserves
         // the "rootfile not found" error path of the previous version.
         for r in result where !reader.contains(path: r.path) {
-            throw SheetMusicError.corruptedContainer(
-                reason: "MXL: rootfile '\(r.path)' not found in archive",
-            )
+            throw missingRootfile(r.path)
         }
         return result
+    }
+
+    private static func invalidContainerXML(_ error: Error) -> SheetMusicError {
+        .corruptedContainer(ScoreFault(
+            code: "mxl.container.invalidXML",
+            message: "MXL: container.xml is not valid XML: \(error)",
+            location: containerPath,
+        ))
+    }
+
+    private static func wrongContainerRoot(_ name: String) -> SheetMusicError {
+        .corruptedContainer(ScoreFault(
+            code: "mxl.container.wrongRoot",
+            message: "MXL: container.xml root is <\(name)>, expected <container>",
+            location: name,
+        ))
+    }
+
+    private static func noRootfiles() -> SheetMusicError {
+        .corruptedContainer(ScoreFault(
+            code: "mxl.container.noRootfiles",
+            message: "MXL: container.xml has no <rootfile> entries",
+            location: containerPath,
+        ))
+    }
+
+    private static func missingRootfile(_ path: String) -> SheetMusicError {
+        .corruptedContainer(ScoreFault(
+            code: "mxl.rootfile.notFound",
+            message: "MXL: rootfile '\(path)' not found in archive",
+            location: path,
+        ))
     }
 
     private static func pickPreferred(_ roots: [MusicXMLContainer.RootFile]) -> MusicXMLContainer.RootFile {

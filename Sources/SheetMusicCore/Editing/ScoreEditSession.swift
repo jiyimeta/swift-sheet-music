@@ -33,10 +33,8 @@ public final class ScoreEditSession {
     }
 
     /// Why the most recent `apply` call returned `false`, or `nil` before the first call and after the most recent
-    /// one succeeded. This is the only diagnostic available when a mirror session and its authoritative counterpart
-    /// disagree about whether an edit landed — see `EditSessionBridge.nativeApplyEditIntent`'s doc comment on
-    /// Android for why a refusal there is always worth investigating, never a benign no-op.
-    public private(set) var lastRefusalReason: String?
+    /// one succeeded. Structured so a host UI can switch over the refusal rather than matching English.
+    public private(set) var lastRefusal: EditRefusal?
 
     /// Applies `intent` as one undo step. Returns `false` when the intent names nothing the score can act on, or
     /// when a sub-command refuses partway through a composite. In the latter case `CompositeEditCommand` rolls back
@@ -50,20 +48,20 @@ public final class ScoreEditSession {
         do {
             planned = try Self.command(for: intent, in: editor.score, depth: 0)
         } catch {
-            lastRefusalReason = Self.reason(for: error)
+            lastRefusal = Self.refusal(for: error, operation: "apply")
             return false
         }
         guard let planned else {
-            lastRefusalReason = "intent resolved to nothing to apply"
+            lastRefusal = EditRefusal(operation: "apply", reason: .nothingToApply)
             return false
         }
         do {
             try editor.apply(Self.renotatingAccidentals(planned, from: editor.score))
         } catch {
-            lastRefusalReason = Self.reason(for: error)
+            lastRefusal = Self.refusal(for: error, operation: "apply")
             return false
         }
-        lastRefusalReason = nil
+        lastRefusal = nil
         return true
     }
 
@@ -85,14 +83,15 @@ public final class ScoreEditSession {
         return CompositeEditCommand(commands: [command] + repairs, location: command.affectedLocation)
     }
 
-    /// Unwraps `SheetMusicError.invalidEdit`'s `reason` directly rather than the error's generic description, so
-    /// callers get the same message an `EditCommand` conformer authored, not `Optional(invalidEdit(reason:))`-shaped
-    /// noise.
-    private static func reason(for error: Error) -> String {
-        guard case let SheetMusicError.invalidEdit(reason) = error else {
-            return String(describing: error)
+    /// Preserves an edit refusal directly and wraps any escaped foreign error.
+    private static func refusal(for error: Error, operation: String) -> EditRefusal {
+        guard case let SheetMusicError.invalidEdit(refusal) = error else {
+            return EditRefusal(
+                operation: operation,
+                reason: .unexpected(description: String(describing: error)),
+            )
         }
-        return reason
+        return refusal
     }
 
     public func undo() -> Bool {
@@ -171,9 +170,10 @@ public final class ScoreEditSession {
             return DeleteVoiceElement(at: location)
         case let .composite(intents):
             guard depth < maxCompositeIntentDepth else {
-                throw SheetMusicError.invalidEdit(
-                    reason: "composite nesting exceeds depth limit (\(maxCompositeIntentDepth))",
-                )
+                throw SheetMusicError.invalidEdit(EditRefusal(
+                    operation: "composite",
+                    reason: .compositeTooDeep(limit: maxCompositeIntentDepth),
+                ))
             }
             let commands = try intents.compactMap { try command(for: $0, in: score, depth: depth + 1) }
             guard let first = commands.first else { return nil }
@@ -315,9 +315,13 @@ public final class ScoreEditSession {
             // attacker-shaped data as far as this function is concerned, so the check has to happen here, before
             // construction, rather than letting the trap take the whole process down.
             guard actualNotes > 1, normalNotes > 0 else {
-                throw SheetMusicError.invalidEdit(
-                    reason: "createTuplet: ratio \(actualNotes):\(normalNotes) is not a tuplet",
-                )
+                throw SheetMusicError.invalidEdit(EditRefusal(
+                    operation: "createTuplet",
+                    reason: .invalidTupletRatio(
+                        actualNotes: actualNotes,
+                        normalNotes: normalNotes,
+                    ),
+                ))
             }
             return CreateTuplet(at: location, actualNotes: actualNotes, normalNotes: normalNotes)
         }
@@ -346,7 +350,10 @@ public final class ScoreEditSession {
         at location: VoiceElementID, pitch: Int, tpc: Int, duration: NoteDuration?, in score: Score,
     ) throws -> any EditCommand {
         guard case let .chord(current)? = score[location], !current.notes.isEmpty else {
-            throw SheetMusicError.invalidEdit(reason: "writeNote: no chord at \(location)")
+            throw SheetMusicError.invalidEdit(EditRefusal(
+                operation: "writeNote",
+                reason: .wrongElementKind(at: location, expected: .chord),
+            ))
         }
         let repitch = SetNotePitch(
             at: NoteID(

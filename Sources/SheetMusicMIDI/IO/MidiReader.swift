@@ -12,7 +12,11 @@ public enum MidiReader {
         func require(_ n: Int) throws {
             guard cursor + n <= data.count else {
                 throw SheetMusicError.malformedScore(
-                    reason: "SMF truncated at offset \(cursor)",
+                    ScoreFault(
+                        code: "midi.smf.truncated",
+                        message: "SMF truncated at offset \(cursor)",
+                        location: "offset \(cursor)",
+                    ),
                 )
             }
         }
@@ -41,15 +45,26 @@ public enum MidiReader {
                 v = (v << 7) | Int(b & 0x7F)
                 if b & 0x80 == 0 { return v }
             }
-            throw SheetMusicError.malformedScore(reason: "VLQ too long")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "midi.vlq.tooLong",
+                message: "VLQ too long",
+            ))
         }
 
         guard try readBytes(4) == Data("MThd".utf8) else {
-            throw SheetMusicError.malformedScore(reason: "missing MThd header")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "midi.header.missingMThd",
+                message: "missing MThd header",
+                location: "MThd",
+            ))
         }
         let headerLen = try readUInt32BE()
         guard headerLen == 6 else {
-            throw SheetMusicError.malformedScore(reason: "unexpected MThd length \(headerLen)")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "midi.header.unexpectedLength",
+                message: "unexpected MThd length \(headerLen)",
+                location: "MThd",
+            ))
         }
         let format = try Int(readUInt16BE())
         let ntracks = try Int(readUInt16BE())
@@ -68,7 +83,11 @@ public enum MidiReader {
         var tracks: [MidiTrack] = []
         for _ in 0 ..< ntracks {
             guard try readBytes(4) == Data("MTrk".utf8) else {
-                throw SheetMusicError.malformedScore(reason: "missing MTrk")
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "midi.track.missingMTrk",
+                    message: "missing MTrk",
+                    location: "MTrk",
+                ))
             }
             let bodyLen = try Int(readUInt32BE())
             let bodyEnd = cursor + bodyLen
@@ -135,7 +154,11 @@ public enum MidiReader {
                         cursor += len
                     } else {
                         throw SheetMusicError.malformedScore(
-                            reason: "unknown status 0x\(String(status, radix: 16))",
+                            ScoreFault(
+                                code: "midi.event.unknownStatus",
+                                message: "unknown status 0x\(String(status, radix: 16))",
+                                location: "offset \(cursor)",
+                            ),
                         )
                     }
                 }

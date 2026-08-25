@@ -53,7 +53,7 @@ struct MixerStripTests {
 
     @Test("every part gets a strip")
     func stripPerPart() throws {
-        let handle = try loadScore(bytes: Self.mscz())
+        let handle = try loadScore(bytes: jsBytes(Self.mscz()))
         defer { releaseScore(handle: handle) }
         #expect(mixerStripCount(handle: handle) == 3)
     }
@@ -66,7 +66,7 @@ struct MixerStripTests {
 
     @Test("an out-of-range index is nil")
     func outOfRangeIndexIsNil() throws {
-        let handle = try loadScore(bytes: Self.mscz())
+        let handle = try loadScore(bytes: jsBytes(Self.mscz()))
         defer { releaseScore(handle: handle) }
         #expect(mixerStrip(handle: handle, index: -1) == nil)
         #expect(mixerStrip(handle: handle, index: 3) == nil)
@@ -76,7 +76,7 @@ struct MixerStripTests {
     /// score's own patches, because the sequence no longer does.
     @Test("the strips carry the score's programs and volumes")
     func stripsCarryProgramsAndVolumes() throws {
-        let handle = try loadScore(bytes: Self.mscz())
+        let handle = try loadScore(bytes: jsBytes(Self.mscz()))
         defer { releaseScore(handle: handle) }
         var strips: [MixerStrip] = []
         for index in 0 ..< mixerStripCount(handle: handle) {
@@ -92,7 +92,7 @@ struct MixerStripTests {
     /// part's index — the drum part is on channel 9 whatever its position.
     @Test("each strip names the channel its part actually sounds on")
     func stripsNameTheLiveChannel() throws {
-        let handle = try loadScore(bytes: Self.mscz())
+        let handle = try loadScore(bytes: jsBytes(Self.mscz()))
         defer { releaseScore(handle: handle) }
         var strips: [MixerStrip] = []
         for index in 0 ..< mixerStripCount(handle: handle) {
@@ -156,7 +156,7 @@ struct MixerStripTests {
     /// backward seek would start fighting the mixer.
     @Test("the rendered sequence carries no program change of its own")
     func renderedSequenceHasNoProgramChanges() throws {
-        let handle = try loadScore(bytes: Self.mscz())
+        let handle = try loadScore(bytes: jsBytes(Self.mscz()))
         defer { releaseScore(handle: handle) }
         let bytes = renderMidi(handle: handle)
         #expect(!bytes.isEmpty)
@@ -165,5 +165,37 @@ struct MixerStripTests {
         // of them could not read as zero, which is the direction that matters.
         let programStatuses = Set<UInt8>((0xC0 ... 0xCF).map { UInt8($0) })
         #expect(!bytes.contains { programStatuses.contains($0) })
+    }
+}
+
+@Suite("staff descriptors")
+struct StaffDescriptorTests {
+    @Test("an unknown handle has no staff descriptors")
+    func unknownHandleHasNoDescriptors() {
+        #expect(staffDescriptorCount(handle: 999_999) == 0)
+        #expect(staffDescriptor(handle: 999_999, index: 0) == nil)
+    }
+
+    @Test("an out-of-range staff descriptor index is nil")
+    func outOfRangeIndexIsNil() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.staffDescriptorScore())))
+        defer { releaseScore(handle: handle) }
+        #expect(staffDescriptor(handle: handle, index: -1) == nil)
+        #expect(staffDescriptor(handle: handle, index: 3) == nil)
+    }
+
+    @Test("parts and staves flatten in score order")
+    func partsAndStavesFlattenInScoreOrder() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.staffDescriptorScore())))
+        defer { releaseScore(handle: handle) }
+        #expect(staffDescriptorCount(handle: handle) == 3)
+        let descriptors = try (0 ..< staffDescriptorCount(handle: handle)).map { index in
+            try #require(staffDescriptor(handle: handle, index: index))
+        }
+        #expect(descriptors.map(\.partIndex) == [0, 0, 1])
+        #expect(descriptors.map(\.staffIndexInPart) == [0, 1, 0])
+        #expect(descriptors.map(\.partName) == ["Piano", "Piano", "Drums"])
+        #expect(descriptors.map(\.defaultClefRawType) == ["G", "F", "PERC"])
+        #expect(descriptors.map(\.isPartVisibleInScore) == [true, true, false])
     }
 }

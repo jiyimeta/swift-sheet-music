@@ -24,11 +24,12 @@ import SheetMusicLayout
 /// Without a table the engraver falls back to `StubFontMetricsProvider`'s
 /// rectangle approximations and the spacing is visibly wrong, so a host that
 /// ignores the `false` will notice.
-@JS public func installSMuFLMetrics(bytes: [UInt8]) -> Bool {
-    guard !bytes.isEmpty else { return false }
+@JS public func installSMuFLMetrics(bytes: JSUint8Array) -> Bool {
+    let data = bytes.bridgedData
+    guard !data.isEmpty else { return false }
     do {
         FontMetrics.provider = try makeSMuFLMetricsTableProvider(
-            table: SMuFLMetricsTable.decode(Data(bytes)),
+            table: SMuFLMetricsTable.decode(data),
         )
         return true
     } catch {
@@ -40,29 +41,32 @@ import SheetMusicLayout
 /// Empty for an unknown handle.
 ///
 /// Android: `nativeComputeLayout`, which also takes a `LayoutOptionsWire` blob
-/// carrying the display inspector's settings. The wasm surface does not expose
-/// options yet and uses `.verticalDefault`, exactly as `LayoutBridge.compute`
-/// does.
+/// carrying the display inspector's settings.
 ///
 /// The laid-out document is stored in `LayoutDocumentCache` so `pageBreaks` —
 /// and, once playback and editing arrive, cursor and hit-test lookups — do not
 /// re-engrave.
-@JS public func computeLayout(handle: Int, pageWidthMM: Double, pageHeightMM: Double) -> [UInt8] {
-    guard let score = scoreTable.value(for: Int64(handle)) else { return [] }
-    let options = LayoutOptionsWire.verticalDefault
+@JS public func computeLayout(
+    handle: Int,
+    pageWidthMM: Double,
+    pageHeightMM: Double,
+    options: LayoutOptions,
+) -> JSUint8Array {
+    guard let score = scoreTable.value(for: Int64(handle)) else { return JSUint8Array(length: 0) }
+    let wire = options.wire
     let result = LayoutBridge.computeWithPages(
-        score: score, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM, options: options,
+        score: score, pageWidthMM: pageWidthMM, pageHeightMM: pageHeightMM, options: wire,
     )
     LayoutDocumentCache.store(
         handle: Int64(handle),
         document: result.document,
         filteredScore: result.filteredScore,
-        hiddenStaves: options.hiddenStaffAddresses,
-        options: options,
+        hiddenStaves: wire.hiddenStaffAddresses,
+        options: wire,
         pageWidthMM: pageWidthMM,
         pageHeightMM: pageHeightMM,
     )
-    return [UInt8](DrawProgramFlat.encode(pages: result.pages))
+    return DrawProgramFlat.encode(pages: result.pages).bridgedUint8Array
 }
 
 /// Page-boundary document-Y offsets in millimetres for the cached layout of
@@ -74,13 +78,14 @@ import SheetMusicLayout
 /// `PageBreaksWire` payload. BridgeJS lowers `[Double]` through the typed-array
 /// fast path, so a wire format would buy nothing here.
 @JS public func pageBreaks(handle: Int, pageHeightMM: Double) -> [Double] {
-    guard let document = LayoutDocumentCache.value(for: Int64(handle)),
-          !document.systems.isEmpty
+    guard let entry = LayoutDocumentCache.entry(for: Int64(handle)),
+          !entry.document.systems.isEmpty
     else { return [] }
     let mmToPt = 72.0 / 25.4
     let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
+    let breakPolicy: LayoutBreakPolicy = entry.options.honorLayoutBreaks == 1 ? .honor : .ignoreAll
     let ranges = LayoutPaginator.paginate(
-        systems: document.systems, pageHeight: pageHeightPt, policy: .honor,
+        systems: entry.document.systems, pageHeight: pageHeightPt, policy: breakPolicy,
     )
     guard !ranges.isEmpty else { return [] }
     var offsetsMM: [Double] = []
@@ -88,11 +93,11 @@ import SheetMusicLayout
         if i == 0 {
             offsetsMM.append(0)
         } else {
-            let previous = document.systems[range.lowerBound - 1]
+            let previous = entry.document.systems[range.lowerBound - 1]
             offsetsMM.append(Double(previous.origin.y + previous.size.height) / mmToPt)
         }
     }
-    let last = document.systems[document.systems.count - 1]
+    let last = entry.document.systems[entry.document.systems.count - 1]
     offsetsMM.append(Double(last.origin.y + last.size.height) / mmToPt)
     return offsetsMM
 }

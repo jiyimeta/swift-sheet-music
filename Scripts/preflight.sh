@@ -51,6 +51,11 @@ if [[ "$run_apple" == 1 ]]; then
     # and repeating them makes SwiftLint lint each file twice.
     (cd "$ROOT" && swiftlint lint --strict --quiet)
 
+    # Cheap, and it catches what the type system cannot: an authored
+    # `.unexpected` refusal, or an `operation` name written as a sentence.
+    step "Apple / SwiftPM: error-code gates"
+    "$ROOT/Scripts/gate-error-codes.sh"
+
     # Wider than swiftlint: .swiftlint.yml excludes Examples/Apple, but
     # the example app is formatter-clean and the pre-commit hook formats
     # it, so check it here too.
@@ -65,6 +70,16 @@ if [[ "$run_apple" == 1 ]]; then
 fi
 
 if [[ "$run_wasm" == 1 ]]; then
+    # Fail here rather than at the end. The browser-package stage needs these,
+    # but it runs last — so in a fresh worktree the missing dependency surfaced
+    # as `tsc: command not found` only after the ~6 min wasm build, the Swift
+    # test run and the size gate had all passed.
+    if [[ ! -d "$ROOT/Web/sheet-music-web/node_modules" ]]; then
+        echo "error: Web/sheet-music-web/node_modules is missing." >&2
+        echo "       run: npm install --prefix Web/sheet-music-web" >&2
+        exit 1
+    fi
+
     if TOOLCHAIN_BIN="$("$ROOT/Scripts/swift-org-toolchain.sh")"; then
         export PATH="$TOOLCHAIN_BIN:$PATH"
     fi

@@ -44,29 +44,20 @@ public struct ReplaceVoiceElements: EditCommand {
               score.parts[staff.partIndex].staves.indices
                   .contains(staff.staffIndexInPart)
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "ReplaceVoiceElements: staff \(staff) "
-                    + "out of range",
-            )
+            throw Self.refused(.staffNotFound(staff))
         }
         let p = staff.partIndex
         let s = staff.staffIndexInPart
         guard score.parts[p].staves[s].measures
             .indices.contains(measureIndex)
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "ReplaceVoiceElements: measure "
-                    + "\(measureIndex) out of range",
-            )
+            throw Self.refused(.targetNotFound(affectedLocation))
         }
         guard score.parts[p].staves[s]
             .measures[measureIndex].voices
             .indices.contains(voiceIndex)
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "ReplaceVoiceElements: voice "
-                    + "\(voiceIndex) out of range",
-            )
+            throw Self.refused(.targetNotFound(affectedLocation))
         }
         let priorVoice = score.parts[p].staves[s]
             .measures[measureIndex].voices[voiceIndex]
