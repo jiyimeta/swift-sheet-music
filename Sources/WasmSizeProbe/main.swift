@@ -162,6 +162,10 @@ let loopRects = loopHighlightRects(
 )
 let tapSeconds = playerSecondsAtPoint(handle: wasmHandle, xMM: 30, yMM: 40)
 let seekSeconds = playerSecondsForMeasure(handle: wasmHandle, measureIndex: 1)
+let seekPositionSeconds = playerSecondsForPosition(
+    handle: wasmHandle, measureIndex: 1, tickInMeasure: 480,
+)
+let seekPosition = positionAtPlayerSeconds(handle: wasmHandle, playerSeconds: seekPositionSeconds)
 let atMeasure = measureIndexAtPlayerSeconds(handle: wasmHandle, playerSeconds: 0)
 let preRoll = countInSeconds(handle: wasmHandle, fromPlayerSeconds: 0)
 let markCount = rehearsalMarkCount(handle: wasmHandle)
@@ -256,7 +260,11 @@ endEditSession(handle: wasmHandle)
 print("playback smf=\(smf.length)B click=\(clickSmf.length)B countIn=\(countInSmf.length)B")
 print("playback measures=\(summary?.measureCount ?? -1) beats=\(beats.count)")
 print("playback cursorY=\(cursor?.yMM ?? -1) loop=\(loopSeconds.count) rects=\(loopRects.count)")
-print("playback tap=\(tapSeconds) seek=\(seekSeconds) at=\(atMeasure) preRoll=\(preRoll)")
+print(
+    "playback tap=\(tapSeconds) seek=\(seekSeconds) "
+        + "posSeek=\(seekPositionSeconds) pos=\(seekPosition.count) "
+        + "at=\(atMeasure) preRoll=\(preRoll)",
+)
 print(
     "score marks=\(markCount) firstMark=\(firstMark?.text ?? "-") "
         + "staves=\(staffCount) firstStaff=\(firstStaff?.defaultClefRawType ?? "-") "

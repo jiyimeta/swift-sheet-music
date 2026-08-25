@@ -163,6 +163,44 @@ import SheetMusicLayout
     return clock.playerSeconds(atMeasureIndex: measureIndex) ?? -1
 }
 
+/// Player seconds for a durable musical position.
+///
+/// Returns **−1** for an unknown handle or a position that does not resolve.
+/// `0` would be indistinguishable from the top of the score, which is a real
+/// position.
+@JS public func playerSecondsForPosition(
+    handle: Int, measureIndex: Int, tickInMeasure: Int,
+) -> Double {
+    guard measureIndex >= 0,
+          tickInMeasure >= 0,
+          let score = scoreTable.value(for: Int64(handle))
+    else { return -1 }
+    let clock = PlaybackClockCache.clock(for: Int64(handle), score: score)
+    let cursor = ScoreCursor.beat(measureIndex: measureIndex, tickInMeasure: tickInMeasure)
+    return clock.playerSeconds(atCursor: cursor) ?? -1
+}
+
+/// The durable musical position sounding at `playerSeconds`, flattened as
+/// `[measureIndex, tickInMeasure]`.
+///
+/// Empty for an unknown handle or a position that does not resolve. The clock
+/// may return an `.item` cursor at a note/rest onset; JavaScript still gets the
+/// beat-shaped address by deriving that item's tick inside its measure.
+@JS public func positionAtPlayerSeconds(handle: Int, playerSeconds: Double) -> [Double] {
+    guard playerSeconds.isFinite,
+          playerSeconds >= 0,
+          let score = scoreTable.value(for: Int64(handle))
+    else { return [] }
+    let clock = PlaybackClockCache.clock(for: Int64(handle), score: score)
+    guard playerSeconds <= clock.totalPlayerSeconds,
+          let cursor = clock.cursor(atPlayerSeconds: playerSeconds)
+    else { return [] }
+    return [
+        Double(cursor.measureIndex),
+        Double(score.tickInMeasure(of: cursor)),
+    ]
+}
+
 /// The measure sounding at `playerSeconds` — what a "loop from here" button
 /// reads. Returns **−1** for an unknown handle or a score with no measures.
 @JS public func measureIndexAtPlayerSeconds(handle: Int, playerSeconds: Double) -> Int {

@@ -201,6 +201,21 @@ describe("PlaybackEngine", () => {
     expect(host.metronome.positionSeconds).toBeCloseTo(expected, 9);
   });
 
+  it("keeps the paused transport position as a musical address", async () => {
+    const { engine, host } = await makeEngine();
+    engine.seekToMeasure(1);
+    host.score.positionSeconds = 0;
+    host.metronome.positionSeconds = 0;
+    engine.setRate(1.25);
+    await engine.play();
+    const expected = score.playerSecondsForPosition({
+      measureIndex: 1,
+      tickInMeasure: 0,
+    });
+    expect(host.score.positionSeconds).toBeCloseTo(expected, 9);
+    expect(host.metronome.positionSeconds).toBeCloseTo(expected, 9);
+  });
+
   it("ignores a seek to a measure that does not exist", async () => {
     const { engine, host } = await makeEngine();
     engine.seekToMeasure(9999);

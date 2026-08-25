@@ -9,6 +9,13 @@ and this project adheres to
 
 ### Added
 
+- A durable playback position on the WebAssembly bridge. `playerSecondsForPosition` and
+  `positionAtPlayerSeconds` convert between player seconds and a `{measureIndex, tickInMeasure}`
+  musical address, and `PlaybackEngine` now parks its transport on the address rather than on a time.
+  Seconds depend on the tempo map and on note durations, so an edit changes what a stored second
+  means; an address does not. Android already carried this — `ScoreCursor` crosses its JNI boundary
+  in both directions — and the wasm surface lost it when the cursor round trip was folded into a
+  single call.
 - Rehearsal marks, staff descriptors and measure frames on the WebAssembly bridge, closing the three
   gaps against the Android surface that had no recorded reason to exist. `rehearsalMarkCount` /
   `rehearsalMark` carry each mark's text, measure and player-clock seek target — every mark the score

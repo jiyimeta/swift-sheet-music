@@ -198,8 +198,19 @@ seconds depend on the tempo map and on note durations, and an edit changes both.
 A tick keeps its musical meaning across an edit; a second does not. `play` and
 `seek` are protected by `editGeneration`, so this cannot bite during playback —
 but a host that persists a seconds bookmark, edits, and restores it lands
-somewhere else musically, with nothing to signal it. Store a measure index, or
-re-derive the seconds after the edit.
+somewhere else musically, with nothing to signal it.
+
+**So store a position, not a time.** `positionAtPlayerSeconds` and
+`playerSecondsForPosition` convert between the player clock and a
+`{measureIndex, tickInMeasure}` address, which is what everything else in the
+editing surface already holds — the selection is a `ScoreItemID`, the loop is a
+measure range, rehearsal marks are recomputed. `PlaybackEngine` parks its
+transport on an address for the same reason. Seconds are derived at the point of
+use.
+
+Ticks would not have solved it: a notated tick changes meaning under
+`SetTimeSignature`, and an unrolled tick dies with any change to the repeat
+plan. The stable thing is the musical address.
 
 Measure boundaries themselves round-trip safely: `measureIndex(atPlayerSeconds:)`
 converts back to a tick and compares against integer measure starts, so the

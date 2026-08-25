@@ -137,6 +137,12 @@ export interface PlaybackSummary {
   readonly openingQuarterBpm: number;
 }
 
+/** Durable playback position in notated score coordinates. */
+export interface ScorePosition {
+  readonly measureIndex: number;
+  readonly tickInMeasure: number;
+}
+
 /**
  * Where to draw the playback cursor, in document millimetres — the same unit
  * the draw program uses, so one `pxPerMM` scales both.
@@ -433,6 +439,15 @@ export interface BridgeExports {
   ): CursorRect | null;
   measureFrame(handle: number, measureIndex: number): number[] | Float64Array;
   playerSecondsForMeasure(handle: number, measureIndex: number): number;
+  playerSecondsForPosition(
+    handle: number,
+    measureIndex: number,
+    tickInMeasure: number,
+  ): number;
+  positionAtPlayerSeconds(
+    handle: number,
+    playerSeconds: number,
+  ): number[] | Float64Array;
   measureIndexAtPlayerSeconds(handle: number, playerSeconds: number): number;
   loopPlayerSeconds(
     handle: number,
@@ -849,6 +864,33 @@ export class Score {
    */
   playerSecondsForMeasure(measureIndex: number): number {
     return this.bridge.playerSecondsForMeasure(this.live(), measureIndex);
+  }
+
+  /**
+   * The player-clock seconds for a durable score position. `-1` means the
+   * position does not resolve.
+   */
+  playerSecondsForPosition(position: ScorePosition): number {
+    return this.bridge.playerSecondsForPosition(
+      this.live(),
+      position.measureIndex,
+      position.tickInMeasure,
+    );
+  }
+
+  /**
+   * The durable score position sounding at `playerSeconds`, or `null` when it
+   * does not resolve.
+   */
+  positionAtPlayerSeconds(playerSeconds: number): ScorePosition | null {
+    const position = asDoubles(
+      this.bridge.positionAtPlayerSeconds(this.live(), playerSeconds),
+    );
+    if (position.length !== 2) return null;
+    return {
+      measureIndex: position[0]!,
+      tickInMeasure: position[1]!,
+    };
   }
 
   /** The measure sounding at a player position, or `-1` for an empty score. */

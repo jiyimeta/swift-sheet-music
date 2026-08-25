@@ -251,6 +251,36 @@ struct PlaybackEntryTests {
         #expect(measureIndexAtPlayerSeconds(handle: handle, playerSeconds: seconds) == 2)
     }
 
+    @Test("beat positions round-trip through player seconds")
+    func beatPositionsRoundTripThroughPlayerSeconds() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
+        defer { releaseScore(handle: handle) }
+        let positions = [
+            [0.0, 0.0],
+            [1.0, 480.0],
+            [1.0, 960.0],
+            [2.0, 0.0],
+        ]
+        for position in positions {
+            let seconds = playerSecondsForPosition(
+                handle: handle,
+                measureIndex: Int(position[0]),
+                tickInMeasure: Int(position[1]),
+            )
+            #expect(seconds >= 0)
+            #expect(positionAtPlayerSeconds(handle: handle, playerSeconds: seconds) == position)
+        }
+    }
+
+    @Test("position conversion sentinels are explicit")
+    func positionConversionSentinelsAreExplicit() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
+        defer { releaseScore(handle: handle) }
+        #expect(playerSecondsForPosition(handle: 999_999, measureIndex: 0, tickInMeasure: 0) == -1)
+        #expect(positionAtPlayerSeconds(handle: 999_999, playerSeconds: 0).isEmpty)
+        #expect(playerSecondsForPosition(handle: handle, measureIndex: 9999, tickInMeasure: 0) == -1)
+    }
+
     @Test("measureIndexAtPlayerSeconds for an unknown handle is -1")
     func measureIndexForUnknownHandleIsSentinel() {
         #expect(measureIndexAtPlayerSeconds(handle: 999_999, playerSeconds: 0) == -1)
@@ -369,6 +399,8 @@ struct PlaybackEntryTests {
         #expect(metronomeBeats(handle: handle).isEmpty)
         #expect(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0) == nil)
         #expect(playerSecondsForMeasure(handle: handle, measureIndex: 0) == -1)
+        #expect(playerSecondsForPosition(handle: handle, measureIndex: 0, tickInMeasure: 0) == -1)
+        #expect(positionAtPlayerSeconds(handle: handle, playerSeconds: 0).isEmpty)
         #expect(measureFrame(handle: handle, measureIndex: 0).isEmpty)
         #expect(rehearsalMarkCount(handle: handle) == 0)
         #expect(staffDescriptorCount(handle: handle) == 0)

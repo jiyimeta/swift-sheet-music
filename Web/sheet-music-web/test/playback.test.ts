@@ -130,6 +130,27 @@ describe("playback parity with the Apple build", () => {
     });
   });
 
+  it("round-trips beat positions through player seconds", () => {
+    const positions = [
+      { measureIndex: 0, tickInMeasure: 0 },
+      { measureIndex: 1, tickInMeasure: 480 },
+      { measureIndex: 1, tickInMeasure: 960 },
+      { measureIndex: 2, tickInMeasure: 0 },
+    ];
+    for (const position of positions) {
+      const seconds = score.playerSecondsForPosition(position);
+      expect(seconds).toBeGreaterThanOrEqual(0);
+      expect(score.positionAtPlayerSeconds(seconds)).toEqual(position);
+    }
+  });
+
+  it("uses null for an unresolved player position", () => {
+    const missing = score.positionAtPlayerSeconds(
+      expectations.totalPlayerSeconds + 100,
+    );
+    expect(missing).toBeNull();
+  });
+
   it("resolves the same cursor rects", () => {
     expect(expectations.cursorProbes.length).toBeGreaterThan(0);
     for (const probe of expectations.cursorProbes) {
