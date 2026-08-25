@@ -62,6 +62,9 @@
       #transport input[type="number"] {
         width: 4rem;
       }
+      #transport input[type="range"] {
+        width: 8rem;
+      }
       #mixer {
         display: grid;
         gap: 0.35rem;
@@ -87,20 +90,30 @@
         font-variant-numeric: tabular-nums;
       }
       #pages {
+        height: calc(100vh - 12rem);
+        min-height: 20rem;
+        overflow: auto;
         padding: 1rem;
-        display: grid;
-        gap: 1rem;
-        justify-items: center;
+        box-sizing: border-box;
       }
-      /*
-        Each tile is its own positioning context so the cursor and the loop
-        highlight can be plain absolutely-positioned elements measured against
-        the canvas they sit on. The layout is one continuous page split across
-        several canvases, so an overlay spanning the whole document would have
-        to redo that split.
-      */
-      .tile {
+      #score-spacer {
         position: relative;
+        margin: 0 auto;
+      }
+      #tile-layer,
+      #overlay-layer {
+        position: absolute;
+        inset: 0;
+      }
+      #tile-layer {
+        z-index: 0;
+      }
+      #overlay-layer {
+        z-index: 1;
+        pointer-events: none;
+      }
+      .tile {
+        position: absolute;
         line-height: 0;
       }
       canvas {
@@ -160,6 +173,16 @@
         <span id="rate-readout">1.00×</span>
       </label>
       <label>
+        zoom
+        <input id="zoom" type="range" min="0.5" max="4" step="0.25" value="1" />
+        <span id="zoom-readout">1.00×</span>
+      </label>
+      <label>
+        staff size
+        <input id="staff-size" type="range" min="18" max="40" step="1" value="28" />
+        <span id="staff-size-readout">28</span>
+      </label>
+      <label>
         loop
         <input id="loop-from" type="number" min="1" value="1" />
         –
@@ -176,7 +199,12 @@
       <span id="playback-status"></span>
     </section>
     <section id="mixer"></section>
-    <main id="pages"></main>
+    <main id="pages">
+      <div id="score-spacer">
+        <div id="tile-layer"></div>
+        <div id="overlay-layer"></div>
+      </div>
+    </main>
     <!--
       PackageToJS's browser glue imports the WASI shim by bare specifier, which
       a browser cannot resolve on its own — that is a bundler's job, and this
