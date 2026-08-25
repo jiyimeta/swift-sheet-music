@@ -183,6 +183,10 @@ public final class ScoreEditSession {
             return try writeNoteCommand(at: location, pitch: pitch, tpc: tpc, duration: duration, in: score)
         case let .writeRest(location, duration):
             return writeRestCommand(at: location, duration: duration, in: score)
+        case let .insertMeasure(index):
+            return InsertMeasure(measureIndex: index)
+        case let .deleteMeasure(index):
+            return DeleteMeasure(measureIndex: index)
         case let .setNotePitch(location, pitch, tpc, accidental):
             return retuneCommand(at: location, pitch: pitch, tpc: tpc, accidental: accidental, in: score)
         case .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet, .removeTuplet:

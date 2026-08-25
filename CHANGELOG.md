@@ -15,6 +15,8 @@ and this project adheres to
   re-homes the score-start key/time/clef signatures onto the new first bar, mirroring MuseScore, and both
   commands fix up any `Spanner.nextMeasuresOffset` that spans the edit point. `DeleteMeasure` refuses to
   remove a score's last measure (`EditRefusal.Reason.cannotDeleteOnlyMeasure`).
+- `EditIntent.insertMeasure(at:)` / `.deleteMeasure(at:)`: the host-facing intents `ScoreEditSession` plans
+  into `InsertMeasure` / `DeleteMeasure`, with `EditIntentCodec` wire support (indices 14…15).
 
 ## [2.0.0] - 2026-08-25
 
