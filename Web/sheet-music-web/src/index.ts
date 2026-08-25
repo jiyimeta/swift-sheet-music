@@ -155,6 +155,30 @@ export interface CursorRect {
   readonly notatedSeconds: number;
 }
 
+/** One rehearsal mark with its player-clock seek target. */
+export interface RehearsalMarkInfo {
+  readonly text: string;
+  readonly measureIndex: number;
+  readonly playerSeconds: number;
+}
+
+/** One staff flattened out of the score's part -> staves descriptor. */
+export interface StaffDescriptor {
+  readonly partIndex: number;
+  readonly staffIndexInPart: number;
+  readonly partName: string;
+  readonly isPartVisibleInScore: boolean;
+  readonly defaultClefRawType: string;
+}
+
+/** A document rectangle in millimetres. */
+export interface MeasureFrame {
+  readonly xMM: number;
+  readonly yMM: number;
+  readonly widthMM: number;
+  readonly heightMM: number;
+}
+
 /** A measure range to loop over. `toMeasureExclusive` may equal the count. */
 export interface MeasureRange {
   readonly fromMeasureIndex: number;
@@ -380,6 +404,10 @@ export interface BridgeExports {
   loadScore(bytes: Uint8Array): number;
   releaseScore(handle: number): void;
   scoreMetadata(handle: number): ScoreMetadata | null;
+  rehearsalMarkCount(handle: number): number;
+  rehearsalMark(handle: number, index: number): RehearsalMarkInfo | null;
+  staffDescriptorCount(handle: number): number;
+  staffDescriptor(handle: number, index: number): StaffDescriptor | null;
   scoreFingerprint(handle: number): string;
   installSMuFLMetrics(bytes: Uint8Array): boolean;
   computeLayout(
@@ -403,6 +431,7 @@ export interface BridgeExports {
     handle: number,
     playerSeconds: number,
   ): CursorRect | null;
+  measureFrame(handle: number, measureIndex: number): number[] | Float64Array;
   playerSecondsForMeasure(handle: number, measureIndex: number): number;
   measureIndexAtPlayerSeconds(handle: number, playerSeconds: number): number;
   loopPlayerSeconds(
@@ -748,6 +777,36 @@ export class Score {
   }
 
   /**
+   * Rehearsal marks in score order, with player-clock seek targets.
+   *
+   * Every mark the score carries is listed. `playerSeconds` is `-1` for one
+   * whose cursor does not resolve — the list is a navigation index, so a
+   * missing letter would be worse than an entry that cannot be seeked to.
+   */
+  rehearsalMarks(): RehearsalMarkInfo[] {
+    const handle = this.live();
+    const count = this.bridge.rehearsalMarkCount(handle);
+    const marks: RehearsalMarkInfo[] = [];
+    for (let index = 0; index < count; index++) {
+      const mark = this.bridge.rehearsalMark(handle, index);
+      if (mark !== null) marks.push(mark);
+    }
+    return marks;
+  }
+
+  /** Staff descriptors flattened across parts in score order. */
+  staffDescriptors(): StaffDescriptor[] {
+    const handle = this.live();
+    const count = this.bridge.staffDescriptorCount(handle);
+    const descriptors: StaffDescriptor[] = [];
+    for (let index = 0; index < count; index++) {
+      const descriptor = this.bridge.staffDescriptor(handle, index);
+      if (descriptor !== null) descriptors.push(descriptor);
+    }
+    return descriptors;
+  }
+
+  /**
    * Click positions for a visual beat indicator, flattened as
    * `[playerSeconds, isDownbeat, …]` — two entries per beat, the flag `1` or
    * `0`.
@@ -766,6 +825,21 @@ export class Score {
    */
   cursorRectAtPlayerSeconds(playerSeconds: number): CursorRect | null {
     return this.bridge.cursorRectAtPlayerSeconds(this.live(), playerSeconds);
+  }
+
+  /**
+   * The bounding rectangle of a measure in document millimetres, or `null`
+   * until `layout()` has run or when the index is outside the document.
+   */
+  measureFrame(measureIndex: number): MeasureFrame | null {
+    const frame = asDoubles(this.bridge.measureFrame(this.live(), measureIndex));
+    if (frame.length !== 4) return null;
+    return {
+      xMM: frame[0]!,
+      yMM: frame[1]!,
+      widthMM: frame[2]!,
+      heightMM: frame[3]!,
+    };
   }
 
   /**

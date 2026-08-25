@@ -153,6 +153,7 @@ let countInSmf = renderCountInMetronomeMidi(handle: wasmHandle, fromPlayerSecond
 let summary = playbackSummary(handle: wasmHandle)
 let beats = metronomeBeats(handle: wasmHandle)
 let cursor = cursorRectAtPlayerSeconds(handle: wasmHandle, playerSeconds: 0)
+let measureRect = measureFrame(handle: wasmHandle, measureIndex: 0)
 let loopSeconds = loopPlayerSeconds(
     handle: wasmHandle, fromMeasureIndex: 0, toMeasureExclusive: 1,
 )
@@ -163,6 +164,10 @@ let tapSeconds = playerSecondsAtPoint(handle: wasmHandle, xMM: 30, yMM: 40)
 let seekSeconds = playerSecondsForMeasure(handle: wasmHandle, measureIndex: 1)
 let atMeasure = measureIndexAtPlayerSeconds(handle: wasmHandle, playerSeconds: 0)
 let preRoll = countInSeconds(handle: wasmHandle, fromPlayerSeconds: 0)
+let markCount = rehearsalMarkCount(handle: wasmHandle)
+let firstMark = rehearsalMark(handle: wasmHandle, index: 0)
+let staffCount = staffDescriptorCount(handle: wasmHandle)
+let firstStaff = staffDescriptor(handle: wasmHandle, index: 0)
 
 // The mixer and its General MIDI table, which are the only paths that reach
 // `LiveChannelPlan`'s labelling and `GMInstrument`.
@@ -252,6 +257,11 @@ print("playback smf=\(smf.length)B click=\(clickSmf.length)B countIn=\(countInSm
 print("playback measures=\(summary?.measureCount ?? -1) beats=\(beats.count)")
 print("playback cursorY=\(cursor?.yMM ?? -1) loop=\(loopSeconds.count) rects=\(loopRects.count)")
 print("playback tap=\(tapSeconds) seek=\(seekSeconds) at=\(atMeasure) preRoll=\(preRoll)")
+print(
+    "score marks=\(markCount) firstMark=\(firstMark?.text ?? "-") "
+        + "staves=\(staffCount) firstStaff=\(firstStaff?.defaultClefRawType ?? "-") "
+        + "measureRect=\(measureRect.count)",
+)
 print("edit geometry hit=\(editHit?.kind ?? "-") caret=\(editCaret?.heightMM ?? -1)")
 print("mixer strips=\(stripCount) first=\(firstStrip?.displayName ?? "-")")
 print("mixer gm=\(gmNames.count)/\(gmFamilies.count) tuning=\(tuning.count) click=\(clickBank.length)B")

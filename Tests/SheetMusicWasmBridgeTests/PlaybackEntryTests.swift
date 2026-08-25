@@ -150,6 +150,35 @@ struct PlaybackEntryTests {
         #expect(metronomeBeats(handle: 999_999).isEmpty)
     }
 
+    @Test("rehearsal marks for an unknown handle are empty")
+    func rehearsalMarksForUnknownHandleAreEmpty() {
+        #expect(rehearsalMarkCount(handle: 999_999) == 0)
+        #expect(rehearsalMark(handle: 999_999, index: 0) == nil)
+    }
+
+    @Test("an out-of-range rehearsal mark index is nil")
+    func outOfRangeRehearsalMarkIsNil() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.rehearsalMarkScore())))
+        defer { releaseScore(handle: handle) }
+        #expect(rehearsalMark(handle: handle, index: -1) == nil)
+        #expect(rehearsalMark(handle: handle, index: 1) == nil)
+    }
+
+    @Test("a rehearsal mark carries player seconds inside its measure")
+    func rehearsalMarkSecondsLandInsideMeasure() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.rehearsalMarkScore())))
+        defer { releaseScore(handle: handle) }
+        #expect(rehearsalMarkCount(handle: handle) == 1)
+        let mark = try #require(rehearsalMark(handle: handle, index: 0))
+        #expect(mark.text == "B")
+        #expect(mark.measureIndex == 1)
+        let measureStart = playerSecondsForMeasure(handle: handle, measureIndex: 1)
+        let nextMeasureStart = playerSecondsForMeasure(handle: handle, measureIndex: 2)
+        #expect(mark.playerSeconds >= measureStart)
+        #expect(mark.playerSeconds < nextMeasureStart)
+        #expect(measureIndexAtPlayerSeconds(handle: handle, playerSeconds: mark.playerSeconds) == 1)
+    }
+
     // MARK: Cursor and seek
 
     @Test("a cursor rect resolves once a layout has been computed")
@@ -170,6 +199,32 @@ struct PlaybackEntryTests {
         let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
         defer { releaseScore(handle: handle) }
         #expect(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0) == nil)
+    }
+
+    @Test("measureFrame is empty for an unknown handle")
+    func measureFrameForUnknownHandleIsEmpty() {
+        #expect(measureFrame(handle: 999_999, measureIndex: 0).isEmpty)
+    }
+
+    @Test("measureFrame is empty for an out-of-range index")
+    func measureFrameForOutOfRangeIndexIsEmpty() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
+        defer { releaseScore(handle: handle) }
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions())
+        #expect(measureFrame(handle: handle, measureIndex: -1).isEmpty)
+        #expect(measureFrame(handle: handle, measureIndex: 9999).isEmpty)
+    }
+
+    @Test("measureFrame resolves only after layout")
+    func measureFrameResolvesAfterLayout() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz()))
+        defer { releaseScore(handle: handle) }
+        #expect(measureFrame(handle: handle, measureIndex: 0).isEmpty)
+        _ = computeLayout(handle: handle, pageWidthMM: 210, pageHeightMM: 297, options: layoutOptions())
+        let frame = measureFrame(handle: handle, measureIndex: 0)
+        #expect(frame.count == 4)
+        #expect(frame[2] > 0)
+        #expect(frame[3] > 0)
     }
 
     @Test("measure 0 starts the player at zero")
@@ -314,6 +369,9 @@ struct PlaybackEntryTests {
         #expect(metronomeBeats(handle: handle).isEmpty)
         #expect(cursorRectAtPlayerSeconds(handle: handle, playerSeconds: 0) == nil)
         #expect(playerSecondsForMeasure(handle: handle, measureIndex: 0) == -1)
+        #expect(measureFrame(handle: handle, measureIndex: 0).isEmpty)
+        #expect(rehearsalMarkCount(handle: handle) == 0)
+        #expect(staffDescriptorCount(handle: handle) == 0)
     }
 
     private func layoutOptions() -> LayoutOptions {

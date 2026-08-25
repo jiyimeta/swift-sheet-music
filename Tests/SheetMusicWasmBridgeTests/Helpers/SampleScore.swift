@@ -163,6 +163,63 @@ enum SampleScore {
         )
     }
 
+    /// A two-part score with per-staff clefs and one hidden part, for the
+    /// flattened staff descriptor surface.
+    static func staffDescriptorScore() -> Score {
+        let measure = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .whole, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+        ])])
+        return Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "piano",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [
+                        Staff(defaultClefType: "G", measures: [measure]),
+                        Staff(defaultClefType: "F", measures: [measure]),
+                    ],
+                ),
+                Part(
+                    id: "drums",
+                    instrument: Instrument(id: "drums", longName: "Drums"),
+                    staves: [Staff(defaultClefType: "PERC", measures: [measure])],
+                    isVisibleInScore: false,
+                ),
+            ],
+            metaTags: ["workTitle": "wasm staves", "composer": "test"],
+        )
+    }
+
+    /// A four-measure score with one rehearsal mark at measure 1's downbeat.
+    static func rehearsalMarkScore() -> Score {
+        let measure = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .whole, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+        ])])
+        return Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "1",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [Staff(measures: [measure, measure, measure, measure])],
+                ),
+            ],
+            systemMeasures: [
+                SystemMeasure(),
+                SystemMeasure(elements: [
+                    PositionedSystemElement(
+                        position: .start,
+                        element: .rehearsalMark(RehearsalMark(text: "B")),
+                    ),
+                ]),
+                SystemMeasure(),
+                SystemMeasure(),
+            ],
+            metaTags: ["workTitle": "wasm marks", "composer": "test"],
+        )
+    }
+
     /// The same score as a `.mscz` container, which is what a browser host
     /// actually hands `loadScore`.
     static func mscz(

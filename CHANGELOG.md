@@ -9,6 +9,13 @@ and this project adheres to
 
 ### Added
 
+- Rehearsal marks, staff descriptors and measure frames on the WebAssembly bridge, closing the three
+  gaps against the Android surface that had no recorded reason to exist. `rehearsalMarkCount` /
+  `rehearsalMark` carry each mark's text, measure and player-clock seek target — every mark the score
+  has, with `-1` seconds for one whose cursor does not resolve, because a navigation index missing a
+  letter is worse than an entry that cannot be seeked to. `staffDescriptorCount` /
+  `staffDescriptor` flatten the parts/staves tree the way `mixerStrip` indexes. `measureFrame` takes
+  a measure index rather than Android's encoded cursor, since a browser host holds one.
 - **A virtualized viewer, with zoom.** The browser example keeps canvases only for the tiles near the
   viewport and drops the rest, so what it rasterizes is bounded by the viewport rather than by the
   score: 80.4 MB of canvas for a 1,757 mm fixture and 151.8 MB for a 149-part score become 18–37 MB

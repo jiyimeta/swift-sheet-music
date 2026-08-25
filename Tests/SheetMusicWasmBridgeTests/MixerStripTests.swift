@@ -167,3 +167,35 @@ struct MixerStripTests {
         #expect(!bytes.contains { programStatuses.contains($0) })
     }
 }
+
+@Suite("staff descriptors")
+struct StaffDescriptorTests {
+    @Test("an unknown handle has no staff descriptors")
+    func unknownHandleHasNoDescriptors() {
+        #expect(staffDescriptorCount(handle: 999_999) == 0)
+        #expect(staffDescriptor(handle: 999_999, index: 0) == nil)
+    }
+
+    @Test("an out-of-range staff descriptor index is nil")
+    func outOfRangeIndexIsNil() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.staffDescriptorScore())))
+        defer { releaseScore(handle: handle) }
+        #expect(staffDescriptor(handle: handle, index: -1) == nil)
+        #expect(staffDescriptor(handle: handle, index: 3) == nil)
+    }
+
+    @Test("parts and staves flatten in score order")
+    func partsAndStavesFlattenInScoreOrder() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.mscz(score: SampleScore.staffDescriptorScore())))
+        defer { releaseScore(handle: handle) }
+        #expect(staffDescriptorCount(handle: handle) == 3)
+        let descriptors = try (0 ..< staffDescriptorCount(handle: handle)).map { index in
+            try #require(staffDescriptor(handle: handle, index: index))
+        }
+        #expect(descriptors.map(\.partIndex) == [0, 0, 1])
+        #expect(descriptors.map(\.staffIndexInPart) == [0, 1, 0])
+        #expect(descriptors.map(\.partName) == ["Piano", "Piano", "Drums"])
+        #expect(descriptors.map(\.defaultClefRawType) == ["G", "F", "PERC"])
+        #expect(descriptors.map(\.isPartVisibleInScore) == [true, true, false])
+    }
+}

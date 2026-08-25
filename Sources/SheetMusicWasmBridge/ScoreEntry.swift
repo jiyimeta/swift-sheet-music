@@ -44,6 +44,52 @@ let scoreTable = HandleTable<Score>()
     }
 }
 
+/// One rehearsal mark as a browser host can use it: text for display, the
+/// measure it belongs to, and the player-clock seek target.
+///
+/// `playerSeconds` is `-1` when the mark's cursor does not resolve on the
+/// player clock — the same sentinel `playerSecondsAtPoint` uses, and for the
+/// same reason: `0` is the top of the score, so it cannot mean "nowhere".
+/// The mark is still listed. A rehearsal-mark list is a navigation index, and
+/// dropping an entry because its seek target failed shows a reader a list that
+/// skips a letter with nothing to say why. A host disables seeking on it.
+@JS public struct RehearsalMarkInfo {
+    public var text: String
+    public var measureIndex: Int
+    public var playerSeconds: Double
+
+    public init(text: String, measureIndex: Int, playerSeconds: Double) {
+        self.text = text
+        self.measureIndex = measureIndex
+        self.playerSeconds = playerSeconds
+    }
+}
+
+/// One flattened staff descriptor. `PartsStavesWire` is part -> staves, but a
+/// JavaScript host indexes the staff list directly and carries the owning part
+/// identity on each item.
+@JS public struct StaffDescriptor {
+    public var partIndex: Int
+    public var staffIndexInPart: Int
+    public var partName: String
+    public var isPartVisibleInScore: Bool
+    public var defaultClefRawType: String
+
+    public init(
+        partIndex: Int,
+        staffIndexInPart: Int,
+        partName: String,
+        isPartVisibleInScore: Bool,
+        defaultClefRawType: String,
+    ) {
+        self.partIndex = partIndex
+        self.staffIndexInPart = staffIndexInPart
+        self.partName = partName
+        self.isPartVisibleInScore = isPartVisibleInScore
+        self.defaultClefRawType = defaultClefRawType
+    }
+}
+
 /// Parse `bytes` — `.mscx`, `.mscz`, `.musicxml`, `.mxl` or `.mid`, sniffed from
 /// the leading bytes — and retain the result. Returns `0` on an empty payload or
 /// a parse failure.
@@ -92,6 +138,56 @@ let scoreTable = HandleTable<Score>()
     )
 }
 
+/// How many rehearsal marks `handle` has. `0` for an unknown handle.
+///
+/// Paired with `rehearsalMark(handle:index:)` for the same reason the mixer
+/// surface is count + index: this package has not established array-of-`@JS
+/// struct` lowering as a browser ABI.
+@JS public func rehearsalMarkCount(handle: Int) -> Int {
+    guard let score = scoreTable.value(for: Int64(handle)) else { return 0 }
+    return rehearsalMarkInfos(for: score, handle: Int64(handle)).count
+}
+
+/// The rehearsal mark at `index`, or `nil` when the handle is unknown or the
+/// index is out of range. A mark whose cursor does not resolve is still
+/// returned, carrying `-1` seconds — see `RehearsalMarkInfo`.
+@JS public func rehearsalMark(handle: Int, index: Int) -> RehearsalMarkInfo? {
+    guard let score = scoreTable.value(for: Int64(handle)) else { return nil }
+    let infos = rehearsalMarkInfos(for: score, handle: Int64(handle))
+    guard index >= 0, index < infos.count else { return nil }
+    return infos[index]
+}
+
+/// How many flattened staff descriptors `handle` has. `0` for an unknown
+/// handle.
+@JS public func staffDescriptorCount(handle: Int) -> Int {
+    guard let score = scoreTable.value(for: Int64(handle)) else { return 0 }
+    return PartsStavesWire(score: score).parts.reduce(0) { $0 + $1.staves.count }
+}
+
+/// The flattened staff descriptor at `index`, or `nil` when the handle is
+/// unknown or the index is out of range.
+@JS public func staffDescriptor(handle: Int, index: Int) -> StaffDescriptor? {
+    guard let score = scoreTable.value(for: Int64(handle)), index >= 0 else { return nil }
+    let parts = PartsStavesWire(score: score).parts
+    var flatIndex = 0
+    for (partIndex, part) in parts.enumerated() {
+        for (staffIndex, staff) in part.staves.enumerated() {
+            if flatIndex == index {
+                return StaffDescriptor(
+                    partIndex: partIndex,
+                    staffIndexInPart: staffIndex,
+                    partName: part.name,
+                    isPartVisibleInScore: part.isVisibleInScore != 0,
+                    defaultClefRawType: staff.defaultClefRawType,
+                )
+            }
+            flatIndex += 1
+        }
+    }
+    return nil
+}
+
 /// The digest the host compares against its own copy, as a decimal string.
 /// Empty for an unknown handle.
 ///
@@ -106,4 +202,19 @@ let scoreTable = HandleTable<Score>()
 @JS public func scoreFingerprint(handle: Int) -> String {
     guard let score = scoreTable.value(for: Int64(handle)) else { return "" }
     return String(score.stableFingerprint)
+}
+
+/// Every mark the score has, in score order, with `-1` seconds for any whose
+/// cursor does not resolve. Deliberately not `compactMap`: the count has to
+/// agree with the score's own, or a host renders a rehearsal index missing a
+/// letter and has no way to know one was dropped.
+private func rehearsalMarkInfos(for score: Score, handle: Int64) -> [RehearsalMarkInfo] {
+    let clock = PlaybackClockCache.clock(for: handle, score: score)
+    return score.rehearsalMarks().map { mark in
+        RehearsalMarkInfo(
+            text: mark.text,
+            measureIndex: mark.cursor.measureIndex,
+            playerSeconds: clock.playerSeconds(atCursor: mark.cursor) ?? -1,
+        )
+    }
 }

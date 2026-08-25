@@ -39,6 +39,37 @@ const pageBreakScoreBytes = new TextEncoder().encode(`<?xml version="1.0" encodi
     </Staff>
   </Score>
 </museScore>`);
+const inspectorScoreBytes = new TextEncoder().encode(`<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part id="1">
+      <Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>G</defaultClef></Staff>
+      <Instrument id="piano"><longName>Piano</longName></Instrument>
+    </Part>
+    <Part id="2">
+      <Staff id="2"><StaffType group="percussion"><name>perc5Line</name></StaffType><defaultClef>PERC</defaultClef></Staff>
+      <Instrument id="drums"><longName>Drums</longName></Instrument>
+      <show>0</show>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord></voice>
+      </Measure>
+      <Measure>
+        <voice><RehearsalMark><text>B</text></RehearsalMark><Chord><durationType>whole</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord></voice>
+      </Measure>
+    </Staff>
+    <Staff id="2">
+      <Measure>
+        <voice><Chord><durationType>whole</durationType><Note><pitch>36</pitch><tpc>14</tpc></Note></Chord></voice>
+      </Measure>
+      <Measure>
+        <voice><Chord><durationType>whole</durationType><Note><pitch>38</pitch><tpc>14</tpc></Note></Chord></voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>`);
 const expectations = JSON.parse(
   readFileSync(fixturePath("sample-expectations.json"), "utf8"),
 ) as {
@@ -213,6 +244,60 @@ describe("wasm bridge parity with the Apple build", () => {
     }
   });
 
+  it("reports rehearsal marks with player-second seek targets", () => {
+    const score = sheetMusic.loadScore(inspectorScoreBytes);
+    try {
+      const marks = score.rehearsalMarks();
+      expect(marks).toHaveLength(1);
+      expect(marks[0]).toEqual({
+        text: "B",
+        measureIndex: 1,
+        playerSeconds: 2,
+      });
+    } finally {
+      score.release();
+    }
+  });
+
+  it("reports flattened staff descriptors", () => {
+    const score = sheetMusic.loadScore(inspectorScoreBytes);
+    try {
+      expect(score.staffDescriptors()).toEqual([
+        {
+          partIndex: 0,
+          staffIndexInPart: 0,
+          partName: "Piano",
+          isPartVisibleInScore: true,
+          defaultClefRawType: "G",
+        },
+        {
+          partIndex: 1,
+          staffIndexInPart: 0,
+          partName: "Drums",
+          isPartVisibleInScore: false,
+          defaultClefRawType: "PERC",
+        },
+      ]);
+    } finally {
+      score.release();
+    }
+  });
+
+  it("wraps measure frames as nullable objects", () => {
+    const score = sheetMusic.loadScore(inspectorScoreBytes);
+    try {
+      expect(score.measureFrame(0)).toBeNull();
+      score.layout({ pageWidthMM: 210, pageHeightMM: 297 });
+      const frame = score.measureFrame(0);
+      expect(frame).not.toBeNull();
+      expect(frame!.widthMM).toBeGreaterThan(0);
+      expect(frame!.heightMM).toBeGreaterThan(0);
+      expect(score.measureFrame(999)).toBeNull();
+    } finally {
+      score.release();
+    }
+  });
+
   it("a released score refuses further use", () => {
     const score = sheetMusic.loadScore(scoreBytes);
     score.release();
@@ -243,6 +328,10 @@ describe("wasm bridge parity with the Apple build", () => {
     }
 
     expect(declarationText).toContain("loadScore(bytes: Uint8Array): number");
+    expect(declarationText).toContain("rehearsalMarkCount(handle: number): number");
+    expect(declarationText).toContain(
+      "measureFrame(handle: number, measureIndex: number): number[]",
+    );
     expect(declarationText).toContain(
       "computeLayout(handle: number, pageWidthMM: number, pageHeightMM: number, options: LayoutOptions): Uint8Array",
     );

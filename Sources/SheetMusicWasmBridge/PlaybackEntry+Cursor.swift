@@ -87,6 +87,30 @@ import SheetMusicLayout
     )
 }
 
+/// The bounding rectangle of `measureIndex`, flattened as
+/// `[xMM, yMM, widthMM, heightMM]`.
+///
+/// Empty when the handle is unknown, no layout has been computed, or the
+/// measure is not present in the cached document.
+@JS public func measureFrame(handle: Int, measureIndex: Int) -> [Double] {
+    guard measureIndex >= 0,
+          scoreTable.value(for: Int64(handle)) != nil,
+          let document = LayoutDocumentCache.value(for: Int64(handle))
+    else { return [] }
+    for system in document.systems {
+        guard let measure = system.measures
+            .first(where: { $0.measureIndex == measureIndex }) else { continue }
+        let ptToMM = 25.4 / 72.0
+        return [
+            Double(system.origin.x + measure.origin.x) * ptToMM,
+            Double(system.origin.y + measure.origin.y) * ptToMM,
+            Double(measure.width) * ptToMM,
+            Double(system.size.height) * ptToMM,
+        ]
+    }
+    return []
+}
+
 /// The player position a tap lands on, for seeking by clicking the score.
 ///
 /// `xMM` / `yMM` are in document millimetres — the same coordinates

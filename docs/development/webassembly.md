@@ -3,6 +3,34 @@
 This document covers the Swift WebAssembly build, browser bridge, tests, and
 download-size constraints.
 
+## Parity with the Android surface
+
+The two bridges are close but not identical, and the differences are of three
+kinds.
+
+**Structurally absent.** The PDF entry points (`nativeLoadScoreFromPDF`,
+`nativePdfHitTest`, `nativePdfCursorRect`, `nativePdfPageSizes`,
+`nativeReleasePdfGeometry`, `nativeLoadScoreWithGeometryFromPDF`) have no wasm
+equivalent because `SheetMusicPDF` is not in the portable graph.
+
+**Deliberately collapsed.** Android polls FluidSynth's unrolled ticks, so it
+carries `nativeFrameAtTick`, `nativeSecondsAtTick`, `nativeUnrolledTickForNotated`,
+`nativeCursorFrame`, `nativeNearestCursor` and `nativeFrameForCursor`. A Web
+Audio sequencer reports seconds, so this surface speaks seconds and folds those
+into `cursorRectAtPlayerSeconds` and `playerSecondsAtPoint`. Likewise
+`nativeTimelineSummary` is `playbackSummary`, `nativeGMInstrumentList` is
+`gmInstrumentNames` + `gmInstrumentFamilies`, and `nativeCountIn` is
+`countInSeconds` + `renderCountInMetronomeMidi`.
+
+**Present only on one side.** wasm has the thirteen scalar edit-intent entry
+points, `editSessionState`, and the mixer surface, none of which Android needs —
+its host authors intents in a second Swift image and reads its own session
+directly. Android still has `nativeAnchorReferencePoint` / `nativeResolveAnchor`
+(freehand-ink anchoring for a specific integration), the tick-space introspection
+`nativeEarliestOf` / `nativeItemEndTick` / `nativePitchAndStaffOfNote`, the synth
+configuration `nativeInstrumentParams` / `nativeStaffParams`, and the keyboard
+navigation `nativeStepMeasureCursor` / `nativeCursorAdvancedByBeats`.
+
 ## Supported surface
 
 The portable graph includes Foundation, Core, XMLTools, Zip, MIDI, Layout,
@@ -161,6 +189,24 @@ the summary it read and the mixer map it seeded. The sequencer then performs the
 old score while the cursor tracks the new one. `Score.editGeneration` counts
 accepted edits and the engine refuses `play` / `seekToMeasure` / `seekToPoint` /
 `exportWav` once it has moved — a loud error in place of a slow divergence.
+
+**A stored position in seconds does not survive an edit.** This surface speaks
+player seconds rather than ticks, which is right for playback — the sequencer
+reports seconds, the cursor wants a continuous value, and a click resolves
+through a `ScoreCursor` so the geometry never passes through seconds. But
+seconds depend on the tempo map and on note durations, and an edit changes both.
+A tick keeps its musical meaning across an edit; a second does not. `play` and
+`seek` are protected by `editGeneration`, so this cannot bite during playback —
+but a host that persists a seconds bookmark, edits, and restores it lands
+somewhere else musically, with nothing to signal it. Store a measure index, or
+re-derive the seconds after the edit.
+
+Measure boundaries themselves round-trip safely: `measureIndex(atPlayerSeconds:)`
+converts back to a tick and compares against integer measure starts, so the
+float only participates in one conversion rather than in the comparison. Two
+hundred and five boundaries were checked across the committed fixtures with no
+mismatch — all at 120 BPM, so a tempo whose boundaries are not exact binary
+fractions remains unverified.
 
 **A hit test is not a nearest match.** `editingHitTest` answers nil on empty
 paper so a tap can deselect; `playerSecondsAtPoint` next door always resolves,
