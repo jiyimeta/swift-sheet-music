@@ -34,10 +34,11 @@ struct DeleteMeasureTests {
         }
     }
 
-    @Test("a first bar with its own signature kind keeps it over the deleted one")
+    @Test("a first bar with its own signature kind keeps it, in canonical clef/key/time order")
     func deleteFirstWithOwnKey() throws {
         var score = threeBarScore()
-        // Give bar 1 its own key change; deleting bar 0 must keep it and only inherit the time signature.
+        // Give bar 1 its own key change; deleting bar 0 must keep it and only inherit the time signature —
+        // ahead of it, per MuseScore's structural clef→key→time order, not wherever a blind prepend lands it.
         for staffIndex in score.parts[0].staves.indices {
             score.parts[0].staves[staffIndex].measures[1].voices[0].elements
                 .insert(.keySignature(KeySignature(concertKey: 3)), at: 0)
@@ -45,10 +46,70 @@ struct DeleteMeasureTests {
         _ = try DeleteMeasure(measureIndex: 0).apply(to: &score)
         for staff in score.parts[0].staves {
             let first = staff.measures[0].voices[0].elements
-            #expect(first.contains(.keySignature(KeySignature(concertKey: 3))))
-            #expect(!first.contains(.keySignature(KeySignature(concertKey: -2))))
-            #expect(first.contains(.timeSignature(TimeSignature(numerator: 6, denominator: 8))))
+            #expect(first[0] == .keySignature(KeySignature(concertKey: 3)))
+            #expect(first[1] == .timeSignature(TimeSignature(numerator: 6, denominator: 8)))
+            #expect(first[2].isMeasureRest)
         }
+    }
+
+    @Test("deleting bar 0 shifts tuplet ranges in the incoming bar that inherits signatures")
+    func deleteFirstShiftsTuplets() throws {
+        var score = threeBarScore()
+        let members: [VoiceElement] = [
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])),
+        ]
+        // Bar 1 (the incoming first bar once bar 0 is deleted) was [rest]; give it 3 triplet members instead.
+        for staffIndex in score.parts[0].staves.indices {
+            score.parts[0].staves[staffIndex].measures[1].voices[0].elements.replaceSubrange(0 ..< 1, with: members)
+            score.parts[0].staves[staffIndex].measures[1].voices[0].tuplets = [
+                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
+            ]
+        }
+        let original = score
+
+        let inverse = try DeleteMeasure(measureIndex: 0).apply(to: &score)
+
+        // The incoming bar inherited [key, time] (2 elements) prepended ahead of its tuplet members, so the
+        // tuplet's indices must shift up by 2 — asserted right after apply, not only after the round trip.
+        for staff in score.parts[0].staves {
+            #expect(staff.measures[0].voices[0].tuplets ==
+                [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)])
+        }
+
+        _ = try inverse.apply(to: &score)
+        #expect(score == original)
+    }
+
+    @Test("undo restores a spanner that ended exactly at the deleted measure")
+    func deleteEndpointSpannerUndo() throws {
+        var score = threeBarScore()
+        // Anchored at bar 0 with offset 1, this spanner's span ends exactly at bar 1 — the boundary the
+        // generic insertion predicate can't distinguish from "never touched this spanner" once the delete
+        // has already shrunk the offset.
+        let spanner = Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 1)
+        score.parts[0].staves[0].measures[0].voices[0].elements.append(.spanner(spanner))
+        let original = score
+
+        let inverse = try DeleteMeasure(measureIndex: 1).apply(to: &score)
+        _ = try inverse.apply(to: &score)
+
+        #expect(score == original)
+    }
+
+    @Test("delete → undo is exact for a score whose systemMeasures never tracked measures")
+    func deleteUndoWithEmptySystemMeasures() throws {
+        var score = EditingFixtures.twoMeasuresOfQuarterRests()
+        #expect(score.systemMeasures.isEmpty)
+        let original = score
+
+        let inverse = try DeleteMeasure(measureIndex: 0).apply(to: &score)
+        #expect(score.systemMeasures.isEmpty)
+
+        _ = try inverse.apply(to: &score)
+        #expect(score.systemMeasures.isEmpty)
+        #expect(score == original)
     }
 
     @Test("inverse restores the exact score, including the bar-0 signature merge")

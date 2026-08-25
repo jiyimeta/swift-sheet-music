@@ -91,4 +91,31 @@ struct InsertMeasureTests {
         }
         #expect(restoredSpanner.nextMeasuresOffset == 1)
     }
+
+    @Test("insert at 0 shifts tuplet ranges in the displaced bar")
+    func insertAtZeroShiftsTuplets() throws {
+        var score = twoBarScore()
+        let members: [VoiceElement] = [
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])),
+        ]
+        // Bar 0 was [key, time, rest]; replace the rest (index 2) with 3 triplet members.
+        score.parts[0].staves[0].measures[0].voices[0].elements.replaceSubrange(2 ..< 3, with: members)
+        score.parts[0].staves[0].measures[0].voices[0].tuplets = [
+            Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4),
+        ]
+        let original = score
+
+        let inverse = try InsertMeasure(measureIndex: 0).apply(to: &score)
+
+        // The 2-element signature prefix was removed from this bar (now at measure index 1), so the
+        // tuplet's indices must shift down by 2 — asserted right after apply, not only after the round trip,
+        // since the bug this guards against is symmetric and would otherwise cancel out invisibly.
+        #expect(score.parts[0].staves[0].measures[1].voices[0].tuplets ==
+            [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2)])
+
+        _ = try inverse.apply(to: &score)
+        #expect(score == original)
+    }
 }

@@ -13,6 +13,37 @@ enum MeasureStructure {
         Array(voice.elements.prefix(while: isLeadingSignature))
     }
 
+    /// Builds bar 0's merged leading-signature run in MuseScore's structural order — clef, then key
+    /// signature, then time signature — regardless of which bar contributed which kind
+    /// (`src/engraving/dom/masterscore.cpp`: signatures live in typed segments whose tick-0 order is
+    /// Clef → KeySig → TimeSig, so a merge can never reproduce insertion order). `incoming`'s own
+    /// declaration of a kind always wins over `deleted`'s — a bar that already declares its own key/time/
+    /// clef never inherits that kind from the deleted bar.
+    static func mergedLeadingSignatures(
+        inheritingFrom deleted: [VoiceElement], into incoming: [VoiceElement],
+    ) -> [VoiceElement] {
+        func resolve(_ matches: (VoiceElement) -> Bool) -> VoiceElement? {
+            incoming.first(where: matches) ?? deleted.first(where: matches)
+        }
+        return [
+            resolve { if case .clef = $0 { true } else { false } },
+            resolve { if case .keySignature = $0 { true } else { false } },
+            resolve { if case .timeSignature = $0 { true } else { false } },
+        ].compactMap(\.self)
+    }
+
+    /// Shifts every tuplet's `startIndex`/`endIndex` in `voice` by `delta` — used whenever elements are
+    /// spliced at the head of a voice's element list (the bar-0 signature move on insert, or the
+    /// signature re-home on delete), so tuplet ranges keep pointing at the same notes. Mirrors the remap
+    /// convention `CreateTuplet` uses for its own splice.
+    static func shiftTuplets(in voice: inout Voice, by delta: Int) {
+        guard delta != 0 else { return }
+        for index in voice.tuplets.indices {
+            voice.tuplets[index].startIndex += delta
+            voice.tuplets[index].endIndex += delta
+        }
+    }
+
     static func measureCount(of score: Score) -> Int {
         score.parts.first?.staves.first?.measures.count ?? 0
     }
@@ -29,18 +60,30 @@ enum MeasureStructure {
     /// Spanners store a relative forward measure distance; a structural change between a spanner's anchor and its
     /// end must stretch or shrink that distance.
     static func adjustSpannerOffsets(in score: inout Score, forInsertionAt index: Int) {
-        adjustSpannerOffsets(in: &score) { anchorMeasure, offset in
-            anchorMeasure < index && index <= anchorMeasure + offset ? offset + 1 : offset
+        adjustSpannerOffsets(in: &score) { id, offset in
+            id.measureIndex < index && index <= id.measureIndex + offset ? offset + 1 : offset
         }
     }
 
-    static func adjustSpannerOffsets(in score: inout Score, forDeletionAt index: Int) {
-        adjustSpannerOffsets(in: &score) { anchorMeasure, offset in
-            anchorMeasure < index && index <= anchorMeasure + offset ? offset - 1 : offset
+    /// Shrinks every spanner whose span crosses the deleted measure, and returns the addresses of the ones
+    /// whose span *ended exactly at* the deleted measure (`index == anchorMeasure + offset`). Those need an
+    /// exact re-increment — not the generic insertion predicate — when the deletion's inverse reinserts the
+    /// column: `forInsertionAt` tests `index <= anchor + offset` against the already-shrunk offset, which
+    /// no longer includes the boundary the shrink just excluded. See `DeleteMeasure.apply` / `InsertMeasure.apply`.
+    @discardableResult
+    static func adjustSpannerOffsets(in score: inout Score, forDeletionAt index: Int) -> [VoiceElementID] {
+        var endpoints: [VoiceElementID] = []
+        adjustSpannerOffsets(in: &score) { id, offset in
+            guard id.measureIndex < index, index <= id.measureIndex + offset else { return offset }
+            if index == id.measureIndex + offset {
+                endpoints.append(id)
+            }
+            return offset - 1
         }
+        return endpoints
     }
 
-    private static func adjustSpannerOffsets(in score: inout Score, _ transform: (Int, Int) -> Int) {
+    private static func adjustSpannerOffsets(in score: inout Score, _ transform: (VoiceElementID, Int) -> Int) {
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
                 for measureIndex in score.parts[partIndex].staves[staffIndex].measures.indices {
@@ -49,8 +92,11 @@ enum MeasureStructure {
                             .voices[voiceIndex].elements
                         for elementIndex in elements.indices {
                             guard case var .spanner(spanner) = elements[elementIndex] else { continue }
-                            spanner.nextMeasuresOffset =
-                                transform(measureIndex, spanner.nextMeasuresOffset)
+                            let id = VoiceElementID(
+                                staff: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex),
+                                measureIndex: measureIndex, voiceIndex: voiceIndex, elementIndex: elementIndex,
+                            )
+                            spanner.nextMeasuresOffset = transform(id, spanner.nextMeasuresOffset)
                             score.parts[partIndex].staves[staffIndex].measures[measureIndex]
                                 .voices[voiceIndex].elements[elementIndex] = .spanner(spanner)
                         }
