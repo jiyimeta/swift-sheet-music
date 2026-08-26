@@ -49,6 +49,9 @@
             /// match, accumulated in the SAME pass so the two columns
             /// describe one run and not two.
             var vgran = OMRVerticalGranularity.Totals()
+            /// Note-level attribution of the beam seam's loss. Gated on
+            /// `OMR_BEAM_DIAG=1`; see `OMRBeamDiagnostics`.
+            var beamdiag = OMRBeamDiagnostics.Totals()
         }
 
         @Test func rasterPathsAgainstLabels() throws {
@@ -79,6 +82,9 @@
                     + " peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB",
             )
             printBeamCoverage(totals.beamCoverageBuckets)
+            if ProcessInfo.processInfo.environment["OMR_BEAM_DIAG"] == "1" {
+                OMRBeamDiagnostics.report(totals.beamdiag)
+            }
             OMRVerticalGranularity.report(totals.vgran)
             for key in Set(totals.endReal.keys).union(totals.endFalse.keys).sorted() {
                 print(
@@ -208,9 +214,34 @@
                 totals.beamCoverageBuckets[Int((c * 20).rounded(.down)), default: 0] += 1
             }
 
+            beamDiagnostics(
+                dir: dir, labelFile: labelFile, predicted: predicted.beams,
+                truth: truthBeams, truthPaths: truthPaths, spacing: spacing,
+                into: &totals,
+            )
             runProbes(
                 predicted: predicted.paths, truth: truthPaths,
                 analysis: analysis, page: page, spacing: spacing, into: &totals,
+            )
+        }
+
+        /// Note-level attribution of the beam loss, and one row per page so
+        /// the aggregate can be crossed against the per-render duration
+        /// deltas. Off unless `OMR_BEAM_DIAG=1`.
+        func beamDiagnostics(
+            dir: String, labelFile: String,
+            predicted: [OMRPageLabels.Beam], truth: [OMRPageLabels.Beam],
+            truthPaths: [OMRPageLabels.Path], spacing: Double,
+            into totals: inout Totals,
+        ) {
+            guard ProcessInfo.processInfo.environment["OMR_BEAM_DIAG"] == "1" else { return }
+            let row = OMRBeamDiagnostics.accumulate(
+                predicted: predicted, truth: truth, truthPaths: truthPaths,
+                spacingPt: spacing, into: &totals.beamdiag,
+            )
+            print(
+                "[beamdiag][page] render=\(URL(fileURLWithPath: dir).lastPathComponent) "
+                    + "file=\(labelFile) " + OMRBeamDiagnostics.row(row),
             )
         }
 

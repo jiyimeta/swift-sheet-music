@@ -267,6 +267,30 @@
             predicted: [OMRPageLabels.Beam], truth: [OMRPageLabels.Beam],
             staffSpacingPt: Double,
         ) -> (tp: Int, fp: Int, fn: Int, coverage: [Double]) {
+            let accepted = beamAssignment(
+                predicted: predicted, truth: truth, staffSpacingPt: staffSpacingPt,
+            )
+            let coverage = accepted.map {
+                xCoverage(predicted[$0.pi], of: truth[$0.ti])
+            }
+            return (
+                accepted.count, predicted.count - accepted.count,
+                truth.count - accepted.count, coverage,
+            )
+        }
+
+        /// WHICH beams the greedy match above pairs, in acceptance order,
+        /// rather than only how many.
+        ///
+        /// Extracted so a probe can ask what the counts cannot: an
+        /// unmatched truth beam may be a thin beam nobody saw or the inner
+        /// level of a stack whose outer level DID match, and only the
+        /// assignment distinguishes them. `beamPR` is written in terms of
+        /// this, so the two can never describe different matchings.
+        static func beamAssignment(
+            predicted: [OMRPageLabels.Beam], truth: [OMRPageLabels.Beam],
+            staffSpacingPt: Double,
+        ) -> [(pi: Int, ti: Int)] {
             var pairs: [(score: Double, pi: Int, ti: Int)] = []
             for (pi, p) in predicted.enumerated() {
                 for (ti, t) in truth.enumerated() {
@@ -284,16 +308,13 @@
             pairs.sort { ($0.score, $0.pi, $0.ti) > ($1.score, $1.pi, $1.ti) }
             var usedP = Set<Int>()
             var usedT = Set<Int>()
-            var coverage: [Double] = []
+            var accepted: [(pi: Int, ti: Int)] = []
             for pair in pairs where !usedP.contains(pair.pi) && !usedT.contains(pair.ti) {
                 usedP.insert(pair.pi)
                 usedT.insert(pair.ti)
-                coverage.append(xCoverage(predicted[pair.pi], of: truth[pair.ti]))
+                accepted.append((pair.pi, pair.ti))
             }
-            return (
-                usedT.count, predicted.count - usedP.count, truth.count - usedT.count,
-                coverage,
-            )
+            return accepted
         }
 
         /// Fraction of `truth`'s x-range covered by `predicted`'s. A
