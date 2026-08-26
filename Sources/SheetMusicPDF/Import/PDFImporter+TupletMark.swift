@@ -130,10 +130,35 @@ extension PDFImporter {
     }
 
     /// The ratio a tuplet digit names, or nil for digits we do not handle.
+    ///
+    /// `normal` is the largest power of two at or below the digit — the
+    /// convention MuseScore writes when only a number is engraved, and the
+    /// one the two original entries (3 -> 2, 6 -> 4) already followed.
+    ///
+    /// 5, 7 and 9 were missing, and a digit that returns nil is not a
+    /// partial read — the whole mark is dropped and every note under it is
+    /// composed at its plain value. Measured on the eval corpus before this
+    /// was added: 165 quintuplet sixteenths (`1/20`) short against 190
+    /// sixteenths over-produced, and 252 septuplet sixteenths (`1/28`)
+    /// short against 227 thirty-seconds over — 428 notes across 18 renders,
+    /// while triplets were short by 11. The arithmetic confirms the ratios
+    /// rather than assuming them: 5 in the time of 4 sixteenths is
+    /// (4/5)x(1/16) = 1/20, and 7 in the time of 4 sixteenths is
+    /// (4/7)x(1/16) = 1/28, which is exactly what the authored scores hold.
+    ///
+    /// 2 and 4 are deliberately absent. A duplet or quadruplet borrows from
+    /// COMPOUND time and inverts the ratio (2 in the time of 3), so it
+    /// cannot be read from the digit alone — it needs the prevailing time
+    /// signature, which this function does not see. Guessing (2, 3) for a
+    /// "2" would also put the importer one mis-detected digit away from
+    /// re-timing a bar around a time signature's numeral.
     static func tupletRatio(forDigit text: String) -> (normal: Int, actual: Int)? {
         switch text.trimmingCharacters(in: .whitespacesAndNewlines) {
         case "3": (2, 3)
+        case "5": (4, 5)
         case "6": (4, 6)
+        case "7": (4, 7)
+        case "9": (8, 9)
         default: nil
         }
     }
