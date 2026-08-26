@@ -45,6 +45,10 @@
             /// head-to-nearer-end distance, split by whether they are real.
             var endReal: [Int: Int] = [:]
             var endFalse: [Int: Int] = [:]
+            /// The same verticals re-scored with a granularity-tolerant
+            /// match, accumulated in the SAME pass so the two columns
+            /// describe one run and not two.
+            var vgran = OMRVerticalGranularity.Totals()
         }
 
         @Test func rasterPathsAgainstLabels() throws {
@@ -75,6 +79,7 @@
                     + " peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB",
             )
             printBeamCoverage(totals.beamCoverageBuckets)
+            OMRVerticalGranularity.report(totals.vgran)
             for key in Set(totals.endReal.keys).union(totals.endFalse.keys).sorted() {
                 print(
                     "[endprofile] sp=\(Double(key) / 4) "
@@ -222,6 +227,10 @@
                 profileVerticals(
                     predicted: predicted, truth: truth,
                     spacing: spacing, into: &totals,
+                )
+                OMRVerticalGranularity.accumulate(
+                    predicted: predicted, truth: truth,
+                    spacing: spacing, into: &totals.vgran,
                 )
             }
             if env["OMR_STEM_END_PROBE"] == "1" {

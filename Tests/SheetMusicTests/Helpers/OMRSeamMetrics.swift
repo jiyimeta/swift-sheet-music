@@ -198,23 +198,44 @@
         ) -> (tp: Int, fp: Int, fn: Int) {
             let tBars = truth.filter { $0.kind == "vertical" }
             let pBars = predicted.filter { $0.kind == "vertical" }
-            var used = Set<Int>()
-            var tp = 0
-            for t in tBars {
+            let assign = barlineAssignment(
+                predicted: pBars, truth: tBars, staffSpacingPt: staffSpacingPt,
+            )
+            let tp = assign.truthMatched.filter(\.self).count
+            let usedP = assign.predMatched.filter(\.self).count
+            return (tp, pBars.count - usedP, tBars.count - tp)
+        }
+
+        /// WHICH verticals the greedy centre-distance match above pairs,
+        /// rather than only how many.
+        ///
+        /// Extracted so a probe can ask a question the counts cannot
+        /// answer: an unmatched prediction may be a spurious stroke, or it
+        /// may be one segment of a truth vertical the other side merged
+        /// differently — and those two want opposite responses. Both input
+        /// arrays must already be filtered to `kind == "vertical"`; the
+        /// returned flags are indexed to them.
+        static func barlineAssignment(
+            predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
+            staffSpacingPt: Double,
+        ) -> (truthMatched: [Bool], predMatched: [Bool]) {
+            var truthMatched = [Bool](repeating: false, count: truth.count)
+            var predMatched = [Bool](repeating: false, count: predicted.count)
+            for (ti, t) in truth.enumerated() {
                 let tx = (t.rectPt[0] + t.rectPt[2]) / 2
                 let ty = (t.rectPt[1] + t.rectPt[3]) / 2
-                for (i, p) in pBars.enumerated() where !used.contains(i) {
+                for (i, p) in predicted.enumerated() where !predMatched[i] {
                     let px = (p.rectPt[0] + p.rectPt[2]) / 2
                     let py = (p.rectPt[1] + p.rectPt[3]) / 2
                     let d = ((px - tx) * (px - tx) + (py - ty) * (py - ty)).squareRoot()
                     if d <= 0.5 * staffSpacingPt {
-                        used.insert(i)
-                        tp += 1
+                        predMatched[i] = true
+                        truthMatched[ti] = true
                         break
                     }
                 }
             }
-            return (tp, pBars.count - used.count, tBars.count - tp)
+            return (truthMatched, predMatched)
         }
 
         /// Greedy one-to-one beam match: a predicted beam may satisfy at
