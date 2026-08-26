@@ -19,6 +19,19 @@ export type {
   PlaybackEngineOptions,
   PlaybackState,
 } from "./engine.js";
+export {
+  AUDIO_FILE_TYPES,
+  encodeAudioFile,
+  isExportFormatSupported,
+} from "./audio-file.js";
+export type {
+  AudioExportFormat,
+  AudioFileResult,
+  AudioFileType,
+} from "./audio-file.js";
+export { encodeAiff } from "./aiff.js";
+export { muxAacIntoMp4 } from "./mp4.js";
+export type { Mp4MuxOptions } from "./mp4.js";
 export { encodeWav, sliceBuffer } from "./wav.js";
 export { createSpessaSynthHost } from "./synth.js";
 export type { SpessaSynthHostOptions } from "./synth.js";

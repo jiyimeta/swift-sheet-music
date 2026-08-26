@@ -20,11 +20,30 @@ import type {
   ScorePosition,
 } from "../index.js";
 import type { SynthHost } from "./types.js";
-import { encodeWav, sliceBuffer } from "./wav.js";
+import {
+  assertExportFormatSupported,
+  type AudioExportFormat,
+  type AudioFileResult,
+  encodeAudioFile,
+  isExportFormatSupported,
+} from "./audio-file.js";
+import { sliceBuffer } from "./wav.js";
+
+/** Every format the shared `AudioFileFormat` names, in a stable order. */
+const ALL_EXPORT_FORMATS: readonly AudioExportFormat[] = ["wav", "aiff", "m4a", "mp3"];
 
 export interface AudioExportOptions {
+  /**
+   * Container and codec. Defaults to `"wav"`.
+   *
+   * `"mp3"` always throws in a browser — no encoder exists for it. Ask
+   * `supportedExportFormats()` before offering a choice.
+   */
+  readonly format?: AudioExportFormat;
   /** Defaults to 44100. */
   readonly sampleRate?: number;
+  /** Compressed formats only. Bits per second; defaults to 192000. */
+  readonly bitRate?: number;
   /**
    * Measures to export, or the whole score when omitted. Pass the active loop's
    * range to write exactly what is being looped.
@@ -449,7 +468,23 @@ export class PlaybackEngine {
   }
 
   /**
-   * Render the score to a 16-bit PCM `.wav`, faster than real time.
+   * The formats this environment can actually write, in a stable order.
+   *
+   * Worth asking before building a format picker: `"m4a"` needs a WebCodecs
+   * `AudioEncoder`, and `"mp3"` is never in the list because no browser ships
+   * an encoder for it.
+   */
+  async supportedExportFormats(
+    options: { readonly sampleRate?: number; readonly bitRate?: number } = {},
+  ): Promise<AudioExportFormat[]> {
+    const answers = await Promise.all(
+      ALL_EXPORT_FORMATS.map((format) => isExportFormatSupported(format, options)),
+    );
+    return ALL_EXPORT_FORMATS.filter((_, index) => answers[index] === true);
+  }
+
+  /**
+   * Render the score to an audio file, faster than real time.
    *
    * Carries the mixer exactly as it stands, so the file matches what is being
    * heard. The metronome does not: clicks are a rehearsal aid, and no other
@@ -461,15 +496,22 @@ export class PlaybackEngine {
    * there is cut mid-tail instead of re-struck — the same thing looping that
    * range sounds like.
    *
-   * Throws when the host has no offline path (`canExport` is `false`).
+   * Throws when the host has no offline path (`canExport` is `false`), and when
+   * the format is one this browser cannot write.
    */
-  async exportWav(options: AudioExportOptions = {}): Promise<Uint8Array> {
+  async exportAudio(options: AudioExportOptions = {}): Promise<AudioFileResult> {
     this.assertLive();
     this.assertScoreUnedited();
     const renderOffline = this.host.renderOffline;
     if (renderOffline === undefined) {
       throw new Error("this synth host cannot render offline");
     }
+
+    const format = options.format ?? "wav";
+    // Ahead of the render, not after it: an export that cannot succeed should
+    // fail while the user is still looking at the button, not once the whole
+    // score has been rendered at some cost.
+    await assertExportFormatSupported(format, options);
 
     const sampleRate = options.sampleRate ?? 44_100;
     const tail = options.tailSeconds ?? 2;
@@ -489,9 +531,20 @@ export class PlaybackEngine {
       seconds: end + (rendersToScoreEnd ? tail : 0),
     });
 
-    return encodeWav(
+    return encodeAudioFile(
       start > 0 ? sliceBuffer(buffer, start, buffer.duration) : buffer,
+      { format, bitRate: options.bitRate },
     );
+  }
+
+  /**
+   * `exportAudio` as WAVE, returning the bytes alone.
+   *
+   * The call most hosts want, and the one 2.0.0 shipped.
+   */
+  async exportWav(options: Omit<AudioExportOptions, "format"> = {}): Promise<Uint8Array> {
+    const { bytes } = await this.exportAudio({ ...options, format: "wav" });
+    return bytes;
   }
 
   dispose(): void {
