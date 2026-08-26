@@ -371,6 +371,8 @@
             print(
                 "[hybrid][SUMMARY] mode=\(mode.rawValue) "
                     + "jitterSp=\(Self.jitterSigma()) rows=\(rows) "
+                    + "vFloorSp=\(RasterPage.verticalMinLengthInSpaces) "
+                    + "vBeamedFloorSp=\(RasterPage.verticalBeamedMinLengthInSpaces) "
                     + "peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB",
             )
         }

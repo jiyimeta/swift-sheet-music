@@ -47,7 +47,10 @@ extension RasterPage {
     /// less admitted ink. Exact measure counts are 142/198 at every value
     /// including the old 3.5 — structure never moved, which is the
     /// signature of a change confined to the stem consumer.
-    static let verticalMinLengthInSpaces = 2.5
+    ///
+    /// `OMR_VERTICAL_MIN_SP` overrides it for a sweep — see
+    /// `sweepOverride` below.
+    static let verticalMinLengthInSpaces = sweepOverride("OMR_VERTICAL_MIN_SP") ?? 2.5
 
     /// Shortest column run kept when it TOUCHES A DETECTED BEAM, in staff
     /// spaces.
@@ -98,7 +101,30 @@ extension RasterPage {
     /// only discriminator here that survives on a page whose noteheads
     /// were missed, and this value is still live as the column-run filter
     /// (`minLengthPx`) even while the branch is not.
-    static let verticalBeamedMinLengthInSpaces = 2.5
+    ///
+    /// `OMR_VERTICAL_BEAMED_MIN_SP` overrides it for a sweep — see
+    /// `sweepOverride` below.
+    static let verticalBeamedMinLengthInSpaces =
+        sweepOverride("OMR_VERTICAL_BEAMED_MIN_SP") ?? 2.5
+
+    /// A threshold's sweep value, read once from the environment.
+    ///
+    /// Both floors above feed a length filter that runs inside the
+    /// column walk, so sweeping them by editing the source costs a
+    /// rebuild of `SheetMusicPDF` and everything downstream PER VALUE —
+    /// on a loaded machine that dwarfs the ~2 min the measurement itself
+    /// takes. Reading the value here instead lets ONE release build
+    /// serve every point of a sweep.
+    ///
+    /// Unset (or unparseable) returns `nil` and the shipped constant
+    /// stands, so the default path is byte-identical to a build without
+    /// this hook. Same shape as the `PDF_NO_TUPLET` / `PDF_TUPLET_DEBUG`
+    /// switches in the importer: a diagnostic that is inert unless a
+    /// harness asks for it.
+    private static func sweepOverride(_ key: String) -> Double? {
+        guard let raw = ProcessInfo.processInfo.environment[key] else { return nil }
+        return Double(raw)
+    }
 
     // NO UPPER LENGTH LIMIT, and the reason is worth keeping.
     //
