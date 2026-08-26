@@ -497,6 +497,17 @@ uses:
     2. Python  model.train / model.export     → checkpoint → .mlpackage
     3. Swift   OMR_DETECT_EVAL=1 swift test   → seam + end-to-end numbers
 
+Step 3 takes two optional switches, both off by default and neither of which
+touches the numbers:
+
+- `OMR_DETECT_TIMING=1` adds `[detect-timing]` lines — the sweep split into
+  named phases, slowest first, with a per-call mean. Use it before optimising
+  anything here; the phase this section's cost table blamed for two rounds was
+  0.4% of the run.
+- `[detect-split]` lines are always printed: the same seam numbers partitioned
+  by `prep.split_of` bucket. **Read those, not the aggregate**, for anything
+  about generalization — see the seam table below for why.
+
 Python never re-derives deskew or scale; it consumes what step 1 wrote. A
 second implementation would drift, and the symptom would not be a crash — it
 would read as "the detector is bad", which is exactly what cost this program a
@@ -509,21 +520,48 @@ against a Python probe's 0.91, and the whole gap was an unmapped frame).
     OMR_PREP_EXPORT=1 swift test -c release --no-parallel \
         --filter OMRPrepExportHarness
 
-| root | renders | pages | glyphs | dropped_no_bbox | skipped_no_staff | oversize | failed | size |
-|---|---|---|---|---|---|---|---|---|
-| clean (v2) | 2208 | 4650 | 911409 | 0 | 0 | 0 | 0 | 692MB |
-| frozen (degraded) | 2208 | 4641 | 909363 | 0 | 9 | 0 | 0 | 5.4GB |
+| root | renders | pages | glyphs | dropped_no_bbox | skipped_no_staff | skipped_implausible_scale | oversize | failed | size |
+|---|---|---|---|---|---|---|---|---|---|
+| clean (`v2-prep-v3`) | 2208 | 4650 | 911409 | 0 | 0 | 0 | 0 | 0 | 693MB |
+| frozen (`v2-prep-frozen-v3`) | 2208 | 4637 | 908435 | 0 | 9 | **4** | 0 | 0 | 5.4GB |
 
-Three of those counters answer questions the design left open:
+What those counters answer:
 
-- **`oversize=0` on both.** The parent design worried that a `brace` cannot be
-  centred inside one tile. At S=12 / T=384 it never happens. Do not design
-  around it.
 - **`skipped_no_staff` 0 clean, 9 degraded.** Degradation destroys the staff
   outright on 9 of 4650 pages, so the detector never sees them and no amount of
   recognition recovers them. That is 0.19%, and it is a floor on any degraded
   number below.
-- **`dropped_no_bbox=0`** over 911k glyphs — the ink-bbox chain holds at scale.
+- **`dropped_no_bbox=0`** over 908k glyphs — the ink-bbox chain holds at scale.
+- **`skipped_implausible_scale=4`, and `oversize=0` only BECAUSE of it.** See
+  below; this counter is new and it exists because the old `oversize=0` was not
+  the reassurance it was read as.
+
+**CORRECTED — `oversize=0` was unfalsifiable, not reassuring.** This section
+used to say the parent design's worry that a `brace` cannot be centred inside
+one tile "never happens at S=12 / T=384; do not design around it". The
+regenerated degraded root reported `oversize=8` — and every one of the eight
+was a `clefG` / `clefG8vb` with a rendered size of **461-729 px**, i.e. a clef
+38 to 60 staff spaces tall.
+
+They were not oversized glyphs. They were four pages whose staff spacing
+`RasterPage.analyze` measured far too small, so `OMRPrepNormalize` UPSCALED
+them to reach S: scale 4.00 and 3.43 (`extz_Now_is_the_time_ms4_MuseJazz_v6`
+pages 9 and 48) and 2.67 twice. Every clean page sits at or below 1.5; 4628 of
+4641 degraded pages do too.
+
+The damage is not disk. A 7196x9992 normalized page yields **~736 tiles**
+against a normal page's ~30, so four pages contributed on the order of 1% of
+the degraded root's training tiles, every one of them teaching the geometry
+heads that a notehead is four staff spaces wide — the exact head this round
+fixed the targets of.
+
+**It is not new, and it was not caused by the target fix**: the pre-existing
+`v2-prep-frozen` carries the same scale 4.00 / 3.43 on the same two pages. What
+changed is detectability. The old constant targets were 4.023 sp ≈ 48 px, which
+cannot exceed a 384 px tile no matter how badly a page is scaled, so `oversize`
+was a counter that could not move — and it was being read as evidence.
+
+`OMRPrepExport.maxNormalizeScale = 2.0` now skips such a page and counts it.
 
 The degraded root is 8× the clean one on disk because degradation noise does
 not compress.
@@ -541,6 +579,25 @@ a notehead — while the ink bbox height is roughly 1. So the `renderedSize`
 regression channel's targets change by ~4×, on clean pages as well as
 degraded ones (the old shortcut only happened to agree with the mapped-corner
 length under an identity `label_transform`).
+
+**Measured on `v2-prep` as it stands, the old targets are worse than "off by a
+factor": they are two class-INDEPENDENT constants.** Over 40 pages, every class
+reports the same `rendered_size_px / staff_space_px` and the same
+`advance_px / staff_space_px`:
+
+| class | n | renderedSize/sp | advance/sp |
+|---|---|---|---|
+| noteheadBlack | 7816 | 4.023 | 2.012 |
+| accidentalNatural | 3908 | 4.023 | 2.012 |
+| accidentalFlat | 977 | 4.023 | 2.012 |
+| clefG | 376 | 4.020 | 2.010 |
+
+The label file's `rendered_size_pt` is exactly `2 x advance_pt` for every glyph,
+and both come from the font's em metrics rather than from ink — while the real
+ink bbox varies a lot by class (on one page: `clefG` bbox height 24.58 pt
+against a recorded 15.52, `noteheadBlack` 5.98 against 18.26). **The geom head
+was therefore trained to regress the same two numbers for a notehead and for a
+clef.** Regeneration is not housekeeping.
 
 Both prep roots above and the checkpoint (`~/omr-models/run1`) were
 exported/trained BEFORE this fix, so they carry the OLD `renderedSize`
@@ -566,7 +623,43 @@ the degraded root:
     OMR_PREP_EXPORT=1 swift test -c release --no-parallel \
         --filter OMRPrepExportHarness
 
-Measured cost (see "Costs, measured" below): 51 min clean, 39 min degraded.
+Measured 2026-08-18 on the regenerated roots: **17.7 min clean, 18.6 min degraded**
+(`renders=2208 pages=4650 glyphs=911409 dropped_no_bbox=0 skipped_no_staff=0
+oversize=0 failed=0`, 693 MB — every counter identical to the old root, as it
+must be: the same pages with different TARGET VALUES).
+
+That the values really did change is the point, and it is visible per class.
+The old root reported the same two ratios for every class; the new one reports
+the glyph's actual ink:
+
+| class | old renderedSize/sp | new | old advance/sp | new |
+|---|---|---|---|---|
+| noteheadBlack | 4.023 | **1.095** | 2.012 | **1.303** |
+| accidentalNatural | 4.023 | **3.067** | 2.012 | **0.693** |
+| accidentalDoubleSharp | 4.023 | **1.164** | 2.012 | **1.089** |
+
+A notehead about one staff space tall and 1.3 wide, a natural tall and narrow,
+a double sharp a small square — which is what those glyphs are.
+
+**A frozen render's `source_id` also changed**, and that one is not cosmetic.
+`frozen.json` carries no provenance, so the export used to write the RENDER id
+into `source_id`; `prep.split_of` is keyed on `(source_id, page_index)`
+precisely so that one source rendered under eight faces cannot straddle the
+train/val boundary, and a render id in that field made the degraded root split
+per render — the exact thing that keying is there to prevent. It is now
+recovered from the render id (`{source_id}_{engine}_{face}_v{n}`, checked
+against all 2208 renders that record one: 2208 agree, 0 disagree). `face` stays
+empty for a frozen render, because the render id spells `Finale Broadway` as
+`FinaleBroadway` and 552 of those 2208 cannot round-trip — an empty face is
+honest, a de-spaced one is wrong.
+
+**Training on both roots together** is what that fix enables. `--prep-root`
+takes several, concatenated in order, and the split is stable across them, so a
+page held out of the clean root is held out of the degraded one:
+
+    Training/.venv/bin/python -m model.train \
+        --prep-root $R-prep-v3 $R-prep-frozen-v3 \
+        --out ~/omr-models/run2 --epochs 8 --seed 20260811 --workers 8
 
 #### Measured 2026-08-15 — the first end-to-end numbers
 
@@ -582,10 +675,241 @@ binary over the same 34 renders / 69 pages:
 | clean | 0.9657 | 0.9355 | **0.0705 sp** |
 | degraded (frozen) | 0.6676 | 0.8887 | 0.1005 sp |
 
+> **Read these two rows as MOSTLY TRAINING-SET numbers.** The eval sets are a
+> hand-made 34-render subsample of the whole dataset and nothing about their
+> construction respected `prep.split_of`: **55 of their 69 pages (80%) hash into
+> `train`**, 9 into `val`, 5 into `test`. `OMRDetectorEvalSweep` sweeps whatever
+> directory it is handed and had no notion of the split; it now partitions the
+> same run and prints a `[detect-split]` row per bucket
+> (`OMRDatasetSplit`, the Swift side of `prep.split_of`, pinned to a
+> Python-generated table). Same binary, same pages, same run:
+>
+> | | pages | recall | precision | mean origin err |
+> |---|---|---|---|---|
+> | clean — train | 55 | 0.9879 | 0.9658 | 0.0702 |
+> | clean — val | 9 | **0.8563** | **0.8563** | 0.0676 |
+> | clean — test | 5 | 0.9576 | 0.8306 | 0.0767 |
+> | degraded — train | 55 | 0.6610 | 0.9004 | 0.1077 |
+> | degraded — val | 9 | 0.6413 | 0.8396 | 0.0809 |
+> | degraded — test | 5 | 0.7580 | 0.8772 | 0.0767 |
+>
+> **`val` is 9 pages and `test` is 5 here, and those two rows are noise.**
+> Read the large-sample table below instead; it was measured as soon as the
+> sweep became cheap enough to run one, and it does not say what these rows
+> appear to say.
+
+#### Held out at scale — the same checkpoint, 1336 pages
+
+`~/Datasets/sheet-music-omr/v2-eval-holdout{,-frozen}`: 54 renders selected for
+carrying held-out pages, 1336 pages swept, **300 of them held out** (99 val +
+201 test). Same binary, same `run1` checkpoint, 5 minutes per row.
+
+| | split | pages | recall | precision | mean origin err |
+|---|---|---|---|---|---|
+| clean | train | 1036 | 0.9934 | 0.9723 | 0.0622 |
+| clean | **val** | 99 | **0.9933** | 0.9714 | 0.0625 |
+| clean | test | 201 | 0.9879 | 0.9570 | 0.0619 |
+| degraded | train | 1036 | 0.8805 | 0.9530 | 0.0835 |
+| degraded | **val** | 99 | **0.8820** | 0.9510 | 0.0817 |
+| degraded | test | 201 | 0.8747 | 0.9474 | 0.0824 |
+
+**There is no train/held-out gap** — clean val recall 0.9933 against a train
+0.9934, degraded 0.8820 against 0.8805. The 80% training share of the eval set
+is real, but the inflation it suggests is not: at this sample size the detector
+generalizes, and the earlier "13-point gap" was one bad page out of nine.
+
+Note also how far the absolutes move between populations: clean recall 0.9657
+on the 34-render subsample against **0.9926** here, degraded 0.6676 against
+**0.8798**. Those are different populations, not different detectors — the same
+`.mlpackage`, the same day. **Never compare a number from one of these tables
+against a number from the other.**
+
+What is left after the partition is the one gap that is real: **degradation
+costs about 11 points of recall** (0.9926 -> 0.8798) on a model that has never
+seen a degraded page. Precision barely moves (0.9701 -> 0.9521), so the failure
+is missed symbols, not invented ones.
+
+One thing the partition does NOT explain: the training curve's val LOSS rises
+monotonically from epoch 1 while val RECALL matches train recall exactly. The
+loss is being driven by something other than detection quality — confidence
+calibration, or the regression heads, both of which the seam metric is blind
+to. **That was resolved by the next run; see "Selecting on val loss was
+wrong".**
+
+#### RESOLVED — selecting the checkpoint on val loss was wrong
+
+`run2-clean`: the corrected targets, everything else identical to `run1`
+(8 epochs, batch 16, lr 1e-3 cosine, seed 20260811, clean root only). Its val
+loss is best at epoch 1 (0.3869) and worse afterwards, ending at 0.4263 —
+so `_save_checkpoint`'s best-val rule ships epoch 1. Both checkpoints were then
+measured on the 1336-page held-out set, same binary, same day:
+
+| clean, val split (99 pages) | recall | precision | mean origin err |
+|---|---|---|---|
+| `run1` (old targets, shipped) | 0.9933 | 0.9714 | 0.0625 |
+| `run2` **best-val**, epoch 1 | 0.9952 | 0.9863 | 0.0534 |
+| `run2` **last**, epoch 7 | **0.9966** | **0.9964** | **0.0339** |
+
+Over the whole 1336 pages, epoch 7 against epoch 1: **false positives
+3636 -> 744 (-80%)**, false negatives 1752 -> 678 (-61%), origin error
+0.0536 -> **0.0332 sp (-38%)**.
+
+**The epoch with the WORST val loss is far the best detector.** Detection
+quality improved monotonically across all 8 epochs while the loss rose. The
+previous round's reading — "textbook overfitting, every number comes from one
+effective epoch" — was an artifact of this selection rule, not a property of
+the training: `run1` shipped its epoch-0 weights for the same reason.
+
+Consequences, in order of how much they cost:
+
+1. **Ship `checkpoint_last.pt`.** Every comparison from here (the mixed-root
+   and augmentation runs) must be read off the last epoch, or it measures the
+   selection defect instead of the change under test.
+2. **Origin error is now 0.0332 sp, 7.5x inside the 0.25 sp budget** (`run1`
+   was 3.4x).
+3. The trainer still selects on val loss. Selecting on held-out seam recall
+   would mean calling the Swift eval from the training loop — a phase boundary
+   this pipeline deliberately keeps — so for now `checkpoint_last.pt` is
+   written every epoch and the choice is left to the eval.
+
+**But not on degraded input**, and that is a real trade, not a rounding error:
+
+| degraded, val split (99 pages) | recall | precision | mean origin err |
+|---|---|---|---|
+| `run1` | 0.8820 | 0.9510 | 0.0817 |
+| `run2` best-val, epoch 1 | 0.8703 | 0.9634 | 0.0807 |
+| `run2` last, epoch 7 | 0.8480 | **0.9793** | **0.0678** |
+
+Training longer on clean pages buys precision and localization everywhere and
+**spends degraded recall**: 0.8820 -> 0.8480. The clean-to-degraded gap widens
+from 11 points to **14.9** (0.9966 vs 0.8480) — which is exactly the argument
+for the mixed-root run below, and that run settles it.
+
+#### RESOLVED — the degraded gap closes by training on degraded pages
+
+`run3-mixed`: identical to `run2-clean` except that `--prep-root` names BOTH
+the clean and the degraded prep export, with `--samples-per-epoch` pinned to
+`run2`'s 110158 so the two runs take the same number of optimizer steps and the
+data mix is the only difference. Held-out val split, 99 pages, last epoch:
+
+| val split | `run1` | `run2` clean-only | **`run3` clean+degraded** |
+|---|---|---|---|
+| clean recall | 0.9933 | 0.9966 | **0.9974** |
+| clean precision | 0.9714 | 0.9964 | 0.9958 |
+| clean origin err | 0.0625 | 0.0339 | **0.0331** |
+| degraded recall | 0.8820 | 0.8480 | **0.9884** |
+| degraded precision | 0.9510 | 0.9793 | 0.9850 |
+| degraded origin err | 0.0817 | 0.0678 | **0.0386** |
+| **clean-to-degraded recall gap** | 11.1 pt | 14.9 pt | **0.9 pt** |
+
+**Degraded recall +14 points, degraded origin error −43%, and nothing given up
+on clean.** Recall and precision rise together, so this is not a threshold
+trade — it is capability the clean-only model did not have.
+
+The experiment was only possible because of the `source_id` fix above. With the
+render id in that field the degraded root split per render, so the same
+engraving sat on both sides of the train/val boundary and a mixed-root run's
+held-out number would have measured nothing.
+
+**Read the degraded row for what it is.** `run3` trains on pages degraded by
+`generate/profiles/scanner.toml` and is evaluated on pages degraded by the same
+profile. That is robustness to THAT corruption, not to scanning in general —
+"trained on the test transform" in the part of the pipeline where it matters
+most. Whether robustness transfers to a corruption never trained on is a
+separate question, and it is what `--augment photometric` is for: its ranges are
+deliberately not read from `scanner.toml`, so a clean+augmentation run evaluated
+on the degraded set measures transfer rather than memorisation.
+
+#### Where the duration deficit actually is — measured, not reasoned
+
+Duration sits at p50 0.72 while pitch is 0.94, and a PERFECT detector moves the
+duration median by nothing. So the deficit is not in the CNN. `truthPaths` (a
+new mode: every path kind from the oracle, which with label glyphs makes the
+front-end fully oracular) puts a number on the rest, over the 34-render
+`v2-eval` set that carries the loss:
+
+| front-end | pitch p50 | dur p50 |
+|---|---|---|
+| `full` — label glyphs, raster paths | 96.0 | 72.0 |
+| `truthPaths` — fully oracular | 100.0 | **82.0** |
+
+**The duration ceiling is 82, not 100.** So of the 28-point deficit, **18 points
+are lost upstream of the front-end entirely** — in `buildScore`, or in what the
+labels can express — and only **10 points** are the raster path front-end's to
+recover. Pitch, by contrast, reaches its ceiling exactly when the paths are
+perfect, so pitch IS a front-end problem and duration mostly is not.
+
+Per-primitive substitution, paired per render against `full` (n=32):
+
+| substituted from the oracle | dur mean delta | renders better / worse |
+|---|---|---|
+| verticals (stems) | **+4.2** | 16 / 1 |
+| staff lines | +2.8 | 4 / 1 |
+| beams | +2.6 | 15 / 0 |
+
+Those sum to ~9.6 against a 10-point front-end deficit, so within the front-end
+the three primitives are close to additive, and stems are the biggest single
+item. Staff lines move only 4 renders of 32 — a narrow, not a broad, effect.
+
+**What the 18 upstream points are.** `OMR_HYBRID_DURHIST=1` prints each
+render's authored-vs-composed duration histogram; differencing the ceiling
+against `full` attributes every missing note:
+
+| duration | short at ceiling | short at `full` | attributable to front-end |
+|---|---|---|---|
+| eighth | 446 | 513 | 67 |
+| `1/28` (septuplet) | 252 | 252 | **0** |
+| 64th | 192 | 192 | **0** |
+| `1/20` (quintuplet) | 165 | 165 | **0** |
+| 32nd | **0** | 160 | **160** |
+| **total** | **1182** | 1464 | 282 |
+
+**81% of all missing notes are already missing at the ceiling.** Three distinct
+upstream defects account for them, and they are unrelated to each other:
+
+1. **5- and 7-tuplets are not composed.** `1/20` short by 165 against 16ths
+   over-produced by 190; `1/28` short by 252 against 32nds over by 227. Each
+   tuplet note lands at its nearest plain duration. Triplets (`1/12`) are short
+   by only 11, so the existing triplet support works and nothing above 3 does.
+   428 notes across 18 renders.
+2. **64th notes become quarters** — 192 notes, all in `cov_flags`, whose notes
+   are otherwise all present (352 -> 352) with duration at 45%. At the ceiling
+   the `flag64th*` glyphs are perfect, so this is `buildScore` ignoring the
+   flag count, not a recognition failure.
+3. **Percussion staves lose ~86% of their notes** (below).
+
+#### Percussion staves are broken in the importer
+
+The renders whose note COUNT collapses are all drum staves, and they are the
+biggest single drag on the ceiling's mean (p50 82 vs mean 72.8):
+
+| render | measures | notes authored -> composed | pitch | dur |
+|---|---|---|---|---|
+| `tex_0029` | 15 -> 15 | 114 -> **16** | 0% | 7% |
+| `tex_0009` | 13 -> 13 | 89 -> **20** | 0% | 6% |
+
+Probed directly (oracle replay, no raster, no detector): the glyphs are all
+there — `tex_0029` walks 112 `noteheadXBlack` + 2 `noteheadXHalf` +
+3 `clefPercussion` — and the part is correctly recognized as a drum kit
+(`useDrumset: true`, a populated `drumLineMap`). The composed measures are
+nearly empty regardless: `m1` and `m3` hold nothing at all, `m2` holds two
+eighths, against 8 authored notes per measure.
+
+Every surviving note is **MIDI 44**. In `percussionMidi` that is the
+`stepsAbove <= 0` branch — "pedal hi-hat, below the staff" — so every notehead
+is reading as below the staff bottom, which points at `anchor.bottomY` being in
+a different frame from `noteheadY` rather than at any per-note decision.
+`decodePercussion` itself keeps every notehead it is given, so the 86% that
+never arrive are lost before it.
+
+This is the shipped importer, not an OMR-specific path, and nothing in the
+corpus gates covers percussion — which is why it survived this long.
+
 **The origin figure is what this stage existed to obtain.** P3a/P3b's
 origin-jitter sweep measured that up to ~0.25 staff spaces of glyph-origin
 error is free and 0.5 sp halves pitch; a real detector lands 3.4× inside that
-budget, and stays inside it under degradation. `barlineCandidates`' 2.0 / 0.6 sp
+budget (`run1`) — **7.5× once the targets were corrected and the last epoch was
+used instead of the best-val one**, and stays inside it under degradation. `barlineCandidates`' 2.0 / 0.6 sp
 windows, calibrated against vector geometry, survive a real detector.
 
 Note the shape of the degraded loss: **precision barely moves while recall
@@ -658,19 +982,68 @@ result and every number the mode reports carries an unknown offset.
   one mechanism this stage's result depends on most. Every test guarding a
   mechanism now carries a recorded break-and-restore round trip.
 
-#### Costs, measured — these are what block the parameter sweeps
+#### Costs — RESOLVED, and the diagnosis that was recorded here was wrong
+
+This section used to read "53 s/page … one Core ML prediction per tile" and name
+**batched tile prediction** as the next round's entry point. That attribution was
+never measured against the alternatives, and it was wrong. Measured with
+`OMR_DETECT_TIMING=1` (`OMRDetectTiming`, which splits the sweep into named
+phases), over the same 34 renders / 69 pages:
+
+| phase | before | after | note |
+|---|---|---|---|
+| **whole sweep** | **545.9 s** (7.9 s/page) | **18.3 s** (0.27 s/page) | **29.8x** |
+| `detect.decode` | 130.80 ms/tile | **0.44 ms/tile** | **297x** — 96% of the old sweep |
+| `detect.predict` (Core ML) | 0.75 ms/tile | 0.61 ms/tile | **0.4% of the old sweep** |
+| page-detections | 111 for 69 pages | 69 for 69 pages | the score pass re-detected |
+| `analyze` | 193 ms/page | 158 ms/page | now the largest single phase |
+
+Two changes, both semantics-preserving, and verified as such: **all 90 result
+rows** (`[detect-seam][SUMMARY]`, every `[detect-split]`, every `[detect-class]`,
+every per-render `[SUMMARY]`) are **byte-identical before and after**.
+
+1. **`OMRDetectorDecode.decode` fused the NMS pass into the threshold scan.**
+   The separated form built a 9-element neighbour array for every one of the
+   62 x 96 x 96 cells — over 20 million array allocations per page — and ran the
+   neighbourhood test on all of them, when on a trained heatmap almost every cell
+   is far below the threshold and can never be a candidate whatever its peak
+   status. (Skipping the test below the threshold is exact only for a
+   non-negative threshold; `checkNumerics` now requires `threshold` in `[0, 1)`,
+   which the sigmoid heatmap satisfies anyway.)
+2. **The score pass reuses the seam pass's detections** (`OMRPrecomputedDetector`)
+   instead of running the detector a second time over the same pages. It is a
+   frozen per-render dictionary that THROWS for a page it was not given, not a
+   self-filling cache that could answer a later render's page 0 with an earlier
+   render's glyphs.
+
+Training was the other blocked path, and its recorded diagnosis was closer but
+still not the mechanism: the loader is slow not merely because `num_workers=0`,
+but because **`dataset._load_tile_image` decodes the WHOLE page PNG for EVERY
+tile**, and a page carries ~30 tiles. Measured at batch 16 over 192 pages:
+
+| | ms/batch | ms/tile | full-epoch equivalent |
+|---|---|---|---|
+| `num_workers=0` | 359.1 | 22.4 | 52.2 min |
+| `num_workers=4` | 125.2 | 7.8 | 18.2 min |
+| `num_workers=8` | 65.2 | 4.1 | **9.5 min** |
+
+17.9 ms of that 22.4 ms is the PIL decode. `--workers` (default `cpu_count - 2`,
+capped at 8, with `persistent_workers` — macOS SPAWNs workers, so each one
+re-imports torch and unpickles the dataset) is a **5.5x** on the loader and
+provably not a results knob: `test_loader_batches_are_worker_count_invariant`
+pins batch-for-batch equality at 0 and 2 workers. Separately, converting only
+the CROP to float32 rather than the whole page is a further 1.21x
+(9.08 -> 7.52 ms) for a bit-identical tile.
 
 | | measured |
 |---|---|
-| detector eval | **53 s/page** (34 renders / 69 pages in ~40 min). One Core ML prediction per tile |
-| training | **~46 min/epoch** over 4650 pages. `user` time is under half of `real`, so most of the wall clock is PNG decode — the DataLoader runs with `num_workers=0` |
-| prep export | 51 min clean, 39 min degraded |
+| detector eval | **0.27 s/page** — a full 4650-page sweep is ~21 min, was ~22 h |
+| training | **~9.5 min/epoch** loader-side at 8 workers, was ~46-52 min |
+| prep export | **17.7 min clean, 18.6 min degraded** (2026-08-18 re-measure; the 51/39 min recorded earlier was never re-taken after the harness changed) |
 
-At those rates a full-dataset detector sweep is ~22 h and the design's S / T
-sweeps are multi-day, which is why **§11's four open parameters are still
-unmeasured** and `model.json` carries `decode_defaults_measured: false`. Batched
-tile prediction and a worker-backed loader are the next round's entry point;
-neither is a research problem.
+**§11's four open parameters are no longer blocked by wall clock.**
+`model.json` still carries `decode_defaults_measured: false` because the sweeps
+have not been run yet, not because they cannot be.
 
 #### What the training curve says
 
@@ -686,13 +1059,77 @@ neither is a research problem.
 Textbook overfitting from epoch 1: train falls 11×, val rises monotonically.
 So **every number above comes from one effective epoch.** A too-high learning
 rate was the first hypothesis and it is wrong — that would show as an unstable
-*train* loss, and train falls smoothly. The model is memorising. Candidates:
-augmentation is photometric-only by design, and the dataset's content diversity
-is ~140 sources inflated by face × dpi, so a held-out page of a source sits
-close to that source's training pages.
+*train* loss, and train falls smoothly. The model is memorising.
 
-`--limit` small enough to empty the val split reports `val_loss=nan` and then
-selects a "best" checkpoint on nan. It should fail loudly instead.
+**The mechanism, checked rather than guessed: `Training/model/` contains no
+augmentation of any kind** — grep it for augment / jitter / noise / brightness
+and nothing comes back. The earlier note here said "augmentation is
+photometric-only by design"; that describes `generate/profiles/scanner.toml`,
+which degrades pages when the DATASET is built, not anything applied while
+training. `run1-train/train.log` confirms the training root:
+`"prep_root": ".../v2-prep"` — the **clean** export, 8 epochs, nothing else.
+
+So the model was fitted on undegraded pages with no augmentation. **What that
+does NOT explain is memorization**: the 1336-page held-out table above shows no
+train/held-out gap at all, on either clean or degraded pages. Whatever the
+rising val loss is measuring, it is not detection quality on unseen pages.
+
+What it does explain is the gap that survived the partition — **11 points of
+recall lost to degradation** (0.9926 clean -> 0.8798 degraded), with precision
+barely moving, i.e. the model goes quiet on a corruption it has never seen one
+example of. That is what `--augment photometric` and training on the degraded
+root's train split are aimed at, and they are aimed at that alone. Neither is
+justified by "the model is memorising" — that claim did not survive its own
+measurement.
+
+The content-diversity concern stands on its own and is unmeasured either way:
+~140 sources inflated by face × dpi, so a held-out page of a source sits close
+to that source's training pages. Note this is a reason the held-out rows above
+might FLATTER the model, not a reason they are noisy — a source-level holdout
+would be the stricter test.
+
+**RESOLVED — the empty val split now refuses.** A `--limit` small enough to
+empty the val split used to report `val_loss=nan` in every epoch line, never
+beat `best_val = inf`, and still write `checkpoint.pt` — from the LAST epoch's
+weights, carrying `val_loss: None`, with nothing in the exit code or the file
+set to distinguish it from a healthy run. `train.main` raises instead, and the
+message quotes the `--limit` that caused it.
+
+#### Augmentation (`--augment photometric`) — built, not yet measured
+
+`Training/model/augment.py`. Five independent ops, applied in scan order —
+gain/bias about mid-grey, gamma, gaussian blur (sigma up to 1.1 normalized px,
+under a tenth of a staff space at S=12), additive gaussian noise, and
+salt-and-pepper speckle. `--augment` defaults to `none` so a run stays
+comparable with the pre-augmentation checkpoints; the default is expected to
+change once the two have been measured against each other **on the held-out
+split**.
+
+Three properties are deliberate and each is pinned by a test with a recorded
+break-and-restore round trip:
+
+- **Photometric only.** Every op is a per-pixel or per-neighbourhood intensity
+  change, so it moves no glyph and the heatmap / offset / geom / mask planes
+  stay exactly correct. A geometric op would have to transform those four
+  target planes too, and a mismatch there does not crash — it trains the
+  geometry heads against the wrong answer. `test_photometric_augmentation_
+  moves_no_ink_and_no_target` locates the ink in the augmented tile and
+  requires its centroid to hold, because asserting only "targets unchanged"
+  passes under a geometric op as well.
+- **Train split only**, refused for `val`/`test` at construction. An augmented
+  validation loss is not comparable across epochs, and comparing it across
+  epochs is exactly how the checkpoint is chosen.
+- **Wider than the eval corruption, and not read from
+  `generate/profiles/scanner.toml`.** Reproducing the frozen set's own
+  parameters would make a degraded-set improvement partly a measurement of
+  training on the test transform.
+
+The augmentation RNG is one `random.Random` per worker process, drawn from per
+call — not seeded per item (that would give every tile the same corruption
+every epoch, i.e. a once-corrupted dataset rather than augmentation) and not
+reset per epoch (`persistent_workers=True` keeps worker processes alive, so a
+`set_epoch()` on the main-process dataset would be a silent no-op in the copies
+the workers hold). A run is reproducible for a fixed (seed, workers).
 
 ### RESOLVED: P0-G1 failed at scale — `buildScore` was not order-invariant
 
