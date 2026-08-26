@@ -6,13 +6,17 @@ struct WrittenPitchViewTests {
     /// Part 0: flute (concert), part 1: B♭ clarinet — both one G staff, C major, one whole note concert B♭4.
     private func ensemble() -> Score {
         var score = Score.blank(BlankScoreTemplate(
-            title: "T", instrumentID: "flute", staves: [.init(clefType: "G")], measureCount: 1,
-        ))
-        let clarinetStaff = score.parts[0].staves[0]
-        score.parts.append(Part(
-            id: "2",
-            instrument: Instrument(id: "clarinet", transposeDiatonic: -1, transposeChromatic: -2),
-            staves: [clarinetStaff],
+            title: "T",
+            parts: [
+                .init(instrumentID: "flute", staves: [.init(clefType: "G")]),
+                .init(
+                    instrumentID: "clarinet",
+                    staves: [.init(clefType: "G")],
+                    transposeDiatonic: -1,
+                    transposeChromatic: -2,
+                ),
+            ],
+            measureCount: 1,
         ))
         for partIndex in score.parts.indices {
             score.parts[partIndex].staves[0].measures[0].voices[0].elements[2] =
@@ -55,7 +59,8 @@ struct WrittenPitchViewTests {
 
     @Test func nonTransposingScoreReturnsSelf() {
         let score = Score.blank(BlankScoreTemplate(
-            title: "T", instrumentID: "piano", staves: [.init(clefType: "G")], measureCount: 1,
+            title: "T", parts: [.init(instrumentID: "piano", staves: [.init(clefType: "G")])],
+            measureCount: 1,
         ))
         #expect(score.writtenPitchView() == score)
     }
@@ -134,11 +139,16 @@ struct WrittenPitchViewTests {
     /// E), while a copy-resolved read would see +7 already, respell 9 → −3 and move the note by −10 fifths instead.
     @Test func midScoreKeyChangeIsResolvedAgainstTheOriginalScore() {
         var score = Score.blank(BlankScoreTemplate(
-            title: "T", instrumentID: "clarinet", staves: [.init(clefType: "G")],
+            title: "T",
+            // writtenFifthsOffset == +2
+            parts: [.init(
+                instrumentID: "clarinet",
+                staves: [.init(clefType: "G")],
+                transposeDiatonic: -1,
+                transposeChromatic: -2,
+            )],
             concertKey: 3, measureCount: 3,
         ))
-        score.parts[0].instrument.transposeDiatonic = -1
-        score.parts[0].instrument.transposeChromatic = -2 // writtenFifthsOffset == +2
         // Measure 1 modulates to B major (+5); measure 2 inherits it and carries the note.
         score.parts[0].staves[0].measures[1].voices[0].elements
             .insert(.keySignature(KeySignature(concertKey: 5)), at: 0)

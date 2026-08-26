@@ -5,7 +5,8 @@ import Testing
 struct ScoreEditSessionMeasureTests {
     private func session() -> ScoreEditSession {
         ScoreEditSession(score: Score.blank(BlankScoreTemplate(
-            title: "t", instrumentID: "piano", staves: [.init(clefType: "G")], measureCount: 2,
+            title: "t", parts: [.init(instrumentID: "piano", staves: [.init(clefType: "G")])],
+            measureCount: 2,
         )))
     }
 
@@ -32,7 +33,8 @@ struct ScoreEditSessionMeasureTests {
     @Test("deleteMeasure on the only bar refuses with a recorded refusal")
     func refusalSurfaces() {
         let session = ScoreEditSession(score: Score.blank(BlankScoreTemplate(
-            title: "t", instrumentID: "piano", staves: [.init(clefType: "G")], measureCount: 1,
+            title: "t", parts: [.init(instrumentID: "piano", staves: [.init(clefType: "G")])],
+            measureCount: 1,
         )))
         #expect(!session.apply(.deleteMeasure(at: 0)))
         #expect(session.lastRefusal?.reason == .cannotDeleteOnlyMeasure)

@@ -6,8 +6,11 @@ struct InsertMeasureTests {
     private func twoBarScore() -> Score {
         // Grand staff, 2 measures, signatures on bar 1 — built via the Task 1 factory so the shape is canonical.
         Score.blank(BlankScoreTemplate(
-            title: "t", instrumentID: "piano",
-            staves: [.init(clefType: "G"), .init(clefType: "F")],
+            title: "t",
+            parts: [.init(
+                instrumentID: "piano",
+                staves: [.init(clefType: "G"), .init(clefType: "F")],
+            )],
             concertKey: 1, timeNumerator: 4, timeDenominator: 4,
             tempoBPM: 120, measureCount: 2,
         ))

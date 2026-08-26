@@ -9,10 +9,15 @@ struct TransposingInstrumentRoundTripTests {
     /// (pitch 70, tpc 12) in concert C major.
     private static func clarinetScore() -> Score {
         var score = Score.blank(BlankScoreTemplate(
-            title: "T", instrumentID: "clarinet", staves: [.init(clefType: "G")], measureCount: 1,
+            title: "T",
+            parts: [.init(
+                instrumentID: "clarinet",
+                staves: [.init(clefType: "G")],
+                transposeDiatonic: -1,
+                transposeChromatic: -2,
+            )],
+            measureCount: 1,
         ))
-        score.parts[0].instrument.transposeDiatonic = -1
-        score.parts[0].instrument.transposeChromatic = -2
         score.parts[0].staves[0].measures[0].voices[0].elements[2] =
             .chord(Chord(duration: .whole, notes: [Note(pitch: 70, tpc: 12)]))
         return score
@@ -109,12 +114,17 @@ struct TransposingInstrumentRoundTripTests {
     /// enharmonic equivalent D♭ major (−5), exactly as MuseScore itself would.
     @Test("a written key outside [-7, +7] is respelled on the way out and on the way back")
     func writtenKeyIsRespelledInBothDirections() throws {
-        var score = Score.blank(BlankScoreTemplate(
-            title: "T", instrumentID: "alto-sax", staves: [.init(clefType: "G")],
+        let score = Score.blank(BlankScoreTemplate(
+            title: "T",
+            // writtenFifthsOffset == 3
+            parts: [.init(
+                instrumentID: "alto-sax",
+                staves: [.init(clefType: "G")],
+                transposeDiatonic: -5,
+                transposeChromatic: -9,
+            )],
             concertKey: 7, measureCount: 1,
         ))
-        score.parts[0].instrument.transposeDiatonic = -5
-        score.parts[0].instrument.transposeChromatic = -9 // writtenFifthsOffset == 3
 
         let xml = try Self.encodedXML(score, targetVersion: .v3)
         #expect(xml.contains("<accidental>-2</accidental>")) // respelled(7 + 3) == -2
@@ -129,12 +139,17 @@ struct TransposingInstrumentRoundTripTests {
     /// A key that stays inside the writable range round-trips exactly, on both wire generations.
     @Test("an in-range written key round-trips exactly", arguments: [MSCXVersion.v3, .v4])
     func inRangeWrittenKeyRoundTrips(version: MSCXVersion) throws {
-        var score = Score.blank(BlankScoreTemplate(
-            title: "T", instrumentID: "horn", staves: [.init(clefType: "G")],
+        let score = Score.blank(BlankScoreTemplate(
+            title: "T",
+            // writtenFifthsOffset == 1
+            parts: [.init(
+                instrumentID: "horn",
+                staves: [.init(clefType: "G")],
+                transposeDiatonic: -4,
+                transposeChromatic: -7,
+            )],
             concertKey: -3, measureCount: 1,
         ))
-        score.parts[0].instrument.transposeDiatonic = -4
-        score.parts[0].instrument.transposeChromatic = -7 // writtenFifthsOffset == 1
 
         let xml = try Self.encodedXML(score, targetVersion: version)
         #expect(xml.contains(Self.writtenKeyTag(version, -2)))
@@ -156,12 +171,17 @@ struct TransposingInstrumentRoundTripTests {
         arguments: [MSCXVersion.v3, .v4],
     )
     func nonZeroConcertKeyWithZeroWrittenKeySurvives(version: MSCXVersion) throws {
-        var score = Score.blank(BlankScoreTemplate(
-            title: "T", instrumentID: "clarinet", staves: [.init(clefType: "G")],
+        let score = Score.blank(BlankScoreTemplate(
+            title: "T",
+            // writtenFifthsOffset == 2
+            parts: [.init(
+                instrumentID: "clarinet",
+                staves: [.init(clefType: "G")],
+                transposeDiatonic: -1,
+                transposeChromatic: -2,
+            )],
             concertKey: -2, measureCount: 1,
         ))
-        score.parts[0].instrument.transposeDiatonic = -1
-        score.parts[0].instrument.transposeChromatic = -2 // writtenFifthsOffset == 2
 
         let xml = try Self.encodedXML(score, targetVersion: version)
         #expect(xml.contains("<KeySig>"))
@@ -177,7 +197,8 @@ struct TransposingInstrumentRoundTripTests {
     @Test("a C-major staff head on a concert-pitch part is still omitted")
     func zeroKeyOnNonTransposingPartIsStillDropped() throws {
         let score = Score.blank(BlankScoreTemplate(
-            title: "T", instrumentID: "piano", staves: [.init(clefType: "G")], measureCount: 1,
+            title: "T", parts: [.init(instrumentID: "piano", staves: [.init(clefType: "G")])],
+            measureCount: 1,
         ))
         #expect(try !Self.encodedXML(score).contains("<KeySig>"))
     }

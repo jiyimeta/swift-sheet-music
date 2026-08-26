@@ -9,7 +9,12 @@ and this project adheres to
 
 ### Added
 
-- `Score.blank(_:)` + `BlankScoreTemplate`: build an empty solo/grand-staff score in code.
+- `Score.blank(_:)` + `BlankScoreTemplate`: build an empty score in code — any number of parts, each with
+  its own staves, instrument names, GM program, transposition pair and optional drum kit, plus `.normal`
+  bracket groups over part ranges (SATB, string quartet). `Part.init(blankPlan:id:measures:)` is the
+  per-part half, reusable by a command that appends a part to an existing score.
+- `GMPercussion.drumLineMap`: the GM drum pitch → staff-line table, promoted out of the MIDI importer so an
+  imported kit and an authored one place the same drum on the same line.
 - `InsertMeasure` / `DeleteMeasure`: structural edit commands that insert or remove a full measure column
   (every staff plus the parallel `SystemMeasure`), each other's inverse. Inserting or deleting bar 0
   re-homes the score-start key/time/clef signatures onto the new first bar, mirroring MuseScore, and both
