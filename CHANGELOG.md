@@ -7,6 +7,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-08-26
+
+### Fixed
+
+- The Android audio writer is joined before its `AudioTrack` is released.
+  `OboeStream.close()` released the track straight after `stop()`, and `stop()`
+  only *asked* the writer to end: it spends most of its life inside
+  `AudioTrack.write(..., WRITE_BLOCKING)`, a blocking native call rather than a
+  suspension point, so `cancel()` could not reach it. Freeing the track under a
+  thread still writing to it crashed natively inside
+  `BpBinder::onLastStrongRef` — intermittently, and with a backtrace naming
+  teardown rather than whatever triggered it. The same window let the writer
+  call back into its `Producer` after `close()` returned, while
+  `AndroidPlaybackEngine.teardown` was already tearing down the synth and the
+  metronome mixer, so one missing join exposed three objects. `pause()` /
+  `flush()` now precede the cancel, since they are what actually returns a
+  parked write, and the join is bounded so a writer stuck beyond this class's
+  reach cannot hang the caller. Reached far more often by a host that
+  re-prepares playback per edit than by one that only tears down on leaving.
+- A 64th flag anchors back along the stem, so its Y gets its own bound in the
+  PDF importer.
+- The PDF importer reads 5, 7 and 9 tuplet digits, not only 3 and 6.
+
 ## [2.0.0] - 2026-08-25
 
 ### Fixed
@@ -1918,7 +1941,8 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.0...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.1...HEAD
+[2.0.1]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.15.0...2.0.0
 [1.13.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.13.0...1.13.1
 [1.13.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.12.0...1.13.0
