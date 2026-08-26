@@ -51,42 +51,94 @@ extension Score {
                 )
                 let measures = copy.parts[partIndex].staves[staffIndex].measures
                 for measureIndex in measures.indices {
+                    // Resolved against `self` — the ORIGINAL score. `copy`'s keys are being rewritten as this
+                    // loop walks forward, so reading the running key out of it would feed a measure that
+                    // inherits its key from an earlier bar an already-shifted value and shift it a second time.
                     let oldKey = activeKey(staff: address, measureIndex: measureIndex)
                     let newKey = Self.respelledKey(oldKey + phi)
-                    let fifthsDelta = newKey - oldKey
-                    let voices = copy.parts[partIndex].staves[staffIndex]
-                        .measures[measureIndex].voices
-                    for voiceIndex in voices.indices {
-                        let elements = copy.parts[partIndex].staves[staffIndex]
-                            .measures[measureIndex].voices[voiceIndex].elements
-                        for elementIndex in elements.indices {
-                            switch elements[elementIndex] {
-                            case var .keySignature(k):
-                                k.concertKey = Self.respelledKey(k.concertKey + phi)
-                                copy.parts[partIndex].staves[staffIndex]
-                                    .measures[measureIndex].voices[voiceIndex]
-                                    .elements[elementIndex] = .keySignature(k)
-                            case let .chord(c):
-                                copy.parts[partIndex].staves[staffIndex]
-                                    .measures[measureIndex].voices[voiceIndex]
-                                    .elements[elementIndex] = .chord(Self.transposedChord(
-                                        c, semitones: delta, fifthsDelta: fifthsDelta, key: newKey,
-                                    ))
-                            case let .harmony(h):
-                                copy.parts[partIndex].staves[staffIndex]
-                                    .measures[measureIndex].voices[voiceIndex]
-                                    .elements[elementIndex] = .harmony(
-                                        Self.transposedHarmony(h, fifthsDelta: fifthsDelta),
-                                    )
-                            default:
-                                break
-                            }
-                        }
-                    }
+                    copy.parts[partIndex].staves[staffIndex].measures[measureIndex] =
+                        Self.rewriteMeasure(
+                            measures[measureIndex],
+                            semitones: delta, keyShift: phi,
+                            fifthsDelta: newKey - oldKey, key: newKey,
+                        )
                 }
             }
         }
         return copy
+    }
+
+    /// Returns a copy of the score with every transposing part's notation shifted to WRITTEN pitch: notes,
+    /// key signatures, and chord symbols move by the part's own interval, exactly (the (diatonic, chromatic)
+    /// pair fixes the fifths shift — no histogram, unlike `transposed(bySemitones:)`, which has to pick one
+    /// offset for the whole score). Concert-pitch parts, `useDrumset` parts, and `"percussion"` staves pass
+    /// through untouched.
+    ///
+    /// Display-only: tick structure, IDs, and element ordering are unchanged, and playback must keep reading
+    /// the un-transformed score — this is what a player sees on the page, not what sounds.
+    public func writtenPitchView() -> Score {
+        guard parts.contains(where: { $0.instrument.isTransposing && !$0.instrument.useDrumset }) else {
+            return self
+        }
+        var copy = self
+        for partIndex in copy.parts.indices {
+            let instrument = copy.parts[partIndex].instrument
+            guard instrument.isTransposing, !instrument.useDrumset else { continue }
+            let semitones = instrument.writtenPitchOffset
+            let fifths = instrument.writtenFifthsOffset
+            for staffIndex in copy.parts[partIndex].staves.indices
+                where copy.parts[partIndex].staves[staffIndex].group != "percussion"
+            {
+                let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
+                let measures = copy.parts[partIndex].staves[staffIndex].measures
+                for measureIndex in measures.indices {
+                    // Same rule as `transposed(bySemitones:)`: `activeKey` reads `self`, never `copy`.
+                    let oldKey = activeKey(staff: address, measureIndex: measureIndex)
+                    let newKey = Self.respelledKey(oldKey + fifths)
+                    copy.parts[partIndex].staves[staffIndex].measures[measureIndex] =
+                        Self.rewriteMeasure(
+                            measures[measureIndex],
+                            semitones: semitones, keyShift: fifths,
+                            fifthsDelta: newKey - oldKey, key: newKey,
+                        )
+                }
+            }
+        }
+        return copy
+    }
+
+    /// The per-measure rewrite both display transforms share: key signatures move by `keyShift` fifths (and are
+    /// respelled back into the writable range), notes move by `semitones` semitones / `fifthsDelta` fifths and are
+    /// re-spelled against `key`, and chord symbols move by `fifthsDelta`. Everything else passes through.
+    ///
+    /// `keyShift` and `fifthsDelta` are deliberately separate. `keyShift` is the caller's whole shift (the global
+    /// offset for `transposed(bySemitones:)`, the part's own interval for `writtenPitchView()`), while
+    /// `fifthsDelta` is `key − oldKey`, which differs from it whenever the destination key had to be respelled —
+    /// notes follow the key that actually got written, not the unclamped one.
+    private static func rewriteMeasure(
+        _ measure: Measure, semitones: Int, keyShift: Int, fifthsDelta: Int, key: Int,
+    ) -> Measure {
+        var m = measure
+        for voiceIndex in m.voices.indices {
+            for elementIndex in m.voices[voiceIndex].elements.indices {
+                switch m.voices[voiceIndex].elements[elementIndex] {
+                case var .keySignature(k):
+                    k.concertKey = Self.respelledKey(k.concertKey + keyShift)
+                    m.voices[voiceIndex].elements[elementIndex] = .keySignature(k)
+                case let .chord(c):
+                    m.voices[voiceIndex].elements[elementIndex] = .chord(transposedChord(
+                        c, semitones: semitones, fifthsDelta: fifthsDelta, key: key,
+                    ))
+                case let .harmony(h):
+                    m.voices[voiceIndex].elements[elementIndex] = .harmony(
+                        transposedHarmony(h, fifthsDelta: fifthsDelta),
+                    )
+                default:
+                    break
+                }
+            }
+        }
+        return m
     }
 
     /// Choose the single fifths offset (`≡ 7·delta mod 12`) added to every key signature. Among the ≤3 candidate
