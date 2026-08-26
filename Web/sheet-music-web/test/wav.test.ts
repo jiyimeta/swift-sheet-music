@@ -5,22 +5,12 @@
  * in its own `SynthHost` still gets an export — which also means nothing else
  * verifies these bytes.
  *
- * Node has no `AudioBuffer`, so the input is a stand-in with the same surface
- * the encoder uses. That is the whole surface: `numberOfChannels`, `length`,
- * `sampleRate` and `getChannelData`.
+ * Node has no `AudioBuffer`, so the input is `fakeAudioBuffer` — a stand-in with
+ * the same surface the encoder uses, and no more.
  */
 import { describe, expect, it } from "vitest";
 import { encodeWav } from "../src/playback/wav.js";
-
-function fakeBuffer(channels: Float32Array[], sampleRate = 44_100): AudioBuffer {
-  return {
-    numberOfChannels: channels.length,
-    length: channels[0]?.length ?? 0,
-    sampleRate,
-    duration: (channels[0]?.length ?? 0) / sampleRate,
-    getChannelData: (index: number) => channels[index]!,
-  } as unknown as AudioBuffer;
-}
+import { fakeAudioBuffer as fakeBuffer } from "./audio-buffer-stub.js";
 
 const ascii = (bytes: Uint8Array, offset: number, length: number) =>
   String.fromCharCode(...bytes.subarray(offset, offset + length));
