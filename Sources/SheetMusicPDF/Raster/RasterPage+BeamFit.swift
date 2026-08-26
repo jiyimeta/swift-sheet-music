@@ -28,20 +28,21 @@ extension RasterPage {
     static let beamEndExtendInSpaces = 0.35
 
     /// One constant-level interval of a slab → its `k` beam segments, or
-    /// none when it fails the straightness or slope gates.
+    /// none when it fails the straightness or slope gates. See `bandFit`
+    /// for what "straight" means once speckle is allowed for.
     static func quads(
         for interval: [BeamColumn], mask: InkMask, spacingPx: Double,
         transform: PageTransform, pageIndex: Int,
     ) -> [PathSegment] {
-        guard let levels = interval.first?.levels,
-              let firstX = interval.first?.x, let lastX = interval.last?.x
-        else { return [] }
-        let tops = interval.map { (Double($0.x), Double($0.y0)) }
-        let bottoms = interval.map { (Double($0.x), Double($0.y1 + 1)) }
-        guard let topFit = leastSquares(tops), let botFit = leastSquares(bottoms),
-              maxResidual(tops, topFit) <= beamStraightnessInSpaces * spacingPx,
-              maxResidual(bottoms, botFit) <= beamStraightnessInSpaces * spacingPx
-        else { return [] }
+        guard let levels = interval.first?.levels else { return [] }
+        guard let band = bandFit(for: interval, spacingPx: spacingPx) else {
+            RasterBeamProbe.noteInterval(
+                interval, spacingPx: spacingPx, drop: .residual,
+                transform: transform, pageIndex: pageIndex,
+            )
+            return []
+        }
+        let (topFit, botFit, firstX, lastX) = (band.top, band.bottom, band.firstX, band.lastX)
 
         // Pixel space is y-down and page space y-up, so a pixel-space
         // slope becomes its negation in page space; the 72/dpi scale
@@ -51,7 +52,17 @@ extension RasterPage {
               // beam. Thickness constancy backstops the ladder, which
               // only ever saw the band's total.
               abs(topFit.slope - botFit.slope) <= beamMaxSlope / 2
-        else { return [] }
+        else {
+            RasterBeamProbe.noteInterval(
+                interval, spacingPx: spacingPx, drop: .slope,
+                transform: transform, pageIndex: pageIndex,
+            )
+            return []
+        }
+        RasterBeamProbe.noteInterval(
+            interval, spacingPx: spacingPx, drop: nil,
+            transform: transform, pageIndex: pageIndex,
+        )
 
         let (xLeft, xRight) = extendedSpan(
             firstX: firstX, lastX: lastX, mask: mask, spacingPx: spacingPx,
@@ -64,6 +75,104 @@ extension RasterPage {
                 transform: transform, pageIndex: pageIndex,
             )
         }
+    }
+
+    /// Smallest share of an interval's columns a refit may keep, as a
+    /// fraction. `OMR_BEAM_TRIM_KEEP` overrides it for a sweep, and 1.0
+    /// switches the refit off entirely — a refit only ever runs on an
+    /// interval whose plain fit already failed, so at least one column
+    /// misses the gate and no refit can keep them all.
+    ///
+    /// This fraction is the whole safety argument for the second pass.
+    /// Speckle is LOCAL: one or two columns miss the gate and the rest
+    /// of the edge is already straight, so a refit keeps nearly all of
+    /// them. A curve misses it EVERYWHERE — the columns within tolerance
+    /// of a chord through a parabola are two thin bands either side of
+    /// its quarter points, about a third of the run — so a slur grazing a
+    /// stem row cannot be trimmed into a beam. Slurs are still not
+    /// detected as anything, which is why that has to be structural here
+    /// rather than left to a threshold.
+    ///
+    /// Swept on v2-eval. DURATION IS FLAT ACROSS THE WHOLE RANGE — every
+    /// value gives dur p50 82.0, mean 69.7, and the SAME 13 renders
+    /// better / 0 worse against the pre-refit baseline, per render to the
+    /// digit. So the objective this stage is tuned against cannot choose,
+    /// and the beam seam's own precision is the tiebreaker:
+    ///
+    ///     value   beams tp   fp    fn
+    ///     (none)      2353   383   199
+    ///     0.50        2528   924    24
+    ///     0.75        2528   924    24
+    ///     0.90        2521   574    31
+    ///     0.95        2519   442    33
+    ///
+    /// 0.90 rather than 0.95 because the ceiling is what binds on SHORT
+    /// intervals, not the ratio: a refit needs `ceil(f·n)` columns, so
+    /// 0.95 cannot trim a single column until an interval is 20 wide.
+    /// The shortest legal beam is 1.1 sp — about 14 columns at 200dpi,
+    /// and the measured minimum, a dotted-eighth's hook, is 1.3 — so 0.95
+    /// would be structurally blind to speckle on exactly the partial
+    /// beams that decide a dotted rhythm. 0.90 is blind only below 10
+    /// columns, which is under the extent gate anyway.
+    static let beamTrimKeepFraction = sweepOverride("OMR_BEAM_TRIM_KEEP") ?? 0.9
+
+    /// The band's two fitted edges and the x-range they were fitted
+    /// over, or nil when the ink is not straight enough to be a beam.
+    ///
+    /// TWO PASSES, and the ordering is the point. The first is the plain
+    /// least-squares fit over every column; when it clears
+    /// `beamStraightnessInSpaces` this function returns it unchanged, so
+    /// every beam the stage already emits is emitted exactly as before.
+    /// The second pass only ever sees an interval the first REJECTED: it
+    /// drops the columns that miss the gate and refits the rest.
+    ///
+    /// Measured on v2-eval, which is why the second pass exists at all:
+    /// all 114 of the unmatched truth beams that carry a prediction one
+    /// beam pitch away sit under an interval this gate discarded, and 83
+    /// of them miss it by less than 0.13 sp — one or two columns of
+    /// speckle on an otherwise straight edge, not curved ink. A refit
+    /// without those columns clears 93 of the 114. (The fusion story this
+    /// was expected to be — a band-spanning column the median smoothing
+    /// relabelled — accounts for 30 of them, and excluding columns by
+    /// label rather than by residual recovers 4.)
+    static func bandFit(
+        for interval: [BeamColumn], spacingPx: Double,
+    ) -> (top: EdgeFit, bottom: EdgeFit, firstX: Int, lastX: Int)? {
+        guard let first = interval.first, let last = interval.last else { return nil }
+        let tops = interval.map { (Double($0.x), Double($0.y0)) }
+        let bottoms = interval.map { (Double($0.x), Double($0.y1 + 1)) }
+        guard let topFit = leastSquares(tops), let botFit = leastSquares(bottoms) else {
+            return nil
+        }
+        let gate = beamStraightnessInSpaces * spacingPx
+        if maxResidual(tops, topFit) <= gate, maxResidual(bottoms, botFit) <= gate {
+            return (topFit, botFit, first.x, last.x)
+        }
+        let kept = interval.indices.filter {
+            abs(tops[$0].1 - topFit.y(at: tops[$0].0)) <= gate
+                && abs(bottoms[$0].1 - botFit.y(at: bottoms[$0].0)) <= gate
+        }
+        return refit(kept: kept, of: interval, tops: tops, bottoms: bottoms, spacingPx: spacingPx)
+    }
+
+    /// The refit over `kept`, subject to keeping enough of the interval
+    /// and still spanning a beam.
+    private static func refit(
+        kept: [Int], of interval: [BeamColumn],
+        tops: [(Double, Double)], bottoms: [(Double, Double)], spacingPx: Double,
+    ) -> (top: EdgeFit, bottom: EdgeFit, firstX: Int, lastX: Int)? {
+        guard kept.count >= 2,
+              Double(kept.count) >= beamTrimKeepFraction * Double(interval.count),
+              let lo = kept.first, let hi = kept.last,
+              Double(interval[hi].x - interval[lo].x + 1) >= beamMinExtentInSpaces * spacingPx,
+              let topFit = leastSquares(kept.map { tops[$0] }),
+              let botFit = leastSquares(kept.map { bottoms[$0] })
+        else { return nil }
+        let gate = beamStraightnessInSpaces * spacingPx
+        guard maxResidual(kept.map { tops[$0] }, topFit) <= gate,
+              maxResidual(kept.map { bottoms[$0] }, botFit) <= gate
+        else { return nil }
+        return (topFit, botFit, interval[lo].x, interval[hi].x)
     }
 
     /// Level `i` of a `k`-level band, placed at FIXED FRACTIONS of the

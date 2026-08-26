@@ -104,10 +104,17 @@ extension RasterPage {
         let minExtentPx = beamMinExtentInSpaces * spacingPx
         var out: [PathSegment] = []
         for slab in slabs {
+            RasterBeamProbe.noteSlab(slab)
             for interval in constantLevelIntervals(slab) {
                 guard let first = interval.first, let last = interval.last,
                       Double(last.x - first.x + 1) >= minExtentPx
-                else { continue }
+                else {
+                    RasterBeamProbe.noteInterval(
+                        interval, spacingPx: spacingPx, drop: .short,
+                        transform: transform, pageIndex: pageIndex,
+                    )
+                    continue
+                }
                 out += quads(
                     for: interval, mask: mask, spacingPx: spacingPx,
                     transform: transform, pageIndex: pageIndex,
@@ -207,12 +214,20 @@ extension RasterPage {
     /// ledger by nothing at all (levelMiss 315, absentMiss 222, fn 199, tp
     /// 2353 all unchanged; fp 376 -> 383) and every one of the 32 scorable
     /// renders came back with its duration and pitch percentages
-    /// unchanged. So the merged column must already be arriving at a stage
-    /// where only ONE slab is open — the stack fused from the first column
-    /// of its shorter member, which never opens a second slab to share
-    /// with — and the surviving 114 are being dropped somewhere after
-    /// this function. Keep the non-destructive merge because it is right
-    /// and cheap; do not credit it with corpus points it did not earn.
+    /// unchanged.
+    ///
+    /// AND NEITHER WAS FUSION AT ALL. The follow-up guess written here —
+    /// that the merged column arrives where only ONE slab is open, the
+    /// stack having fused from the first column of its shorter member —
+    /// was measured too and is also not it. Of the 114, 30 have any
+    /// label/geometry disagreement under them and excluding columns by
+    /// that disagreement recovers 4. What actually held them was
+    /// `bandFit`'s straightness gate failing on ONE speckled column of an
+    /// otherwise straight edge (83 of the 114 miss the gate by under 0.13
+    /// sp); refitting without that column recovers 93 and moves the eval
+    /// 13 renders better, 0 worse. Keep the non-destructive merge because
+    /// it is right and cheap; do not credit it with corpus points it did
+    /// not earn.
     private static func linkSlabs(
         _ mask: InkMask, spacingPx: Double,
     ) -> [[BeamColumn]] {
@@ -224,6 +239,7 @@ extension RasterPage {
             var next: [OpenSlab] = []
             var consumed = [Bool](repeating: false, count: runs.count)
             let shares = fusedShares(runs: runs, open: open, consumed: &consumed)
+            RasterBeamProbe.noteRuns(runs.count)
             for (index, entry) in open.enumerated() {
                 var slab = entry
                 if let rung = shares[index] {
@@ -231,14 +247,32 @@ extension RasterPage {
                 } else if let i = runs.indices.first(where: {
                     !consumed[$0] && runs[$0].y0 <= slab.y1 && runs[$0].y1 >= slab.y0
                 }) {
+                    if RasterBeamProbe.enabled {
+                        RasterBeamProbe.noteTake(
+                            run: runs[i], slabLevels: slab.levels,
+                            openCovering: open.count(where: {
+                                runs[i].y0 <= $0.y1 && runs[i].y1 >= $0.y0
+                            }),
+                        )
+                    }
                     slab.take(runs[i])
                     consumed[i] = true
                 } else {
                     slab.missing += 1
+                    if RasterBeamProbe.enabled,
+                       runs.contains(where: { $0.y0 <= slab.y1 && $0.y1 >= slab.y0 })
+                    {
+                        RasterBeamProbe.noteStarved()
+                    }
                 }
                 if slab.missing > bridgePx { closed.append(slab.columns) } else { next.append(slab) }
             }
             for (i, run) in runs.enumerated() where !consumed[i] {
+                if RasterBeamProbe.enabled {
+                    RasterBeamProbe.noteOpen(overlapsOpen: open.contains {
+                        run.y0 <= $0.y1 && run.y1 >= $0.y0
+                    })
+                }
                 next.append(OpenSlab(
                     columns: [run], y0: run.y0, y1: run.y1,
                     levels: run.levels, missing: 0,
@@ -305,6 +339,7 @@ extension RasterPage {
                 shares[index] = rungs[slot]
             }
             consumed[i] = true
+            RasterBeamProbe.noteShare()
         }
         return shares
     }

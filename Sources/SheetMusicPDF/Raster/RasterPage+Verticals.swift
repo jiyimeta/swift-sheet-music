@@ -121,7 +121,10 @@ extension RasterPage {
     /// this hook. Same shape as the `PDF_NO_TUPLET` / `PDF_TUPLET_DEBUG`
     /// switches in the importer: a diagnostic that is inert unless a
     /// harness asks for it.
-    private static func sweepOverride(_ key: String) -> Double? {
+    ///
+    /// Internal rather than private because the beam fitter reads it too
+    /// (`beamTrimKeepFraction`) and pays the same rebuild-per-value cost.
+    static func sweepOverride(_ key: String) -> Double? {
         guard let raw = ProcessInfo.processInfo.environment[key] else { return nil }
         return Double(raw)
     }

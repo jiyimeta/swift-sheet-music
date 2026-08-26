@@ -52,6 +52,10 @@
             /// Note-level attribution of the beam seam's loss. Gated on
             /// `OMR_BEAM_DIAG=1`; see `OMRBeamDiagnostics`.
             var beamdiag = OMRBeamDiagnostics.Totals()
+            /// Stage-level attribution of the same loss, joined to the
+            /// detector's own drop record. Gated on
+            /// `OMR_BEAM_SLAB_PROBE=1`; see `OMRBeamSlabProbe`.
+            var beamslab = OMRBeamSlabProbe.Totals()
         }
 
         @Test func rasterPathsAgainstLabels() throws {
@@ -85,6 +89,7 @@
             if ProcessInfo.processInfo.environment["OMR_BEAM_DIAG"] == "1" {
                 OMRBeamDiagnostics.report(totals.beamdiag)
             }
+            if RasterBeamProbe.enabled { OMRBeamSlabProbe.report(totals.beamslab) }
             OMRVerticalGranularity.report(totals.vgran)
             for key in Set(totals.endReal.keys).union(totals.endFalse.keys).sorted() {
                 print(
@@ -156,6 +161,9 @@
             )
             let imageURL = URL(fileURLWithPath: "\(dir)/\(page.image.file)")
             guard FileManager.default.fileExists(atPath: imageURL.path) else { return }
+            // The detector's drop record is per PAGE; the counters beside
+            // it are meant to accumulate over the whole sweep.
+            RasterBeamProbe.resetBands()
             let analysis = try OMRPageBitmapLoader.withPageBitmap(
                 url: imageURL, dpi: Double(page.image.dpi),
             ) { RasterPage.analyze($0, pageIndex: page.page.index) }
@@ -228,12 +236,22 @@
         /// Note-level attribution of the beam loss, and one row per page so
         /// the aggregate can be crossed against the per-render duration
         /// deltas. Off unless `OMR_BEAM_DIAG=1`.
+        ///
+        /// The stage-level probe rides here too, under its own
+        /// `OMR_BEAM_SLAB_PROBE` gate, because it needs exactly the same
+        /// four arguments and this page's drop record is still current.
         func beamDiagnostics(
             dir: String, labelFile: String,
             predicted: [OMRPageLabels.Beam], truth: [OMRPageLabels.Beam],
             truthPaths: [OMRPageLabels.Path], spacing: Double,
             into totals: inout Totals,
         ) {
+            if RasterBeamProbe.enabled {
+                OMRBeamSlabProbe.accumulate(
+                    bands: RasterBeamProbe.bands, predicted: predicted,
+                    truth: truth, spacingPt: spacing, into: &totals.beamslab,
+                )
+            }
             guard ProcessInfo.processInfo.environment["OMR_BEAM_DIAG"] == "1" else { return }
             let row = OMRBeamDiagnostics.accumulate(
                 predicted: predicted, truth: truth, truthPaths: truthPaths,

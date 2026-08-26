@@ -189,6 +189,57 @@
             #expect(Self.beams(bmp).count == 2)
         }
 
+        /// A flat 0.5 sp beam over [x0, x1) with the single column at
+        /// `speckleX` lifted `dy` px — one bad column on an edge that is
+        /// otherwise perfectly straight.
+        static func speckledBeam(
+            x0: Int, x1: Int, y0: Int, speckleX: Int, dy: Int,
+        ) -> GrayBitmap {
+            var bmp = Self.page()
+            for x in x0 ..< x1 {
+                RasterTestBitmaps.vLine(
+                    &bmp, x: x, y0: x == speckleX ? y0 - dy : y0,
+                    y1: (x == speckleX ? y0 - dy : y0) + 6, thickness: 1,
+                )
+            }
+            return bmp
+        }
+
+        /// ONE speckled column used to cost the whole beam, and that —
+        /// not fusion — is what the corpus was losing.
+        ///
+        /// The straightness gate is 0.12 sp, here 1.44px. A single column
+        /// 3px off an otherwise exact edge takes the residual to ~3px, and
+        /// `quads` dropped the WHOLE interval on it. Measured on v2-eval,
+        /// every one of the 114 unmatched truth beams with a prediction
+        /// one beam pitch away sits under an interval dropped this way,
+        /// and 83 of them miss the gate by under 0.13 sp — speckle, not
+        /// curved ink.
+        @Test func aSpeckledColumnDoesNotCostTheWholeBeam() {
+            let bmp = Self.speckledBeam(x0: 60, x1: 260, y0: 90, speckleX: 150, dy: 3)
+            let segs = Self.beams(bmp)
+            #expect(segs.count == 1)
+            // The whole run, not the part either side of the speckle.
+            #expect(Double(segs.first?.rect.width ?? 0) > 45)
+        }
+
+        /// …and the refit must not turn a CURVE into a beam. A slur is
+        /// not detected as anything yet, so on a page where one grazes a
+        /// stem row the only thing keeping it out of the beam stream is
+        /// this gate. A curve misses it everywhere: the columns within
+        /// tolerance of its own chord are two thin bands either side of
+        /// the quarter points, about a third of the run, which is what
+        /// `beamTrimKeepFraction` rejects.
+        @Test func aCurvedBandIsStillNotABeam() {
+            var bmp = Self.page()
+            for x in 60 ..< 260 {
+                let t = Double(x - 60) / 200
+                let y = 90 - Int((32 * t * (1 - t)).rounded())
+                RasterTestBitmaps.vLine(&bmp, x: x, y0: y, y1: y + 6, thickness: 1)
+            }
+            #expect(Self.beams(bmp).isEmpty)
+        }
+
         @Test func theQuadEdgesBracketTheSlab() {
             var bmp = Self.page()
             Self.slopedBeam(&bmp, x0: 60, x1: 260, y0: 90, dy: 0, thickness: 6)
