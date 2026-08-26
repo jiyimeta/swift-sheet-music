@@ -28,9 +28,12 @@ public struct MSCXEncoderOptions: Sendable {
     /// per-part copy of the options before emitting that part's staff bodies.
     ///
     /// mscx stores the *concert* pitch/key in `<pitch>` / `<tpc>` / `<concertKey>` and the
-    /// *written* one alongside it (`<tpc2>`, and `<accidental>` on a `<KeySig>`), so the note and
-    /// key-signature encoders need this to fill the written half in.
-    public var writtenFifthsOffset = 0
+    /// *written* one alongside it (`<tpc2>`, and `<actualKey>` / `<accidental>` on a `<KeySig>`),
+    /// so the note and key-signature encoders need this to fill the written half in.
+    ///
+    /// `package`, not `public`: the Score encoder overwrites it once per part, so any value an
+    /// external caller set would be discarded before it reached an element encoder.
+    package var writtenFifthsOffset = 0
 
     public init(targetVersion: MSCXVersion = .v4) {
         self.targetVersion = targetVersion == .v2 ? .v3 : targetVersion

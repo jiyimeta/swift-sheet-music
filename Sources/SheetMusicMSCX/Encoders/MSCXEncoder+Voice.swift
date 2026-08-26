@@ -219,16 +219,28 @@ extension Voice {
         }
     }
 
-    /// The omission is of the key signature MuseScore *displays* by default, so it is the WRITTEN
-    /// key that has to be C major — on a transposing part the written key of concert C is not C
-    /// (a B♭ clarinet writes D major), and omitting the `<KeySig>` there would make Studio render
-    /// the part a whole tone out. Hence the offset: with a non-transposing part it is 0 and this
-    /// reduces to the original `concertKey == 0` test.
+    /// The staff-head `<KeySig>` may only be dropped when BOTH halves of the signature are C major
+    /// — the concert key and the written one — because the omission has to be lossless in both
+    /// directions and nothing recreates the element on the way back in.
+    ///
+    /// - The written key must be 0 because the omission mirrors MuseScore's own: it stands for the
+    ///   signature Studio *displays* by default. On a transposing part the written key of concert
+    ///   C is not C (a B♭ clarinet writes D major), so dropping it there renders the part a whole
+    ///   tone out.
+    /// - The concert key must be 0 for the mirror case: a B♭ part in concert B♭ major
+    ///   (`concertKey -2`, offset `+2`) has a written key of exactly 0. Dropping it loses the −2,
+    ///   the decoder brings the part back at concert C, and the next save writes written D — two
+    ///   fifths of drift per round trip. MuseScore's compat repair only runs for
+    ///   `mscVersion < 420`, so our v4 output would never be repaired.
+    ///
+    /// With a non-transposing part the two conditions coincide and this is the original
+    /// `concertKey == 0` test.
     private func shouldDropInitialZeroKeySig(
         isStaffHead: Bool, writtenFifthsOffset: Int,
     ) -> Bool {
         guard isStaffHead, let first = elements.first else { return false }
         if case let .keySignature(key) = first,
+           key.concertKey == 0,
            Score.respelledKey(key.concertKey + writtenFifthsOffset) == 0
         {
             return true
