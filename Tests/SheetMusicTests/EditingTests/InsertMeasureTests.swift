@@ -4,7 +4,7 @@ import Testing
 @Suite("InsertMeasure")
 struct InsertMeasureTests {
     private func twoBarScore() -> Score {
-        // Grand staff, 2 measures, signatures on bar 1 — built via the Task 1 factory so the shape is canonical.
+        // Grand staff, 2 measures, signatures on bar 1 — built via `Score.blank(_:)` so the shape is canonical.
         Score.blank(BlankScoreTemplate(
             title: "t",
             parts: [.init(

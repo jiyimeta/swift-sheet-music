@@ -86,10 +86,15 @@ extension Measure {
     /// This measure with every key signature dropped from every voice. A percussion staff has no key, so a
     /// drum staff built from a pitched bar chain opens on the time signature alone — the same shape
     /// `MidiImporter` produces for a drum track (`includeKeySignature: !track.isDrums`).
+    ///
+    /// Tuplet endpoints index into the same element list, so the removal goes through
+    /// `MeasureStructure.removeElements(in:where:)`, which remaps them. That is dead weight for the
+    /// signatures-plus-measure-rest bars `Score.blank(_:)` builds, but `Part.init(blankPlan:id:measures:)`
+    /// invites a caller to pass a real bar chain, where it is not.
     fileprivate func droppingKeySignatures() -> Measure {
         var copy = self
         for index in copy.voices.indices {
-            copy.voices[index].elements.removeAll { element in
+            MeasureStructure.removeElements(in: &copy.voices[index]) { element in
                 if case .keySignature = element { return true }
                 return false
             }
@@ -110,7 +115,7 @@ extension Part {
     ///
     /// Cross-part brackets are NOT applied here: a `.normal` group bracket spans the global staff order and
     /// so can only be resolved once every part's staff count is known. See `Score.blank(_:)`.
-    public init(
+    init(
         blankPlan plan: BlankScoreTemplate.PartPlan,
         id: String,
         measures: [Measure],
@@ -212,13 +217,23 @@ extension Score {
     ///
     /// A group of a single single-staff part would draw a bracket around one staff — MuseScore itself
     /// suppresses that, and so do we.
+    ///
+    /// The group bracket goes one `column` further out than anything already on the anchor staff, which in
+    /// practice means column 1 when a grand-staff part heads the group. Column is not cosmetic there: a
+    /// brace is drawn with its right edge at `staffOriginX - 0.3 sp` extending LEFT
+    /// (`StaffRenderer.drawBrace`), while a `.normal` bracket's spine sits at
+    /// `staffOriginX - 0.5 sp - column * sp` (`StaffRenderer.bracketSpineX`) — so at column 0 the spine
+    /// lands inside the brace glyph. Each column steps the spine one `sp` further left, and the gutter
+    /// widens to match (`LayoutEngine.bracketGutterInfo` reports `maxColumn + 1`).
     private static func applyBracketGroups(_ groups: [Range<Int>], to parts: inout [Part]) {
         for group in groups {
             guard group.lowerBound >= 0, group.upperBound <= parts.count, !group.isEmpty else { continue }
             let span = parts[group].reduce(0) { $0 + $1.staves.count }
             guard span > 1, !parts[group.lowerBound].staves.isEmpty else { continue }
+            let existing = parts[group.lowerBound].staves[0].brackets
+            let column = existing.isEmpty ? 0 : (existing.map(\.column).max() ?? 0) + 1
             parts[group.lowerBound].staves[0].brackets.append(
-                BracketItem(type: .normal, span: span),
+                BracketItem(type: .normal, span: span, column: column),
             )
         }
     }

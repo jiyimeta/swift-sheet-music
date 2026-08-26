@@ -132,12 +132,65 @@ struct BlankScoreTests {
             measureCount: 2,
         ))
         #expect(score.parts[0].staves[0].brackets.isEmpty)
-        // Piano keeps its own brace and additionally anchors the 3-staff group bracket.
+        // Piano keeps its own brace and additionally anchors the 3-staff group bracket. The group bracket
+        // takes column 1: at column 0 its spine (`staffOriginX - 0.5 sp`) would be drawn inside the brace
+        // glyph, whose right edge sits at `staffOriginX - 0.3 sp`.
         #expect(score.parts[1].staves[0].brackets == [
             BracketItem(type: .brace, span: 2),
-            BracketItem(type: .normal, span: 3),
+            BracketItem(type: .normal, span: 3, column: 1),
         ])
+        #expect(score.parts[1].staves[0].brackets[1].column == 1)
         #expect(score.parts[2].staves[0].brackets.isEmpty)
+    }
+
+    /// A group headed by a single-staff part has nothing to nest under, so its bracket stays in column 0.
+    @Test("a group bracket with no brace under it stays in column 0")
+    func bracketGroupWithoutBraceUsesColumnZero() {
+        let score = Score.blank(BlankScoreTemplate(
+            title: "SA",
+            parts: [
+                .init(instrumentID: "voice", longName: "Soprano", staves: [.init(clefType: "G")]),
+                .init(instrumentID: "voice", longName: "Alto", staves: [.init(clefType: "G")]),
+            ],
+            bracketGroups: [0 ..< 2],
+            measureCount: 1,
+        ))
+        #expect(score.parts[0].staves[0].brackets == [BracketItem(type: .normal, span: 2, column: 0)])
+    }
+
+    /// The percussion staff's key-signature strip removes elements a tuplet's `startIndex`/`endIndex` index
+    /// into, so the endpoints have to move with them. `Score.blank(_:)` never builds a tuplet, but
+    /// `Part.init(blankPlan:id:measures:)` takes any bar chain — an add-part command hands it real bars.
+    @Test("stripping a drum staff's key signature remaps tuplet spans")
+    func percussionStripRemapsTupletSpans() {
+        let triplet = [
+            VoiceElement.chord(Chord(duration: .eighth, notes: [Note(pitch: 38, tpc: 16)])),
+            .chord(Chord(duration: .eighth, notes: [Note(pitch: 38, tpc: 16)])),
+            .chord(Chord(duration: .eighth, notes: [Note(pitch: 38, tpc: 16)])),
+        ]
+        let bar = Measure(voices: [Voice(
+            elements: [
+                .keySignature(KeySignature(concertKey: 3)),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            ] + triplet,
+            tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)],
+        )])
+        let part = Part(
+            blankPlan: .init(
+                instrumentID: "drumset",
+                longName: "Drum Kit",
+                staves: [.init(clefType: "PERC", isPercussion: true)],
+                isDrums: true,
+            ),
+            id: "1",
+            measures: [bar],
+        )
+        let voice = part.staves[0].measures[0].voices[0]
+        #expect(voice.elements.count == 4) // key signature gone, time signature + 3 chords left
+        #expect(voice.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
+        // The endpoints still name the first and last member of the same triplet.
+        #expect(voice.elements[voice.tuplets[0].startIndex] == triplet[0])
+        #expect(voice.elements[voice.tuplets[0].endIndex] == triplet[2])
     }
 
     @Test("out-of-bounds or empty bracket ranges are ignored")
