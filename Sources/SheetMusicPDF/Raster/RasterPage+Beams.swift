@@ -145,52 +145,168 @@ extension RasterPage {
             + Double(k - 1) * beamGapInSpaces
     }
 
+    /// The rungs of a fused band, one per open slab it covers, or nil when
+    /// the band is not that stack.
+    ///
+    /// The slabs' level counts must ALREADY sum to the band's own, and
+    /// that is what keeps sharing from inventing a level: every rung handed
+    /// out here was detected as a slab of its own by the columns on one
+    /// side of the fusion, and the band's thickness independently agrees
+    /// with their total. A run that merely grazes two slabs fails the sum
+    /// and takes the ordinary single-slab path.
+    ///
+    /// The cuts are the fixed fractions `quads(for:)` places levels at, so
+    /// a shared column lands where the band would have been split anyway
+    /// had it stayed one slab; each rung must still meet the slab it is
+    /// handed to, which rejects an implausible assignment outright.
+    static func sharedRungs(
+        of run: BeamColumn, across slabs: [(y0: Int, y1: Int, levels: Int)],
+    ) -> [BeamColumn]? {
+        guard slabs.count > 1,
+              slabs.reduce(0, { $0 + $1.levels }) == run.levels
+        else { return nil }
+        let total = ladderThicknessInSpaces(levels: run.levels)
+        let pitch = beamSingleThicknessInSpaces + beamGapInSpaces
+        let top = Double(run.y0)
+        let height = Double(run.y1 + 1 - run.y0)
+        var out: [BeamColumn] = []
+        var base = 0
+        for slab in slabs {
+            let fracTop = Double(base) * pitch / total
+            let fracBottom = (Double(base + slab.levels - 1) * pitch
+                + beamSingleThicknessInSpaces) / total
+            let y0 = Int((top + fracTop * height).rounded())
+            let y1 = Int((top + fracBottom * height).rounded()) - 1
+            guard y0 <= y1, y0 <= slab.y1, y1 >= slab.y0 else { return nil }
+            out.append(BeamColumn(x: run.x, y0: y0, y1: y1, levels: slab.levels))
+            base += slab.levels
+        }
+        return out
+    }
+
     /// Link ladder-quantized column runs into slabs, bridging the columns
-    /// where a stem crosses.
+    /// where a stem crosses and SHARING the columns where the stack's own
+    /// ink merges.
+    ///
+    /// A merged column is one run for the whole stack, and handing it to a
+    /// single slab is destructive twice over. The slabs it starves run out
+    /// of bridge and close, and their remnants fall under
+    /// `beamMinExtentInSpaces`; worse, the slab that took it now carries
+    /// one column whose y-range is the whole band while
+    /// `constantLevelIntervals`' median smoothing still calls the interval
+    /// one level, and `quads` then fails that interval on straightness and
+    /// drops it entire. ONE inked column across the 0.25 sp gap is enough
+    /// to cost a two-beam group its outer beam outright, and
+    /// `aSingleFusedColumnKeepsBothBeams` is that page.
+    ///
+    /// SHARING IS NOT WHAT THE CORPUS WAS LOSING, and that is the finding
+    /// this comment exists to keep. The v2-eval signature — 114 of 199
+    /// unmatched truth beams carrying a 0.5 sp prediction exactly one beam
+    /// pitch away, the outer member missing three times in four — reads
+    /// exactly like starvation, and it is not: sharing moved the seam
+    /// ledger by nothing at all (levelMiss 315, absentMiss 222, fn 199, tp
+    /// 2353 all unchanged; fp 376 -> 383) and every one of the 32 scorable
+    /// renders came back with its duration and pitch percentages
+    /// unchanged. So the merged column must already be arriving at a stage
+    /// where only ONE slab is open — the stack fused from the first column
+    /// of its shorter member, which never opens a second slab to share
+    /// with — and the surviving 114 are being dropped somewhere after
+    /// this function. Keep the non-destructive merge because it is right
+    /// and cheap; do not credit it with corpus points it did not earn.
     private static func linkSlabs(
         _ mask: InkMask, spacingPx: Double,
     ) -> [[BeamColumn]] {
-        struct Open {
-            var columns: [BeamColumn]
-            var y0: Int
-            var y1: Int
-            var missing: Int
-        }
         let bridgePx = max(1, Int((beamBridgeInSpaces * spacingPx).rounded()))
-        var open: [Open] = []
+        var open: [OpenSlab] = []
         var closed: [[BeamColumn]] = []
         for x in 0 ..< mask.width {
-            let runs = columnRuns(mask, x: x).compactMap { run -> BeamColumn? in
-                guard let levels = beamLevels(
-                    runLengthPx: Double(run.y1 - run.y0 + 1), spacingPx: spacingPx,
-                ) else { return nil }
-                return BeamColumn(x: x, y0: run.y0, y1: run.y1, levels: levels)
-            }
-            var next: [Open] = []
+            let runs = ladderColumns(mask, x: x, spacingPx: spacingPx)
+            var next: [OpenSlab] = []
             var consumed = [Bool](repeating: false, count: runs.count)
-            for var slab in open {
-                var matched = false
-                for (i, run) in runs.enumerated()
-                    where !consumed[i] && run.y0 <= slab.y1 && run.y1 >= slab.y0
-                {
-                    slab.columns.append(run)
-                    slab.y0 = run.y0
-                    slab.y1 = run.y1
-                    slab.missing = 0
+            let shares = fusedShares(runs: runs, open: open, consumed: &consumed)
+            for (index, entry) in open.enumerated() {
+                var slab = entry
+                if let rung = shares[index] {
+                    slab.take(rung)
+                } else if let i = runs.indices.first(where: {
+                    !consumed[$0] && runs[$0].y0 <= slab.y1 && runs[$0].y1 >= slab.y0
+                }) {
+                    slab.take(runs[i])
                     consumed[i] = true
-                    matched = true
-                    break
+                } else {
+                    slab.missing += 1
                 }
-                if !matched { slab.missing += 1 }
                 if slab.missing > bridgePx { closed.append(slab.columns) } else { next.append(slab) }
             }
             for (i, run) in runs.enumerated() where !consumed[i] {
-                next.append(Open(columns: [run], y0: run.y0, y1: run.y1, missing: 0))
+                next.append(OpenSlab(
+                    columns: [run], y0: run.y0, y1: run.y1,
+                    levels: run.levels, missing: 0,
+                ))
             }
             open = next
         }
         closed.append(contentsOf: open.map(\.columns))
         return closed
+    }
+
+    /// A slab still being extended, column by column.
+    private struct OpenSlab {
+        var columns: [BeamColumn]
+        var y0: Int
+        var y1: Int
+        var levels: Int
+        var missing: Int
+
+        mutating func take(_ column: BeamColumn) {
+            columns.append(column)
+            y0 = column.y0
+            y1 = column.y1
+            levels = column.levels
+            missing = 0
+        }
+    }
+
+    /// This column's ink runs, keeping only the ones whose thickness lands
+    /// on a ladder rung.
+    private static func ladderColumns(
+        _ mask: InkMask, x: Int, spacingPx: Double,
+    ) -> [BeamColumn] {
+        columnRuns(mask, x: x).compactMap { run in
+            guard let levels = beamLevels(
+                runLengthPx: Double(run.y1 - run.y0 + 1), spacingPx: spacingPx,
+            ) else { return nil }
+            return BeamColumn(x: x, y0: run.y0, y1: run.y1, levels: levels)
+        }
+    }
+
+    /// The rung each open slab is owed by a fused run this column, keyed by
+    /// its index in `open`, marking every shared run consumed.
+    ///
+    /// Runs first, slabs second: a slab already promised a rung must not
+    /// then be offered the same run again by the sequential pass, and a run
+    /// already shared out must not be handed to a slab whole.
+    private static func fusedShares(
+        runs: [BeamColumn], open: [OpenSlab], consumed: inout [Bool],
+    ) -> [Int: BeamColumn] {
+        var shares: [Int: BeamColumn] = [:]
+        for (i, run) in runs.enumerated() {
+            let covered = open.indices
+                .filter {
+                    shares[$0] == nil
+                        && run.y0 <= open[$0].y1 && run.y1 >= open[$0].y0
+                }
+                .sorted { open[$0].y0 < open[$1].y0 }
+            guard let rungs = sharedRungs(
+                of: run,
+                across: covered.map { (open[$0].y0, open[$0].y1, open[$0].levels) },
+            ) else { continue }
+            for (slot, index) in covered.enumerated() {
+                shares[index] = rungs[slot]
+            }
+            consumed[i] = true
+        }
+        return shares
     }
 
     /// Maximal stretches of a slab whose columns agree on the level

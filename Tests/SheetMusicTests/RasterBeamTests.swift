@@ -134,6 +134,52 @@
             #expect(segs.count == 3)
         }
 
+        /// Two 0.5 sp beams a 0.25 sp gap apart over [x0, x1), with the
+        /// gap inked — the pair FUSED — over [f0, f1).
+        static func fusedStack(x0: Int, x1: Int, f0: Int, f1: Int) -> GrayBitmap {
+            var bmp = Self.page()
+            RasterTestBitmaps.hLine(&bmp, y: 80, x0: x0, x1: x1, thickness: 6)
+            RasterTestBitmaps.hLine(&bmp, y: 89, x0: x0, x1: x1, thickness: 6)
+            RasterTestBitmaps.hLine(&bmp, y: 86, x0: f0, x1: f1, thickness: 3)
+            return bmp
+        }
+
+        /// ONE inked column across the gap used to cost the stack a whole
+        /// beam. The merged column is a single run, so the first slab took
+        /// it and the second starved — but the worse half is what it did to
+        /// the slab that took it: that column's y-range is the whole
+        /// 1.25 sp band inside an interval the median smoothing still calls
+        /// one level, and `quads` fails the WHOLE interval on straightness
+        /// and drops it. One beam is left where the page has two, one beam
+        /// pitch away — which is the corpus's dominant beam loss (114 of
+        /// 199 unmatched truth beams).
+        @Test func aSingleFusedColumnKeepsBothBeams() {
+            let bmp = Self.fusedStack(x0: 60, x1: 260, f0: 150, f1: 151)
+            let segs = Self.beams(bmp)
+            #expect(segs.count == 2)
+            let tops = segs.compactMap { $0.quad?.topIntercept }.sorted()
+            guard tops.count == 2 else {
+                Issue.record("expected two levels, got \(tops.count)")
+                return
+            }
+            // One beam pitch apart: 0.75 sp = 9px = 2.16pt.
+            #expect(abs(Double(tops[1] - tops[0]) - 2.16) < 0.3)
+        }
+
+        /// A fusion long enough to exhaust the starved slab's bridge costs
+        /// the group's x-range rather than a level: both beams arrive as
+        /// fragments that stop either side of the fused stretch. Sharing
+        /// the merged columns keeps each one whole.
+        @Test func aFusedStretchDoesNotFragmentTheStack() {
+            let bmp = Self.fusedStack(x0: 60, x1: 260, f0: 150, f1: 166)
+            let segs = Self.beams(bmp)
+            #expect(segs.count == 2)
+            // 200px at 300dpi is 48pt; a fragment would be under half that.
+            for seg in segs {
+                #expect(Double(seg.rect.width) > 45)
+            }
+        }
+
         /// Two beams that are NOT fused are simply two slabs, even when
         /// one is shorter than the other — no splitting involved.
         @Test func anUnfusedPartialSecondaryIsJustTwoBeams() {
