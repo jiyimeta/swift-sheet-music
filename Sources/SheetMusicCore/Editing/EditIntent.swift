@@ -55,4 +55,9 @@ public enum EditIntent: Sendable, Equatable {
     /// The delete here is the plain one, on purpose. `.delete` keeps its collapse — that is right for ⌫, which is
     /// emptying the bar rather than stating a length.
     case writeRest(at: VoiceElementID, duration: NoteDuration)
+
+    /// Insert a blank measure column before `index`; `index == measureCount` appends at the end.
+    case insertMeasure(at: Int)
+    /// Delete the measure column at `index`.
+    case deleteMeasure(at: Int)
 }

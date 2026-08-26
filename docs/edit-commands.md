@@ -66,6 +66,8 @@ own substantive logic.
 | `ReplaceVoiceElements` | primitive | primitive |
 | `PasteVoiceElement` | ⌘V (single, cross-measure spill) | — |
 | `PasteVoiceElements` | ⌘V (range, multi-element, cross-measure spill, tuplet-aware) | — |
+| `InsertMeasure` | menu command (structural) | — |
+| `DeleteMeasure` | menu command (structural) | — |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -90,8 +92,8 @@ section above).
   constituents to ordinary durations.
 - [ ] **`MoveToVoice`** — move a chord or rest from one voice to
   another within the same measure.
-- [ ] **`InsertMeasure`** / **`DeleteMeasure`** — measure-level
-  structural ops.
+- [x] **`InsertMeasure`** / **`DeleteMeasure`** — measure-level
+  structural ops. Implemented; see "A. Implemented" above.
 - [ ] **`SetBarLineSubtype`** *(sugar)* — change a barline
   (regular / double / repeat / end).
 - [ ] **`SetMeasureRepeat`** — replace a measure's content with a

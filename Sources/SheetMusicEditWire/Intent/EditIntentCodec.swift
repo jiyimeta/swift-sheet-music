@@ -46,9 +46,12 @@ import Wirelet
 /// 11 = removeTuplet(VoiceElementIDWire)
 /// 12 = writeNote(WriteNoteIntentWire)
 /// 13 = writeRest(SlotDurationIntentWire)
+/// 14 = insertMeasure(MeasureIndexIntentWire)
+/// 15 = deleteMeasure(MeasureIndexIntentWire)
 /// ```
 ///
-/// Cases 5…11 were appended in SP1 and 12…13 in SP2; 0…4 predate them and must keep their indices and byte layout.
+/// Cases 5…11 were appended in SP1, 12…13 in SP2, and 14…15 for M1 solo scratch creation; 0…4 predate them all and
+/// must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -186,6 +189,12 @@ import Wirelet
 /// ```
 ///
 /// `removeTuplet` reuses `VoiceElementIDWire` directly as its payload — no wrapper struct, same pattern as `delete`.
+///
+/// `MeasureIndexIntentWire` (shared by `insertMeasure` and `deleteMeasure` — the discriminator case index is what
+/// tells the two apart, not anything in this struct; same pattern as `SlotDurationIntentWire` above):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -307,6 +316,11 @@ public enum EditIntentWire {
     /// Appended in SP2 — index 13. Shares `SlotDurationIntentWire` with `setRestDuration` / `setChordDuration`:
     /// the payload really is the same two scalars, and the discriminator is what tells the three apart.
     case writeRest(SlotDurationIntentWire)
+    /// Appended for M1 solo scratch creation — index 14. Never renumber anything above it.
+    case insertMeasure(MeasureIndexIntentWire)
+    /// Appended for M1 solo scratch creation — index 15. Shares `MeasureIndexIntentWire` with `insertMeasure`: the
+    /// payload really is the same one scalar, and the discriminator is what tells the two apart.
+    case deleteMeasure(MeasureIndexIntentWire)
 
     public init(from intent: EditIntent) {
         switch intent {
@@ -349,6 +363,10 @@ public enum EditIntentWire {
             self = .writeNote(WriteNoteIntentWire(location: location, pitch: pitch, tpc: tpc, duration: duration))
         case let .writeRest(location, duration):
             self = .writeRest(SlotDurationIntentWire(location: location, duration: duration))
+        case let .insertMeasure(index):
+            self = .insertMeasure(MeasureIndexIntentWire(measureIndex: index))
+        case let .deleteMeasure(index):
+            self = .deleteMeasure(MeasureIndexIntentWire(measureIndex: index))
         }
     }
 
@@ -404,6 +422,10 @@ public enum EditIntentWire {
         case let .writeRest(wire):
             let decoded = try wire.decoded()
             return .writeRest(at: decoded.at, duration: decoded.duration)
+        case let .insertMeasure(wire):
+            return .insertMeasure(at: wire.decoded())
+        case let .deleteMeasure(wire):
+            return .deleteMeasure(at: wire.decoded())
         }
     }
 }
@@ -663,5 +685,20 @@ public struct CreateTupletIntentWire {
 
     public func decoded() -> (location: VoiceElementID, actualNotes: Int, normalNotes: Int) {
         (location: location.decoded(), actualNotes: Int(actualNotes), normalNotes: Int(normalNotes))
+    }
+}
+
+/// Shared by `insertMeasure` and `deleteMeasure` — the discriminator case index is what tells the two apart, not
+/// anything in this struct.
+@WireFormat
+public struct MeasureIndexIntentWire {
+    public var measureIndex: Int32
+
+    public init(measureIndex: Int) {
+        self.measureIndex = Int32(measureIndex)
+    }
+
+    public func decoded() -> Int {
+        Int(measureIndex)
     }
 }
