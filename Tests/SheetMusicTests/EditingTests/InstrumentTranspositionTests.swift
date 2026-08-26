@@ -1,6 +1,7 @@
 @testable import SheetMusicCore
 import Testing
 
+@Suite("InstrumentTransposition")
 struct InstrumentTranspositionTests {
     @Test func defaultsAreNonTransposing() {
         let piano = Instrument(id: "piano")
