@@ -17,7 +17,7 @@ import SheetMusicFoundation
 /// field embeds one, and it is the only thing re-stamped here:
 ///
 /// - `PositionedSystemElement.originalStaff` — the staff a tempo / rehearsal mark / staff text was attached to.
-///   Every address with `partIndex >= partIndex` moves one part down.
+///   Every address whose own `partIndex` is at or past this command's insertion index moves one part down.
 ///
 /// Everything else that looks like an address is not stored in the score:
 ///
@@ -27,6 +27,16 @@ import SheetMusicFoundation
 ///   move it (unlike `InsertMeasure`, which must).
 /// - `Tuplet` endpoints index into their own voice's element list; `Part` / `Staff` / `Measure` / `Voice` locate
 ///   themselves by nesting, so re-indexing is the array insertion itself.
+///
+/// ## One asymmetry worth knowing about
+///
+/// Reached through `ScoreEditSession.apply`, this command is bundled with `MeasureAccidentals`' renotation pass,
+/// which diffs each post-edit staff against whatever staff previously held its address. A part insertion shifts
+/// every address below it, so the staves BELOW the insertion point all read as changed and are re-notated — and
+/// any glyph the pass would canonicalize there is written in the same undo step as the insertion. That is
+/// deliberate and undo-exact (the composite's inverse restores both halves); it only means an add-part can also
+/// tidy an accidental somewhere it did not touch. Applying `AddPart` directly through `ScoreEditor` skips the pass
+/// entirely.
 public struct AddPart: EditCommand {
     public let partIndex: Int
     /// The plan the new part is built from. `nil` on the restore path — when this command is the inverse of a
@@ -100,11 +110,11 @@ public struct AddPart: EditCommand {
     /// has just restored, so the indices line up by construction.
     private func restore(_ score: inout Score) {
         if let restoredBrackets {
-            for partIndex in score.parts.indices where restoredBrackets.indices.contains(partIndex) {
-                for staffIndex in score.parts[partIndex].staves.indices
-                    where restoredBrackets[partIndex].indices.contains(staffIndex)
+            for part in score.parts.indices where restoredBrackets.indices.contains(part) {
+                for staff in score.parts[part].staves.indices
+                    where restoredBrackets[part].indices.contains(staff)
                 {
-                    score.parts[partIndex].staves[staffIndex].brackets = restoredBrackets[partIndex][staffIndex]
+                    score.parts[part].staves[staff].brackets = restoredBrackets[part][staff]
                 }
             }
         }

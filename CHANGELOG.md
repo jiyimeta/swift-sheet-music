@@ -22,6 +22,18 @@ and this project adheres to
   remove a score's last measure (`EditRefusal.Reason.cannotDeleteOnlyMeasure`).
 - `EditIntent.insertMeasure(at:)` / `.deleteMeasure(at:)`: the host-facing intents `ScoreEditSession` plans
   into `InsertMeasure` / `DeleteMeasure`, with `EditIntentCodec` wire support (indices 14…15).
+- `AddPart` / `RemovePart`: structural edit commands that add or drop a whole part, each other's inverse. A
+  new part is built through the same `Part.init(blankPlan:id:measures:)` a blank score uses, and its bars are
+  measure rests carrying the score's signature skeleton — the key / time signature each existing bar declares,
+  so a mid-score signature change stays consistent across staves. Clefs are not copied; the part declares its
+  own. Brackets follow the global staff order in both directions: one whose span crosses the insertion point
+  grows by the inserted staff count, and a removal shrinks it or re-anchors it onto the first staff it still
+  covers (`Score.filtered(hidingStaves:)`'s pass, now shared). A system element anchored into a removed part
+  re-anchors on the score's first staff rather than being dropped, so a tempo survives its instrument, and
+  `RemovePart` refuses to remove a score's last part.
+- `EditIntent.addPart(plan:at:)`: the host-facing intent `ScoreEditSession` plans into `AddPart`, carrying a
+  `BlankScoreTemplate.PartPlan` — the recipe, not a built part, so both images construct the same one — with
+  `EditIntentCodec` wire support (index 16).
 
 ## [2.0.0] - 2026-08-25
 

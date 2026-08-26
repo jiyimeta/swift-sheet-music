@@ -16,6 +16,11 @@ import SheetMusicFoundation
 ///   `StaffAddress(partIndex: 0, staffIndexInPart: 0)`; addresses past the removed part move one part up.
 ///
 /// Neither is reversible by arithmetic, so the inverse carries both pre-images whole.
+///
+/// Removing a score's LAST part is refused. Not a taste judgment: `AddPart`'s restore form needs a reference staff
+/// to validate against, so its `apply` would throw against the emptied score — and `ScoreEditor.undo` pops the
+/// inverse BEFORE applying it, so a throwing undo would drop that entry permanently and leave every older entry on
+/// the stack keyed to a score shape that no longer matches. The refusal is what keeps the undo stack coherent.
 public struct RemovePart: EditCommand {
     public let partIndex: Int
 
@@ -34,6 +39,13 @@ public struct RemovePart: EditCommand {
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard score.parts.indices.contains(partIndex) else {
             throw Self.refused(.targetNotFound(affectedLocation))
+        }
+        // `.cannotDeleteOnlyMeasure` stands in for the structural-minimum rule this is the part-shaped sibling of;
+        // the dedicated `.cannotRemoveLastPart` reason arrives with the `.removePart` intent, and swapping it here
+        // is the whole change. Refusing with the wrong-sounding code is still far better than the alternative — see
+        // the type's doc comment for what an unrefused last-part removal does to the undo stack.
+        guard score.parts.count > 1 else {
+            throw Self.refused(.cannotDeleteOnlyMeasure)
         }
 
         let removed = score.parts[partIndex]
@@ -68,16 +80,15 @@ public struct RemovePart: EditCommand {
         )
     }
 
-    /// Re-homes every system-element anchor the removal invalidated. An address INTO the removed part falls back
-    /// to the score's first staff — which exists as long as a part remains; a score emptied of its last part has
-    /// no valid address to offer and leaves the anchor alone rather than inventing one.
+    /// Re-homes every system-element anchor the removal invalidated. An address INTO the removed part falls back to
+    /// the score's first staff, which is always a real one: `apply` has refused the last-part case, so at least one
+    /// part survives.
     private func reanchorSystemElements(in score: inout Score) {
         for measureIndex in score.systemMeasures.indices {
             for elementIndex in score.systemMeasures[measureIndex].elements.indices {
                 guard let address = score.systemMeasures[measureIndex].elements[elementIndex].originalStaff
                 else { continue }
                 if address.partIndex == partIndex {
-                    guard !score.parts.isEmpty else { continue }
                     score.systemMeasures[measureIndex].elements[elementIndex].originalStaff =
                         StaffAddress(partIndex: 0, staffIndexInPart: 0)
                 } else if address.partIndex > partIndex {

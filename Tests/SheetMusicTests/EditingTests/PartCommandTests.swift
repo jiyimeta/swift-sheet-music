@@ -289,4 +289,51 @@ struct PartCommandTests {
             try RemovePart(partIndex: 7).apply(to: &score)
         }
     }
+
+    /// Removing the last part would leave `AddPart`'s restore form nothing to validate against, so its `apply`
+    /// would throw on the way back — and `ScoreEditor.undo` pops the inverse BEFORE applying it, so that throw
+    /// would discard the undo entry for good and leave every older entry keyed to a score shape that no longer
+    /// matches. Driven through `ScoreEditor` rather than the command alone precisely because the stack is what is
+    /// at stake: nothing may be pushed, and the score may not move.
+    @Test("removing a score's last part is refused, leaving the score and the undo stack untouched")
+    func removingTheLastPartIsRefused() throws {
+        let score = Score.blank(BlankScoreTemplate(
+            title: "t", parts: [.init(instrumentID: "piano", staves: [.init(clefType: "G")])],
+            measureCount: 2,
+        ))
+        let editor = ScoreEditor(score: score)
+        #expect(throws: SheetMusicError.self) {
+            try editor.apply(RemovePart(partIndex: 0))
+        }
+        #expect(editor.score == score)
+        #expect(editor.canUndo == false)
+        #expect(editor.canRedo == false)
+
+        // And an edit landing afterwards still undoes cleanly — the refusal left nothing half-done behind it.
+        try editor.apply(InsertMeasure(measureIndex: 2))
+        #expect(editor.canUndo)
+        try editor.undo()
+        #expect(editor.score == score)
+    }
+
+    /// The refusal has to be distinguishable from "that part index does not exist" — a host showing "no such
+    /// part" when the user tried to delete their only instrument is telling them something untrue.
+    @Test("the last-part refusal is not the out-of-range one")
+    func removingTheLastPartRefusesForItsOwnReason() {
+        var score = Score.blank(BlankScoreTemplate(
+            title: "t", parts: [.init(instrumentID: "piano", staves: [.init(clefType: "G")])],
+            measureCount: 1,
+        ))
+        do {
+            _ = try RemovePart(partIndex: 0).apply(to: &score)
+            Issue.record("expected a refusal")
+        } catch let SheetMusicError.invalidEdit(refusal) {
+            #expect(refusal.operation == "RemovePart")
+            // Stands in until the `.removePart` intent brings a dedicated `.cannotRemoveLastPart`; what matters
+            // here is that it is NOT `.targetNotFound`, which the out-of-range case already uses.
+            #expect(refusal.reason == .cannotDeleteOnlyMeasure)
+        } catch {
+            Issue.record("expected an invalidEdit refusal, got \(error)")
+        }
+    }
 }
