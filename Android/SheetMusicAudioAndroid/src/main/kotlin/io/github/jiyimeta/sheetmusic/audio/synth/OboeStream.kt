@@ -11,7 +11,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -90,6 +93,11 @@ internal open class OboeStream(
      */
     data class ClockSample(val framePosition: Long, val nanoTime: Long)
 
+    /** How long [stop] waits for the writer after unparking and cancelling it. See [stop]. */
+    private companion object {
+        const val WRITER_SHUTDOWN_TIMEOUT_MS = 500L
+    }
+
     private var track: AudioTrack? = null
     private val producer = AtomicReference<Producer?>(null)
 
@@ -159,13 +167,32 @@ internal open class OboeStream(
     /**
      * Stops the writer coroutine and pauses / flushes the AudioTrack.
      * Idempotent.
+     *
+     * **Returns only once the writer has actually stopped**, which is what makes [close] safe. The writer spends
+     * most of its life inside `AudioTrack.write(..., WRITE_BLOCKING)` — a blocking native call, not a suspension
+     * point, so `cancel()` cannot reach it and merely marks the job. A caller that released the track on the
+     * strength of `cancel()` alone was freeing an AudioTrack another thread was still writing into: a native
+     * use-after-free that surfaced as SIGSEGV inside `BpBinder::onLastStrongRef`, rarely, and never at the call
+     * site that caused it.
+     *
+     * `pause()` / `flush()` move BEFORE the cancel for the same reason: they are what actually returns a parked
+     * `write()`, so the join below has something to wait for rather than a thread that will not budge until the
+     * ring buffer drains on its own.
+     *
+     * The join is bounded. A writer that has not come back by then is stuck somewhere this class cannot reach,
+     * and blocking a caller — often the main thread, since teardown runs from the Reader leaving or an edit
+     * landing — is worse than the leak of letting that one thread finish on its own.
      */
     open fun stop() {
         running = false
-        writerScope?.cancel()
-        writerScope = null
+        // Order matters: unpark the writer first, then ask it to stop, then wait for it.
         track?.pause()
         track?.flush()
+        val scope = writerScope
+        writerScope = null
+        scope?.cancel()
+        val job = scope?.coroutineContext?.job ?: return
+        runBlocking { withTimeoutOrNull(WRITER_SHUTDOWN_TIMEOUT_MS) { job.join() } }
     }
 
     /**
@@ -183,7 +210,12 @@ internal open class OboeStream(
         return ClockSample(framePosition = ts.framePosition, nanoTime = ts.nanoTime)
     }
 
-    /** Stops playback, releases the AudioTrack, and shuts down the writer dispatcher. */
+    /**
+     * Stops playback, releases the AudioTrack, and shuts down the writer dispatcher.
+     *
+     * Safe because [stop] joins the writer: nothing is touching the track by the time it is released, and nothing
+     * is calling back into the [Producer] by the time the caller tears the synth down after this returns.
+     */
     open override fun close() {
         stop()
         track?.release()
