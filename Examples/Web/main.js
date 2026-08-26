@@ -46,6 +46,7 @@ const loopClear = document.querySelector("#loop-clear");
 const tuningSlider = document.querySelector("#tuning");
 const tuningReadout = document.querySelector("#tuning-readout");
 const exportButton = document.querySelector("#export");
+const exportFormat = document.querySelector("#export-format");
 const playbackStatus = document.querySelector("#playback-status");
 const mixerHost = document.querySelector("#mixer");
 
@@ -758,7 +759,28 @@ function updateControls() {
   loopApply.disabled = !engine || editMode;
   loopClear.disabled = !engine || editMode;
   exportButton.disabled = !engine?.canExport || editMode;
+  exportFormat.disabled = exportButton.disabled || exportFormat.options.length === 0;
   playButton.textContent = engine?.state === "playing" ? "Pause" : "Play";
+}
+
+/**
+ * Fill the format picker from what this browser can actually write.
+ *
+ * Asked once per engine rather than per click: the answer depends on the
+ * browser's codec set, which does not change while the page is open.
+ */
+async function refreshExportFormats() {
+  const formats = (await engine?.supportedExportFormats()) ?? [];
+  exportFormat.replaceChildren(
+    ...formats.map((format) => {
+      const option = document.createElement("option");
+      option.value = format;
+      option.textContent = format.toUpperCase();
+      return option;
+    }),
+  );
+  document.body.dataset.exportFormats = formats.join(",");
+  updateControls();
 }
 
 function setEditMode(enabled) {
@@ -823,6 +845,7 @@ async function ensureEngine() {
     document.body.dataset.clickBank = applied ? "custom" : "gm";
   }
   buildMixer();
+  await refreshExportFormats();
   return engine;
 }
 
@@ -955,6 +978,53 @@ staffSizeSlider.addEventListener("change", () => {
   }
 });
 
+/**
+ * Decode exported bytes back through the browser and publish what came out.
+ *
+ * Deliberately goes through `decodeAudioData` rather than reading the samples
+ * out of the container by hand: for M4A that is the only way to find out
+ * whether a real demuxer accepts the file at all, and using the same path for
+ * every format means the numbers compare.
+ *
+ * Returns whether it could read the file back. Chromium's `decodeAudioData`
+ * takes WAV, MP3, AAC/MP4, Ogg and FLAC — but NOT AIFF, which it rejects with a
+ * null error even for a file CoreAudio reads without complaint. So a `false`
+ * here means "this browser will not read that container", not "the export is
+ * broken"; the file has already been written and downloaded by this point.
+ */
+async function measureExportedAudio(bytes) {
+  const context = new OfflineAudioContext(2, 1, 44_100);
+  const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  let decoded;
+  try {
+    decoded = await context.decodeAudioData(copy);
+  } catch (error) {
+    document.body.dataset.exportedDecodeError =
+      error instanceof Error ? error.message : String(error ?? "not decodable here");
+    return false;
+  }
+  const samples = decoded.getChannelData(0);
+
+  let peak = 0;
+  for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
+  // Where the audio actually starts. A file whose leading silence is longer
+  // than a codec frame is offset, which no other measurement here would show.
+  let leadingSilentFrames = samples.length;
+  for (let index = 0; index < samples.length; index++) {
+    if (Math.abs(samples[index]) > 0.02) {
+      leadingSilentFrames = index;
+      break;
+    }
+  }
+
+  document.body.dataset.exportedPeak = peak.toFixed(4);
+  document.body.dataset.exportedSeconds = decoded.duration.toFixed(4);
+  document.body.dataset.exportedLeadingSilenceMs = (
+    (leadingSilentFrames / decoded.sampleRate) * 1000
+  ).toFixed(2);
+  return true;
+}
+
 exportButton.addEventListener("click", async () => {
   if (!engine) return;
   // Playing while rendering is not a problem for the engine, but the file would
@@ -962,34 +1032,44 @@ exportButton.addEventListener("click", async () => {
   engine.pause();
   exportButton.disabled = true;
   playbackStatus.textContent = "rendering…";
+  // One terminal marker rather than several optional ones: a test polling for
+  // an EMPTY error cannot tell "no error" from "not finished yet".
+  delete document.body.dataset.exportDone;
+  delete document.body.dataset.exportError;
+  delete document.body.dataset.exportedDecodeError;
+  delete document.body.dataset.exportedSeconds;
   try {
     // The active loop, when there is one — exporting exactly what is being
     // looped is the common case, and matches AudioExportRange.currentLoop on
     // the other platforms.
-    const bytes = await engine.exportWav(loopRange ? { range: loopRange } : {});
-    const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+    const { bytes, mimeType, fileExtension } = await engine.exportAudio({
+      format: exportFormat.value || "wav",
+      ...(loopRange ? { range: loopRange } : {}),
+    });
+    const url = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${openScore?.metadata.title || "score"}.wav`;
+    link.download = `${openScore?.metadata.title || "score"}.${fileExtension}`;
     link.click();
     URL.revokeObjectURL(url);
     playbackStatus.textContent = `exported ${(bytes.length / 1e6).toFixed(1)} MB`;
     document.body.dataset.exportedBytes = String(bytes.length);
-    // Peak level, for the browser test. A render that was configured wrong
-    // produces a buffer of exactly the right length full of silence, which the
-    // byte count cannot tell apart from a good one.
-    const samples = new Int16Array(
-      bytes.buffer,
-      bytes.byteOffset + 44,
-      (bytes.length - 44) >> 1,
-    );
-    let peak = 0;
-    for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
-    document.body.dataset.exportedPeak = String(peak);
+    document.body.dataset.exportedType = mimeType;
+    // Decode what was written and measure it, for the browser test. Every
+    // export failure mode worth catching produces a file of PLAUSIBLE LENGTH:
+    // a render that never reached the worklet is silent, and an M4A missing its
+    // edit list leads with the encoder's priming. Neither shows up in a byte
+    // count, and both show up here.
+    const measured = await measureExportedAudio(bytes);
+    if (!measured) {
+      playbackStatus.textContent += " (this browser cannot read it back)";
+    }
+    document.body.dataset.exportDone = measured ? "ok" : "undecodable";
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     playbackStatus.textContent = `export failed: ${message}`;
     document.body.dataset.exportError = message;
+    document.body.dataset.exportDone = "error";
   } finally {
     updateControls();
   }

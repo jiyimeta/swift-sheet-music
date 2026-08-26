@@ -197,31 +197,62 @@ test("layers a generated click bank onto the metronome", async ({ page }) => {
 });
 
 /**
+ * Swap in mixer.mscz, whose drum part hits notes 76 and 77 — the only two the
+ * generated click bank defines. Every other fixture would export correct-length
+ * silence through that bank, which is indistinguishable from a broken render.
+ */
+async function useAudibleFixture(page: import("@playwright/test").Page) {
+  await page.evaluate(
+    (url) => window.renderScoreFromURL(url),
+    "/Web/sheet-music-web/test/fixtures/mixer.mscz",
+  );
+  await page.evaluate(() => window.useGeneratedSoundFont());
+}
+
+/**
+ * Export in `format` and wait for the page's terminal marker.
+ *
+ * The marker rather than an empty error string: an export that has not finished
+ * yet also has no error, so polling for emptiness passes immediately and the
+ * failure then surfaces as a timeout on some later attribute.
+ */
+async function exportAs(
+  page: import("@playwright/test").Page,
+  format: string,
+  expected: "ok" | "undecodable" = "ok",
+) {
+  await page.locator("#export-format").selectOption(format);
+  await page.locator("#export").click();
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(
+          () =>
+            document.body.dataset.exportDone ??
+            document.body.dataset.exportError ??
+            "",
+        ),
+      { timeout: 30_000 },
+    )
+    .toBe(expected);
+}
+
+/** Peak level of the exported file, decoded back through the browser. */
+async function exportedPeak(page: import("@playwright/test").Page) {
+  return Number(await page.evaluate(() => document.body.dataset.exportedPeak));
+}
+
+/**
  * The one thing only a browser can answer about the export: that an
  * `OfflineAudioContext` really does instantiate spessasynth's worklet and render
  * through it. Everything about the bytes themselves is pinned by
  * `test/wav.test.ts`, which needs no browser.
  */
 test("renders the score to a WAV faster than real time", async ({ page }) => {
-  // mixer.mscz rather than the default fixture: its drum part hits notes 76 and
-  // 77, the only two the generated click bank defines, so the render has
-  // something to be audible with. Every other score would export correct-length
-  // silence through that bank — indistinguishable from a broken render.
-  await page.evaluate(
-    (url) => window.renderScoreFromURL(url),
-    "/Web/sheet-music-web/test/fixtures/mixer.mscz",
-  );
-  await page.evaluate(() => window.useGeneratedSoundFont());
+  await useAudibleFixture(page);
   await page.locator("#play").click();
   await expect(page.locator("body")).toHaveAttribute("data-playback-state", "playing");
-  await page.locator("#export").click();
-
-  await expect
-    .poll(async () => page.evaluate(() => document.body.dataset.exportError ?? ""))
-    .toBe("");
-  await expect(page.locator("body")).toHaveAttribute("data-exported-bytes", /\d+/, {
-    timeout: 30_000,
-  });
+  await exportAs(page, "wav");
 
   const bytes = Number(
     await page.evaluate(() => document.body.dataset.exportedBytes),
@@ -234,8 +265,75 @@ test("renders the score to a WAV faster than real time", async ({ page }) => {
   // not applied, the sound bank not transferred, the worklet never reached —
   // yields a buffer of exactly the right length full of silence, which the byte
   // count above cannot tell apart from a good one.
-  const peak = Number(await page.evaluate(() => document.body.dataset.exportedPeak));
-  expect(peak).toBeGreaterThan(1000);
+  expect(await exportedPeak(page)).toBeGreaterThan(0.01);
+});
+
+/**
+ * AIFF is offered, and Chromium will not read it back.
+ *
+ * `decodeAudioData` takes WAV, MP3, AAC/MP4, Ogg and FLAC — not AIFF, which it
+ * rejects with a null error for a file CoreAudio's `afinfo` reads as a clean
+ * 2-channel 44.1 kHz big-endian PCM. So the browser adds nothing to what
+ * `test/aiff.test.ts` already pins field by field; what it can say is that the
+ * format reaches the picker and produces a downloadable file of the right size,
+ * and that the page survives a container it cannot decode.
+ */
+test("offers AIFF, and survives a container Chromium will not decode", async ({ page }) => {
+  await useAudibleFixture(page);
+  await page.locator("#play").click();
+  await expect(page.locator("body")).toHaveAttribute("data-playback-state", "playing");
+
+  expect(
+    (await page.evaluate(() => document.body.dataset.exportFormats ?? "")).split(","),
+  ).toContain("aiff");
+
+  await exportAs(page, "aiff", "undecodable");
+  expect(await page.evaluate(() => document.body.dataset.exportedType)).toBe("audio/aiff");
+  // Uncompressed, like the WAV: one 4/4 bar at ♩=120 plus a two-second tail,
+  // stereo 16-bit at 44.1 kHz.
+  const bytes = Number(await page.evaluate(() => document.body.dataset.exportedBytes));
+  expect(bytes).toBeGreaterThan(54 + 3 * 176_400);
+});
+
+/**
+ * M4A, decoded back through the browser's own demuxer.
+ *
+ * `test/mp4.test.ts` walks the box tree, but it walks it with the same
+ * understanding that wrote it — only a real demuxer can say whether the result
+ * is actually an MP4. And an MP4 has a failure mode WAV does not: without the
+ * edit list the encoder's ~2048 frames of priming stay in the presentation,
+ * shifting everything ~46 ms later while leaving length and peak plausible.
+ */
+test("renders the score to an M4A that a decoder accepts", async ({ page }) => {
+  await useAudibleFixture(page);
+  await page.locator("#play").click();
+  await expect(page.locator("body")).toHaveAttribute("data-playback-state", "playing");
+
+  const formats = (
+    await page.evaluate(() => document.body.dataset.exportFormats ?? "")
+  ).split(",");
+  expect(formats).toContain("m4a");
+  // Never offered: no browser ships an MP3 encoder, and hiding it beats letting
+  // a user pick a format that throws after a full render.
+  expect(formats).not.toContain("mp3");
+
+  await exportAs(page, "m4a");
+
+  expect(await page.evaluate(() => document.body.dataset.exportedType)).toBe("audio/mp4");
+  // Compressed: the same audio as AAC is a fraction of the WAV above, so a byte
+  // count anywhere near 176,400 per second would mean raw PCM got mislabelled.
+  const bytes = Number(await page.evaluate(() => document.body.dataset.exportedBytes));
+  expect(bytes).toBeGreaterThan(4_000);
+  expect(bytes).toBeLessThan(3 * 176_400);
+
+  expect(await exportedPeak(page)).toBeGreaterThan(0.01);
+
+  // The edit list assertion. Much past one AAC frame means the priming was left
+  // in the presentation.
+  const leadingSilenceMs = Number(
+    await page.evaluate(() => document.body.dataset.exportedLeadingSilenceMs),
+  );
+  expect(leadingSilenceMs).toBeLessThan(23.3);
 });
 
 test("the count-in holds the score until the pre-roll ends", async ({ page }) => {

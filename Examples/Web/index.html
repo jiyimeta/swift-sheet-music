@@ -195,7 +195,17 @@
         <input id="tuning" type="range" min="-50" max="50" step="1" value="0" />
         <span id="tuning-readout">±0¢</span>
       </label>
-      <button id="export" type="button" disabled>Export WAV</button>
+      <label>
+        <!--
+          Populated from `engine.supportedExportFormats()` rather than written
+          out here: which formats a browser can write is something only the
+          browser knows, and offering one it cannot is worse than not offering
+          it at all.
+        -->
+        format
+        <select id="export-format" disabled></select>
+      </label>
+      <button id="export" type="button" disabled>Export</button>
       <span id="playback-status"></span>
     </section>
     <section id="mixer"></section>
