@@ -89,7 +89,9 @@
             print(
                 "[prep][SUMMARY] renders=\(result.renders) pages=\(totals.pages) "
                     + "glyphs=\(totals.glyphs) dropped_no_bbox=\(totals.droppedNoBBox) "
-                    + "skipped_no_staff=\(totals.skippedNoStaff) oversize=\(totals.oversize) "
+                    + "skipped_no_staff=\(totals.skippedNoStaff) "
+                    + "skipped_implausible_scale=\(totals.skippedImplausibleScale) "
+                    + "oversize=\(totals.oversize) "
                     + "failed=\(totals.failed) peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB",
             )
         }
@@ -121,6 +123,114 @@
             #expect(result.totals.failed == 0)
             let files = try FileManager.default.subpathsOfDirectory(atPath: prepRoot)
             #expect(files.contains { $0.hasSuffix(".prep.png") })
+        }
+
+        /// A frozen render's `source_id` must be the SOURCE's id, not the
+        /// render's — recovered from the render id, since `frozen.json`
+        /// carries no provenance.
+        ///
+        /// `Training/model/prep.py`'s `split_of` is keyed on
+        /// (source_id, page_index) and explicitly NOT on the render,
+        /// because one source is rendered under eight faces and three
+        /// dpi. Writing the render id into `source_id` — which the
+        /// export used to do, documented as an expected fallback —
+        /// silently made the DEGRADED prep root split per render: the
+        /// same engraving under a different face would sit on the other
+        /// side of the train/val boundary, and the clean and degraded
+        /// roots disagreed about which split a page is in. Nothing
+        /// warned and no counter moved; it surfaces only as a model that
+        /// scores better than it should.
+        ///
+        /// The two render ids below are the SAME source under two faces
+        /// and must therefore export the same `source_id`. Comparing
+        /// them is what makes this test fail against the old fallback,
+        /// where each got its own.
+        @Test func aFrozenRenderExportsItsSourceIdNotItsRenderId() throws {
+            let root = try makeTempRoot()
+            defer { try? FileManager.default.removeItem(atPath: root) }
+            let renderIds = ["cov_accidentals_ms4_Bravura_v0", "cov_accidentals_ms4_MuseJazz_v7"]
+            for renderId in renderIds {
+                try PrepFixture.stage(
+                    at: "\(root)/\(renderId)", markerName: "frozen.json",
+                    markerJSON: ["render_id": renderId],
+                    labels: PrepFixture.labels(glyphs: []), raster: PrepFixture.staffBitmap(),
+                )
+            }
+            let prepRoot = root + "-prep"
+            defer { try? FileManager.default.removeItem(atPath: prepRoot) }
+
+            let result = try OMRPrepExportHarness.sweep(
+                root: root, prepRoot: prepRoot, staffSpacePx: 12, tile: 384,
+            )
+            #expect(result.totals.pages == 2)
+
+            var sourceIds: [String] = []
+            for renderId in renderIds {
+                let data = try Data(contentsOf: URL(
+                    fileURLWithPath: "\(prepRoot)/\(renderId)/page_0.prep.json",
+                ))
+                let page = try JSONDecoder().decode(OMRPrepPage.self, from: data)
+                #expect(page.renderId == renderId)
+                sourceIds.append(page.sourceId)
+            }
+            #expect(sourceIds == ["cov_accidentals", "cov_accidentals"])
+        }
+
+        /// A page whose staff spacing is measured far too small gets
+        /// UPSCALED to reach the canonical S — 4x on the worst real
+        /// page — and one such page yields ~736 tiles against a normal
+        /// page's ~30, every one of them teaching the geometry heads a
+        /// notehead four staff spaces wide. It must be skipped and
+        /// counted, not exported.
+        ///
+        /// The fixture builds a staff whose spacing is 2 px against a
+        /// canonical 12, i.e. a 6x upscale, and asserts nothing was
+        /// written — the failure this guards against is one that leaves
+        /// a perfectly valid-looking `.prep.png` behind.
+        @Test func aPageNormalizedFarPastOneToOneIsSkippedAndCounted() throws {
+            let root = try makeTempRoot()
+            defer { try? FileManager.default.removeItem(atPath: root) }
+            let dir = "\(root)/render_0001"
+            let bitmap = RasterTestBitmaps.staff(
+                widthPx: 400, heightPx: 200, dpi: 300, topY: 80, spacingPx: 2,
+            )
+            try PrepFixture.stage(
+                at: dir, markerName: "render.json",
+                markerJSON: ["pdf": "score.pdf", "dpi": 300],
+                labels: PrepFixture.labels(glyphs: []), raster: bitmap,
+            )
+            let prepRoot = root + "-prep"
+            defer { try? FileManager.default.removeItem(atPath: prepRoot) }
+
+            let result = try OMRPrepExportHarness.sweep(
+                root: root, prepRoot: prepRoot, staffSpacePx: 12, tile: 384,
+            )
+            #expect(result.totals.skippedImplausibleScale == 1)
+            #expect(result.totals.pages == 0)
+            #expect(result.totals.failed == 0, "a skip is not a failure")
+            let files = (try? FileManager.default.subpathsOfDirectory(atPath: prepRoot)) ?? []
+            #expect(!files.contains { $0.hasSuffix(".prep.png") })
+        }
+
+        /// The counterpart: a NORMAL page must still be exported. Without
+        /// this, a guard that rejected everything would pass the test
+        /// above.
+        @Test func aPageAtANormalScaleIsStillExported() throws {
+            let root = try makeTempRoot()
+            defer { try? FileManager.default.removeItem(atPath: root) }
+            try PrepFixture.stage(
+                at: "\(root)/render_0001", markerName: "render.json",
+                markerJSON: ["pdf": "score.pdf", "dpi": 300],
+                labels: PrepFixture.labels(glyphs: []), raster: PrepFixture.staffBitmap(),
+            )
+            let prepRoot = root + "-prep"
+            defer { try? FileManager.default.removeItem(atPath: prepRoot) }
+
+            let result = try OMRPrepExportHarness.sweep(
+                root: root, prepRoot: prepRoot, staffSpacePx: 12, tile: 384,
+            )
+            #expect(result.totals.skippedImplausibleScale == 0)
+            #expect(result.totals.pages == 1)
         }
 
         @Test func oversizeCountsAGlyphWhoseAdvanceExceedsTheTile() throws {

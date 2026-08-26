@@ -27,9 +27,43 @@
             var glyphs = 0
             var droppedNoBBox = 0
             var skippedNoStaff = 0
+            /// A page whose measured staff spacing was so small that
+            /// normalizing it to the canonical S would UPSCALE it past
+            /// `maxNormalizeScale` — see that constant.
+            var skippedImplausibleScale = 0
             var oversize = 0
             var failed = 0
         }
+
+        /// The largest normalization upscale a page may be given before
+        /// it is treated as a failed staff-spacing measurement rather
+        /// than a small-but-real staff.
+        ///
+        /// `OMRPrepNormalize` resizes a deskewed page so its staff
+        /// spacing becomes the canonical S (12 px). A real page therefore
+        /// lands near 1 — measured over the regenerated roots, all 4650
+        /// clean pages and 4628 of 4641 degraded pages are at or below
+        /// 1.5. Above 2 the measurement has failed: a scale of 4 means
+        /// the estimator read a 3-pixel staff spacing, which is below
+        /// what `RasterPage.estimateStaffSpacingPx` can resolve at all.
+        ///
+        /// It is not a cosmetic problem. Such a page is emitted at 4x
+        /// linear size, so ONE of them yields ~736 tiles against a normal
+        /// page's ~30, and every one of those tiles teaches the geometry
+        /// heads that a notehead is four staff spaces wide. Four pages of
+        /// 4641 contributed on the order of 1% of the degraded root's
+        /// tiles that way.
+        ///
+        /// This was invisible until 2026-08-18 and NOT caused by that
+        /// day's changes: the same two pages carry scale 4.0 / 3.43 in
+        /// the pre-existing `v2-prep-frozen` root. What changed is that
+        /// the corrected `renderedSize` target finally made a glyph on
+        /// such a page exceed the tile, which tripped `oversize` — the
+        /// counter that surfaced it. The parent design's note that
+        /// "`oversize=0`, a brace never fails to fit, do not design
+        /// around it" was reading a number the old constant targets could
+        /// not have moved.
+        static let maxNormalizeScale = 2.0
 
         /// `render.json` / `frozen.json`'s fields this stage needs,
         /// decoded tolerantly. A real render.json carries all three (see
@@ -86,6 +120,10 @@
                 totals.skippedNoStaff += 1
                 return
             }
+            guard normalized.scale <= maxNormalizeScale else {
+                totals.skippedImplausibleScale += 1
+                return
+            }
             let (glyphs, droppedNoBBox) = OMRPrepTargets.glyphs(
                 page: page, transform: analysis.transform, scale: normalized.scale,
             )
@@ -115,6 +153,12 @@
         /// was `render.json`: `frozen.json`'s schema never carries
         /// either (`build_dataset.py`), so their absence there is
         /// expected shape, not a real data gap, and does not warn.
+        ///
+        /// "Expected shape" is not the same as "any value will do",
+        /// though, and for `source_id` it once was treated that way —
+        /// see the recovery below and why a render id in that field
+        /// silently changed what the DEGRADED root's train/val split
+        /// means.
         private static func renderMeta(
             dir: String,
         ) throws -> (renderId: String, sourceId: String, face: String) {
@@ -132,10 +176,42 @@
             let face = decoded.face ?? (isFrozen ? "" : warnFallback(
                 dir: dirName, sourceFile: sourceFile, field: "face", value: "",
             ))
-            let sourceId = decoded.provenance?.sourceId ?? (isFrozen ? renderId : warnFallback(
-                dir: dirName, sourceFile: sourceFile, field: "provenance.source_id",
-                value: renderId,
-            ))
+            // A frozen render's `source_id` is RECOVERED from the render
+            // id, never defaulted to the render id itself.
+            //
+            // `Training/model/prep.py`'s `split_of` is keyed on
+            // (source_id, page_index) and NOT on the render precisely
+            // because one source is rendered under eight faces and three
+            // dpi — its own doc comment says a render-level split "would
+            // put the identical engraved content on both sides". Writing
+            // the render id into `source_id` produced exactly that: the
+            // degraded prep root (`v2-prep-frozen`) split PER RENDER, so
+            // training on it would hold out `cov_accidentals` under one
+            // face while training on the same engraving under another,
+            // and the two roots disagreed about which split any given
+            // page belongs to. Nothing warned; the fallback was
+            // documented as "expected shape".
+            //
+            // The recovery is `OMRDatasetSplit.sourceId(fromRenderID:)`
+            // — drop the trailing `_{engine}_{face}_v{n}`. Checked
+            // against every render in the dataset that records a
+            // `source_id`: **2208 of 2208 agree**
+            // (`theRecoveredSourceIdAgreesWithEveryRecordedOne`).
+            //
+            // `face` is NOT recovered the same way and stays empty for a
+            // frozen render: the render id spells "Finale Broadway" as
+            // `FinaleBroadway`, so 552 of those 2208 cannot round-trip.
+            // An empty face is honest; a de-spaced one would be wrong.
+            let sourceId = decoded.provenance?.sourceId
+                ?? (isFrozen
+                    ? (OMRDatasetSplit.sourceId(fromRenderID: renderId) ?? warnFallback(
+                        dir: dirName, sourceFile: sourceFile,
+                        field: "source_id recoverable from render_id", value: renderId,
+                    ))
+                    : warnFallback(
+                        dir: dirName, sourceFile: sourceFile, field: "provenance.source_id",
+                        value: renderId,
+                    ))
             return (renderId: renderId, sourceId: sourceId, face: face)
         }
 
