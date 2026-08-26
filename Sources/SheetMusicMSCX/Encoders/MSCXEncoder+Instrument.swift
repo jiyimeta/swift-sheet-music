@@ -26,6 +26,36 @@ extension Instrument {
         if let v = maxPitchAmateur {
             children.append(XMLTreeNode(name: "maxPitchA", text: String(v)))
         }
+        // MuseScore writes the transposition pair right after the pitch ranges and before
+        // `<instrumentId>` / `<Channel>`, and omits both at the concert-pitch default of 0 — so a
+        // non-transposing instrument keeps its existing byte shape. Both are written whenever
+        // either is set: an octave transposition is `diatonic -7 / chromatic -12`, and dropping the
+        // zero half of a pair would make it unreadable.
+        if isTransposing {
+            children.append(XMLTreeNode(
+                name: "transposeDiatonic", text: String(transposeDiatonic),
+            ))
+            children.append(XMLTreeNode(
+                name: "transposeChromatic", text: String(transposeChromatic),
+            ))
+        }
+        appendDrumset(into: &children)
+        for art in articulations {
+            children.append(art.encode())
+        }
+        for chan in channels {
+            children.append(chan.encode(options: options))
+        }
+        return XMLTreeNode(
+            name: "Instrument",
+            attributes: ["id": id],
+            children: children,
+        )
+    }
+
+    /// Append the percussion-kit block: the `<instrumentId>` / `<useDrumset>` marker pair and one
+    /// `<Drum>` per mapped pitch.
+    private func appendDrumset(into children: inout [XMLTreeNode]) {
         if useDrumset {
             // MuseScore Studio looks up the drumset template by the
             // canonical `<instrumentId>` (Sound ID) — without it,
@@ -65,17 +95,6 @@ extension Instrument {
                 children: drumChildren,
             ))
         }
-        for art in articulations {
-            children.append(art.encode())
-        }
-        for chan in channels {
-            children.append(chan.encode(options: options))
-        }
-        return XMLTreeNode(
-            name: "Instrument",
-            attributes: ["id": id],
-            children: children,
-        )
     }
 }
 

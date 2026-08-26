@@ -67,7 +67,9 @@ extension Voice {
     /// signature at the staff head — emitting `<KeySig><concertKey>0
     /// </concertKey></KeySig>` causes Studio to display a redundant
     /// "natural" sign at the start of the system on file open. We
-    /// mirror that omission here.
+    /// mirror that omission here — for the key as *written*, which on a
+    /// transposing part (`options.writtenFifthsOffset != 0`) is not the
+    /// concert one.
     ///
     /// `systemElements` (typically only non-empty for voice 0) are
     /// interleaved into the chord/rest stream at their natural cursor
@@ -99,6 +101,7 @@ extension Voice {
             isStaffHead: isStaffHead,
             effectiveDuration: effectiveDuration,
             nextMeasureFirstChordNotes: nextMeasureFirstChordNotes,
+            writtenFifthsOffset: options.writtenFifthsOffset,
         )
         var state = EncodeState(carryIn: carryIn)
         let sortedSys = Self.sortedSystemElements(systemElements)
@@ -143,6 +146,7 @@ extension Voice {
         isStaffHead: Bool,
         effectiveDuration: Fraction,
         nextMeasureFirstChordNotes: ChordNotes?,
+        writtenFifthsOffset: Int,
     ) -> IterationPlan {
         // At a given startIndex, push outer tuplets (longer range)
         // before inner ones so the close-side LIFO pops innermost first.
@@ -174,11 +178,13 @@ extension Voice {
             effectiveDuration: effectiveDuration,
             // Staff-head suppression of an implicit C-major KeySig: drop
             // the very first VoiceElement when this voice sits at the
-            // staff head and that element is `keySignature` with
-            // concertKey == 0. Tuplets do not span key signatures, so
-            // the open/close tuplet bookkeeping at index 0 is unaffected.
+            // staff head and that element is a `keySignature` whose
+            // WRITTEN key is C major. Tuplets do not span key signatures,
+            // so the open/close tuplet bookkeeping at index 0 is
+            // unaffected.
             dropInitialZeroKeySig: shouldDropInitialZeroKeySig(
                 isStaffHead: isStaffHead,
+                writtenFifthsOffset: writtenFifthsOffset,
             ),
             forwardTiePartnerNotes: Self.forwardTiePartnerNotes(
                 in: elements,
@@ -213,9 +219,18 @@ extension Voice {
         }
     }
 
-    private func shouldDropInitialZeroKeySig(isStaffHead: Bool) -> Bool {
+    /// The omission is of the key signature MuseScore *displays* by default, so it is the WRITTEN
+    /// key that has to be C major — on a transposing part the written key of concert C is not C
+    /// (a B♭ clarinet writes D major), and omitting the `<KeySig>` there would make Studio render
+    /// the part a whole tone out. Hence the offset: with a non-transposing part it is 0 and this
+    /// reduces to the original `concertKey == 0` test.
+    private func shouldDropInitialZeroKeySig(
+        isStaffHead: Bool, writtenFifthsOffset: Int,
+    ) -> Bool {
         guard isStaffHead, let first = elements.first else { return false }
-        if case let .keySignature(key) = first, key.concertKey == 0 {
+        if case let .keySignature(key) = first,
+           Score.respelledKey(key.concertKey + writtenFifthsOffset) == 0
+        {
             return true
         }
         return false

@@ -60,7 +60,7 @@ extension Score {
         let assembled = try assembleParts(
             decoded: partPairings, topLevel: topLevelStaves,
         )
-        let parts = assembled.parts
+        let parts = concertKeysResolved(assembled.parts, version: version)
         let systemMeasures = assembled.systemMeasures
 
         var metaTags: [String: String] = [:]
@@ -100,6 +100,50 @@ extension Score {
             style: style,
             source: .museScore(version),
         )
+    }
+
+    /// Convert every key signature of a transposing part from the WRITTEN key back to the concert
+    /// one, for files old enough to store only the written form.
+    ///
+    /// MuseScore 4 writes `<concertKey>` next to `<accidental>`, and `KeySignature.decode` prefers
+    /// it, so a v4 file already yields concert keys and is returned untouched. MuseScore 3 and
+    /// earlier wrote `<accidental>` alone — the key as it appears on that part's staff — which the
+    /// decoder has to shift back by the instrument's `writtenFifthsOffset`. The instrument is only
+    /// paired with its staves once parts are assembled, which is why this is a post-pass rather
+    /// than something `KeySignature.decode` could do on its own.
+    ///
+    /// Enharmonic respelling makes this lossy at the edges by nature: a written B♭ major on an
+    /// alto sax reads back as concert D♭ major even if the file was written from C♯ major. Both
+    /// spell the same pitches, and MuseScore's own round-trip collapses them the same way.
+    private static func concertKeysResolved(
+        _ parts: [Part], version: MSCXVersion,
+    ) -> [Part] {
+        guard version == .v2 || version == .v3 else { return parts }
+        return parts.map { part in
+            let offset = part.instrument.writtenFifthsOffset
+            guard offset != 0 else { return part }
+            var part = part
+            for staffIndex in part.staves.indices {
+                for measureIndex in part.staves[staffIndex].measures.indices {
+                    for voiceIndex in part.staves[staffIndex].measures[measureIndex].voices.indices {
+                        rewriteKeys(
+                            in: &part.staves[staffIndex].measures[measureIndex]
+                                .voices[voiceIndex].elements,
+                            offset: offset,
+                        )
+                    }
+                }
+            }
+            return part
+        }
+    }
+
+    private static func rewriteKeys(in elements: inout [VoiceElement], offset: Int) {
+        for index in elements.indices {
+            guard case var .keySignature(key) = elements[index] else { continue }
+            key.concertKey = respelledKey(key.concertKey - offset)
+            elements[index] = .keySignature(key)
+        }
     }
 
     /// MuseScore 2 wrote swing markers inside `<StaffText>` even when

@@ -22,6 +22,16 @@ public struct MSCXEncoderOptions: Sendable {
         }
     }
 
+    /// Line-of-fifths shift from the concert notation to the written one for the part currently
+    /// being encoded — `Instrument.writtenFifthsOffset`. `0` for a non-transposing part, which is
+    /// what every element encoder outside the per-part measure loop sees; the Score encoder makes a
+    /// per-part copy of the options before emitting that part's staff bodies.
+    ///
+    /// mscx stores the *concert* pitch/key in `<pitch>` / `<tpc>` / `<concertKey>` and the
+    /// *written* one alongside it (`<tpc2>`, and `<accidental>` on a `<KeySig>`), so the note and
+    /// key-signature encoders need this to fill the written half in.
+    public var writtenFifthsOffset = 0
+
     public init(targetVersion: MSCXVersion = .v4) {
         self.targetVersion = targetVersion == .v2 ? .v3 : targetVersion
     }

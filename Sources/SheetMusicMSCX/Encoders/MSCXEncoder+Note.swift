@@ -56,6 +56,16 @@ extension Note {
         appendParentheses(into: &children, targetVersion: options.targetVersion)
         children.append(XMLTreeNode(name: "pitch", text: String(pitch)))
         children.append(XMLTreeNode(name: "tpc", text: String(tpc)))
+        // `<tpc>` is the concert (sounding) tonal pitch class; `<tpc2>` is the written one, which
+        // MuseScore writes only when the two differ — i.e. on a transposing part. The decoder
+        // recomputes it from the instrument, so this is write-only; it exists so MuseScore Studio
+        // shows the part at written pitch instead of respelling it from scratch.
+        // C++: `TWrite::write(const Note*, …)`, `Pid::TPC2`.
+        if options.writtenFifthsOffset != 0 {
+            children.append(XMLTreeNode(
+                name: "tpc2", text: String(tpc + options.writtenFifthsOffset),
+            ))
+        }
         if let headType {
             children.append(XMLTreeNode(name: "head", text: headType))
         } else if let drumDefaultHead {

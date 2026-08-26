@@ -46,6 +46,10 @@ extension Instrument {
             channels: channels,
             useDrumset: useDrumset,
             drumLineMap: drumLineMap,
+            // `<transposeDiatonic>` / `<transposeChromatic>` are omitted for a concert-pitch
+            // instrument; both default to 0, which `Instrument` reads as non-transposing.
+            transposeDiatonic: node.first("transposeDiatonic").flatMap { Int($0.text) } ?? 0,
+            transposeChromatic: node.first("transposeChromatic").flatMap { Int($0.text) } ?? 0,
         )
     }
 }

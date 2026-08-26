@@ -110,6 +110,12 @@ extension Score {
     ) throws {
         var titleFrameSlot = titleFrame
         for (partIndex, entry) in allStaffIDs.enumerated() {
+            // The written notation is a per-part property, and everything below this point
+            // (notes' `<tpc2>`, key signatures' `<accidental>`) needs it. Hand the measure
+            // encoders a copy of the options carrying this part's offset; parts that don't
+            // transpose keep the incoming 0 and so keep their existing output byte-for-byte.
+            var partOptions = options
+            partOptions.writtenFifthsOffset = entry.part.instrument.writtenFifthsOffset
             for (staffIndexInPart, pair) in zip(entry.part.staves, entry.ids).enumerated() {
                 let staff = pair.0
                 let id = pair.1
@@ -126,7 +132,7 @@ extension Score {
                         titleFrame: frame,
                         systemElementsByMeasure: perMeasure,
                         effectiveMeasureDurations: staff.measures.effectiveMeasureDurations(),
-                        options: options,
+                        options: partOptions,
                     ),
                 )
             }

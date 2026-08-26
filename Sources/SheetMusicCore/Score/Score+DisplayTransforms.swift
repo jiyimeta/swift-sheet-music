@@ -3,7 +3,7 @@ extension Score {
     /// (adding / removing 12 accidentals spells the same pitch set the other way). Brings a fifths-shifted key back to
     /// a notatable signature; e.g. `+8` (8 sharps, unwritable) → `-4` (A♭ major). Values already in range — including
     /// `±7` (C♯ / C♭ major) — are returned unchanged, so a deliberately sharp/flat context keeps its spelling.
-    static func respelledKey(_ key: Int) -> Int {
+    package static func respelledKey(_ key: Int) -> Int {
         var k = key
         while k > 7 {
             k -= 12
