@@ -26,10 +26,28 @@ public struct Instrument: Sendable, Equatable {
     /// Used by the UI to position drum noteheads instead of the pitched
     /// diatonic formula.
     public var drumLineMap: [Int: Int]
+    /// mscx `<transposeDiatonic>` — diatonic steps from written to sounding pitch (negative = sounds lower).
+    public var transposeDiatonic: Int
+    /// mscx `<transposeChromatic>` — semitones from written to sounding pitch (negative = sounds lower).
+    public var transposeChromatic: Int
 
     /// Convenience accessor for the primary (= first) channel.
     public var channel: InstrumentChannel {
         channels.first ?? InstrumentChannel()
+    }
+
+    /// Semitones to ADD to a concert (sounding) pitch to get the written pitch.
+    public var writtenPitchOffset: Int {
+        -transposeChromatic
+    }
+
+    /// Line-of-fifths shift to ADD to a concert tpc (or key) to get the written one.
+    public var writtenFifthsOffset: Int {
+        12 * transposeDiatonic - 7 * transposeChromatic
+    }
+
+    public var isTransposing: Bool {
+        transposeDiatonic != 0 || transposeChromatic != 0
     }
 
     public init(
@@ -45,6 +63,8 @@ public struct Instrument: Sendable, Equatable {
         channels: [InstrumentChannel] = [InstrumentChannel()],
         useDrumset: Bool = false,
         drumLineMap: [Int: Int] = [:],
+        transposeDiatonic: Int = 0,
+        transposeChromatic: Int = 0,
     ) {
         self.id = id
         self.longName = longName
@@ -58,5 +78,7 @@ public struct Instrument: Sendable, Equatable {
         self.channels = channels.isEmpty ? [InstrumentChannel()] : channels
         self.useDrumset = useDrumset
         self.drumLineMap = drumLineMap
+        self.transposeDiatonic = transposeDiatonic
+        self.transposeChromatic = transposeChromatic
     }
 }
