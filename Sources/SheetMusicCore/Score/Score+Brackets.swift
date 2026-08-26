@@ -15,8 +15,12 @@ extension Score {
     ///
     /// `survivorLocations` maps each ORIGINAL address that survives to where it landed; an address absent from the
     /// map is one that went away. Callers strip the brackets off the rebuilt staves and append what this returns —
-    /// see `filtered(hidingStaves:)` (staff visibility), `RemovePart` (a whole part deleted) and `MovePart` (the
-    /// parts permuted), the callers this exists to keep in agreement.
+    /// see `filtered(hidingStaves:)` (staff visibility) and `RemovePart` (a whole part deleted), the two callers
+    /// this exists to keep in agreement.
+    ///
+    /// This is a pass for a change where staves GO AWAY, and `span` is re-derived from what is left. `MovePart`
+    /// deliberately does not use it: under a permutation every staff survives, so re-deriving could only clip a
+    /// declared span against the end of the staff list. See `MovePart.movedBrackets`.
     ///
     /// The result's `column`s are compacted (`canonicalizedColumns`) before it is returned, so a bracket whose
     /// neighbour in the gutter went away does not keep drawing a column further out than anything occupies.
@@ -69,6 +73,13 @@ extension Score {
     /// share a spine position across the whole system — that is the alignment a nested layout depends on — so
     /// compacting one staff's columns in isolation would pull its outer bracket down onto a spine another staff
     /// still draws one column further out. A column any surviving bracket still occupies is not a gap.
+    ///
+    /// "Occupied" counts EVERY surviving bracket, including invisible ones and `.noBracket` — which
+    /// `LayoutEngine.buildBrackets` skips when it draws, and `bracketGutterInfo` skips when it sizes the gutter.
+    /// So an invisible bracket at column 0 keeps a visible one at column 1 where it is. That is deliberate:
+    /// this pass repairs the damage a structural edit did, and an undrawn bracket is still a slot the score
+    /// declared and a slot the user can make visible again. Squeezing it out would silently rewrite a column the
+    /// edit never touched, and the gutter it costs is already zero — the sizing pass ignores it too.
     private static func canonicalizedColumns(
         _ entries: [(part: Int, staff: Int, bracket: BracketItem)],
     ) -> [(part: Int, staff: Int, bracket: BracketItem)] {

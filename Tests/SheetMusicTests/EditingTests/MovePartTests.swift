@@ -95,16 +95,25 @@ struct MovePartTests {
         #expect(score.parts[1].staves[0].brackets.isEmpty)
     }
 
-    /// A group bracket keeps its span and follows its anchor staff. Clamped so it can never claim more staves than
-    /// remain below its new anchor — a bracket spanning past the last staff is not something the layout engine has
-    /// any sane answer for.
-    @Test("a group bracket follows its anchor staff, clamped to the staves left below it")
-    func moveCarriesAGroupBracketWithItsAnchor() throws {
+    /// A group bracket follows its anchor staff carrying its DECLARED span, even to the bottom of the score where
+    /// only one staff is left below it. Clamping belongs to the layout engine (`LayoutEngine.buildBrackets` caps
+    /// the last spanned staff, mirroring MuseScore's `BracketItem::staffIdx2`), and MuseScore's own
+    /// `Score::sortStaves` reorders parts without touching spans.
+    ///
+    /// Driven as two FORWARD moves with no undo between them, because that is the case a model-level clamp would
+    /// break and undo could not repair: away and back has to leave the score exactly as it started, rather than
+    /// leaving a group bracket permanently shrunk to a span-1 stub — which MuseScore would then draw, having
+    /// hidden the collapsed one.
+    @Test("a group bracket keeps its declared span through a move to the bottom and back")
+    func movePreservesADeclaredBracketSpan() throws {
         var score = bracketedTrio()
+        let original = score
         _ = try MovePart(from: 0, to: 2).apply(to: &score)
         #expect(score.parts.map(\.instrument.id) == ["b", "c", "a"])
-        #expect(score.parts[2].staves[0].brackets == [BracketItem(type: .normal, span: 1)])
+        #expect(score.parts[2].staves[0].brackets == [BracketItem(type: .normal, span: 3)])
         #expect(score.parts[0].staves[0].brackets.isEmpty)
+        _ = try MovePart(from: 2, to: 0).apply(to: &score)
+        #expect(score == original)
     }
 
     @Test("an out-of-range source index is refused", arguments: [-1, 3])

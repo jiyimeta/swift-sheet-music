@@ -38,7 +38,8 @@ and this project adheres to
   `MovePart(from: 0, to: 1)` over `[A, B, C]` gives `[B, A, C]`. Its own inverse in shape
   (`MovePart(from: to, to: from)`), carrying the pre-image of every bracket and system-element anchor so the undo
   is byte-exact. `originalStaff` addresses are re-stamped through the permutation, and each bracket follows its
-  anchor staff, clamped to the staves left below its new position.
+  anchor staff carrying its declared span — spans are not rewritten, matching MuseScore's `Score::sortStaves`;
+  capping a span at the system's end stays a draw-time concern of `LayoutEngine.buildBrackets`.
 - `EditIntent.removePart(at:)` / `.movePart(from:to:)`: the host-facing intents `ScoreEditSession` plans into
   `RemovePart` / `MovePart`, with `EditIntentCodec` wire support (indices 17…18). `.movePart(from: n, to: n)`
   resolves to nothing to apply rather than pushing an undo entry that restores the score to itself.
