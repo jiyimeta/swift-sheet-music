@@ -60,4 +60,13 @@ public enum EditIntent: Sendable, Equatable {
     case insertMeasure(at: Int)
     /// Delete the measure column at `index`.
     case deleteMeasure(at: Int)
+
+    /// Insert a new part built from `plan` before `index`; `index == parts.count` appends. The one intent that
+    /// carries something other than scalars — a `PartPlan` is the instrument's identity and staff list, not a slice
+    /// of the score, and both images build the same `Part` from it rather than shipping the built part across.
+    ///
+    /// An out-of-range `index` is refused as `.targetNotFound` by `AddPart.apply` rather than by the session's
+    /// planner: one place states the range, and the answer is the same whether the command is reached through an
+    /// intent or built directly.
+    case addPart(plan: BlankScoreTemplate.PartPlan, at: Int)
 }

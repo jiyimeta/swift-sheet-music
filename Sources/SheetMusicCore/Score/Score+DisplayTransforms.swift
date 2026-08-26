@@ -289,19 +289,6 @@ extension Score {
     public func filtered(hidingStaves addresses: Set<StaffAddress>) -> Score {
         guard !addresses.isEmpty else { return self }
 
-        // Brackets span the GLOBAL staff order (`parts.flatMap(\.staves)`), not
-        // a single part — MuseScore routinely groups several single-staff parts
-        // under one bracket. So both survival and span must be computed over the
-        // flattened sequence; a per-part span calculation collapses such
-        // cross-part brackets down to just their anchor staff.
-        var originalAddresses: [StaffAddress] = []
-        for (partIndex, part) in parts.enumerated() {
-            for staffIndex in part.staves.indices {
-                originalAddresses.append(StaffAddress(
-                    partIndex: partIndex, staffIndexInPart: staffIndex,
-                ))
-            }
-        }
         func isKept(_ address: StaffAddress) -> Bool {
             !addresses.contains(address)
         }
@@ -329,29 +316,11 @@ extension Score {
             newParts.append(newPart)
         }
 
-        // Re-anchor / re-span each bracket over the surviving global staves. A
-        // bracket at global index `g` with span `s` covers g … g+s-1; it
-        // re-anchors on the first surviving staff in that window (which may live
-        // in a different part than the original anchor) and its span becomes the
-        // number of survivors in the window. A window with no survivor drops the
-        // bracket entirely.
-        for (globalIndex, address) in originalAddresses.enumerated() {
-            let staff = parts[address.partIndex].staves[address.staffIndexInPart]
-            for bracket in staff.brackets {
-                let endIndex = min(
-                    globalIndex + bracket.span - 1,
-                    originalAddresses.count - 1,
-                )
-                let surviving = (globalIndex ... endIndex)
-                    .filter { isKept(originalAddresses[$0]) }
-                guard let anchorGlobal = surviving.first,
-                      let location = newLocation[originalAddresses[anchorGlobal]]
-                else { continue }
-                var rebased = bracket
-                rebased.span = surviving.count
-                newParts[location.part].staves[location.staff]
-                    .brackets.append(rebased)
-            }
+        // Re-anchor / re-span each bracket over the surviving global staves — the
+        // same pass `RemovePart` runs when a whole part goes away, which is why it
+        // lives in `Score+Brackets.swift` rather than here.
+        for entry in Self.reanchoredBrackets(in: parts, survivorLocations: newLocation) {
+            newParts[entry.part].staves[entry.staff].brackets.append(entry.bracket)
         }
 
         var copy = self

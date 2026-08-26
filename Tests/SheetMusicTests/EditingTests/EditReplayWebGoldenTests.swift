@@ -195,7 +195,7 @@
             case let .removeTuplet(at):
                 self.init(op: "removeTuplet")
                 self.at = ElementPath(at)
-            case .composite, .insertMeasure, .deleteMeasure:
+            case .composite, .insertMeasure, .deleteMeasure, .addPart:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }

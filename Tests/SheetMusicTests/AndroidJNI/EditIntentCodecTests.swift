@@ -123,6 +123,26 @@ struct EditIntentCodecTests {
             // Appended for M1 solo scratch creation — indices 14…15.
             .insertMeasure(at: 3),
             .deleteMeasure(at: 0),
+            // Appended for M2 ensemble creation — index 16. Three shapes, because `PartPlanWire` is the first
+            // payload in this file carrying strings, an array and two present-flagged optionals: both names set
+            // on a transposing single-staff part, both names absent, and a multi-staff drum plan.
+            .addPart(
+                plan: .init(
+                    instrumentID: "clarinet-bb", longName: "Clarinet in B♭", shortName: "Cl.",
+                    staves: [.init(clefType: "G")],
+                    transposeDiatonic: -1, transposeChromatic: -2, gmProgram: 71,
+                ),
+                at: 2,
+            ),
+            .addPart(plan: .init(instrumentID: "x", staves: [.init(clefType: "G")]), at: 0),
+            .addPart(
+                plan: .init(
+                    instrumentID: "drumset", longName: "Drum Kit",
+                    staves: [.init(clefType: "PERC", isPercussion: true), .init(clefType: "F")],
+                    isDrums: true,
+                ),
+                at: 1,
+            ),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -154,6 +174,55 @@ struct EditIntentCodecTests {
         // Appended for M1 solo scratch creation.
         #expect(EditIntentCodec.encode(.insertMeasure(at: 0))[1] == 14)
         #expect(EditIntentCodec.encode(.deleteMeasure(at: 0))[1] == 15)
+        // Appended for M2 ensemble creation. `addPart` is the first case whose payload is variable-length enough
+        // that the frame's own length prefix could exceed one byte — a plan with long names would push it past
+        // 127 — so the index is read from a deliberately small plan, keeping the `bytes[1]` framing assumption
+        // this whole test rests on true.
+        #expect(EditIntentCodec.encode(
+            .addPart(plan: .init(instrumentID: "x", staves: [.init(clefType: "G")]), at: 0),
+        )[1] == 16)
+    }
+
+    /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field
+    /// by field rather than trusting `EditIntent`'s synthesized `==` alone — a plan whose `staves` array or
+    /// present-flagged optional names decoded wrong would still compare equal to itself if the flags were dropped
+    /// on BOTH sides of the trip.
+    @Test func `a part plan's every field survives the wire`() throws {
+        let plan = BlankScoreTemplate.PartPlan(
+            instrumentID: "clarinet-bb", longName: "Clarinet in B♭", shortName: "Cl.",
+            staves: [.init(clefType: "G"), .init(clefType: "PERC", isPercussion: true)],
+            transposeDiatonic: -1, transposeChromatic: -2, gmProgram: 71, isDrums: true,
+        )
+        let bytes = EditIntentCodec.encode(.addPart(plan: plan, at: 3))
+        guard case let .addPart(decoded, index) = try EditIntentCodec.decode(bytes) else {
+            Issue.record("expected .addPart"); return
+        }
+        #expect(index == 3)
+        #expect(decoded.instrumentID == "clarinet-bb")
+        #expect(decoded.longName == "Clarinet in B♭")
+        #expect(decoded.shortName == "Cl.")
+        #expect(decoded.staves.count == 2)
+        #expect(decoded.staves[0].clefType == "G")
+        #expect(decoded.staves[0].isPercussion == false)
+        #expect(decoded.staves[1].clefType == "PERC")
+        #expect(decoded.staves[1].isPercussion)
+        #expect(decoded.transposeDiatonic == -1)
+        #expect(decoded.transposeChromatic == -2)
+        #expect(decoded.gmProgram == 71)
+        #expect(decoded.isDrums)
+    }
+
+    /// An absent name has to come back absent, not as `""` — the two are different instruments as far as the mscx
+    /// encoder is concerned (`<longName>` written empty versus omitted).
+    @Test func `an absent part-plan name decodes as nil, not empty string`() throws {
+        let plan = BlankScoreTemplate.PartPlan(instrumentID: "x", staves: [.init(clefType: "G")])
+        guard case let .addPart(decoded, _) = try EditIntentCodec
+            .decode(EditIntentCodec.encode(.addPart(plan: plan, at: 0)))
+        else {
+            Issue.record("expected .addPart"); return
+        }
+        #expect(decoded.longName == nil)
+        #expect(decoded.shortName == nil)
     }
 
     /// An accidental spelling this build does not know must fail the decode, not decode as "no accidental" —

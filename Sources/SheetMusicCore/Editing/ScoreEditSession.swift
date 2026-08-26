@@ -187,6 +187,8 @@ public final class ScoreEditSession {
             return InsertMeasure(measureIndex: index)
         case let .deleteMeasure(index):
             return DeleteMeasure(measureIndex: index)
+        case let .addPart(plan, index):
+            return AddPart(plan: plan, at: index)
         case let .setNotePitch(location, pitch, tpc, accidental):
             return retuneCommand(at: location, pitch: pitch, tpc: tpc, accidental: accidental, in: score)
         case .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet, .removeTuplet:

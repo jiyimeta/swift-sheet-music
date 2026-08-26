@@ -48,10 +48,11 @@ import Wirelet
 /// 13 = writeRest(SlotDurationIntentWire)
 /// 14 = insertMeasure(MeasureIndexIntentWire)
 /// 15 = deleteMeasure(MeasureIndexIntentWire)
+/// 16 = addPart(AddPartIntentWire)
 /// ```
 ///
-/// Cases 5…11 were appended in SP1, 12…13 in SP2, and 14…15 for M1 solo scratch creation; 0…4 predate them all and
-/// must keep their indices and byte layout.
+/// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation and 16 for M2 ensemble
+/// creation; 0…4 predate them all and must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -195,6 +196,34 @@ import Wirelet
 /// ```
 /// tag 1: measureIndex  i32, zig-zag varint
 /// ```
+///
+/// `AddPartIntentWire` (`addPart`'s payload):
+/// ```
+/// tag 1: plan       PartPlanWire, see layout below
+/// tag 2: partIndex  i32, zig-zag varint
+/// ```
+///
+/// `PartPlanWire` — `BlankScoreTemplate.PartPlan`. The two optional names follow `AccidentalWire`'s present-flag
+/// pattern rather than becoming `Optional` stored properties, so every field here stays mandatory like the rest of
+/// this file:
+/// ```
+/// tag 1:  instrumentID        string
+/// tag 2:  hasLongName         u8, varint — 0 = nil, 1 = longName holds it
+/// tag 3:  longName            string — "" when hasLongName == 0
+/// tag 4:  hasShortName        u8, varint — 0 = nil, 1 = shortName holds it
+/// tag 5:  shortName           string — "" when hasShortName == 0
+/// tag 6:  staves              [StaffPlanWire] — length-delimited array, each element itself length-delimited
+/// tag 7:  transposeDiatonic   i32, zig-zag varint
+/// tag 8:  transposeChromatic  i32, zig-zag varint
+/// tag 9:  gmProgram           i32, zig-zag varint
+/// tag 10: isDrums             u8, varint — 0 / 1
+/// ```
+///
+/// `StaffPlanWire` — `BlankScoreTemplate.StaffPlan`:
+/// ```
+/// tag 1: clefType      string — the MuseScore clef token ("G", "F", "PERC", …)
+/// tag 2: isPercussion  u8, varint — 0 / 1
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -321,6 +350,8 @@ public enum EditIntentWire {
     /// Appended for M1 solo scratch creation — index 15. Shares `MeasureIndexIntentWire` with `insertMeasure`: the
     /// payload really is the same one scalar, and the discriminator is what tells the two apart.
     case deleteMeasure(MeasureIndexIntentWire)
+    /// Appended for M2 ensemble creation — index 16. Never renumber anything above it.
+    case addPart(AddPartIntentWire)
 
     public init(from intent: EditIntent) {
         switch intent {
@@ -367,6 +398,8 @@ public enum EditIntentWire {
             self = .insertMeasure(MeasureIndexIntentWire(measureIndex: index))
         case let .deleteMeasure(index):
             self = .deleteMeasure(MeasureIndexIntentWire(measureIndex: index))
+        case let .addPart(plan, index):
+            self = .addPart(AddPartIntentWire(plan: plan, partIndex: index))
         }
     }
 
@@ -426,6 +459,9 @@ public enum EditIntentWire {
             return .insertMeasure(at: wire.decoded())
         case let .deleteMeasure(wire):
             return .deleteMeasure(at: wire.decoded())
+        case let .addPart(wire):
+            let decoded = wire.decoded()
+            return .addPart(plan: decoded.plan, at: decoded.partIndex)
         }
     }
 }
@@ -700,5 +736,88 @@ public struct MeasureIndexIntentWire {
 
     public func decoded() -> Int {
         Int(measureIndex)
+    }
+}
+
+/// One staff of a `BlankScoreTemplate.PartPlan`.
+@WireFormat
+public struct StaffPlanWire {
+    /// The MuseScore clef token stored into `Staff.defaultClefType` ("G", "F", "G8vb", "C3", "PERC", …).
+    public var clefType: String
+    /// 0 / 1 — a drum / unpitched staff.
+    public var isPercussion: UInt8
+
+    public init(from plan: BlankScoreTemplate.StaffPlan) {
+        clefType = plan.clefType
+        isPercussion = plan.isPercussion ? 1 : 0
+    }
+
+    public func decoded() -> BlankScoreTemplate.StaffPlan {
+        BlankScoreTemplate.StaffPlan(clefType: clefType, isPercussion: isPercussion != 0)
+    }
+}
+
+/// `BlankScoreTemplate.PartPlan` — the instrument identity and staff list a new part is built from.
+///
+/// Deliberately not scalars-only like the rest of this file's payloads: a plan is the *recipe* for a part, not a
+/// slice of the score, so both images build the same `Part` from it and the built part never travels. The two
+/// optional names use `AccidentalWire`'s present-flag pattern rather than `Optional` stored properties, keeping
+/// every field in this file mandatory.
+@WireFormat
+public struct PartPlanWire {
+    public var instrumentID: String
+    /// 0 = `longName` is nil, 1 = it holds one.
+    public var hasLongName: UInt8
+    public var longName: String
+    /// 0 = `shortName` is nil, 1 = it holds one.
+    public var hasShortName: UInt8
+    public var shortName: String
+    public var staves: [StaffPlanWire]
+    public var transposeDiatonic: Int32
+    public var transposeChromatic: Int32
+    public var gmProgram: Int32
+    /// 0 / 1 — a drum kit.
+    public var isDrums: UInt8
+
+    public init(from plan: BlankScoreTemplate.PartPlan) {
+        instrumentID = plan.instrumentID
+        hasLongName = plan.longName == nil ? 0 : 1
+        longName = plan.longName ?? ""
+        hasShortName = plan.shortName == nil ? 0 : 1
+        shortName = plan.shortName ?? ""
+        staves = plan.staves.map(StaffPlanWire.init(from:))
+        transposeDiatonic = Int32(plan.transposeDiatonic)
+        transposeChromatic = Int32(plan.transposeChromatic)
+        gmProgram = Int32(plan.gmProgram)
+        isDrums = plan.isDrums ? 1 : 0
+    }
+
+    public func decoded() -> BlankScoreTemplate.PartPlan {
+        BlankScoreTemplate.PartPlan(
+            instrumentID: instrumentID,
+            longName: hasLongName != 0 ? longName : nil,
+            shortName: hasShortName != 0 ? shortName : nil,
+            staves: staves.map { $0.decoded() },
+            transposeDiatonic: Int(transposeDiatonic),
+            transposeChromatic: Int(transposeChromatic),
+            gmProgram: Int(gmProgram),
+            isDrums: isDrums != 0,
+        )
+    }
+}
+
+/// `addPart`'s payload.
+@WireFormat
+public struct AddPartIntentWire {
+    public var plan: PartPlanWire
+    public var partIndex: Int32
+
+    public init(plan: BlankScoreTemplate.PartPlan, partIndex: Int) {
+        self.plan = PartPlanWire(from: plan)
+        self.partIndex = Int32(partIndex)
+    }
+
+    public func decoded() -> (plan: BlankScoreTemplate.PartPlan, partIndex: Int) {
+        (plan: plan.decoded(), partIndex: Int(partIndex))
     }
 }
