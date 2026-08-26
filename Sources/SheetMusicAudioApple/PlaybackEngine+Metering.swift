@@ -34,10 +34,10 @@ extension PlaybackEngine {
     /// attenuate, so a peak over `1.0` cannot be rescued by turning the
     /// device down — headroom has to be found here.
     ///
-    /// The tap sits on `sumMixer`: after the master gain and after the
-    /// metronome is summed in, but *before* the limiter, so the reported
-    /// level is the true pre-limiting one rather than the limiter's
-    /// clamped output.
+    /// The tap sits on `sumMixer`: downstream of the gain stage, where
+    /// the score and the metronome have already been summed and scaled by
+    /// the master gain, but *before* the limiter, so the reported level is
+    /// the true pre-limiting one rather than the limiter's clamped output.
     ///
     /// `handler` is called on an audio-processing thread, not the main
     /// actor — hop before touching UI. Buffers arrive only while audio is

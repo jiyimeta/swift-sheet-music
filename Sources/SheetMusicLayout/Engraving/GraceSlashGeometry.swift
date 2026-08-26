@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Acciaccatura stem-slash placement for a grace chord.
 ///

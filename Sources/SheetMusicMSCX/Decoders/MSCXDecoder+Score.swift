@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 #if canImport(os)
     import os
 #endif
@@ -16,17 +16,28 @@ extension Score {
     static func decode(_ root: XMLTreeNode) throws -> Score {
         guard root.name == "museScore" else {
             throw SheetMusicError.malformedScore(
-                reason:
-                "root is <\(root.name)>, expected <museScore>",
+                ScoreFault(
+                    code: "mscx.root.wrongElement",
+                    message: "root is <\(root.name)>, expected <museScore>",
+                    location: root.name,
+                ),
             )
         }
         guard let scoreNode = root.first("Score") else {
-            throw SheetMusicError.malformedScore(reason: "missing <Score>")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "mscx.score.missing",
+                message: "missing <Score>",
+                location: "Score",
+            ))
         }
         guard let divisionText = scoreNode.first("Division")?.text,
               let division = Int(divisionText)
         else {
-            throw SheetMusicError.malformedScore(reason: "missing <Division>")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "mscx.division.missing",
+                message: "missing <Division>",
+                location: "Division",
+            ))
         }
         // Resolved up front and published as a TaskLocal: element
         // decoders nested arbitrarily deep need it to tell "absent

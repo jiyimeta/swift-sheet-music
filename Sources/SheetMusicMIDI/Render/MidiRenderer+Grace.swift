@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiRenderer {
     /// Default playback length of one grace note in ticks.

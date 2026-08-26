@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Path-based address of a `Staff` inside a `Score`:
 /// `score.parts[partIndex].staves[staffIndexInPart]`.

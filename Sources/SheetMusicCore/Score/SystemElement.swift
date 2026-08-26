@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// An element that conceptually applies to the whole system at a
 /// given measure position, not to a particular staff or voice.

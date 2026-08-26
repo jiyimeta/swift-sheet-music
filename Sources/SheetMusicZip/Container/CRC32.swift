@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// CRC-32 per RFC 1952 (the same variant used by ZIP and gzip).
 /// Polynomial 0xEDB88320, initial register 0xFFFFFFFF, output XOR

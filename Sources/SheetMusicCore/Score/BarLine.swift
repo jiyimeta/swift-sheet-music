@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Bar line marker. Display-only — does not affect MIDI output.
 /// C++: `mu::engraving::BarLine`.

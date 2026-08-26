@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Two-axis alignment for a text element. Mirrors MuseScore's
 /// `mu::engraving::Align` (`engraving/types/types.h`), which is
@@ -36,8 +36,8 @@ public struct TextAlign: Sendable, Equatable, Hashable {
     public init?(mscxString raw: String) {
         let parts = raw.split(separator: ",", omittingEmptySubsequences: false)
         guard parts.count == 2 else { return nil }
-        let h = parts[0].trimmingCharacters(in: .whitespaces).lowercased()
-        let v = parts[1].trimmingCharacters(in: .whitespaces).lowercased()
+        let h = parts[0].trimmingHorizontalWhitespace().lowercased()
+        let v = parts[1].trimmingHorizontalWhitespace().lowercased()
         guard let hh = Horizontal.parse(h), let vv = Vertical.parse(v) else {
             return nil
         }

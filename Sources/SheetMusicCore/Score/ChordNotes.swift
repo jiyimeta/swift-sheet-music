@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A pitch-unique ordered collection of `Note`s belonging to a
 /// single `Chord`.

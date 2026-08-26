@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiRenderer {
     static func headerEvents(

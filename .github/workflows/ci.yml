@@ -1,6 +1,6 @@
 name: CI
 
-# Apple-side build + test gate. Runs on every push and pull request,
+# Apple-side build + test + lint gate. Runs on every push and pull request,
 # including fork PRs — the SwiftPM dependency graph (swift-java,
 # swift-subprocess, swift-wirelet) resolves over public HTTPS and needs
 # no secrets. The Android cross-compile lives in android-audio.yml, which
@@ -26,11 +26,134 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      # The package needs Swift 6.3: swift-wirelet 0.4.1 declares tools version
+      # 6.3.0, and dependency resolution fails outright below it — before a
+      # single file is compiled. No released Xcode ships it yet; `latest-stable`
+      # on this runner is Xcode 26.3 with Swift 6.2.4. So the Apple job installs
+      # the same swift.org toolchain the wasm and Android jobs already do, which
+      # is also what CONTRIBUTING and the README tell contributors to use.
+      - name: Install the swift.org toolchain
+        run: |
+          curl -fsSL -o toolchain.pkg \
+            https://download.swift.org/swift-6.3.3-release/xcode/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE-osx.pkg
+          installer -pkg toolchain.pkg -target CurrentUserHomeDirectory
+
       - name: Swift version
-        run: swift --version
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          swift --version
 
       - name: Build
-        run: swift build
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          swift build
 
       - name: Test
-        run: swift test
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          swift test
+
+  lint:
+    name: Lint
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Both tools are installed from Homebrew rather than pinned, which
+      # matches how contributors get them (.pre-commit-config.yaml uses
+      # `language: system`, so the hooks call whatever is on PATH). The
+      # trade-off is that a new upstream release can turn on a rule that
+      # was previously off and fail this job on untouched code — that is
+      # how `wrapIfStatementBodies` was found. The version echo below is
+      # what makes such a break diagnosable from the log alone.
+      - name: Install SwiftLint and SwiftFormat
+        run: brew install swiftlint swiftformat
+
+      - name: Tool versions
+        run: |
+          swiftlint --version
+          swiftformat --version
+
+      # Paths come from `included:` in .swiftlint.yml; passing them again
+      # on the command line makes SwiftLint lint each file twice and
+      # report every violation twice.
+      - name: SwiftLint
+        run: swiftlint lint --strict --quiet
+
+      # Wider than SwiftLint on purpose: `.swiftlint.yml` excludes
+      # Examples/Apple (the demo app carries long view bodies the library
+      # rules would reject), but the example app is formatter-clean and
+      # the pre-commit hook formats it, so CI checks it too.
+      - name: SwiftFormat
+        run: swiftformat Sources Tests Examples Tools --lint
+
+  wasm:
+    name: Build & test (WebAssembly)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Xcode's Swift has no WebAssembly backend and crashes with "No
+      # available targets are compatible with triple wasm32-unknown-wasip1".
+      # -target CurrentUserHomeDirectory needs no administrator password;
+      # Scripts/swift-org-toolchain.sh resolves either install location.
+      - name: Install the swift.org toolchain
+        run: |
+          curl -fsSL -o toolchain.pkg \
+            https://download.swift.org/swift-6.3.3-release/xcode/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE-osx.pkg
+          installer -pkg toolchain.pkg -target CurrentUserHomeDirectory
+          "$(Scripts/swift-org-toolchain.sh)/swift" --version
+
+      - name: Install the WebAssembly SDK
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          swift sdk install \
+            https://download.swift.org/swift-6.3.3-release/wasm-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_wasm.artifactbundle.tar.gz \
+            --checksum cabfa08b73bb8ac783927ecd15fa386e99d0c139c5f232445067bcf58379cae7
+
+      # brotli measures the download; binaryen supplies wasm-opt, which
+      # PackageToJS runs by default.
+      - name: Install brotli and binaryen
+        run: brew install brotli binaryen
+
+      # Runs Swift Testing on the wasm SDK. --disable-sandbox is required:
+      # PackageToJS is a SwiftPM command plugin, SwiftPM sandboxes command
+      # plugins, and this one npm-installs the WASI shim its test host needs.
+      # Without the flag it fails with ENOTFOUND against the npm registry even
+      # when the network is fine.
+      - name: Swift Testing on WebAssembly
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          SWIFT_SHEET_MUSIC_WASM=1 swift package --disable-sandbox \
+            --swift-sdk swift-6.3.3-RELEASE_wasm js test --environment node \
+            --prelude Scripts/package-to-js-test-prelude.mjs
+
+      - name: Build the browser bundle
+        run: Scripts/wasm-build-web.sh
+
+      # Two numbers: the 4 MB ceiling over the whole portable graph, and what a
+      # page actually downloads. The build above has to come first or the second
+      # one is unmeasurable.
+      - name: Size gate
+        run: Scripts/wasm-size.sh
+
+      - name: Install the browser package
+        run: npm --prefix Web/sheet-music-web ci
+
+      - name: Build the TypeScript
+        run: npm --prefix Web/sheet-music-web run build
+
+      - name: Parity and unit tests
+        run: npm --prefix Web/sheet-music-web test
+
+      - name: Browser rendering tests
+        run: |
+          npx --prefix Web/sheet-music-web playwright install --with-deps chromium chromium-headless-shell
+          npm --prefix Web/sheet-music-web run test:e2e
+
+      - name: Upload rendering diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: Web/sheet-music-web/playwright-report

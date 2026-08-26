@@ -25,7 +25,10 @@
 
 #if !canImport(CoreGraphics)
 
-    import Foundation
+    // Nothing here needs Foundation — the types are built from `Double` and
+    // `min`/`max`. Importing the umbrella from this one file was enough to pull
+    // Foundation (and ICU) into the WebAssembly binary, which is the whole cost
+    // the FoundationEssentials migration exists to avoid.
 
     public typealias CGFloat = Double
 

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Chord {
@@ -8,7 +8,11 @@ extension Chord {
             let durationText = node.first("durationType")?.text,
             let baseDuration = NoteDuration(mscxName: durationText)
         else {
-            throw SheetMusicError.malformedScore(reason: "Chord missing/invalid <durationType>")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "mscx.chord.invalidDurationType",
+                message: "Chord missing/invalid <durationType>",
+                location: "Chord",
+            ))
         }
         let dots = Int(node.first("dots")?.text ?? "0") ?? 0
         let duration = baseDuration.dotted(dots)

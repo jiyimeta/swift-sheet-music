@@ -173,6 +173,18 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// How often a measure-number label is engraved. Default
     /// `.systemStart` matches behavior from before this option existed.
     public var measureNumbers: MeasureNumberPolicy
+    /// Whether sung text is engraved at all.
+    ///
+    /// This is a HOST DISPLAY CHOICE, not MuseScore's per-element
+    /// `visible` flag: when false the whole lyric row is removed —
+    /// syllables, the hyphens between them and the melisma rules that
+    /// follow them — and nothing is routed to the invisible container
+    /// either, so `showsInvisibleElements` cannot bring it back. The
+    /// resulting document is genuinely SHORTER, which is what a caller
+    /// reserving space for a fixed-height notation strip depends on.
+    ///
+    /// Default: `true` (behavior from before this option existed).
+    public var lyricsVisible: Bool
 
     public init(
         staffSize: CGFloat = 28,
@@ -186,6 +198,7 @@ public struct ScoreViewOptions: Sendable, Equatable {
         multiMeasureRest: MultiMeasureRestPolicy = .disabled,
         showsInvisibleElements: Bool = false,
         measureNumbers: MeasureNumberPolicy = .systemStart,
+        lyricsVisible: Bool = true,
     ) {
         self.staffSize = staffSize
         self.systemGap = systemGap
@@ -198,5 +211,6 @@ public struct ScoreViewOptions: Sendable, Equatable {
         self.multiMeasureRest = multiMeasureRest
         self.showsInvisibleElements = showsInvisibleElements
         self.measureNumbers = measureNumbers
+        self.lyricsVisible = lyricsVisible
     }
 }

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Chooses the octave for a letter key: the candidate pitch closest to the reference (previous note), ties resolved
 /// upward. Reference nil → octave 4 (MuseScore's default entry octave; NoteInputKeyMap octave 4 contains middle C).

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiImporter {
     // MARK: - Core assembly

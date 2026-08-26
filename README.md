@@ -259,6 +259,7 @@ artifacts to GitHub Packages:
 |---|---|
 | `io.github.jiyimeta:sheet-music-android` | JNI bridge + bundled `libSheetMusicJNI.so`. Score load, layout, draw-program emit. |
 | `io.github.jiyimeta:sheet-music-audio-android` | FluidSynth (via [VolcanoMobile's `.aar`](https://github.com/VolcanoMobile/fluidsynth-android)) + [Oboe](https://github.com/google/oboe) low-latency PCM. Mirrors `PlaybackEngine` API on the Kotlin side. |
+| `io.github.jiyimeta:sheet-music-compose-android` | Compose rendering, playback overlays, and generated draw-program codecs. |
 
 The published artifacts are at **v1.0.0**. Consuming them in your own
 Android app needs a `read:packages` PAT and a one-time `swiftkit-core`
@@ -269,7 +270,8 @@ for the complete `settings.gradle.kts` recipe and packaging config.
 The instructions below (`Scripts/android-build-libs.sh` etc.) are for
 **building this repository itself**, not for consuming the published AAR.
 A working Compose demo lives at `Examples/Android/` (Pixel 6 Pro
-API 36 verified). Bootstrap is documented in `CLAUDE.md` —
+API 36 verified). Bootstrap is documented in
+[`docs/development/android.md`](docs/development/android.md) —
 the short form:
 
 ```bash
@@ -282,6 +284,28 @@ swift package resolve
 # Open Android/ or Examples/Android/ in Android Studio and Run
 ```
 
+## Browser (WebAssembly)
+
+The same engraver runs in a browser. `Web/sheet-music-web` is an npm package
+wrapping the wasm build with a Canvas2D renderer; see
+[its README](Web/sheet-music-web/README.md) for the consumer-side API, and
+[`Examples/Web/`](Examples/Web/) for a viewer you can open locally.
+
+The bindings expose display and playback. Editing exists in the Swift engine
+but is not exposed to JavaScript yet.
+
+```bash
+Scripts/wasm-build-web.sh                    # wasm + JavaScript glue
+npm --prefix Web/sheet-music-web install
+npm --prefix Web/sheet-music-web run build
+Scripts/web-example-serve.sh                 # http://localhost:8080/Examples/Web/
+```
+
+The download is about 2.4 MB brotli. Cross-compiling needs the same swift.org
+toolchain the Android build does, plus the WebAssembly SDK and `binaryen`. See
+[`docs/development/webassembly.md`](docs/development/webassembly.md) for the
+contributor workflow and size gates.
+
 ### Toolchain: cross-compiling needs the swift.org Swift, not Xcode's
 
 Building for Apple platforms works with whatever Swift ships in Xcode.
@@ -291,12 +315,21 @@ version of the compiler`), so a Swift SDK build needs the open-source
 [swift.org toolchain](https://www.swift.org/install/macos/) — and the
 toolchain and SDK versions have to match exactly.
 
-Install the `.pkg`; it lands in `/Library/Developer/Toolchains/`. Then
-**put it first on `PATH`** — do not use `TOOLCHAINS`, which the `swiftly`
-shim ignores if you have swiftly installed:
+Install the `.pkg` — double-clicking it puts the toolchain in
+`/Library/Developer/Toolchains/` and asks for an administrator password.
+There is a per-user install that does not:
 
 ```bash
-export PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH"
+installer -pkg swift-6.3.3-RELEASE-osx.pkg -target CurrentUserHomeDirectory
+# → ~/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain
+```
+
+Either location works; Xcode and the scripts here read both. Then **put
+it first on `PATH`** — do not use `TOOLCHAINS`, which the `swiftly` shim
+ignores if you have swiftly installed:
+
+```bash
+export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
 swift --version
 ```
 
@@ -308,9 +341,12 @@ checking before assuming a build failure is real:
 | `Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 …)` | Xcode's fork | no |
 | `Apple Swift version 6.3.3 (swift-6.3.3-RELEASE)` | swift.org build | yes |
 
+`Scripts/swift-org-toolchain.sh` is what resolves the two locations —
+system first, then per-user — and prints the `usr/bin` path or exits 1.
 `Scripts/android-build-libs.sh`, `Scripts/android-test.sh` and
-`Scripts/preflight.sh` prepend that path themselves, so they work without
-the `export`. Ad-hoc `swift build --swift-sdk …` invocations do not.
+`Scripts/preflight.sh` call it and prepend the result themselves, so they
+work without the `export`. Ad-hoc `swift build --swift-sdk …` invocations
+do not.
 
 Install the Android SDK with the matching toolchain version:
 
@@ -322,8 +358,8 @@ swift sdk install \
 
 `swift sdk list` should then report `swift-6.3.3-RELEASE_android`. The
 NDK sysroot also needs a one-time setup step (NDK r27d or later) — see
-`CLAUDE.md` for that and for the `WIRELET_PAT` / `gpr.key` credentials
-the Gradle side needs.
+[`docs/development/android.md`](docs/development/android.md) for that and for
+the `WIRELET_PAT` / `gpr.key` credentials the Gradle side needs.
 
 Local development also expects `swiftlint`, `swiftformat` and
 `pre-commit` on `PATH` (`brew install swiftlint swiftformat pre-commit`);

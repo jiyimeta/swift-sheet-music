@@ -1,12 +1,13 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT
     import Foundation
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicAudioCore
+    @testable import SheetMusicBridgeCore
     import SheetMusicCore
     import Testing
 
     private func loadFixtureScore() throws -> Score {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "midi01",
             withExtension: "mscx",
         ))

@@ -509,7 +509,7 @@
                 layoutMode = .originalPDF
             } catch {
                 errorMessage =
-                    "PDF import failed: " + error.localizedDescription
+                    "PDF import failed: " + exampleErrorDescription(error)
             }
         }
 
@@ -544,7 +544,7 @@
                 // without hunting through Finder.
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
-                errorMessage = "PDF export failed: \(error.localizedDescription)"
+                errorMessage = "PDF export failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -575,7 +575,7 @@
                 )
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
-                errorMessage = "MSCX export failed: \(error.localizedDescription)"
+                errorMessage = "MSCX export failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -595,7 +595,7 @@
                 try data.write(to: url)
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
-                errorMessage = "MIDI export failed: \(error.localizedDescription)"
+                errorMessage = "MIDI export failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -618,7 +618,7 @@
                 )
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
-                errorMessage = "MSCZ export failed: \(error.localizedDescription)"
+                errorMessage = "MSCZ export failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -888,7 +888,7 @@
                     try controller.undo()
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
                 return
             }
             // Defer @State mutations to the next runloop tick.
@@ -1127,7 +1127,7 @@
                 )
                 errorMessage = "Inserted \(String(letter).uppercased())\(controller.inputOctave) (MIDI \(mapped.pitch)). Click another rest to keep typing."
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
             return true
         }
@@ -1219,7 +1219,7 @@
                     : "Lyric set"
                 return true
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
                 return false
             }
         }
@@ -1328,7 +1328,7 @@
                 )
                 errorMessage = "Added \(mapped.pitch) to chord"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -1361,7 +1361,7 @@
                 errorMessage = "Duration changed"
                 scrollToAffectedMeasure(measureIndex: noteID.measureIndex)
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -1382,7 +1382,7 @@
                 errorMessage = "Duration changed"
                 scrollToAffectedMeasure(measureIndex: restID.measureIndex)
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -1416,7 +1416,7 @@
                 adoptEditedScore(controller.score)
                 errorMessage = alreadyTied ? "Tie removed" : "Tied"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -1696,7 +1696,7 @@
                     )))
                     errorMessage = "Cut"
                 } catch {
-                    errorMessage = error.localizedDescription
+                    errorMessage = exampleErrorDescription(error)
                 }
                 return true
             case let .range(anchor, target):
@@ -1781,7 +1781,7 @@
                     errorMessage = "Cut \(total) element"
                         + (total == 1 ? "" : "s")
                 } catch {
-                    errorMessage = error.localizedDescription
+                    errorMessage = exampleErrorDescription(error)
                 }
                 return true
             default:
@@ -1852,7 +1852,7 @@
                     )
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
             return true
         }
@@ -1903,19 +1903,27 @@
             for (key, streamElements) in streams {
                 let destFlatStaff = targetFlatIdx + key.staffOffset
                 guard pasteAllStaves.indices.contains(destFlatStaff) else {
-                    throw SheetMusicError.invalidEdit(
-                        reason: "Paste: no staff at flat index \(destFlatStaff)",
-                    )
+                    throw SheetMusicError.invalidEdit(EditRefusal(
+                        operation: "Paste",
+                        reason: .staffNotFound(StaffAddress(
+                            partIndex: destFlatStaff,
+                            staffIndexInPart: 0,
+                        )),
+                    ))
                 }
                 let destAddress = pasteAllStaves[destFlatStaff].address
                 guard score[destAddress]?.measures
                     .indices.contains(targetID.measureIndex) ?? false
                 else {
-                    throw SheetMusicError.invalidEdit(
-                        reason: "Paste: no measure "
-                            + "\(targetID.measureIndex) on staff "
-                            + "\(destAddress)",
-                    )
+                    throw SheetMusicError.invalidEdit(EditRefusal(
+                        operation: "Paste",
+                        reason: .targetNotFound(VoiceElementID(
+                            staff: destAddress,
+                            measureIndex: targetID.measureIndex,
+                            voiceIndex: targetID.voiceIndex,
+                            elementIndex: targetID.elementIndex,
+                        )),
+                    ))
                 }
 
                 // Walk the stream tick-by-tick across destination
@@ -1989,9 +1997,10 @@
             var result: [DestinationPiece] = []
             let division = score.division
             guard let destStaffVal = score[destStaffAddress] else {
-                throw SheetMusicError.invalidEdit(
-                    reason: "Paste: staff not found at \(destStaffAddress)",
-                )
+                throw SheetMusicError.invalidEdit(EditRefusal(
+                    operation: "Paste",
+                    reason: .staffNotFound(destStaffAddress),
+                ))
             }
             let measures = destStaffVal.measures
 
@@ -2016,11 +2025,15 @@
                 pieceTickStart = 0
                 measureTickCursor = 0
                 if pieceMeasure >= measures.count {
-                    throw SheetMusicError.invalidEdit(
-                        reason: "Paste: ran out of destination "
-                            + "measures past staff \(destStaffAddress) "
-                            + "measure \(measures.count - 1)",
-                    )
+                    throw SheetMusicError.invalidEdit(EditRefusal(
+                        operation: "Paste",
+                        reason: .targetNotFound(VoiceElementID(
+                            staff: destStaffAddress,
+                            measureIndex: pieceMeasure,
+                            voiceIndex: destVoice,
+                            elementIndex: 0,
+                        )),
+                    ))
                 }
             }
 
@@ -2120,9 +2133,10 @@
         ) throws -> any EditCommand {
             let division = score.division
             guard let staffVal = score[staffAddress] else {
-                throw SheetMusicError.invalidEdit(
-                    reason: "Paste: staff not found at \(staffAddress)",
-                )
+                throw SheetMusicError.invalidEdit(EditRefusal(
+                    operation: "Paste",
+                    reason: .staffNotFound(staffAddress),
+                ))
             }
             let v = staffVal.measures[measure].voices[voice]
             let pieceTicks = pieceElements.reduce(0) {
@@ -2161,11 +2175,15 @@
                 tick = elEnd
             }
             guard let loIdx = leadingIdx else {
-                throw SheetMusicError.invalidEdit(
-                    reason: "Paste: no element at tick "
-                        + "\(tickStartInMeasure) on staff \(staffAddress) "
-                        + "measure \(measure) voice \(voice)",
-                )
+                throw SheetMusicError.invalidEdit(EditRefusal(
+                    operation: "Paste",
+                    reason: .targetNotFound(VoiceElementID(
+                        staff: staffAddress,
+                        measureIndex: measure,
+                        voiceIndex: voice,
+                        elementIndex: 0,
+                    )),
+                ))
             }
             // Single-element overlap (loIdx == hiIdx) is fine — we
             // trim both ends of the same element. trailingIdx unset
@@ -2181,11 +2199,13 @@
             // If the trailing trim is negative (shouldn't happen given
             // the scan), bail.
             guard trailingTrim >= 0 else {
-                throw SheetMusicError.invalidEdit(
-                    reason: "Paste: trailing trim came out negative "
-                        + "— consumed range \(tickStartInMeasure)..\(tickEnd) "
-                        + "vs trailing element \(hiStart)..\(hiEnd)",
-                )
+                throw SheetMusicError.invalidEdit(EditRefusal(
+                    operation: "Paste",
+                    reason: .insufficientRoom(
+                        neededTicks: tickEnd - tickStartInMeasure,
+                        availableTicks: hiEnd - hiStart,
+                    ),
+                ))
             }
 
             var replacement: [VoiceElement] = []
@@ -2448,7 +2468,7 @@
                     at: id, firstElement: firstElement,
                 )
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
             return true
         }
@@ -2474,7 +2494,7 @@
                     "Set accidental: \($0)"
                 } ?? "Cleared accidental"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -2527,7 +2547,7 @@
                 adoptEditedScore(controller.score)
             } catch {
                 errorMessage = "Failed to change clef: " +
-                    error.localizedDescription
+                    exampleErrorDescription(error)
             }
             clefPopover = nil
             selection = .none
@@ -2586,7 +2606,7 @@
                 }
                 errorMessage = "Removed note"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -2631,7 +2651,7 @@
                     )))
                     errorMessage = "Tuplet deleted"
                 } catch {
-                    errorMessage = error.localizedDescription
+                    errorMessage = exampleErrorDescription(error)
                 }
                 return
             }
@@ -2662,7 +2682,7 @@
                 selection = .single(.rest(newRest))
                 errorMessage = "Deleted"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -2717,7 +2737,7 @@
                 scrollToAffectedMeasure(measureIndex: noteID.measureIndex)
                 errorMessage = "Shifted to MIDI \(shifted.pitch)"
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -3032,7 +3052,7 @@
                 let loaded = try ScoreLoader.loadBundled()
                 adoptLoadedScore(loaded, sourceName: "test.mscx")
             } catch {
-                errorMessage = "Failed: \(error.localizedDescription)"
+                errorMessage = "Failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -3043,7 +3063,7 @@
                     loaded, sourceName: "harmony-basic.mscx",
                 )
             } catch {
-                errorMessage = "Failed: \(error.localizedDescription)"
+                errorMessage = "Failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -3059,7 +3079,7 @@
             } catch {
                 errorMessage =
                     "Could not load \(url.lastPathComponent): "
-                        + error.localizedDescription
+                        + exampleErrorDescription(error)
             }
         }
 

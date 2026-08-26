@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Bravura / SMuFL Private Use Area codepoints used by the engraving
 /// layer.

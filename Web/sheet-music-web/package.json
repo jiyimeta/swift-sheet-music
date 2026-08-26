@@ -1,0 +1,43 @@
+{
+  "name": "@jiyimeta/sheet-music-web",
+  "version": "0.0.0",
+  "description": "Browser bindings for swift-sheet-music: parse, engrave and draw notation from WebAssembly.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist-esm/index.js",
+  "types": "./dist-esm/index.d.ts",
+  "exports": {
+    ".": "./dist-esm/index.js",
+    "./playback": "./dist-esm/playback/index.js",
+    "./assets/*": "./assets/*"
+  },
+  "files": [
+    "dist",
+    "dist-esm",
+    "assets",
+    "README.md"
+  ],
+  "scripts": {
+    "build:wasm": "../../Scripts/wasm-build-web.sh",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@bjorn3/browser_wasi_shim": "0.3.0"
+  },
+  "peerDependencies": {
+    "spessasynth_lib": "^4"
+  },
+  "peerDependenciesMeta": {
+    "spessasynth_lib": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "spessasynth_lib": "^4.3.13",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

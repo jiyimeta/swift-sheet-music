@@ -1,5 +1,5 @@
 // swiftlint:disable file_length
-import Foundation
+import SheetMusicFoundation
 
 /// Shared shorten / lengthen algorithm used by `SetChordDuration`
 /// and `SetRestDuration`. Both commands resolve to "change the
@@ -30,6 +30,8 @@ public enum DurationChangeAlgorithm {
         dstTicks: Int,
         targetRtick: Int,
         division: Int,
+        baseLocation: VoiceElementID,
+        operation: String,
     ) throws -> (elements: [VoiceElement], tuplets: [Tuplet]) {
         var newElements = voice.elements
         newElements[idx] = mutatedTarget
@@ -102,11 +104,12 @@ public enum DurationChangeAlgorithm {
                 case let .chord(c):
                     elTicks = c.duration.ticks(division: division)
                 default:
-                    throw SheetMusicError.invalidEdit(
-                        reason: "DurationChange: lengthening "
-                            + "blocked by non-timed element at "
-                            + "index \(i)",
-                    )
+                    throw SheetMusicError.invalidEdit(EditRefusal(
+                        operation: operation,
+                        reason: .blockedByUntimedElement(
+                            at: baseLocation.withElementIndex(i),
+                        ),
+                    ))
                 }
                 if consumed + elTicks <= needed {
                     consumed += elTicks
@@ -121,11 +124,13 @@ public enum DurationChangeAlgorithm {
                 }
             }
             if consumed < needed {
-                throw SheetMusicError.invalidEdit(
-                    reason: "DurationChange: not enough room "
-                        + "in the measure to lengthen "
-                        + "(need \(needed), have \(consumed))",
-                )
+                throw SheetMusicError.invalidEdit(EditRefusal(
+                    operation: operation,
+                    reason: .insufficientRoom(
+                        neededTicks: needed,
+                        availableTicks: consumed,
+                    ),
+                ))
             }
             consumedEndIdx = lastConsumedIdx
             let lastEl = newElements[lastConsumedIdx]
@@ -312,14 +317,19 @@ public enum DurationChangeAlgorithm {
     /// Common precondition: refuse when the target element sits
     /// inside any tuplet span.
     static func ensureNotInsideTuplet(
-        voice: Voice, elementIdx: Int, label: String,
+        voice: Voice,
+        at location: VoiceElementID,
+        operation: String,
     ) throws {
         if voice.tuplets.contains(where: {
-            $0.startIndex <= elementIdx && elementIdx <= $0.endIndex
+            $0.startIndex <= location.elementIndex
+                && location.elementIndex <= $0.endIndex
         }) {
             throw SheetMusicError.invalidEdit(
-                reason: "\(label): target is inside a tuplet "
-                    + "(changing duration would invalidate the ratio)",
+                EditRefusal(
+                    operation: operation,
+                    reason: .insideTuplet(at: location),
+                ),
             )
         }
     }

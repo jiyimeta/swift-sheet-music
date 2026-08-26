@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Measure-right navigation instruction: D.C., D.S., D.C. al Coda, etc.
 /// C++: `mu::engraving::Jump`.

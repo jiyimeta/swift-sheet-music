@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Dynamic marking (pp, p, mp, mf, f, ff, …). Drives MIDI velocity for following notes.
 /// C++: `mu::engraving::Dynamic`.

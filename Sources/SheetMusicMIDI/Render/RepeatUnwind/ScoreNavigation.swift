@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Score-global, per-measure navigation facts merged across all
 /// staves.

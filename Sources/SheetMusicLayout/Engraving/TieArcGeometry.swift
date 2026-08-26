@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Cubic-Bezier anchors for a symmetric tie or slur arc.
 ///

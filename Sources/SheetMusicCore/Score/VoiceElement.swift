@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// One ordered element of a voice. The order is significant: a
 /// voice is a time-ordered sequence of these.

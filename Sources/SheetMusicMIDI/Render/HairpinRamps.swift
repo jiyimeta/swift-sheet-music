@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// One resolved hairpin: a linear (or v1-falls-through-to-linear)
 /// velocity ramp between two ticks in the original (pre-repeat)

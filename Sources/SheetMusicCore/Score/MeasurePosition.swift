@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Offset within a measure, measured as a fraction of a whole note
 /// from the measure's start. `0/4` is the downbeat; `1/4` is the
@@ -20,7 +20,7 @@ public struct MeasurePosition: Hashable, Sendable {
     }
 
     public init(numerator: Int, denominator: Int) {
-        self.offset = Fraction(numerator: numerator, denominator: denominator)
+        offset = Fraction(numerator: numerator, denominator: denominator)
     }
 
     /// Start of the measure (downbeat).

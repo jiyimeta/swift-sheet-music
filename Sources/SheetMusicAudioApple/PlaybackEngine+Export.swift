@@ -10,8 +10,17 @@ extension PlaybackEngine {
     ///
     /// The exported audio reflects the live engine state: mixer
     /// (volume / mute / solo), per-staff program changes,
-    /// metronome on/off, and the current playback rate. The
-    /// implementation builds a *dedicated* `AVAudioEngine` per
+    /// metronome on/off, and the current playback rate.
+    ///
+    /// It also reflects the live *synth*: when a `SynthBackend` is
+    /// injected and can build an offline instance of itself
+    /// (`makeOfflineInstance`), the export renders through that —
+    /// so an export sounds like what the user just heard. Without
+    /// one it falls back to the built-in AUMIDISynth pipeline,
+    /// which steals voices on dense scores and sits at a different
+    /// level. See `PlaybackEngine+ExportBackend`.
+    ///
+    /// The implementation builds a *dedicated* `AVAudioEngine` per
     /// export call rather than reusing the live playback engine —
     /// `AVAudioEngine.enableManualRenderingMode` is a global
     /// per-engine flag that doesn't compose with concurrent
@@ -64,39 +73,32 @@ extension PlaybackEngine {
 
         setStateForExport(.exporting)
         do {
-            let pipeline = try Self.buildExportPipeline(
+            let pipeline = try await buildPipeline(
                 score: score,
                 snapshot: snapshot,
                 outputFormat: outputFormat,
+                timeline: timeline,
+                startTick: startTick,
             )
-            // Position the sequencer at `startTick` (in beats) so
-            // partial-range exports start at the right place.
-            let beatsPerTick = 1.0 / Double(timeline.division)
-            pipeline.sequencer.currentPositionInBeats =
-                Double(startTick) * beatsPerTick
-            pipeline.sequencer.prepareToPlay()
-            // Re-assert pitch-bend sensitivity right before the
-            // sequencer starts — see the matching block in
-            // `PlaybackEngine.play(from:in:)` for the rationale.
-            // Melodic only: percussion (GM ch 9) never uses pitch bend,
-            // mirroring the live engine's `play(from:in:)` path.
-            if let melodic = pipeline.samplers.first {
-                for ch: UInt8 in 0 ..< 16 where ch != 9 {
-                    MIDISynthBuilder.setPitchBendSensitivity(
-                        into: melodic, semitones: 12, onChannel: ch,
-                    )
-                }
+            // Tear the pipeline down on the way out however this ends. A
+            // cancelled export used to leave its engine running in manual
+            // rendering mode until dealloc; on the backend path that engine
+            // owns a synth holding a tens-of-MB SoundFont, so leaning on ARC
+            // timing is no longer good enough.
+            do {
+                try pipeline.start()
+                try await exporter.renderLoop(
+                    engine: pipeline.engine,
+                    outputFormat: outputFormat,
+                    framesToRender: framesToRender,
+                    writer: writer,
+                    progress: progress,
+                )
+            } catch {
+                pipeline.teardown()
+                throw error
             }
-            try pipeline.sequencer.start()
-
-            try await exporter.renderLoop(
-                engine: pipeline.engine,
-                outputFormat: outputFormat,
-                framesToRender: framesToRender,
-                writer: writer,
-                progress: progress,
-            )
-            Self.teardown(pipeline: pipeline)
+            pipeline.teardown()
             setStateForExport(.stopped)
         } catch is CancellationError {
             try? FileManager.default.removeItem(at: url)
@@ -129,6 +131,38 @@ extension PlaybackEngine {
         return AVAudioFrameCount((renderSeconds * sampleRate).rounded(.up))
     }
 
+    /// Choose the export pipeline. An injected `SynthBackend` that can build an
+    /// offline instance of itself wins — that is the only way the exported file
+    /// reproduces what live playback sounds like, in both voice allocation and
+    /// level. Everything else falls back to the built-in AUMIDISynth pipeline.
+    private func buildPipeline(
+        score: Score,
+        snapshot: ExportEngineSnapshot,
+        outputFormat: AVAudioFormat,
+        timeline: PlaybackTimeline,
+        startTick: Int,
+    ) async throws -> ExportPipeline {
+        if let offline = backend?.makeOfflineInstance(
+            sampleRate: outputFormat.sampleRate,
+        ) {
+            return try await Self.buildBackendExportPipeline(
+                score: score,
+                snapshot: snapshot,
+                outputFormat: outputFormat,
+                timeline: timeline,
+                startTick: startTick,
+                backend: offline,
+            )
+        }
+        return try Self.buildExportPipeline(
+            score: score,
+            snapshot: snapshot,
+            outputFormat: outputFormat,
+            timeline: timeline,
+            startTick: startTick,
+        )
+    }
+
     /// Build a dedicated `AVAudioEngine` + melodic and percussion
     /// `AVAudioUnitMIDIInstrument` units + a loaded `AVAudioSequencer`
     /// ready to drive an offline render of `score`. Mirrors the live
@@ -136,13 +170,15 @@ extension PlaybackEngine {
     /// carries GM channel 9; drum staves route to percussion.
     ///
     /// The engine is left in manual-rendering mode and started so the
-    /// caller can immediately call `renderLoop`. Caller owns the
-    /// returned pipeline and must call `teardown(pipeline:)` before
-    /// releasing.
+    /// caller can immediately `start()` the returned pipeline and call
+    /// `renderLoop`. Caller owns the returned pipeline and must call
+    /// its `teardown` before releasing.
     private static func buildExportPipeline(
         score: Score,
         snapshot: ExportEngineSnapshot,
         outputFormat: AVAudioFormat,
+        timeline: PlaybackTimeline,
+        startTick: Int,
     ) throws -> ExportPipeline {
         let engine = AVAudioEngine()
         let resolver = snapshot.resolver
@@ -155,7 +191,7 @@ extension PlaybackEngine {
         // Master output chain — mirrors the live engine's
         // (PlaybackEngine.buildMasterChain). Rebuilt here so exported
         // files reflect the chosen master gain and shaping stage.
-        let (scoreGainMixer, sumMixer) = buildOutputChain(
+        let scoreGainMixer = buildOutputChain(
             engine: engine,
             gain: snapshot.masterGain,
             stage: snapshot.masterOutputStage,
@@ -170,14 +206,62 @@ extension PlaybackEngine {
             scoreSynth: exportSynth, channels: snapshot.mixerChannels,
         )
 
-        // 2. Optional metronome synth / track.
+        // 2. Optional metronome synth / track. Onto `scoreGainMixer`, like
+        //    the score — the click is scaled by the master gain, matching
+        //    the live engine (see `PlaybackEngine.init`).
         let metronomeSampler = buildMetronomeSampler(
-            snapshot: snapshot, engine: engine, output: sumMixer,
+            snapshot: snapshot, engine: engine, output: scoreGainMixer,
         )
 
         // 3. Render MIDI bytes (score tracks + optional metronome
         //    track) and load into a fresh sequencer bound to the
         //    fresh engine.
+        let sequencer = try makeExportSequencer(
+            score: score, plan: plan, snapshot: snapshot, engine: engine,
+            metronomeOutput: scoreGainMixer, exportSynth: exportSynth,
+            metronomeSampler: metronomeSampler,
+        )
+
+        // 4. Switch to manual rendering mode and start. Engine is
+        //    fresh so `enableManualRenderingMode` always succeeds.
+        try engine.enableManualRenderingMode(
+            .offline,
+            format: outputFormat,
+            maximumFrameCount: AudioFileExporter.bufferFrames,
+        )
+        try engine.start()
+
+        return ExportPipeline(
+            engine: engine,
+            start: {
+                try startSequencer(
+                    sequencer, melodic: exportSynth.melodic,
+                    timeline: timeline, startTick: startTick,
+                )
+            },
+            teardown: {
+                sequencer.stop()
+                engine.stop()
+                engine.disableManualRenderingMode()
+                // Releasing the references is enough; AVAudioEngine cleans
+                // up its attached nodes on dealloc.
+            },
+        )
+    }
+
+    /// Render `score` to an SMF, append the metronome track when one is being
+    /// sounded, post-process it for AUMIDISynth, and load it into a fresh
+    /// `AVAudioSequencer` bound to `engine` with each track routed to its
+    /// melodic / percussion / metronome unit.
+    private static func makeExportSequencer(
+        score: Score,
+        plan: LiveChannelPlan,
+        snapshot: ExportEngineSnapshot,
+        engine: AVAudioEngine,
+        metronomeOutput: AVAudioMixerNode,
+        exportSynth: ScoreSynth,
+        metronomeSampler: AVAudioUnitMIDIInstrument?,
+    ) throws -> AVAudioSequencer {
         var midi = try MidiRenderer.render(score: score)
         // Collapse the MuseScore-exact multi-port SMF onto the same
         // live single-port channel set `exportSynth` was built against
@@ -189,12 +273,13 @@ extension PlaybackEngine {
         if metronomeSampler != nil {
             // This controller is used only to generate the metronome
             // MIDI track; `prepare(soundfontURL:)` is never called on it,
-            // so `output` is never connected. Pass `sumMixer` anyway (not
-            // `mainMixerNode`) so that if a future change does call
-            // `prepare`, the metronome stays inside the master stage
-            // rather than silently bypassing the limiter.
+            // so `output` is never connected. Pass the real metronome
+            // output anyway (not `mainMixerNode`) so that if a future
+            // change does call `prepare`, the click lands where the live
+            // engine puts it rather than silently bypassing the gain
+            // stage and the limiter.
             let metronome = MetronomeController(
-                engine: engine, output: sumMixer,
+                engine: engine, output: metronomeOutput,
             )
             midi.tracks.append(metronome.metronomeTrack(
                 beats: snapshot.metronomeBeats, division: midi.division,
@@ -222,36 +307,51 @@ extension PlaybackEngine {
             }
         }
         sequencer.rate = snapshot.rate
+        return sequencer
+    }
 
-        // 4. Switch to manual rendering mode and start. Engine is
-        //    fresh so `enableManualRenderingMode` always succeeds.
-        try engine.enableManualRenderingMode(
-            .offline,
-            format: outputFormat,
-            maximumFrameCount: AudioFileExporter.bufferFrames,
-        )
-        try engine.start()
-
-        return ExportPipeline(
-            engine: engine,
-            sequencer: sequencer,
-            samplers: [exportSynth.melodic, exportSynth.percussion].compactMap(\.self),
-            metronomeSampler: metronomeSampler,
-        )
+    /// Position and start the export sequencer. Split out of
+    /// `buildExportPipeline` only for length; the ordering — position, prime,
+    /// re-assert pitch bend, start — is the contract and must not be shuffled.
+    private static func startSequencer(
+        _ sequencer: AVAudioSequencer,
+        melodic: AVAudioUnitMIDIInstrument,
+        timeline: PlaybackTimeline,
+        startTick: Int,
+    ) throws {
+        // Position the sequencer at `startTick` (in beats) so
+        // partial-range exports start at the right place.
+        let beatsPerTick = 1.0 / Double(timeline.division)
+        sequencer.currentPositionInBeats = Double(startTick) * beatsPerTick
+        sequencer.prepareToPlay()
+        // Re-assert pitch-bend sensitivity right before the sequencer
+        // starts — see the matching block in `PlaybackEngine.play(from:in:)`
+        // for the rationale. Melodic only: percussion (GM ch 9) never uses
+        // pitch bend, mirroring the live engine's `play(from:in:)` path.
+        for ch: UInt8 in 0 ..< 16 where ch != 9 {
+            MIDISynthBuilder.setPitchBendSensitivity(
+                into: melodic, semitones: 12, onChannel: ch,
+            )
+        }
+        try sequencer.start()
     }
 
     /// Attach the master output chain
     /// (scoreGainMixer → sumMixer → softClip → PeakLimiter →
     /// mainMixerNode) to `engine`, seed `scoreGainMixer.outputVolume`
     /// with `gain`, and bypass whichever shaping nodes `stage` does not
-    /// select. Returns `(scoreGainMixer, sumMixer)` so callers can route
-    /// the score synth and metronome sampler through the same chain.
+    /// select. Returns `scoreGainMixer` — the chain's entry point, which
+    /// both the score synth and the metronome sampler feed. `sumMixer` is
+    /// wired but not handed back: nothing joins the chain after the gain
+    /// stage, and live it exists only as the metering tap point.
     /// Mirrors `PlaybackEngine.buildMasterChain` from `+Master.swift`.
-    private static func buildOutputChain(
+    /// `internal` (not `private`) so the backend pipeline in
+    /// `PlaybackEngine+ExportBackend` builds the identical master stage.
+    static func buildOutputChain(
         engine: AVAudioEngine,
         gain: Float,
         stage: MasterOutputStage,
-    ) -> (scoreGainMixer: AVAudioMixerNode, sumMixer: AVAudioMixerNode) {
+    ) -> AVAudioMixerNode {
         let scoreGainMixer = AVAudioMixerNode()
         let sumMixer = AVAudioMixerNode()
         let softClip = SoftClipAudioUnit.makeNode()
@@ -267,7 +367,7 @@ extension PlaybackEngine {
         engine.connect(softClip, to: limiter, format: nil)
         engine.connect(limiter, to: engine.mainMixerNode, format: nil)
         scoreGainMixer.outputVolume = gain
-        return (scoreGainMixer, sumMixer)
+        return scoreGainMixer
     }
 
     private struct ScoreSynth {
@@ -424,18 +524,17 @@ extension PlaybackEngine {
         }
     }
 
-    private static func teardown(pipeline: ExportPipeline) {
-        pipeline.sequencer.stop()
-        pipeline.engine.stop()
-        pipeline.engine.disableManualRenderingMode()
-        // Releasing the references is enough; AVAudioEngine cleans
-        // up its attached nodes on dealloc.
-    }
-
-    private struct ExportPipeline {
+    /// One prepared offline render, independent of which synth drives it.
+    ///
+    /// `engine` is already in manual-rendering mode and started; `start` kicks
+    /// whichever transport the pipeline owns (an `AVAudioSequencer` for the
+    /// AUMIDISynth path, the backend's own for `+ExportBackend`) and must be
+    /// called before pulling frames; `teardown` stops both and leaves manual
+    /// rendering mode. Closures rather than stored transports because the two
+    /// paths share no transport type.
+    struct ExportPipeline {
         let engine: AVAudioEngine
-        let sequencer: AVAudioSequencer
-        let samplers: [AVAudioUnitMIDIInstrument]
-        let metronomeSampler: AVAudioUnitMIDIInstrument?
+        let start: @MainActor () throws -> Void
+        let teardown: @MainActor () -> Void
     }
 }

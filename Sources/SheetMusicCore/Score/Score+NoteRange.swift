@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 extension Score {
     /// Returns every `ScoreItemID` (note or rest) inside the

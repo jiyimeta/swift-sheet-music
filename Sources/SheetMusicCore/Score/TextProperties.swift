@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Per-element font overrides parsed from MSCX. Any field left `nil`
 /// inherits from the element's `TextStyleType` row in

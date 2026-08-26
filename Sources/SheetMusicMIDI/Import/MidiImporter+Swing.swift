@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiImporter {
     /// Detect swing in an ImportTrack and, if confidence is high

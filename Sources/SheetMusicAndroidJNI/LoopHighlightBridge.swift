@@ -1,37 +1,12 @@
 import Foundation
 import SheetMusicAudioCore
+import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicLayout
 
-/// Helper that maps a tick range to a measure range via the score's
-/// `PlaybackTimeline.measureStartTicks`. Pure function; testable on
-/// host without JNI.
-enum LoopHighlightTickResolver {
-    static func measureRange(
-        fromTick: Int64,
-        toTick: Int64,
-        timeline: PlaybackTimeline,
-    ) -> (from: Int, toExclusive: Int)? {
-        let measureStarts = timeline.measureStartTicks
-        guard !measureStarts.isEmpty else { return nil }
-
-        // fromMeasure = largest index where measureStarts[idx] <= fromTick.
-        // toMeasureExclusive = first index where measureStarts[idx] >= toTick;
-        // when all starts are < toTick, the entire measure list is included.
-        var fromMeasure = 0
-        var toMeasureExclusive = measureStarts.count
-        for idx in measureStarts.indices {
-            let start = Int64(measureStarts[idx])
-            if start <= fromTick { fromMeasure = idx }
-            if start >= toTick {
-                toMeasureExclusive = idx
-                break
-            }
-        }
-        guard fromMeasure < toMeasureExclusive else { return nil }
-        return (fromMeasure, toMeasureExclusive)
-    }
-}
+// The tick→measure resolution itself lives in
+// `SheetMusicBridgeCore.LoopHighlightTickResolver`, which the wasm bridge
+// shares; only the JNI binding surface is here.
 
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicJNI.nativeLoopHighlightRects(...)` call site. Returns an

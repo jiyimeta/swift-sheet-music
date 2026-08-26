@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 /// Translates MusicXML `<barline>` elements into either:

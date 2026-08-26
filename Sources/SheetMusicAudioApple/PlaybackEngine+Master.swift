@@ -38,8 +38,9 @@ extension PlaybackEngine {
     /// Attach the master output stage and wire it once:
     /// `scoreGainMixer → sumMixer → softClip → limiter → mainMixerNode`.
     /// The score synth is connected to `scoreGainMixer` in
-    /// `prepareSynth`; the metronome sampler connects to `sumMixer` from
-    /// `MetronomeController`. Called from `init`, so the chain — and
+    /// `prepareSynth`; the metronome sampler connects to the same node
+    /// from `MetronomeController`, so the click is scaled by the master
+    /// gain too. Called from `init`, so the chain — and
     /// therefore `masterGain` and `masterOutputStage` — outlives every
     /// `prepare(score:)`.
     ///

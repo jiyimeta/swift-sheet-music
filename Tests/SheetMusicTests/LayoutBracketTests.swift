@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import CoreGraphics
     import Foundation
     @testable import SheetMusicCore
@@ -225,7 +225,7 @@
         @available(macOS 15.0, iOS 16.0, *)
         @Test func multiPartMixedStavesFixtureBrackets() throws {
             let url = try #require(
-                Bundle.module.url(
+                TestResources.url(
                     forResource: "multiPartMixedStaves",
                     withExtension: "mscx",
                 ),

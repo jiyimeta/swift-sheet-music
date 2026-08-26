@@ -219,7 +219,7 @@
                 try data.write(to: url)
                 pdfShareItem = PDFShareItem(url: url)
             } catch {
-                errorMessage = "PDF export failed: \(error.localizedDescription)"
+                errorMessage = "PDF export failed: \(exampleErrorDescription(error))"
             }
         }
 
@@ -589,7 +589,7 @@
             do {
                 try adoptLoadedScore(ScoreLoader.loadBundled())
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
@@ -603,7 +603,7 @@
             switch result {
             case let .failure(err):
                 errorMessage =
-                    "File picker failed: \(err.localizedDescription)"
+                    "File picker failed: \(exampleErrorDescription(err))"
             case let .success(urls):
                 guard let url = urls.first else { return }
                 do {
@@ -611,7 +611,7 @@
                 } catch {
                     errorMessage =
                         "Could not load \(url.lastPathComponent): "
-                            + error.localizedDescription
+                            + exampleErrorDescription(error)
                 }
             }
         }

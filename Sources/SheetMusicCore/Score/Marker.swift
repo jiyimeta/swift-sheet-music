@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Measure-left navigation marker: Segno, Coda, Fine, "To Coda".
 /// C++: `mu::engraving::Marker`.

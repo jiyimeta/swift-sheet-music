@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Retunes a note (changes its MIDI `pitch`, `tpc`, and the
 /// accidental override the layout renders).
@@ -36,15 +36,11 @@ public struct SetNotePitch: EditCommand {
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let oldNote = score[location] else {
-            throw SheetMusicError.invalidEdit(
-                reason: "SetNotePitch: no note at \(location)",
-            )
+            throw Self.refused(.noteNotFound(location))
         }
         let veID = VoiceElementID(location)
         guard case var .chord(chord) = score[veID] else {
-            throw SheetMusicError.invalidEdit(
-                reason: "SetNotePitch: element at \(veID) is not a chord",
-            )
+            throw Self.refused(.wrongElementKind(at: veID, expected: .chord))
         }
         var note = chord.notes[location.noteIndexInChord]
         note.pitch = pitch

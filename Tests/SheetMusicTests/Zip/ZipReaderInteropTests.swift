@@ -16,7 +16,7 @@
         @Test
         func midi01EntriesMatchSnapshot() throws {
             let url = try #require(
-                Bundle.module.url(forResource: "midi01", withExtension: "mscz"),
+                TestResources.url(forResource: "midi01", withExtension: "mscz"),
                 "midi01.mscz fixture not found in test bundle",
             )
             let data = try Data(contentsOf: url)

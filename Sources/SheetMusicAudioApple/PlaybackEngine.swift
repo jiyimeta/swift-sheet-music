@@ -101,12 +101,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// instrument.
     private var staffChannelSwitches: [Int: [(tick: Int, channel: UInt8)]] = [:]
 
-    /// Master output stage. The score synth feeds `scoreGainMixer`,
-    /// whose `outputVolume` is the user's master gain (`0...`). Its
-    /// output is summed with the metronome at `sumMixer`, passed through
-    /// `softClip` and `limiter` — both bypassed unless
+    /// Master output stage. The score synth and the metronome both feed
+    /// `scoreGainMixer`, whose `outputVolume` is the user's master gain
+    /// (`0...`). Its output passes through `sumMixer`, then `softClip`
+    /// and `limiter` — both bypassed unless
     /// `masterOutputStage` selects one — then routed into
-    /// `mainMixerNode`. Built once in
+    /// `mainMixerNode`. `sumMixer` no longer sums anything the gain
+    /// stage didn't already; it stays as the metering tap point (see
+    /// `+Metering`), which must read the post-gain mix. Built once in
     /// `init` and reused across every `prepare(score:)`, so `masterGain`
     /// survives score reloads. `internal` so the `+Master` / `+Export`
     /// extensions in sibling files can reach the nodes directly.
@@ -136,7 +138,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// synth rebuilds in `prepareSynth`, like `masterGain`.
     public private(set) var masterTuningCents: Double = 0 // swiftlint:disable:this inclusive_language
 
-    /// Whole-score transpose in semitones (`-7…+7`). Applied as MIDI
+    /// Whole-score transpose in semitones (`-12…+12`). Applied as MIDI
     /// coarse tuning to every pitched channel; re-applied after each
     /// `prepare(score:)` so a score reload preserves it. `0` = concert.
     public private(set) var transposeSemitones = 0
@@ -332,10 +334,21 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             provider: metronomeClickProvider0,
             soundfontResolver: soundfontResolver,
         )
-        // The metronome joins the master stage at `sumMixer` (post-gain,
-        // pre-limiter) so it is limited along with the boosted score but
-        // is not itself boosted by the master gain.
-        metronome = MetronomeController(engine: engine, output: sumMixer)
+        // The metronome joins the master stage at `scoreGainMixer`, i.e. the
+        // click IS scaled by the master gain, along with the score.
+        //
+        // It used to land on `sumMixer` (post-gain) so the click stayed a fixed
+        // reference while the score was boosted. That was only ever true on the
+        // AUMIDISynth path: an injected `SynthBackend` mixes its own click
+        // inside its render block and hands back ONE node, which connects here
+        // to `scoreGainMixer` — so on the backend path the click has always
+        // tracked the gain. Rather than give backends a second output node to
+        // keep a split nobody asked for, the two paths are unified on the
+        // backend's behavior, which is also the more useful one: `masterGain`
+        // is documented as calibration for a quiet backend
+        // (see `setMasterGain`), and a click that ignored it would silently
+        // rebalance score-against-click every time the user calibrated.
+        metronome = MetronomeController(engine: engine, output: scoreGainMixer)
         buildMasterChain()
         startObservingAudioSessionInterruptions()
     }
@@ -441,6 +454,18 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         )
     }
 
+    /// Test-only read-back of the node the live metronome's synth actually
+    /// feeds, so a test can assert the click joins the master chain AT the
+    /// gain stage (`scoreGainMixer`) rather than after it. Read from the
+    /// engine's own connection table, not from what `MetronomeController` was
+    /// handed, so a rewiring that never reached the graph would still fail.
+    /// `nil` until `prepare(score:)` has built the synth.
+    var metronomeOutputDestination: AVAudioNode? {
+        guard let sampler = metronome.attachedSampler else { return nil }
+        return engine.outputConnectionPoints(for: sampler, outputBus: 0)
+            .first?.node
+    }
+
     // MARK: Internal accessors for `PlaybackEngine+Mixer`
 
     func midiChannel(forStaff idx: Int) -> UInt8? {
@@ -478,11 +503,18 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         staffIsDrum[idx] ?? false
     }
 
-    /// Live whole-score transpose in semitones (clamped −7…+7). Global
+    /// Live whole-score transpose in semitones (clamped −12…+12). Global
     /// coarse tuning on the MELODIC unit only, so pitched content (incl.
     /// already-sounding notes) shifts zero-artifact and drums stay put.
+    ///
+    /// An octave either way, not the old diminished fifth: a singer moving a
+    /// song out of its written key routinely needs one, and the MIDI coarse
+    /// tuning RPN carries ±64 semitones so the old limit bought nothing. The
+    /// NOTATION half (`LayoutOptionsWire.transposeDelta`) is clamped to the
+    /// same range and must move with it — a wider sound than notation makes
+    /// the score look and sound like different pieces past the narrower bound.
     public func setTranspose(semitones: Int) {
-        let clamped = max(-7, min(7, semitones))
+        let clamped = max(-12, min(12, semitones))
         transposeSemitones = clamped
         applyTuning()
     }
@@ -1533,6 +1565,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             ),
             timeline: timeline,
         )
+        // The sequence just loaded is the unrolled render; hand over the projection that turns the
+        // engine's notated ticks into positions on it before any transport move can happen.
+        backend.setUnrolledTimeMap(unrolledTimeMap)
         loadBackendMetronomeSequence(backend: backend, rendered: rendered)
         sequencerScore = score
         sequenceMap = .identity
@@ -1594,9 +1629,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 plan: plan, baseTick: baseTick, includingPreRollClicks: true,
             ),
             // Where the body's `baseTick` sits on the metronome's clock, minus
-            // where it sits on the score's. Expressed in the same notated-seconds
-            // space `SynthBackend.seek(toTick:)` uses, so the two agree.
-            offsetSeconds: preRollSeconds - timeline.seconds(atTick: Double(baseTick)),
+            // where it sits on the score's. Both transports run on the UNROLLED
+            // render's seconds — which is also where `SynthBackend.seek(toTick:)`
+            // puts the score transport — so the subtrahend is projected too, or the
+            // click track drifts from the music by the unrolled sequence's head start.
+            offsetSeconds: preRollSeconds - unrolledTimeMap.unrolledSeconds(
+                fromNotated: timeline.seconds(atTick: Double(baseTick)),
+            ),
         )
         backendMetronomeHasPreRoll = true
         backend.setMetronomeMuted(!metronome.isEnabled)
@@ -1642,8 +1681,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             }
         }
         if let t = targetTick {
+            // `t` is a notated tick; the sequencer's position is on the unrolled render.
             sequencer.currentPositionInBeats =
-                Double(t) / Double(timeline.division)
+                Double(unrolledTick(forNotated: t)) / Double(timeline.division)
             currentCursor = timeline.frame(atTick: t)?.cursor
         }
     }
@@ -1704,8 +1744,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             return
         }
         guard let sequencer else { return }
+        // `sequencerTick(fromScore:)` shifts by the count-in pre-roll only — its input is already
+        // a position on the unrolled render, so the notated tick has to be projected first.
         sequencer.currentPositionInBeats =
-            Double(sequenceMap.sequencerTick(fromScore: tick))
+            Double(sequenceMap.sequencerTick(fromScore: unrolledTick(forNotated: tick)))
             / Double(timeline.division)
         currentCursor = timeline.frame(atTick: tick)?.cursor
     }
@@ -1754,10 +1796,62 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     public func clearLoop() {
         guard state != .exporting else { return }
         loopRange = nil
+        transportLoop = nil
     }
 
     private func apply(loop: LoopRange) {
         loopRange = loop
+        transportLoop = projectLoopOntoTransport(loop)
+    }
+
+    /// `loopRange` expressed in the transport's own coordinates.
+    ///
+    /// `LoopRange` is a region of the SCORE, so it is stored — and handed back to the host — in
+    /// notated ticks. The transport plays the UNROLLED render, where the same music can sit at
+    /// several positions (one per pass) and generally none of them is the notated tick. Every
+    /// comparison against a polled transport position therefore has to use this instead.
+    /// Internal rather than private so `wrapToLoopStart` — itself internal, so tests can drive one
+    /// wrap deterministically — can take it, and so a test can assert the projection directly.
+    struct TransportLoop: Equatable {
+        /// Unrolled tick of the loop's start — its FIRST occurrence in playback order, matching
+        /// the rule the rest of scheduling follows.
+        let startTick: Int
+        /// Exclusive unrolled end. Derived as `startTick + notated span` rather than by looking the
+        /// notated end tick up on its own: within one measure-play the region is contiguous and
+        /// slope-1, whereas the end tick's own first occurrence can belong to a LATER pass (a loop
+        /// over a repeated bar would then swallow the repeat's second take).
+        let endTick: Int
+        /// The same two bounds on the transport's seconds clock, for a time-based backend. The
+        /// span is taken from the notated clock for the same reason: a pass replays its own
+        /// stretch of the tempo map, so its duration is the notated one.
+        let startSeconds: TimeInterval
+        let endSeconds: TimeInterval
+    }
+
+    private(set) var transportLoop: TransportLoop?
+
+    private func projectLoopOntoTransport(_ loop: LoopRange) -> TransportLoop? {
+        guard let timeline else { return nil }
+        let startTick = unrolledTick(forNotated: loop.startTick)
+        let notatedStartSeconds = timeline.seconds(atTick: Double(loop.startTick))
+        let notatedEndSeconds = timeline.seconds(atTick: Double(loop.endTick))
+        let startSeconds = unrolledTimeMap.unrolledSeconds(fromNotated: notatedStartSeconds)
+        return TransportLoop(
+            startTick: startTick,
+            endTick: startTick + (loop.endTick - loop.startTick),
+            startSeconds: startSeconds,
+            endSeconds: startSeconds + (notatedEndSeconds - notatedStartSeconds),
+        )
+    }
+
+    /// The UNROLLED transport tick a NOTATED score tick sits at — its first occurrence in playback
+    /// order, which is the coordinate scheduling (seek, play-from, loop wrap) targets. Identity for
+    /// a score with no repeat plan.
+    ///
+    /// The rule itself lives on `PlaybackUnroll` so the Android engine reaches the same one through
+    /// JNI (`nativeUnrolledTickForNotated`) instead of restating it in Kotlin.
+    private func unrolledTick(forNotated tick: Int) -> Int {
+        unroll.firstUnrolledTick(forNotated: tick)
     }
 
     /// Clamp `tick` into the active loop region. Returns `tick`
@@ -1813,7 +1907,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         let rawTick = sequenceMap.scoreTick(fromSequencer: rawSeqTick)
             ?? sequenceMap.baseTick
         let tick: Int
-        if let loop = loopRange, rawTick >= loop.endTick {
+        // `rawTick` is an UNROLLED sequencer tick, so the fold has to use the loop's unrolled
+        // bounds; folding against the notated ones wrapped at the wrong instant — and by the
+        // wrong length — on any score with a repeat.
+        if let loop = transportLoop, rawTick >= loop.endTick {
             let len = loop.endTick - loop.startTick
             tick = loop.startTick + (rawTick - loop.startTick) % len
         } else {
@@ -1858,7 +1955,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             ? Double(sequenceMap.baseTick)
             : Double(sequenceMap.baseTick) + (rawSeqTick - Double(sequenceMap.preRollTicks))
         let tick: Double
-        if let loop = loopRange, rawTick >= Double(loop.endTick) {
+        // Unrolled bounds, for the same reason as `currentTimeSeconds`'s fold above.
+        if let loop = transportLoop, rawTick >= Double(loop.endTick) {
             let len = Double(loop.endTick - loop.startTick)
             tick = Double(loop.startTick)
                 + (rawTick - Double(loop.startTick))
@@ -1945,7 +2043,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         } else {
             let tick = snapTickToLoop(frame.tick)
             sequencer.currentPositionInBeats =
-                Double(sequenceMap.sequencerTick(fromScore: tick))
+                Double(sequenceMap.sequencerTick(fromScore: unrolledTick(forNotated: tick)))
                 / Double(timeline.division)
             currentCursor = timeline.frame(atTick: tick)?.cursor
         }
@@ -2329,7 +2427,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // reruns AVAudioSequencer's tempo-track event scan up to the
         // new position, restoring the tempo trajectory for every
         // iteration.
-        if let loop = loopRange, tick >= loop.endTick {
+        // `tick` is UNROLLED, so the bound it is measured against has to be too.
+        if let loop = transportLoop, tick >= loop.endTick {
             wrapToLoopStart(loop)
             return
         }
@@ -2391,11 +2490,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // During a count-in this is the held start position, so the cursor stays pinned there
         // and neither branch below can fire early: the transport hasn't moved yet.
         let scoreSeconds = backend.currentPositionSeconds
-        // `seconds(atTick:)` extrapolates across the final `[lastTick, totalTicks]` →
-        // `[lastTime, totalSeconds]` segment, so an offset-valued `endTick` maps to a
-        // reachable time even though it has no frame of its own.
-        if let loop = loopRange,
-           scoreSeconds >= timeline.seconds(atTick: Double(loop.endTick))
+        // The transport's clock is the UNROLLED sequence's, so the loop's end has to be expressed
+        // there too — `TransportLoop.endSeconds`. Comparing against the NOTATED end time wrapped
+        // early by exactly the head start the unrolled sequence has accumulated, which on a score
+        // with a repeat meant the region was cut short and, after the seek below, replayed from
+        // somewhere else entirely.
+        if let loop = transportLoop, let notatedLoop = loopRange,
+           scoreSeconds >= loop.endSeconds
         {
             // The count is over once the first pass is: swap the count-in metronome sequence for
             // the plain one so the wrapped pass clicks from the loop's start (that sequence keeps
@@ -2407,10 +2508,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 loadBackendMetronomeSequence(backend: backend, rendered: rendered)
                 backend.setMetronomeMuted(!metronome.isEnabled)
             }
-            backend.seek(toTick: loop.startTick)
+            // `seek(toTick:)` and `frame(atTick:)` both speak NOTATED ticks — the backend maps its
+            // argument onto the unrolled clock itself (`setUnrolledTimeMap`).
+            backend.seek(toTick: notatedLoop.startTick)
             reapplyMixerPrograms()
             applyMixerState()
-            currentCursor = timeline.frame(atTick: loop.startTick)?.cursor
+            currentCursor = timeline.frame(atTick: notatedLoop.startTick)?.cursor
             return
         }
         // Project the transport's UNROLLED seconds onto the notated timeline before the frame
@@ -2434,8 +2537,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     }
 
     /// Seek the playhead back to the loop's start and resume. Driven by
-    /// `tickCursor` when the polled position reaches the loop end.
-    func wrapToLoopStart(_ loop: LoopRange) {
+    /// `tickCursor` when the polled position reaches the loop end. Takes the loop already
+    /// projected onto the transport — the sequencer plays the unrolled render, so the notated
+    /// start tick is not where that music sits.
+    func wrapToLoopStart(_ loop: TransportLoop) {
         guard let sequencer, let timeline else { return }
         // Seek back in *sequencer* ticks: with a count-in pre-roll the loop
         // start (a score tick) sits at `preRollTicks + (startTick - baseTick)`.

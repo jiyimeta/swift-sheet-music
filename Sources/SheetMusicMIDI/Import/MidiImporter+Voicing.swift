@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 // `VoiceNote` and the passes that gather / merge / snap them live in
 // `MidiImporter+VoiceNotes.swift`.

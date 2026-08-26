@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import AVFoundation
     import Foundation
     @testable import SheetMusicAudioApple
@@ -26,6 +26,16 @@
         /// which one a count-in's clicks were written into.
         private(set) var lastSequence: MidiFile?
         private(set) var lastMetronomeSequence: MidiFile?
+        /// `true` once the transport was started by a plain `play` or a count-in one.
+        private(set) var didPlay = false
+        /// Metronome state the last `setMetronomeMuted` / `setMetronomeVolume` set.
+        private(set) var metronomeMuted: Bool?
+        private(set) var metronomeVolume: Float?
+        /// The offline double handed back by `makeOfflineInstance`, and the sample
+        /// rate it was asked for — this is how an export test reaches the instance
+        /// the export built for itself.
+        private(set) var offlineInstance: RecordingBackend?
+        private(set) var offlineSampleRate: Double?
         private var timeline: PlaybackTimeline?
 
         func clearRecordings() {
@@ -55,13 +65,31 @@
             metronomeOffsetSeconds = offsetSeconds
         }
 
-        func setMetronomeMuted(_: Bool) {}
+        func setMetronomeMuted(_ muted: Bool) {
+            metronomeMuted = muted
+        }
+
+        func setMetronomeVolume(_ volume: Float) {
+            metronomeVolume = volume
+        }
+
         func play() {
             countInSeconds = nil
+            didPlay = true
         }
 
         func play(afterCountInSeconds seconds: TimeInterval) {
             countInSeconds = seconds
+            didPlay = true
+        }
+
+        /// A second recorder, so an export test can assert what the offline
+        /// pipeline pushed onto the instance it built for itself.
+        func makeOfflineInstance(sampleRate: Double) -> (any SynthBackend)? {
+            offlineSampleRate = sampleRate
+            let instance = RecordingBackend()
+            offlineInstance = instance
+            return instance
         }
 
         func pause() {}

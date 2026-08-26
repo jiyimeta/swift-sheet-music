@@ -1,6 +1,7 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT
     import Foundation
     @testable import SheetMusicAndroidJNI
+    @testable import SheetMusicBridgeCore
     import Testing
 
     struct LayoutBridgeStemTests {
@@ -8,7 +9,7 @@
 
         @Test
         func midi01EmitsStrokeCommands() throws {
-            let url = try #require(Bundle.module.url(
+            let url = try #require(TestResources.url(
                 forResource: "midi01",
                 withExtension: "mscx",
             ))

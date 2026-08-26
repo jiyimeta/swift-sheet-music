@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 /// Decoder for MSCX `<Rest>` elements. In our model rests are
@@ -9,7 +9,11 @@ enum MSCXRestDecoder {
     static func decode(_ node: XMLTreeNode) throws -> Chord {
         guard let durationText = node.first("durationType")?.text else {
             throw SheetMusicError.malformedScore(
-                reason: "Rest missing <durationType>",
+                ScoreFault(
+                    code: "mscx.rest.missingDurationType",
+                    message: "Rest missing <durationType>",
+                    location: "Rest",
+                ),
             )
         }
         let duration = try duration(
@@ -35,7 +39,11 @@ enum MSCXRestDecoder {
         }
         guard let base = NoteDuration(mscxName: type) else {
             throw SheetMusicError.malformedScore(
-                reason: "Rest unknown durationType \"\(type)\"",
+                ScoreFault(
+                    code: "mscx.rest.unknownDurationType",
+                    message: "Rest unknown durationType \"\(type)\"",
+                    location: type,
+                ),
             )
         }
         let dots = Int(node.first("dots")?.text ?? "0") ?? 0

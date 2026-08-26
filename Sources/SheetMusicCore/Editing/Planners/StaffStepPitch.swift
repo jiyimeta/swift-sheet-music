@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Diatonic (staff-line/space) pitch math for the notehead drag gesture. One staff step = one diatonic letter step.
 /// The result is spelled IN KEY: the tpc for a letter under concert key K (−7…+7) is the unique value ≡ the letter's

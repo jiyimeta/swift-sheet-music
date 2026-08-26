@@ -1,0 +1,9 @@
+// Declared by hand rather than left to SwiftPM's umbrella-directory
+// default so the module is named `zlib` — the same name the system module
+// carries on Linux and Android, which is what lets
+// `SheetMusicZip/Backend/DeflateZLib.swift` say `import zlib` on all three
+// platforms without a per-platform alias.
+module zlib {
+    header "zlib.h"
+    export *
+}

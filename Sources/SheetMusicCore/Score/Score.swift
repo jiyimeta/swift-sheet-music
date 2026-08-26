@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Root of the parsed MuseScore document. C++: `mu::engraving::MasterScore`/`Score`.
 public struct Score: Sendable, Equatable {

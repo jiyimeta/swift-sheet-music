@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Namespace for MSCX decoder constants surfaced for the Phase 6
 /// render-coverage sync test (RenderCoverageSyncTests).

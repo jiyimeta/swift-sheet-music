@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Sets `Staff.defaultClefType` for the staff at `staff`.
 ///
@@ -29,9 +29,7 @@ public struct SetStaffDefaultClef: EditCommand {
               score.parts[staff.partIndex].staves.indices
                   .contains(staff.staffIndexInPart)
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "SetStaffDefaultClef: no staff at \(staff)",
-            )
+            throw Self.refused(.staffNotFound(staff))
         }
         let p = staff.partIndex
         let s = staff.staffIndexInPart

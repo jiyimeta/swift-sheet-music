@@ -1,11 +1,11 @@
-import Foundation
+import SheetMusicFoundation
 
 extension Score {
-    /// `nearestCursor` runs against a `LayoutDocument` built from the filtered score, so the
-    /// `StaffAddress` it stamps onto `NoteID` / `RestID` is positional within the filtered parts. The
-    /// playback engine's timeline is keyed by the full-score address, so a tap-derived cursor must be
-    /// re-addressed before being handed to the engine. `.beat` cursors carry no staff address and pass
-    /// through unchanged.
+    /// `nearestCursor` and `editingHitTest` run against a `LayoutDocument` built from the filtered score,
+    /// so the `StaffAddress` they stamp onto `NoteID` / `RestID` / `TupletID` is positional within the
+    /// filtered parts. The playback engine's timeline — and every edit intent — is keyed by the full-score
+    /// address, so a tap-derived cursor must be re-addressed before being handed to the engine. `.beat`
+    /// cursors carry no staff address and pass through unchanged.
     public func engineCursorForFilteredTap(
         _ cursor: ScoreCursor, hiddenStaves hidden: Set<StaffAddress>,
     ) -> ScoreCursor {
@@ -24,7 +24,17 @@ extension Score {
                 staff: full, measureIndex: restID.measureIndex, voiceIndex: restID.voiceIndex,
                 elementIndex: restID.elementIndex,
             )))
-        case .tuplet, .clef:
+        case let .tuplet(tupletID):
+            return .item(.tuplet(TupletID(
+                staff: full, measureIndex: tupletID.measureIndex, voiceIndex: tupletID.voiceIndex,
+                startElementIndex: tupletID.startElementIndex,
+            )))
+        case .clef:
+            // Deliberately NOT re-addressed — but only because nothing produces a `.clef` cursor today:
+            // `editingHitTest` drops clef hits (no clef editing UI in v1) and the playback engine never
+            // parks on one. The day clef selection becomes real, `.clef` must be re-stamped here exactly
+            // like `.tuplet` above — an un-re-addressed pass-through is what made a tuplet tap name the
+            // wrong staff once a hidden staff sat ahead of it.
             return cursor
         }
     }
@@ -89,7 +99,7 @@ extension Score {
     /// * if the cursor's staff is hidden, translate to `.beat(measureIndex:tickInMeasure:)` so the renderer
     ///   falls back to interpolated X against the surviving visible columns;
     /// * if the staff is visible but its full-score address differs from its filtered address, re-stamp the
-    ///   `NoteID` / `RestID` with the filtered address.
+    ///   `NoteID` / `RestID` / `TupletID` with the filtered address.
     ///
     /// `.beat` cursors and visible-staff `.item` values whose full and filtered addresses already match pass
     /// through unchanged. This is the playback-side mirror of `engineCursorForFilteredTap` (tap → engine).
@@ -116,7 +126,14 @@ extension Score {
                 staff: filteredStaff, measureIndex: restID.measureIndex, voiceIndex: restID.voiceIndex,
                 elementIndex: restID.elementIndex,
             )))
-        case .tuplet, .clef:
+        case let .tuplet(tupletID):
+            return .item(.tuplet(TupletID(
+                staff: filteredStaff, measureIndex: tupletID.measureIndex, voiceIndex: tupletID.voiceIndex,
+                startElementIndex: tupletID.startElementIndex,
+            )))
+        case .clef:
+            // Same deliberate gap as `engineCursorForFilteredTap`'s `.clef` case (see the comment there):
+            // no producer exists, and any future one must re-stamp instead of passing through.
             return cursor
         }
     }

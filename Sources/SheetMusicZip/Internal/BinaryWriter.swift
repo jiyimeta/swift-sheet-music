@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Appends little-endian primitives to a `Data` buffer. Used by ZipWriter.
 struct BinaryWriter {

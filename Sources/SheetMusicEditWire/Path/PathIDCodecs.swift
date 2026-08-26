@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import Wirelet
 
 /// Codecs for path-based identity types: `VoiceElementID`, `NoteID`,

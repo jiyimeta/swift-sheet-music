@@ -4,18 +4,17 @@ An end-to-end Kotlin Compose demo that parses an `.mscz` and renders it
 to a Compose `Canvas` using the cross-compiled `SheetMusicAndroidJNI`
 Swift library.
 
-Audio is intentionally disabled; the Play button is shown but greyed
-out. Wiring `SheetMusicAudioCore` into the JNI bridge is a Phase 4 follow-up.
+Playback, mixer controls, and audio-file export are available when a General
+MIDI SoundFont is staged into the app's assets. The Play button remains
+disabled without one.
 
 ## Prerequisites
 
 - macOS or Linux host
-- Open-source Swift 6.3.2-RELEASE toolchain installed (see the project
-  root `CLAUDE.md` "Android build" section for the install command and
-  `TOOLCHAINS` env var)
-- Swift Android SDK 6.3.2-RELEASE_android-0.1 installed (`swift sdk list`
-  should report it)
-- One-time NDK sysroot symlink setup completed (see root `CLAUDE.md`)
+- Open-source Swift toolchain matching the repository's Android SDK installed
+  (see `docs/development/android.md` at the project root)
+- Matching Swift Android SDK installed (`swift sdk list` should report it)
+- One-time NDK sysroot setup completed (see the same development guide)
 - Android Studio Hedgehog or later, JDK 17
 - A physical Android device or emulator on API 28 or higher (arm64 or
   x86_64)
@@ -28,7 +27,12 @@ Scripts/android-build-libs.sh        # cross-compile + stage .so per ABI
 
 # Provide your own MuseScore file (this is gitignored and never committed)
 cp /path/to/your/file.mscz ~/Desktop/test.mscz
-Scripts/android-bundle-test-score.sh # copies it into Examples/Android/app/src/main/assets/
+
+# Optional, but required for audible playback
+cp /path/to/GeneralUserGS.sf2 ~/Desktop/gm.sf2
+
+# Copies the available local assets into the gitignored app directory
+Scripts/android-bundle-test-score.sh
 
 # Open the example in Android Studio
 open -a "Android Studio" Examples/Android
@@ -39,9 +43,8 @@ library through the JNI bridge, and renders page 1 onto the Compose
 Canvas. Pinch / drag to zoom and pan; use Prev / Next for page
 navigation.
 
-## What this does NOT do
+## What this does not do
 
-- Play audio — the icon is disabled until Phase 4 lands.
 - Edit the score.
 - Export to PDF.
 - Use a real SMuFL music font. Phase 2's `StubFontMetricsProvider`
@@ -59,8 +62,8 @@ navigation.
   `Scripts/android-bundle-test-score.sh` after putting a MuseScore file
   at `~/Desktop/test.mscz`. Then rebuild and reinstall.
 - `'semaphore.h' file not found` during Swift cross-compile — the NDK
-  sysroot symlink wasn't set up. See root `CLAUDE.md` "One-time NDK
-  sysroot setup".
+  sysroot wasn't set up. See the project root's
+  `docs/development/android.md`.
 - App crashes on launch with SEGV — the Swift runtime stubs may be
   missing in `jniLibs/<abi>/`. `Scripts/android-build-libs.sh` copies
   them automatically; confirm `libswiftCore.so` is present.

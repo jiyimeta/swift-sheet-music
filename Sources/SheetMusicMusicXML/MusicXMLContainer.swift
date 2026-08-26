@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Public helpers for `.mxl` archive introspection.
 public enum MusicXMLContainer {

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiImporter {
     /// Tonal pitch class for a MIDI pitch, given an optional key

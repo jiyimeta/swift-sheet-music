@@ -54,6 +54,14 @@ final class MetronomeController {
         self.output = output
     }
 
+    /// Test-only read-back of the synth actually attached to the engine, so a
+    /// test can assert WHERE the click joins the master chain
+    /// (`engine.outputConnectionPoints(for:outputBus:)`) rather than trusting
+    /// the `output` this controller was handed. `nil` before `prepare`.
+    var attachedSampler: AVAudioUnitMIDIInstrument? {
+        sampler
+    }
+
     /// Idempotent: attaches a synth to the audio engine the first
     /// time, then reloads its preset from `soundfontURL` whenever
     /// that URL changes between scores. Failure to load the GM bank

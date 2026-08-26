@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Replace the element at `location` with `element`, rebalancing
 /// the voice when the durations differ. Same algorithm
@@ -40,9 +40,7 @@ public struct PasteVoiceElement: EditCommand {
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "PasteVoiceElement: no element at \(location)",
-            )
+            throw Self.refused(.targetNotFound(location))
         }
         let original = voice.elements[location.elementIndex]
         let division = score.division
@@ -75,8 +73,8 @@ public struct PasteVoiceElement: EditCommand {
         // tuplet (changing its duration would invalidate the ratio).
         try DurationChangeAlgorithm.ensureNotInsideTuplet(
             voice: voice,
-            elementIdx: location.elementIndex,
-            label: "PasteVoiceElement",
+            at: location,
+            operation: "PasteVoiceElement",
         )
         let targetRtick = DurationChangeAlgorithm.tickOffset(
             in: voice,
@@ -95,6 +93,8 @@ public struct PasteVoiceElement: EditCommand {
                 dstTicks: src,
                 targetRtick: targetRtick,
                 division: division,
+                baseLocation: location,
+                operation: "PasteVoiceElement",
             )
         let replace = ReplaceVoiceElements(
             staff: location.staff,

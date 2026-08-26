@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Font descriptor used by `FontMetricsProvider`. Identifies the face
 /// (e.g. "Bravura", "Edwin", "" for system), the rendering point size,

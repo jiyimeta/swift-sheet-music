@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Time-ordered sequence of elements within a measure. C++: `mu::engraving::Voice`.
 public struct Voice: Sendable, Equatable {

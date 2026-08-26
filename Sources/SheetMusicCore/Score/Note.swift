@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A pitched note inside a `Chord`. C++: `mu::engraving::Note` (subset).
 public struct Note: Sendable, Equatable {

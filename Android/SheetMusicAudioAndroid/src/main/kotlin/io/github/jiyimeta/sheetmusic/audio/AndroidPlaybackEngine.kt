@@ -7,6 +7,7 @@ import io.github.jiyimeta.sheetmusic.CountInWireCodec
 import io.github.jiyimeta.sheetmusic.audio.export.AudioExporter
 import io.github.jiyimeta.sheetmusic.audio.export.ExportEngineSnapshot
 import io.github.jiyimeta.sheetmusic.audio.jni.SheetMusicAudioJNI
+import io.github.jiyimeta.sheetmusic.audio.model.AudioClockPosition
 import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
@@ -131,6 +132,23 @@ class AndroidPlaybackEngine internal constructor(
         /** Returns a serialized [Frame] for the frame matching [cursorBytes]. */
         fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray
 
+        /**
+         * The UNROLLED transport tick that a NOTATED score tick sits at — its first occurrence in
+         * playback order. The write-side inverse of [frameAtTick]'s read-side translation.
+         *
+         * The engine gets notated ticks out of [frameForCursor], [itemEndTick] and the timeline
+         * summary's `totalTicks`, but everything it hands the player ([PlayerDriver.seekTick]) or
+         * reads back from it ([PlayerDriver.currentTick]) is unrolled. This is the projection
+         * between them, and it is a genuine translation only on a score whose repeats or jumps make
+         * the rendered SMF longer than the notated timeline.
+         *
+         * Returns -1 when the handle is unknown, the tick is negative, or the native bridge predates
+         * this entry point. The default here returns the tick unchanged for exactly that last case —
+         * identity is what the engine did before this existed, and it stays correct for every score
+         * without a repeat.
+         */
+        fun unrolledTickForNotated(scoreHandle: Long, notatedTick: Long): Long = notatedTick
+
         /** Returns a serialized `CountInWire` for a pre-roll starting at [cursorBytes]. */
         fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray
 
@@ -188,6 +206,8 @@ class AndroidPlaybackEngine internal constructor(
             override fun frameAtTick(h: Long, t: Long) = SheetMusicAudioJNI.nativeFrameAtTick(h, t)
             override fun frameForCursor(h: Long, c: ByteArray) =
                 SheetMusicAudioJNI.nativeFrameForCursor(h, c)
+            override fun unrolledTickForNotated(h: Long, t: Long) =
+                SheetMusicAudioJNI.nativeUnrolledTickForNotated(h, t)
             override fun countIn(h: Long, c: ByteArray) = SheetMusicAudioJNI.nativeCountIn(h, c)
             override fun staffParams(h: Long) = SheetMusicAudioJNI.nativeStaffParams(h)
             override fun instrumentParams(h: Long) = SheetMusicAudioJNI.nativeInstrumentParams(h)
@@ -277,6 +297,30 @@ class AndroidPlaybackEngine internal constructor(
     private val _loopRange = MutableStateFlow<LoopRange?>(null)
     val loopRange: StateFlow<LoopRange?> = _loopRange.asStateFlow()
 
+    /**
+     * The transport's position paired with the device's AUDIO clock, or `null` when the output
+     * cannot supply a timestamp (before playback starts, after teardown, or on a route that does
+     * not report one — `AudioTrack.getTimestamp` is best-effort by contract).
+     *
+     * A read, deliberately, and not a flow: [currentTimeSeconds] is written from a 33 ms poll, so
+     * its value is stale by an unknown fraction of that interval whenever a host looks at it. This
+     * asks the audio output where it actually is AT THE MOMENT OF THE CALL, so a host smoothing a
+     * playhead can extrapolate from `nanoTime` rather than from whenever the poll last fired.
+     * Publishing it as a flow would put it back on the poll's cadence and lose the whole point.
+     *
+     * Purely additive: [currentTimeSeconds] and [currentCursor] are untouched and a host that never
+     * calls this behaves exactly as before.
+     */
+    fun audioClockPosition(): AudioClockPosition? {
+        val sample = oboeStream?.audioTimestamp() ?: return null
+        val tick = playerDriver?.currentTick ?: return null
+        return AudioClockPosition(
+            unrolledTick = tick,
+            framePosition = sample.framePosition,
+            nanoTime = sample.nanoTime,
+        )
+    }
+
     // ── Internal mutable state (assembled by prepare) ────────────────
 
     private val prepareMutex = Mutex()
@@ -338,7 +382,7 @@ class AndroidPlaybackEngine internal constructor(
     @Volatile private var pendingRate: Float = 1.0f
     @Volatile private var masterTuningCents: Double = 0.0
 
-    /** Live whole-score transpose (−7…+7). Combined with [masterTuningCents] by `applyTuning`. */
+    /** Live whole-score transpose (−12…+12). Combined with [masterTuningCents] by `applyTuning`. */
     @Volatile private var transposeSemitones: Int = 0
 
     /**
@@ -371,6 +415,7 @@ class AndroidPlaybackEngine internal constructor(
     suspend fun prepare(scoreHandle: Long) = prepareMutex.withLock {
         withContext(Dispatchers.IO) {
             _loopRange.value = null
+            transportLoop = null
             val summary = jniBridge.timelineSummary(scoreHandle)
             if (summary.size < 3) throw AudioBackendException.InvalidScoreHandle()
             totalTicks = summary[0]
@@ -761,7 +806,8 @@ class AndroidPlaybackEngine internal constructor(
         val frameBytes = jniBridge.frameForCursor(scoreHandle, cursorBytes)
         val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
         frame ?: return
-        val snapped = snapTickToLoop(frame.tick)
+        // `frame.tick` and the loop are NOTATED; the player and the click transport are not.
+        val snapped = unrolledTick(forNotated = snapTickToLoop(frame.tick))
         fluidSynthEngine?.allNotesOff()
         player.seekTick(snapped)
         scoreTickIntent = snapped
@@ -783,13 +829,16 @@ class AndroidPlaybackEngine internal constructor(
         val player = playerDriver ?: return
         val total = _totalTimeSeconds.value
         val target = (_currentTimeSeconds.value + seconds).coerceIn(0.0, total)
+        // `total` and `totalTicks` are both NOTATED, so this estimate is a notated tick — but
+        // `frameAtTick` takes the player's UNROLLED coordinates, so it has to be projected first.
         val targetTickEstimate = if (total > 0) {
-            (target / total * totalTicks).toLong()
+            unrolledTick(forNotated = (target / total * totalTicks).toLong())
         } else 0L
         val frameBytes = jniBridge.frameAtTick(scoreHandle, targetTickEstimate)
         val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
         frame ?: return
-        val snapped = snapTickToLoop(frame.tick)
+        // Back the other way: the frame's tick and the loop are notated, the player is not.
+        val snapped = unrolledTick(forNotated = snapTickToLoop(frame.tick))
         fluidSynthEngine?.allNotesOff()
         player.seekTick(snapped)
         scoreTickIntent = snapped
@@ -839,7 +888,7 @@ class AndroidPlaybackEngine internal constructor(
         val toFrame = if (toBytes.isEmpty()) null else FrameCodec.decode(toBytes)
         toFrame ?: return
         if (fromFrame.tick >= toFrame.tick) return
-        _loopRange.value = LoopRange(startTick = fromFrame.tick, endTick = toFrame.tick)
+        armLoop(LoopRange(startTick = fromFrame.tick, endTick = toFrame.tick))
     }
 
     /**
@@ -859,7 +908,7 @@ class AndroidPlaybackEngine internal constructor(
         val endTick = jniBridge.itemEndTick(scoreHandle, ScoreItemIDCodec.encode(throughEndOf))
         if (endTick < 0) return
         if (fromFrame.tick >= endTick) return
-        _loopRange.value = LoopRange(startTick = fromFrame.tick, endTick = endTick)
+        armLoop(LoopRange(startTick = fromFrame.tick, endTick = endTick))
     }
 
     /**
@@ -885,7 +934,7 @@ class AndroidPlaybackEngine internal constructor(
         )
         val endTick = if (endBytes.isEmpty()) totalTicks else FrameCodec.decode(endBytes).tick
         if (fromFrame.tick >= endTick) return
-        _loopRange.value = LoopRange(startTick = fromFrame.tick, endTick = endTick)
+        armLoop(LoopRange(startTick = fromFrame.tick, endTick = endTick))
     }
 
     /**
@@ -895,7 +944,7 @@ class AndroidPlaybackEngine internal constructor(
     fun setLoopFullScore() {
         if (_state.value == PlaybackState.EXPORTING) return
         if (playerDriver == null || totalTicks <= 0) return
-        _loopRange.value = LoopRange(startTick = 0, endTick = totalTicks)
+        armLoop(LoopRange(startTick = 0, endTick = totalTicks))
     }
 
     /**
@@ -905,6 +954,51 @@ class AndroidPlaybackEngine internal constructor(
     fun clearLoop() {
         if (_state.value == PlaybackState.EXPORTING) return
         _loopRange.value = null
+        transportLoop = null
+    }
+
+    /**
+     * The active loop expressed in the TRANSPORT's own coordinates.
+     *
+     * [LoopRange] is a region of the SCORE, so [loopRange] stores — and hands the host — NOTATED
+     * ticks; that is what the host persists and what it maps back through its own measure table.
+     * The transport, though, runs the UNROLLED render, where the same bar sits at one position per
+     * pass and generally at none of its notated ticks. Every comparison against a polled player
+     * position, and every seek that answers one, uses this instead.
+     */
+    private data class TransportLoop(
+        /** Unrolled tick of the loop's start — its FIRST occurrence in playback order. */
+        val startTick: Long,
+        /**
+         * Exclusive unrolled end, derived as `startTick + notated span` rather than by projecting
+         * the notated end tick on its own: within one measure-play the region is contiguous and
+         * slope-1, whereas the end tick's own first occurrence can belong to a LATER pass — a loop
+         * over a repeated bar would then swallow the repeat's second take.
+         */
+        val endTick: Long,
+    )
+
+    @Volatile private var transportLoop: TransportLoop? = null
+
+    /** Store [range] as the score-space loop and cache its projection onto the transport. */
+    private fun armLoop(range: LoopRange) {
+        _loopRange.value = range
+        val start = unrolledTick(forNotated = range.startTick)
+        transportLoop = TransportLoop(
+            startTick = start,
+            endTick = start + (range.endTick - range.startTick),
+        )
+    }
+
+    /**
+     * The UNROLLED transport tick a NOTATED score tick sits at. Identity when no score is prepared
+     * or the native bridge declines the projection (see [JniBridge.unrolledTickForNotated]), which
+     * is what this engine did before the projection existed and stays correct without a repeat.
+     */
+    private fun unrolledTick(forNotated: Long): Long {
+        if (scoreHandle == 0L || forNotated < 0) return forNotated
+        val projected = jniBridge.unrolledTickForNotated(scoreHandle, forNotated)
+        return if (projected < 0) forNotated else projected
     }
 
     /**
@@ -925,7 +1019,13 @@ class AndroidPlaybackEngine internal constructor(
         }
     }
 
-    /** Clamp [tick] into the active loop, or return it unchanged. */
+    /**
+     * Clamp [tick] into the active loop, or return it unchanged.
+     *
+     * NOTATED in and notated out: its callers hand it a frame's tick and go on to look the result up
+     * on the notated timeline, so the comparison belongs on [loopRange] rather than on the
+     * transport's projection. Projecting to the player's coordinates is the caller's next step.
+     */
     private fun snapTickToLoop(tick: Long): Long {
         val loop = _loopRange.value ?: return tick
         return if (tick < loop.startTick || tick >= loop.endTick) loop.startTick else tick
@@ -1084,7 +1184,7 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * Live whole-score transpose in [semitones], clamped to −7…+7. Persists across prepare.
+     * Live whole-score transpose in [semitones], clamped to −12…+12. Persists across prepare.
      * No-op when [state] is [PlaybackState.EXPORTING].
      *
      * Implemented as a tuning shift, not a re-render: [FluidSynthEngine.setMasterTuning] retunes the
@@ -1098,7 +1198,7 @@ class AndroidPlaybackEngine internal constructor(
      */
     fun setTranspose(semitones: Int) {
         if (_state.value == PlaybackState.EXPORTING) return
-        transposeSemitones = semitones.coerceIn(-7, 7)
+        transposeSemitones = semitones.coerceIn(-12, 12)
         applyTuning()
     }
 
@@ -1241,6 +1341,11 @@ class AndroidPlaybackEngine internal constructor(
             metronomeSmfBytes = jniBridge.renderMetronomeMidi(scoreHandle),
             rate = _currentRate.value,
             metronomeResolution = clickResolver.resolve(),
+            // Pitch state travels with the snapshot for the same reason the mixer does: the offline
+            // render builds a fresh synth at concert pitch, and the SMF it loads carries the AUTHORED
+            // pitches because transposed playback is a tuning shift and never a re-render.
+            masterTuningCents = masterTuningCents,
+            transposeSemitones = transposeSemitones,
         )
 
         val smfBytes = jniBridge.renderMidi(scoreHandle)
@@ -1323,8 +1428,11 @@ class AndroidPlaybackEngine internal constructor(
             while (isActive && _state.value == PlaybackState.PLAYING) {
                 val player = playerDriver ?: break
                 var tick = player.currentTick
-                // Loop wrap: if we've advanced past loop.endTick, snap back.
-                val loop = _loopRange.value
+                // Loop wrap: if we've advanced past the loop's end, snap back. `tick` is an
+                // UNROLLED player tick, so the bounds it is measured against — and the tick seeked
+                // back to — have to be the loop's UNROLLED ones. Folding against the notated bounds
+                // wrapped at the wrong instant, and to the wrong place, on any score with a repeat.
+                val loop = transportLoop
                 if (loop != null && tick >= loop.endTick) {
                     fluidSynthEngine?.allNotesOff()
                     player.seekTick(loop.startTick)

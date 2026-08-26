@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 extension NoteDuration {
     /// Replace `.measure` with `.fraction(measureDuration)`. All other

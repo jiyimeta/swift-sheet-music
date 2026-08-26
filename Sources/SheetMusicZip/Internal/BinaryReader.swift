@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Little-endian cursor over a `Data` value. Used by ZipReader to walk
 /// EOCD, central directory, and local file header records.

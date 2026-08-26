@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Identifies a specific clef instance in a `Score` for selection
 /// and editing.

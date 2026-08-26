@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Result of an MSCX / MSCZ parse that surfaces non-fatal anomalies
 /// alongside the parsed score. Returned by

@@ -1,5 +1,5 @@
 // swiftlint:disable file_length
-import Foundation
+import SheetMusicFoundation
 
 /// Multi-element paste: replace the single element at `location`
 /// with a sequence of `elements`, then rebalance the voice's
@@ -51,17 +51,13 @@ public struct PasteVoiceElements: EditCommand {
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard !elements.isEmpty else {
-            throw SheetMusicError.invalidEdit(
-                reason: "PasteVoiceElements: payload is empty",
-            )
+            throw Self.refused(.emptyPayload)
         }
         guard let voice = DurationChangeAlgorithm
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "PasteVoiceElements: no element at \(location)",
-            )
+            throw Self.refused(.targetNotFound(location))
         }
         let division = score.division
         let measureDuration = score
@@ -92,6 +88,7 @@ public struct PasteVoiceElements: EditCommand {
             targetRtick: targetRtick,
             division: division,
             measureDuration: measureDuration,
+            baseLocation: location,
         )
         let replace = ReplaceVoiceElements(
             staff: location.staff,
@@ -131,6 +128,7 @@ public struct PasteVoiceElements: EditCommand {
         targetRtick: Int,
         division: Int,
         measureDuration: Fraction,
+        baseLocation: VoiceElementID,
     ) throws -> (elements: [VoiceElement], tuplets: [Tuplet]) {
         var newElements = voice.elements
         newElements.replaceSubrange(idx ... idx, with: payload)
@@ -166,11 +164,9 @@ public struct PasteVoiceElements: EditCommand {
                         .resolved(in: measureDuration)
                         .ticks(division: division)
                 default:
-                    throw SheetMusicError.invalidEdit(
-                        reason: "PasteVoiceElements: lengthening "
-                            + "blocked by non-timed element at "
-                            + "index \(i)",
-                    )
+                    throw Self.refused(.blockedByUntimedElement(
+                        at: baseLocation.withElementIndex(i),
+                    ))
                 }
                 if consumed + elTicks <= needed {
                     consumed += elTicks
@@ -187,11 +183,10 @@ public struct PasteVoiceElements: EditCommand {
                 }
             }
             if consumed < needed {
-                throw SheetMusicError.invalidEdit(
-                    reason: "PasteVoiceElements: not enough room "
-                        + "in the measure to lengthen "
-                        + "(need \(needed), have \(consumed))",
-                )
+                throw Self.refused(.insufficientRoom(
+                    neededTicks: needed,
+                    availableTicks: consumed,
+                ))
             }
             consumedEndOrigIdx = lastConsumedIdx - payloadInsertDelta
 
@@ -199,6 +194,7 @@ public struct PasteVoiceElements: EditCommand {
                 voice: voice,
                 pasteStart: idx,
                 pasteEnd: consumedEndOrigIdx,
+                baseLocation: baseLocation,
             )
 
             newElements.removeSubrange(
@@ -231,7 +227,10 @@ public struct PasteVoiceElements: EditCommand {
         // might sit inside a tuplet.
         if payloadTicks <= targetTicks {
             try checkTupletOverlap(
-                voice: voice, pasteStart: idx, pasteEnd: idx,
+                voice: voice,
+                pasteStart: idx,
+                pasteEnd: idx,
+                baseLocation: baseLocation,
             )
         }
 
@@ -265,7 +264,10 @@ public struct PasteVoiceElements: EditCommand {
     /// containing it. The full-contain case is allowed (the tuplet
     /// is dropped wholesale by the caller).
     private static func checkTupletOverlap(
-        voice: Voice, pasteStart: Int, pasteEnd: Int,
+        voice: Voice,
+        pasteStart: Int,
+        pasteEnd: Int,
+        baseLocation: VoiceElementID,
     ) throws {
         for t in voice.tuplets {
             let overlap = pasteStart <= t.endIndex
@@ -274,13 +276,12 @@ public struct PasteVoiceElements: EditCommand {
             let fullyContained = pasteStart <= t.startIndex
                 && t.endIndex <= pasteEnd
             if !fullyContained {
-                throw SheetMusicError.invalidEdit(
-                    reason: "PasteVoiceElements: paste range "
-                        + "[\(pasteStart)…\(pasteEnd)] would "
-                        + "partially overlap a tuplet "
-                        + "[\(t.startIndex)…\(t.endIndex)] — "
-                        + "would invalidate its ratio",
-                )
+                throw Self.refused(.tupletOverlap(
+                    rangeStart: pasteStart,
+                    rangeEnd: pasteEnd,
+                    tupletStart: t.startIndex,
+                    tupletEnd: t.endIndex,
+                ))
             }
         }
     }

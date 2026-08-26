@@ -1,7 +1,8 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT
     import CoreGraphics
     import Foundation
     @testable import SheetMusicAndroidJNI
+    @testable import SheetMusicBridgeCore
     import SheetMusicCore
     @testable import SheetMusicLayout
     import Testing
@@ -134,6 +135,7 @@
                 hiddenStaves: [],
                 clefOverrides: [],
                 transposeSemitones: 0,
+                showsLyrics: 1,
             )
             let options = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(options.mode == .page)

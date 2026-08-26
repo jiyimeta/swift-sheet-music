@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 public struct VoiceElementID: Hashable, Sendable {
     public let staff: StaffAddress
@@ -33,6 +33,15 @@ public struct VoiceElementID: Hashable, Sendable {
             measureIndex: id.measureIndex,
             voiceIndex: id.voiceIndex,
             elementIndex: id.elementIndex,
+        )
+    }
+
+    func withElementIndex(_ elementIndex: Int) -> VoiceElementID {
+        VoiceElementID(
+            staff: staff,
+            measureIndex: measureIndex,
+            voiceIndex: voiceIndex,
+            elementIndex: elementIndex,
         )
     }
 }

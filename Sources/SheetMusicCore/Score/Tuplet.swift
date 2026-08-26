@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A tuplet marking inside a voice (triplet, quintuplet, septuplet, …).
 /// C++: `mu::engraving::Tuplet` (subset — we only carry what's needed

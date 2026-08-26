@@ -1,5 +1,5 @@
 // swiftlint:disable file_length
-import Foundation
+import SheetMusicFoundation
 
 /// Drop the tuplet that contains the element at `location` and
 /// replace its members with a single chord/rest of the same total
@@ -38,18 +38,13 @@ public struct RemoveTuplet: EditCommand {
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "RemoveTuplet: no element at \(location)",
-            )
+            throw Self.refused(.targetNotFound(location))
         }
         guard let tuplet = voice.tuplets.first(where: {
             $0.startIndex <= location.elementIndex
                 && location.elementIndex <= $0.endIndex
         }) else {
-            throw SheetMusicError.invalidEdit(
-                reason: "RemoveTuplet: element at \(location) "
-                    + "isn't inside any tuplet of its voice",
-            )
+            throw Self.refused(.wrongElementKind(at: location, expected: .tuplet))
         }
         let division = score.division
         var totalTicks = 0

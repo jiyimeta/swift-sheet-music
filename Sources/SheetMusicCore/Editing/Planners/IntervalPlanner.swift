@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A diatonic interval above a selected chord tone: a third or an octave.
 public enum DiatonicInterval: Sendable {

@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension KeySignature {
@@ -16,7 +16,11 @@ extension KeySignature {
             // count. Our model only stores fifths, so treat them as no sharps/flats.
             concertKey = 0
         } else {
-            throw SheetMusicError.malformedScore(reason: "KeySig missing <concertKey>/<accidental>")
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "mscx.keySig.missingConcertKeyOrAccidental",
+                message: "KeySig missing <concertKey>/<accidental>",
+                location: "KeySig",
+            ))
         }
         var key = KeySignature(concertKey: concertKey)
         key.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)

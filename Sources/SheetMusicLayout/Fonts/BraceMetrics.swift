@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Brace SMuFL glyph metrics needed at layout time.
 ///

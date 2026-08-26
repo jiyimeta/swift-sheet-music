@@ -1,4 +1,5 @@
 import Foundation
+import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicEditWire
 import SheetMusicLayout
@@ -52,19 +53,8 @@ import SheetMusicLayout
 /// that rule.
 ///
 /// Returns an empty `Data` when the score handle is unknown, the layout document is not cached, or the tap hit
-/// no selectable item. On a hit, returns the `ScoreItemIDCodec` encoding of the item — full-score-addressed for
-/// `.note`/`.rest`, per `engineCursorForFilteredTap`'s own switch.
-///
-/// **Exception**: a `.tuplet` hit is returned with its **filtered** staff address unchanged.
-/// `engineCursorForFilteredTap` (`Score+FilteredTapCursor.swift`) passes `.tuplet` (and `.clef`, which
-/// `editingHitTest` never returns) through its switch without re-addressing — a pre-existing gap in that
-/// shared helper, not something introduced here. With a hidden staff ahead of a tuplet's own staff in the
-/// same part, a caller that feeds this straight into an edit intent targeting `TupletID.staff` would hit the
-/// wrong staff. `nativeEditingCaretFrame` and `nativeEncodeDrawProgram` both special-case `.tuplet` ids and
-/// skip re-addressing them for exactly this reason: the id never left filtered addressing, so translating it
-/// again would test it against `hiddenStaves` (a set of full-score addresses) before that pass-through switch
-/// gets a chance to apply, and a filtered address can coincide numerically with an unrelated hidden full-score
-/// address.
+/// no selectable item. On a hit, returns the `ScoreItemIDCodec` encoding of the item — full-score-addressed by
+/// `engineCursorForFilteredTap`, including `.tuplet` hits.
 ///
 /// Not `@available`-annotated: the swift-java jextract `@_cdecl` wrapper that calls this is generated without
 /// one, so the entry point must compile at the package's macOS 14 / iOS 17 baseline. The macOS 15 requirement
@@ -133,25 +123,14 @@ public func nativeEditingCaretFrame(
         return Data()
     }
 
-    let filteredItem: ScoreItemID
-    if case .tuplet = item {
-        // `.tuplet` ids never leave filtered addressing (`Score+FilteredTapCursor.swift` passes them through
-        // both directions unchanged), so they must not be handed to `translateCursorForHiddenStaves` — its
-        // first check tests the id's staff against `hiddenStaves`, a set of FULL-score addresses, and a
-        // filtered address can coincide with one by pure numeric accident (e.g. a later staff renumbers down
-        // to the same index an earlier hidden staff occupied), which would wrongly discard the id here.
-        filteredItem = item
-    } else {
-        guard case let .item(translated) = score.translateCursorForHiddenStaves(
-            .item(item), hiddenStaves: entry.hiddenStaves,
-        ) else {
-            // A `.beat` fallback means `item`'s staff is hidden — there is no laid-out frame for it to caret
-            // against (a host cannot have selected it in the first place, since `nativeEditingHitTest` only
-            // ever hits items the filtered document actually renders). Refuse rather than resolve against the
-            // wrong staff.
-            return Data()
-        }
-        filteredItem = translated
+    guard case let .item(filteredItem) = score.translateCursorForHiddenStaves(
+        .item(item), hiddenStaves: entry.hiddenStaves,
+    ) else {
+        // A `.beat` fallback means `item`'s staff is hidden — there is no laid-out frame for it to caret
+        // against (a host cannot have selected it in the first place, since `nativeEditingHitTest` only
+        // ever hits items the filtered document actually renders). Refuse rather than resolve against the
+        // wrong staff.
+        return Data()
     }
 
     let mmToPt = 72.0 / 25.4
@@ -216,19 +195,9 @@ public func nativeEncodeDrawProgram(
 
     var expandedIDs: Set<ScoreItemID> = []
     for id in decoded.ids {
-        let filtered: ScoreItemID
-        if case .tuplet = id {
-            // See the matching comment in `nativeEditingCaretFrame`: a `.tuplet` id is already
-            // filtered-addressed and must skip `translateCursorForHiddenStaves` entirely, or a filtered
-            // address that numerically coincides with an unrelated FULL-score hidden-staff address gets
-            // dropped as if it belonged to a hidden staff.
-            filtered = id
-        } else {
-            guard case let .item(translated) = score.translateCursorForHiddenStaves(
-                .item(id), hiddenStaves: entry.hiddenStaves,
-            ) else { continue }
-            filtered = translated
-        }
+        guard case let .item(filtered) = score.translateCursorForHiddenStaves(
+            .item(id), hiddenStaves: entry.hiddenStaves,
+        ) else { continue }
         expandedIDs.formUnion(SelectionExpansion.expand(filtered, in: entry.filteredScore))
     }
 

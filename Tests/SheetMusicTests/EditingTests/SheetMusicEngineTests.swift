@@ -17,6 +17,21 @@ struct SheetMusicEngineTests {
 
     @Test("the version string matches the released version")
     func versionMatchesRelease() {
-        #expect(SheetMusicEngine.version == "1.13.1")
+        // A hand-edited literal is the only thing enforcing the bump; there is no automated
+        // release process that touches it. The in-flight build carried a `-w9` suffix and was
+        // published only to a local `~/.m2`, so it stamps differently from this tagged one — see
+        // the constant's own doc for why that difference is load-bearing.
+        #expect(SheetMusicEngine.version == "2.0.0")
+    }
+
+    @Test("the stamp is the FNV-1a of the version string")
+    func stampMatchesTheWrittenOutValue() {
+        // Written out, not recomputed: a host compares its own compiled-in expectation against
+        // this number over JNI, and both sides deriving it from the same expression would make a
+        // wrong hash agree with itself. 1.13.1 was 7339729597660573583 and 1.15.0 was
+        // 3598528033961937950, so the three are visibly distinct. The digest is unsigned and this
+        // is `Int64`, so a release whose hash lands above 2^63 reads negative — 2.0.0 is the first
+        // one that does. Nothing compares it for order; only for equality.
+        #expect(SheetMusicEngine.versionStamp == -7_874_815_785_480_828_763)
     }
 }

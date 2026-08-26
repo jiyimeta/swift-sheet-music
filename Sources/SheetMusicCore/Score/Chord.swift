@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A simultaneously-sounding group of notes with a shared duration.
 /// C++: `mu::engraving::Chord` (subset).

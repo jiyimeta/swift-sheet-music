@@ -1,4 +1,5 @@
 import Foundation
+import SheetMusicBridgeCore
 import SheetMusicCore
 
 /// JNI entry point for Kotlin `SheetMusicJNI.nativeCursorAdvancedByBeats(...)`. Advances `fromCursorBytes` by

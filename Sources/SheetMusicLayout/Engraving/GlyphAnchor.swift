@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Offset that converts a SMuFL glyph emitted with SwiftUI's `.center`
 /// anchor into a baseline-leading anchor (the position

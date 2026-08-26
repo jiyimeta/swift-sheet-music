@@ -1,0 +1,27 @@
+{
+  "probes" : [
+    {
+      "activeVoice" : 0,
+      "caret" : {
+        "heightMM" : 14.816666666666665,
+        "widthMM" : 3,
+        "xMM" : 30.188958333333332,
+        "yMM" : 33.3375
+      },
+      "hit" : {
+        "elementIndex" : 0,
+        "kind" : "note",
+        "measureIndex" : 0,
+        "noteIndexInChord" : 0,
+        "partIndex" : 0,
+        "pitch" : 60,
+        "staffIndexInPart" : 0,
+        "tpc" : 14,
+        "voiceIndex" : 0
+      },
+      "minimumWidthMM" : 3,
+      "xMM" : 31.176736111111108,
+      "yMM" : 48.15416666666666
+    }
+  ]
+}

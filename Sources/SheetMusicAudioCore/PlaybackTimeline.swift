@@ -1,6 +1,17 @@
-// swiftlint:disable file_length
-import Foundation
 import SheetMusicCore
+import SheetMusicMIDI
+
+/// Precedence of two tempo changes landing on the same tick, lowest applied first. Mirrors the
+/// close → `<Tempo>` → open ordering `MidiRenderer.renderTrack`'s stable sort gives the SMF, so the
+/// notated timeline resolves a collision exactly as the audio does.
+private enum TempoRank {
+    static let fermataClose = 0
+    static let score = 1
+    static let fermataOpen = 2
+}
+
+// swiftlint:disable file_length
+import SheetMusicFoundation
 
 /// A pre-computed map from playback time → cursor position, used by
 /// `PlaybackEngine` to drive a MuseScore-style cursor that snaps
@@ -25,11 +36,26 @@ public struct PlaybackTimeline: Sendable, Equatable {
         public let tick: Int
         public let timeSeconds: TimeInterval
         public let cursor: ScoreCursor
+        /// When this frame's item is actually HEARD, which is `timeSeconds` for everything except a
+        /// chord swing pushes off the beat: swing starts an up-beat late without moving any bar or
+        /// beat, so the tick↔seconds clock is unaffected and only the audible onset moves.
+        ///
+        /// `frame(atTime:)` — the cursor's own lookup — searches on this, so the playhead steps onto
+        /// a swung eighth when it sounds rather than up to a tenth of a beat early. Everything that
+        /// addresses the score by position (`frame(atTick:)`, `seconds(atTick:)`, `totalSeconds`,
+        /// the loop and seek plumbing built on them) keeps using `timeSeconds` and is unchanged.
+        public let soundedTimeSeconds: TimeInterval
 
-        public init(tick: Int, timeSeconds: TimeInterval, cursor: ScoreCursor) {
+        public init(
+            tick: Int,
+            timeSeconds: TimeInterval,
+            cursor: ScoreCursor,
+            soundedTimeSeconds: TimeInterval? = nil,
+        ) {
             self.tick = tick
             self.timeSeconds = timeSeconds
             self.cursor = cursor
+            self.soundedTimeSeconds = soundedTimeSeconds ?? timeSeconds
         }
     }
 
@@ -61,20 +87,25 @@ public struct PlaybackTimeline: Sendable, Equatable {
     /// tick column.
     public let measureStartTicks: [Int]
 
-    /// Latest frame whose `timeSeconds` is at or before `t`. Used by
-    /// the cursor poller — returns `nil` for `t` before the first
+    /// Latest frame whose `soundedTimeSeconds` is at or before `t`. Used
+    /// by the cursor poller — returns `nil` for `t` before the first
     /// event so the cursor can stay hidden until playback actually
     /// starts.
+    ///
+    /// Searches the AUDIBLE onset rather than the grid one so a swung
+    /// eighth is highlighted when it is heard; the two are identical on
+    /// any score without swing. `init` keeps the sequence non-decreasing
+    /// in this key, so the binary search stays valid.
     public func frame(atTime t: TimeInterval) -> Frame? {
-        guard !frames.isEmpty, t >= frames[0].timeSeconds else {
+        guard !frames.isEmpty, t >= frames[0].soundedTimeSeconds else {
             return nil
         }
         // Binary search for the largest index i with
-        // frames[i].timeSeconds <= t.
+        // frames[i].soundedTimeSeconds <= t.
         var lo = 0, hi = frames.count - 1, best = 0
         while lo <= hi {
             let mid = (lo + hi) / 2
-            if frames[mid].timeSeconds <= t {
+            if frames[mid].soundedTimeSeconds <= t {
                 best = mid
                 lo = mid + 1
             } else {
@@ -227,8 +258,10 @@ extension PlaybackTimeline {
             let cursor: ScoreCursor
         }
         var pending: [Pending] = []
-        // (tick, microseconds-per-quarter). Default 120 BPM = 500_000.
-        var tempoEvents: [(tick: Int, mpq: Int)] = []
+        // (tick, microseconds-per-quarter, rank). Default 120 BPM =
+        // 500_000. `rank` breaks ties at one tick the way the
+        // renderer's stable sort does — see `TempoRank`.
+        var tempoEvents: [(tick: Int, mpq: Int, rank: Int)] = []
         var maxEndTick = 0
         var itemTicks: [ScoreItemID: Int] = [:]
         var itemEndTicks: [ScoreItemID: Int] = [:]
@@ -288,6 +321,16 @@ extension PlaybackTimeline {
                     switch el {
                     case let .chord(c):
                         spineTick += c.duration
+                            .resolved(in: measureDuration)
+                            .ticks(division: division)
+                    case let .measureRepeat(r):
+                        // A measure-repeat bar carries no chords of its own — `MidiRenderer`
+                        // splices the source measure's notes in at render time and
+                        // `measureTicks` counts the marker's own duration. Counting it here
+                        // too is what keeps `measureStarts` equal to the MIDI measure bases;
+                        // without it every measure after a `𝄎` sat one bar's worth of ticks
+                        // early, so the cursor ran a whole measure ahead of the audio.
+                        spineTick += r.duration
                             .resolved(in: measureDuration)
                             .ticks(division: division)
                     case let .breath(b) where b.pause > 0:
@@ -426,6 +469,16 @@ extension PlaybackTimeline {
                                 (b.pause * bps * Double(division))
                                     .rounded(),
                             )
+                        case let .measureRepeat(r):
+                            // No frame: the bar engraves a `𝄎` rather than notes, so the
+                            // cursor's stops in it are the `.beat` entries added below. The
+                            // tick still has to advance — `maxEndTick` (and with it
+                            // `totalTicks` / `totalSeconds`) is taken from this walker, and a
+                            // score ending on a measure repeat would otherwise report its
+                            // length one bar short.
+                            tick += r.duration
+                                .resolved(in: measureDuration)
+                                .ticks(division: division)
                         default:
                             break
                         }
@@ -488,10 +541,25 @@ extension PlaybackTimeline {
                 let tick = measureStart + positioned.position.ticks(
                     division: division,
                 )
-                tempoEvents.append((tick, t.microsecondsPerQuarter))
+                tempoEvents.append((tick, t.microsecondsPerQuarter, TempoRank.score))
             }
         }
-        tempoEvents.sort { $0.tick < $1.tick }
+        // Fold in the fermata holds. A fermata carries no notated duration — the SMF
+        // `MidiRenderer.render` produces realises the hold by slowing the tempo across the held
+        // chord and restoring it after — so a timeline built from `<Tempo>` markers alone runs
+        // AHEAD of the audio by the hold's extra time, permanently, from the first fermata onward.
+        // Taking the bookends from the renderer keeps one source of truth for how long a hold is.
+        for bookend in MidiRenderer.fermataTempoBookends(score: score) {
+            tempoEvents.append((
+                bookend.tick,
+                bookend.microsecondsPerQuarter,
+                bookend.isOpen ? TempoRank.fermataOpen : TempoRank.fermataClose,
+            ))
+        }
+        // Last event at a tick wins in `advance(to:)`, so the rank order IS the precedence order:
+        // a `<Tempo>` landing where a hold ends overrides the restore, and a hold opening where one
+        // lands overrides the marker. Same resolution the renderer's stable sort gives the SMF.
+        tempoEvents.sort { ($0.tick, $0.rank) < ($1.tick, $1.rank) }
 
         // Walk pending entries, advancing time using the tempo map.
         var frames: [Frame] = []
@@ -525,19 +593,44 @@ extension PlaybackTimeline {
             lastTick = targetTick
         }
 
+        // Swing moves an up-beat's ATTACK without moving the beat it belongs to, so it changes no
+        // tick and no tempo — only when the frame's own item is heard. Carried on the frame rather
+        // than folded into `currentTime`, so the tick↔seconds clock every other caller reads is
+        // untouched.
+        let swingShifts = MidiRenderer.swingOnsetShifts(score: score)
         for entry in pending {
             advance(to: entry.tick)
             if entry.tick != lastEmittedTick {
+                var sounded = currentTime
+                if case let .item(id) = entry.cursor, let shift = swingShifts[id], shift > 0 {
+                    sounded += secondsForTicks(shift, mpq: currentMpq, division: division)
+                }
                 frames.append(Frame(
                     tick: entry.tick,
                     timeSeconds: currentTime,
                     cursor: entry.cursor,
+                    soundedTimeSeconds: sounded,
                 ))
                 lastEmittedTick = entry.tick
             }
         }
         // End time: advance to the last tick reached by any voice.
         advance(to: maxEndTick)
+
+        // Keep `soundedTimeSeconds` non-decreasing so `frame(atTime:)`'s binary search stays valid.
+        // A shift is bounded by half its swung pair and the next frame is at least the pair's
+        // midpoint away, so this only bites on a pathological swing ratio — but the search must not
+        // depend on that.
+        for index in frames.indices.dropFirst() where
+            frames[index].soundedTimeSeconds < frames[index - 1].soundedTimeSeconds
+        {
+            frames[index] = Frame(
+                tick: frames[index].tick,
+                timeSeconds: frames[index].timeSeconds,
+                cursor: frames[index].cursor,
+                soundedTimeSeconds: frames[index - 1].soundedTimeSeconds,
+            )
+        }
 
         self.frames = frames
         totalSeconds = currentTime

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Paper size and per-edge margins, in MuseScore's native units.
 /// All linear values are **inches**. The right margin is *not* stored

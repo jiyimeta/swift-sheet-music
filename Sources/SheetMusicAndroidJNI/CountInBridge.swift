@@ -1,5 +1,6 @@
 import Foundation
 import SheetMusicAudioCore
+import SheetMusicBridgeCore
 import SheetMusicCore
 
 /// JNI entry point exposed via swift-java for the Kotlin

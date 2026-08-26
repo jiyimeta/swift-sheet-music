@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Errors thrown by `PlaybackEngine.exportAudioFile(...)`.
 ///

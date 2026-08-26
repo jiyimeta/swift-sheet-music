@@ -602,6 +602,40 @@ extension PDFImporter {
     /// for.
     static let flagAttachToleranceInSpaces: CGFloat = 0.5
 
+    /// The same question in Y, where the answer is different — and where
+    /// 0.5 sp was silently costing every 64th note its flag.
+    ///
+    /// The measurement above ("53,058 of ~54,000 within 0.04 sp") is a
+    /// statement about the POPULATION, not about every flag: the ~940 it
+    /// leaves out are the high-level flags, whose glyph origin sits well
+    /// off the stem's bare end because the glyph has to reach back along
+    /// the stem to hang four hooks. Measured per level on `cov_flags`
+    /// (32nd + 64th) and `extz_Now_is_the_time` (8th + 16th), both at
+    /// spatium 4.56pt:
+    ///
+    /// | flag | offset from the bare end |
+    /// |---|---|
+    /// | 8th | 0.18 sp |
+    /// | 16th | 0.41–0.47 sp |
+    /// | 32nd | 0.17–0.20 sp |
+    /// | 64th | **0.94–1.17 sp** |
+    ///
+    /// So the offset is NOT monotonic in level — it is a property of each
+    /// glyph's own anchoring — and a per-level scale would be fitting a
+    /// curve to four points. What the numbers do support is a single
+    /// bound: 1.5 sp sits above the largest observed own-flag offset and
+    /// far below the 3.1 sp where the next population (a different note's
+    /// flag in the same column) begins.
+    ///
+    /// Note how close 16th already was to the old 0.5: this was not a
+    /// 64th-only cliff, it was a gate one hair from cutting 16ths too.
+    ///
+    /// X keeps the tighter 0.5 sp. It has a different neighbour distance
+    /// (own 0.1 sp, nearest neighbour 1.1 sp), so widening it to 1.5 would
+    /// admit the adjacent note's flag — which is exactly the flag theft
+    /// the x-gate was introduced to stop.
+    static let flagAttachYToleranceInSpaces: CGFloat = 1.5
+
     private static func applyFlags(
         base: NoteDuration,
         glyphs: [ClassifiedGlyph],
@@ -625,6 +659,7 @@ extension PDFImporter {
         // notehead — is what a flag is matched against.
         let bareEnd = stemPointsUp ? stem.rect.maxY : stem.rect.minY
         let attachTol = flagAttachToleranceInSpaces * spatium
+        let attachTolY = flagAttachYToleranceInSpaces * spatium
         var level = 0
         for g in glyphs {
             // Staff-scope the flag match: a vertically-aligned adjacent-staff
@@ -646,8 +681,12 @@ extension PDFImporter {
             // neighbour's flag that lands at the right height but hangs off an
             // oppositely-stemmed note is rejected (the 君と kick 8→16 theft).
             guard isUp == stemPointsUp else { continue }
-            // …and it must sit AT this stem's bare end.
-            guard abs(g.geometry.origin.y - bareEnd) <= attachTol else { continue }
+            // …and it must sit AT this stem's bare end — in Y with the
+            // looser bound, because a 64th flag's origin legitimately
+            // sits ~1 staff space back along the stem (see
+            // `flagAttachYToleranceInSpaces`). The tight bound stays on X,
+            // which is what keeps a neighbour's flag out.
+            guard abs(g.geometry.origin.y - bareEnd) <= attachTolY else { continue }
             level = max(level, lvl)
         }
         var d = base

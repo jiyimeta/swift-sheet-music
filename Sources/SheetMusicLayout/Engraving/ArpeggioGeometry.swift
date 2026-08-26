@@ -1,7 +1,7 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
+import SheetMusicFoundation
 
 /// Vertical stack of arpeggio "wiggle" SMuFL segments drawn to the
 /// left of a chord, with an optional arrow glyph at one end.

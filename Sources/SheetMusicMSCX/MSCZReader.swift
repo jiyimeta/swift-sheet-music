@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicZip
 
 /// Reads `.mscz` (ZIP) containers and returns the `Score` contained in
@@ -24,7 +24,11 @@ public enum MSCZReader {
             mscxData = try reader.read(path: mainPath)
         } catch let error as ZipError {
             throw SheetMusicError.corruptedContainer(
-                reason: "failed to extract \(mainPath): \(error)",
+                ScoreFault(
+                    code: error.faultCode,
+                    message: "failed to extract \(mainPath): \(error)",
+                    location: mainPath,
+                ),
             )
         }
         let score = try MSCXParser.parse(mscxData)
@@ -57,7 +61,11 @@ public enum MSCZReader {
             mscxData = try reader.read(path: mainPath)
         } catch let error as ZipError {
             throw SheetMusicError.corruptedContainer(
-                reason: "failed to extract \(mainPath): \(error)",
+                ScoreFault(
+                    code: error.faultCode,
+                    message: "failed to extract \(mainPath): \(error)",
+                    location: mainPath,
+                ),
             )
         }
         let inner = try MSCXParser.parseWithDiagnostics(mscxData)
@@ -84,7 +92,10 @@ public enum MSCZReader {
             return try ZipReader(data: data)
         } catch let error as ZipError {
             throw SheetMusicError.corruptedContainer(
-                reason: "could not open ZIP: \(error)",
+                ScoreFault(
+                    code: error.faultCode,
+                    message: "could not open ZIP: \(error)",
+                ),
             )
         }
     }
@@ -99,7 +110,10 @@ public enum MSCZReader {
             .sorted()
         guard let first = candidates.first else {
             throw SheetMusicError.corruptedContainer(
-                reason: "no main .mscx entry found in archive",
+                ScoreFault(
+                    code: "mscz.noMainEntry",
+                    message: "no main .mscx entry found in archive",
+                ),
             )
         }
         return first

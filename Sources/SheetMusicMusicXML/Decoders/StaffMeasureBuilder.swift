@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Accumulator for one staff's measure. Collects per-voice element buckets
 /// where the "voice" key is an MSCX-style index derived from first-seen

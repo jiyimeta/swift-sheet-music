@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import CoreGraphics
     import Foundation
     @testable import SheetMusicCore
@@ -14,7 +14,7 @@
             // The sticky-header context keeps one label per staff so each
             // staff line in the continuous-view pane gets its own name.
             let url = try #require(
-                Bundle.module.url(
+                TestResources.url(
                     forResource: "multiPartMixedStaves",
                     withExtension: "mscx",
                 ),
@@ -41,7 +41,7 @@
             // Part. Piano (multi-staff) gets a single label centered
             // between its two staves.
             let url = try #require(
-                Bundle.module.url(
+                TestResources.url(
                     forResource: "multiPartMixedStaves",
                     withExtension: "mscx",
                 ),

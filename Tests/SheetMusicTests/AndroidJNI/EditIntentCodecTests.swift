@@ -120,6 +120,9 @@ struct EditIntentCodecTests {
             // Shares `SlotDurationIntentWire` with `.setRestDuration` / `.setChordDuration`, so the round trip is
             // really checking that the DISCRIMINATOR carries the difference — the payload bytes are identical.
             .writeRest(at: slot, duration: .half),
+            // Appended for M1 solo scratch creation — indices 14…15.
+            .insertMeasure(at: 3),
+            .deleteMeasure(at: 0),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -148,6 +151,9 @@ struct EditIntentCodecTests {
         // telling them apart on the wire — and confusing them would silently turn "make this slot a rest of this
         // length" into "re-time the rest already here", which over a note does nothing at all.
         #expect(EditIntentCodec.encode(.setRestDuration(at: slot, duration: .half))[1] == 1)
+        // Appended for M1 solo scratch creation.
+        #expect(EditIntentCodec.encode(.insertMeasure(at: 0))[1] == 14)
+        #expect(EditIntentCodec.encode(.deleteMeasure(at: 0))[1] == 15)
     }
 
     /// An accidental spelling this build does not know must fail the decode, not decode as "no accidental" —

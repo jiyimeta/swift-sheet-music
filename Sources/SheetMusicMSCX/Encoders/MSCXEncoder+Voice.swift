@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Voice {
@@ -249,11 +249,15 @@ extension Voice {
                     && other.endIndex >= current.endIndex
                 if !(disjoint || currentContainsOther || otherContainsCurrent) {
                     throw SheetMusicError.malformedScore(
-                        reason: "Tuplets [\(current.startIndex)..."
-                            + "\(current.endIndex)] and [\(other.startIndex)..."
-                            + "\(other.endIndex)] overlap without "
-                            + "nesting; MSCXEncoder accepts only "
-                            + "properly nested or disjoint tuplets.",
+                        ScoreFault(
+                            code: "mscx.encoder.tupletsOverlap",
+                            message: "Tuplets [\(current.startIndex)..."
+                                + "\(current.endIndex)] and [\(other.startIndex)..."
+                                + "\(other.endIndex)] overlap without "
+                                + "nesting; MSCXEncoder accepts only "
+                                + "properly nested or disjoint tuplets.",
+                            location: "\(current.startIndex)...\(current.endIndex)",
+                        ),
                     )
                 }
             }

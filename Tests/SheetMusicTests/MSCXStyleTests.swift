@@ -9,7 +9,7 @@ struct MSCXStyleTests {
     /// We assert the parsed values match the literal XML to within
     /// 1e-5 (the file uses 6-digit fixed point).
     @Test func parsesAllPageGeometryTags() throws {
-        let url = try #require(Bundle.module.url(
+        let url = try #require(TestResources.url(
             forResource: "testArpeggio", withExtension: "mscx",
         ))
         let data = try Data(contentsOf: url)

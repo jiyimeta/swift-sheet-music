@@ -1,8 +1,8 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Pure geometry for spanner segments — slurs, voltas, hairpins,
 /// pedals, ottavas, and generic text lines. Each spanner kind exposes

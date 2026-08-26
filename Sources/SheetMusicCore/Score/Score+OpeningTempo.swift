@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 extension Score {
     /// Quarter-note BPM at the score's opening. Equivalent to `effectiveQuarterBpm(at: nil)`.

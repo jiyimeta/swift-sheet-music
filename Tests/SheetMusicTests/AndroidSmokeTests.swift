@@ -19,9 +19,9 @@ struct AndroidSmokeTests {
         #expect(root.children.first?.attributes["attr"] == "value")
     }
 
-    @Test("Bundle.module resolves test resources")
+    @Test("test resource helper resolves bundled resources")
     func bundleModule() {
-        let url = Bundle.module.url(forResource: "midi01", withExtension: "mscx")
-        #expect(url != nil, "midi01.mscx must be locatable via Bundle.module")
+        let url = TestResources.url(forResource: "midi01", withExtension: "mscx")
+        #expect(url != nil, "midi01.mscx must be locatable via TestResources")
     }
 }

@@ -7,10 +7,10 @@ import Testing
 struct MSCZReaderTests {
     @Test func parseMatchesDirectMSCX() throws {
         let mscz = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscz"),
+            TestResources.url(forResource: "midi01", withExtension: "mscz"),
         )
         let mscx = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
         )
         let msczScore = try MSCZReader.parse(Data(contentsOf: mscz))
         let mscxScore = try MSCXParser.parse(Data(contentsOf: mscx))
@@ -39,11 +39,11 @@ struct MSCZReaderTests {
             _ = try MSCZReader.parse(empty)
             Issue.record("expected throw")
         } catch let error as SheetMusicError {
-            guard case let .corruptedContainer(reason) = error else {
+            guard case let .corruptedContainer(fault) = error else {
                 Issue.record("wrong case: \(error)")
                 return
             }
-            #expect(reason.lowercased().contains("mscx"))
+            #expect(fault.code == "mscz.noMainEntry")
         } catch {
             Issue.record("unexpected error: \(error)")
         }
@@ -51,7 +51,7 @@ struct MSCZReaderTests {
 
     @Test func parseContentsOfURLMatchesDataOverload() throws {
         let url = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscz"),
+            TestResources.url(forResource: "midi01", withExtension: "mscz"),
         )
         let viaData = try MSCZReader.parse(Data(contentsOf: url))
         let viaURL = try MSCZReader.parse(contentsOf: url)
@@ -248,7 +248,7 @@ struct MSCZReaderTests {
         // Zip only contains "renamed.mscx" at root — the rule-2 fallback
         // in MSCZReader should still locate it.
         let mscx = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
         )
         let mscxBytes = try Data(contentsOf: mscx)
         let msczBytes = try buildArchiveData(entries: [("renamed.mscx", mscxBytes)])

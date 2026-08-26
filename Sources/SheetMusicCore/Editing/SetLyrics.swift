@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Replaces the lyrics array on a chord. Inverse is another
 /// `SetLyrics` carrying the prior lyrics.
@@ -29,10 +29,7 @@ public struct SetLyrics: EditCommand {
         guard case var .chord(chord) = score[location],
               !chord.notes.isEmpty
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "SetLyrics: element at \(location) "
-                    + "is not a chord (rests can't carry lyrics)",
-            )
+            throw Self.refused(.wrongElementKind(at: location, expected: .chord))
         }
         let prior = chord.lyrics
         chord.lyrics = lyrics

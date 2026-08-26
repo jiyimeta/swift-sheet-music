@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// One SMF track: an ordered list of timed events.
 public struct MidiTrack: Sendable, Equatable {

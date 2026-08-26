@@ -248,6 +248,7 @@ extension LayoutEngine {
                     graceNoteMag: context.options.graceNoteMag,
                     systemElements: systemElementsForStaff,
                     showsInvisibleElements: context.options.showsInvisibleElements,
+                    lyricsVisible: context.options.lyricsVisible,
                     measureDuration: measDuration,
                 )
                 let els: [LayoutElement]

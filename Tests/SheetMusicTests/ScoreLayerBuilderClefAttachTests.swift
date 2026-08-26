@@ -18,7 +18,7 @@
         func staffDefaultClefAttached() throws {
             _ = BravuraFont.register
             let url = try #require(
-                Bundle.module.url(
+                TestResources.url(
                     forResource: "multiPartMixedStaves",
                     withExtension: "mscx",
                 ),

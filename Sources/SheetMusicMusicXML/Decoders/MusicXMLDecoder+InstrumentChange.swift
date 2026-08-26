@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 /// MusicXML has no single equivalent of `<InstrumentChange>`. Synthesize

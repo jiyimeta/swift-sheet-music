@@ -1,4 +1,4 @@
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     import Foundation
     @testable import SheetMusicAudio
     @testable import SheetMusicAudioApple
@@ -69,7 +69,9 @@
                 // Wrap back to the loop start. This is the path the bug
                 // lived in: it must re-assert the live mixer state after the
                 // rewind, restoring the user's muted-metronome choice.
-                engine.wrapToLoopStart(LoopRange(startTick: 0, endTick: 480))
+                engine.wrapToLoopStart(PlaybackEngine.TransportLoop(
+                    startTick: 0, endTick: 480, startSeconds: 0, endSeconds: 0.5,
+                ))
 
                 #expect(engine.exportEngineSnapshot().metronomeEnabled == false)
             }

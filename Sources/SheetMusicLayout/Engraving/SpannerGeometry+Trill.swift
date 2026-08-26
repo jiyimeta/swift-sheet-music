@@ -1,8 +1,8 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Trill-line geometry: which SMuFL glyphs a `TrillType` is built
 /// from, and how they tile along the segment.

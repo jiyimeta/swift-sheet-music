@@ -119,7 +119,7 @@ struct KeySignatureStepsTests {
     }
 }
 
-#if !os(Android)
+#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     /// End-to-end: the layout engine must hand the renderers the clef
     /// that is in force, so an F-clef staff's flats are drawn a line
     /// lower than a G-clef staff's.

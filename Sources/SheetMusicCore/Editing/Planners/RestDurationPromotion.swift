@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// The write-side counterpart of `FullMeasureRestCollapse`: a rest that fills its bar from beat one is spelled
 /// `.measure`, not as whatever literal length happens to add up to the same ticks.

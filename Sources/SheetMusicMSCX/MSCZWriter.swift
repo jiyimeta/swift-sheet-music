@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicZip
 
 /// Packages already-serialized `.mscx` XML bytes into a minimal `.mscz`
@@ -34,7 +34,10 @@ public enum MSCZWriter {
             try writer.add(path: mainFileName, data: mscxData, method: .deflate)
         } catch let error as ZipError {
             throw SheetMusicError.corruptedContainer(
-                reason: "failed to add entry: \(error)",
+                ScoreFault(
+                    code: error.faultCode,
+                    message: "failed to add entry: \(error)",
+                ),
             )
         }
         return writer.finish()
@@ -47,7 +50,7 @@ public enum MSCZWriter {
     ) throws {
         let bytes = try write(mscxData: mscxData, mainFileName: mainFileName)
         do {
-            try bytes.write(to: url, options: .atomic)
+            try bytes.write(to: url, options: .atomicIfAvailable)
         } catch {
             throw SheetMusicError.ioError(url: url, underlying: error)
         }
@@ -65,7 +68,7 @@ public enum MSCZWriter {
     ) throws {
         let bytes = try write(score: score, mainFileName: mainFileName)
         do {
-            try bytes.write(to: url, options: .atomic)
+            try bytes.write(to: url, options: .atomicIfAvailable)
         } catch {
             throw SheetMusicError.ioError(url: url, underlying: error)
         }
@@ -87,7 +90,7 @@ public enum MSCZWriter {
             score: score, options: options, mainFileName: mainFileName,
         )
         do {
-            try bytes.write(to: url, options: .atomic)
+            try bytes.write(to: url, options: .atomicIfAvailable)
         } catch {
             throw SheetMusicError.ioError(url: url, underlying: error)
         }
@@ -96,12 +99,19 @@ public enum MSCZWriter {
     private static func validate(mainFileName: String) throws {
         guard !mainFileName.isEmpty else {
             throw SheetMusicError.corruptedContainer(
-                reason: "mainFileName must not be empty",
+                ScoreFault(
+                    code: "mscz.mainFileName.empty",
+                    message: "mainFileName must not be empty",
+                ),
             )
         }
         guard !mainFileName.contains("/") else {
             throw SheetMusicError.corruptedContainer(
-                reason: "mainFileName must not contain '/': \(mainFileName)",
+                ScoreFault(
+                    code: "mscz.mainFileName.containsSlash",
+                    message: "mainFileName must not contain '/': \(mainFileName)",
+                    location: mainFileName,
+                ),
             )
         }
     }
@@ -121,12 +131,23 @@ public enum MSCZWriter {
         """.utf8)
     }
 
+    /// A single pass rather than five `replacingOccurrences` calls, which
+    /// are umbrella-only and so unavailable on wasm. Output is unchanged:
+    /// the chained form replaced `&` first, so the ampersands the later
+    /// replacements introduced were never re-escaped either.
     private static func xmlAttributeEscape(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&apos;")
+        var escaped = ""
+        escaped.reserveCapacity(value.count)
+        for character in value {
+            switch character {
+            case "&": escaped += "&amp;"
+            case "<": escaped += "&lt;"
+            case ">": escaped += "&gt;"
+            case "\"": escaped += "&quot;"
+            case "'": escaped += "&apos;"
+            default: escaped.append(character)
+            }
+        }
+        return escaped
     }
 }

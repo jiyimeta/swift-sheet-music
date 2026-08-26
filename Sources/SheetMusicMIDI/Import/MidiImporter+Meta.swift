@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension MidiImporter {
     /// Build a tick→measureIndex map and per-track per-measure

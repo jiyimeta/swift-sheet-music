@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 /// Converts MusicXML `<pitch>` elements to MuseScore-style `(midi, tpc)` pairs.
@@ -9,19 +9,31 @@ enum PitchDecoder {
     static func decode(_ pitchNode: XMLTreeNode) throws -> (midi: Int, tpc: Int) {
         guard let stepText = pitchNode.first("step")?.text, !stepText.isEmpty else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <pitch> missing <step>",
+                ScoreFault(
+                    code: "musicxml.pitch.missingStep",
+                    message: "MusicXML: <pitch> missing <step>",
+                    location: "pitch",
+                ),
             )
         }
         let octave = pitchNode.first("octave").flatMap { Int($0.text) } ?? 4
         let alter = pitchNode.first("alter").flatMap { Int(Double($0.text) ?? 0) } ?? 0
         guard let semitoneOffset = stepSemitones[stepText] else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: unknown <step>\(stepText)</step>",
+                ScoreFault(
+                    code: "musicxml.pitch.unknownStep",
+                    message: "MusicXML: unknown <step>\(stepText)</step>",
+                    location: "step \(stepText)",
+                ),
             )
         }
         guard let naturalTpc = stepTpc[stepText] else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: unknown <step>\(stepText)</step>",
+                ScoreFault(
+                    code: "musicxml.pitch.unknownStep",
+                    message: "MusicXML: unknown <step>\(stepText)</step>",
+                    location: "step \(stepText)",
+                ),
             )
         }
         let midi = (octave + 1) * 12 + semitoneOffset + alter
@@ -41,7 +53,11 @@ enum PitchDecoder {
         let octave = unpitchedNode.first("display-octave").flatMap { Int($0.text) } ?? 4
         guard let semitoneOffset = stepSemitones[stepText] else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: unknown <display-step>\(stepText)</display-step>",
+                ScoreFault(
+                    code: "musicxml.unpitched.unknownDisplayStep",
+                    message: "MusicXML: unknown <display-step>\(stepText)</display-step>",
+                    location: "display-step \(stepText)",
+                ),
             )
         }
         let tpc = stepTpc[stepText] ?? 14

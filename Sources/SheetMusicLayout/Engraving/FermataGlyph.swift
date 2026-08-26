@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// SMuFL codepoint selection for fermatas.
 ///

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 extension Score {
     /// One entry in a part's instrument timeline: the position from

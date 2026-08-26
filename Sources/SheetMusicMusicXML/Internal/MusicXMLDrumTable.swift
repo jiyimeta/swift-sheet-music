@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 /// Maps `<note><instrument id="X"/></note>` references to the General MIDI

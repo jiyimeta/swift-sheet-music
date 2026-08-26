@@ -19,25 +19,46 @@ The whole test suite runs on SwiftPM, so `swift test` is the fastest
 iteration loop. `MidiExportTests` runs MuseScore's own
 `midiexport_tests.cpp` fixtures through semantic-equivalence comparison.
 
-Optional lint (matches CI; needs `brew install swiftlint`):
+Lint and formatting are gated in CI, so run them before pushing
+(`brew install swiftlint swiftformat`):
 
 ```bash
-swiftlint --quiet Sources Tests   # expect 0 warnings
+swiftlint lint --strict --quiet            # expect no output
+swiftformat Sources Tests Examples --lint  # expect "0/N require formatting"
 ```
+
+`--strict` promotes warnings to errors, which is what CI enforces. Don't
+pass paths to `swiftlint` — `included:` in `.swiftlint.yml` already names
+them, and passing them again lints every file twice.
+
+To have both run automatically on commit:
+
+```bash
+pre-commit install
+```
+
+That reads `.pre-commit-config.yaml` and installs a hook into the shared
+`.git/hooks`, so it covers every worktree of the clone. The hooks are
+`language: system`, meaning they invoke the Homebrew binaries directly
+rather than managing their own — install the tools first. Note that the
+formatter runs in fix mode there, so a commit that needed reformatting is
+aborted once with the files rewritten; re-stage and commit again.
 
 ### Android
 
 The Foundation-only subset cross-compiles to Android via the official
 swift.org Swift Android SDK. The toolchain, SDK, NDK sysroot, and the
-`wirelet` GitHub-Packages PAT are documented in `CLAUDE.md` under
-"Android build". Android changes are verified with
+`wirelet` GitHub-Packages PAT are documented in
+`docs/development/android.md`. Android changes are verified with
 `Scripts/preflight.sh --android`.
 
 ## Pre-merge verification
 
-Continuous integration runs the Apple build/test on every push and pull
-request and the Android cross-compile on pull requests to `main`. You can
-reproduce the full gate locally before opening a PR:
+Continuous integration runs the Apple build/test and the lint job on every
+push and pull request. The Android cross-compile is **not** part of the PR
+gate — it needs a GitHub Packages token that forks can't read, so it runs
+only on push to `main` and on manual dispatch. Android changes are
+therefore verified locally, before merging:
 
 ```bash
 Scripts/preflight.sh            # Apple swift test + Android
@@ -51,15 +72,15 @@ Scripts/preflight.sh --apple    # Apple / SwiftPM only (fast)
   `/// C++: mu::engraving::MasterScore`).
 - **Value types.** Score / MIDI types are `struct` / `enum`, `Sendable`,
   with no back-pointers.
-- **One responsibility per file** (SwiftLint caps files at 300 lines;
-  split by concern when a file outgrows it).
+- **One responsibility per file** (SwiftLint warns past 400 lines; split
+  by concern when a file outgrows it).
 - **Errors via `throws`** and the single `SheetMusicError` enum — no
   `Result`, no "Optional means failure".
 - New tests use **Swift Testing** (`@Test` / `#expect`), not XCTest
   (except UI tests that need `XCUIApplication`).
 - Tests importing an Apple framework or an Apple-only sub-library must be
-  wrapped in `#if !os(Android)`; run `Scripts/gate-android-tests.sh` after
-  adding test files.
+  wrapped in `#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT`; run
+  `Scripts/gate-test-support-guards.sh` after adding test files.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design rationale behind
 these conventions.

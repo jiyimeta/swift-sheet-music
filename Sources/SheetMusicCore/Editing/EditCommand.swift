@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A single, undoable mutation applied to a `Score`.
 ///
@@ -24,4 +24,14 @@ public protocol EditCommand: Sendable {
     /// must restore the pre-edit state byte-for-byte.
     @discardableResult
     func apply(to score: inout Score) throws -> any EditCommand
+}
+
+extension EditCommand {
+    /// Stamps the conforming command's type name as the refusal operation.
+    public static func refused(_ reason: EditRefusal.Reason) -> SheetMusicError {
+        .invalidEdit(EditRefusal(
+            operation: String(describing: Self.self),
+            reason: reason,
+        ))
+    }
 }

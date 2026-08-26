@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Standard note duration. C++: `mu::engraving::TDuration` (subset).
 /// `.fraction` covers irregular durations encoded as raw fractions

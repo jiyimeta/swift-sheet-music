@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Collects `ScoreDiagnostic` entries during a single MSCX parse call.
 /// Owned for the lifetime of one `parseWithDiagnostics(...)` invocation;

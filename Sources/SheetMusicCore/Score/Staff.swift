@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// A single staff inside a `Part`. Unifies what was previously split
 /// across `StaffDeclaration` (rendering hints, defaultClef) and

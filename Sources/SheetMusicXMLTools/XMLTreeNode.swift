@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Order-preserving XML element tree built by `XMLTreeParser`.
 /// Lightweight on purpose — callers walk it in per-target decoder extensions.

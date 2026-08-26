@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// Tracks the current `<divisions>` value within a part as MusicXML is walked.
 /// MusicXML encodes intra-measure positions and durations as an integer number

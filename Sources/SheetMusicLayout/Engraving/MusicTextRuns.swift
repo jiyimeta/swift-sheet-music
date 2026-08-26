@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Splits a mixed-font text string (e.g. a tempo indication or a
 /// metronome marking) into Bravura-glyph runs and Edwin-text runs.

@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Spells a note or a rest that outlasts the bar it starts in as a beat-aligned chain running across the barline —
 /// the only way a score can write one.

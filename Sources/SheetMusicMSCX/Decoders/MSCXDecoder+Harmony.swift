@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Harmony {
@@ -73,7 +73,7 @@ extension Harmony {
     }
 
     private static func decodeHarmonyType(_ raw: String) -> HarmonyType {
-        switch raw.trimmingCharacters(in: .whitespacesAndNewlines) {
+        switch raw.trimmingWhitespaceAndNewlines() {
         case "1": return .roman
         case "2": return .nashville
         default: return .standard
@@ -81,7 +81,7 @@ extension Harmony {
     }
 
     private static func decodeNoteCase(_ raw: String?) -> NoteCase {
-        switch raw?.trimmingCharacters(in: .whitespacesAndNewlines) {
+        switch raw?.trimmingWhitespaceAndNewlines() {
         case "1": return .upper
         case "2": return .lower
         case "3": return .capitalize
@@ -93,10 +93,8 @@ extension Harmony {
     /// resolved. Normalize to `nil` so downstream code never does
     /// arithmetic on -1.
     private static func decodeTpc(_ raw: String?) -> Int? {
-        guard let raw = raw?.trimmingCharacters(
-            in: .whitespacesAndNewlines,
-        ),
-            let value = Int(raw)
+        guard let raw = raw?.trimmingWhitespaceAndNewlines(),
+              let value = Int(raw)
         else { return nil }
         return value == -1 ? nil : value
     }
@@ -105,7 +103,7 @@ extension Harmony {
     /// also defaults to true (matches MuseScore's `Harmony` ctor).
     private static func decodePlay(_ raw: String?) -> Bool {
         guard let raw = raw?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingWhitespaceAndNewlines()
             .lowercased()
         else { return true }
         return raw == "1" || raw == "true"

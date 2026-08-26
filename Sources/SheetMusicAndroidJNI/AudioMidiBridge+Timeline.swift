@@ -1,131 +1,9 @@
 import Foundation
 import SheetMusicAudioCore
+import SheetMusicBridgeCore
 import SheetMusicCore
 import SheetMusicEditWire
 import SheetMusicMIDI
-
-// MARK: - T15: Timeline summary
-
-extension AudioMidiBridge {
-    struct TimelineSummary: Equatable {
-        let totalTicks: Int64
-        let totalSecondsMicros: Int64
-        let division: Int64
-        /// Length of the UNROLLED sequence (repeats + jumps expanded) —
-        /// the tick space the FluidSynth player actually traverses. The
-        /// Kotlin poll loop compares the player's tick against THIS for
-        /// end-of-score, otherwise a repeat's second pass would push the
-        /// unrolled tick past the (shorter) notated `totalTicks` and stop
-        /// playback early. Mirrors the Apple engine's
-        /// `max(unroll.totalUnrolledTicks, timeline.totalTicks)`.
-        let totalUnrolledTicks: Int64
-    }
-
-    static func timelineSummary(score: Score) -> TimelineSummary {
-        let t = PlaybackTimeline(score: score)
-        let unroll = MidiRenderer.playbackUnroll(score: score)
-        return TimelineSummary(
-            totalTicks: Int64(t.totalTicks),
-            totalSecondsMicros: Int64((t.totalSeconds * 1_000_000).rounded()),
-            division: Int64(t.division),
-            totalUnrolledTicks: Int64(max(unroll.totalUnrolledTicks, t.totalTicks)),
-        )
-    }
-}
-
-// MARK: - T17: Metronome beats + staff params
-
-extension AudioMidiBridge {
-    /// UNROLLED (not notated) — the Kotlin poll loop feeds the FluidSynth
-    /// player's UNROLLED tick (repeats + jumps expanded) to
-    /// `MetronomeMixer.updateCurrentTick`. A beat list built from notated
-    /// ticks alone would end at the notated length and go silent on a
-    /// repeat's 2nd pass, even though the score keeps playing. Mirrors
-    /// the Apple engine's `PlaybackTimeline.unrolledMetronomeBeats`
-    /// wiring in `PlaybackEngine.prepare(score:)`.
-    static func metronomeBeats(score: Score) -> Data {
-        let beats = PlaybackTimeline.unrolledMetronomeBeats(score: score)
-        return MetronomeBeatCodec.encodeArray(beats)
-    }
-
-    static func staffParams(score: Score) -> Data {
-        let entries = score.allStaves.enumerated().map { idx, entry -> StaffParams in
-            let address = entry.address
-            let part = score.part(at: address)
-            let channel = part?.instrument.channels.first ?? InstrumentChannel()
-            return StaffParams(
-                staffIndex: idx,
-                bankLSB: UInt8(clamping: channel.bank),
-                program: UInt8(clamping: channel.program),
-                isDrums: part?.instrument.useDrumset == true,
-                partAddressHash: Int64(address.partIndex) * 1000
-                    + Int64(address.staffIndexInPart),
-                partIndex: address.partIndex,
-                staffIndexInPart: address.staffIndexInPart,
-                displayName: score.staffDisplayName(at: address),
-                trackName: part?.trackName ?? "",
-                instrumentLongName: part?.instrument.longName ?? "",
-                channelVolume: UInt8(clamping: channel.volume),
-                defaultClefType: entry.staff.defaultClefType ?? "",
-            )
-        }
-        return StaffParamsCodec.encodeArray(entries)
-    }
-
-    /// One entry per deduped (part × instrument) mixer strip — the
-    /// Android mirror of `PlaybackEngine.rebuildMixerChannels`.
-    ///
-    /// Naming comes from `LiveChannelPlan.labels(for:in:)`, the same call
-    /// the Apple engine makes when it fills `MixerChannel`. It used to be
-    /// a second copy of that rule here, under a comment promising the two
-    /// matched; sharing the function is what actually holds them together.
-    static func instrumentParams(score: Score) -> Data {
-        let plan = LiveChannelPlan.build(score: score)
-        let entries = plan.strips.map { strip -> InstrumentParams in
-            let name = plan.labels(for: strip, in: score).displayName
-            return InstrumentParams(
-                partIndex: strip.partIndex,
-                ordinal: strip.ordinal,
-                liveChannel: strip.liveChannel,
-                bankLSB: UInt8(clamping: strip.instrument.channel.bank),
-                program: UInt8(clamping: strip.instrument.channel.program),
-                isDrums: strip.instrument.useDrumset,
-                displayName: name,
-                channelVolume: UInt8(clamping: strip.instrument.channel.volume),
-            )
-        }
-        return InstrumentParamsCodec.encodeArray(entries)
-    }
-}
-
-// MARK: - T16: Frame lookup
-
-extension AudioMidiBridge {
-    static func frameAtTick(score: Score, tick: Int64) -> Data {
-        // A tick before the sequence start is out of range → no frame.
-        // Guard BEFORE the unroll map, whose `notatedTick(fromUnrolled:)`
-        // clamps negatives to 0 (a valid frame); without this a negative
-        // tick would wrongly resolve to the first frame.
-        guard tick >= 0 else { return Data() }
-        let timeline = PlaybackTimeline(score: score)
-        // `tick` arrives from the FluidSynth player in UNROLLED SMF
-        // coordinates (repeats + jumps expanded), but `timeline` frames
-        // are NOTATED. Translate before the lookup so the cursor follows
-        // a repeat's second pass and every jump instead of clamping
-        // forward. Mirrors the Apple engine's read-path translation
-        // (`PlaybackEngine.mappedCursor`).
-        let unroll = MidiRenderer.playbackUnroll(score: score)
-        let notated = unroll.notatedTick(fromUnrolled: Int(tick))
-        guard let frame = timeline.frame(atTick: notated) else { return Data() }
-        return FrameCodec.encode(frame)
-    }
-
-    static func frameForCursor(score: Score, cursor: ScoreCursor) -> Data {
-        let timeline = PlaybackTimeline(score: score)
-        guard let frame = timeline.frame(forCursor: cursor) else { return Data() }
-        return FrameCodec.encode(frame)
-    }
-}
 
 // MARK: - swift-java entry points
 
@@ -185,6 +63,32 @@ public func nativeTimelineSummary(scoreHandle: Int64) -> [Int64] {
 public func nativeFrameAtTick(scoreHandle: Int64, tick: Int64) -> Data {
     guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
     return AudioMidiBridge.frameAtTick(score: score, tick: tick)
+}
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativeSecondsAtTick(...)` call site.
+///
+/// Continuous seconds at a fractional UNROLLED player tick — the smooth
+/// counterpart of `nativeFrameAtTick`, whose time snaps to a frame onset.
+/// Returns **−1** for an unknown handle, which a real position never is;
+/// returning 0 there would be indistinguishable from the start of the score.
+public func nativeSecondsAtTick(scoreHandle: Int64, unrolledTick: Double) -> Double {
+    guard let score = scoreTable.value(for: scoreHandle) else { return -1 }
+    return AudioMidiBridge.secondsAtTick(score: score, unrolledTick: unrolledTick)
+}
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeUnrolledTickForNotated(...)` call site: the
+/// UNROLLED transport tick a NOTATED score tick sits at.
+///
+/// Returns **−1** for an unknown handle or a negative input, neither of which
+/// a real scheduling target is; the Kotlin caller keeps its notated tick in
+/// that case, which is exactly the old behavior and correct on any score
+/// without a repeat.
+public func nativeUnrolledTickForNotated(scoreHandle: Int64, notatedTick: Int64) -> Int64 {
+    guard let score = scoreTable.value(for: scoreHandle) else { return -1 }
+    guard notatedTick >= 0 else { return -1 }
+    return AudioMidiBridge.unrolledTickForNotated(score: score, notatedTick: notatedTick)
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin

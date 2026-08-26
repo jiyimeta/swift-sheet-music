@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 extension [Measure] {
     /// Effective duration of each measure, indexed by position in the

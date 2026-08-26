@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// How a note's `Note.userVelocity` combines with the velocity derived
 /// from the prevailing dynamic. C++: `mu::engraving::VeloType`

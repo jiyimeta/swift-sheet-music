@@ -33,6 +33,23 @@ struct FermataRangesTests {
         return Staff(measures: [Measure(voices: voices)])
     }
 
+    /// The anchoring rule under test lives in `Score.fermataHolds()` — one derivation shared by the
+    /// renderer's tempo bookends and the notated-time API. Every fixture here is a single measure,
+    /// so a hold's bar-relative onset is also its absolute tick.
+    private func holds(of s: Staff) -> [FermataRange] {
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "p", instrument: Instrument(id: "i"), staves: [s])],
+        )
+        return score.fermataHolds().map {
+            FermataRange(
+                startTick: $0.startTickInMeasure,
+                endTick: $0.startTickInMeasure + $0.ticks,
+                stretch: $0.stretch,
+            )
+        }
+    }
+
     // MARK: anchor: forward search (canonical MusicXML layout)
 
     @Test func forwardAnchorPicksNextChord() {
@@ -41,7 +58,7 @@ struct FermataRangesTests {
             fermata("fermataAbove"), // anchors to D4
             chord(62), // tick 480..960
         ]])
-        let ranges = FermataRanges.collect(from: s, division: 480)
+        let ranges = holds(of: s)
         #expect(ranges == [FermataRange(startTick: 480, endTick: 960, stretch: 1.5)])
     }
 
@@ -52,7 +69,7 @@ struct FermataRangesTests {
             .dynamic(Dynamic(subtype: "mf", velocity: 64)), // skipped
             chord(62),
         ]])
-        let ranges = FermataRanges.collect(from: s, division: 480)
+        let ranges = holds(of: s)
         #expect(ranges == [FermataRange(startTick: 480, endTick: 960, stretch: 1.5)])
     }
 
@@ -63,7 +80,7 @@ struct FermataRangesTests {
             chord(60), // tick 0..480
             fermata("fermataAbove"), // no chord after → fall back to C4
         ]])
-        let ranges = FermataRanges.collect(from: s, division: 480)
+        let ranges = holds(of: s)
         #expect(ranges == [FermataRange(startTick: 0, endTick: 480, stretch: 1.5)])
     }
 
@@ -73,7 +90,7 @@ struct FermataRangesTests {
         let s = staff([[
             fermata("fermataAbove"), // no chord at all
         ]])
-        let ranges = FermataRanges.collect(from: s, division: 480)
+        let ranges = holds(of: s)
         #expect(ranges.isEmpty)
     }
 
@@ -84,7 +101,7 @@ struct FermataRangesTests {
             fermata("fermataLongAbove"),
             chord(60),
         ]])
-        let ranges = FermataRanges.collect(from: s, division: 480)
+        let ranges = holds(of: s)
         #expect(ranges == [FermataRange(startTick: 0, endTick: 480, stretch: 2.0)])
     }
 
@@ -93,7 +110,7 @@ struct FermataRangesTests {
             fermata("fermataAbove", stretch: 2.5),
             chord(60),
         ]])
-        let ranges = FermataRanges.collect(from: s, division: 480)
+        let ranges = holds(of: s)
         #expect(ranges == [FermataRange(startTick: 0, endTick: 480, stretch: 2.5)])
     }
 
@@ -104,7 +121,7 @@ struct FermataRangesTests {
             fermata("fermataAbove"),
             rest(.quarter),
         ]])
-        let ranges = FermataRanges.collect(from: s, division: 480)
+        let ranges = holds(of: s)
         #expect(ranges == [FermataRange(startTick: 0, endTick: 480, stretch: 1.5)])
     }
 
@@ -115,7 +132,7 @@ struct FermataRangesTests {
             [fermata("fermataAbove"), chord(60)], // stretch 1.5 on [0,480)
             [fermata("fermataLongAbove"), chord(60)], // stretch 2.0 on [0,480)
         ])
-        let ranges = FermataRanges.collect(from: s, division: 480)
+        let ranges = holds(of: s)
         #expect(ranges == [FermataRange(startTick: 0, endTick: 480, stretch: 2.0)])
     }
 

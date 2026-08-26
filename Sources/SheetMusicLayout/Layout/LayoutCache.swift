@@ -191,6 +191,12 @@ public final class LayoutCache: @unchecked Sendable {
         /// container. Part of the cache-hit predicate so flipping the
         /// `showsInvisibleElements` toggle invalidates stale placements.
         let showsInvisibleElements: Bool
+        /// Whether sung text is engraved at all. Part of the cache-hit
+        /// predicate for the same reason `showsInvisibleElements` is:
+        /// flipping the host's lyrics toggle changes which elements this
+        /// measure emits, and a cached placement would keep serving the
+        /// old row.
+        let lyricsVisible: Bool
         /// Prevailing time-signature duration for this measure, derived
         /// from the full staff measure list via
         /// `[Measure].effectiveMeasureDurations()`. Used to resolve any

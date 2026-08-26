@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 /// One navigation-relevant event in a section's ordered element list.
 /// Swift analog of MuseScore's `RepeatListElement`

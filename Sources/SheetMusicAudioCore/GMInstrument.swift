@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 import Wirelet
 
 /// One General-MIDI Level 1 melodic program (0...127), with the

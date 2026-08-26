@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 extension Score {
     /// Concert-key value (`-7…+7`; flats negative) in effect at the

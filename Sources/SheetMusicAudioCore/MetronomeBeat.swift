@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicMIDI
 
 /// One metronome tick — the metric beat at which the click should

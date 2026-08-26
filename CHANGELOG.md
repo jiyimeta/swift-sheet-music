@@ -7,7 +7,402 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `Score.blank(_:)` + `BlankScoreTemplate`: build an empty solo/grand-staff score in code.
+- `InsertMeasure` / `DeleteMeasure`: structural edit commands that insert or remove a full measure column
+  (every staff plus the parallel `SystemMeasure`), each other's inverse. Inserting or deleting bar 0
+  re-homes the score-start key/time/clef signatures onto the new first bar, mirroring MuseScore, and both
+  commands fix up any `Spanner.nextMeasuresOffset` that spans the edit point. `DeleteMeasure` refuses to
+  remove a score's last measure (`EditRefusal.Reason.cannotDeleteOnlyMeasure`).
+- `EditIntent.insertMeasure(at:)` / `.deleteMeasure(at:)`: the host-facing intents `ScoreEditSession` plans
+  into `InsertMeasure` / `DeleteMeasure`, with `EditIntentCodec` wire support (indices 14…15).
+
+## [2.0.0] - 2026-08-25
+
 ### Fixed
+
+- `LayoutOptionsWire.showsLyrics` declares its compatible default, so the
+  generated Kotlin `data class` gives it one too. 1.15.0 appended the field
+  without one, and although the wire stayed readable by hosts that had never
+  heard of it, the generated constructor gained a required ninth parameter —
+  so every Kotlin host stopped compiling against a release that was supposed
+  to be compatible with it. `1` is the value the field's own documentation
+  already names as the safe direction (anything but an explicit `0` shows
+  lyrics, which is what every release before 1.15.0 did), so a host that
+  omits it gets exactly its previous behaviour. Requires swift-wirelet's
+  Kotlin emitter to carry declared defaults.
+
+### Added
+
+- A durable playback position on the WebAssembly bridge. `playerSecondsForPosition` and
+  `positionAtPlayerSeconds` convert between player seconds and a `{measureIndex, tickInMeasure}`
+  musical address, and `PlaybackEngine` now parks its transport on the address rather than on a time.
+  Seconds depend on the tempo map and on note durations, so an edit changes what a stored second
+  means; an address does not. Android already carried this — `ScoreCursor` crosses its JNI boundary
+  in both directions — and the wasm surface lost it when the cursor round trip was folded into a
+  single call.
+- Rehearsal marks, staff descriptors and measure frames on the WebAssembly bridge, closing the three
+  gaps against the Android surface that had no recorded reason to exist. `rehearsalMarkCount` /
+  `rehearsalMark` carry each mark's text, measure and player-clock seek target — every mark the score
+  has, with `-1` seconds for one whose cursor does not resolve, because a navigation index missing a
+  letter is worse than an entry that cannot be seeked to. `staffDescriptorCount` /
+  `staffDescriptor` flatten the parts/staves tree the way `mixerStrip` indexes. `measureFrame` takes
+  a measure index rather than Android's encoded cursor, since a browser host holds one.
+- **A virtualized viewer, with zoom.** The browser example keeps canvases only for the tiles near the
+  viewport and drops the rest, so what it rasterizes is bounded by the viewport rather than by the
+  score: 80.4 MB of canvas for a 1,757 mm fixture and 151.8 MB for a 149-part score become 18–37 MB
+  for both. `planViewportTiles` and `reconcileMounts` are exported for hosts that want the same
+  policy. Zoom re-rasterizes at the new scale instead of upscaling a bitmap, and preserves the
+  document position under the top of the viewport; `staffSize` remains the separate control that
+  re-engraves. Scrolling still does not redraw — the compositor pans the mounted canvases.
+- **Editing in the browser.** `Score` gains `beginEditing` / `endEditing`, a typed `applyEdit` over all
+  thirteen scalar `EditIntent` cases, `applyEditIntentBytes` for a relayed composite, `undo` / `redo`,
+  `editState`, `hitTest` and `caretRect`. An accepted edit publishes back into the same handle, so
+  every downstream consumer keeps working across it. `EditReplayScript`'s fourteen steps now replay
+  through the browser facade against the same fingerprint chain the Apple host and the Android device
+  assert, so "the browser edits what the app does" is pinned rather than assumed.
+- **Band culling in the browser renderer.** `splitIntoBands` slices a page's draw program into
+  self-contained horizontal bands — a port of Android's `ScoreBands.kt` — and `drawTile` paints a
+  tile from only the bands whose ink reaches it. A page too tall for one canvas previously walked
+  its whole command list once per tile; on a 1757 mm fixture a 100 mm tile now walks 10% of the
+  page. `drawPage` is unchanged for pages that fit a single canvas.
+- **Layout options on the WebAssembly bridge.** `computeLayout` takes a `LayoutOptions` struct —
+  layout mode, staff size, break handling, multi-measure rests, invisible elements, lyrics,
+  transposition, hidden staves and clef overrides — reaching the settings Android's display
+  inspector has had. The browser facade fills every field from the vertical default, so a caller
+  that passes none gets what it got before.
+- **Playback in the browser.** `@jiyimeta/sheet-music-web/playback` plays a score, follows it with
+  a cursor, and supports a measure-range loop with its highlight, a metronome, a count-in, a
+  playback rate and a mixer (per-strip patch, level and mute). The synth is the host's: Swift
+  renders the score and metronome SMFs and answers positional questions, and the default engine is
+  spessasynth_lib, declared as an optional peer dependency so a viewer never downloads one. A
+  different synth can be substituted by implementing `SynthHost`.
+- `mixerStripCount` / `mixerStrip` on the WebAssembly bridge, and `Score.mixerStrips()` on the
+  browser facade. `PlaybackEngine` asserts each strip's patch and level at load and after every
+  transport move — the sequence carries neither, by design, so that a backward seek cannot replay
+  them over a live override.
+- Click-to-seek, and a count-in from anywhere rather than only a downbeat. `playerSecondsAtPoint`
+  resolves a point in document millimetres to the nearest playable element (`nearestEngineCursor`,
+  as on Android) and folds the cursor round trip into one call; `renderCountInMetronomeMidi` and
+  `countInSeconds` now take a position on the player's clock, which is what lets `CountInBeats`
+  schedule the partial lead-in a mid-bar start needs.
+- Solo, master tuning and a replaceable metronome click on the browser mixer.
+  `setStripSoloed` silences everything not soloed while remembering each strip's own mute
+  underneath; `setMasterTuning` sends the MIDI master-tuning RPN built by
+  `SheetMusicAudioCore.MasterTuning`, so an A4 calibration means the same thing here as on iOS and
+  Android; `setMetronomeClickSoundFont` layers a bank from `buildClickSoundFont` ahead of the
+  score's, on the metronome synth only.
+- **Audio export in the browser.** `PlaybackEngine.exportWav()` renders the score — or a measure
+  range — to 16-bit PCM offline and faster than real time, carrying the mixer as it stands. The
+  mixer travels as a snapshot of the live synth rather than being re-applied, so the file cannot
+  drift from what is being heard. `encodeWav` is exported separately, and `SynthHost.renderOffline`
+  is the optional seam a custom synth implements — the counterpart of Apple's
+  `SynthBackend.makeOfflineInstance`. WAV only for now: M4A and MP3 need WebCodecs or
+  `MediaRecorder`.
+- `gmInstrumentNames` / `gmInstrumentFamilies` on the WebAssembly bridge, and
+  `SheetMusic.gmInstruments()` on the browser facade: the 128 General MIDI patches with their
+  families, for a mixer's patch picker. Read out of `SheetMusicAudioCore.GMInstrument`, the same
+  table the iOS and Android mixers show — Android loads it over JNI for the same reason.
+- Eleven `@JS` entry points on the WebAssembly bridge behind that — `renderMidi`,
+  `renderMetronomeMidi`, `renderCountInMetronomeMidi`, `countInSeconds`, `playbackSummary`,
+  `metronomeBeats`, `cursorRectAtPlayerSeconds`, `playerSecondsForMeasure`,
+  `measureIndexAtPlayerSeconds`, `loopPlayerSeconds`, `loopHighlightRects` — plus
+  `buildClickSoundFont`, which the Android bridge has had since the metronome landed.
+- `SheetMusicBridgeCore.PlaybackClock`: the projection between a browser sequencer's seconds clock
+  and the notated score. Android round-trips through unrolled ticks because FluidSynth reports one;
+  a Web Audio sequencer reports seconds, and `UnrolledTimeMap` already speaks them on both sides.
+- `SheetMusicLoader`, a small static product holding the one decision about
+  which parser a score payload belongs to. `ScoreLoader.sniff` /
+  `loadScore(bytes:sourceFilename:)` / `loadScore(contentsOf:)` are the logic
+  `ScoreBridge` used to own privately; `ScoreBridge` now delegates and keeps its
+  API, and `SheetMusic` gains matching `loadScore(bytes:)` /
+  `loadScore(contentsOf:)` overloads. It exists because a consumer that parses
+  score files in its own image could not reach `ScoreBridge` at all — it lives in
+  `SheetMusicBridgeCore`, which is not exported, and the one product that carries
+  it is `.dynamic`, while a `Score` cannot cross between two `SheetMusicCore`
+  copies. So such a consumer wrote the format table out again, and the copy fell
+  behind: Folino's Android edit session read every stored score as a MuseScore
+  container, and silently refused to open over the four other formats its own
+  importer accepts. A static target compiles into each image, which is what lets
+  one declaration serve them all. `sourceFilename` carries the MIDI title
+  fallback that a byte-level entry point would otherwise drop.
+- Kotlin codecs for the two editing-geometry payloads, `SelectionTint` and
+  `EditCaretFrame`. `nativeEncodeDrawProgram` takes the first and
+  `nativeEditingCaretFrame` answers with the second, but both live in
+  `SheetMusicEditWire/Geometry` while the Android codegen only ever scanned
+  `SheetMusicEditWire/Path` — so a Kotlin host could call either entry point and
+  had no way to build or read its payload. Hand-writing one would have put a
+  second spelling of a frozen schema in a second language, which is the thing a
+  single shared wire product exists to prevent. The two types move into their own
+  directory (a `schemaPaths` entry must resolve to exactly one directory, and the
+  edit-*intent* vocabulary in the neighbouring `Intent/` must stay unemitted —
+  Kotlin never builds an intent) and a new `editGeometry` source set emits them,
+  models included. Byte agreement with the Swift codecs is pinned by
+  `editCaretFrame-v1.bin` / `selectionTint-v1.bin` in the existing cross-language
+  golden set.
+
+### Changed
+
+- **Breaking.** A tapped `.tuplet` now crosses `Score.engineCursorForFilteredTap` and
+  `translateCursorForHiddenStaves` re-addressed like `.note` and `.rest`, instead of passing through
+  in the rendered document's numbering. With a hidden staff ahead of a tuplet's own staff in the same
+  part, a hit-test result fed into an edit intent named the wrong staff. Hosts holding a tuplet id
+  across a visibility change now hold the full-score address; the `.tuplet` special-cases in the
+  Android geometry bridge are gone with the mixed contract that forced them.
+- `LayoutDocument.editingCaretRect` resolves a caret for a selected tuplet, anchored to the column of
+  the bracket's first member. It previously returned nil, because it goes through `cursorFrame` and a
+  playback head never sits on a bracket — correct for a playback head, wrong for an editing caret.
+- `releaseScore` on the WebAssembly bridge also ends any open edit session, so a session cannot
+  outlive its handle.
+- **Breaking.** `computeLayout` on the WebAssembly bridge takes a `LayoutOptions` argument. There is
+  no options-less overload: two entry points into the same engraver drift, and the browser facade
+  supplies the defaults instead.
+- **Breaking.** The WebAssembly bridge's byte-blob faces take and return `Uint8Array` rather than
+  `number[]`. BridgeJS lowered a `[UInt8]` parameter one wasm import call per byte and lifted a
+  `[UInt8]` return into a boxed JavaScript array; `loadScore` on a 1 MB score went from 41.8 ms to
+  16.6 ms. The `[Double]` faces are unchanged — their payloads are small and cross once per user
+  action.
+- `pageBreaks` on the WebAssembly bridge derives its break policy from the options the document was
+  laid out with, as Android does, instead of always honouring layout breaks. Previously unobservable
+  because options could not be set; now it would answer with boundaries the document does not have.
+- **Breaking.** `SheetMusicError.malformedScore` and
+  `SheetMusicError.corruptedContainer` now carry a structured `ScoreFault`
+  instead of a free-text reason, and `SheetMusicError.invalidEdit` now carries
+  an `EditRefusal` with a typed refusal `reason`. Hosts should switch over the
+  structured payloads and use their stable codes for presentation instead of
+  matching English strings.
+- `AudioMidiBridge` and `LoopHighlightTickResolver` moved from `SheetMusicAndroidJNI` to
+  `SheetMusicBridgeCore`, so Android and WebAssembly share one implementation. The `native*` entry
+  points stayed behind — jextract only makes a JNI symbol where the declaration physically sits.
+  No behaviour change on Android.
+
+### Fixed
+
+- A layout computed while an edit lands is no longer cached against the edited
+  handle. `nativeComputeLayout` reads the score at its start and files the
+  document at its end without the edit lock, so an intent applied in between left
+  a layout of the *old* score cached against a handle whose score was new —
+  invisible to the fingerprint gate, which compares scores rather than layouts.
+  `LayoutDocumentCache` now carries a per-handle generation: the compute stamps
+  it before reading, `nativeApplyEditIntent` / undo / redo advance it through
+  `invalidate`, and a store whose stamp has been superseded is refused, leaving
+  the cache empty rather than stale. Empty is the right answer — the edit has
+  already requested the recompute that repopulates it, and in the meantime
+  `nativeEditingHitTest` returns nothing instead of naming an element the user
+  did not tap, which since 1.11.0 would have become the target of the next edit.
+
+
+## [1.15.0] - 2026-08-17
+
+### Added
+
+- `Score.fermataHolds()` — every fermata resolved to the chord it holds, merged across staves. It
+  is now the single derivation of that anchoring: `MidiRenderer`'s tempo bookends and the
+  notated-time API both read it, so the SMF's idea of a hold and the score's cannot drift apart.
+- `MidiRenderer.swingOnsetShifts(score:)` — how far swing pushes each sounding chord's onset, for
+  callers that need the audible attack without the renderer.
+
+### Fixed
+
+- `notatedDurationSeconds`, `seconds(at:)` and `cursor(atSeconds:)` count fermata holds. They summed
+  each bar's tick length at its governing tempo and stopped there, so a score with fermatas reported
+  as shorter than it plays and every elapsed / total readout drawn from them ran short by the sum of
+  every hold.
+- `PlaybackTimeline.frame(atTime:)` — the cursor's own lookup — follows the AUDIBLE onset, so the
+  playhead steps onto a swung eighth when it sounds rather than up to a tenth of a beat early. The
+  new `Frame.soundedTimeSeconds` carries it; `timeSeconds`, `frame(atTick:)`, `seconds(atTick:)` and
+  `totalSeconds` are unchanged, so nothing that addresses the score by position moves.
+
+### Added
+
+- `sheet-music-compose-android` is published. Its publication block has been
+  complete since the module landed, but every release so far ran only the two
+  other publish tasks, so the module existed at no released coordinate and a
+  consumer that wanted the score canvas or the playback-cursor overlay could not
+  resolve it at all. **All three Android coordinates must now be pinned to the
+  same version.** `DrawProgramReader` validates the draw-program version the
+  native library produces, so a mismatched pair throws at the first strip drawn
+  — on a device, in a feature nothing would connect back to a version line. The
+  module's `proguard-consumer.pro` now records *why* it contributes no consumer
+  keep rules, its keep-rule story being consumer-facing for the first time: it
+  is ordinary Kotlin and Compose with no reflective entry point, no JNI
+  registration and nothing looked up by name, and the rules that do matter
+  belong to `sheet-music-android`, which owns the JNI boundary, and to the app.
+
+- `ScoreViewOptions.lyricsVisible` (default `true`), with `showsLyrics` appended
+  to `LayoutOptionsWire` as a ninth field for the Android bridge. The engraver's
+  only lyric gate was MuseScore's per-element `visible` flag, which is the
+  score's own authoring state rather than a display choice, so a host offering a
+  "show lyrics" switch had nowhere to put it. Hiding removes the whole lyric row
+  — the syllables, the hyphens between them, the melisma rule that follows a
+  held syllable, and the continuation segments an earlier measure's melisma
+  pushes into later ones — and nothing is routed to the invisible container
+  either, so `showsInvisibleElements` cannot bring it back. The engraved
+  document is therefore genuinely shorter, which is the point: a host fitting a
+  fixed-height notation strip to the engraved height gets a different number,
+  where a gate that suppressed the glyphs but kept their vertical slot would
+  change nothing on screen. On the wire, anything other than an explicit `0`
+  shows lyrics, so a host that has not been updated keeps the behaviour every
+  earlier release had.
+
+- `groupRawValue` on the staff-params wire (tag 13), carrying `Staff.group`. The
+  only percussion signal the wire had was `isDrums`, derived from the part's
+  `instrument.useDrumset` — but a pitched-percussion staff (timpani,
+  glockenspiel) has `useDrumset == false` while its `<StaffType group="…">`
+  still reads "percussion", so an Android host keying a drum-kit UI on `isDrums`
+  alone over-offered exactly the staves Apple hides. Appending is safe for an
+  **older** consumer meeting a **newer** payload — it skips the tag — and not
+  the other way round: the generated decoder throws when a declared tag is
+  absent, so a build carrying the new decoder must not meet a native library
+  older than the field. The AAR and the `.so` ship in one artifact, so the only
+  way to produce that is a partial version pin across the three coordinates.
+
+- `nativeSecondsAtTick(scoreHandle, unrolledTick)`, bridging
+  `PlaybackTimeline.seconds(atTick:)` — public and Android-compatible for
+  several releases with no JNI symbol. The only position an Android host could
+  read was `nativeFrameAtTick`, whose `timeSeconds` snaps to a frame onset, and
+  interpolating two polled frames cannot recover the value in between because
+  those times are themselves quantized: the result steps once per note however
+  often it is sampled. The tick is in the same unrolled coordinates the
+  FluidSynth player reports, fractional ticks included. An unknown handle
+  returns `-1` rather than `0`, since `0` is a real position.
+
+- `AndroidPlaybackEngine.audioClockPosition()`, returning the transport's tick
+  together with `AudioTrack.getTimestamp()`'s frame position and the
+  `System.nanoTime()` instant that frame was presented, so a host can
+  extrapolate a playhead from the audio clock. `currentTimeSeconds` and
+  `currentCursor` are written from a 33 ms poll, so their timestamp is when the
+  poll observed the transport rather than when the audio was heard, and anything
+  smoothing between polls inherited the poll's jitter. A read rather than a
+  flow, on purpose — publishing it would put it back on the poll's cadence and
+  lose the only thing it adds. Nullable, because `getTimestamp` is best-effort
+  by contract (it reports nothing before enough audio has been written, and
+  nothing at all on routes that carry no timestamp), so a host can tell "no
+  better information" from "position zero". Purely additive: neither existing
+  flow changes, and a host that never calls it behaves exactly as before.
+
+### Changed
+
+- The whole-score transpose clamp widens from ±7 to ±12 semitones. A diminished
+  fifth either way was too narrow for what the feature exists for — moving a
+  song out of its written key for a singer routinely needs an octave — and the
+  MIDI coarse-tuning RPN carries ±64 semitones, so the old bound bought nothing.
+  The clamp lives in three places and they move together: the Apple engine's
+  `setTranspose`, `AndroidPlaybackEngine.setTranspose`, and the notation half in
+  `LayoutOptionsWire.transposeDelta`. Widening only the audio side would leave a
+  score sounding transposed past the narrower bound while still reading in the
+  written key, which is worse than either limit alone. The doc comments that
+  spelled out the old range — including the one on the wire field, which is
+  mirrored into the generated Java — move with it.
+
+### Fixed
+
+- **Android:** the playback transport no longer confuses the notated score
+  clock with the unrolled render it actually plays. `AndroidPlaybackEngine`
+  reads notated ticks out of `frameForCursor`, `itemEndTick` and the timeline
+  summary's `totalTicks`, but everything it hands the FluidSynth player
+  (`seekTick`) or reads back from it (`currentTick`) is in the repeat- and
+  jump-expanded coordinates of the rendered SMF — and the two were used
+  interchangeably. The read direction was already translated (`frameAtTick`
+  maps the player's tick back through the unroll); the write direction was not.
+  On a score with a repeat this made A-B looping unusable rather than
+  inaccurate: an A-B region placed *after* a repeat had its end compared against
+  a player position that was already past it, so the wrap fired the instant the
+  repeat finished — before a note of the selected region had sounded — and then
+  seeked to the notated start tick, which in transport coordinates lands inside
+  the repeat. The result cycled two bars the user had not selected and never
+  reached the ones they had. `setLoopFullScore` truncated the same way, and the
+  same misprojection sent `seek(ScoreCursor)`, `seek(toTimeSeconds)` and `skip`
+  to the wrong measure once a repeat had been passed, while `skip` additionally
+  fed a notated estimate to `frameAtTick`, which takes unrolled ticks. A score
+  without a repeat plan is unaffected — the two clocks are the same map there,
+  which is why this survived the Apple-side fix and every existing loop test.
+  `loopRange` is unchanged and still notated: it is a region of the *score*, so
+  that is what a host persists and maps back through its own measure table. The
+  engine now caches the region's projection onto the transport alongside it,
+  deriving the end as `start + notated span` rather than projecting the end tick
+  separately, so a loop over a repeated bar covers that bar's own pass instead
+  of swallowing the repeat's second take. The projection itself is
+  `PlaybackUnroll.firstUnrolledTick(forNotated:)` — the rule the Apple engine
+  already schedules by, now hoisted out of `PlaybackEngine` so both platforms
+  share one implementation — reached through the new
+  `nativeUnrolledTickForNotated` JNI entry point. `JniBridge` gains a matching
+  member with an identity default, so a bridge predating the entry point keeps
+  today's behaviour.
+
+- **Android:** an offline audio export now reproduces the live engine's
+  transpose and A4 calibration. Transposed playback is a tuning shift on the
+  melodic channels rather than a re-render, so the SMF the exporter loads holds
+  the *authored* pitches — and `ExportEngineSnapshot` carried the mixer, the
+  metronome and the rate but no pitch state at all, while the exporter builds
+  its own synth, which starts at concert pitch. A score transposed on screen
+  therefore exported in its original key, and an A4 calibration was dropped the
+  same way: silently, on every device, with the file itself the only evidence.
+  The snapshot gains `masterTuningCents` and `transposeSemitones`, populated
+  from the live engine where the mixer is captured, and `AudioExporter` applies
+  them through the same MIDI Master Tuning RPN the live engine uses — melodic
+  channels take calibration + transpose at 100 cents per semitone, percussion
+  the calibration alone, so a transposed score's kit stays where it was written.
+  That split is the one Apple's `PlaybackEngine+Export` already makes. Zero is
+  skipped rather than sent as a no-op RPN, mirroring the live engine's guard at
+  prepare, so an untuned export emits exactly the sequence it emitted before.
+
+- **Android:** a Standard MIDI File can be imported. `MidiImporter` has always
+  existed and Apple hosts call it directly, but the Android score bridge sniffed
+  ZIP, `<museScore` and `<score-partwise>`/`<score-timewise>` only, so a `.mid`
+  fell through to `loadScore`'s `.unknown` case and threw — which a host
+  surfaces as a failure to load the score. The `MThd` header chunk is now one of
+  four recognized magics and routes to `MidiImporter.parse`. This closes a
+  parity gap rather than fixing a regression: `.mid` import has never worked
+  through the Android bridge in any release. It adds no dependency and no native
+  size — `SheetMusicAndroidJNI` already depends on `SheetMusicMIDI` for MIDI
+  rendering — and the JNI signature is unchanged, so a host needs nothing beyond
+  accepting the extension at its file picker. The importer's `sourceFilename`
+  hint stays `nil`; the host titles the score from the picker's display name.
+
+- `nativeCursorFrame` and `nativeLoopHighlightRects` no longer describe payloads
+  that have not existed for several releases, in the direction that costs a
+  consumer the most: both KDocs named a byte layout precise enough to write a
+  reader from — a `u16` version word followed by microsecond `i64`s — and a
+  reader written from either decodes garbage. `nativeLoopHighlightRects` had
+  three mutually inconsistent accounts in circulation. The wire is wirelet TLV,
+  and both now name the generated codec to decode with (`DecodedFrameCodec` and
+  `RectCodec` respectively). `nativeMeasureFrame` refers to `nativeCursorFrame`
+  for its format, so it is corrected with it. No signature and no wire change.
+
+- `SheetMusicEngine.version` names this release. It still read `1.13.1` at tag
+  `1.14.0` — that release commit changed only a CHANGELOG heading. Nothing was
+  broken by it, since both images derive their stamp from the same constant and
+  so agreed with each other, but the constant feeds the Android version-skew
+  gate through `nativeEngineVersionStamp`, and a stamp that names the wrong
+  release is exactly what a skew gate cannot afford.
+
+- A `<MeasureRepeat>` bar now occupies its bar on `PlaybackTimeline`'s measure
+  spine. The spine counted chords and breath pauses only, while
+  `MidiRenderer.measureTicks` counts the marker's own duration, so every measure
+  after a `𝄎` started a full bar early on the cursor's timeline and the playhead
+  ran a measure ahead of the audio for the rest of the piece. `totalTicks` was
+  short by a bar for a score ending on one, too.
+
+- An A-B loop is now projected onto the transport's own coordinates before it is
+  compared against or seeked with. `LoopRange` is a region of the score, so it is
+  stored (and handed back to the host) in notated ticks — but the transport plays
+  `MidiRenderer.render`'s UNROLLED sequence, where the same bar sits at one
+  position per pass and generally at none of its notated ticks. On a score with a
+  repeat, a region after it therefore wrapped a measure-play early and then
+  replayed from wherever the sequence happened to be that many notated seconds
+  in, i.e. a different passage than the one the host had highlighted. The new
+  projection resolves the region's first occurrence and carries the span across,
+  so a loop over a repeated bar covers that bar's own pass rather than swallowing
+  the repeat's second take.
+
+  The same confusion ran through every other transport move — `seek(to:)`,
+  `play(from:)`, the count-in's base position and its metronome offset — which
+  all handed a notated tick straight to the sequencer. `SynthBackend` gains
+  `setUnrolledTimeMap(_:)` (default no-op, so existing conformers are unaffected)
+  and `SwiftySynthBackend` runs both `seek(toTick:)` and `currentTick` through it,
+  which is what lets the engine keep speaking notated ticks throughout.
 
 - **Apple example apps:** exporting while a transposition was active wrote the
   file in the *authored* key. Every export entry point handed the raw loaded
@@ -25,6 +420,27 @@ and this project adheres to
   The library itself was never affected; `TransposedScoreExportTests` now pins
   that (transpose → encode → reparse keeps the keys and pitches for MSCX, MSCZ
   and MIDI) so a future regression is unambiguously attributable.
+
+- A fermata is now one score-global tempo fact rather than a per-staff one, which
+  fixes two bugs at once on any score that has both a fermata and a tempo marking.
+
+  `render(score:)` realises a fermata's hold as a pair of tempo bookends around
+  the held chord, and it used to build that pair separately for every staff,
+  against the tempo markings `filterSystemElements` routes to *that* staff. A
+  system-level `<Tempo>` goes to the canonical staff alone, so every other staff
+  computed its hold against the 120 BPM default and emitted a CLOSE event
+  restoring 120 BPM. Tempo metas are score-global once a sequencer merges the
+  tracks, so that bogus restore outranked the real marking — a score marked
+  ♩=79 after a fermata played the rest of the piece at 120 BPM. The bookends are
+  now computed once, from the union of every staff's fermatas against the whole
+  of `systemMeasures`, and emitted into the first track only.
+
+- `PlaybackTimeline` folds the same fermata bookends into its own tempo map, via
+  the new `MidiRenderer.fermataTempoBookends(score:)`. A fermata carries no
+  notated duration, so a timeline built from `<Tempo>` markings alone never held
+  — leaving the playback cursor running ahead of the audio by the hold's extra
+  time, permanently, from the first fermata onward, and taking every elapsed-time
+  read and A-B loop boundary with it.
 
 ## [1.14.0] - 2026-08-14
 
@@ -1513,7 +1929,8 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.13.1...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.0...HEAD
+[2.0.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.15.0...2.0.0
 [1.13.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.13.0...1.13.1
 [1.13.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.12.0...1.13.0
 [1.12.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.11.0...1.12.0

@@ -7,7 +7,7 @@ import Testing
 
 struct MSCXParserTests {
     @Test func parsesMidi01() throws {
-        let url = try #require(Bundle.module.url(forResource: "midi01", withExtension: "mscx"))
+        let url = try #require(TestResources.url(forResource: "midi01", withExtension: "mscx"))
         let data = try Data(contentsOf: url)
         let score = try MSCXParser.parse(data)
         #expect(score.division == 480)

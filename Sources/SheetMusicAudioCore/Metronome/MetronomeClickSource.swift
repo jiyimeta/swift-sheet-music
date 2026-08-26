@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Where the metronome's click sound comes from. Supplied by the host
 /// through a `MetronomeClickProvider`. Kept separate from

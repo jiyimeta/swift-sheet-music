@@ -1,8 +1,8 @@
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 
 extension LayoutEngine {
     /// Build the `.chordLine` layout elements for one chord, mirroring

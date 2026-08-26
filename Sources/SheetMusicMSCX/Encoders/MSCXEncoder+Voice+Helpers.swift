@@ -1,5 +1,5 @@
-import Foundation
 import SheetMusicCore
+import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Voice {
@@ -148,10 +148,14 @@ extension Voice {
                 .map { "\($0.actualNotes)/\($0.normalNotes)" }
                 .joined(separator: " × ")
             throw SheetMusicError.malformedScore(
-                reason: "Tuplet member duration \(scaled) does not "
-                    + "decompose to a named base + dots after "
-                    + "un-scaling by \(ratios); MSCXEncoder supports "
-                    + "only durations representable as base + dots.",
+                ScoreFault(
+                    code: "mscx.encoder.tupletMemberDurationNotRepresentable",
+                    message: "Tuplet member duration \(scaled) does not "
+                        + "decompose to a named base + dots after "
+                        + "un-scaling by \(ratios); MSCXEncoder supports "
+                        + "only durations representable as base + dots.",
+                    location: "duration \(scaled)",
+                ),
             )
         }
         return candidate

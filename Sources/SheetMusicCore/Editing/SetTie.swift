@@ -1,4 +1,4 @@
-import Foundation
+import SheetMusicFoundation
 
 /// Sets the `tieForward` field on one note and the `tieBack` field
 /// on another. Used to add or remove a tie between two adjacent
@@ -44,14 +44,10 @@ public struct SetTie: EditCommand {
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let oldSource = score[sourceID] else {
-            throw SheetMusicError.invalidEdit(
-                reason: "SetTie: no note at source \(sourceID)",
-            )
+            throw Self.refused(.noteNotFound(sourceID))
         }
         guard let oldTarget = score[targetID] else {
-            throw SheetMusicError.invalidEdit(
-                reason: "SetTie: no note at target \(targetID)",
-            )
+            throw Self.refused(.noteNotFound(targetID))
         }
         let priorSourceForward = oldSource.tieForward
         let priorTargetBack = oldTarget.tieBack
@@ -77,16 +73,12 @@ public struct SetTie: EditCommand {
     ) throws {
         let veID = VoiceElementID(noteID)
         guard case var .chord(chord) = score[veID] else {
-            throw SheetMusicError.invalidEdit(
-                reason: "SetTie: element at \(veID) is not a chord",
-            )
+            throw Self.refused(.wrongElementKind(at: veID, expected: .chord))
         }
         guard chord.notes.indices
             .contains(noteID.noteIndexInChord)
         else {
-            throw SheetMusicError.invalidEdit(
-                reason: "SetTie: noteIndex out of range at \(noteID)",
-            )
+            throw Self.refused(.noteNotFound(noteID))
         }
         var note = chord.notes[noteID.noteIndexInChord]
         mutate(&note)

@@ -7,8 +7,7 @@ set -euo pipefail
 # Prepend it to PATH so plain `swift` resolves to it — the swiftly shim on
 # some hosts ignores TOOLCHAINS, and Apple's Xcode swiftc produces
 # incompatible swiftmodules.
-TOOLCHAIN_BIN="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin"
-if [[ -d "$TOOLCHAIN_BIN" ]]; then
+if TOOLCHAIN_BIN="$("$(dirname "$0")/swift-org-toolchain.sh")"; then
     export PATH="$TOOLCHAIN_BIN:$PATH"
 fi
 export SWIFT_SHEET_MUSIC_ANDROID=1
