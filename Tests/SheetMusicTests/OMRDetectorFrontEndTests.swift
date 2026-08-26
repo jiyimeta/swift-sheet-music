@@ -60,10 +60,11 @@
                 try OMRDetectorFrontEnd.checkVocabulary(classes)
                 Issue.record("expected checkVocabulary to throw")
             } catch {
-                guard case let SheetMusicError.malformedScore(reason) = error else {
+                guard case let SheetMusicError.malformedScore(fault) = error else {
                     Issue.record("expected .malformedScore, got \(error)")
                     return
                 }
+                let reason = fault.message
                 #expect(reason.contains("index 0"))
                 #expect(reason.contains(classes[0]))
                 #expect(reason.contains(OMRPrepTargets.trainableVocabulary[0]))
@@ -293,7 +294,9 @@
         @MainActor
         static func realPageWithSymbols() throws -> (bitmap: GrayBitmap, page: OMRPageLabels) {
             guard #available(macOS 15.0, *) else {
-                throw SheetMusicError.malformedScore(reason: "requires macOS 15")
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector", message: "requires macOS 15",
+                ))
             }
             _ = TestSupport.installApple
 

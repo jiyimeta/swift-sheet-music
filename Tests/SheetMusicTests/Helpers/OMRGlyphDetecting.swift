@@ -31,10 +31,11 @@
 
         func glyphs(page: OMRPageLabels, analysis _: RasterPageAnalysis) throws -> [ClassifiedGlyph] {
             guard let glyphs = byPageIndex[page.page.index] else {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMRPrecomputedDetector: no precomputed glyphs for page "
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector",
+                    message: "OMRPrecomputedDetector: no precomputed glyphs for page "
                         + "\(page.page.index) — it holds \(byPageIndex.keys.sorted())",
-                )
+                ))
             }
             return glyphs
         }

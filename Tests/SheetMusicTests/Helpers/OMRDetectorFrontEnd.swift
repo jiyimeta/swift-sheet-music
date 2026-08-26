@@ -173,17 +173,19 @@
             let expected = OMRPrepTargets.trainableVocabulary
             guard classes != expected else { return }
             if classes.count != expected.count {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMR detector: model class list (\(classes.count) classes) does not "
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector",
+                    message: "OMR detector: model class list (\(classes.count) classes) does not "
                         + "match the frozen trainable vocabulary (\(expected.count) classes)",
-                )
+                ))
             }
             let index = classes.indices.first { classes[$0] != expected[$0] } ?? 0
-            throw SheetMusicError.malformedScore(
-                reason: "OMR detector: model class list disagrees with the frozen trainable "
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "omr.detector",
+                message: "OMR detector: model class list disagrees with the frozen trainable "
                     + "vocabulary at index \(index): model has \"\(classes[index])\", "
                     + "expected \"\(expected[index])\"",
-            )
+            ))
         }
 
         /// A manifest field that decodes as a syntactically valid number
@@ -210,10 +212,11 @@
                 ("top_k", Double(manifest.topK)),
             ]
             for check in positiveChecks where check.value <= 0 {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMR detector: manifest field \"\(check.name)\" must be positive, "
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector",
+                    message: "OMR detector: manifest field \"\(check.name)\" must be positive, "
                         + "got \(check.value)",
-                )
+                ))
             }
             // `OMRTiling.origins`' step is `max(1, tile - overlap)`, so a
             // negative overlap does not fail outright — it silently
@@ -226,16 +229,18 @@
             // through the model by ANY tile, and silently vanish from
             // every detection, not merely a slower or redundant sweep.
             guard manifest.overlap >= 0 else {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMR detector: manifest field \"overlap\" must be non-negative, "
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector",
+                    message: "OMR detector: manifest field \"overlap\" must be non-negative, "
                         + "got \(manifest.overlap)",
-                )
+                ))
             }
             guard manifest.std != 0 else {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMR detector: manifest field \"std\" must not be zero, "
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector",
+                    message: "OMR detector: manifest field \"std\" must not be zero, "
                         + "got \(manifest.std)",
-                )
+                ))
             }
             // The heatmap head is a sigmoid, so its cells live in [0, 1]
             // and a negative threshold selects EVERY cell of every class
@@ -246,10 +251,11 @@
             // candidates), which is exact for a threshold of 0 or more
             // and would silently change the result below zero.
             guard manifest.threshold >= 0, manifest.threshold < 1 else {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMR detector: manifest field \"threshold\" must be in [0, 1), "
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector",
+                    message: "OMR detector: manifest field \"threshold\" must be in [0, 1), "
                         + "got \(manifest.threshold)",
-                )
+                ))
             }
         }
 
@@ -316,18 +322,20 @@
                   let offsetArray = output.featureValue(for: "offset")?.multiArrayValue,
                   let geomArray = output.featureValue(for: "geom")?.multiArrayValue
             else {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMR detector: model output is missing heatmap / offset / geom",
-                )
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector",
+                    message: "OMR detector: model output is missing heatmap / offset / geom",
+                ))
             }
             let heatmap = try OMRDetectTiming.shared.measure("detect.flatten") {
                 try flatten(heatmapArray)
             }
             guard heatmap.channels == manifest.classes.count else {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMR detector: heatmap has \(heatmap.channels) channels, manifest "
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector",
+                    message: "OMR detector: heatmap has \(heatmap.channels) channels, manifest "
                         + "lists \(manifest.classes.count) classes",
-                )
+                ))
             }
             let offset = try OMRDetectTiming.shared.measure("detect.flatten") { try flatten(offsetArray) }
             let geom = try OMRDetectTiming.shared.measure("detect.flatten") { try flatten(geomArray) }
@@ -354,10 +362,11 @@
         ) throws -> ClassifiedGlyph {
             let className = manifest.classes[detection.classIndex]
             guard let semantic = OMRLabelClassNames.semantic(forClassName: className) else {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMR detector: no semantic for class \(className) — "
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector",
+                    message: "OMR detector: no semantic for class \(className) — "
                         + "checkVocabulary should have caught this at load time",
-                )
+                ))
             }
             let deskewedX = Double(detection.originPx.x) / scale
             let deskewedY = Double(detection.originPx.y) / scale
@@ -414,16 +423,18 @@
         /// a multi-array out however the selected compute unit prefers.
         private func flatten(_ array: MLMultiArray) throws -> FlatArray {
             guard array.dataType == .float32 else {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMR detector: expected a float32 model output, got \(array.dataType)",
-                )
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector",
+                    message: "OMR detector: expected a float32 model output, got \(array.dataType)",
+                ))
             }
             let shape = array.shape.map(\.intValue)
             let strides = array.strides.map(\.intValue)
             guard shape.count >= 3 else {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMR detector: model output has rank \(shape.count), expected at least 3",
-                )
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.detector",
+                    message: "OMR detector: model output has rank \(shape.count), expected at least 3",
+                ))
             }
             let rank = shape.count
             let channels = shape[rank - 3], height = shape[rank - 2], width = shape[rank - 1]

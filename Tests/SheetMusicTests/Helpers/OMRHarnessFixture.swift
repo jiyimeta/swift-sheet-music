@@ -69,9 +69,10 @@
                 document, anchorMusicGlyphsToPUARange: true,
             )
             guard let pageSize = walk.pageSizes[0] else {
-                throw SheetMusicError.malformedScore(
-                    reason: "OMRHarnessFixture: no page size for page 0",
-                )
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.harness",
+                    message: "OMRHarnessFixture: no page size for page 0",
+                ))
             }
             let score = try PDFImporter.buildScore(
                 pageCount: document.pageCount, walked: walk.content,

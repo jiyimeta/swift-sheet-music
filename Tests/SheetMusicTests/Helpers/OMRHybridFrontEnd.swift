@@ -517,7 +517,9 @@
         /// fallback would report label-quality numbers under a detector
         /// heading.
         private static func hybridError(_ reason: String) -> Error {
-            SheetMusicError.malformedScore(reason: "OMRHybridFrontEnd: \(reason)")
+            SheetMusicError.malformedScore(ScoreFault(
+                code: "omr.hybrid", message: "OMRHybridFrontEnd: \(reason)",
+            ))
         }
     }
 #endif

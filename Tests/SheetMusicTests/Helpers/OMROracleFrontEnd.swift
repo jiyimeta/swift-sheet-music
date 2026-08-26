@@ -38,9 +38,10 @@
         ) throws -> [ClassifiedGlyph] {
             try source.map { g in
                 guard let semantic = OMRLabelClassNames.semantic(forClassName: g.className) else {
-                    throw SheetMusicError.malformedScore(
-                        reason: "OMR labels: unknown class \(g.className)",
-                    )
+                    throw SheetMusicError.malformedScore(ScoreFault(
+                        code: "omr.oracle",
+                        message: "OMR labels: unknown class \(g.className)",
+                    ))
                 }
                 return try ClassifiedGlyph(
                     geometry: GlyphGeometry(
@@ -126,22 +127,27 @@
             case "rectangle": return .rectangle
             case "beam": return .beam
             default:
-                throw SheetMusicError.malformedScore(
-                    reason: "OMR labels: unknown path kind \(name)",
-                )
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.oracle",
+                    message: "OMR labels: unknown path kind \(name)",
+                ))
             }
         }
 
         private static func point(_ a: [Double], what: String) throws -> CGPoint {
             guard a.count == 2 else {
-                throw SheetMusicError.malformedScore(reason: "OMR labels: bad \(what)")
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.oracle", message: "OMR labels: bad \(what)",
+                ))
             }
             return CGPoint(x: a[0], y: a[1])
         }
 
         private static func rect(_ a: [Double], what: String) throws -> CGRect {
             guard a.count == 4 else {
-                throw SheetMusicError.malformedScore(reason: "OMR labels: bad \(what)")
+                throw SheetMusicError.malformedScore(ScoreFault(
+                    code: "omr.oracle", message: "OMR labels: bad \(what)",
+                ))
             }
             return CGRect(x: a[0], y: a[1], width: a[2] - a[0], height: a[3] - a[1])
         }
