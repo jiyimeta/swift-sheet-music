@@ -86,7 +86,8 @@
 
         init(modelRoot: URL) async throws {
             let manifestData = try Data(contentsOf: modelRoot.appendingPathComponent("model.json"))
-            let manifest = try JSONDecoder().decode(Manifest.self, from: manifestData)
+            let decoded = try JSONDecoder().decode(Manifest.self, from: manifestData)
+            let manifest = Self.applyDecodeOverrides(to: decoded)
             try Self.checkVocabulary(manifest.classes)
             try Self.checkNumerics(manifest)
 
@@ -96,6 +97,65 @@
             configuration.computeUnits = .all
             model = try MLModel(contentsOf: compiledURL, configuration: configuration)
             self.manifest = manifest
+        }
+
+        /// Overrides the three DECODE constants from the environment, so
+        /// spec §11's sweep is a shell loop over one exported model
+        /// instead of a re-export per setting:
+        ///
+        ///     OMR_DECODE_THRESHOLD  detection threshold τ
+        ///     OMR_DECODE_TOP_K      per-tile top-K
+        ///     OMR_DECODE_NMS_SP     merge NMS radius, in staff spaces
+        ///
+        /// Only these three. `staff_space_px` (S) and `tile` (T) are
+        /// baked into the trained weights and the exported graph — a
+        /// model trained at S=12 does not become an S=16 model by being
+        /// told so, it becomes a wrong one. Sweeping those means
+        /// re-exporting the prep root and retraining, which is why the
+        /// spec separates them.
+        ///
+        /// An unparseable value THROWS rather than falling back to the
+        /// manifest: a swept run that silently ignored its own parameter
+        /// would report the baseline's numbers under the swept setting's
+        /// label, which is the one outcome a sweep cannot survive.
+        /// `checkNumerics` then applies to the overridden values, so a
+        /// nonsense τ is rejected the same way a nonsense manifest is.
+        ///
+        /// `decode_defaults_measured` is deliberately NOT set by an
+        /// override — it records whether the values in the MANIFEST were
+        /// swept, and an override is by definition not yet that.
+        static func applyDecodeOverrides(
+            to manifest: Manifest,
+            environment: [String: String] = ProcessInfo.processInfo.environment,
+        ) -> Manifest {
+            var out = manifest
+            var applied: [String] = []
+            if let raw = environment["OMR_DECODE_THRESHOLD"] {
+                out.threshold = Self.parse(raw, name: "OMR_DECODE_THRESHOLD")
+                applied.append("threshold=\(out.threshold)")
+            }
+            if let raw = environment["OMR_DECODE_TOP_K"] {
+                out.topK = Int(Self.parse(raw, name: "OMR_DECODE_TOP_K"))
+                applied.append("topK=\(out.topK)")
+            }
+            if let raw = environment["OMR_DECODE_NMS_SP"] {
+                out.nmsRadiusSp = Self.parse(raw, name: "OMR_DECODE_NMS_SP")
+                applied.append("nmsRadiusSp=\(out.nmsRadiusSp)")
+            }
+            if !applied.isEmpty {
+                print("[detect-override] \(applied.joined(separator: " "))")
+            }
+            return out
+        }
+
+        private static func parse(_ raw: String, name: String) -> Double {
+            guard let value = Double(raw) else {
+                // A sweep that quietly ignores its own parameter is worse
+                // than one that dies, so this is fatal rather than a
+                // fallback to the manifest value.
+                fatalError("\(name)=\"\(raw)\" is not a number")
+            }
+            return value
         }
 
         /// The gate: throws unless `classes` is EXACTLY
@@ -177,16 +237,32 @@
                         + "got \(manifest.std)",
                 )
             }
+            // The heatmap head is a sigmoid, so its cells live in [0, 1]
+            // and a negative threshold selects EVERY cell of every class
+            // channel — 62 x 96 x 96 per tile. It is also the one input
+            // `OMRDetectorDecode.decode`'s peak scan requires to be
+            // non-negative: the scan skips the neighbourhood test for
+            // cells at or below the threshold (they can never become
+            // candidates), which is exact for a threshold of 0 or more
+            // and would silently change the result below zero.
+            guard manifest.threshold >= 0, manifest.threshold < 1 else {
+                throw SheetMusicError.malformedScore(
+                    reason: "OMR detector: manifest field \"threshold\" must be in [0, 1), "
+                        + "got \(manifest.threshold)",
+                )
+            }
         }
 
         func glyphs(page: OMRPageLabels, analysis: RasterPageAnalysis) throws -> [ClassifiedGlyph] {
             // A page with no staff yields no glyphs, exactly as it yields
             // no paths — there is no staff space to normalize against.
             guard analysis.staffSpacingPx > 0, let deskewed = analysis.deskewed else { return [] }
-            guard let normalized = OMRPrepNormalize.normalize(
-                deskewed, staffSpacingPx: analysis.staffSpacingPx,
-                targetStaffSpacePx: manifest.staffSpacePx,
-            ) else { return [] }
+            guard let normalized = OMRDetectTiming.shared.measure("detect.normalize", {
+                OMRPrepNormalize.normalize(
+                    deskewed, staffSpacingPx: analysis.staffSpacingPx,
+                    targetStaffSpacePx: manifest.staffSpacePx,
+                )
+            }) else { return [] }
 
             let detections = try runTiles(over: normalized.bitmap)
             return try detections.map { detection in
@@ -211,11 +287,13 @@
                     }
                 }
             }
-            return OMRDetectorDecode.merge(
-                tiles, pageWidth: bitmap.width, pageHeight: bitmap.height,
-                tile: manifest.tile, overlap: manifest.overlap,
-                nmsRadiusPx: manifest.nmsRadiusSp * manifest.staffSpacePx,
-            )
+            return OMRDetectTiming.shared.measure("detect.merge") {
+                OMRDetectorDecode.merge(
+                    tiles, pageWidth: bitmap.width, pageHeight: bitmap.height,
+                    tile: manifest.tile, overlap: manifest.overlap,
+                    nmsRadiusPx: manifest.nmsRadiusSp * manifest.staffSpacePx,
+                )
+            }
         }
 
         /// One tile's Core ML round trip: build the input tensor, run the
@@ -225,11 +303,15 @@
         private func detect(
             tileAt ox: Int, _ oy: Int, in bitmap: GrayBitmap,
         ) throws -> [OMRDetectorDecode.Detection] {
-            let input = try makeInput(bitmap, originX: ox, originY: oy)
-            let provider = try MLDictionaryFeatureProvider(
-                dictionary: ["image": MLFeatureValue(multiArray: input)],
-            )
-            let output = try model.prediction(from: provider)
+            let provider = try OMRDetectTiming.shared.measure("detect.makeInput") {
+                let input = try makeInput(bitmap, originX: ox, originY: oy)
+                return try MLDictionaryFeatureProvider(
+                    dictionary: ["image": MLFeatureValue(multiArray: input)],
+                )
+            }
+            let output = try OMRDetectTiming.shared.measure("detect.predict") {
+                try model.prediction(from: provider)
+            }
             guard let heatmapArray = output.featureValue(for: "heatmap")?.multiArrayValue,
                   let offsetArray = output.featureValue(for: "offset")?.multiArrayValue,
                   let geomArray = output.featureValue(for: "geom")?.multiArrayValue
@@ -238,21 +320,25 @@
                     reason: "OMR detector: model output is missing heatmap / offset / geom",
                 )
             }
-            let heatmap = try flatten(heatmapArray)
+            let heatmap = try OMRDetectTiming.shared.measure("detect.flatten") {
+                try flatten(heatmapArray)
+            }
             guard heatmap.channels == manifest.classes.count else {
                 throw SheetMusicError.malformedScore(
                     reason: "OMR detector: heatmap has \(heatmap.channels) channels, manifest "
                         + "lists \(manifest.classes.count) classes",
                 )
             }
-            let offset = try flatten(offsetArray)
-            let geom = try flatten(geomArray)
-            return OMRDetectorDecode.decode(
-                heatmap: heatmap.values, offset: offset.values, geom: geom.values,
-                classes: heatmap.channels, width: heatmap.width, height: heatmap.height,
-                stride: manifest.stride, staffSpacePx: manifest.staffSpacePx,
-                threshold: manifest.threshold, topK: manifest.topK,
-            )
+            let offset = try OMRDetectTiming.shared.measure("detect.flatten") { try flatten(offsetArray) }
+            let geom = try OMRDetectTiming.shared.measure("detect.flatten") { try flatten(geomArray) }
+            return OMRDetectTiming.shared.measure("detect.decode") {
+                OMRDetectorDecode.decode(
+                    heatmap: heatmap.values, offset: offset.values, geom: geom.values,
+                    classes: heatmap.channels, width: heatmap.width, height: heatmap.height,
+                    stride: manifest.stride, staffSpacePx: manifest.staffSpacePx,
+                    threshold: manifest.threshold, topK: manifest.topK,
+                )
+            }
         }
 
         /// Maps one normalized-page-space detection into a `ClassifiedGlyph`

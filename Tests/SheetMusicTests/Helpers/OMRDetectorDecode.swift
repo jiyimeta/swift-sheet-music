@@ -34,7 +34,22 @@
         /// matching the CenterNet decode this net was trained against:
         /// 3x3 max-pool NMS on the heatmap, threshold (score > `threshold`
         /// survives), then keep the `topK` highest-scoring survivors
-        /// overall (not per class).
+        /// overall (not per class). A cell survives NMS only if it is the
+        /// maximum of its own 3x3 neighbourhood (which includes itself,
+        /// so a strict local maximum always survives and a tie survives
+        /// on both sides) — the same rule as `decode.py::_nms`, fused
+        /// into the threshold scan rather than materialising a separate
+        /// peaks plane.
+        ///
+        /// The fusion is what makes this affordable. Measured over the
+        /// 34-render eval set, the separated form was **130.8 ms per
+        /// tile and 96% of the whole sweep** — it allocated a 9-element
+        /// neighbour array for every one of the 62 x 96 x 96 cells (over
+        /// 20 million array allocations per page) and ran the
+        /// neighbourhood test on all of them, when on a trained heatmap
+        /// almost every cell is far below the threshold and can never be
+        /// a candidate whatever its peak status. Core ML's own
+        /// prediction, by contrast, was 0.75 ms per tile.
         ///
         /// `centre = (cell + offset) * stride` — no `+ 0.5`; `offset` IS
         /// the sub-pixel remainder in cell units, not a half-cell shift.
@@ -48,15 +63,42 @@
             width: Int, height: Int, stride: Int, staffSpacePx: Double,
             threshold: Double, topK: Int,
         ) -> [Detection] {
-            let peaks = nms(heatmap, classes: classes, width: width, height: height)
             let plane = height * width
             var candidates: [(score: Double, classIndex: Int, iy: Int, ix: Int)] = []
-            for cls in 0 ..< classes {
-                for iy in 0 ..< height {
-                    for ix in 0 ..< width {
-                        let value = Double(peaks[cls * plane + iy * width + ix])
-                        guard value > threshold else { continue }
-                        candidates.append((value, cls, iy, ix))
+            // Compared as `Double(value) > threshold`, never against a
+            // `Float(threshold)`: `Float(0.3)` is 0.30000001192…, so a
+            // cell between the two representations would change sides
+            // purely from where the conversion happens.
+            heatmap.withUnsafeBufferPointer { hm in
+                for cls in 0 ..< classes {
+                    let base = cls * plane
+                    for iy in 0 ..< height {
+                        let rowBase = base + iy * width
+                        let y0 = max(0, iy - 1), y1 = min(height - 1, iy + 1)
+                        for ix in 0 ..< width {
+                            let value = hm[rowBase + ix]
+                            // Sub-threshold cells are skipped BEFORE the
+                            // neighbourhood test, not after: they cannot
+                            // become candidates whether or not they are
+                            // peaks, and on a trained heatmap almost
+                            // every one of the 62 x 96 x 96 cells is one.
+                            // Exact because `threshold >= 0` (enforced by
+                            // `OMRDetectorFrontEnd.checkNumerics`) — a
+                            // suppressed cell scores 0, which is never
+                            // above a non-negative threshold.
+                            guard Double(value) > threshold else { continue }
+                            let x0 = max(0, ix - 1), x1 = min(width - 1, ix + 1)
+                            var isPeak = true
+                            neighbourhood: for ny in y0 ... y1 {
+                                let nRow = base + ny * width
+                                for nx in x0 ... x1 where hm[nRow + nx] > value {
+                                    isPeak = false
+                                    break neighbourhood
+                                }
+                            }
+                            guard isPeak else { continue }
+                            candidates.append((Double(value), cls, iy, ix))
+                        }
                     }
                 }
             }
@@ -77,42 +119,6 @@
                     advancePx: advance, renderedSizePx: renderedSize,
                 )
             }
-        }
-
-        /// 3x3 max-pool NMS, independently per class channel: a cell
-        /// survives only if it is the maximum of its own 3x3 neighbourhood
-        /// (which always includes the cell itself, so a strict local
-        /// maximum always survives, and a tie survives on both sides).
-        /// Suppressed cells come back as 0. Mirrors `decode.py::_nms`.
-        private static func nms(_ heatmap: [Float], classes: Int, width: Int, height: Int) -> [Float] {
-            let plane = height * width
-            var peaks = [Float](repeating: 0, count: heatmap.count)
-            for cls in 0 ..< classes {
-                let base = cls * plane
-                for iy in 0 ..< height {
-                    for ix in 0 ..< width {
-                        let value = heatmap[base + iy * width + ix]
-                        let isPeak = neighborhood(iy: iy, ix: ix, width: width, height: height)
-                            .allSatisfy { ny, nx in heatmap[base + ny * width + nx] <= value }
-                        peaks[base + iy * width + ix] = isPeak ? value : 0
-                    }
-                }
-            }
-            return peaks
-        }
-
-        private static func neighborhood(iy: Int, ix: Int, width: Int, height: Int) -> [(Int, Int)] {
-            var result: [(Int, Int)] = []
-            for dy in -1 ... 1 {
-                let ny = iy + dy
-                guard ny >= 0, ny < height else { continue }
-                for dx in -1 ... 1 {
-                    let nx = ix + dx
-                    guard nx >= 0, nx < width else { continue }
-                    result.append((ny, nx))
-                }
-            }
-            return result
         }
     }
 #endif

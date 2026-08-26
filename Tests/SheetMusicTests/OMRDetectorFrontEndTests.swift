@@ -142,6 +142,86 @@
                 try OMRDetectorFrontEnd.checkNumerics(Self.sampleManifest(overlap: -1))
             }
         }
+
+        /// Spec §11's sweep varies the three decode constants over ONE
+        /// exported model, via the environment.
+        @Test func decodeOverridesReplaceOnlyTheThreeDecodeConstants() {
+            let base = Self.sampleManifest()
+            let out = OMRDetectorFrontEnd.applyDecodeOverrides(
+                to: base,
+                environment: [
+                    "OMR_DECODE_THRESHOLD": "0.45",
+                    "OMR_DECODE_TOP_K": "120",
+                    "OMR_DECODE_NMS_SP": "0.75",
+                ],
+            )
+            #expect(out.threshold == 0.45)
+            #expect(out.topK == 120)
+            #expect(out.nmsRadiusSp == 0.75)
+
+            // Everything the weights and the exported graph are baked
+            // against must be untouched — S and T especially: a model
+            // trained at S=12 does not become an S=16 model by being told
+            // so, it becomes a wrong one.
+            #expect(out.staffSpacePx == base.staffSpacePx)
+            #expect(out.tile == base.tile)
+            #expect(out.overlap == base.overlap)
+            #expect(out.stride == base.stride)
+            #expect(out.mean == base.mean)
+            #expect(out.std == base.std)
+            #expect(out.classes == base.classes)
+            #expect(out.checkpoint == base.checkpoint)
+            // An override is not a measurement.
+            #expect(out.decodeDefaultsMeasured == base.decodeDefaultsMeasured)
+        }
+
+        @Test func anEmptyEnvironmentLeavesTheManifestExactlyAsDecoded() {
+            let base = Self.sampleManifest()
+            let out = OMRDetectorFrontEnd.applyDecodeOverrides(to: base, environment: [:])
+            #expect(out.threshold == base.threshold)
+            #expect(out.topK == base.topK)
+            #expect(out.nmsRadiusSp == base.nmsRadiusSp)
+        }
+
+        /// Each variable is independent — a sweep over τ alone must not
+        /// disturb top-K or the NMS radius. Without this, one `if` block
+        /// reading another's variable would pass every assertion above.
+        @Test func eachDecodeOverrideActsAlone() {
+            let base = Self.sampleManifest()
+            let onlyThreshold = OMRDetectorFrontEnd.applyDecodeOverrides(
+                to: base, environment: ["OMR_DECODE_THRESHOLD": "0.9"],
+            )
+            #expect(onlyThreshold.threshold == 0.9)
+            #expect(onlyThreshold.topK == base.topK)
+            #expect(onlyThreshold.nmsRadiusSp == base.nmsRadiusSp)
+
+            let onlyTopK = OMRDetectorFrontEnd.applyDecodeOverrides(
+                to: base, environment: ["OMR_DECODE_TOP_K": "7"],
+            )
+            #expect(onlyTopK.topK == 7)
+            #expect(onlyTopK.threshold == base.threshold)
+            #expect(onlyTopK.nmsRadiusSp == base.nmsRadiusSp)
+
+            let onlyNms = OMRDetectorFrontEnd.applyDecodeOverrides(
+                to: base, environment: ["OMR_DECODE_NMS_SP": "1.25"],
+            )
+            #expect(onlyNms.nmsRadiusSp == 1.25)
+            #expect(onlyNms.threshold == base.threshold)
+            #expect(onlyNms.topK == base.topK)
+        }
+
+        /// An overridden value goes through `checkNumerics` like any
+        /// other, so a sweep cannot walk into a configuration the loader
+        /// would have refused from a manifest — `top_k: 0` detects
+        /// nothing and reads as a detector failure.
+        @Test func anOverriddenValueIsStillCheckedForSanity() {
+            let out = OMRDetectorFrontEnd.applyDecodeOverrides(
+                to: Self.sampleManifest(), environment: ["OMR_DECODE_TOP_K": "0"],
+            )
+            #expect(throws: (any Error).self) {
+                try OMRDetectorFrontEnd.checkNumerics(out)
+            }
+        }
     }
 
     /// `model.json`'s `decode_defaults_measured` and `checkpoint` fields
