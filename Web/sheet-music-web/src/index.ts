@@ -1,10 +1,13 @@
 /**
  * Browser and Node facade over the wasm bridge.
  *
- * `loadSheetMusic` is async even though everything under it is synchronous:
- * moving layout onto a Worker with OffscreenCanvas is a planned optimization,
- * and it can only be done without breaking hosts if the entry point was never
- * promised to be synchronous.
+ * `loadSheetMusic` is async even though everything under it is synchronous, so
+ * that moving work onto a Worker later could not break hosts. That move is NOT
+ * planned: the measurements in `docs/development/webassembly.md` say a renderer
+ * Worker would have nothing to protect, and moving `computeLayout` would mean
+ * moving the whole bridge and turning every cursor, hit-test and caret query
+ * into a postMessage round trip. The async signature is headroom that was kept,
+ * not a migration that is pending.
  */
 import {
   decodeDrawProgram,

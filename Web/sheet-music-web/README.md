@@ -240,7 +240,9 @@ leading bytes.
 
 MP3 export. No browser ships an encoder for it — see the export table above.
 
-Layout on a Worker with OffscreenCanvas. `loadSheetMusic` is already async so
-that it can move there without breaking hosts, but it has not moved yet.
+Layout on a Worker with OffscreenCanvas is not planned, and the reason is a
+measurement rather than a preference: a viewport-sized redraw costs 0–0.1 ms and
+a renderer Worker would have nothing to protect. `loadSheetMusic` is async
+anyway, so the option stays open if that ever stops being true.
 
 [repo]: https://github.com/jiyimeta/swift-sheet-music
