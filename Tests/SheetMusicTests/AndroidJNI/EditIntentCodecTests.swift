@@ -143,6 +143,10 @@ struct EditIntentCodecTests {
                 ),
                 at: 1,
             ),
+            // Appended for M2 ensemble creation — indices 17…18. `.movePart`'s two fields are distinct so the
+            // round trip can catch a `from`/`to` transposition, which would silently move the part the wrong way.
+            .removePart(at: 2),
+            .movePart(from: 0, to: 3),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -181,6 +185,8 @@ struct EditIntentCodecTests {
         #expect(EditIntentCodec.encode(
             .addPart(plan: .init(instrumentID: "x", staves: [.init(clefType: "G")]), at: 0),
         )[1] == 16)
+        #expect(EditIntentCodec.encode(.removePart(at: 0))[1] == 17)
+        #expect(EditIntentCodec.encode(.movePart(from: 0, to: 1))[1] == 18)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field

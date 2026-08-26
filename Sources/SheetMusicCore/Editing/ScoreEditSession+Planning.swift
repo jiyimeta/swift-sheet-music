@@ -14,8 +14,9 @@ extension ScoreEditSession {
     /// the same limit `CompositeIntentWire.decoded` enforces on the wire side of this same recursion.
     private static let maxCompositeIntentDepth = 8
 
-    /// Plans an intent against `score`. `nil` when the intent has nothing to do — an empty composite, or a composite
-    /// whose members all planned to nothing. Throws when a nested `.composite` exceeds `maxCompositeIntentDepth`.
+    /// Plans an intent against `score`. `nil` when the intent has nothing to do — an empty composite, a composite
+    /// whose members all planned to nothing, or a `.movePart` that would not move anything. Throws when a nested
+    /// `.composite` exceeds `maxCompositeIntentDepth`.
     static func command(for intent: EditIntent, in score: Score, depth: Int) throws -> (any EditCommand)? {
         switch intent {
         case let .inputNote(location, pitch, tpc, duration):
@@ -91,6 +92,14 @@ extension ScoreEditSession {
             return DeleteMeasure(measureIndex: index)
         case let .addPart(plan, index):
             return AddPart(plan: plan, at: index)
+        case let .removePart(index):
+            return RemovePart(partIndex: index)
+        case let .movePart(from, to):
+            // A move onto its own index is a no-op, and planning it into a command would push an undo entry that
+            // restores the score to itself — a dead ⌘Z the user has to press twice. `nil` reports it the way an
+            // empty composite is reported, as `.nothingToApply`. Out-of-range indices are deliberately NOT caught
+            // here: `MovePart.apply` states the range once, so the answer is the same however it is reached.
+            return from == to ? nil : MovePart(from: from, to: to)
         case let .setNotePitch(location, pitch, tpc, accidental):
             return retuneCommand(at: location, pitch: pitch, tpc: tpc, accidental: accidental, in: score)
         case .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet, .removeTuplet:

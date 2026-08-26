@@ -15,8 +15,13 @@ import SheetMusicFoundation
 public final class ScoreEditSession {
     private let editor: ScoreEditor
 
+    /// The part ids the current `partIndexMapping` is measured from — the score's ids at `init`, re-taken by
+    /// `consumePartIndexMapping()`.
+    private var partIDBaseline: [String]
+
     public init(score: Score) {
         editor = ScoreEditor(score: score)
+        partIDBaseline = score.parts.map(\.id)
     }
 
     public var score: Score {
@@ -108,5 +113,49 @@ public final class ScoreEditSession {
         guard editor.canRedo else { return false }
         do { try editor.redo() } catch { return false }
         return true
+    }
+
+    // MARK: - Part-index mapping
+
+    /// Where every part that existed at the last consume point (or at `init`) is NOW: `nil` means it was removed.
+    ///
+    /// A host keys per-part state — a mixer strip's volume, a staff's collapsed flag, a per-instrument SoundFont —
+    /// by part INDEX, and an add / remove / move renumbers underneath it. This is the map to migrate that state
+    /// through, taken cumulatively over every intent applied since the baseline rather than per edit, so a host can
+    /// read it once when it is ready to write rather than following along with each step.
+    ///
+    /// Derived by diffing `Part.id` snapshots, which is what makes undo and redo free: an undone removal puts the
+    /// same id back, and the diff says so without anything having to track the inverse.
+    ///
+    /// **Duplicate ids in the baseline yield the identity mapping.** A malformed file can carry two parts sharing
+    /// an id, and `firstIndex(of:)` cannot tell them apart — the answer would be a plausible-looking lie that moves
+    /// one part's preferences onto another. Reporting identity makes the host skip the migration instead, which
+    /// leaves its state pointing where it already pointed. Losing a migration is recoverable; corrupting the
+    /// preferences it was migrating is not.
+    public var partIndexMapping: [Int: Int?] {
+        let baseline = partIDBaseline
+        guard Set(baseline).count == baseline.count else {
+            return Dictionary(uniqueKeysWithValues: baseline.indices.map { ($0, Optional($0)) })
+        }
+        let current = editor.score.parts.map(\.id)
+        return Dictionary(
+            uniqueKeysWithValues: baseline.enumerated().map { ($0.offset, current.firstIndex(of: $0.element)) },
+        )
+    }
+
+    /// Whether `partIndexMapping` says nothing moved and nothing went away — the case a host can skip entirely.
+    ///
+    /// A part APPENDED past the end leaves this true: it renumbers none of the parts the baseline knew about, so
+    /// there is nothing to migrate.
+    public var isPartMappingIdentity: Bool {
+        partIndexMapping.allSatisfy { $0.value == $0.key }
+    }
+
+    /// Re-baselines the mapping to the current parts, so the next `partIndexMapping` is measured from here.
+    ///
+    /// Call it after acting on a mapping. Until it is called the mapping keeps accumulating, which is deliberate:
+    /// a host that reads it three edits later still gets one map from the state it last wrote.
+    public func consumePartIndexMapping() {
+        partIDBaseline = editor.score.parts.map(\.id)
     }
 }

@@ -15,9 +15,19 @@ extension Score {
     ///
     /// `survivorLocations` maps each ORIGINAL address that survives to where it landed; an address absent from the
     /// map is one that went away. Callers strip the brackets off the rebuilt staves and append what this returns —
-    /// see `filtered(hidingStaves:)` (staff visibility) and `RemovePart` (a whole part deleted), the two callers
-    /// this exists to keep in agreement.
+    /// see `filtered(hidingStaves:)` (staff visibility), `RemovePart` (a whole part deleted) and `MovePart` (the
+    /// parts permuted), the callers this exists to keep in agreement.
+    ///
+    /// The result's `column`s are compacted (`canonicalizedColumns`) before it is returned, so a bracket whose
+    /// neighbour in the gutter went away does not keep drawing a column further out than anything occupies.
     static func reanchoredBrackets(
+        in parts: [Part],
+        survivorLocations: [StaffAddress: (part: Int, staff: Int)],
+    ) -> [(part: Int, staff: Int, bracket: BracketItem)] {
+        canonicalizedColumns(rebasedBrackets(in: parts, survivorLocations: survivorLocations))
+    }
+
+    private static func rebasedBrackets(
         in parts: [Part],
         survivorLocations: [StaffAddress: (part: Int, staff: Int)],
     ) -> [(part: Int, staff: Int, bracket: BracketItem)] {
@@ -43,5 +53,32 @@ extension Score {
             }
         }
         return result
+    }
+
+    /// Closes the gaps a re-anchor pass leaves in the bracket gutter: the columns still occupied are renumbered
+    /// onto `0 ..< n`, keeping their order.
+    ///
+    /// `column` is a horizontal coordinate, not a label — `StaffRenderer.bracketSpineX` puts a bracket's spine at
+    /// `staffOriginX - 0.5 sp - column * sp`, and `LayoutEngine.bracketGutterInfo` sizes the whole gutter as
+    /// `maxColumn + 1`. So a group bracket left at column 1 after the brace at column 0 was removed with its part
+    /// draws one `sp` further left than anything needs and reserves a gutter column nothing occupies. `RemovePart`
+    /// and `MovePart` write their result to the score the user saves, which is why it is compacted rather than
+    /// left for the layout engine to shrug at.
+    ///
+    /// The renumbering is GLOBAL over the pass's result rather than per anchor staff. Brackets sharing a column
+    /// share a spine position across the whole system — that is the alignment a nested layout depends on — so
+    /// compacting one staff's columns in isolation would pull its outer bracket down onto a spine another staff
+    /// still draws one column further out. A column any surviving bracket still occupies is not a gap.
+    private static func canonicalizedColumns(
+        _ entries: [(part: Int, staff: Int, bracket: BracketItem)],
+    ) -> [(part: Int, staff: Int, bracket: BracketItem)] {
+        let occupied = Set(entries.map(\.bracket.column)).sorted()
+        guard occupied != Array(occupied.indices) else { return entries }
+        let dense = Dictionary(uniqueKeysWithValues: occupied.enumerated().map { ($1, $0) })
+        return entries.map { entry in
+            var bracket = entry.bracket
+            bracket.column = dense[bracket.column] ?? bracket.column
+            return (part: entry.part, staff: entry.staff, bracket: bracket)
+        }
     }
 }

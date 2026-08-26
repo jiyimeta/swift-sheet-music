@@ -3,8 +3,8 @@ import SheetMusicFoundation
 /// Removes the whole part at `partIndex` — its instrument, its staves and their bar chains — and re-settles what
 /// pointed at it.
 ///
-/// Ships here as `AddPart`'s inverse; the `.removePart` intent that lets a host reach it directly comes with the
-/// part reorder work. See `AddPart`'s doc comment for the audit of what in the model carries a part index.
+/// Reachable directly as `EditIntent.removePart(at:)`, and also `AddPart`'s inverse. See `AddPart`'s doc comment
+/// for the audit of what in the model carries a part index.
 ///
 /// Two things outlive the part:
 ///
@@ -40,12 +40,8 @@ public struct RemovePart: EditCommand {
         guard score.parts.indices.contains(partIndex) else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
-        // `.cannotDeleteOnlyMeasure` stands in for the structural-minimum rule this is the part-shaped sibling of;
-        // the dedicated `.cannotRemoveLastPart` reason arrives with the `.removePart` intent, and swapping it here
-        // is the whole change. Refusing with the wrong-sounding code is still far better than the alternative — see
-        // the type's doc comment for what an unrefused last-part removal does to the undo stack.
         guard score.parts.count > 1 else {
-            throw Self.refused(.cannotDeleteOnlyMeasure)
+            throw Self.refused(.cannotRemoveLastPart)
         }
 
         let removed = score.parts[partIndex]

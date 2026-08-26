@@ -282,6 +282,50 @@ struct PartCommandTests {
         #expect(score == original)
     }
 
+    /// `bracketedTrio` with a grand staff at the head, so the group bracket is pushed out to column 1 by the
+    /// brace already sitting on its anchor staff — the shape `Score.applyBracketGroups` documents.
+    private func grandStaffHeadedTrio() -> Score {
+        Score.blank(BlankScoreTemplate(
+            title: "t",
+            parts: [
+                .init(instrumentID: "piano", staves: [.init(clefType: "G"), .init(clefType: "F")]),
+                .init(instrumentID: "b", staves: [.init(clefType: "G")]),
+                .init(instrumentID: "c", staves: [.init(clefType: "F")]),
+            ],
+            bracketGroups: [0 ..< 3],
+            measureCount: 2,
+        ))
+    }
+
+    /// Removing the part that carried the brace leaves the group bracket alone in a gutter two columns wide: its
+    /// spine draws one `sp` further left than it needs to, and `LayoutEngine.bracketGutterInfo` reserves a column
+    /// nothing occupies. Unlike a display filter's, this result is what gets saved, so the gap is compacted away.
+    @Test("a bracket left alone in its gutter compacts back to column 0")
+    func removePartCompactsBracketColumns() throws {
+        var score = grandStaffHeadedTrio()
+        let original = score
+        #expect(score.parts[0].staves[0].brackets == [
+            BracketItem(type: .brace, span: 2),
+            BracketItem(type: .normal, span: 4, column: 1),
+        ])
+        let inverse = try RemovePart(partIndex: 0).apply(to: &score)
+        #expect(score.parts[0].staves[0].brackets == [BracketItem(type: .normal, span: 2, column: 0)])
+        _ = try inverse.apply(to: &score)
+        #expect(score == original)
+    }
+
+    /// The compaction closes GAPS, it does not flatten nesting: a column still occupied by a surviving brace is
+    /// not a gap, and pulling the group bracket down onto it would draw the two spines on top of each other.
+    @Test("a column another bracket still occupies keeps the outer bracket where it is")
+    func removePartKeepsAnOccupiedBracketColumn() throws {
+        var score = grandStaffHeadedTrio()
+        _ = try RemovePart(partIndex: 2).apply(to: &score)
+        #expect(score.parts[0].staves[0].brackets == [
+            BracketItem(type: .brace, span: 2),
+            BracketItem(type: .normal, span: 3, column: 1),
+        ])
+    }
+
     @Test("an out-of-range part index is refused")
     func removePartOutOfRangeIsRefused() {
         var score = fixture()
@@ -329,9 +373,7 @@ struct PartCommandTests {
             Issue.record("expected a refusal")
         } catch let SheetMusicError.invalidEdit(refusal) {
             #expect(refusal.operation == "RemovePart")
-            // Stands in until the `.removePart` intent brings a dedicated `.cannotRemoveLastPart`; what matters
-            // here is that it is NOT `.targetNotFound`, which the out-of-range case already uses.
-            #expect(refusal.reason == .cannotDeleteOnlyMeasure)
+            #expect(refusal.reason == .cannotRemoveLastPart)
         } catch {
             Issue.record("expected an invalidEdit refusal, got \(error)")
         }

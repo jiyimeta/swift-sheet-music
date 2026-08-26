@@ -72,6 +72,7 @@ struct EditRefusalTests {
             .compositeTooDeep(limit: 8),
             .nothingToApply,
             .cannotDeleteOnlyMeasure,
+            .cannotRemoveLastPart,
             .unexpected(description: "boom"),
         ]
     }

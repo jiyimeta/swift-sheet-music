@@ -49,9 +49,11 @@ import Wirelet
 /// 14 = insertMeasure(MeasureIndexIntentWire)
 /// 15 = deleteMeasure(MeasureIndexIntentWire)
 /// 16 = addPart(AddPartIntentWire)
+/// 17 = removePart(PartIndexIntentWire)
+/// 18 = movePart(MovePartIntentWire)
 /// ```
 ///
-/// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation and 16 for M2 ensemble
+/// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation and 16…18 for M2 ensemble
 /// creation; 0…4 predate them all and must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
@@ -224,6 +226,18 @@ import Wirelet
 /// tag 1: clefType      string — the MuseScore clef token ("G", "F", "PERC", …)
 /// tag 2: isPercussion  u8, varint — 0 / 1
 /// ```
+///
+/// `PartIndexIntentWire` (`removePart`'s payload — a part-index sibling of `MeasureIndexIntentWire`, kept separate
+/// so neither struct's field has to be read as naming something it does not):
+/// ```
+/// tag 1: partIndex  i32, zig-zag varint
+/// ```
+///
+/// `MovePartIntentWire` (`movePart`'s payload):
+/// ```
+/// tag 1: fromIndex  i32, zig-zag varint
+/// tag 2: toIndex    i32, zig-zag varint
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -352,6 +366,10 @@ public enum EditIntentWire {
     case deleteMeasure(MeasureIndexIntentWire)
     /// Appended for M2 ensemble creation — index 16. Never renumber anything above it.
     case addPart(AddPartIntentWire)
+    /// Appended for M2 ensemble creation — index 17.
+    case removePart(PartIndexIntentWire)
+    /// Appended for M2 ensemble creation — index 18.
+    case movePart(MovePartIntentWire)
 
     public init(from intent: EditIntent) {
         switch intent {
@@ -400,13 +418,21 @@ public enum EditIntentWire {
             self = .deleteMeasure(MeasureIndexIntentWire(measureIndex: index))
         case let .addPart(plan, index):
             self = .addPart(AddPartIntentWire(plan: plan, partIndex: index))
+        case let .removePart(index):
+            self = .removePart(PartIndexIntentWire(partIndex: index))
+        case let .movePart(from, to):
+            self = .movePart(MovePartIntentWire(fromIndex: from, toIndex: to))
         }
     }
 
     /// `depth` counts how many `composite` levels enclose this node — 0 at the top of a decode. Only the
     /// `.composite` branch advances it; every other case is a leaf and ignores it. See `CompositeIntentWire.decoded`
     /// for the bound this enforces.
-    public func decoded(depth: Int = 0) throws -> EditIntent {
+    ///
+    /// One `switch` over every discriminator on purpose, past the length rule: splitting it would need a `default`
+    /// or a second exhaustive switch, and the compiler's insistence that every wire case be decoded here is the
+    /// only thing standing between an appended case and a payload that decodes as silence.
+    public func decoded(depth: Int = 0) throws -> EditIntent { // swiftlint:disable:this function_body_length
         switch self {
         case let .inputNote(wire):
             let decoded = try wire.decoded()
@@ -462,6 +488,11 @@ public enum EditIntentWire {
         case let .addPart(wire):
             let decoded = wire.decoded()
             return .addPart(plan: decoded.plan, at: decoded.partIndex)
+        case let .removePart(wire):
+            return .removePart(at: wire.decoded())
+        case let .movePart(wire):
+            let decoded = wire.decoded()
+            return .movePart(from: decoded.fromIndex, to: decoded.toIndex)
         }
     }
 }
@@ -819,5 +850,37 @@ public struct AddPartIntentWire {
 
     public func decoded() -> (plan: BlankScoreTemplate.PartPlan, partIndex: Int) {
         (plan: plan.decoded(), partIndex: Int(partIndex))
+    }
+}
+
+/// `removePart`'s payload. Byte-identical to `MeasureIndexIntentWire`, and deliberately not shared with it: the two
+/// index different things, and a codec whose field names lie about what they address is a decode away from a bug
+/// nothing catches.
+@WireFormat
+public struct PartIndexIntentWire {
+    public var partIndex: Int32
+
+    public init(partIndex: Int) {
+        self.partIndex = Int32(partIndex)
+    }
+
+    public func decoded() -> Int {
+        Int(partIndex)
+    }
+}
+
+/// `movePart`'s payload.
+@WireFormat
+public struct MovePartIntentWire {
+    public var fromIndex: Int32
+    public var toIndex: Int32
+
+    public init(fromIndex: Int, toIndex: Int) {
+        self.fromIndex = Int32(fromIndex)
+        self.toIndex = Int32(toIndex)
+    }
+
+    public func decoded() -> (fromIndex: Int, toIndex: Int) {
+        (fromIndex: Int(fromIndex), toIndex: Int(toIndex))
     }
 }

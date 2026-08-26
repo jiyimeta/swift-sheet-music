@@ -34,6 +34,33 @@ and this project adheres to
 - `EditIntent.addPart(plan:at:)`: the host-facing intent `ScoreEditSession` plans into `AddPart`, carrying a
   `BlankScoreTemplate.PartPlan` — the recipe, not a built part, so both images construct the same one — with
   `EditIntentCodec` wire support (index 16).
+- `MovePart`: reorders the parts — a removal followed by an insertion of the same `Part` value, so
+  `MovePart(from: 0, to: 1)` over `[A, B, C]` gives `[B, A, C]`. Its own inverse in shape
+  (`MovePart(from: to, to: from)`), carrying the pre-image of every bracket and system-element anchor so the undo
+  is byte-exact. `originalStaff` addresses are re-stamped through the permutation, and each bracket follows its
+  anchor staff, clamped to the staves left below its new position.
+- `EditIntent.removePart(at:)` / `.movePart(from:to:)`: the host-facing intents `ScoreEditSession` plans into
+  `RemovePart` / `MovePart`, with `EditIntentCodec` wire support (indices 17…18). `.movePart(from: n, to: n)`
+  resolves to nothing to apply rather than pushing an undo entry that restores the score to itself.
+- `EditRefusal.Reason.cannotRemoveLastPart` (`edit.cannotRemoveLastPart`): what `RemovePart` refuses a last-part
+  removal with. It used to borrow `.cannotDeleteOnlyMeasure`; a host switching over the reason can now tell the
+  two structural minimums apart.
+- `ScoreEditSession.partIndexMapping` / `consumePartIndexMapping()` / `isPartMappingIdentity`: where every part
+  that existed at the last consume point (or at `init`) is now, `nil` for one that was removed. A host keys
+  per-part state — mixer strips, per-staff flags — by index, and add / remove / move renumber underneath it; this
+  is the map to migrate that state through. Derived by diffing `Part.id` snapshots, so undo and redo need no
+  special handling, and cumulative rather than per-edit, so a host reads it once when it is ready to write.
+  Duplicate ids in the baseline (a malformed file) yield the identity mapping rather than a guess.
+
+### Fixed
+
+- Re-anchoring brackets no longer leaves a hole in the bracket gutter. `column` is a horizontal coordinate —
+  a bracket's spine sits at `staffOriginX - 0.5 sp - column * sp` and the gutter is sized `maxColumn + 1` — so a
+  group bracket left at column 1 after the brace at column 0 went away with its part drew one `sp` further left
+  than anything needed and reserved a column nothing occupied. `Score.reanchoredBrackets` now renumbers the
+  columns still occupied onto `0 ..< n`, which fixes `RemovePart` (whose result is saved to the file) and
+  `filtered(hidingStaves:)` (whose result is only displayed) in one place. The renumbering is global rather than
+  per anchor staff, so brackets that share a column keep sharing one.
 
 ## [2.0.0] - 2026-08-25
 

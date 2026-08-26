@@ -44,6 +44,10 @@ public struct EditRefusal: Sendable, Hashable {
         case nothingToApply
         /// A score must keep at least one measure; `DeleteMeasure` refuses when it would remove the last one.
         case cannotDeleteOnlyMeasure
+        /// A score must keep at least one part; `RemovePart` refuses when it would remove the last one. Distinct
+        /// from `.targetNotFound` on purpose: a host showing "no such part" when the user tried to delete their
+        /// only instrument is telling them something untrue.
+        case cannotRemoveLastPart
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -88,6 +92,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.nothingToApply"
         case .cannotDeleteOnlyMeasure:
             "edit.cannotDeleteOnlyMeasure"
+        case .cannotRemoveLastPart:
+            "edit.cannotRemoveLastPart"
         case .unexpected:
             "edit.unexpected"
         }
@@ -134,6 +140,8 @@ public struct EditRefusal: Sendable, Hashable {
             "intent resolved to nothing to apply"
         case .cannotDeleteOnlyMeasure:
             "a score must keep at least one measure"
+        case .cannotRemoveLastPart:
+            "a score must keep at least one part"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }

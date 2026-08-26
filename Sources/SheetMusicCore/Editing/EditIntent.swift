@@ -69,4 +69,19 @@ public enum EditIntent: Sendable, Equatable {
     /// planner: one place states the range, and the answer is the same whether the command is reached through an
     /// intent or built directly.
     case addPart(plan: BlankScoreTemplate.PartPlan, at: Int)
+
+    /// Remove the whole part at `index` — its instrument, its staves and their bars.
+    ///
+    /// Refused with `.cannotRemoveLastPart` when it would empty the score of parts, and with `.targetNotFound` for
+    /// an index that names no part; both answers come from `RemovePart.apply`, so they are the same whether the
+    /// command is reached through this intent or built directly.
+    case removePart(at: Int)
+
+    /// Move the part at `from` to `to` — a removal followed by an insertion, so `[A, B, C]` with
+    /// `.movePart(from: 0, to: 1)` becomes `[B, A, C]`.
+    ///
+    /// Both indices name positions in the current parts array; unlike `.addPart`, `to == parts.count` is out of
+    /// range, because a move cannot grow the score. `from == to` resolves to nothing to apply rather than pushing
+    /// an undo entry that restores the score to itself.
+    case movePart(from: Int, to: Int)
 }
