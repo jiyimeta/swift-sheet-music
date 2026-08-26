@@ -146,7 +146,18 @@ def test_export_pdf_write_then_hang_via_real_run_supervised_is_success(tmp_path)
     already prove they should. No MuseScore needed: a tiny stand-in
     script plays MuseScore's role (write the output, then hang) using
     the venv's own interpreter, invoked exactly like `export_pdf` would
-    invoke a real `mscore_bin` (argv: stub, "-o", out_pdf, source)."""
+    invoke a real `mscore_bin` (argv: stub, "-o", out_pdf, source).
+
+    The two durations are load headroom, not tuning. `timeout_s` must
+    exceed the stub's COLD START — a fresh interpreter plus the
+    `pypdfium2` import — or the timeout fires before the PDF is written
+    and the outcome is "incomplete after retry": a failure that says
+    nothing about `export_pdf`, which is this test's actual subject.
+    Measured on this host with a training run competing for the machine,
+    that cold start took 0.6-1.06 s against a `timeout_s` of 0.5, and the
+    test failed exactly that way. The sleep must in turn exceed
+    `timeout_s`, or the process is gone before the timeout and the
+    timed-out assertion below stops holding."""
     stub = tmp_path / "stub_mscore.py"
     stub.write_text(
         f"#!{sys.executable}\n"
@@ -157,12 +168,14 @@ def test_export_pdf_write_then_hang_via_real_run_supervised_is_success(tmp_path)
         "doc = pdfium.PdfDocument.new()\n"
         "doc.new_page(595, 842)\n"
         "doc.save(out)\n"
-        "time.sleep(5)\n"
+        "time.sleep(60)\n"
     )
     stub.chmod(stub.stat().st_mode | 0o111)
     out = tmp_path / "out.pdf"
-    o = export_pdf.export_pdf(str(stub), tmp_path / "s.mscx", out, timeout_s=0.5)
+    o = export_pdf.export_pdf(str(stub), tmp_path / "s.mscx", out, timeout_s=5.0)
     assert o.ok is True
+    # The timeout still has to be what ended it, or the widened budget
+    # would have turned this into a test of a process that simply exited.
     assert o.timed_out is True
 
 

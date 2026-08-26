@@ -1,11 +1,12 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 from PIL import Image
 
-from model import dataset, prep
+from model import augment, dataset, prep
 
 
 def _write_page(root: Path, render_id: str, source_id: str, page_index: int,
@@ -183,3 +184,138 @@ def test_rare_classes_are_oversampled(tmp_path):
     # naive share would be 1/2; the 100:1 rarity weighting should push
     # this far above it.
     assert rare_draws / len(drawn) > 0.8
+
+
+def test_the_tile_image_is_the_page_window_normalized(tmp_path):
+    # The image channel had NO test at all: every existing case here
+    # asserts on the heatmap / offset / geom / mask, so an implementation
+    # that returned the wrong window — or the right window off by an
+    # offset, or unnormalized — went uncaught. This pins the pixels.
+    png = tmp_path / "page.png"
+    width, height = 40, 30
+    # A gradient, so a wrong window or a transposed crop is visible in
+    # the values. A constant-gray fixture (what _write_page makes) cannot
+    # tell any of those apart.
+    image = Image.new("L", (width, height))
+    image.putdata([(x * 7 + y * 3) % 256 for y in range(height) for x in range(width)])
+    image.save(png)
+    source = np.asarray(image, dtype=np.float32) / 255.0
+
+    tile = 16
+    for ox, oy in [(0, 0), (8, 4), (24, 14)]:
+        got = dataset._load_tile_image(png, ox, oy, tile)
+        assert got.shape == (tile, tile)
+        assert got.dtype == np.float32
+        expected = source[oy:oy + tile, ox:ox + tile]
+        assert np.array_equal(got, expected), f"window at ({ox}, {oy})"
+        # And the values really are in [0, 1] — an unnormalized crop
+        # would pass an array_equal against an unnormalized expectation
+        # only if BOTH were wrong, so check the range independently.
+        assert 0.0 <= got.min() and got.max() <= 1.0
+        assert got.max() > 0.0
+
+
+def test_a_page_smaller_than_the_tile_is_zero_padded_not_resized(tmp_path):
+    # tile_origins returns [0] for a page smaller than the tile, so the
+    # single crop runs off the page on the right and bottom. Those pixels
+    # must be ZERO-padded — the model is trained at one input size and a
+    # resized page is a distribution it never sees.
+    png = tmp_path / "small.png"
+    width, height = 10, 6
+    image = Image.new("L", (width, height), color=255)
+    image.save(png)
+
+    tile = 16
+    got = dataset._load_tile_image(png, 0, 0, tile)
+    assert got.shape == (tile, tile)
+    # The page's own area came through at full value...
+    assert np.array_equal(got[0:height, 0:width], np.ones((height, width), dtype=np.float32))
+    # ...and everything outside it is exactly zero, in both directions.
+    assert got[height:, :].max() == 0.0
+    assert got[:, width:].max() == 0.0
+    # A resize would have filled the whole tile with 1.0 — assert it did
+    # not, so this case cannot pass against a resizing implementation.
+    assert got.mean() < 1.0
+
+
+def test_augmentation_is_refused_outside_the_train_split(tmp_path):
+    # An augmented validation loss is not comparable across epochs, and
+    # the checkpoint is selected by comparing exactly that. Refuse rather
+    # than trust the caller: nothing downstream could tell an augmented
+    # val loss from a worse model.
+    prep_root = tmp_path / "prep"
+    _write_page(prep_root, "r_0", "src_0", 0, [_glyph("noteheadBlack", (30.0, 30.0))])
+    _write_page(prep_root, "r_1", "src_10", 0, [_glyph("noteheadBlack", (30.0, 30.0))])
+    index = prep.PrepIndex(prep_root)
+
+    cfg = augment.PhotometricAugment()
+    # train accepts it...
+    dataset.SymbolTiles(index, "train", tile=128, overlap=32, seed=0, augment=cfg)
+    # ...val and test do not.
+    for split in ("val", "test"):
+        with pytest.raises(ValueError, match="train-only"):
+            dataset.SymbolTiles(index, split, tile=128, overlap=32, seed=0, augment=cfg)
+    # And passing nothing is always fine.
+    dataset.SymbolTiles(index, "val", tile=128, overlap=32, seed=0)
+
+
+def test_photometric_augmentation_moves_no_ink_and_no_target(tmp_path):
+    # The reason this augmentation is photometric-ONLY: the four target
+    # planes are geometry, built once from the label, and nothing here
+    # transforms them. So an op that MOVED the image would silently train
+    # the geometry heads against the wrong answer — no crash, no counter.
+    #
+    # Asserting only "targets unchanged" would not catch that: the targets
+    # are unchanged under a geometric op too. So this also locates the
+    # ink in the augmented image and requires its centroid to stay put.
+    # A shift of even one pixel fails it.
+    png = _write_page(tmp_path, "r_0", "src_0", 0,
+                      [_glyph("noteheadBlack", (40.0, 40.0), origin_px=(34.0, 40.0))],
+                      width_px=100, height_px=80)
+    # Draw a symmetric dark block well inside the page, so a blur cannot
+    # move its centroid by clipping it against an edge.
+    image = np.full((80, 100), 230, dtype=np.uint8)
+    image[34:46, 34:46] = 20
+    Image.fromarray(image).save(png)
+
+    index = prep.PrepIndex(tmp_path)
+    # Noise and speckle are off: both perturb a centroid by construction,
+    # so leaving them on would force a tolerance loose enough to admit a
+    # real shift.
+    cfg = augment.PhotometricAugment(
+        contrast_p=1.0, contrast_gain=(1.6, 1.6), contrast_bias=(0.05, 0.05),
+        gamma_p=1.0, gamma=(1.8, 1.8), blur_p=1.0, blur_sigma=(0.9, 0.9),
+        noise_p=0.0, speckle_p=0.0,
+    )
+    plain = dataset.SymbolTiles(index, "train", tile=128, overlap=32, seed=0)
+    augmented = dataset.SymbolTiles(index, "train", tile=128, overlap=32, seed=0,
+                                     augment=cfg)
+    assert len(plain) == len(augmented) == 1
+
+    a_image, *a_targets = plain[0]
+    b_image, *b_targets = augmented[0]
+
+    # It really augmented something.
+    assert not torch.equal(a_image, b_image), "the image was not augmented"
+
+    # Targets are bit-identical.
+    for name, a, b in zip(["heatmap", "offset", "geom", "mask"], a_targets, b_targets):
+        assert torch.equal(a, b), f"{name} changed under a photometric augmentation"
+    # ...and they are not two all-zero planes.
+    assert float(a_targets[0].max()) > 0.0
+    assert float(a_targets[3].sum()) > 0.0
+
+    def ink_centroid(t: torch.Tensor) -> tuple[float, float]:
+        # Ink is dark, so weight by (1 - value) and keep only what is
+        # clearly darker than paper.
+        arr = 1.0 - t[0].numpy()
+        arr = np.where(arr > 0.5 * arr.max(), arr, 0.0)
+        total = arr.sum()
+        assert total > 0, "no ink found — the fixture is vacuous"
+        ys, xs = np.mgrid[0:arr.shape[0], 0:arr.shape[1]]
+        return float((xs * arr).sum() / total), float((ys * arr).sum() / total)
+
+    ax, ay = ink_centroid(a_image)
+    bx, by = ink_centroid(b_image)
+    assert abs(ax - bx) < 0.25, f"ink moved in x: {ax} -> {bx}"
+    assert abs(ay - by) < 0.25, f"ink moved in y: {ay} -> {by}"

@@ -172,11 +172,20 @@
         /// bisect would measure a doubled primitive rather than a
         /// replaced one.
         @Test func everyTruthModeRemovesTheKindItSubstitutes() {
-            #expect(OMRHybridFrontEnd.Mode.truthBeams.substituted == .beam)
-            #expect(OMRHybridFrontEnd.Mode.truthVerticals.substituted == .vertical)
-            #expect(OMRHybridFrontEnd.Mode.truthStaffLines.substituted == .horizontal)
-            #expect(OMRHybridFrontEnd.Mode.full.substituted == nil)
-            #expect(OMRHybridFrontEnd.Mode.noBeams.substituted == nil)
+            #expect(OMRHybridFrontEnd.Mode.truthBeams.substituted == [.beam])
+            #expect(OMRHybridFrontEnd.Mode.truthVerticals.substituted == [.vertical])
+            #expect(OMRHybridFrontEnd.Mode.truthStaffLines.substituted == [.horizontal])
+            #expect(OMRHybridFrontEnd.Mode.full.substituted.isEmpty)
+            #expect(OMRHybridFrontEnd.Mode.noBeams.substituted.isEmpty)
+            // `.truthPaths` is the ceiling mode: with label glyphs it
+            // leaves the raster front-end contributing nothing at all, so
+            // it must take EVERY kind. A missing kind here would silently
+            // make the "ceiling" a partial substitution, and the deficit
+            // attributed to `buildScore` would absorb it.
+            #expect(
+                OMRHybridFrontEnd.Mode.truthPaths.substituted
+                    == [.horizontal, .vertical, .beam, .rectangle],
+            )
 
             let paths = [
                 PathSegment(

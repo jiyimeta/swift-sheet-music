@@ -9,6 +9,7 @@ otherwise give them (§3.2 R3 — a 600-page sample of the real dataset has
 from __future__ import annotations
 
 import math
+import random
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,7 @@ import torch
 from PIL import Image
 from torch.utils.data import Dataset
 
+from . import augment as augment_mod
 from . import prep
 
 
@@ -85,14 +87,20 @@ def _load_tile_image(png_path: Path, ox: int, oy: int, tile: int) -> np.ndarray:
     `tile_origins`) are zero-padded on the right/bottom rather than
     resized, so the crop always matches the trained input size."""
     with Image.open(png_path) as im:
-        arr = np.asarray(im.convert("L"), dtype=np.float32) / 255.0
+        # uint8, and the float conversion applied to the CROP only. The
+        # page is ~1300x1800, the crop is 384x384, so converting the
+        # whole page to float32 first (what this used to do) spent ~1.2x
+        # the time to produce a bit-identical result — measured, and
+        # `test_the_tile_image_is_the_page_window_normalized` pins the
+        # values so the two forms cannot drift.
+        arr = np.asarray(im.convert("L"))
     canvas = np.zeros((tile, tile), dtype=np.float32)
     height, width = arr.shape
     x1 = min(ox + tile, width)
     y1 = min(oy + tile, height)
     dst_w, dst_h = x1 - ox, y1 - oy
     if dst_w > 0 and dst_h > 0:
-        canvas[0:dst_h, 0:dst_w] = arr[oy:y1, ox:x1]
+        canvas[0:dst_h, 0:dst_w] = arr[oy:y1, ox:x1].astype(np.float32) / 255.0
     return canvas
 
 
@@ -132,11 +140,26 @@ class SymbolTiles(Dataset):
     """
 
     def __init__(self, index: prep.PrepIndex, split: str, tile: int = 384,
-                 overlap: int = 64, stride: int = 4, seed: int = 0):
+                 overlap: int = 64, stride: int = 4, seed: int = 0,
+                 augment: "augment_mod.PhotometricAugment | None" = None):
         self.tile = tile
         self.overlap = overlap
         self.stride = stride
         self.split = split
+        # Augmentation is a TRAIN-split-only transform, enforced here
+        # rather than left to the caller. Augmenting val would make the
+        # validation loss a moving target — the epoch-to-epoch comparison
+        # that selects the checkpoint would then be measuring the draw as
+        # much as the model, and "best val loss" would stop meaning
+        # anything. `test_augmentation_is_refused_outside_the_train_split`
+        # pins it.
+        if augment is not None and split != "train":
+            raise ValueError(
+                f"augmentation was passed for the {split!r} split; it is "
+                "train-only, because an augmented validation loss is not "
+                "comparable across epochs")
+        self.augment = augment
+        self._rng: random.Random | None = None
         self.pages: list[prep.PrepPage] = [
             page for page in index.pages
             if prep.split_of(page.source_id, page.page_index, seed) == split
@@ -164,6 +187,30 @@ class SymbolTiles(Dataset):
     def __len__(self) -> int:
         return len(self.tiles)
 
+    def _augment_rng(self) -> random.Random:
+        """One `random.Random` per PROCESS, created on first use and then
+        drawn from per call.
+
+        Not seeded per item, and not reset per epoch, both on purpose:
+
+        - Per item would give every tile the same corruption in every
+          epoch — a once-corrupted dataset rather than augmentation. The
+          whole point is that a tile is seen under a different corruption
+          each time it is drawn.
+        - Per epoch is not reachable from here. `persistent_workers=True`
+          keeps the worker processes alive across epochs, so a
+          `set_epoch()` on the main-process dataset would never reach the
+          copies the workers actually hold — a silent no-op, which is
+          worse than not offering it.
+
+        Seeded from `torch.initial_seed()`, which PyTorch sets per worker
+        as `base_seed + worker_id`, so workers do not draw identical
+        streams and a run is reproducible for a fixed (seed, workers).
+        """
+        if self._rng is None:
+            self._rng = random.Random(torch.initial_seed())
+        return self._rng
+
     def __getitem__(self, idx: int):
         page_idx, ox, oy = self.tiles[idx]
         page = self.pages[page_idx]
@@ -171,6 +218,8 @@ class SymbolTiles(Dataset):
         num_classes = len(prep.VOCABULARY)
 
         image = _load_tile_image(page.png_path, ox, oy, self.tile)
+        if self.augment is not None:
+            image = self.augment.apply(image, self._augment_rng())
         heatmap = np.zeros((num_classes, grid, grid), dtype=np.float32)
         offset = np.zeros((2, grid, grid), dtype=np.float32)
         geom = np.zeros((4, grid, grid), dtype=np.float32)

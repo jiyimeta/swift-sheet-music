@@ -96,14 +96,30 @@ class PrepPage:
 
 
 class PrepIndex:
-    """Every page found under a prep root (`<render_id>/page_<n>.prep.json`),
-    indexed in sorted, deterministic file order."""
+    """Every page found under one or more prep roots
+    (`<render_id>/page_<n>.prep.json`), indexed in sorted, deterministic
+    file order — roots in the order given, pages sorted within each.
 
-    def __init__(self, root: Path):
-        self.root = Path(root)
+    Several roots are how a clean and a degraded export are trained on
+    together. That is only sound because `split_of` keys on
+    (source_id, page_index): the same engraved page lands in the same
+    bucket in every root, so a page held out of the clean root is held
+    out of the degraded one too. It was NOT sound before 2026-08-18 —
+    the degraded export wrote the render id into `source_id`, which
+    split it per render and put the same engraving on both sides of the
+    boundary (see `OMRPrepExport.renderMeta`).
+    """
+
+    def __init__(self, root: Path | list[Path] | tuple[Path, ...]):
+        roots = [root] if isinstance(root, (str, Path)) else list(root)
+        self.roots: list[Path] = [Path(r) for r in roots]
+        #: The first root, for callers (and log lines) that predate
+        #: multi-root support and just want something to name.
+        self.root = self.roots[0]
         self.pages: list[PrepPage] = [
             PrepPage.from_json_file(path)
-            for path in sorted(self.root.glob("*/*.prep.json"))
+            for r in self.roots
+            for path in sorted(r.glob("*/*.prep.json"))
         ]
 
 

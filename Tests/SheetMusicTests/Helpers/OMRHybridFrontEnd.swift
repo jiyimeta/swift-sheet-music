@@ -36,6 +36,14 @@
             case truthStaffLines
             case truthVerticals
             case truthBeams
+            /// Every path kind from the oracle at once — with label
+            /// glyphs, that is a fully-oracle front-end, so its score is
+            /// the CEILING the raster front-end is working against.
+            /// Without it, a per-primitive bisect cannot tell a deficit
+            /// the front-end could close from one that lives further
+            /// upstream (in `buildScore`, or in what the labels can
+            /// express at all).
+            case truthPaths
             /// Glyphs come from a REAL detector (`OMRGlyphDetecting`)
             /// instead of the label oracle; paths are still the raster
             /// front-end's own classical CV, unchanged from `.full`. This
@@ -48,21 +56,36 @@
             /// detector itself, run with no training, already supplies one.
             case detectorGlyphs
 
-            /// The path kind this mode takes from the oracle instead of
-            /// the raster front-end.
-            var substituted: PathSegment.Kind? {
+            /// Every path kind this mode takes from the oracle instead of
+            /// the raster front-end. Empty for the modes that substitute
+            /// nothing.
+            ///
+            /// A SET rather than one kind because of `.truthPaths`, which
+            /// takes all of them at once. Substituting one primitive
+            /// answers "what is this primitive costing", and the three
+            /// single-primitive modes each recovered only 2.6-4.2 points
+            /// of a 28-point duration deficit — which invites the reading
+            /// that the rest is elsewhere. It is not a safe reading
+            /// without `.truthPaths`: durations are read from stems AND
+            /// beams AND flags together, so the primitives are not
+            /// additive, and only substituting all of them separates
+            /// "the path front-end is costing this" from "this is lost
+            /// upstream of the front-end entirely".
+            var substituted: Set<PathSegment.Kind> {
                 switch self {
-                case .truthStaffLines: .horizontal
-                case .truthVerticals: .vertical
-                case .truthBeams: .beam
-                default: nil
+                case .truthStaffLines: [.horizontal]
+                case .truthVerticals: [.vertical]
+                case .truthBeams: [.beam]
+                case .truthPaths: [.horizontal, .vertical, .beam, .rectangle]
+                default: []
                 }
             }
         }
 
         static func filter(_ paths: [PathSegment], mode: Mode) -> [PathSegment] {
-            if let substituted = mode.substituted {
-                return paths.filter { $0.kind != substituted }
+            let substituted = mode.substituted
+            if !substituted.isEmpty {
+                return paths.filter { !substituted.contains($0.kind) }
             }
             switch mode {
             case .full: return paths
@@ -466,10 +489,11 @@
                 }
                 walked.glyphs += pageGlyphs
                 var pagePaths = filter(analysis.paths, mode: mode)
-                if let substituted = mode.substituted {
+                let substituted = mode.substituted
+                if !substituted.isEmpty {
                     pagePaths += reframe(
                         oracle.walked.paths.filter {
-                            $0.pageIndex == index && $0.kind == substituted
+                            $0.pageIndex == index && substituted.contains($0.kind)
                         },
                         page: page, transform: analysis.transform,
                     )

@@ -69,3 +69,41 @@ def test_vocabulary_is_derived_from_class_names_minus_unreachable():
     expected = [name for name in sw_vocabulary.CLASS_NAMES
                 if name not in sw_vocabulary.UNREACHABLE]
     assert prep.VOCABULARY == expected
+
+
+def test_a_multi_root_index_concatenates_and_keeps_the_split_stable(tmp_path):
+    # Training on the clean and the degraded export together is only
+    # sound because `split_of` keys on (source_id, page_index): the same
+    # engraved page must land in the same bucket in BOTH roots, so a page
+    # held out of one is held out of all of them. This stages the same
+    # page under two roots — with DIFFERENT render ids, as the two real
+    # exports have — and requires exactly that.
+    clean = tmp_path / "clean"
+    degraded = tmp_path / "degraded"
+    # src_0 is chosen because its two render ids DO fall in
+    # different buckets under render-id keying (train vs test),
+    # which is what makes the assertion below discriminating.
+    _write_page(clean, "src_0_ms4_Bravura_v0", "src_0", 0)
+    _write_page(degraded, "src_0_ms4_Bravura_v0_frozen", "src_0", 0)
+
+    single = prep.PrepIndex(clean)
+    both = prep.PrepIndex([clean, degraded])
+    assert len(single.pages) == 1
+    assert len(both.pages) == 2
+    # Roots in the order given, pages sorted within each.
+    assert [p.render_id for p in both.pages] == [
+        "src_0_ms4_Bravura_v0", "src_0_ms4_Bravura_v0_frozen",
+    ]
+    # The load-bearing property. Keyed on the render id instead — which
+    # the degraded export really did write into `source_id` until
+    # 2026-08-18 — these two would split independently and the same
+    # engraving would sit on both sides of the boundary.
+    splits = {prep.split_of(p.source_id, p.page_index, 0) for p in both.pages}
+    assert len(splits) == 1, "the same page landed in two different splits"
+    assert len({prep.split_of(p.render_id, p.page_index, 0)
+                for p in both.pages}) == 2, (
+        "the fixture must be one where render-id keying WOULD disagree, "
+        "or this proves nothing")
+    # `root` still names something, for callers and log lines that
+    # predate multi-root support.
+    assert both.root == clean
