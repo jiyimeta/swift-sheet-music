@@ -7,6 +7,30 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **M4A and AIFF export in the browser.** `PlaybackEngine.exportAudio` takes a
+  `format` and returns the bytes together with the MIME type and file extension
+  to call them, so a host no longer hardcodes both; `exportWav` stays as the
+  shorthand it was. M4A goes through WebCodecs' `AudioEncoder` and an ISOBMFF
+  muxer written in the package — `MediaRecorder` would also mux MP4 but records
+  in real time, which would undo the point of rendering offline. The muxer
+  writes an edit list so the encoder's 2,048 frames of analysis delay stay out
+  of the presentation: without it the file decodes, holds the right audio and
+  reports a plausible duration while starting 46 ms after the WAV from the same
+  render. AIFF needs no browser capability at all and was missing only because
+  WAV went first. `supportedExportFormats()` reports what this browser can
+  actually write.
+
+### Changed
+
+- **MP3 export is refused in the browser, explicitly.** No browser ships an
+  encoder for it — WebCodecs has no `mp3` codec and `MediaRecorder` rejects
+  `audio/mpeg` — and bundling a wasm LAME would put an LGPL dependency in an MIT
+  package whose only runtime dependency is the WASI shim. `exportAudio({ format:
+  "mp3" })` throws and `supportedExportFormats()` never lists it, which is the
+  state Android already reaches on a device whose MediaCodec has no MP3 encoder.
+
 ## [2.0.0] - 2026-08-25
 
 ### Fixed

@@ -157,6 +157,53 @@ metronome loads and stays inaudible until it is moved to the front of the
 priority order, because the General MIDI bank underneath keeps answering the
 click notes.
 
+**An M4A without an edit list is 46 ms late, and every other measurement of it
+looks right.** An AAC-LC encoder emits 2,048 frames of analysis delay before the
+signal; the `elst` box in `trak/edts` is what hides them. Drop it and the file
+still decodes, still holds the right audio, and still reports a plausible
+duration — it just starts later than the WAV from the same render. Measure the
+leading silence, not only the length and the peak. `elst`'s `segment_duration`
+is in MOVIE units while its `media_time` is in MEDIA units; writing both in the
+sample rate declares a segment 44 times too long.
+
+## Audio export
+
+The browser writes WAV, AIFF and M4A. Every encoder is in this package —
+`src/playback/{wav,aiff,mp4}.ts` — so a host that replaces `SynthHost` still
+gets an export and the bytes stay this package's contract rather than a
+dependency's.
+
+M4A goes through WebCodecs' `AudioEncoder` (`mp4a.40.2`) and an ISOBMFF muxer
+written here. `MediaRecorder` will also produce `audio/mp4`, and is not used:
+it records a `MediaStream` in real time, so a five-minute score would take five
+minutes to export, and an `OfflineAudioContext` has no
+`createMediaStreamDestination` to record from in the first place. The split
+between `aac.ts` and `mp4.ts` is deliberate — `AudioEncoder` does not exist in
+Node, so everything that can be tested without a browser lives on the far side
+of a pure function taking frames and returning bytes.
+
+**MP3 cannot be written in a browser.** WebCodecs has no `mp3` encoder codec and
+`MediaRecorder` refuses `audio/mpeg` (measured on Chromium 151, both the
+Playwright build and system Chrome). Shipping a wasm LAME would put an LGPL
+dependency in an MIT package whose only runtime dependency today is the WASI
+shim — for a format a host can reach by running the exported WAV through an
+encoder of its own. `exportAudio({ format: "mp3" })` throws, the same state
+Android reaches when a device's MediaCodec has no MP3 encoder and Apple reaches
+below iOS 17 / macOS 14.
+
+**Bit depth and channel count are not exposed**, unlike `PCMOptions` on Apple
+and Android. The offline render is stereo, and 16-bit is what every consumer of
+a rendered score accepts; float32 WAVE doubles the file for headroom nothing
+here uses.
+
+**Chromium writes AIFF and cannot read it back.** `decodeAudioData` takes WAV,
+MP3, AAC/MP4, Ogg and FLAC; handed an AIFF it rejects with a null error. The
+file is fine — CoreAudio's `afinfo` reads the same bytes as a 2-channel
+44.1 kHz big-endian PCM of exactly the expected duration. So AIFF cannot be
+verified by round-tripping it through the browser the way WAV and M4A are;
+`Web/sheet-music-web/test/aiff.test.ts` pins it field by field in Node instead,
+and the browser test only checks that it reaches the picker and downloads.
+
 ## Editing
 
 Android's edit surface is a relay: the host keeps the authoritative score in a
