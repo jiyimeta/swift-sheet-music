@@ -216,7 +216,37 @@
                     + "nmsRadiusSp=\(String(format: "%.4f", detector.nmsRadiusSp)) "
                     + "decodeDefaultsMeasured=\(detector.decodeDefaultsMeasured)",
             )
+            // The same seam numbers partitioned by dataset split. These
+            // are their own lines rather than fields of the summary
+            // because the summary is diffed byte-for-byte by P3d-G4, and
+            // because the aggregate above is NOT the generalization
+            // number: 55 of the shipped eval set's 69 pages hash into
+            // `train` (OMRDatasetSplit), so the `val` / `test` rows are
+            // the ones that say whether the detector learned or
+            // memorized. `unattributed` means the render recorded no
+            // seed — deliberately not folded into any bucket.
+            for split in totals.bySplit.keys.sorted() {
+                guard let counts = totals.bySplit[split] else { continue }
+                let recall = (counts.tp + counts.fn) > 0
+                    ? Double(counts.tp) / Double(counts.tp + counts.fn) : 0
+                let precision = (counts.tp + counts.fp) > 0
+                    ? Double(counts.tp) / Double(counts.tp + counts.fp) : 0
+                let err = counts.originErrCount > 0
+                    ? counts.originErrSumSp / Double(counts.originErrCount) : 0
+                print(
+                    "[detect-split] split=\(split) pages=\(counts.pages) "
+                        + "tp=\(counts.tp) fp=\(counts.fp) fn=\(counts.fn) "
+                        + "recall=\(String(format: "%.4f", recall)) "
+                        + "precision=\(String(format: "%.4f", precision)) "
+                        + "meanOriginErrSp=\(String(format: "%.4f", err))",
+                )
+            }
             print("[detect-rss] peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB")
+            // Also outside the byte-diffed summary line, for the same
+            // reason `peakRSS` is: wall clock is a process measurement.
+            for line in OMRDetectTiming.shared.report() {
+                print(line)
+            }
             let classes = Set(totals.tpByClass.keys)
                 .union(totals.fpByClass.keys).union(totals.fnByClass.keys)
             for cls in classes.sorted() {
@@ -586,6 +616,72 @@
             #expect(result.totals.seamOnly == 0)
             #expect(result.totals.tpByClass.isEmpty)
             #expect(result.totals.fnByClass.isEmpty)
+        }
+
+        /// Counts real detector invocations, so "the detector ran once
+        /// per page" is a measured claim rather than a reading of the
+        /// call sites.
+        final class CountingDetector: OMRGlyphDetecting, @unchecked Sendable {
+            private let inner = LabelReplayDetector()
+            private let lock = NSLock()
+            private(set) var calls = 0
+
+            func glyphs(
+                page: OMRPageLabels, analysis: RasterPageAnalysis,
+            ) throws -> [ClassifiedGlyph] {
+                lock.lock()
+                calls += 1
+                lock.unlock()
+                return try inner.glyphs(page: page, analysis: analysis)
+            }
+        }
+
+        /// A SCORED render exercises both consumers of the detector: the
+        /// seam metrics and `OMRHybridFrontEnd.compose` inside the score
+        /// pass. It used to run the detector once for each — measured on
+        /// the real eval set as 111 page-detections for 69 pages, and
+        /// detection is essentially the sweep's whole cost, so the second
+        /// pass doubled it. The score pass now reuses the seam pass's
+        /// results (`OMRPrecomputedDetector`).
+        ///
+        /// The render must be `scored`, not `seamOnly`: a `seamOnly`
+        /// render never reaches `compose` at all, so it would report one
+        /// call per page whether or not the reuse exists.
+        @Test func theDetectorRunsExactlyOncePerPage() throws {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("omr-detect-eval-once-\(UUID().uuidString)").path
+            defer { try? FileManager.default.removeItem(atPath: root) }
+            try Self.stageGoodRender(at: "\(root)/aaa_good")
+
+            let detector = CountingDetector()
+            let result = try OMRDetectorEvalSweep.sweep(
+                root: root, detector: detector, matchSp: 0.5,
+            )
+            #expect(result.totals.scored == 1, "the score pass must have run")
+            #expect(result.totals.pages == 1)
+            #expect(detector.calls == 1)
+        }
+
+        /// The reuse is a frozen dictionary, and a page missing from it
+        /// must be loud. Silently returning `[]` would read downstream as
+        /// "the detector found nothing on that page" — a real, plausible
+        /// result — and no counter would move.
+        @Test func aPrecomputedDetectorThrowsForAPageItWasNotGiven() throws {
+            let (page, _) = try Self.stagePage(glyphs: [Self.noteheadGlyph])
+            let bitmap = RasterTestBitmaps.staff(
+                widthPx: 900, heightPx: 500, dpi: 300, topY: 200, spacingPx: 16,
+            )
+            let analysis = RasterPage.analyze(bitmap, pageIndex: 0)
+            let glyphs = try LabelReplayDetector().glyphs(page: page, analysis: analysis)
+            #expect(!glyphs.isEmpty, "the fixture must produce glyphs, or this proves nothing")
+
+            let present = OMRPrecomputedDetector(byPageIndex: [0: glyphs])
+            #expect(try present.glyphs(page: page, analysis: analysis).count == glyphs.count)
+
+            let absent = OMRPrecomputedDetector(byPageIndex: [7: glyphs])
+            #expect(throws: SheetMusicError.self) {
+                try absent.glyphs(page: page, analysis: analysis)
+            }
         }
     }
 #endif

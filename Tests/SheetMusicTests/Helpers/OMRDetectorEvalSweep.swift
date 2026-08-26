@@ -67,6 +67,34 @@
             var originErrSumSp = 0.0
             var originErrCount = 0
 
+            /// The same seam numbers, partitioned by which split
+            /// `Training/model/prep.py` puts the page in
+            /// (`OMRDatasetSplit`). Measured over the shipped eval sets,
+            /// 55 of 69 pages hash into `train` — so the aggregate row
+            /// above is dominated by pages the model was fitted on, and
+            /// only the `val` / `test` rows say anything about
+            /// generalization. A page whose render records no seed lands
+            /// in `unattributed` rather than being guessed into a bucket.
+            var bySplit: [String: SplitCounts] = [:]
+
+            struct SplitCounts {
+                var pages = 0
+                var tp = 0
+                var fp = 0
+                var fn = 0
+                var originErrSumSp = 0.0
+                var originErrCount = 0
+
+                mutating func merge(_ other: SplitCounts) {
+                    pages += other.pages
+                    tp += other.tp
+                    fp += other.fp
+                    fn += other.fn
+                    originErrSumSp += other.originErrSumSp
+                    originErrCount += other.originErrCount
+                }
+            }
+
             /// Folds another `Totals`' seam-level fields (everything
             /// `evaluate`/`evaluateSeam` populate) into this one.
             /// `scored`/`seamOnly`/`failed` are NOT included here — those
@@ -91,6 +119,9 @@
                 }
                 originErrSumSp += other.originErrSumSp
                 originErrCount += other.originErrCount
+                for (split, counts) in other.bySplit {
+                    bySplit[split, default: SplitCounts()].merge(counts)
+                }
             }
         }
 
@@ -167,19 +198,39 @@
         ) throws -> RenderOutcome {
             let labelNames = try OMRHarnessDirectoryWalk.labelFiles(in: dir)
             guard !labelNames.isEmpty else { return .skipped }
-            let pages = try labelNames.map {
-                try OMRLabelSchema.decode(Data(contentsOf: URL(fileURLWithPath: "\(dir)/\($0)")))
+            let pages = try OMRDetectTiming.shared.measure("labelDecode") {
+                try labelNames.map {
+                    try OMRLabelSchema.decode(Data(contentsOf: URL(fileURLWithPath: "\(dir)/\($0)")))
+                }
             }
             let pageAnalyses = analyses(dir: dir, pages: pages)
+            // Resolved once per render: both inputs are render-scoped,
+            // and a missing seed means this render cannot be attributed
+            // to a split at all (never silently defaulted — a wrong seed
+            // reshuffles every page into the wrong bucket).
+            let sourceId = OMRDatasetSplit.sourceId(renderDirectory: dir)
+            let seed = OMRDatasetSplit.seed(renderDirectory: dir)
             var renderTotals = Totals()
+            // The seam pass's detections, reused by the score pass
+            // instead of running the detector a second time over the
+            // same pages (`OMRPrecomputedDetector`).
+            var detected: [Int: [ClassifiedGlyph]] = [:]
             for page in pages {
                 guard let analysis = pageAnalyses[page.page.index] else {
                     renderTotals.skippedNoAnalysis += 1
                     continue
                 }
-                try evaluateSeam(
+                let split: String
+                if let sourceId, let seed {
+                    split = OMRDatasetSplit
+                        .of(sourceId: sourceId, pageIndex: page.page.index, seed: seed)
+                        .rawValue
+                } else {
+                    split = "unattributed"
+                }
+                detected[page.page.index] = try evaluateSeam(
                     page: page, analysis: analysis, detector: detector,
-                    matchSp: matchSp, into: &renderTotals,
+                    matchSp: matchSp, split: split, into: &renderTotals,
                 )
             }
             guard FileManager.default.fileExists(atPath: "\(dir)/source.mscx") else {
@@ -191,7 +242,8 @@
             )
             try evaluateScore(
                 dir: dir, scoreA: scoreA, pages: pages, pageAnalyses: pageAnalyses,
-                detector: detector, pitchPcts: &pitchPcts, durPcts: &durPcts,
+                detector: OMRPrecomputedDetector(byPageIndex: detected),
+                pitchPcts: &pitchPcts, durPcts: &durPcts,
             )
             totals.merge(renderTotals)
             return .scored
@@ -210,9 +262,11 @@
             for page in pages {
                 let url = URL(fileURLWithPath: "\(dir)/\(page.image.file)")
                 guard FileManager.default.fileExists(atPath: url.path) else { continue }
-                out[page.page.index] = try? OMRPageBitmapLoader.withPageBitmap(
-                    url: url, dpi: Double(page.image.dpi),
-                ) { RasterPage.analyze($0, pageIndex: page.page.index, keepDeskewed: true) }
+                out[page.page.index] = OMRDetectTiming.shared.measure("analyze") {
+                    try? OMRPageBitmapLoader.withPageBitmap(
+                        url: url, dpi: Double(page.image.dpi),
+                    ) { RasterPage.analyze($0, pageIndex: page.page.index, keepDeskewed: true) }
+                }
             }
             return out
         }
@@ -225,30 +279,44 @@
         /// `compose` does not expose it to a caller.
         private static func evaluateSeam(
             page: OMRPageLabels, analysis: RasterPageAnalysis,
-            detector: any OMRGlyphDetecting, matchSp: Double, into totals: inout Totals,
-        ) throws {
+            detector: any OMRGlyphDetecting, matchSp: Double, split: String,
+            into totals: inout Totals,
+        ) throws -> [ClassifiedGlyph] {
             totals.pages += 1
+            totals.bySplit[split, default: Totals.SplitCounts()].pages += 1
             if analysis.staffSpacingPt <= 0 { totals.noStaffPages += 1 }
-            let oracle = try OMROracleFrontEnd.replay(pages: [page])
+            let oracle = try OMRDetectTiming.shared.measure("oracleReplay") {
+                try OMROracleFrontEnd.replay(pages: [page])
+            }
             let vocabulary = OMRHybridFrontEnd.detectorVocabularyGlyphs(
                 oracle.walked.glyphs.filter { $0.geometry.pageIndex == page.page.index },
             )
             let truth = OMRHybridFrontEnd.reframe(vocabulary, page: page, transform: analysis.transform)
-            let predicted = try detector.glyphs(page: page, analysis: analysis)
-            let result = OMRDetectorMetrics.match(
-                predicted: predicted, truth: truth,
-                staffSpacingPt: analysis.staffSpacingPt, matchSp: matchSp,
-            )
+            let predicted = try OMRDetectTiming.shared.measure("detect") {
+                try detector.glyphs(page: page, analysis: analysis)
+            }
+            let result = OMRDetectTiming.shared.measure("seamMatch") {
+                OMRDetectorMetrics.match(
+                    predicted: predicted, truth: truth,
+                    staffSpacingPt: analysis.staffSpacingPt, matchSp: matchSp,
+                )
+            }
             for (cls, counts) in result.byClass {
                 totals.tpByClass[cls, default: 0] += counts.tp
                 totals.fpByClass[cls, default: 0] += counts.fp
                 totals.fnByClass[cls, default: 0] += counts.fn
+                totals.bySplit[split, default: Totals.SplitCounts()].tp += counts.tp
+                totals.bySplit[split, default: Totals.SplitCounts()].fp += counts.fp
+                totals.bySplit[split, default: Totals.SplitCounts()].fn += counts.fn
                 for err in counts.originErrSp {
                     totals.originErrBuckets[Int((err * 4).rounded(.down)), default: 0] += 1
                     totals.originErrSumSp += err
                     totals.originErrCount += 1
+                    totals.bySplit[split, default: Totals.SplitCounts()].originErrSumSp += err
+                    totals.bySplit[split, default: Totals.SplitCounts()].originErrCount += 1
                 }
             }
+            return predicted
         }
 
         /// The render's score-level number: `.detectorGlyphs` composed
@@ -262,14 +330,18 @@
             pageAnalyses: [Int: RasterPageAnalysis], detector: any OMRGlyphDetecting,
             pitchPcts: inout [Double], durPcts: inout [Double],
         ) throws {
-            let hybrid = try OMRHybridFrontEnd.compose(
-                pages: pages, analyses: pageAnalyses, mode: .detectorGlyphs, detector: detector,
-            )
-            let scoreB = try PDFImporter.buildScore(
-                pageCount: hybrid.pageCount, walked: hybrid.walked,
-                pageSizes: hybrid.pageSizes, documentAttributes: nil,
-                options: PDFImportOptions(),
-            )
+            let hybrid = try OMRDetectTiming.shared.measure("compose") {
+                try OMRHybridFrontEnd.compose(
+                    pages: pages, analyses: pageAnalyses, mode: .detectorGlyphs, detector: detector,
+                )
+            }
+            let scoreB = try OMRDetectTiming.shared.measure("buildScore") {
+                try PDFImporter.buildScore(
+                    pageCount: hybrid.pageCount, walked: hybrid.walked,
+                    pageSizes: hybrid.pageSizes, documentAttributes: nil,
+                    options: PDFImportOptions(),
+                )
+            }
             let aligned = ScoreSemanticMetrics.alignNotefulParts(scoreA: scoreA, scoreB: scoreB)
             print(ScoreSemanticMetrics.summaryRow(
                 tag: "[\((dir as NSString).lastPathComponent)]", scoreA: scoreA, scoreB: scoreB,
