@@ -77,11 +77,32 @@ struct WrittenPitchViewTests {
         }
     }
 
+    /// The in-loop `useDrumset` guard, not the top-level fast path: a SECOND transposing part (an F horn,
+    /// `writtenFifthsOffset +1`) keeps `writtenPitchView()` past its early return, so the loop actually runs and
+    /// has to skip the drumset part on its own. Without the horn the whole score short-circuits to `self` and the
+    /// guard is never reached.
     @Test func drumsetPartIsNotShifted() {
         var score = ensemble()
         score.parts[1].instrument.useDrumset = true
+        var hornStaff = score.parts[0].staves[0]
+        hornStaff.measures[0].voices[0].elements[2] =
+            .chord(Chord(duration: .whole, notes: [Note(pitch: 70, tpc: 12)]))
+        score.parts.append(Part(
+            id: "3",
+            instrument: Instrument(id: "horn", transposeDiatonic: -4, transposeChromatic: -7),
+            staves: [hornStaff],
+        ))
+
         let written = score.writtenPitchView()
-        #expect(written == score)
+        // The drumset clarinet is untouched — pitch, spelling and key signature all stay concert.
+        #expect(chord(written, part: 1, measure: 0, element: 2)?.notes.first?.pitch == 70)
+        #expect(chord(written, part: 1, measure: 0, element: 2)?.notes.first?.tpc == 12)
+        #expect(key(written, part: 1, measure: 0, element: 0) == 0)
+        #expect(written.parts[1] == score.parts[1])
+        // …while the horn beside it did move, proving the loop ran rather than short-circuiting.
+        #expect(chord(written, part: 2, measure: 0, element: 2)?.notes.first?.pitch == 77)
+        #expect(chord(written, part: 2, measure: 0, element: 2)?.notes.first?.tpc == 13)
+        #expect(key(written, part: 2, measure: 0, element: 0) == 1)
     }
 
     @Test func percussionStaffIsNotShifted() {

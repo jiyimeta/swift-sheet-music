@@ -51,9 +51,8 @@ extension Score {
                 )
                 let measures = copy.parts[partIndex].staves[staffIndex].measures
                 for measureIndex in measures.indices {
-                    // Resolved against `self` — the ORIGINAL score. `copy`'s keys are being rewritten as this
-                    // loop walks forward, so reading the running key out of it would feed a measure that
-                    // inherits its key from an earlier bar an already-shifted value and shift it a second time.
+                    // Resolved against `self`, the ORIGINAL score: `copy`'s keys are rewritten as this loop
+                    // walks, so a measure inheriting its key from an earlier bar would be shifted twice.
                     let oldKey = activeKey(staff: address, measureIndex: measureIndex)
                     let newKey = Self.respelledKey(oldKey + phi)
                     copy.parts[partIndex].staves[staffIndex].measures[measureIndex] =
@@ -68,21 +67,26 @@ extension Score {
         return copy
     }
 
-    /// Returns a copy of the score with every transposing part's notation shifted to WRITTEN pitch: notes,
-    /// key signatures, and chord symbols move by the part's own interval, exactly (the (diatonic, chromatic)
-    /// pair fixes the fifths shift — no histogram, unlike `transposed(bySemitones:)`, which has to pick one
-    /// offset for the whole score). Concert-pitch parts, `useDrumset` parts, and `"percussion"` staves pass
-    /// through untouched.
+    /// Returns a copy of the score with every transposing part's notation shifted to WRITTEN pitch: notes, key
+    /// signatures and chord symbols move by the part's own interval, exactly — the (diatonic, chromatic) pair
+    /// fixes the fifths shift, no histogram, unlike `transposed(bySemitones:)` which picks one offset for the
+    /// whole score. Concert-pitch parts, `useDrumset` parts and `"percussion"` staves pass through untouched.
     ///
-    /// Display-only: tick structure, IDs, and element ordering are unchanged, and playback must keep reading
-    /// the un-transformed score — this is what a player sees on the page, not what sounds.
+    /// Display-only, and for RENDERING only: tick structure, IDs and element ordering are unchanged, but the
+    /// result must never reach playback, MIDI export or the MSCX encoder. The latter two apply the part's own
+    /// offset themselves (`MSCXEncoder+Score.swift` seeds `MSCXEncoderOptions.writtenFifthsOffset` per part), so
+    /// encoding a written-pitch view shifts every key and tpc a second time — silently, compounding per save.
+    ///
+    /// A note whose written pitch would leave the MIDI range `0…127` keeps its concert pitch and spelling under
+    /// a key signature that DID move, so it reads wrong on the page — inherited from the shared note transform,
+    /// only reachable at the extremes of the range, and no part is rejected for it.
     public func writtenPitchView() -> Score {
         guard parts.contains(where: { $0.instrument.isTransposing && !$0.instrument.useDrumset }) else {
             return self
         }
         var copy = self
         for partIndex in copy.parts.indices {
-            let instrument = copy.parts[partIndex].instrument
+            let instrument = parts[partIndex].instrument
             guard instrument.isTransposing, !instrument.useDrumset else { continue }
             let semitones = instrument.writtenPitchOffset
             let fifths = instrument.writtenFifthsOffset
@@ -111,10 +115,10 @@ extension Score {
     /// respelled back into the writable range), notes move by `semitones` semitones / `fifthsDelta` fifths and are
     /// re-spelled against `key`, and chord symbols move by `fifthsDelta`. Everything else passes through.
     ///
-    /// `keyShift` and `fifthsDelta` are deliberately separate. `keyShift` is the caller's whole shift (the global
-    /// offset for `transposed(bySemitones:)`, the part's own interval for `writtenPitchView()`), while
-    /// `fifthsDelta` is `key − oldKey`, which differs from it whenever the destination key had to be respelled —
-    /// notes follow the key that actually got written, not the unclamped one.
+    /// `keyShift` and `fifthsDelta` are deliberately separate: `keyShift` is the caller's whole shift (global
+    /// offset for `transposed(bySemitones:)`, the part's own interval for `writtenPitchView()`) while
+    /// `fifthsDelta` is `key − oldKey`, which differs whenever the destination key had to be respelled — notes
+    /// follow the key that actually got written, not the unclamped one.
     private static func rewriteMeasure(
         _ measure: Measure, semitones: Int, keyShift: Int, fifthsDelta: Int, key: Int,
     ) -> Measure {
