@@ -100,6 +100,22 @@
             /// component was measured last.
             case allVerticalComponents
 
+            /// The three hybrid-BEAM modes, and their combination, for the
+            /// same reason: `truthBeams` wins +2.5 durP50 / +2.1 durMean
+            /// and that number is compatible with an x-extent fix, a
+            /// precision fix or a recall fix. See `OMRBeamHybrid`.
+            case snapBeamXRanges
+            case dropBeamFalsePositives
+            case addBeamMisses
+            /// All three. Its gap to `truthBeams` is what the components
+            /// CANNOT reach — the labels' own edge fits, which no
+            /// component takes.
+            ///
+            /// `beamHybrid`, the map from these four cases to the edits
+            /// they apply, lives in `OMRBeamHybrid.swift` — this enum is at
+            /// SwiftLint's `type_body_length` ceiling.
+            case allBeamComponents
+
             /// Which vertical-set edits this mode applies, in order.
             /// Distinct from `substituted`: these modes keep the raster's
             /// own verticals and EDIT them, so nothing is filtered out
@@ -607,6 +623,15 @@
                     mode.verticalHybrid, pagePaths: pagePaths,
                     truth: oracle.walked.paths.filter {
                         $0.pageIndex == index && $0.kind == .vertical
+                    },
+                    page: page, analysis: analysis, mode: mode, index: index,
+                )
+            }
+            if !mode.beamHybrid.isEmpty {
+                pagePaths = hybridBeams(
+                    mode.beamHybrid, pagePaths: pagePaths,
+                    truth: oracle.walked.paths.filter {
+                        $0.pageIndex == index && $0.kind == .beam
                     },
                     page: page, analysis: analysis, mode: mode, index: index,
                 )
