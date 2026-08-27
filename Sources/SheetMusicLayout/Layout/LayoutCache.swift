@@ -150,6 +150,12 @@ public final class LayoutCache: @unchecked Sendable {
         let overlappingSpannerAnchors: [LayoutEngine.SpannerAnchor]
         /// Read by `synthesizeLineSpanners` for the ottava label.
         let ottavaNumbersOnly: Bool
+        /// The end-of-system courtesy signature this system announces —
+        /// derived from the measure that OPENS the NEXT system, which no
+        /// other field here can see. Without it a key change edited into
+        /// the following measure would leave this system serving a
+        /// cached trailing edge that never announces it.
+        let trailingCourtesy: LayoutEngine.TrailingCourtesy?
     }
 
     /// All inputs to `placeMeasureElements` for one (measure, staff).

@@ -13,7 +13,13 @@ extension LayoutEngine {
     /// `synthesizeLineSpanners` can insert into the same buffer.
     struct UntranslatedMeasure {
         let measureIdx: Int
+        /// The measure's full horizontal advance, including any
+        /// end-of-system courtesy reservation at its trailing edge.
         let width: CGFloat
+        /// Where the measure's own content ends — `width` minus the
+        /// courtesy reservation, and so where the end barline sits.
+        /// Equal to `width` for every measure that announces nothing.
+        let contentWidth: CGFloat
         var perStaffElements: [Int: [LayoutElement]]
         /// Hidden annotations laid out under `showsInvisibleElements`,
         /// kept parallel to `perStaffElements` so the system-wide
@@ -35,6 +41,7 @@ extension LayoutEngine {
         widths: [CGFloat],
         systemOriginY: CGFloat,
         isFirstSystem: Bool,
+        trailingCourtesy: TrailingCourtesy? = nil,
         activeClefs: inout [NotatedClef],
         activeKeys: inout [Int],
         context: RenderContext,
@@ -118,6 +125,13 @@ extension LayoutEngine {
         var clefs = activeClefs
         var keys = activeKeys
         let plan = context.multiMeasureRestPlan
+        // The measure that carries the end-of-system announcement: the
+        // last one in the range that actually draws. A multi-measure-rest
+        // run's interiors emit nothing, so the run's start announces for
+        // them. `packSystems` reserved the width on the same index.
+        let announcingMeasureIdx: Int? = trailingCourtesy == nil
+            ? nil
+            : measureRange.reversed().first { !plan.isInteriorOfRun($0) }
         for (j, measureIdx) in measureRange.enumerated() {
             if plan.isInteriorOfRun(measureIdx) {
                 // Run-interior: collapsed-bar emission is owned by the
@@ -137,6 +151,11 @@ extension LayoutEngine {
                 untranslated.append(UntranslatedMeasure(
                     measureIdx: measureIdx,
                     width: widths[j],
+                    contentWidth: widths[j] - courtesyReserve(
+                        trailingCourtesy,
+                        at: measureIdx,
+                        announcingAt: announcingMeasureIdx,
+                    ),
                     perStaffElements: [:],
                     perStaffInvisibleElements: [:],
                     staff0Measure: staff0Measure,
@@ -145,7 +164,16 @@ extension LayoutEngine {
                 ))
                 continue
             }
-            let w = widths[j]
+            // Placement lays the measure out inside its CONTENT width;
+            // the announcement lives in the reserved band beyond it, so
+            // the notes never spread into the glyphs that follow the
+            // end barline.
+            let fullWidth = widths[j]
+            let w = fullWidth - courtesyReserve(
+                trailingCourtesy,
+                at: measureIdx,
+                announcingAt: announcingMeasureIdx,
+            )
             let synthesizeClefHere = j == 0
             let synthesizeKeySigHere = j == 0
             let schedule = computeHeaderSchedule(
@@ -312,6 +340,32 @@ extension LayoutEngine {
                     perStaffInvisible[staffIdx] = invisibleEls
                 }
             }
+            // End-of-system courtesy signatures, in the band reserved
+            // past the end barline. Appended AFTER the per-measure
+            // placement cache is written above — like the measure number
+            // below — so a cached `StaffPlacement` never carries an
+            // announcement that belongs to a boundary it knows nothing
+            // about. The clef is this staff's carry-out one, which the
+            // loop above just settled, so a courtesy of a change to C
+            // cancels at the positions that clef actually uses.
+            if let courtesy = trailingCourtesy,
+               measureIdx == announcingMeasureIdx
+            {
+                for staffIdx in staves.indices
+                    where perStaff[staffIdx] != nil
+                {
+                    perStaff[staffIdx, default: []].append(
+                        contentsOf: courtesyElements(
+                            courtesy,
+                            staffIndex: staffIdx,
+                            contentWidth: w,
+                            clef: clefs[staffIdx],
+                            lineGeometry: staffGeometries[staffIdx],
+                            metrics: metrics,
+                        ),
+                    )
+                }
+            }
             // Measure number — TOP STAFF ONLY. Engraving convention
             // places a single number above the topmost staff; how often
             // is `options.measureNumbers` (every system head by default,
@@ -354,7 +408,8 @@ extension LayoutEngine {
                 : nil
             untranslated.append(UntranslatedMeasure(
                 measureIdx: measureIdx,
-                width: w,
+                width: fullWidth,
+                contentWidth: w,
                 perStaffElements: perStaff,
                 perStaffInvisibleElements: perStaffInvisible,
                 staff0Measure: staff0Measure,
@@ -798,8 +853,27 @@ extension LayoutEngine {
                     let staffCenterY = staffY + staffHeights[staffIdx] / 2
                     elements.append(.multiMeasureRest(
                         count: runLen,
-                        origin: CGPoint(x: um.width / 2, y: staffCenterY),
+                        origin: CGPoint(
+                            x: um.contentWidth / 2, y: staffCenterY,
+                        ),
                     ))
+                    // A run that ends the system announces too. Pass 2
+                    // has already applied the staff origins here, so the
+                    // staff-local glyphs get the same shift the normal
+                    // path applies during translation.
+                    if let courtesy = trailingCourtesy,
+                       um.measureIdx == announcingMeasureIdx
+                    {
+                        let yOffset = staffY - metrics.sp * 2
+                        elements.append(contentsOf: courtesyElements(
+                            courtesy,
+                            staffIndex: staffIdx,
+                            contentWidth: um.contentWidth,
+                            clef: clefs[staffIdx],
+                            lineGeometry: staffGeometries[staffIdx],
+                            metrics: metrics,
+                        ).map { translate(element: $0, dy: yOffset) })
+                    }
                     // Right-edge barline mirrors normal measures so the
                     // system's visible separators stay continuous. Collapsed
                     // measures bypass placeMeasureElements, so we add it
@@ -815,7 +889,9 @@ extension LayoutEngine {
                         .barLineSpanY(sp: metrics.sp)
                     elements.append(.barLine(
                         subtype: barSubtype,
-                        origin: CGPoint(x: um.width, y: staffCenterY),
+                        origin: CGPoint(
+                            x: um.contentWidth, y: staffCenterY,
+                        ),
                         halfHeight: (barSpan.bottom - barSpan.top) / 2,
                     ))
                 }

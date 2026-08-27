@@ -146,6 +146,14 @@ extension LayoutEngine {
             return cachedMinWidths[i] + cancellationWidths[i]
         }
 
+        // What each possible system boundary would announce at its
+        // trailing edge, and how much room that takes. Indexed by the
+        // measure a system would END at, so the entry a break consults is
+        // driven by the measure that would OPEN the next system.
+        let courtesies = trailingCourtesies(
+            staves: staves, metrics: context.metrics,
+        )
+
         // Clef state persists ACROSS systems: engraving convention
         // redraws the currently active clef at the start of every
         // new system (line break).  Without this persistence,
@@ -315,9 +323,52 @@ extension LayoutEngine {
                     break
                 }
             }
+            // The system's trailing edge announces the next system's
+            // opening signature change. The inner loop above filled the
+            // system without knowing that, so give the announcement back
+            // its room here: drop trailing measures until it fits.
+            // Bounded by the one-measure floor — a lone measure keeps its
+            // system even when the announcement overflows, exactly as the
+            // hard ceiling lets a single over-wide measure through.
+            if context.options.wrapToViewWidth {
+                while cursor - systemStart > 1,
+                      let courtesy = courtesies[cursor - 1],
+                      widthSoFar + courtesy.width > contentAvail
+                {
+                    // Step back one DRAWN measure: past a whole
+                    // multi-measure-rest run rather than into the middle
+                    // of one, whose interiors carry no width and emit
+                    // nothing without their run-start.
+                    var candidate = cursor - 1
+                    while candidate > systemStart,
+                          plan.isInteriorOfRun(candidate)
+                    {
+                        candidate -= 1
+                    }
+                    guard candidate > systemStart else { break }
+                    for idx in candidate ..< cursor {
+                        widthSoFar -= minWidths[idx]
+                    }
+                    cursor = candidate
+                }
+            }
+            // `courtesies` is nil at the score's last measure, so a
+            // system that runs to the end announces nothing.
+            let trailingCourtesy = courtesies[cursor - 1]
             var widthsSlice = Array(minWidths[systemStart ..< cursor])
             if !widthsSlice.isEmpty {
                 widthsSlice[0] += firstHeaderBoost
+            }
+            // Reserve the announcement on the last measure that actually
+            // draws — a multi-measure-rest run's interior indices carry
+            // width 0 and emit nothing, so the reservation belongs on the
+            // run's start instead.
+            if let courtesy = trailingCourtesy,
+               let last = widthsSlice.indices.last(where: {
+                   !plan.isInteriorOfRun(systemStart + $0)
+               })
+            {
+                widthsSlice[last] += courtesy.width
             }
             let stretched: [CGFloat]
             if context.options.wrapToViewWidth {
@@ -348,6 +399,7 @@ extension LayoutEngine {
                 isFirstSystem: isFirstSystem,
                 activeClefsIn: activeClefsIn,
                 activeKeysIn: activeKeysIn,
+                trailingCourtesy: trailingCourtesy,
                 context: context,
             )
             let system: LayoutSystem
@@ -369,6 +421,7 @@ extension LayoutEngine {
                     widths: stretched,
                     systemOriginY: 0,
                     isFirstSystem: isFirstSystem,
+                    trailingCourtesy: trailingCourtesy,
                     activeClefs: &activeClefs,
                     activeKeys: &activeKeys,
                     context: context,
@@ -424,6 +477,7 @@ extension LayoutEngine {
         isFirstSystem: Bool,
         activeClefsIn: [NotatedClef],
         activeKeysIn: [Int],
+        trailingCourtesy: TrailingCourtesy?,
         context: RenderContext,
     ) -> LayoutCache.SystemInputs {
         let allStaves = context.score.allStaves
@@ -475,6 +529,7 @@ extension LayoutEngine {
             options: context.options,
             overlappingSpannerAnchors: overlappingAnchors,
             ottavaNumbersOnly: context.score.style.ottavaNumbersOnly,
+            trailingCourtesy: trailingCourtesy,
         )
     }
 
