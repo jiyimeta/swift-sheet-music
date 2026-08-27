@@ -130,6 +130,25 @@ extension RasterPage {
     /// rejoin across the narrow rows that disowned it.
     static let staffLineCoreRowWidthFraction = 0.5
 
+    /// Least fraction of a line blob's box that the agreement of its core
+    /// rows must keep for that agreement to be believed — see
+    /// `coreSpan(of:)`.
+    ///
+    /// MEASURED, and the measurement is the whole point: at 0.5 the
+    /// v2-eval-frozen (degraded) staff-line recall falls 0.5415 → 0.4891,
+    /// 226 lines, because an eroded row's ends are missing and the
+    /// intersection believes them. Nothing downstream moved there — staves
+    /// 448/447 aligned, barlines 8224/4703/2923 and beams 2049/7188/503 all
+    /// identical — but a fifth of the line population shortening past the
+    /// seam's 0.8 coverage gate is not a trade to make silently.
+    ///
+    /// The defect this exists to remove is small by construction: foreign
+    /// ink reaches sideways only as far as `staffLineGapToleranceInSpaces`
+    /// plus its own width, and measured on `tex_0017` that is 111px of a
+    /// 2117px line — the intersection keeps 0.948 of the box. Erosion
+    /// removes far more. 0.9 sits between them with room on both sides.
+    static let staffLineCoreSpanFloor = 0.9
+
     /// Staff-line spacing in pixels, from the row projection's peak
     /// spacing; nil when the page has no staff.
     ///
@@ -211,6 +230,49 @@ extension RasterPage {
             .map { segment(from: $0, transform: transform, pageIndex: pageIndex) }
     }
 
+    /// The same blobs `staffLineSegments` emits, with the row-width
+    /// profile each segment's y was derived from.
+    ///
+    /// `centerRow` is the only place a staff line's y is decided, and it
+    /// decides it from `rowWidths` — a vector a caller cannot see through
+    /// the `PathSegment` that comes out, whose `lineWidth` is the blob's
+    /// whole box. A diagnostic that has to say WHY a line landed where it
+    /// did therefore cannot work from the output alone. Exposed rather
+    /// than copied into the test so the probe and the detector can never
+    /// profile different blobs.
+    struct BlobProfile {
+        var segment: PathSegment
+        var yTop: Int
+        var yBottom: Int
+        var centerRow: Double
+        var rowWidths: [Int]
+    }
+
+    static func staffLineBlobProfiles(
+        _ mask: InkMask, spacingPx: Double, transform: PageTransform, pageIndex: Int,
+    ) -> [BlobProfile] {
+        let gapTolerance = max(1, Int((staffLineGapToleranceInSpaces * spacingPx).rounded()))
+        let minWidthPx = max(1, Int((staffLineMinWidthPt * transform.dpi / 72.0).rounded()))
+        var runsByRow: [[(x0: Int, x1: Int)]] = []
+        runsByRow.reserveCapacity(mask.height)
+        for y in 0 ..< mask.height {
+            runsByRow.append(rowRuns(
+                mask, y: y, gapTolerance: gapTolerance, minWidthPx: minWidthPx,
+            ))
+        }
+        let found = blobs(runsByRow)
+        let floor = referenceWidth(found) * staffLineMinWidthFractionOfWidest
+        return found
+            .filter { Double($0.x1 - $0.x0 + 1) >= floor }
+            .map {
+                BlobProfile(
+                    segment: segment(from: $0, transform: transform, pageIndex: pageIndex),
+                    yTop: $0.yTop, yBottom: $0.yBottom,
+                    centerRow: centerRow($0), rowWidths: $0.rowWidths,
+                )
+            }
+    }
+
     /// The page's "a staff line is about this wide" reference: the median
     /// width of the widest quarter of the runs.
     ///
@@ -261,110 +323,5 @@ extension RasterPage {
         }
         if let from = start, let last = lastInk { close(from, last, inked) }
         return out
-    }
-
-    /// A run and the rows it spans.
-    private struct LineBlob {
-        var x0: Int
-        var x1: Int
-        var yTop: Int
-        var yBottom: Int
-        /// Total run width on each row from `yTop` to `yBottom`, in raster
-        /// order. Kept because the bounding box alone cannot say WHERE in
-        /// the blob the line is — see `staffLineCoreRowWidthFraction`.
-        var rowWidths: [Int]
-    }
-
-    /// Vertically adjacent runs that overlap in x become one blob.
-    ///
-    /// Rows are walked top to bottom and runs left to right — raster-scan
-    /// order — so the output is a function of the mask alone, which the
-    /// determinism contract requires and the run-twice gate checks.
-    private static func blobs(_ runsByRow: [[(x0: Int, x1: Int)]]) -> [LineBlob] {
-        var open: [LineBlob] = []
-        var closed: [LineBlob] = []
-        for (y, runs) in runsByRow.enumerated() {
-            var next: [LineBlob] = []
-            var consumed = [Bool](repeating: false, count: runs.count)
-            for var blob in open {
-                var extended = false
-                for (i, run) in runs.enumerated()
-                    where !consumed[i] && run.x0 <= blob.x1 && run.x1 >= blob.x0
-                {
-                    blob.x0 = min(blob.x0, run.x0)
-                    blob.x1 = max(blob.x1, run.x1)
-                    // Several runs of one row can join the same blob; they
-                    // are all that row's contribution, so they share its
-                    // slot rather than adding one each.
-                    if extended {
-                        blob.rowWidths[blob.rowWidths.count - 1] += run.x1 - run.x0 + 1
-                    } else {
-                        blob.yBottom = y
-                        blob.rowWidths.append(run.x1 - run.x0 + 1)
-                        extended = true
-                    }
-                    consumed[i] = true
-                }
-                if extended { next.append(blob) } else { closed.append(blob) }
-            }
-            for (i, run) in runs.enumerated() where !consumed[i] {
-                next.append(LineBlob(
-                    x0: run.x0, x1: run.x1, yTop: y, yBottom: y,
-                    rowWidths: [run.x1 - run.x0 + 1],
-                ))
-            }
-            open = next
-        }
-        return closed + open
-    }
-
-    /// Where the LINE is inside its blob: the width-weighted centroid of
-    /// the rows contiguous with the widest one that are themselves at
-    /// least `staffLineCoreRowWidthFraction` of it.
-    ///
-    /// NOT the bounding box's midpoint, which merged ink drags off the
-    /// line — see `staffLineCoreRowWidthFraction`. Weighted rather than
-    /// snapped to the widest row alone so a line whose ink covers an even
-    /// number of rows still reports the half-row centre between them.
-    private static func centerRow(_ blob: LineBlob) -> Double {
-        let midpoint = Double(blob.yTop + blob.yBottom) / 2
-        guard let widest = blob.rowWidths.max(), widest > 0,
-              let peak = blob.rowWidths.firstIndex(of: widest)
-        else { return midpoint }
-        let floor = Double(widest) * staffLineCoreRowWidthFraction
-        var first = peak
-        while first > 0, Double(blob.rowWidths[first - 1]) >= floor {
-            first -= 1
-        }
-        var last = peak
-        while last + 1 < blob.rowWidths.count,
-              Double(blob.rowWidths[last + 1]) >= floor
-        {
-            last += 1
-        }
-        var weight = 0.0
-        var moment = 0.0
-        for row in first ... last {
-            weight += Double(blob.rowWidths[row])
-            moment += Double(blob.rowWidths[row]) * Double(blob.yTop + row)
-        }
-        guard weight > 0 else { return midpoint }
-        return moment / weight
-    }
-
-    private static func segment(
-        from blob: LineBlob, transform: PageTransform, pageIndex: Int,
-    ) -> PathSegment {
-        let midRow = centerRow(blob)
-        let left = transform.point(x: Double(blob.x0), y: midRow)
-        let right = transform.point(x: Double(blob.x1 + 1), y: midRow)
-        let thicknessPt = Double(blob.yBottom - blob.yTop + 1) * (72.0 / transform.dpi)
-        return PathSegment(
-            kind: .horizontal,
-            rect: CGRect(x: left.x, y: left.y, width: right.x - left.x, height: 0),
-            lineWidth: CGFloat(thicknessPt),
-            pageIndex: pageIndex,
-            quad: nil,
-        )
     }
 }

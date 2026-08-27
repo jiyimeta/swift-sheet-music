@@ -237,5 +237,86 @@
             #expect(segs.count == 1)
             #expect(abs(Double(segs[0].lineWidth) - 3 * 72.0 / 300.0) < 0.05)
         }
+
+        /// Ink NEAR a line's end must not lengthen the line.
+        ///
+        /// The gap tolerance exists so a broken line comes out as one
+        /// segment. At a line's END there is nothing to reconnect to, so
+        /// the same tolerance reaches sideways into whatever sits beside
+        /// it — measured on v2-eval, the instrument name "Tenor" printed
+        /// 4.5pt left of `tex_0017`'s staff bridges into the middle line
+        /// on ONE raster row of the two that line occupies.
+        ///
+        /// The price is a staff, not a line: `detectStaves` builds a
+        /// staff's `xRange` from its lines' extents, so the staff starts
+        /// 5.9 staff spaces left of where it does and the score gains a
+        /// measure. `tex_0017` and `tex_0097` are the only two renders the
+        /// `truthStaffLines` bisect wins on, and this is the difference.
+        ///
+        /// Here: five 2-row lines from x=45, and 16px of foreign ink at
+        /// x=20 on the TOP row of the middle line only, 9px from it —
+        /// inside the 12px (1.0 space at spacing 12) tolerance.
+        @Test func inkBesideALineDoesNotLengthenIt() {
+            var bmp = RasterTestBitmaps.blank(widthPx: 900, heightPx: 300, dpi: 300)
+            for i in 0 ..< 5 {
+                RasterTestBitmaps.hLine(
+                    &bmp, y: 120 + i * 12, x0: 45, x1: 855, thickness: 2,
+                )
+            }
+            RasterTestBitmaps.hLine(&bmp, y: 144, x0: 20, x1: 36, thickness: 1)
+            let mask = RasterPage.binarize(bmp)
+            let segs = RasterPage.staffLineSegments(
+                mask, spacingPx: 12, transform: Self.transform(bmp), pageIndex: 0,
+            )
+            // The polluted line is still EMITTED — this trims an extent,
+            // it does not drop a line — and starts where its siblings do.
+            #expect(segs.count == 5)
+            let lefts = segs.map { Double($0.rect.minX) }
+            #expect((lefts.max() ?? 0) - (lefts.min() ?? 0) < 0.05)
+            // x=45 at 300dpi is page x 10.8pt; x=20 would be 4.8pt.
+            #expect(abs((lefts.min() ?? 0) - 10.8) < 0.05)
+        }
+
+        /// …while a line whose rows genuinely disagree keeps its full
+        /// reach. The trim is an intersection, so without a floor a single
+        /// half-width row could halve a real line; the guard caps what it
+        /// can take at half the blob.
+        ///
+        /// Here three rows are all core (each is half the widest) but the
+        /// second covers only the left half and the third only the right,
+        /// so their intersection with the first is EMPTY. The box wins.
+        @Test func aLineWhoseRowsDisagreeKeepsItsBox() {
+            var bmp = RasterTestBitmaps.blank(widthPx: 900, heightPx: 300, dpi: 300)
+            RasterTestBitmaps.hLine(&bmp, y: 150, x0: 40, x1: 860, thickness: 1)
+            RasterTestBitmaps.hLine(&bmp, y: 151, x0: 40, x1: 450, thickness: 1)
+            RasterTestBitmaps.hLine(&bmp, y: 152, x0: 450, x1: 860, thickness: 1)
+            let mask = RasterPage.binarize(bmp)
+            let segs = RasterPage.staffLineSegments(
+                mask, spacingPx: 12, transform: Self.transform(bmp), pageIndex: 0,
+            )
+            #expect(segs.count == 1)
+            #expect(abs(Double(segs.first?.rect.minX ?? 0) - 40 * 72.0 / 300.0) < 0.05)
+            #expect(abs(Double(segs.first?.rect.maxX ?? 0) - 860 * 72.0 / 300.0) < 0.05)
+        }
+
+        /// …and an ERODED row does not shorten the line either, which is
+        /// the whole reason the trim has a floor.
+        ///
+        /// A degraded page's rows are too SHORT, not too long, so there
+        /// the widest row is the truest one. Measured on v2-eval-frozen, a
+        /// floor of 0.5 costs 226 staff lines. Here the second row is
+        /// missing its first 100px of 820 — an 0.878 agreement, under
+        /// `staffLineCoreSpanFloor` — so the box wins.
+        @Test func anErodedRowDoesNotShortenTheLine() {
+            var bmp = RasterTestBitmaps.blank(widthPx: 900, heightPx: 300, dpi: 300)
+            RasterTestBitmaps.hLine(&bmp, y: 150, x0: 40, x1: 860, thickness: 1)
+            RasterTestBitmaps.hLine(&bmp, y: 151, x0: 140, x1: 860, thickness: 1)
+            let mask = RasterPage.binarize(bmp)
+            let segs = RasterPage.staffLineSegments(
+                mask, spacingPx: 12, transform: Self.transform(bmp), pageIndex: 0,
+            )
+            #expect(segs.count == 1)
+            #expect(abs(Double(segs.first?.rect.minX ?? 0) - 40 * 72.0 / 300.0) < 0.05)
+        }
     }
 #endif
