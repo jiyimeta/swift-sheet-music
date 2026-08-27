@@ -20,8 +20,9 @@ extension LayoutEngine {
         /// then cross over each other, so the attach pass uses only the
         /// begin anchor and lets the bend degenerate to a tick.
         let sameNote: Bool
-        /// `true` when the bend rises (end pitch at or above start),
-        /// which is the side of the staff its vertex arcs toward.
+        /// Side of the staff the vertex arcs toward. Decided by
+        /// `bendIsUp(pairing:stems:)`, a mirror of
+        /// `GuitarBendLayout::computeUp`.
         let up: Bool
         /// `true` for `GuitarBendType.slightBend`, which draws a fixed
         /// cubic hook rather than an angular polyline.
@@ -31,11 +32,19 @@ extension LayoutEngine {
     /// One bend's endpoints as note PATHS, before coordinates are
     /// resolved. `collectGlissandi` returns a tuple for the same job;
     /// this needs five fields, one past SwiftLint's `large_tuple` limit.
+    ///
+    /// `up` is deliberately absent: deciding it needs the start chord's
+    /// STEM DIRECTION, which only exists once the score is laid out. It is
+    /// computed in `resolveGuitarBends`, off the same `.chord` elements
+    /// that supply the note origins.
     struct GuitarBendPairing: Equatable {
         let from: NoteID
         let to: NoteID
         let sameNote: Bool
-        let up: Bool
+        /// `true` when the source measure has more than one voice with
+        /// content — MuseScore's `measure->hasVoices(staffIdx)`, the first
+        /// branch of `computeUp` after an explicit direction.
+        let multiVoice: Bool
         let slight: Bool
     }
 
@@ -70,6 +79,10 @@ extension LayoutEngine {
         var results: [GuitarBendPairing] = []
         for (address, staff) in score.allStaves {
             for (measureIndex, measure) in staff.measures.enumerated() {
+                // MuseScore's `measure->hasVoices(staffIdx)`: more than one
+                // voice actually carrying content in this measure.
+                let multiVoice = measure.voices
+                    .filter { !$0.elements.isEmpty }.count > 1
                 for (voiceIndex, voice) in measure.voices.enumerated() {
                     for (elementIndex, element) in voice.elements.enumerated() {
                         guard case let .chord(chord) = element,
@@ -85,11 +98,12 @@ extension LayoutEngine {
                                 noteIndexInChord: noteIndex,
                             )
                             guard let item = pairing(
-                                bend: bend, note: note, from: from,
-                                staff: staff, measureIndex: measureIndex,
+                                bend: bend, from: from, staff: staff,
+                                measureIndex: measureIndex,
                                 voiceIndex: voiceIndex,
                                 elementIndex: elementIndex,
                                 noteIndex: noteIndex,
+                                multiVoice: multiVoice,
                             ) else { continue }
                             results.append(item)
                         }
@@ -103,27 +117,34 @@ extension LayoutEngine {
     /// One note's bend → its `NoteID` pair, or `nil` when the type isn't
     /// laid out in v1 or no target chord exists. Split out of
     /// `collectGuitarBends` to keep both bodies short.
-    private static func pairing(
+    private static func pairing( // swiftlint:disable:this function_parameter_count
         bend: GuitarBend,
-        note: Note,
         from: NoteID,
         staff: Staff,
         measureIndex: Int,
         voiceIndex: Int,
         elementIndex: Int,
         noteIndex: Int,
+        multiVoice: Bool,
     ) -> GuitarBendPairing? {
         switch bend.type {
         case .dive, .preDive, .dip, .scoop:
             return nil
         case .preBend, .slightBend:
-            // Same-note pair: no target to look up, and no pitch delta,
-            // so the bend arcs upward by convention.
+            // Same-note pair: no target to look up.
             return GuitarBendPairing(
-                from: from, to: from, sameNote: true, up: true,
+                from: from, to: from, sameNote: true,
+                multiVoice: multiVoice,
                 slight: bend.type == .slightBend,
             )
         case .bend, .graceNoteBend:
+            // NOTE: `.graceNoteBend` is handled here only because its
+            // source note would otherwise be dropped without a word. What
+            // it SHOULD do — run from the grace note to its parent chord's
+            // matching note — is not implemented: grace chords live in
+            // `Chord.graceNotesBefore` / `graceNotesAfter`, which this walk
+            // never visits, so a `.graceNoteBend` source is unreachable and
+            // this arm is dead for that type until grace walking lands.
             guard let target = nextChordLocation(
                 in: staff,
                 afterMeasure: measureIndex,
@@ -136,6 +157,15 @@ extension LayoutEngine {
             let targetNoteIndex = target.chord.notes.indices.contains(noteIndex)
                 ? noteIndex
                 : target.chord.notes.count - 1
+            // The decoder stamps `guitarBendBack` on every note that is a
+            // genuine bend DESTINATION (the `<prev>`-only end side). If the
+            // next real chord's note isn't one, this bend's true target is
+            // something this walk can't see — in practice a grace chord —
+            // and pairing with it anyway would draw a bend to the wrong
+            // notehead. Drop instead, the same v1 policy `resolveGuitarBends`
+            // applies to unresolvable endpoints.
+            guard target.chord.notes[targetNoteIndex].guitarBendBack
+            else { return nil }
             let to = NoteID(
                 staff: from.staff,
                 measureIndex: target.measureIndex,
@@ -143,12 +173,45 @@ extension LayoutEngine {
                 elementIndex: target.elementIndex,
                 noteIndexInChord: targetNoteIndex,
             )
-            let endPitch = target.chord.notes[targetNoteIndex].pitch
             return GuitarBendPairing(
                 from: from, to: to, sameNote: false,
-                up: endPitch >= note.pitch, slight: false,
+                multiVoice: multiVoice, slight: false,
             )
         }
+    }
+
+    /// Which side of the staff a bend's vertex arcs toward. Mirrors
+    /// `GuitarBendLayout::computeUp` (`guitarbendlayout.cpp:222-260`) with
+    /// the data this pipeline has:
+    ///
+    /// 1. **Multi-voice measure** → track parity. C++ (`:237-238`):
+    ///    `if (measure->hasVoices(staffIdx)) { setUp(track() % 2); }`.
+    ///    `track = staffIdx * VOICES + voice`, so the parity is the VOICE
+    ///    index's: voice 0 (and 2) arc DOWN, voice 1 (and 3) arc UP. That
+    ///    agrees with rule 2 — voice 0 conventionally takes up-stems, and
+    ///    rule 2 puts the bend opposite the stem.
+    /// 2. **Single voice** → the opposite of the start chord's stem
+    ///    direction. C++: `setUp(!startChord->up())` for a single-note
+    ///    start chord (`:253`). MuseScore first checks
+    ///    `startChord->up() != endChord->up()` (`:247`) and falls through to
+    ///    the end chord and then to a bend-index tie-break; v1 stops at the
+    ///    start chord, which is the dominant case.
+    /// 3. **Neither available** → `true`.
+    ///
+    /// MuseScore's first branch — an explicit `item->direction()` override
+    /// (`:228`) — is NOT modeled: v1's decoder drops `<direction>`, so a
+    /// hand-flipped bend re-engraves to its automatic side.
+    static func bendIsUp(
+        pairing: GuitarBendPairing,
+        stems: [NoteID: StemDirection],
+    ) -> Bool {
+        if pairing.multiVoice {
+            return !(pairing.from.voiceIndex % 2 == 0)
+        }
+        if let stem = stems[pairing.from] {
+            return stem == .down
+        }
+        return true
     }
 
     /// Resolve `collectGuitarBends`' path-based pairs against the
@@ -157,6 +220,10 @@ extension LayoutEngine {
     /// does), then each pair looks up its endpoints. Pairs whose
     /// endpoints aren't in the map are dropped silently — the v1 policy
     /// for bends hanging off grace chords, which the map doesn't cover.
+    ///
+    /// The same walk also records each note's chord STEM DIRECTION, which
+    /// `bendIsUp(pairing:stems:)` needs and which exists nowhere in the
+    /// `Score` — it is decided during layout.
     static func resolveGuitarBends(
         for document: LayoutDocument,
         score: Score,
@@ -171,10 +238,11 @@ extension LayoutEngine {
         }
 
         var origins: [NoteID: CGPoint] = [:]
+        var stems: [NoteID: StemDirection] = [:]
         for system in document.systems {
             for measure in system.measures {
                 for el in measure.elements {
-                    guard case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = el
+                    guard case let .chord(notes, _, stem, _, _, _, _, _, _, _, _) = el
                     else { continue }
                     for n in notes where needed.contains(n.noteID) {
                         // Origin-only (no `mirrorDx`), matching
@@ -183,6 +251,7 @@ extension LayoutEngine {
                             x: system.origin.x + measure.origin.x + n.origin.x,
                             y: system.origin.y + measure.origin.y + n.origin.y,
                         )
+                        stems[n.noteID] = stem
                     }
                 }
             }
@@ -194,7 +263,9 @@ extension LayoutEngine {
             else { return nil }
             return GuitarBendPair(
                 fromOrigin: fromOrigin, toOrigin: toOrigin,
-                sameNote: item.sameNote, up: item.up, slight: item.slight,
+                sameNote: item.sameNote,
+                up: bendIsUp(pairing: item, stems: stems),
+                slight: item.slight,
             )
         }
     }

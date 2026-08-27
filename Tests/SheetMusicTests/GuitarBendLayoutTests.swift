@@ -161,20 +161,137 @@
             }
         }
 
-        @Test("a rising bend arcs above and a falling bend arcs below")
-        func bendDirectionFollowsPitch() {
+        @Test("a bend's anchors sit 0.2sp off its noteheads' centres")
+        func anchorsPinnedToNoteOrigins() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
-            let up = Self.twoNoteBendDocument(startPitch: 60, endPitch: 64)
-            let down = Self.twoNoteBendDocument(startPitch: 64, endPitch: 60)
-            let upBends = Self.bends(in: up)
-            let downBends = Self.bends(in: down)
-            #expect(upBends.count == 1)
-            #expect(downBends.count == 1)
-            guard let u = upBends.first, let d = downBends.first else { return }
-            // `up` puts the vertex above the chord of the two anchors,
-            // `down` below it (y grows downward).
-            #expect(u.vertex.y < min(u.from.y, u.to.y))
-            #expect(d.vertex.y > max(d.from.y, d.to.y))
+            // The frame conversion this pins: MuseScore's note position is
+            // the notehead's LEFT EDGE horizontally but its vertical
+            // CENTRE, while ours is the centre on both axes. So the
+            // `0.5 * width` term cancels horizontally (leaving ±0.2sp) and
+            // the vertical `0.2sp + 0.5 * height` carries over whole. An
+            // earlier revision kept the width term on both axes and pushed
+            // each anchor a further 0.59sp outward — a green suite did not
+            // catch it, because nothing compared an anchor to its note.
+            let document = Self.twoNoteBendDocument(
+                startPitch: 60, endPitch: 64,
+            )
+            let found = Self.bends(in: document)
+            #expect(found.count == 1)
+            let notes = Self.chordFirstNotes(in: document.systems[0].measures[0])
+            #expect(notes.count == 2)
+            guard let bend = found.first, notes.count == 2 else { return }
+            let sp = document.metrics.sp
+            let upSign: CGFloat = bend.vertex.y < bend.from.y ? -1 : 1
+            let dy = upSign * sp * (0.2 + 1.0 / 2)
+            #expect(abs(bend.from.x - (notes[0].origin.x + sp * 0.2)) < 0.01)
+            #expect(abs(bend.from.y - (notes[0].origin.y + dy)) < 0.01)
+            #expect(abs(bend.to.x - (notes[1].origin.x - sp * 0.2)) < 0.01)
+            #expect(abs(bend.to.y - (notes[1].origin.y + dy)) < 0.01)
+        }
+
+        @Test("a slight bend's anchor sits half a notehead past its centre")
+        func slightAnchorPinnedToNoteOrigin() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            // The slight bend keeps its width term: MuseScore adds a FULL
+            // notehead width to the left edge, which is half a width past
+            // the centre.
+            let a = Note(
+                pitch: 60, tpc: 14,
+                guitarBend: GuitarBend(type: .slightBend),
+                guitarBendBack: true,
+            )
+            let measure = Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .quarter, notes: [a])),
+            ])])
+            let document = Self.layout(measures: [measure])
+            let found = Self.bends(in: document)
+            #expect(found.count == 1)
+            let notes = Self.chordFirstNotes(in: document.systems[0].measures[0])
+            guard let bend = found.first, let note = notes.first else { return }
+            let sp = document.metrics.sp
+            #expect(abs(bend.from.x - (note.origin.x + sp * (1.18 / 2 + 0.25))) < 0.01)
+            #expect(abs(bend.from.y - (note.origin.y - sp * 0.25)) < 0.01)
+        }
+
+        @Test("in a single voice the bend arcs opposite the start chord's stem")
+        func bendOpposesStemDirection() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            // MuseScore's `computeUp` never consults pitch — it takes the
+            // opposite of the start chord's stem (`guitarbendlayout.cpp:253`,
+            // `setUp(!startChord->up())`). Two registers so both stem
+            // directions are exercised; the assertion is the RULE, read off
+            // each document's own laid-out stem.
+            var seen: Set<StemDirection> = []
+            for startPitch in [50, 79] {
+                let document = Self.twoNoteBendDocument(
+                    startPitch: startPitch, endPitch: startPitch + 2,
+                )
+                let found = Self.bends(in: document)
+                #expect(found.count == 1)
+                let stems = Self.chordFirstNotes(
+                    in: document.systems[0].measures[0],
+                )
+                guard let bend = found.first, let stem = stems.first?.stem
+                else { continue }
+                seen.insert(stem)
+                let arcsUp = bend.vertex.y < bend.from.y
+                #expect(arcsUp == (stem == .down))
+            }
+            // Non-vacuity: the two registers really did produce opposite
+            // stems, so the assertion above was checked in both directions.
+            #expect(seen == [.up, .down])
+        }
+
+        @Test("in a multi-voice measure the bend follows track parity")
+        func bendFollowsTrackParityWhenVoicesShareAMeasure() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            // C++: `if (measure->hasVoices(staffIdx)) { setUp(track() % 2); }`
+            // (`guitarbendlayout.cpp:237-238`). `track % 2` is 0 for voice
+            // 0, so voice 0 → arcs DOWN, voice 1 → arcs UP.
+            for (bendVoice, expectUp) in [(0, false), (1, true)] {
+                let document = Self.multiVoiceBendDocument(bendVoice: bendVoice)
+                let found = Self.bends(in: document)
+                #expect(found.count == 1)
+                guard let bend = found.first else { continue }
+                #expect((bend.vertex.y < bend.from.y) == expectUp)
+            }
+        }
+
+        @Test("bendIsUp falls back to up when no stem is known")
+        func bendIsUpFallback() {
+            let id = NoteID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                measureIndex: 0, voiceIndex: 0, elementIndex: 0,
+                noteIndexInChord: 0,
+            )
+            let pairing = LayoutEngine.GuitarBendPairing(
+                from: id, to: id, sameNote: true,
+                multiVoice: false, slight: false,
+            )
+            // Hand-built systems carry no `.chord` elements, so the stem
+            // map comes back empty — the neutral branch.
+            #expect(LayoutEngine.bendIsUp(pairing: pairing, stems: [:]))
+            #expect(!LayoutEngine.bendIsUp(pairing: pairing, stems: [id: .up]))
+            #expect(LayoutEngine.bendIsUp(pairing: pairing, stems: [id: .down]))
+        }
+
+        @Test("a bend whose next chord is not a bend destination is dropped")
+        func bendWithoutMarkedTargetIsDropped() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            // The decoder stamps `guitarBendBack` on genuine destinations.
+            // When the next real chord carries none, this bend's true
+            // target is something the walk can't see (in practice a grace
+            // chord), so pairing with it would draw to the wrong notehead.
+            let a = Note(
+                pitch: 60, tpc: 14, guitarBend: GuitarBend(type: .bend),
+            )
+            let b = Note(pitch: 64, tpc: 14) // NOT a bend destination
+            let measure = Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .quarter, notes: [a])),
+                .chord(Chord(duration: .quarter, notes: [b])),
+            ])])
+            let document = Self.layout(measures: [measure])
+            #expect(Self.bends(in: document).isEmpty)
         }
 
         @Test("whammy-bar bend types are not laid out in v1")
@@ -190,6 +307,39 @@
             }
         }
 
+        /// First-note origin (SYSTEM-local, matching the frame spanners
+        /// use) and owning chord's stem direction, for every real chord in
+        /// `measure`, in element order.
+        private static func chordFirstNotes(
+            in measure: LayoutMeasure,
+        ) -> [(origin: CGPoint, stem: StemDirection)] {
+            measure.elements.compactMap { el in
+                guard case let .chord(notes, _, stem, _, _, _, _, _, _, _, _) = el,
+                      let n = notes.first
+                else { return nil }
+                return (
+                    CGPoint(
+                        x: measure.origin.x + n.origin.x,
+                        y: measure.origin.y + n.origin.y,
+                    ),
+                    stem,
+                )
+            }
+        }
+
+        private static func layout(measures: [Measure]) -> LayoutDocument {
+            let score = Score(
+                division: 480,
+                parts: [Part(
+                    id: "1", instrument: Instrument(id: "x"),
+                    staves: [Staff(measures: measures)],
+                )],
+            )
+            return LayoutEngine.layout(
+                score: score, options: .init(), availableWidth: 800,
+            )
+        }
+
         /// Two quarter chords in one measure, the first carrying a bend
         /// into the second.
         private static func twoNoteBendDocument(
@@ -202,20 +352,34 @@
                 guitarBend: GuitarBend(type: type),
             )
             let b = Note(pitch: endPitch, tpc: 14, guitarBendBack: true)
-            let measure = Measure(voices: [Voice(elements: [
+            return layout(measures: [Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .quarter, notes: [a])),
                 .chord(Chord(duration: .quarter, notes: [b])),
+            ])])])
+        }
+
+        /// One measure with TWO voices carrying content (so MuseScore's
+        /// `measure->hasVoices` is true), the bend on `bendVoice` only.
+        private static func multiVoiceBendDocument(
+            bendVoice: Int,
+        ) -> LayoutDocument {
+            func voice(bent: Bool, pitch: Int) -> Voice {
+                let a = Note(
+                    pitch: pitch, tpc: 14,
+                    guitarBend: bent ? GuitarBend(type: .bend) : nil,
+                )
+                let b = Note(
+                    pitch: pitch + 2, tpc: 14, guitarBendBack: bent,
+                )
+                return Voice(elements: [
+                    .chord(Chord(duration: .quarter, notes: [a])),
+                    .chord(Chord(duration: .quarter, notes: [b])),
+                ])
+            }
+            return layout(measures: [Measure(voices: [
+                voice(bent: bendVoice == 0, pitch: 72),
+                voice(bent: bendVoice == 1, pitch: 52),
             ])])
-            let score = Score(
-                division: 480,
-                parts: [Part(
-                    id: "1", instrument: Instrument(id: "x"),
-                    staves: [Staff(measures: [measure])],
-                )],
-            )
-            return LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800,
-            )
         }
     }
 #endif

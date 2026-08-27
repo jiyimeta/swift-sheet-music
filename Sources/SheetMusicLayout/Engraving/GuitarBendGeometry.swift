@@ -60,6 +60,11 @@ public enum GuitarBendGeometry {
     ///   with itself, so `to == from` is a case that really occurs; the
     ///   result is a purely vertical tick of `vertexHeightMinSp`.
     ///
+    /// MuseScore then runs `avoidBadStaffLineIntersection` over the result
+    /// (`guitarbendlayout.cpp:200`) to nudge a vertex off a staff line it
+    /// would otherwise land exactly on. That is deliberately not modeled in
+    /// v1, so a vertex may coincide with a staff line.
+    ///
     /// - Parameters:
     ///   - from: Start anchor, absolute.
     ///   - to: End anchor, absolute.
@@ -120,25 +125,52 @@ public enum GuitarBendGeometry {
     static let noteheadHeightSp: CGFloat = 1.0
 
     /// Anchor offset from a notehead CENTRE for an angular bend, mirroring
-    /// `layoutAngularBend`'s `xOff` / `yOff`
-    /// (`guitarbendlayout.cpp:141-158`): half a notehead sideways plus a
-    /// `0.2 sp` horizontal indent, and `0.2 sp + half a notehead` vertically
-    /// on the side the bend arcs toward.
+    /// `layoutAngularBend`'s `xOff` / `yOff` (`guitarbendlayout.cpp:138-162`):
     ///
-    /// `isInside` (a bend between two noteheads of the same chord) is not
-    /// modeled in v1 — every bend here takes the `!isInside` branch.
+    /// ```cpp
+    /// double xOff = (isInside ? 1 : 0.5) * startNote->width()
+    ///             + horizontalIndent * startNote->mag();   // begin
+    /// double xOff = (isInside ? 0 : 0.5) * endNote->width()
+    ///             - horizontalIndent * endNote->mag();     // end
+    /// double yOff = upSign * verticalPadding * mag;
+    /// if (!isInside) { yOff += upSign * 0.5 * note->height(); }
+    /// ```
+    ///
+    /// with `horizontalIndent = verticalPadding = 0.2 * spatium`.
+    ///
+    /// **The two axes need different frame conversions.** MuseScore's
+    /// `startNotePos` / `endNotePos` are the notehead glyph's origin: its
+    /// LEFT edge horizontally, but its vertical CENTRE (a notehead is drawn
+    /// centred on its staff line). Our note origins are the notehead centre
+    /// on BOTH axes, so:
+    ///
+    /// * horizontally the `0.5 * width` term is exactly the left-edge →
+    ///   centre conversion and cancels, leaving `±0.2 sp`. (An earlier
+    ///   revision kept both terms and pushed each anchor a further half
+    ///   notehead outward — see `slightBendStartOffset`, which documents
+    ///   the same conversion for its `width` term.)
+    /// * vertically nothing cancels, so the full
+    ///   `0.2 sp + 0.5 * noteheadHeight` carries over.
+    ///
+    /// Two things MuseScore does around these offsets are deliberately NOT
+    /// modeled in v1:
+    ///
+    /// * `isInside` (a bend between two noteheads of the same chord) —
+    ///   every bend here takes the `!isInside` branch.
+    /// * `avoidBadStaffLineIntersection` (`guitarbendlayout.cpp:171-172`
+    ///   for the anchors, `:200` for the vertex), which nudges a point off
+    ///   a staff line it would otherwise sit exactly on.
     ///
     /// - Parameters:
     ///   - start: `true` for the begin anchor (which sits to the RIGHT of
-    ///     its notehead), `false` for the end anchor (to the LEFT of its
-    ///     notehead).
+    ///     its notehead centre), `false` for the end anchor (to the LEFT).
     static func angularAnchorOffset(
         sp: CGFloat, up: Bool, start: Bool,
     ) -> CGPoint {
         let upSign: CGFloat = up ? -1 : 1
-        let dx = sp * (noteheadWidthSp / 2 + 0.2)
+        let indent = sp * 0.2
         return CGPoint(
-            x: start ? dx : -dx,
+            x: start ? indent : -indent,
             y: upSign * sp * (0.2 + noteheadHeightSp / 2),
         )
     }
