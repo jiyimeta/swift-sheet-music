@@ -22,14 +22,31 @@ into `cursorRectAtPlayerSeconds` and `playerSecondsAtPoint`. Likewise
 `gmInstrumentNames` + `gmInstrumentFamilies`, and `nativeCountIn` is
 `countInSeconds` + `renderCountInMetronomeMidi`.
 
+**Equivalent with a different boundary shape.** Android's tick-space
+introspection (`nativeEarliestOf` / `nativeItemEndTick` /
+`nativePitchAndStaffOfNote`) and keyboard navigation
+(`nativeStepMeasureCursor` / `nativeCursorAdvancedByBeats`) carry path and cursor
+codecs because Kotlin can author those payloads through a second Swift image.
+The wasm equivalents lower the same identities and positions to scalars instead;
+the browser has no second Swift image and must not author codec blobs.
+`itemEndTick` and `earliestOf` accept only notes and rests because those are the
+only item kinds the playback timeline records. Measure-step direction is also
+deliberately stricter at the untyped JavaScript boundary: wasm accepts only `0`
+or `1`, while Android treats any nonzero value as forward. This prevents a
+coerced `undefined` from silently becoming a valid forward command.
+
+**Deliberately not ported.** Android's `nativeInstrumentParams` /
+`nativeStaffParams` configure its synthesizer. Their synth content is already on
+wasm's `MixerStrip`, at the deduped part-by-instrument granularity used by
+`renderMidi`'s channel assignment. The genuinely missing per-staff metadata —
+track name, instrument long name, and staff group — is instead carried by
+`StaffDescriptor`.
+
 **Present only on one side.** wasm has the thirteen scalar edit-intent entry
 points, `editSessionState`, and the mixer surface, none of which Android needs —
 its host authors intents in a second Swift image and reads its own session
 directly. Android still has `nativeAnchorReferencePoint` / `nativeResolveAnchor`
-(freehand-ink anchoring for a specific integration), the tick-space introspection
-`nativeEarliestOf` / `nativeItemEndTick` / `nativePitchAndStaffOfNote`, the synth
-configuration `nativeInstrumentParams` / `nativeStaffParams`, and the keyboard
-navigation `nativeStepMeasureCursor` / `nativeCursorAdvancedByBeats`.
+for freehand-ink anchoring in a specific integration.
 
 ## Supported surface
 
