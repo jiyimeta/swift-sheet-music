@@ -76,6 +76,13 @@ extension LayoutEngine {
     /// arc at whatever sits there. That is the same thing the encoder does
     /// with the same missing field (`Chord.pendingSlurEnds(at:)`), so the
     /// two stay consistent; modelling `<voices>` is the fix for both.
+    ///
+    /// **Cross-staff slurs are re-homed the same way.** `pairings(for:…)`
+    /// pins the end ref's `staff` to the start's, so a piano slur running
+    /// from the right hand into the left draws entirely on the START
+    /// staff. MuseScore anchors each end on its own `ChordRest`, staff and
+    /// all; carrying a staff hop through `<location>` is the same missing
+    /// piece as `<voices>`.
     static func collectSlurs(score: Score) -> [SlurPairing] {
         var out: [SlurPairing] = []
         for (address, staff) in score.allStaves {
@@ -305,23 +312,38 @@ extension LayoutEngine {
     ///    decoded `<placement>` — `<up>`, the tag MuseScore actually writes
     ///    for a hand-flipped slur, is not modeled (see
     ///    `SlurDecodeTests.unknownSlurChildrenWarn`).
-    /// 1. **Multi-voice parity**, when any measure the slur spans carries
+    /// 1. **Rest start → BELOW**, and the parity branch is skipped.
+    ///    `startStem == nil` means the start `ChordRest` is a rest, and
+    ///    BOTH of the C++'s rest behaviours follow from that:
+    ///
+    ///    * A Rest *is* a `ChordRest`, so `:2583`'s
+    ///      `if (chordRest1 == 0 || chordRest2 == 0) setUp(true)` does NOT
+    ///      fire — that guard is for a MISSING end, which cannot happen
+    ///      here since both ends resolved to an element. Control reaches
+    ///      `:2606 slur->setUp(!(chordRest1->up()))`, and `ChordRest::up`
+    ///      defaults to `true` (`dom/chordrest.h:197`,
+    ///      `ld_field<bool> up = { "[ChordRest] up", true }`, read at
+    ///      `:203`) because a rest has no stem to set it from. So
+    ///      `setUp(!true)` — a rest-start slur goes BELOW.
+    ///    * The parity branch never runs for it either: `:2612-2613`
+    ///      guards `multipleVoices` with `&& chord1`, and `chord1` is
+    ///      `slur->startCR()->isChord() ? toChord(startCR) : 0` (`:2587`)
+    ///      — null for a rest start. Hence the early return here, ahead
+    ///      of branch 2.
+    /// 2. **Multi-voice parity**, when any measure the slur spans carries
     ///    more than one voice (`:2609-2625`): "slurs go on the stem side" —
     ///    `if (chordRest1->voice() > 0 || chordRest2->voice() > 0)
     ///    slur->setUp(false); else slur->setUp(true);`. Voice 0 at BOTH
     ///    ends → above; any other voice at either end → below. This runs
     ///    last in the C++ and overwrites the stem-opposite result assigned
-    ///    at `:2606`, which is why it is checked first here.
+    ///    at `:2606`, which is why it is checked before branch 3 here.
     ///
     ///    Note the parity is the OPPOSITE of `GuitarBendLayout::computeUp`'s
     ///    `setUp(track() % 2)` — voice 0 arcs UP for a slur and DOWN for a
     ///    bend — so this is transcribed rather than shared with `bendIsUp`.
-    /// 2. **Stem-opposite**, the plain AUTO answer:
+    /// 3. **Stem-opposite**, the plain AUTO answer:
     ///    `slur->setUp(!(chordRest1->up()))` (`:2606`). A stem-UP start
     ///    chord takes the slur below, a stem-DOWN one above.
-    /// 3. **No stem to read** — a slur starting on a rest → `true`, which is
-    ///    the C++'s own fallback when either end is not a `ChordRest`
-    ///    (`:2583-2586`).
     ///
     /// NOT ported: the cross-staff-beam branch (`:2600-2604`) and the two
     /// `isDirectionMixture` branches (`:2626-2632`), which need stem
@@ -335,11 +357,21 @@ extension LayoutEngine {
         if let placement = pairing.placement {
             return placement == .above
         }
+        // Branch 1: rest start. Short-circuits the parity branch as the
+        // C++'s `&& chord1` guard does, and lands on `!up()` == false.
+        // Branch 1: rest start. Short-circuits the parity branch as the
+        // C++'s `&& chord1` guard does, and lands on `!up()` == false.
+        guard let startStem else { return false }
         if pairing.multiVoice {
+            // `end.voiceIndex` is today always equal to `start.voiceIndex`
+            // — `pairings(for:…)` pins the end ref to the start voice
+            // because `<location><voices>` is unmodeled — so the second
+            // conjunct cannot currently change the answer. It is written
+            // out anyway to match the C++ verbatim, so that modelling
+            // `<voices>` needs no edit here.
             return pairing.start.voiceIndex == 0
                 && pairing.end.voiceIndex == 0
         }
-        guard let startStem else { return true }
         return startStem == .down
     }
 

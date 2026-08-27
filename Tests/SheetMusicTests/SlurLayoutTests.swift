@@ -111,9 +111,13 @@
         /// once any measure the slur spans carries more than one voice, the
         /// side is decided by voice index alone — voice 0 above, any other
         /// below — and the stem-opposite result computed at `:2606` is
-        /// overwritten. Voice 0 here is stem-DOWN material whose single-voice
-        /// answer would also be `above`, so the discriminating case is the
-        /// voice-1 one.
+        /// overwritten.
+        ///
+        /// BOTH cases discriminate. Two voices force stems by parity
+        /// (`LayoutEngine+Placement.swift:274-276`, voice 0 up / voice 1
+        /// down) regardless of pitch, so the stem-opposite answer would be
+        /// `below` for voice 0 and `above` for voice 1 — the exact inverse
+        /// of what the parity branch returns in each case.
         @Test("in a multi-voice measure the side follows the voice index")
         func multiVoiceParityDecidesSide() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
@@ -125,6 +129,45 @@
                 #expect(pairs.count == 1)
                 #expect(pairs.first?.above == (slurVoice == 0))
             }
+        }
+
+        /// A slur starting on a REST arcs BELOW, and does so whether or not
+        /// the measure carries a second voice.
+        ///
+        /// A Rest is a `ChordRest` in MuseScore, so `computeUp`'s
+        /// `chordRest1 == 0` guard (`:2583`) does not fire; control reaches
+        /// `slur->setUp(!(chordRest1->up()))` (`:2606`) and `ChordRest::up`
+        /// defaults to `true` (`dom/chordrest.h:197`) for want of a stem —
+        /// so `setUp(false)`. The multi-voice case must agree, because
+        /// `:2612-2613` guards `multipleVoices` with `&& chord1`, which is
+        /// null for a rest start: the parity branch that would otherwise
+        /// return `above` for voice 0 never runs.
+        @Test("a slur starting on a rest arcs below", arguments: [false, true])
+        func restStartArcsBelow(_ multiVoice: Bool) {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let score = Self.restStartScore(multiVoice: multiVoice)
+            let doc = Self.layout(score)
+            let pairs = LayoutEngine.resolveSlurs(for: doc, score: score)
+            #expect(pairs.count == 1)
+            #expect(pairs.first?.above == false)
+            #expect(Self.arcCount(in: doc) == 1)
+        }
+
+        /// The rest end of such a slur anchors at the rest glyph's own
+        /// origin, not at a notehead.
+        @Test("a rest endpoint anchors on the rest glyph")
+        func restEndpointIsTheRestOrigin() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let score = Self.restStartScore(multiVoice: false)
+            let doc = Self.layout(score)
+            let pairs = LayoutEngine.resolveSlurs(for: doc, score: score)
+            guard let pair = pairs.first,
+                  let rest = Self.firstRestOrigin(in: doc)
+            else {
+                Issue.record("expected one pair and one laid-out rest")
+                return
+            }
+            #expect(pair.fromOrigin == rest)
         }
 
         // MARK: - Cross-system
@@ -266,6 +309,51 @@
                 voice(1, pitch: 77, tpc: 13),
             ])
             return score(measures: [measure])
+        }
+
+        /// One measure whose voice 0 opens with a slur-bearing quarter REST
+        /// (a note-less `Chord`) followed by the chord the slur ends on.
+        /// `multiVoice` adds a second, fully populated voice so the parity
+        /// branch would fire if it were not skipped for a rest start.
+        private static func restStartScore(multiVoice: Bool) -> Score {
+            let lead = Voice(elements: [
+                .chord(Chord(
+                    duration: .quarter, notes: [], spanners: [slur()],
+                )),
+                .chord(Chord(
+                    duration: .quarter, notes: [Note(pitch: 79, tpc: 15)],
+                )),
+            ])
+            let second = Voice(elements: [
+                .chord(Chord(
+                    duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
+                )),
+                .chord(Chord(
+                    duration: .quarter, notes: [Note(pitch: 62, tpc: 16)],
+                )),
+            ])
+            return score(measures: [
+                Measure(voices: multiVoice ? [lead, second] : [lead]),
+            ])
+        }
+
+        /// Absolute origin of the first laid-out rest glyph.
+        private static func firstRestOrigin(
+            in document: LayoutDocument,
+        ) -> CGPoint? {
+            for system in document.systems {
+                for measure in system.measures {
+                    for element in measure.elements {
+                        guard case let .rest(_, origin, _, _, _) = element
+                        else { continue }
+                        return CGPoint(
+                            x: system.origin.x + measure.origin.x + origin.x,
+                            y: system.origin.y + measure.origin.y + origin.y,
+                        )
+                    }
+                }
+            }
+            return nil
         }
 
         private static func score(measures: [Measure]) -> Score {
