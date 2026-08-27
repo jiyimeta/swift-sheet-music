@@ -89,6 +89,39 @@ public enum KeySignatureSteps {
         sp * 1.4
     }
 
+    /// Ink width of one accidental glyph — the WIDEST of the three a key
+    /// signature can draw, so a reservation made from this can never be
+    /// too small for the glyph that actually lands there.
+    ///
+    /// Bravura's `glyphBBoxes` (`fonts/bravura/bravura_metadata.json`),
+    /// in staff spaces because SMuFL puts one em at 4 sp and
+    /// `StaffMetrics.glyphFontSize` is exactly `sp * 4`:
+    /// `accidentalSharp` 0.996, `accidentalFlat` 0.904,
+    /// `accidentalNatural` 0.672.
+    ///
+    /// Note this EXCEEDS nothing on its own — it is `advance` that sets
+    /// the stride — but it is what makes the last glyph in a row stick
+    /// out past the last stride, which is the part a column has to
+    /// contain.
+    static func glyphWidth(sp: CGFloat) -> CGFloat {
+        sp * 0.996
+    }
+
+    /// Horizontal ink a row of `glyphCount` accidentals occupies.
+    ///
+    /// Renderers stride by `advance` and draw each glyph CENTERED on its
+    /// stride (`KeySignatureRenderer.draw`), so the row spans
+    /// `(glyphCount - 1)` strides plus one whole glyph. Sizing a column
+    /// as `glyphCount * advance` — or, as the header schedule does, as
+    /// `sp * (glyphCount + 1.5)` — under-reserves from five accidentals
+    /// up, because the stride is narrower than the glyph plus its share
+    /// of the margin.
+    static func inkWidth(glyphCount: Int, sp: CGFloat) -> CGFloat {
+        guard glyphCount > 0 else { return 0 }
+        return CGFloat(glyphCount - 1) * advance(sp: sp)
+            + glyphWidth(sp: sp)
+    }
+
     /// Convert a step value to a Y offset relative to the staff-middle
     /// reference Y. Positive step = up, which is `-dy` in y-down screen
     /// coordinates.

@@ -284,21 +284,103 @@ import Testing
                 guard let last = sys.measures.last,
                       last.measureIndex != 2 else { continue }
                 for element in last.elements {
-                    switch element {
-                    case let .keySignature(_, _, _, _, origin),
-                         let .timeSignature(_, _, origin):
-                        announced += 1
-                        #expect(last.origin.x + origin.x <= sys.size.width)
-                        // Right of the end barline, per MuseScore's
-                        // `EndBarLine, KeySigAnnounce, TimeSigAnnounce`
-                        // trailer order.
-                        #expect(origin.x > barLineX(last))
-                    default:
-                        continue
-                    }
+                    guard let ink = inkSpan(of: element, sp: doc.metrics.sp)
+                    else { continue }
+                    announced += 1
+                    #expect(last.origin.x + ink.right <= sys.size.width)
+                    // Right of the end barline, per MuseScore's
+                    // `EndBarLine, KeySigAnnounce, TimeSigAnnounce`
+                    // trailer order.
+                    #expect(ink.left > barLineX(last))
                 }
             }
             #expect(announced > 0)
+        }
+
+        /// The announcement must fit as INK, not merely as an anchor
+        /// point. A six- or seven-accidental modulation is where the
+        /// difference bites: the header schedule's `sp * (glyphs + 1.5)`
+        /// column is narrower than the `(glyphs - 1) * 1.4 sp + glyph`
+        /// the renderer actually strides out, so sizing the courtesy that
+        /// way put the last accidental past the system's right edge.
+        /// The available width is deliberately narrow enough that
+        /// `stretchWidths` is the identity — a stretched system scales the
+        /// reservation up while the glyphs stay fixed, so slack from the
+        /// stretch would hide an under-reservation.
+        @Test(
+            "a wide modulation's announcement fits inside the system",
+            arguments: [
+                // C -> G♭ major: six flats and no time change, so no
+                // second column's slack can absorb the key's spill.
+                (0, -6, nil as (Int, Int)?, 1 as Int),
+                // C♯ -> C: seven naturals cancelling seven sharps.
+                (7, 0, nil as (Int, Int)?, 1 as Int),
+                // C♭ -> C: seven naturals cancelling seven flats.
+                (-7, 0, nil as (Int, Int)?, 1 as Int),
+                // Both columns, with a two-digit numerator.
+                (0, -6, (12, 8) as (Int, Int)?, 2 as Int),
+            ],
+        )
+        func wideModulationFitsInsideTheSystem(
+            firstKey: Int,
+            secondKey: Int,
+            timeChange: (Int, Int)?,
+            expectedAnnouncements: Int,
+        ) throws {
+            let doc = layout(
+                Self.score(
+                    firstKey: firstKey,
+                    secondKey: secondKey,
+                    timeChange: timeChange,
+                ),
+                width: 200,
+            )
+            let sys = try system(doc, containing: 1)
+            let m1 = try measure(doc, 1)
+            let barX = barLineX(m1)
+            var announced = 0
+            for element in m1.elements {
+                guard let ink = inkSpan(of: element, sp: doc.metrics.sp),
+                      // Only the trailing band; a system-head key
+                      // signature that wrapping put on m1 is not one.
+                      ink.left > barX
+                else { continue }
+                announced += 1
+                // Both edges of the drawn ink, in system coordinates.
+                #expect(m1.origin.x + ink.left >= 0)
+                #expect(m1.origin.x + ink.right <= sys.size.width)
+            }
+            // If this drops, the fixture stopped exercising the wide case.
+            #expect(announced == expectedAnnouncements)
+        }
+
+        /// Horizontal ink of a key / time signature element, measure-local.
+        /// Mirrors what the renderers draw: `KeySignatureRenderer` strides
+        /// accidentals by `KeySignatureSteps.advance` and centers each
+        /// glyph on its stride; `TimeSignatureRenderer` does the same with
+        /// `TimeSignatureLayout.digitAdvance`. `nil` for anything else.
+        private func inkSpan(
+            of element: LayoutElement, sp: CGFloat,
+        ) -> (left: CGFloat, right: CGFloat)? {
+            switch element {
+            case let .keySignature(sharps, flats, _, naturals, origin):
+                let count = naturals.count + sharps + flats
+                guard count > 0 else { return nil }
+                let half = KeySignatureSteps.glyphWidth(sp: sp) / 2
+                let stride = KeySignatureSteps.advance(sp: sp)
+                    * CGFloat(count - 1)
+                return (origin.x - half, origin.x + stride + half)
+            case let .timeSignature(numerator, denominator, origin):
+                let digits = max(
+                    String(numerator).count, String(denominator).count,
+                )
+                let half = TimeSignatureLayout.digitWidth(sp: sp) / 2
+                let stride = TimeSignatureLayout.digitAdvance(sp: sp)
+                    * CGFloat(digits - 1)
+                return (origin.x - half, origin.x + stride + half)
+            default:
+                return nil
+            }
         }
 
         /// The measure's own end barline. A measure that announces keeps
@@ -317,7 +399,7 @@ import Testing
         /// a system ending at the measure before a change reserves the
         /// announcement's column; every other measure reserves nothing.
         @Test("the courtesy table reserves only at a change boundary")
-        func courtesyTableWidths() {
+        func courtesyTableWidths() throws {
             let metrics = StaffMetrics(staffSize: 28)
             let table = LayoutEngine.trailingCourtesies(
                 staves: Self.score().allStaves.map(\.staff),
@@ -327,13 +409,38 @@ import Testing
             #expect(table[0] == nil)
             #expect(table[2] == nil)
             #expect(table[3] == nil)
-            let courtesy = table[1]
-            #expect(courtesy != nil)
-            // Two flats + the 1.5 sp margin, then the time signature's
-            // 3 sp column, behind a 0.5 sp gap.
-            #expect(courtesy?.width == metrics.sp * (3.5 + 3 + 0.5))
-            #expect(courtesy?.keys.count == 1)
-            #expect(courtesy?.time?.numerator == 3)
+            let courtesy = try #require(table[1])
+            // Gap, the two flats' ink, gap, the single digit's ink, and
+            // the trailing pad — built from the renderers' own constants
+            // rather than the header schedule's padded columns.
+            let gap = metrics.sp * 0.5
+            let keyInk = KeySignatureSteps.inkWidth(
+                glyphCount: 2, sp: metrics.sp,
+            )
+            let timeInk = TimeSignatureLayout.inkWidth(
+                numerator: 3, denominator: 4, sp: metrics.sp,
+            )
+            #expect(
+                abs(courtesy.width - (gap + keyInk + gap + timeInk + gap))
+                    < 0.0001,
+            )
+            // Every column's ink sits inside the reservation, with the
+            // trailing pad to spare: the anchors are half a glyph in
+            // because the renderers center each glyph on its stride.
+            #expect(
+                abs(
+                    courtesy.keyOriginDx
+                        - (gap + KeySignatureSteps.glyphWidth(sp: metrics.sp) / 2),
+                ) < 0.0001,
+            )
+            #expect(
+                courtesy.timeOriginDx
+                    + timeInk
+                    - TimeSignatureLayout.digitWidth(sp: metrics.sp) / 2
+                    + gap <= courtesy.width + 0.0001,
+            )
+            #expect(courtesy.keys.count == 1)
+            #expect(courtesy.time?.numerator == 3)
         }
     }
 #endif

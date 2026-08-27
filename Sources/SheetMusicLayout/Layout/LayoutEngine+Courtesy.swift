@@ -29,28 +29,41 @@ extension LayoutEngine {
         let denominator: Int
     }
 
-    /// Everything the trailing edge of one system announces, plus the
-    /// width that announcement occupies.
+    /// Everything the trailing edge of one system announces: what to
+    /// draw, where to draw it, and how much room the whole band takes.
     ///
-    /// The width is stored rather than recomputed because two passes
-    /// consume it and they must agree exactly: `packSystems` reserves it
-    /// when it decides where the system ends, and `buildSystem`
-    /// subtracts it again to recover the measure's content width.
+    /// The offsets and the width are STORED rather than recomputed
+    /// because two passes consume them and they must agree exactly:
+    /// `packSystems` reserves `width` when it decides where the system
+    /// ends, `buildSystem` subtracts the same `width` to recover the
+    /// measure's content width, and the glyphs go down at the same
+    /// entry's offsets. One table entry, one arithmetic.
     struct TrailingCourtesy: Equatable, Sendable {
         /// Only the staves whose key actually changes, so a change on
         /// one staff of a multi-staff score doesn't announce on the
         /// others.
         let keys: [CourtesyKeySignature]
         let time: CourtesyTimeSignature?
-        /// Gap + key column. The time signature is drawn at
-        /// `contentWidth + keyWidth`.
-        let keyWidth: CGFloat
-        /// Total trailing reservation: `keyWidth` + the time column.
+        /// Anchor of the FIRST accidental, relative to the announcing
+        /// measure's content width. Half a glyph inside the key column's
+        /// left edge, because the renderer centers each glyph on its
+        /// stride.
+        let keyOriginDx: CGFloat
+        /// Row origin of the time signature, relative to the same
+        /// content width, and half a digit inside its own column for the
+        /// same reason.
+        let timeOriginDx: CGFloat
+        /// Total trailing reservation: leading gap, the ink of every
+        /// column present, the gap between them, and the trailing pad.
         let width: CGFloat
     }
 
-    /// Gap between the end barline and the first announced glyph.
-    private static func courtesyLeadingGap(sp: CGFloat) -> CGFloat {
+    /// Clearance around the announced columns: after the end barline,
+    /// between the key and time columns, and after the last column so
+    /// the glyphs don't sit flush against the system's right edge. The
+    /// last of the three mirrors the `sp * 0.5` the header schedule adds
+    /// after its own time-signature column.
+    private static func courtesyGap(sp: CGFloat) -> CGFloat {
         sp * 0.5
     }
 
@@ -172,27 +185,63 @@ extension LayoutEngine {
             }
         }
         guard !courtesyKeys.isEmpty || courtesyTime != nil else { return nil }
-        // Same column arithmetic `computeHeaderSchedule` uses for the
-        // leading header, so an announcement and the signature it
-        // announces reserve the same room: `sp * (glyphs + 1.5)` for the
-        // key, `sp * 3` for the time signature. A change that lands on C
-        // draws the outgoing key's row as naturals, so it is as wide as
-        // that key was.
-        var keyWidth: CGFloat = 0
-        for key in courtesyKeys {
+        return band(keys: courtesyKeys, time: courtesyTime, metrics: metrics)
+    }
+
+    /// Lay the announced columns out and size the band that holds them.
+    ///
+    /// Sized from what the RENDERERS actually draw, not from the header
+    /// schedule's `sp * (glyphs + 1.5)` / `sp * 3` columns. Those are
+    /// padded estimates that happen to work INSIDE a measure — an
+    /// overrun there just eats into the next column — but this band ends
+    /// at the system's right edge, where an overrun leaves the page. The
+    /// header's arithmetic under-reserves from five accidentals up
+    /// (seven sharps stride out 9.4 sp into an 8.5 sp column), so a real
+    /// modulation to C♯ or G♭ spilled past `LayoutSystem.size.width`.
+    private static func band(
+        keys: [CourtesyKeySignature],
+        time: CourtesyTimeSignature?,
+        metrics: StaffMetrics,
+    ) -> TrailingCourtesy {
+        let gap = courtesyGap(sp: metrics.sp)
+        var keyInk: CGFloat = 0
+        for key in keys {
+            // A change that lands on C draws the OUTGOING key's row as
+            // naturals and nothing else, so its glyph count is that
+            // key's — see `KeySignatureSteps.cancellationNaturals`.
             let glyphs = key.newKey != 0
                 ? abs(key.newKey) : abs(key.priorKey)
-            keyWidth = max(
-                keyWidth, metrics.sp * (CGFloat(glyphs) + 1.5),
+            keyInk = max(
+                keyInk,
+                KeySignatureSteps.inkWidth(
+                    glyphCount: glyphs, sp: metrics.sp,
+                ),
             )
         }
-        let gap = courtesyLeadingGap(sp: metrics.sp)
-        let timeWidth: CGFloat = courtesyTime != nil ? metrics.sp * 3 : 0
+        let timeInk: CGFloat = time.map {
+            TimeSignatureLayout.inkWidth(
+                numerator: $0.numerator,
+                denominator: $0.denominator,
+                sp: metrics.sp,
+            )
+        } ?? 0
+        // Columns left to right, each preceded by a gap; the trailing pad
+        // closes the band. A key-only or time-only announcement simply
+        // drops the column it doesn't have, and with it that column's
+        // gap. Each column's anchor sits half a glyph inside its left
+        // edge because both renderers center a glyph on its stride.
+        let timeColumnStart = keyInk > 0 ? gap + keyInk + gap : gap
+        let lastColumnEnd = timeInk > 0
+            ? timeColumnStart + timeInk
+            : gap + keyInk
         return TrailingCourtesy(
-            keys: courtesyKeys,
-            time: courtesyTime,
-            keyWidth: gap + keyWidth,
-            width: gap + keyWidth + timeWidth,
+            keys: keys,
+            time: time,
+            keyOriginDx: gap
+                + KeySignatureSteps.glyphWidth(sp: metrics.sp) / 2,
+            timeOriginDx: timeColumnStart
+                + TimeSignatureLayout.digitWidth(sp: metrics.sp) / 2,
+            width: lastColumnEnd + gap,
         )
     }
 
@@ -230,8 +279,7 @@ extension LayoutEngine {
                     clef: clef,
                 ),
                 origin: CGPoint(
-                    x: contentWidth
-                        + courtesyLeadingGap(sp: metrics.sp),
+                    x: contentWidth + courtesy.keyOriginDx,
                     y: staffMidY,
                 ),
             ))
@@ -241,7 +289,7 @@ extension LayoutEngine {
                 numerator: time.numerator,
                 denominator: time.denominator,
                 origin: CGPoint(
-                    x: contentWidth + courtesy.keyWidth,
+                    x: contentWidth + courtesy.timeOriginDx,
                     y: staffMidY
                         + metrics.sp * lineGeometry.centerOffsetSp,
                 ),

@@ -18,6 +18,36 @@ public enum TimeSignatureLayout {
         sp * 1.4
     }
 
+    /// Ink width of one time-signature digit — the WIDEST of the ten, so
+    /// a reservation made from it fits whichever digits land there.
+    ///
+    /// Bravura's `glyphBBoxes` (`fonts/bravura/bravura_metadata.json`),
+    /// in staff spaces (SMuFL puts one em at 4 sp, and
+    /// `StaffMetrics.glyphFontSize` is exactly `sp * 4`): `timeSig0` and
+    /// `timeSig4` are the widest at 1.72; `timeSig1` the narrowest at
+    /// 1.176.
+    ///
+    /// This is WIDER than `digitAdvance`, which is why the doc above
+    /// calls 1.4 sp "tight": adjacent digits in a "12" share a sliver of
+    /// side bearing. That is a deliberate look, but it means a column
+    /// sized as `count * digitAdvance` does not contain the row's ink.
+    static func digitWidth(sp: CGFloat) -> CGFloat {
+        sp * 1.72
+    }
+
+    /// Horizontal ink the stacked numerator / denominator occupies.
+    /// Digits are drawn CENTERED on their stride
+    /// (`TimeSignatureRenderer.drawRow`), so the wider of the two rows
+    /// spans `(count - 1)` strides plus one whole digit.
+    static func inkWidth(
+        numerator: Int, denominator: Int, sp: CGFloat,
+    ) -> CGFloat {
+        let count = max(digitCount(numerator), digitCount(denominator))
+        guard count > 0 else { return 0 }
+        return CGFloat(count - 1) * digitAdvance(sp: sp)
+            + digitWidth(sp: sp)
+    }
+
     /// Vertical offset of the numerator row baseline anchor, relative
     /// to the staff middle. The staff has four spaces; the numerator
     /// sits one staff-space above the middle.
