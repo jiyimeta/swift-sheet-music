@@ -84,6 +84,7 @@ extension MidiRenderer {
         tempoBps: Double,
         division: Int,
         glissandoEndPitch: Int?,
+        bendChainSlot: BendChainSlot? = nil,
         currentKey: Int,
         events: inout [TimedMidiEvent],
         playedTicksOverride: Int? = nil,
@@ -97,6 +98,12 @@ extension MidiRenderer {
             : transpose(originalChord, by: pitchShift)
         let shiftedGlissandoEnd = glissandoEndPitch.map {
             min(127, max(0, $0 + pitchShift))
+        }
+        // The chain's sounding key rides the ottava like every other pitch.
+        let shiftedBendSlot = bendChainSlot.map { slot -> BendChainSlot in
+            var copy = slot
+            copy.basePitch = min(127, max(0, slot.basePitch + pitchShift))
+            return copy
         }
         // `playedTicksOverride` is set by the swing pass to express
         // a chord whose audible length differs from its written
@@ -210,8 +217,21 @@ extension MidiRenderer {
                 )
             }
         } else {
+            // Only the bend-carrying note of the chord drives the chain; the
+            // rest emit normally and are dragged along by the channel-wide
+            // wheel (see `guitarBendChains`' chord-level simplification).
+            let chainPitch = shiftedBendSlot == nil
+                ? nil
+                : bendChainNote(in: chord)?.pitch
             for note in chord.notes {
-                if let glissando = note.glissando, let endPitch = shiftedGlissandoEnd {
+                if let slot = shiftedBendSlot, note.pitch == chainPitch {
+                    renderBendChainNote(
+                        note: note, slot: slot,
+                        startTick: mainOnset, durationTicks: playedTicks,
+                        velocity: mainVelocity, channel: channel,
+                        events: &events,
+                    )
+                } else if let glissando = note.glissando, let endPitch = shiftedGlissandoEnd {
                     renderGlissandoNote(
                         note: note, glissando: glissando, endPitch: endPitch,
                         startTick: mainOnset, durationTicks: playedTicks,
