@@ -12,10 +12,10 @@ import SheetMusicFoundation
 ///
 /// A re-bar is not reversible by arithmetic: it re-spells rhythms, re-homes system elements and barline markers,
 /// and changes how many bars there are. So the inverse carries the pre-image — the region's columns exactly as
-/// they stood, plus the offsets of every spanner reaching across it — restored verbatim by
-/// `RestoreTimeSignatureRegion`. The idiom `InsertMeasure(measureIndex:restoredContents:...)` and
-/// `SetKeySignature(restoringPrefixes:at:)` already use, one level up: a whole measure column rather than a
-/// leading signature run.
+/// they stood, plus the endpoints of every spanner anchored OUTSIDE it that had to be restated (one anchored
+/// inside rides back in with the columns) — restored verbatim by `RestoreTimeSignatureRegion`. The idiom
+/// `InsertMeasure(measureIndex:restoredContents:...)` and `SetKeySignature(restoringPrefixes:at:)` already use,
+/// one level up: a whole measure column rather than a leading signature run.
 ///
 /// ## Irregular bars at the head
 ///
@@ -118,7 +118,9 @@ public struct RemoveTimeSignature: EditCommand {
 struct RestoreTimeSignatureRegion: EditCommand {
     let range: Range<Int>
     let columns: [MeasureSlice]
-    let spannerOffsets: [TimeSignatureRegion.SpannerOffset]
+    /// Only the spanners anchored BEFORE the region whose endpoint the re-bar restated. One anchored inside it is
+    /// not here and does not need to be: it lives in a column, and `columns` puts that column back verbatim.
+    let spannerEndpoints: [TimeSignatureRegion.SpannerEndpoint]
 
     var affectedLocation: VoiceElementID {
         VoiceElementID(
@@ -134,13 +136,13 @@ struct RestoreTimeSignatureRegion: EditCommand {
         else { throw Self.refused(.targetNotFound(affectedLocation)) }
 
         let previousColumns = TimeSignatureRegion.capturedColumns(of: score, over: range)
-        let previousOffsets = TimeSignatureRegion.currentOffsets(for: spannerOffsets, in: score)
+        let previousEndpoints = TimeSignatureRegion.currentEndpoints(for: spannerEndpoints, in: score)
         TimeSignatureRegion.splice(columns, into: &score, replacing: range)
-        TimeSignatureRegion.writeOffsets(spannerOffsets, into: &score)
+        TimeSignatureRegion.writeEndpoints(spannerEndpoints, into: &score)
         return RestoreTimeSignatureRegion(
             range: range.lowerBound ..< range.lowerBound + columns.count,
             columns: previousColumns,
-            spannerOffsets: previousOffsets,
+            spannerEndpoints: previousEndpoints,
         )
     }
 }
@@ -175,16 +177,17 @@ extension TimeSignatureRegion {
         }
 
         let previousColumns = capturedColumns(of: score, over: region)
-        let previousOffsets = crossingSpannerOffsets(of: score, region: region)
-        let adjusted = recomputed(
-            previousOffsets, region: region, columns: columns, signature: signature, in: score,
+        // Rewrites the inside-anchored spanners in `columns` and hands back the outside-anchored ones, whose
+        // addresses only become writable once the splice has happened.
+        let endpoints = restatingSpannerEndpoints(
+            &columns, region: region, signature: signature, in: score,
         )
         splice(columns, into: &score, replacing: region)
-        writeOffsets(adjusted, into: &score)
+        writeEndpoints(endpoints.map(\.restated), into: &score)
         return RestoreTimeSignatureRegion(
             range: measureIndex ..< measureIndex + columns.count,
             columns: previousColumns,
-            spannerOffsets: previousOffsets,
+            spannerEndpoints: endpoints.map(\.previous),
         )
     }
 }

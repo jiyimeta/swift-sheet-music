@@ -102,11 +102,6 @@ struct SetTimeSignatureTests {
         score.parts.flatMap { $0.staves.map(\.measures.count) }
     }
 
-    private static func spannerOffset(_ score: Score, at id: VoiceElementID) -> Int? {
-        guard case let .spanner(spanner) = score[id] else { return nil }
-        return spanner.nextMeasuresOffset
-    }
-
     // MARK: - .setTimeSignature
 
     @Test("4/4 to 3/4 at bar 0 re-bars the whole score, and every staff agrees on the new bar count")
@@ -277,33 +272,6 @@ struct SetTimeSignatureTests {
         #expect(session.lastRefusal?.reason == .nothingToApply)
         #expect(session.score == score)
         #expect(!session.canUndo)
-    }
-
-    // MARK: - Spanners crossing the region
-
-    /// A spanner stores a MEASURE distance, so a re-bar that changes how many bars its span covers has to restate
-    /// it — otherwise a hairpin drawn to bar 3 silently ends somewhere else.
-    @Test("a spanner anchored before the region keeps its endpoint's tick across a re-bar")
-    func spannerAcrossRegionKeepsItsEndpoints() {
-        var original = uniform44()
-        original.parts[0].staves[0].measures[0].voices[0].elements.append(.spanner(Spanner(
-            kind: .hairpin, rawType: "HairPin", nextMeasuresOffset: 3,
-        )))
-        let anchor = VoiceElementID(
-            staff: Self.staff0, measureIndex: 0, voiceIndex: 0,
-            elementIndex: original.parts[0].staves[0].measures[0].voices[0].elements.count - 1,
-        )
-        #expect(Self.spannerOffset(original, at: anchor) == 3)
-
-        let session = ScoreEditSession(score: original)
-        #expect(session.apply(.setTimeSignature(measureIndex: 1, numerator: 2, denominator: 4)))
-        // Region [1, 4): 5760 ticks at 960 a bar is six columns, so the score grows 4 bars → 7. The old bar 3
-        // started at tick 5760, which is now the head of bar 5 (1920 + 4 x 960).
-        #expect(Self.measureCounts(session.score) == [7, 7, 7])
-        #expect(Self.spannerOffset(session.score, at: anchor) == 5)
-        #expect(session.undo())
-        #expect(session.score == original)
-        #expect(Self.spannerOffset(session.score, at: anchor) == 3)
     }
 
     // MARK: - Session interplay

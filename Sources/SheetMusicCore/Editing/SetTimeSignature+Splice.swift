@@ -1,20 +1,13 @@
 import SheetMusicFoundation
 
 /// The machinery both meter commands share: which bars a declaration governs, what that span looked like before
-/// the re-bar, how `RebarPlanner`'s replacement columns are spliced back over it, and what a re-bar does to a
-/// spanner whose span reaches across it.
+/// the re-bar, and how `RebarPlanner`'s replacement columns are spliced back over it.
 ///
 /// Split off `SetTimeSignature.swift` so that file stays a statement of the two commands and their inverse. The
 /// seam is the same one `SignaturePrefixes` marks next door in `SetKeySignature.swift`: everything here reads or
-/// writes the SCORE around the edit, while the commands state what the edit is.
+/// writes the SCORE around the edit, while the commands state what the edit is. What a re-bar does to a
+/// SPANNER's endpoint is its own third file, `SetTimeSignature+Spanners.swift`.
 enum TimeSignatureRegion {
-    /// A spanner's address paired with the `nextMeasuresOffset` it carries at one point in time — the pre-image a
-    /// restore puts back, and the recomputed value a re-bar writes.
-    struct SpannerOffset: Sendable, Equatable {
-        var id: VoiceElementID
-        var offset: Int
-    }
-
     /// Whether a host's numbers name a signature that can be written at all. The UI never sends anything else;
     /// the guard is for a command built directly. 63 is MuseScore's own numerator ceiling, and the denominators
     /// are the powers of two a note duration exists for.
@@ -179,130 +172,5 @@ enum TimeSignatureRegion {
         }
         guard parallelLane, score.systemMeasures.count >= range.upperBound else { return }
         score.systemMeasures.replaceSubrange(range, with: columns.map(\.systemMeasure))
-    }
-
-    // MARK: - Spanners reaching across the region
-
-    /// Every spanner anchored BEFORE `region` whose span reaches into it or past it, with the offset it carries
-    /// now.
-    ///
-    /// Spanners anchored inside or after the region are deliberately absent. One anchored after it measures a
-    /// distance across bars the re-bar never touched; one anchored inside travels with the column it lives in,
-    /// and re-addressing it is `RebarPlanner`'s business rather than the splice's.
-    static func crossingSpannerOffsets(of score: Score, region: Range<Int>) -> [SpannerOffset] {
-        var result: [SpannerOffset] = []
-        for partIndex in score.parts.indices {
-            for staffIndex in score.parts[partIndex].staves.indices {
-                let measures = score.parts[partIndex].staves[staffIndex].measures
-                for measureIndex in measures.indices where measureIndex < region.lowerBound {
-                    result.append(contentsOf: crossingSpanners(
-                        in: measures[measureIndex],
-                        staff: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex),
-                        measureIndex: measureIndex, region: region,
-                    ))
-                }
-            }
-        }
-        return result
-    }
-
-    private static func crossingSpanners(
-        in measure: Measure, staff: StaffAddress, measureIndex: Int, region: Range<Int>,
-    ) -> [SpannerOffset] {
-        var result: [SpannerOffset] = []
-        for voiceIndex in measure.voices.indices {
-            let elements = measure.voices[voiceIndex].elements
-            for elementIndex in elements.indices {
-                guard case let .spanner(spanner) = elements[elementIndex],
-                      measureIndex + spanner.nextMeasuresOffset >= region.lowerBound
-                else { continue }
-                result.append(SpannerOffset(
-                    id: VoiceElementID(
-                        staff: staff, measureIndex: measureIndex,
-                        voiceIndex: voiceIndex, elementIndex: elementIndex,
-                    ),
-                    offset: spanner.nextMeasuresOffset,
-                ))
-            }
-        }
-        return result
-    }
-
-    /// `captured` restated against the new barring: the span's END BAR is mapped by tick, so the endpoint stays
-    /// on the moment it always fell on.
-    ///
-    /// Two shapes, and they are not the same arithmetic. A span reaching PAST the region simply gains however
-    /// many bars the region gained, because everything after it shifted by exactly that. A span ending INSIDE it
-    /// has no such invariant: its end bar is gone, and the new bar to name is whichever column now holds that
-    /// bar's start tick.
-    static func recomputed(
-        _ captured: [SpannerOffset], region: Range<Int>, columns: [MeasureSlice],
-        signature: TimeSignature, in score: Score,
-    ) -> [SpannerOffset] {
-        guard !captured.isEmpty else { return [] }
-        let durations = score.effectiveMeasureDurations()
-        let oldStarts = startTicks(
-            region.map { durations.indices.contains($0) ? durations[$0] : signatureFraction(signature) },
-            division: score.division,
-        )
-        let newStarts = startTicks(
-            columns.map { $0.staffMeasures.first?.first?.actualLength ?? signatureFraction(signature) },
-            division: score.division,
-        )
-        let delta = columns.count - region.count
-        return captured.map { entry in
-            let end = entry.id.measureIndex + entry.offset
-            let mapped: Int
-            if end >= region.upperBound {
-                mapped = end + delta
-            } else {
-                let offsetInRegion = end - region.lowerBound
-                let tick = oldStarts.indices.contains(offsetInRegion) ? oldStarts[offsetInRegion] : 0
-                mapped = region.lowerBound + column(containing: tick, starts: newStarts)
-            }
-            return SpannerOffset(id: entry.id, offset: mapped - entry.id.measureIndex)
-        }
-    }
-
-    /// Writes each captured offset back onto the spanner it names, skipping any address that no longer holds one.
-    static func writeOffsets(_ offsets: [SpannerOffset], into score: inout Score) {
-        for entry in offsets {
-            guard case var .spanner(spanner) = score[entry.id] else { continue }
-            spanner.nextMeasuresOffset = entry.offset
-            score[entry.id] = .spanner(spanner)
-        }
-    }
-
-    /// The offsets the addresses in `offsets` carry in `score` RIGHT NOW — the pre-image a restore's own inverse
-    /// needs. Every such address is anchored before the region, so it names the same slot in either barring.
-    static func currentOffsets(for offsets: [SpannerOffset], in score: Score) -> [SpannerOffset] {
-        offsets.map { entry in
-            guard case let .spanner(spanner) = score[entry.id] else { return entry }
-            return SpannerOffset(id: entry.id, offset: spanner.nextMeasuresOffset)
-        }
-    }
-
-    private static func signatureFraction(_ signature: TimeSignature) -> Fraction {
-        Fraction(numerator: signature.numerator, denominator: signature.denominator)
-    }
-
-    private static func startTicks(_ durations: [Fraction], division: Int) -> [Int] {
-        var starts: [Int] = []
-        var total = 0
-        for duration in durations {
-            starts.append(total)
-            total += duration.ticks(division: division)
-        }
-        return starts
-    }
-
-    /// The last column starting at or before `tick` — 0 for a tick before the first one, which a clamped read of
-    /// an empty column list also gives.
-    private static func column(containing tick: Int, starts: [Int]) -> Int {
-        var result = 0
-        for (index, start) in starts.enumerated() where start <= tick {
-            result = index
-        }
-        return result
     }
 }
