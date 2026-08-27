@@ -53,7 +53,19 @@ extension Note {
             string: (node.first("string")?.text).flatMap(Int.init),
         )
         note.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
-        if let bendNode = node.first("Bend") {
+        // `Note.legacyBend` holds one curve, so only the first `<Bend>` can be
+        // kept. MuseScore writes at most one, so a second is a hand-edited or
+        // foreign file — announced rather than silently losing a curve.
+        let bendNodes = node.all("Bend")
+        if bendNodes.count > 1 {
+            mscxDecoderWarn(
+                code: "mscx.bend.duplicateDropped",
+                message: "Only the first <Bend> is kept — "
+                    + "\(bendNodes.count - 1) additional dropped",
+                location: "Note/Bend",
+            )
+        }
+        if let bendNode = bendNodes.first {
             note.legacyBend = decodeLegacyBend(bendNode)
         }
         return note

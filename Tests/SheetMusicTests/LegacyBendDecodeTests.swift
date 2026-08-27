@@ -155,6 +155,76 @@ struct LegacyBendDecodeTests {
         #expect(decoded.diagnostics.map(\.code) == ["mscx.bend.malformedPoint"])
     }
 
+    /// Item properties MuseScore writes on any element (`offset`, `visible`,
+    /// `color`, …) carry real user intent, so dropping them is announced
+    /// rather than silent. The curve itself still decodes.
+    @Test("unmodeled <Bend> children are announced in one diagnostic")
+    func unknownChildrenWarn() throws {
+        let decoded = try decodeNote("""
+        <Note>
+          <pitch>62</pitch>
+          <tpc>16</tpc>
+          <Bend>
+            <point time="0" pitch="0"/>
+            <point time="60" pitch="100"/>
+            <offset x="1" y="2"/>
+            <visible>0</visible>
+          </Bend>
+        </Note>
+        """)
+        #expect(decoded.note.legacyBend?.points.count == 2)
+        #expect(decoded.diagnostics.map(\.code) == ["mscx.bend.propertiesDropped"])
+        #expect(decoded.diagnostics.first?.message
+            == "<Bend> children not modeled and dropped: offset, visible")
+    }
+
+    /// `<eid>` is MuseScore 4.6's regenerated internal element id. No decoder
+    /// in this package models it, it carries no user data, and announcing it
+    /// would fire on every element of every 4.6 score — so it stays silent.
+    @Test("<eid> is elided without a diagnostic")
+    func eidIsSilentlyElided() throws {
+        let decoded = try decodeNote("""
+        <Note>
+          <pitch>62</pitch>
+          <tpc>16</tpc>
+          <Bend>
+            <eid>4123456789012345</eid>
+            <point time="0" pitch="0"/>
+            <point time="60" pitch="100"/>
+          </Bend>
+        </Note>
+        """)
+        #expect(decoded.note.legacyBend?.points.count == 2)
+        #expect(decoded.diagnostics.isEmpty)
+    }
+
+    /// `Note.legacyBend` holds one curve, so a second `<Bend>` on the same
+    /// note cannot be kept. MuseScore never writes one — announcing it means
+    /// a hand-edited or foreign file says so instead of losing a curve.
+    @Test("a second <Bend> child is dropped with a warning")
+    func duplicateBendWarns() throws {
+        let decoded = try decodeNote("""
+        <Note>
+          <pitch>62</pitch>
+          <tpc>16</tpc>
+          <Bend>
+            <point time="0" pitch="0"/>
+            <point time="60" pitch="100"/>
+          </Bend>
+          <Bend>
+            <point time="0" pitch="100"/>
+            <point time="60" pitch="0"/>
+          </Bend>
+        </Note>
+        """)
+        // The first curve — rising — is the one kept.
+        #expect(decoded.note.legacyBend?.points == [
+            LegacyBend.Point(time: 0, pitch: 0, vibrato: 0),
+            LegacyBend.Point(time: 60, pitch: 100, vibrato: 0),
+        ])
+        #expect(decoded.diagnostics.map(\.code) == ["mscx.bend.duplicateDropped"])
+    }
+
     // MARK: - Helpers
 
     private func decodeNote(

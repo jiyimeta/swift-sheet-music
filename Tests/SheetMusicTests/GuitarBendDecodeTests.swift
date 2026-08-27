@@ -227,26 +227,41 @@ struct GuitarBendDecodeTests {
         #expect(decoded.diagnostics.map(\.code) == ["mscx.guitarBend.missingPayload"])
     }
 
-    /// `<direction>` is dropped on purpose and deliberately *not* announced —
-    /// see `Note.decodeGuitarBend`'s doc comment for why. Pinned so the
-    /// silence is a decision rather than an oversight.
-    @Test("a user-flipped <direction> is dropped silently")
-    func directionDroppedSilently() throws {
-        let decoded = try decodeNote("""
-        <Note>
-          <pitch>60</pitch>
-          <tpc>14</tpc>
-          <Spanner type="GuitarBend">
-            <GuitarBend>
-              <guitarBendType>0</guitarBendType>
-              <direction>down</direction>
-            </GuitarBend>
-            <next><location><fractions>1/4</fractions></location></next>
-          </Spanner>
-        </Note>
-        """)
+    /// `<direction>` — which side of the note the bend arc is drawn on — is
+    /// not modeled. MuseScore writes the tag only when the user flipped it off
+    /// `DirectionV::AUTO`, so its presence is always real user intent.
+    @Test("a user-flipped <direction> is dropped with a warning")
+    func directionDroppedWarns() throws {
+        let decoded = try decodePayload("<direction>down</direction>")
         #expect(decoded.note.guitarBend?.type == .bend)
-        #expect(decoded.diagnostics.isEmpty)
+        #expect(decoded.diagnostics.map(\.code) == ["mscx.guitarBend.directionDropped"])
+    }
+
+    /// MuseScore never serializes `DirectionV::AUTO`, but a hand-written or
+    /// re-exported file can spell the default out — that loses nothing, so it
+    /// must not warn. `<eid>` is exempt for its own reason: see
+    /// `LegacyBendDecodeTests.eidIsSilentlyElided`.
+    @Test("a default <direction> and an <eid> are both silent")
+    func defaultDirectionAndEidAreSilent() throws {
+        let direction = try decodePayload("<direction>auto</direction>")
+        #expect(direction.note.guitarBend?.type == .bend)
+        #expect(direction.diagnostics.isEmpty)
+        let eid = try decodePayload("<eid>4123456789012345</eid>")
+        #expect(eid.note.guitarBend?.type == .bend)
+        #expect(eid.diagnostics.isEmpty)
+    }
+
+    /// Item properties (`offset`, `visible`, …) sit alongside the bend's own
+    /// payload and are not modeled; the bend still decodes.
+    @Test("unmodeled <GuitarBend> children are announced in one diagnostic")
+    func unknownPayloadChildrenWarn() throws {
+        let decoded = try decodePayload(
+            "<offset x=\"1\" y=\"2\"/><visible>0</visible>",
+        )
+        #expect(decoded.note.guitarBend?.type == .bend)
+        #expect(decoded.diagnostics.map(\.code) == ["mscx.guitarBend.propertiesDropped"])
+        #expect(decoded.diagnostics.first?.message
+            == "<GuitarBend> children not modeled and dropped: offset, visible")
     }
 
     /// The whammy-bar types carry four extra properties this model does not
@@ -303,6 +318,25 @@ struct GuitarBendDecodeTests {
             try Note.decode(node)
         }
         return (note, collector.entries)
+    }
+
+    /// Decode a plain `<Note>` carrying a begin-side `GuitarBend` spanner
+    /// whose payload holds `<guitarBendType>0</guitarBendType>` plus
+    /// `extraChildren` — the boilerplate every payload-level diagnostic test
+    /// would otherwise repeat.
+    private func decodePayload(
+        _ extraChildren: String,
+    ) throws -> (note: Note, diagnostics: [ScoreDiagnostic]) {
+        try decodeNote("""
+        <Note>
+          <pitch>60</pitch>
+          <tpc>14</tpc>
+          <Spanner type="GuitarBend">
+            <GuitarBend><guitarBendType>0</guitarBendType>\(extraChildren)</GuitarBend>
+            <next><location><fractions>1/4</fractions></location></next>
+          </Spanner>
+        </Note>
+        """)
     }
 
     private func parse(_ fixture: String) throws -> Score {
