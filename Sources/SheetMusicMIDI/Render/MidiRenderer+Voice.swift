@@ -258,7 +258,7 @@ extension MidiRenderer {
                 renderVoiceElement(
                     element,
                     elementIndex: elementIndex,
-                    bendChainSlot: bendChainSlots[elementIndex],
+                    bendChainSlots: bendChainSlots[elementIndex],
                     voiceElements: effectiveVoice.elements,
                     voiceTuplets: effectiveVoice.tuplets,
                     measures: staff.measures,
@@ -305,7 +305,7 @@ extension MidiRenderer {
     private static func renderVoiceElement( // swiftlint:disable:this function_body_length
         _ element: VoiceElement,
         elementIndex: Int,
-        bendChainSlot: BendChainSlot?,
+        bendChainSlots: BendChainChordSlots?,
         voiceElements: [VoiceElement],
         voiceTuplets: [Tuplet],
         measures: [Measure],
@@ -423,7 +423,7 @@ extension MidiRenderer {
                 tempoBps: currentTempoBps,
                 division: division,
                 glissandoEndPitch: glissandoEndPitch,
-                bendChainSlot: bendChainSlot,
+                bendChainSlots: bendChainSlots,
                 currentKey: currentKey,
                 events: &events,
                 playedTicksOverride: adjust == .none

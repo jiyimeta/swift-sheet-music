@@ -15,57 +15,12 @@ import Testing
 struct MidiRendererGuitarBendTests {
     // MARK: - Fixtures
 
-    private static func makeScore(
-        division: Int = 480,
-        chords: [Chord],
-    ) -> Score {
-        let instrument = Instrument(
-            id: "test",
-            articulations: [InstrumentArticulation()],
-        )
-        let voice = Voice(elements: chords.map { .chord($0) })
-        let measure = Measure(voices: [voice])
-        let staff = Staff(measures: [measure])
-        let part = Part(id: "P1", instrument: instrument, staves: [staff])
-        return Score(division: division, parts: [part])
-    }
-
-    private static func noteOns(in track: MidiTrack) -> [(tick: Int, pitch: Int)] {
-        track.events.compactMap { ev in
-            if case let .noteOn(_, pitch, vel) = ev.event, vel > 0 { return (ev.tick, pitch) }
-            return nil
-        }
-    }
-
-    private static func noteOffs(in track: MidiTrack) -> [(tick: Int, pitch: Int)] {
-        track.events.compactMap { ev in
-            if case let .noteOff(_, pitch, _) = ev.event { return (ev.tick, pitch) }
-            if case let .noteOn(_, pitch, vel) = ev.event, vel == 0 { return (ev.tick, pitch) }
-            return nil
-        }
-    }
-
-    private static func bends(in track: MidiTrack) -> [(tick: Int, value: Int)] {
-        track.events.compactMap { ev in
-            if case let .pitchBend(_, value) = ev.event { return (ev.tick, value) }
-            return nil
-        }
-    }
+    private typealias Probe = GuitarBendMidiProbe
 
     private static func assertBalancedNoteEvents(track: MidiTrack) {
-        let ons = noteOns(in: track).map(\.pitch).sorted()
-        let offs = noteOffs(in: track).map(\.pitch).sorted()
+        let ons = Probe.noteOns(in: track).map(\.pitch).sorted()
+        let offs = Probe.noteOffs(in: track).map(\.pitch).sorted()
         #expect(ons == offs, "unmatched note-on/off: ons=\(ons) offs=\(offs)")
-    }
-
-    /// Wheel value for `semitones` at the 12-semitone sensitivity the track
-    /// header sets — the same scaling `renderPortamento` uses.
-    private static func wheel(semitones: Double) -> Int {
-        MidiEvent.pitchBendCenter + Int((semitones / 12.0 * 8191.0).rounded())
-    }
-
-    private static func bendNote(pitch: Int, type: GuitarBendType = .bend) -> Note {
-        Note(pitch: pitch, tpc: 14, guitarBend: GuitarBend(type: type))
     }
 
     // MARK: - 1. Two-chord bend
@@ -74,27 +29,27 @@ struct MidiRendererGuitarBendTests {
     func twoChordBend_playsAsOneNoteWithRamp() throws {
         // C4 → D4 over two quarter notes. The written D4 never re-attacks:
         // the C4 key sustains and the wheel climbs +2 semitones.
-        let start = Chord(duration: .quarter, notes: [Self.bendNote(pitch: 60)])
+        let start = Chord(duration: .quarter, notes: [Probe.bendNote(pitch: 60)])
         let end = Chord(
             duration: .quarter,
             notes: [Note(pitch: 62, tpc: 16, guitarBendBack: true)],
         )
-        let file = try MidiRenderer.render(score: Self.makeScore(chords: [start, end]))
+        let file = try MidiRenderer.render(score: Probe.makeScore(chords: [start, end]))
         let track = try #require(file.tracks.first)
 
-        let ons = Self.noteOns(in: track)
+        let ons = Probe.noteOns(in: track)
         #expect(ons.map(\.pitch) == [60], "the bend chain must strike exactly one key")
         #expect(ons.first?.tick == 0)
 
-        let offs = Self.noteOffs(in: track)
+        let offs = Probe.noteOffs(in: track)
         #expect(offs.count == 1)
         #expect(offs.first?.pitch == 60)
         // 480 (second chord onset) + 480 (its duration) − 1.
         #expect(offs.first?.tick == 959)
 
-        let wheelEvents = Self.bends(in: track)
+        let wheelEvents = Probe.bends(in: track)
         #expect(wheelEvents.first?.value == MidiEvent.pitchBendCenter)
-        let peak = Self.wheel(semitones: 2)
+        let peak = Probe.wheel(semitones: 2)
         #expect(peak == MidiEvent.pitchBendCenter + 1365)
         #expect(wheelEvents.map(\.value).max() == peak)
         // The ramp lives inside the FIRST chord; by its end the wheel holds.
@@ -112,7 +67,7 @@ struct MidiRendererGuitarBendTests {
     func bendReleaseChain_returnsToCenterMidChain() throws {
         // C4 → D4 → C4: bend up, then release back down. Three chords, two
         // bends, still ONE sounding key.
-        let start = Chord(duration: .quarter, notes: [Self.bendNote(pitch: 60)])
+        let start = Chord(duration: .quarter, notes: [Probe.bendNote(pitch: 60)])
         let middle = Chord(
             duration: .quarter,
             notes: [Note(
@@ -125,17 +80,17 @@ struct MidiRendererGuitarBendTests {
             notes: [Note(pitch: 60, tpc: 14, guitarBendBack: true)],
         )
         let file = try MidiRenderer.render(
-            score: Self.makeScore(chords: [start, middle, end]),
+            score: Probe.makeScore(chords: [start, middle, end]),
         )
         let track = try #require(file.tracks.first)
 
-        #expect(Self.noteOns(in: track).map(\.pitch) == [60])
-        let offs = Self.noteOffs(in: track)
+        #expect(Probe.noteOns(in: track).map(\.pitch) == [60])
+        let offs = Probe.noteOffs(in: track)
         #expect(offs.count == 1)
         #expect(offs.first?.tick == 1439) // 960 + 480 − 1
 
-        let wheelEvents = Self.bends(in: track)
-        let peak = Self.wheel(semitones: 2)
+        let wheelEvents = Probe.bends(in: track)
+        let peak = Probe.wheel(semitones: 2)
         #expect(wheelEvents.map(\.value).max() == peak)
         // The middle chord ramps back down: its last sample is center again.
         let middleSamples = wheelEvents.filter { $0.tick >= 480 && $0.tick < 960 }
@@ -159,16 +114,16 @@ struct MidiRendererGuitarBendTests {
             guitarBend: GuitarBend(type: .slightBend), guitarBendBack: true,
         )
         let chord = Chord(duration: .quarter, notes: [note])
-        let file = try MidiRenderer.render(score: Self.makeScore(chords: [chord]))
+        let file = try MidiRenderer.render(score: Probe.makeScore(chords: [chord]))
         let track = try #require(file.tracks.first)
 
-        #expect(Self.noteOns(in: track).map(\.pitch) == [60])
-        let offs = Self.noteOffs(in: track)
+        #expect(Probe.noteOns(in: track).map(\.pitch) == [60])
+        let offs = Probe.noteOffs(in: track)
         #expect(offs.count == 1)
         #expect(offs.first?.tick == 479)
 
-        let wheelEvents = Self.bends(in: track)
-        let peak = Self.wheel(semitones: 0.5)
+        let wheelEvents = Probe.bends(in: track)
+        let peak = Probe.wheel(semitones: 0.5)
         #expect(peak == MidiEvent.pitchBendCenter + 341)
         #expect(wheelEvents.map(\.value).max() == peak)
         // Held at the peak right up to the release, then reset.
@@ -181,23 +136,23 @@ struct MidiRendererGuitarBendTests {
 
     @Test("a plain chord after a bend chain plays unbent")
     func chordAfterChain_playsAtNaturalPitch() throws {
-        let start = Chord(duration: .quarter, notes: [Self.bendNote(pitch: 60)])
+        let start = Chord(duration: .quarter, notes: [Probe.bendNote(pitch: 60)])
         let end = Chord(
             duration: .quarter,
             notes: [Note(pitch: 62, tpc: 16, guitarBendBack: true)],
         )
         let plain = Chord(duration: .quarter, notes: [Note(pitch: 65, tpc: 13)])
         let file = try MidiRenderer.render(
-            score: Self.makeScore(chords: [start, end, plain]),
+            score: Probe.makeScore(chords: [start, end, plain]),
         )
         let track = try #require(file.tracks.first)
 
-        #expect(Self.noteOns(in: track).map(\.pitch) == [60, 65])
+        #expect(Probe.noteOns(in: track).map(\.pitch) == [60, 65])
         // Every wheel event at or after the plain chord's onset is center.
-        let after = Self.bends(in: track).filter { $0.tick >= 960 }
+        let after = Probe.bends(in: track).filter { $0.tick >= 960 }
         #expect(after.allSatisfy { $0.value == MidiEvent.pitchBendCenter })
         // …and the last wheel event before it is the chain's reset.
-        #expect(Self.bends(in: track).last { $0.tick < 960 }?.value
+        #expect(Probe.bends(in: track).last { $0.tick < 960 }?.value
             == MidiEvent.pitchBendCenter)
         Self.assertBalancedNoteEvents(track: track)
     }
@@ -215,12 +170,12 @@ struct MidiRendererGuitarBendTests {
             duration: .quarter,
             notes: [Note(pitch: 62, tpc: 16, guitarBendBack: true)],
         )
-        let file = try MidiRenderer.render(score: Self.makeScore(chords: [first, second]))
+        let file = try MidiRenderer.render(score: Probe.makeScore(chords: [first, second]))
         let track = try #require(file.tracks.first)
 
-        #expect(Self.noteOns(in: track).map(\.pitch) == [60, 62])
-        #expect(Self.noteOffs(in: track).map(\.pitch).sorted() == [60, 62])
-        #expect(Self.bends(in: track).isEmpty, "no chain means no wheel traffic")
+        #expect(Probe.noteOns(in: track).map(\.pitch) == [60, 62])
+        #expect(Probe.noteOffs(in: track).map(\.pitch).sorted() == [60, 62])
+        #expect(Probe.bends(in: track).isEmpty, "no chain means no wheel traffic")
     }
 
     // MARK: - 6. Pre-bend plays straight (v1 limitation)
@@ -230,16 +185,16 @@ struct MidiRendererGuitarBendTests {
         // MuseScore derives a pre-bend's distance from the tab fret data this
         // model does not carry, so v1 leaves the wheel alone — see the comment
         // on `guitarBendChains`.
-        let grace = Chord(duration: .eighth, notes: [Self.bendNote(pitch: 50, type: .preBend)])
+        let grace = Chord(duration: .eighth, notes: [Probe.bendNote(pitch: 50, type: .preBend)])
         let main = Chord(
             duration: .eighth,
             notes: [Note(pitch: 52, tpc: 18, guitarBendBack: true)],
         )
-        let file = try MidiRenderer.render(score: Self.makeScore(chords: [grace, main]))
+        let file = try MidiRenderer.render(score: Probe.makeScore(chords: [grace, main]))
         let track = try #require(file.tracks.first)
 
-        #expect(Self.noteOns(in: track).map(\.pitch) == [50, 52])
-        #expect(Self.bends(in: track).isEmpty)
+        #expect(Probe.noteOns(in: track).map(\.pitch) == [50, 52])
+        #expect(Probe.bends(in: track).isEmpty)
     }
 
     // MARK: - 7. Chain map shape
@@ -247,7 +202,7 @@ struct MidiRendererGuitarBendTests {
     @Test("the chain map records one slot per chain member")
     func chainMap_describesEachChainMember() {
         let elements: [VoiceElement] = [
-            .chord(Chord(duration: .quarter, notes: [Self.bendNote(pitch: 60)])),
+            .chord(Chord(duration: .quarter, notes: [Probe.bendNote(pitch: 60)])),
             .chord(Chord(
                 duration: .quarter,
                 notes: [Note(pitch: 62, tpc: 16, guitarBendBack: true)],
@@ -256,7 +211,7 @@ struct MidiRendererGuitarBendTests {
         ]
         let slots = MidiRenderer.guitarBendChains(voiceElements: elements)
         #expect(slots.count == 2)
-        #expect(slots[0] == MidiRenderer.BendChainSlot(
+        #expect(slots[0]?.parent == MidiRenderer.BendChainSlot(
             basePitch: 60,
             startOffsetQuarterTones: 0,
             targetOffsetQuarterTones: 4,
@@ -265,7 +220,7 @@ struct MidiRendererGuitarBendTests {
             startTimeFactor: 0,
             endTimeFactor: 1,
         ))
-        #expect(slots[1] == MidiRenderer.BendChainSlot(
+        #expect(slots[1]?.parent == MidiRenderer.BendChainSlot(
             basePitch: 60,
             startOffsetQuarterTones: 4,
             targetOffsetQuarterTones: nil,
@@ -275,6 +230,8 @@ struct MidiRendererGuitarBendTests {
             endTimeFactor: 1,
         ))
         #expect(slots[2] == nil)
+        // Nothing hangs off a grace note here.
+        #expect(slots.values.allSatisfy { $0.before.isEmpty && $0.after.isEmpty })
     }
 
     /// A `.between` tremolo swallows the FOLLOWING chord — which carries no
@@ -292,7 +249,7 @@ struct MidiRendererGuitarBendTests {
             tremolo: Tremolo(subtype: .r8, span: .between),
         )
         // Consumed by the tremolo above AND the would-be chain start.
-        let bendStart = Chord(duration: .quarter, notes: [Self.bendNote(pitch: 60)])
+        let bendStart = Chord(duration: .quarter, notes: [Probe.bendNote(pitch: 60)])
         let bendEnd = Chord(
             duration: .quarter,
             notes: [Note(pitch: 62, tpc: 16, guitarBendBack: true)],
@@ -301,14 +258,14 @@ struct MidiRendererGuitarBendTests {
         #expect(MidiRenderer.guitarBendChains(voiceElements: elements).isEmpty)
 
         let file = try MidiRenderer.render(
-            score: Self.makeScore(chords: [tremolo, bendStart, bendEnd]),
+            score: Probe.makeScore(chords: [tremolo, bendStart, bendEnd]),
         )
         let track = try #require(file.tracks.first)
         // The bend end falls back to a plain attack; without the guard it
         // emitted only an orphan note-off and never sounded at all.
-        #expect(Self.noteOns(in: track).filter { $0.pitch == 62 }.count == 1)
-        #expect(Self.noteOffs(in: track).filter { $0.pitch == 62 }.count == 1)
-        #expect(Self.bends(in: track).isEmpty, "a refused chain drives no wheel")
+        #expect(Probe.noteOns(in: track).filter { $0.pitch == 62 }.count == 1)
+        #expect(Probe.noteOffs(in: track).filter { $0.pitch == 62 }.count == 1)
+        #expect(Probe.bends(in: track).isEmpty, "a refused chain drives no wheel")
         Self.assertBalancedNoteEvents(track: track)
     }
 
@@ -318,7 +275,7 @@ struct MidiRendererGuitarBendTests {
     @Test("an unclosed chain yields no slots at all")
     func chainMap_dropsUnclosedChain() {
         let elements: [VoiceElement] = [
-            .chord(Chord(duration: .quarter, notes: [Self.bendNote(pitch: 60)])),
+            .chord(Chord(duration: .quarter, notes: [Probe.bendNote(pitch: 60)])),
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
         ]
         #expect(MidiRenderer.guitarBendChains(voiceElements: elements).isEmpty)
@@ -348,8 +305,8 @@ struct MidiRendererGuitarBendTests {
         let file = try MidiRenderer.render(score: score)
         let track = try #require(file.tracks.first)
 
-        #expect(Self.noteOns(in: track).count == Self.soundingChordCount(in: score) - 3)
-        #expect(!Self.bends(in: track).isEmpty)
+        #expect(Probe.noteOns(in: track).count == Self.soundingChordCount(in: score) - 3)
+        #expect(!Probe.bends(in: track).isEmpty)
         Self.assertBalancedNoteEvents(track: track)
     }
 
@@ -361,29 +318,9 @@ struct MidiRendererGuitarBendTests {
         let file = try MidiRenderer.render(score: score)
         let track = try #require(file.tracks.first)
 
-        #expect(Self.noteOns(in: track).count == Self.soundingChordCount(in: score))
-        let peak = Self.wheel(semitones: 0.5)
-        #expect(Self.bends(in: track).map(\.value).max() == peak)
-        Self.assertBalancedNoteEvents(track: track)
-    }
-
-    @Test("guitarbend_tied: a tie inside a chain keeps every tied tail")
-    func tiedFixture_losesNoSound() throws {
-        // Ties interleaved with bends are a later pass, so v1 builds no chain
-        // through one. The bend curve is what that costs; what it must NOT cost
-        // is sound — running both suppression rules uncomposed drops the tied
-        // tail, and `resolveUnisonOverlap` hides that by discarding the orphan
-        // note-off, so assert the durations rather than the on/off balance.
-        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("guitarbend_tied"))
-        let elements = score.parts[0].staves[0].measures[0].voices[0].elements
-        #expect(MidiRenderer.guitarBendChains(voiceElements: elements).isEmpty)
-
-        let file = try MidiRenderer.render(score: score)
-        let track = try #require(file.tracks.first)
-        // Five written chords, three sounding keys after the two ties merge:
-        // 52 (eighth), 56 (eighth + tied eighth), 52 (eighth + tied half).
-        #expect(Self.noteOns(in: track).map(\.tick) == [0, 240, 720])
-        #expect(Self.noteOffs(in: track).map(\.tick) == [239, 719, 1919])
+        #expect(Probe.noteOns(in: track).count == Self.soundingChordCount(in: score))
+        let peak = Probe.wheel(semitones: 0.5)
+        #expect(Probe.bends(in: track).map(\.value).max() == peak)
         Self.assertBalancedNoteEvents(track: track)
     }
 
@@ -399,18 +336,18 @@ struct MidiRendererGuitarBendTests {
             notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .portamento))],
         )
         let end = Chord(duration: .quarter, notes: [Note(pitch: 67, tpc: 15)])
-        let file = try MidiRenderer.render(score: Self.makeScore(chords: [start, end]))
+        let file = try MidiRenderer.render(score: Probe.makeScore(chords: [start, end]))
         let track = try #require(file.tracks.first)
 
-        #expect(Self.noteOns(in: track).map(\.pitch) == [60, 67])
-        let wheelEvents = Self.bends(in: track)
+        #expect(Probe.noteOns(in: track).map(\.pitch) == [60, 67])
+        let wheelEvents = Probe.bends(in: track)
         #expect(wheelEvents.count >= 5)
         #expect(wheelEvents.first?.value == MidiEvent.pitchBendCenter)
         let approxPeak = wheelEvents.dropLast().last?.value ?? 0
         #expect(approxPeak > MidiEvent.pitchBendCenter + 3000)
         #expect(approxPeak <= MidiEvent.pitchBendCenter + 8191)
         #expect(wheelEvents.last?.value == MidiEvent.pitchBendCenter)
-        #expect(Self.noteOffs(in: track).filter { $0.pitch == 67 }.count == 1)
+        #expect(Probe.noteOffs(in: track).filter { $0.pitch == 67 }.count == 1)
         Self.assertBalancedNoteEvents(track: track)
     }
 }

@@ -26,6 +26,46 @@ extension MidiRenderer {
         var endTimeFactor: Double
     }
 
+    /// Which grace chord of a voice element a slot belongs to. `nil` (the
+    /// absent case in `BendChainChordSlots`) means the principal chord.
+    enum BendChainGraceRole: Hashable {
+        case before(Int)
+        case after(Int)
+    }
+
+    /// Every bend-chain slot one voice element owns. A chain runs through
+    /// grace notes as freely as through principal chords — MuseScore's
+    /// `collectGuitarBend` walks `bendFor()` links without caring whether the
+    /// note it lands on is a grace — so one element can host several members
+    /// of the same chain (`guitarbend_release_twice`'s second chord carries
+    /// two of them in its after-graces).
+    struct BendChainChordSlots: Equatable {
+        var parent: BendChainSlot?
+        var before: [Int: BendChainSlot] = [:]
+        var after: [Int: BendChainSlot] = [:]
+
+        mutating func set(_ slot: BendChainSlot, at role: BendChainGraceRole?) {
+            switch role {
+            case .none: parent = slot
+            case let .some(.before(index)): before[index] = slot
+            case let .some(.after(index)): after[index] = slot
+            }
+        }
+    }
+
+    /// One place in a voice that can host a chain slot, listed in playback
+    /// order: each chord contributes its before-graces, then its principal
+    /// notes, then its after-graces.
+    private struct ChainPosition {
+        var elementIndex: Int
+        var grace: BendChainGraceRole?
+        /// The chain-carrying note here, or nil when this position cannot take
+        /// part in a chain (see `chainPositions`). A position with no note
+        /// still occupies a slot in the walk, so a chain can never link past
+        /// a chord that would re-articulate between its members.
+        var note: Note?
+    }
+
     // MARK: - Chain construction
 
     /// Bend-chain slots for one voice's elements, keyed by element index.
@@ -41,6 +81,17 @@ extension MidiRenderer {
     /// (unknown `<guitarBendType>`, missing `<GuitarBend>` payload), and such a
     /// note has to attack normally or it would be silent.
     ///
+    /// ## Ties are walked in the same pass
+    ///
+    /// A tie and a bend make the same claim — the key already sounds, do not
+    /// strike it again — so the two suppression rules have to be decided
+    /// together or each will re-decide the other's attack and release.
+    /// MuseScore composes them in one loop (`collectGuitarBend`:
+    /// `while (note->bendFor() || note->tieFor())`, whose `else` branch simply
+    /// follows `tieFor()` and holds the wheel where it is), and so does this:
+    /// a tied member is a chain interior with no target, and only the chain's
+    /// last member releases the key.
+    ///
     /// ## What v1 deliberately does not curve
     ///
     /// - `preBend` — MuseScore takes a pre-bend's distance from the tab fret
@@ -48,16 +99,6 @@ extension MidiRenderer {
     ///   principal is the *bent* one), which this model does not carry, so
     ///   there is no pitch delta to ramp. The note plays straight at its
     ///   written pitch with the wheel untouched.
-    /// - `graceNoteBend` — grace-attached bends are handled in a later pass;
-    ///   the walk below only sees `voiceElements`, never `graceNotesBefore` /
-    ///   `graceNotesAfter`.
-    /// - Any chain touching a tie. A chain re-decides for itself when the key
-    ///   is struck and released, which is exactly what the tie flags in
-    ///   `emitNoteEventsForGrace` also decide; running both without composing
-    ///   them drops the tied tail (measured on `guitarbend_tied`: the closing
-    ///   half note lost its whole sound). Excluding tied chains keeps those
-    ///   scores playing as they did before bends existed, at the cost of the
-    ///   bend curve, until the two suppression rules are merged.
     /// - The four whammy-bar types (`dive`, `preDive`, `dip`, `scoop`) — their
     ///   depth lives in properties this model announces and drops at decode.
     ///
@@ -66,137 +107,209 @@ extension MidiRenderer {
     /// The pitch wheel is a channel-wide control, so a chord that mixes bent
     /// and unbent notes bends all of them. MuseScore's own MIDI export has the
     /// same limitation; bends are single-note in practice.
-    static func guitarBendChains(voiceElements: [VoiceElement]) -> [Int: BendChainSlot] {
-        var slots: [Int: BendChainSlot] = [:]
-        let skipped = tremoloConsumedIndices(in: voiceElements)
+    static func guitarBendChains(voiceElements: [VoiceElement]) -> [Int: BendChainChordSlots] {
+        let positions = chainPositions(in: voiceElements)
+        var slots: [Int: BendChainChordSlots] = [:]
         var index = 0
-        while index < voiceElements.count {
-            guard let chain = bendChain(
-                voiceElements: voiceElements, startingAt: index, skipped: skipped,
-            ) else {
+        while index < positions.count {
+            guard let chain = bendChain(positions: positions, startingAt: index) else {
                 index += 1
                 continue
             }
-            for (elementIndex, slot) in chain {
-                slots[elementIndex] = slot
+            for (positionIndex, slot) in chain {
+                let position = positions[positionIndex]
+                var chordSlots = slots[position.elementIndex] ?? BendChainChordSlots()
+                chordSlots.set(slot, at: position.grace)
+                slots[position.elementIndex] = chordSlots
             }
             index = (chain.last?.0 ?? index) + 1
         }
         return slots
     }
 
-    /// The note a chord's bend chain sounds on: the first note carrying either
-    /// side of a `<Spanner type="GuitarBend">` pair. The chord-level
+    /// The note a chord (or grace chord) sounds its bend chain on: the first
+    /// note carrying either side of a `<Spanner type="GuitarBend">` pair, and
+    /// failing that the first tied note. A chain reaching through a tie has
+    /// members carrying no bend spanner at all — `guitarbend_tied` closes on a
+    /// plain tied half note, and a chain tied INTO is struck on the plain note
+    /// the tie starts from.
+    ///
+    /// `ChordNotes` is pitch-unique, so the note this returns is exactly the
+    /// one `renderChordWithGraces` finds again by pitch. The chord-level
     /// simplification documented on `guitarBendChains` is what makes "first"
-    /// good enough.
-    static func bendChainNote(in chord: Chord) -> Note? {
-        chord.notes.first { $0.guitarBend != nil || $0.guitarBendBack }
+    /// good enough. A muted note yields nil: it emits no MIDI, so it can
+    /// neither open a chain nor carry one through.
+    static func bendChainNote(in notes: ChordNotes) -> Note? {
+        let candidate = notes.first { $0.guitarBend != nil || $0.guitarBendBack }
+            ?? notes.first { $0.tieBack != nil || $0.tieForward != nil }
+        guard let candidate, candidate.play else { return nil }
+        return candidate
     }
 
-    /// One complete chain starting at `startIndex`, or nil when the element is
+    /// Every position a chain could pass through, in playback order.
+    ///
+    /// A position with a nil `note` is a wall: the walk sees it, so a chain can
+    /// never link across a chord that would re-articulate in between. Rests
+    /// (note-less chords) and non-chord elements produce no position at all —
+    /// `.dynamic` / `.locationShift` / `.breath` / the signatures emit no note
+    /// events and make `renderVoiceElement` skip nothing, so stepping over them
+    /// is safe. In particular there is **no** `.instrumentChange` voice
+    /// element: a mid-part channel switch reaches the walker as a tick-keyed
+    /// `PartChannelRoute` entry, so refusing chains that step over an element
+    /// would not close the "channel switches inside a chain" hazard. That one
+    /// needs the chain's channel pinned at its head, the way `sustainedChannel`
+    /// pins a tie's.
+    ///
+    /// A chord whose render path never consults the chain map hosts no note,
+    /// because a slot the renderer never reaches would emit a note-off with no
+    /// note-on and `resolveUnisonOverlap` would then discard it, silencing the
+    /// whole chain instead of merely un-bending it. Two such paths:
+    ///
+    /// - The chord CARRIES a tremolo or an arpeggio (`renderTremoloChord`
+    ///   emits its own strokes and never renders graces; the arpeggio branch
+    ///   of `renderChordWithGraces` bypasses the chain-aware note loop).
+    /// - The chord is CONSUMED by a preceding `.between` tremolo. Such a chord
+    ///   has `tremolo == nil` itself, so the check above cannot see it — the
+    ///   voice walker `continue`s past it before `renderVoiceElement` runs.
+    ///   That skip is the ONLY one the voice walker performs, so this closes
+    ///   the whole "the renderer never reaches this slot" class.
+    private static func chainPositions(in voiceElements: [VoiceElement]) -> [ChainPosition] {
+        let skipped = tremoloConsumedIndices(in: voiceElements)
+        var positions: [ChainPosition] = []
+        for (elementIndex, element) in voiceElements.enumerated() {
+            guard case let .chord(chord) = element else { continue }
+            let renderable = !skipped.contains(elementIndex)
+                && chord.tremolo == nil && chord.arpeggio == nil
+            for (graceIndex, grace) in chord.graceNotesBefore.enumerated()
+                where !grace.notes.isEmpty
+            {
+                positions.append(ChainPosition(
+                    elementIndex: elementIndex, grace: .before(graceIndex),
+                    note: renderable ? bendChainNote(in: grace.notes) : nil,
+                ))
+            }
+            if !chord.notes.isEmpty {
+                positions.append(ChainPosition(
+                    elementIndex: elementIndex, grace: nil,
+                    note: renderable ? bendChainNote(in: chord.notes) : nil,
+                ))
+            }
+            for (graceIndex, grace) in chord.graceNotesAfter.enumerated()
+                where !grace.notes.isEmpty
+            {
+                positions.append(ChainPosition(
+                    elementIndex: elementIndex, grace: .after(graceIndex),
+                    note: renderable ? bendChainNote(in: grace.notes) : nil,
+                ))
+            }
+        }
+        return positions
+    }
+
+    /// One complete chain starting at `startIndex`, or nil when the position is
     /// not a chain head or the chain cannot be completed. Returning nil for an
     /// incomplete chain is deliberate: every member then falls back to a plain
     /// attack, which keeps the note-on/off stream balanced. A chain whose
     /// destination sits in the next measure lands here too — the walk sees one
     /// voice's elements at a time.
-    private static func bendChain(
-        voiceElements: [VoiceElement],
+    private static func bendChain( // swiftlint:disable:this function_body_length
+        positions: [ChainPosition],
         startingAt startIndex: Int,
-        skipped: Set<Int>,
     ) -> [(Int, BendChainSlot)]? {
-        guard let head = chainCapableNote(in: voiceElements, at: startIndex, skipped: skipped),
+        guard let head = positions[startIndex].note,
               let headBend = head.guitarBend,
-              startsChain(headBend.type)
+              startsChain(headBend.type),
+              let firstIndex = struckAt(positions: positions, bendingAt: startIndex),
+              let first = positions[firstIndex].note
         else { return nil }
         let basePitch = head.pitch
         var chain: [(Int, BendChainSlot)] = []
         var offsetQuarterTones = 0
-        var index = startIndex
-        var bend = headBend
+        var index = firstIndex
+        var note = first
         while true {
-            // A slight bend is a quarter-tone scoop with no notated
-            // destination: it begins and ends on the same note, ramps up and
-            // HOLDS — MuseScore never brings it back down.
-            if bend.type == .slightBend {
+            let bend = note.guitarBend.flatMap { startsChain($0.type) ? $0 : nil }
+            let followerIndex = index + 1
+            let follower = followerIndex < positions.count
+                ? positions[followerIndex].note
+                : nil
+            // A member tied onward MUST hand the key to its tie partner. If it
+            // cannot, the whole chain is dropped rather than half-applied: the
+            // tie would otherwise suppress a note-on whose note-off the chain
+            // had already emitted somewhere else.
+            let tiedFollower = note.tieForward != nil
+            if tiedFollower {
+                guard let follower, follower.tieBack != nil,
+                      follower.pitch == note.pitch
+                else { return nil }
+            }
+            if let bend, bend.type != .slightBend {
+                guard let follower, follower.guitarBendBack else { return nil }
+                let target = (follower.pitch - basePitch) * 2
                 chain.append((index, BendChainSlot(
                     basePitch: basePitch,
                     startOffsetQuarterTones: offsetQuarterTones,
-                    targetOffsetQuarterTones: offsetQuarterTones + 1,
-                    isChainStart: chain.isEmpty, isChainEnd: true,
+                    targetOffsetQuarterTones: target,
+                    isChainStart: chain.isEmpty, isChainEnd: false,
                     startTimeFactor: bend.startTimeFactor,
                     endTimeFactor: bend.endTimeFactor,
                 )))
-                return chain
-            }
-            guard let nextIndex = nextSoundingChordIndex(in: voiceElements, after: index),
-                  let follower = chainCapableNote(
-                      in: voiceElements, at: nextIndex, skipped: skipped,
-                  ),
-                  follower.guitarBendBack
-            else { return nil }
-            let target = (follower.pitch - basePitch) * 2
-            chain.append((index, BendChainSlot(
-                basePitch: basePitch,
-                startOffsetQuarterTones: offsetQuarterTones,
-                targetOffsetQuarterTones: target,
-                isChainStart: chain.isEmpty, isChainEnd: false,
-                startTimeFactor: bend.startTimeFactor,
-                endTimeFactor: bend.endTimeFactor,
-            )))
-            offsetQuarterTones = target
-            index = nextIndex
-            if let next = follower.guitarBend, startsChain(next.type) {
-                bend = next
+                offsetQuarterTones = target
+                index = followerIndex
+                note = follower
                 continue
             }
+            // A slight bend is a quarter-tone scoop with no notated
+            // destination: it begins and ends on the same note, ramps up and
+            // HOLDS — MuseScore never brings it back down. Everything else
+            // here has no bend of its own and simply holds the wheel: either a
+            // tie carries the chain onward, or this is its last member.
             chain.append((index, BendChainSlot(
                 basePitch: basePitch,
                 startOffsetQuarterTones: offsetQuarterTones,
-                targetOffsetQuarterTones: nil,
-                isChainStart: false, isChainEnd: true,
-                startTimeFactor: 0, endTimeFactor: 1,
+                targetOffsetQuarterTones: bend.map { _ in offsetQuarterTones + 1 },
+                isChainStart: chain.isEmpty, isChainEnd: !tiedFollower,
+                startTimeFactor: bend?.startTimeFactor ?? 0,
+                endTimeFactor: bend?.endTimeFactor ?? 1,
             )))
-            return chain
+            if bend != nil { offsetQuarterTones += 1 }
+            guard tiedFollower, let follower else { return chain }
+            index = followerIndex
+            note = follower
         }
+    }
+
+    /// Where the chain that bends at `index` is actually STRUCK: walking back
+    /// over ties, because a note tied into is already sounding and its
+    /// predecessor suppressed its own release. Striking at the bend instead
+    /// would attack the key a second time while the first is still ringing.
+    ///
+    /// Returns nil when the tie leads out of reach — the partner is in another
+    /// measure (the walk sees one measure's voice elements), or takes a render
+    /// path this map cannot host. The chain is then dropped whole and every
+    /// member keeps the plain rendering it had before bends existed.
+    private static func struckAt(
+        positions: [ChainPosition], bendingAt index: Int,
+    ) -> Int? {
+        var index = index
+        while let note = positions[index].note, note.tieBack != nil {
+            let previousIndex = index - 1
+            guard previousIndex >= 0,
+                  let previous = positions[previousIndex].note,
+                  previous.tieForward != nil, previous.pitch == note.pitch
+            else { return nil }
+            index = previousIndex
+        }
+        return index
     }
 
     /// Whether a bend type opens (or extends) a pitch-curving chain in v1.
     /// See `guitarBendChains` for why the other five do not.
     private static func startsChain(_ type: GuitarBendType) -> Bool {
         switch type {
-        case .bend, .slightBend: true
-        case .preBend, .graceNoteBend, .dive, .preDive, .dip, .scoop: false
+        case .bend, .slightBend, .graceNoteBend: true
+        case .preBend, .dive, .preDive, .dip, .scoop: false
         }
-    }
-
-    /// `bendChainNote` for the element at `index`, gated on that chord going
-    /// through the plain note loop of `renderChordWithGraces`. A chord that
-    /// takes any other path never consults the chain map, so admitting one
-    /// would leave a slot unrendered — and a chain missing its start emits a
-    /// note-off with no note-on, which `resolveUnisonOverlap` then discards,
-    /// silencing the whole chain instead of merely un-bending it. Three
-    /// exclusions, all of that shape:
-    ///
-    /// - The chord CARRIES a tremolo or an arpeggio (their own render paths).
-    /// - The chord is CONSUMED by a preceding `.between` tremolo. Such a chord
-    ///   has `tremolo == nil` itself, so the check above does not see it —
-    ///   `renderTremoloChord` absorbs it into the stroke expansion and the
-    ///   voice walker `continue`s past it before `renderVoiceElement` runs.
-    ///   That skip is the ONLY one the voice walker performs, which is why
-    ///   `skipped` closes the whole "the renderer never reaches this slot"
-    ///   class rather than just this one case.
-    /// - The note is muted (`<play>0</play>`) or tied — see `guitarBendChains`
-    ///   for what a tie costs here.
-    private static func chainCapableNote(
-        in voiceElements: [VoiceElement], at index: Int, skipped: Set<Int>,
-    ) -> Note? {
-        guard index >= 0, index < voiceElements.count, !skipped.contains(index),
-              case let .chord(chord) = voiceElements[index],
-              chord.tremolo == nil, chord.arpeggio == nil,
-              let note = bendChainNote(in: chord), note.play,
-              note.tieBack == nil, note.tieForward == nil
-        else { return nil }
-        return note
     }
 
     /// Element indices a `.between` tremolo swallows, mirroring the lookup in
@@ -217,156 +330,5 @@ extension MidiRenderer {
             }
         }
         return consumed
-    }
-
-    /// Index of the next element that actually sounds. Rests are `.chord`
-    /// elements with no notes, so they are skipped exactly as
-    /// `glissandoEndPitch` skips them.
-    ///
-    /// The walk deliberately steps over non-chord elements, and that is safe:
-    /// `VoiceElement` has no case that makes `renderVoiceElement` skip a later
-    /// chord, and none of them (`.dynamic`, `.locationShift`, `.breath`,
-    /// `.spanner`, the signatures) changes which MIDI key or channel a chain
-    /// member lands on. In particular there is **no** `.instrumentChange`
-    /// voice element — a mid-part channel switch reaches the walker as a
-    /// tick-keyed `PartChannelRoute` entry, never as an element — so refusing
-    /// chains that step over an element would not close the "channel switches
-    /// inside a chain" hazard. That one needs the chain's channel pinned at
-    /// its head, the way `sustainedChannel` pins a tie's.
-    private static func nextSoundingChordIndex(
-        in voiceElements: [VoiceElement], after index: Int,
-    ) -> Int? {
-        var i = index + 1
-        while i < voiceElements.count {
-            if case let .chord(chord) = voiceElements[i], !chord.notes.isEmpty { return i }
-            i += 1
-        }
-        return nil
-    }
-
-    // MARK: - Rendering
-
-    /// Wheel value for an offset expressed in quarter tones, at the
-    /// 12-semitone sensitivity the track header sets via RPN
-    /// (`MidiRenderer+Header.swift`). Same scaling `renderPortamento` uses.
-    static func bendWheelValue(quarterTones: Int) -> Int {
-        bendWheelValue(semitones: Double(quarterTones) / 2.0)
-    }
-
-    private static func bendWheelValue(semitones: Double) -> Int {
-        let sensitivity = 12.0
-        let offset = max(-8192.0, min(8191.0, semitones / sensitivity * 8191.0))
-        return MidiEvent.pitchBendCenter + Int(offset.rounded())
-    }
-
-    // swiftlint:disable:next function_parameter_count
-    /// Emit one chord's contribution to a bend chain.
-    ///
-    /// A chain-start slot strikes `basePitch` and emits no note-off; interior
-    /// slots emit neither, only wheel traffic; the chain-end slot releases
-    /// `basePitch` and resets the wheel. The ramp is confined to the bend's
-    /// `[startTimeFactor, endTimeFactor]` window inside this chord and holds
-    /// on both sides of it.
-    ///
-    /// Sampling mirrors `renderPortamento` (`MidiRenderer+Glissando.swift`):
-    /// one event every ~16 ticks clamped to [4, 64], and the last wheel event
-    /// of the chord lands at `offTick − 1` so a chain-end reset has the whole
-    /// `offTick` to itself — otherwise a synth that reorders simultaneous
-    /// events by message type can apply the reset BEFORE the peak and leave
-    /// the wheel stuck for the rest of the song.
-    static func renderBendChainNote(
-        note: Note,
-        slot: BendChainSlot,
-        startTick: Int,
-        durationTicks: Int,
-        velocity: Int,
-        channel: Int,
-        events: inout [TimedMidiEvent],
-    ) {
-        // A muted note (`<play>0</play>`) emits no MIDI. Mirrors the
-        // `if (!note->play()) return;` guard in CompatMidiRender::collectNote.
-        // `chainCapableNote` already refuses to build a chain through one, so
-        // this is belt and braces.
-        guard note.play else { return }
-        let velocity = note.customizedVelocity(velocity)
-        let offTick = startTick + durationTicks - 1
-        let lastSampleTick = max(startTick, offTick - 1)
-        if slot.isChainStart {
-            events.append(TimedMidiEvent(
-                tick: startTick,
-                event: .noteOn(channel: channel, pitch: slot.basePitch, velocity: velocity),
-            ))
-        }
-        events.append(TimedMidiEvent(
-            tick: startTick,
-            event: .pitchBend(
-                channel: channel,
-                value: bendWheelValue(quarterTones: slot.startOffsetQuarterTones),
-            ),
-        ))
-        if let target = slot.targetOffsetQuarterTones {
-            appendBendRamp(
-                slot: slot, target: target,
-                startTick: startTick, durationTicks: durationTicks,
-                lastSampleTick: lastSampleTick,
-                channel: channel, events: &events,
-            )
-        }
-        if slot.isChainEnd {
-            events.append(TimedMidiEvent(
-                tick: offTick,
-                event: .noteOff(channel: channel, pitch: slot.basePitch, velocity: 0),
-            ))
-            events.append(TimedMidiEvent(
-                tick: offTick,
-                event: .pitchBend(channel: channel, value: MidiEvent.pitchBendCenter),
-            ))
-        }
-    }
-
-    // swiftlint:disable:next function_parameter_count
-    /// Wheel samples from the slot's start offset to `target`, spread across
-    /// the bend's time-factor window and then held to `lastSampleTick`.
-    private static func appendBendRamp(
-        slot: BendChainSlot,
-        target: Int,
-        startTick: Int,
-        durationTicks: Int,
-        lastSampleTick: Int,
-        channel: Int,
-        events: inout [TimedMidiEvent],
-    ) {
-        let span = Double(durationTicks)
-        let windowEnd = min(
-            startTick + Int((span * slot.endTimeFactor).rounded()), lastSampleTick,
-        )
-        let rampEnd = max(windowEnd, startTick)
-        let rampStart = min(
-            startTick + Int((span * slot.startTimeFactor).rounded()), rampEnd,
-        )
-        let rampSpan = rampEnd - rampStart
-        let fromSemitones = Double(slot.startOffsetQuarterTones) / 2.0
-        let deltaSemitones = Double(target - slot.startOffsetQuarterTones) / 2.0
-        let sampleCount = max(4, min(64, durationTicks / 16))
-        for i in 1 ... sampleCount {
-            let t = Double(i) / Double(sampleCount)
-            events.append(TimedMidiEvent(
-                tick: rampStart + Int((Double(rampSpan) * t).rounded()),
-                event: .pitchBend(
-                    channel: channel,
-                    value: bendWheelValue(semitones: fromSemitones + deltaSemitones * t),
-                ),
-            ))
-        }
-        // A window that closes before the chord does holds the reached offset
-        // to the end, so the wheel is unambiguous for the rest of the chord.
-        if rampEnd < lastSampleTick {
-            events.append(TimedMidiEvent(
-                tick: lastSampleTick,
-                event: .pitchBend(
-                    channel: channel, value: bendWheelValue(quarterTones: target),
-                ),
-            ))
-        }
     }
 }
