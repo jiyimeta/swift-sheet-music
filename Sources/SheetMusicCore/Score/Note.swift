@@ -25,6 +25,16 @@ public struct Note: Sendable, Equatable {
     /// Glissando starting on this note and sweeping to the next chord's note.
     /// C++: `<Spanner type="Glissando">` attached to a `<Note>`.
     public var glissando: Glissando?
+    /// Guitar bend starting on this note. Mirrors `glissando`: only the
+    /// begin side of the `<Spanner type="GuitarBend">` pair carries the
+    /// payload. A slight bend begins and ends on the same note, so it sets
+    /// both this and `guitarBendBack`. C++: `Note::bendFor()`.
+    public var guitarBend: GuitarBend?
+    /// True when a `<Spanner type="GuitarBend">` *ends* on this note (the
+    /// `<prev>`-only placeholder). Marks the note whose attack playback
+    /// suppresses, and lets the end side be re-emitted on encode. Mirrors
+    /// `tieBack`. C++: `Note::bendBack()`.
+    public var guitarBendBack: Bool
     /// Notehead shape override (e.g. "cross" for hi-hat, "diamond" for
     /// percussion rim, "triangle-down" for cowbell). When nil, the
     /// standard notehead for the duration is used.
@@ -80,6 +90,8 @@ public struct Note: Sendable, Equatable {
         tieForward: Int? = nil,
         tieBack: Int? = nil,
         glissando: Glissando? = nil,
+        guitarBend: GuitarBend? = nil,
+        guitarBendBack: Bool = false,
         headType: String? = nil,
         parentheses: NoteParentheses = .none,
         isSmall: Bool = false,
@@ -98,6 +110,8 @@ public struct Note: Sendable, Equatable {
         self.tieForward = tieForward
         self.tieBack = tieBack
         self.glissando = glissando
+        self.guitarBend = guitarBend
+        self.guitarBendBack = guitarBendBack
         self.headType = headType
         self.parentheses = parentheses
         self.isSmall = isSmall
