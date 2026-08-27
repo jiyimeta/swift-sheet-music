@@ -21,6 +21,7 @@ extension Voice {
         previousChordNotes: ChordNotes? = nil,
         forwardTiePartnerNotes: ChordNotes? = nil,
         previousChordTrailingBendGrace: Int? = nil,
+        slurEndMarkers: [XMLTreeNode] = [],
         options: MSCXEncoderOptions,
         staffGroup: String,
         voiceIndex: Int,
@@ -56,6 +57,7 @@ extension Voice {
         )
         return unscaledChord.notes.isEmpty
             ? unscaledChord.encodeAsRest(
+                slurEndMarkers: slurEndMarkers,
                 options: options, in: effectiveDuration,
             )
             : unscaledChord.encodeAsChord(
@@ -66,6 +68,7 @@ extension Voice {
                 bendNeighbourForward: bendForward,
                 bendNeighbourBackward: bendBackward,
                 previousChordTrailingBendGrace: previousChordTrailingBendGrace,
+                slurEndMarkers: slurEndMarkers,
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,

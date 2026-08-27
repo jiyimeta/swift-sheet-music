@@ -83,19 +83,43 @@ extension Spanner {
 
     /// `<next><location>…</location></next>`. Returns nil when both
     /// offsets are at their defaults (no end-side anchor needed).
-    /// Element order inside `<location>` differs by target version:
-    /// v4 emits `<fractions>` then `<measures>`, matching MuseScore 4
-    /// (`engraving/types/location.cpp::Location::write`); v3 emits
-    /// `<measures>` then `<fractions>`, matching MuseScore 3.
     private func nextLocationElement(options: MSCXEncoderOptions = .init()) -> XMLTreeNode? {
-        let fractionsNode: XMLTreeNode? = nextFractionsOffset.map {
+        let locationChildren = Self.relativeLocationChildren(
+            measures: nextMeasuresOffset,
+            fractions: nextFractionsOffset,
+            options: options,
+        )
+        guard !locationChildren.isEmpty else { return nil }
+        return XMLTreeNode(name: "next", children: [
+            XMLTreeNode(name: "location", children: locationChildren),
+        ])
+    }
+
+    /// The `<measures>` / `<fractions>` children of a relative
+    /// `<location>`. `<measures>` is elided at its `0` default, matching
+    /// `xml.tag("measures", …, relDefaults.measure())`; `<fractions>` is
+    /// written whenever the model holds one, `nil` standing for "MuseScore
+    /// elided it".
+    ///
+    /// Element order differs by target version: v4 emits `<fractions>` then
+    /// `<measures>`, matching what MuseScore 4 wrote when this encoder's
+    /// spanner fixtures were captured
+    /// (`engraving/types/location.cpp::Location::write`); v3 emits
+    /// `<measures>` then `<fractions>`, matching MuseScore 3 — and matching
+    /// the `<prev>` markers in `slur_ms3_exchangevoices.mscx:252-259`.
+    private static func relativeLocationChildren(
+        measures: Int,
+        fractions: Fraction?,
+        options: MSCXEncoderOptions,
+    ) -> [XMLTreeNode] {
+        let fractionsNode: XMLTreeNode? = fractions.map {
             XMLTreeNode(
                 name: "fractions",
                 text: "\($0.numerator)/\($0.denominator)",
             )
         }
-        let measuresNode: XMLTreeNode? = nextMeasuresOffset != 0
-            ? XMLTreeNode(name: "measures", text: String(nextMeasuresOffset))
+        let measuresNode: XMLTreeNode? = measures != 0
+            ? XMLTreeNode(name: "measures", text: String(measures))
             : nil
         var locationChildren: [XMLTreeNode] = []
         switch options.targetVersion {
@@ -106,9 +130,71 @@ extension Spanner {
             if let fractionsNode { locationChildren.append(fractionsNode) }
             if let measuresNode { locationChildren.append(measuresNode) }
         }
-        guard !locationChildren.isEmpty else { return nil }
-        return XMLTreeNode(name: "next", children: [
-            XMLTreeNode(name: "location", children: locationChildren),
-        ])
+        return locationChildren
+    }
+
+    /// The begin side of a *chord-anchored* `<Spanner>` — the form MuseScore
+    /// nests inside `<Chord>` / `<Rest>` for slurs, written by the spanner
+    /// loop at the tail of `TWrite::writeProperties(const ChordRest*, …)`
+    /// (`rw/write/twrite.cpp:1093`, loop at `:1135`).
+    ///
+    /// Unlike `encode(options:)` this never dispatches on `visible`. That
+    /// dispatch exists because a *voice-level* end side is modeled as an
+    /// invisible `Spanner`; a chord-anchored one never is — `Chord.spanners`
+    /// holds begin sides only, since `Chord.decodeChordSpanners` drops the
+    /// `<prev>`-only markers and the encoder recomputes them. Here
+    /// `<visible>` therefore means what it says, and an invisible slur still
+    /// writes its payload.
+    ///
+    /// `<next>` is emitted even when both offsets are at their defaults —
+    /// as the bare `<next/>` the glissando writer also uses. The decoder
+    /// keys "this is a begin side" off the presence of `<next>`, so eliding
+    /// it would make the slur vanish on the next read.
+    func encodeChordAnchoredBegin(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        XMLTreeNode(
+            name: "Spanner",
+            attributes: ["type": rawType],
+            children: [
+                payloadElement(options: options),
+                nextLocationElement(options: options)
+                    ?? XMLTreeNode(name: "next"),
+            ],
+        )
+    }
+
+    /// The end side of a chord-anchored `<Spanner>`: `<prev><location>` whose
+    /// offsets are the *negation* of the begin side's `<next>` — the
+    /// relative location read back the other way
+    /// (`Location::toRelative`, applied from the end element's tick).
+    /// MuseScore's own pairs confirm the negation exactly:
+    /// `<next>` `measures 1` / `fractions -1/2` against `<prev>`
+    /// `measures -1` / `fractions 1/2`
+    /// (`slur_ms3_exchangevoices.mscx:205-210` and `:252-259`).
+    ///
+    /// The caller supplies the already-negated values, because it is the
+    /// voice walker — not the spanner — that knows which chord the marker
+    /// landed on.
+    static func chordAnchoredEndMarker(
+        rawType: String,
+        measures: Int,
+        fractions: Fraction?,
+        options: MSCXEncoderOptions = .init(),
+    ) -> XMLTreeNode {
+        XMLTreeNode(
+            name: "Spanner",
+            attributes: ["type": rawType],
+            children: [
+                XMLTreeNode(name: "prev", children: [
+                    XMLTreeNode(
+                        name: "location",
+                        children: relativeLocationChildren(
+                            measures: measures,
+                            fractions: fractions,
+                            options: options,
+                        ),
+                    ),
+                ]),
+            ],
+        )
     }
 }

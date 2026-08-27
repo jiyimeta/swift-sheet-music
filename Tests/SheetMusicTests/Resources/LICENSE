@@ -94,6 +94,15 @@ were hand-authored specifically for the swift-sheet-music test suite:
     was edited down from guitarbend_simple.mscx above (GuitarBend
     spanners removed, a legacy `<Bend>` inserted), so the GPL-3.0 terms
     also cover the MuseScore-authored skeleton it retains.
+  slur_ms4_resave.mscx — hand-authored the same way, from
+    legacybend_ms4_resave.mscx's skeleton (the `<Bend>` and its ties
+    replaced by two chord-anchored slurs: one same-measure, one crossing
+    the bar line), so the same GPL-3.0 remark applies transitively. It
+    is written in this package's own writer dialect so it can serve as a
+    byte-parity fixed point — the vendored slur_ms4_glissando_legato.mscx
+    cannot, because it carries `<linkedMain/>` / `<linked>` part-linking
+    tags, a tablature `<StaffType>` body and other MuseScore-4.2 fields
+    this model does not hold.
 
 These files are contributed under the same MIT license that applies to
 `Sources/` in this repository. The full MIT license text is in the
