@@ -55,6 +55,10 @@ public enum MeasureAccidentals {
     /// `nearestTo` stays CONCERT at the call site (it comes from the previous note in the stored score); the
     /// conversion for the octave search happens here.
     ///
+    /// `nil` also for a letter whose written pitch is fine but whose CONCERT pitch would fall outside MIDI's
+    /// `0…127` — the guard `plannedPitch` applies to the pitch it returns says nothing about the pitch this
+    /// stores, and on a transposing staff those are two different numbers.
+    ///
     /// **Cost:** one `writtenPitchView()` — a full-score value copy — per call, i.e. per keystroke. Accepted
     /// rather than transformed in place because the octave search and the bar's accidental state both have to
     /// read the written key AND the written spelling of every earlier note in the measure, and only the view
@@ -66,17 +70,17 @@ public enum MeasureAccidentals {
         at location: VoiceElementID,
         in score: Score,
     ) -> (pitch: Int, tpc: Int)? {
-        let offsets = score.writtenSpaceOffsets(staff: location.staff, measureIndex: location.measureIndex)
-        guard offsets.pitch != 0 || offsets.fifths != 0 else {
+        let crossing = score.writtenSpaceCrossing(staff: location.staff, measureIndex: location.measureIndex)
+        guard !crossing.isIdentity else {
             return plannedPitch(forLetter: letter, nearestTo: concertReference, at: location, in: score)
         }
         guard let planned = plannedPitch(
             forLetter: letter,
-            nearestTo: concertReference.map { $0 + offsets.pitch },
+            nearestTo: concertReference.map(crossing.writtenPitch),
             at: location,
             in: score.writtenPitchView(),
         ) else { return nil }
-        return (planned.pitch - offsets.pitch, planned.tpc - offsets.fifths)
+        return crossing.concert(planned)
     }
 
     // MARK: - Keeping the written glyphs true

@@ -68,17 +68,22 @@ public struct SetAccidental: EditCommand {
     ///
     /// `accidental: nil` still leaves pitch and tpc alone (the caller only wants the glyph cleared), so the
     /// detour is a no-op there too.
+    ///
+    /// When the crossing back cannot be stored — a written respelling that is inside MIDI's `0…127` sitting over
+    /// a concert pitch that is not — the note keeps the pitch and spelling it had, the same thing
+    /// `Score.writtenPitchView()` does at that extreme rather than writing a pitch outside the range. The glyph
+    /// still lands, which is the command's contract; the respell half is unguarded on the concert path too, and
+    /// making the accidental keys refuse outright is a public-refusal question, not one to settle here.
     private static func respelled(
         _ note: Note, with accidental: Accidental?, at location: NoteID, in score: Score,
     ) -> (pitch: Int, tpc: Int) {
-        let offsets = score.writtenSpaceOffsets(staff: location.staff, measureIndex: location.measureIndex)
-        guard offsets.pitch != 0 || offsets.fifths != 0 else {
+        let crossing = score.writtenSpaceCrossing(staff: location.staff, measureIndex: location.measureIndex)
+        guard !crossing.isIdentity else {
             return PitchSpelling.respelled(from: note, with: accidental)
         }
         var asRead = note
-        asRead.pitch += offsets.pitch
-        asRead.tpc += offsets.fifths
+        (asRead.pitch, asRead.tpc) = crossing.written((note.pitch, note.tpc))
         let written = PitchSpelling.respelled(from: asRead, with: accidental)
-        return (written.pitch - offsets.pitch, written.tpc - offsets.fifths)
+        return crossing.concert(written) ?? (note.pitch, note.tpc)
     }
 }

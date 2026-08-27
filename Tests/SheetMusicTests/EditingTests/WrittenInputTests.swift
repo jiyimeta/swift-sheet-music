@@ -33,6 +33,44 @@ struct WrittenInputTests {
         ))
     }
 
+    /// The same clarinet over one 4/4 bar of QUARTER rests, so there is more than one slot to plan into and a
+    /// note can sit earlier in the bar than the one being planned. Elements: [0] keySignature, [1] timeSignature,
+    /// [2...5] rest(quarter).
+    ///
+    /// The transposition defaults to the B♭ clarinet's; the range tests pass the BASS clarinet's (sounding a
+    /// major ninth lower — `writtenPitchOffset` +14, the same `writtenFifthsOffset` +2), which is the smallest
+    /// standard instrument whose written space reaches below MIDI 0 when crossed back.
+    private func clarinetQuarters(
+        concertKey: Int = 0, transposeDiatonic: Int = -1, transposeChromatic: Int = -2,
+    ) -> Score {
+        let voice = Voice(elements: [
+            .keySignature(KeySignature(concertKey: concertKey)),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+        ])
+        return Score(division: 480, parts: [Part(
+            id: "1",
+            instrument: Instrument(
+                id: "clarinet",
+                transposeDiatonic: transposeDiatonic, transposeChromatic: transposeChromatic,
+            ),
+            staves: [Staff(measures: [Measure(voices: [voice])])],
+        )])
+    }
+
+    /// A bass clarinet: `writtenPitchOffset` +14, so a written note at the bottom of the staff crosses back to a
+    /// concert pitch below MIDI 0.
+    private func bassClarinetQuarters() -> Score {
+        clarinetQuarters(transposeDiatonic: -8, transposeChromatic: -14)
+    }
+
+    private func quarterSlot(_ element: Int) -> VoiceElementID {
+        VoiceElementID(staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: element)
+    }
+
     private func flute(concertKey: Int = 0) -> Score {
         Score.blank(BlankScoreTemplate(
             title: "T",
@@ -131,6 +169,72 @@ struct WrittenInputTests {
         let read = try #require(displayed(in: writing(planned.pitch, planned.tpc, into: score)))
         #expect(read.tpc == 14) // written C natural — A♭ major leaves C alone
         #expect(read.pitch == 60)
+    }
+
+    /// The bar's own accidental state is read in the WRITTEN space too, not just the key. A written C♮ earlier in
+    /// the bar cancels D major's C♯ for the rest of it, so the next C key means C♮ — and on this staff that is a
+    /// concert B♭, not the concert B♮ the key alone would have planned.
+    @Test func `an accidental earlier in the bar respells the letter on a transposing staff`() throws {
+        var score = clarinetQuarters()
+        // Concert B♭3 — what the staff reads as a plain C♮4.
+        score[quarterSlot(2)] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 58, tpc: 12)]))
+        let earlier = try #require(score.writtenSpelling(of: NoteID(
+            staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0,
+        )))
+        #expect(earlier.pitch == 60) // written C♮4
+        #expect(earlier.tpc == 14)
+
+        let planned = try #require(MeasureAccidentals.plannedConcertPitch(
+            forWrittenLetter: "C", nearestTo: 58, at: quarterSlot(3), in: score,
+        ))
+        #expect(planned.pitch == 58) // concert B♭3 again, not the B♮ the key signature spells
+        #expect(planned.tpc == 12)
+
+        var edited = score
+        edited[quarterSlot(3)] = .chord(Chord(
+            duration: .quarter, notes: [Note(pitch: planned.pitch, tpc: planned.tpc)],
+        ))
+        guard case let .chord(chord) = edited.writtenPitchView()[quarterSlot(3)] else {
+            Issue.record("expected a chord")
+            return
+        }
+        #expect(chord.notes.first?.pitch == 60) // still a written C♮
+        #expect(chord.notes.first?.tpc == 14)
+    }
+
+    // MARK: - The MIDI range is guarded on the side that STORES
+
+    /// `plannedPitch`'s own guard covers the pitch it RETURNS, which on a transposing staff is the written one.
+    /// The concert pitch underneath is a different number and can be out of range while the written pitch is
+    /// not: a bass clarinet's written C♯0 is MIDI 13, and it would have to be stored as concert −1. Reachable by
+    /// holding the octave-down key to the floor of the staff and then typing a letter.
+    @Test func `a letter whose concert pitch would fall below MIDI 0 plans nothing`() throws {
+        let score = bassClarinetQuarters()
+        // The written-space planner is happy — this is exactly the answer the concert-side guard has to catch.
+        let inWrittenSpace = try #require(MeasureAccidentals.plannedPitch(
+            forLetter: "C", nearestTo: 14, at: quarterSlot(2), in: score.writtenPitchView(),
+        ))
+        #expect(inWrittenSpace.pitch == 13)
+
+        #expect(MeasureAccidentals.plannedConcertPitch(
+            forWrittenLetter: "C", nearestTo: 0, at: quarterSlot(2), in: score,
+        ) == nil)
+    }
+
+    /// The same crossing in `SetAccidental`: a written respelling inside the range over a concert pitch that is
+    /// not. The note keeps the pitch and spelling it had rather than being stored below 0.
+    @Test func `an accidental whose concert pitch would fall below MIDI 0 leaves the note where it is`() throws {
+        var score = bassClarinetQuarters()
+        // Concert C(−1) — the floor of the range — which this staff reads as D0.
+        score[quarterSlot(2)] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 0, tpc: 14)]))
+        let noteID = NoteID(
+            staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0,
+        )
+        _ = try SetAccidental(at: noteID, accidental: .flat).apply(to: &score)
+
+        let stored = try #require(score[noteID])
+        #expect(stored.pitch == 0) // written D♭0 would be concert −1
+        #expect(stored.tpc == 14)
     }
 
     // MARK: - The relative operations need no written-space routing
