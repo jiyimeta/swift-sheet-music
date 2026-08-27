@@ -84,4 +84,23 @@ public enum EditIntent: Sendable, Equatable {
     /// range, because a move cannot grow the score. `from == to` resolves to nothing to apply rather than pushing
     /// an undo entry that restores the score to itself.
     case movePart(from: Int, to: Int)
+
+    /// Set the concert key in force from `measureIndex` to the next explicit key change (or the end of the
+    /// score): writes/replaces the `.keySignature` on every non-percussion staff at that measure and
+    /// re-spells accidental glyphs over the affected span, as one undo step.
+    ///
+    /// Resolves to nothing to apply when that key is already the one in force there — restating a key the score
+    /// already declares would push an undo entry that restores the score to itself, the same rule `.movePart`
+    /// applies to a move onto its own index. An out-of-range `measureIndex` is refused as `.targetNotFound` by
+    /// `SetKeySignature.apply`, so one place states the range.
+    case setKeySignature(measureIndex: Int, concertKey: Int)
+
+    /// Remove the explicit key change at `measureIndex`, reverting its span to the previous key. Refused
+    /// with `.cannotRemoveInitialSignature` at measure 0; plans to nothing when no explicit key change exists
+    /// there.
+    ///
+    /// The span that reverts is re-spelled in the same undo step, for the same reason `.setKeySignature` re-spells
+    /// its own: the bars after a removed change are byte-identical and yet every accidental in them is now judged
+    /// against a different signature.
+    case removeKeySignature(measureIndex: Int)
 }

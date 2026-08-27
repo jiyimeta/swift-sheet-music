@@ -73,6 +73,7 @@ struct EditRefusalTests {
             .nothingToApply,
             .cannotDeleteOnlyMeasure,
             .cannotRemoveLastPart,
+            .cannotRemoveInitialSignature,
             .unexpected(description: "boom"),
         ]
     }

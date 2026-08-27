@@ -48,6 +48,11 @@ public struct EditRefusal: Sendable, Hashable {
         /// from `.targetNotFound` on purpose: a host showing "no such part" when the user tried to delete their
         /// only instrument is telling them something untrue.
         case cannotRemoveLastPart
+        /// A score's OPENING key signature is the score's key, not a change to it; `RemoveKeySignature` refuses at
+        /// measure 0. Distinct from `.targetNotFound` for the same reason `.cannotRemoveLastPart` is: there IS a
+        /// signature there, and a host saying otherwise would be telling the user something untrue. The way to
+        /// change what bar 1 declares is `.setKeySignature`, which has no "remove" to refuse.
+        case cannotRemoveInitialSignature
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -94,6 +99,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.cannotDeleteOnlyMeasure"
         case .cannotRemoveLastPart:
             "edit.cannotRemoveLastPart"
+        case .cannotRemoveInitialSignature:
+            "edit.cannotRemoveInitialSignature"
         case .unexpected:
             "edit.unexpected"
         }
@@ -142,6 +149,8 @@ public struct EditRefusal: Sendable, Hashable {
             "a score must keep at least one measure"
         case .cannotRemoveLastPart:
             "a score must keep at least one part"
+        case .cannotRemoveInitialSignature:
+            "a score's opening signature cannot be removed"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }

@@ -147,6 +147,13 @@ struct EditIntentCodecTests {
             // round trip can catch a `from`/`to` transposition, which would silently move the part the wrong way.
             .removePart(at: 2),
             .movePart(from: 0, to: 3),
+            // Appended for M3 signature changes — indices 19…20. A flat key and a sharp one, because `concertKey`
+            // is the first field in this codec whose real range is signed: a plain (non-zig-zag) varint would
+            // encode -3 as ten bytes and still round-trip, so the pair is here to keep the layout doc honest
+            // rather than to catch a decode.
+            .setKeySignature(measureIndex: 2, concertKey: -3),
+            .setKeySignature(measureIndex: 0, concertKey: 7),
+            .removeKeySignature(measureIndex: 5),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -187,6 +194,11 @@ struct EditIntentCodecTests {
         )[1] == 16)
         #expect(EditIntentCodec.encode(.removePart(at: 0))[1] == 17)
         #expect(EditIntentCodec.encode(.movePart(from: 0, to: 1))[1] == 18)
+        // Appended for M3 signature changes. `.removeKeySignature`'s payload is byte-identical to
+        // `.insertMeasure`'s, so — exactly as with `.writeRest` above — the discriminator is the only thing
+        // standing between "drop this key change" and "insert a bar here".
+        #expect(EditIntentCodec.encode(.setKeySignature(measureIndex: 0, concertKey: 0))[1] == 19)
+        #expect(EditIntentCodec.encode(.removeKeySignature(measureIndex: 0))[1] == 20)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field

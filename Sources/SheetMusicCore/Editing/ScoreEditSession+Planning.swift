@@ -86,20 +86,12 @@ extension ScoreEditSession {
             return try writeNoteCommand(at: location, pitch: pitch, tpc: tpc, duration: duration, in: score)
         case let .writeRest(location, duration):
             return writeRestCommand(at: location, duration: duration, in: score)
-        case let .insertMeasure(index):
-            return InsertMeasure(measureIndex: index)
-        case let .deleteMeasure(index):
-            return DeleteMeasure(measureIndex: index)
-        case let .addPart(plan, index):
-            return AddPart(plan: plan, at: index)
-        case let .removePart(index):
-            return RemovePart(partIndex: index)
-        case let .movePart(from, to):
-            // A move onto its own index is a no-op, and planning it into a command would push an undo entry that
-            // restores the score to itself — a dead ⌘Z the user has to press twice. `nil` reports it the way an
-            // empty composite is reported, as `.nothingToApply`. Out-of-range indices are deliberately NOT caught
-            // here: `MovePart.apply` states the range once, so the answer is the same however it is reached.
-            return from == to ? nil : MovePart(from: from, to: to)
+        case .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart,
+             .setKeySignature, .removeKeySignature:
+            // The intents that change the score's SHAPE rather than its notes — measure columns, parts, and what a
+            // bar declares. Factored into `structuralCommand` for the same reason the six note edits below are
+            // factored into `directNoteEditCommand`: to keep this switch under SwiftLint's body budget.
+            return try structuralCommand(for: intent, in: score)
         case let .setNotePitch(location, pitch, tpc, accidental):
             return retuneCommand(at: location, pitch: pitch, tpc: tpc, accidental: accidental, in: score)
         case .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet, .removeTuplet:
@@ -295,6 +287,39 @@ extension ScoreEditSession {
             commands: [SetChordDuration(at: location, duration: duration), repitch],
             location: location,
         )
+    }
+
+    /// The seven intents that change the score's shape: the measure columns, the parts, and what a bar declares.
+    ///
+    /// Reached only via `command(for:in:depth:)`'s combined case above, so — exactly like `directNoteEditCommand`
+    /// — the `if case` chain below never needs to handle the intents that function keeps for itself.
+    private static func structuralCommand(for intent: EditIntent, in score: Score) throws -> (any EditCommand)? {
+        if case let .insertMeasure(index) = intent {
+            return InsertMeasure(measureIndex: index)
+        }
+        if case let .deleteMeasure(index) = intent {
+            return DeleteMeasure(measureIndex: index)
+        }
+        if case let .addPart(plan, index) = intent {
+            return AddPart(plan: plan, at: index)
+        }
+        if case let .removePart(index) = intent {
+            return RemovePart(partIndex: index)
+        }
+        if case let .movePart(from, to) = intent {
+            // A move onto its own index is a no-op, and planning it into a command would push an undo entry that
+            // restores the score to itself — a dead ⌘Z the user has to press twice. `nil` reports it the way an
+            // empty composite is reported, as `.nothingToApply`. Out-of-range indices are deliberately NOT caught
+            // here: `MovePart.apply` states the range once, so the answer is the same however it is reached.
+            return from == to ? nil : MovePart(from: from, to: to)
+        }
+        if case let .setKeySignature(measureIndex, concertKey) = intent {
+            return try setKeySignatureCommand(at: measureIndex, concertKey: concertKey, in: score)
+        }
+        if case let .removeKeySignature(measureIndex) = intent {
+            return try removeKeySignatureCommand(at: measureIndex, in: score)
+        }
+        return nil
     }
 
     /// Whether `slot` sits inside a tuplet in `score`.

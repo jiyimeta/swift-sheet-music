@@ -51,10 +51,12 @@ import Wirelet
 /// 16 = addPart(AddPartIntentWire)
 /// 17 = removePart(PartIndexIntentWire)
 /// 18 = movePart(MovePartIntentWire)
+/// 19 = setKeySignature(SetKeySignatureIntentWire)
+/// 20 = removeKeySignature(RemoveKeySignatureIntentWire)
 /// ```
 ///
-/// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation and 16…18 for M2 ensemble
-/// creation; 0…4 predate them all and must keep their indices and byte layout.
+/// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
+/// creation and 19…20 for M3 signature changes; 0…4 predate them all and must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -238,6 +240,17 @@ import Wirelet
 /// tag 1: fromIndex  i32, zig-zag varint
 /// tag 2: toIndex    i32, zig-zag varint
 /// ```
+///
+/// `SetKeySignatureIntentWire` (`setKeySignature`'s payload):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// tag 2: concertKey    i32, zig-zag varint — -7…+7, sharps positive
+/// ```
+///
+/// `RemoveKeySignatureIntentWire` (`removeKeySignature`'s payload):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -370,6 +383,10 @@ public enum EditIntentWire {
     case removePart(PartIndexIntentWire)
     /// Appended for M2 ensemble creation — index 18.
     case movePart(MovePartIntentWire)
+    /// Appended for M3 signature changes — index 19. Never renumber anything above it.
+    case setKeySignature(SetKeySignatureIntentWire)
+    /// Appended for M3 signature changes — index 20.
+    case removeKeySignature(RemoveKeySignatureIntentWire)
 
     public init(from intent: EditIntent) {
         switch intent {
@@ -422,6 +439,12 @@ public enum EditIntentWire {
             self = .removePart(PartIndexIntentWire(partIndex: index))
         case let .movePart(from, to):
             self = .movePart(MovePartIntentWire(fromIndex: from, toIndex: to))
+        case let .setKeySignature(measureIndex, concertKey):
+            self = .setKeySignature(
+                SetKeySignatureIntentWire(measureIndex: measureIndex, concertKey: concertKey),
+            )
+        case let .removeKeySignature(measureIndex):
+            self = .removeKeySignature(RemoveKeySignatureIntentWire(measureIndex: measureIndex))
         }
     }
 
@@ -493,6 +516,11 @@ public enum EditIntentWire {
         case let .movePart(wire):
             let decoded = wire.decoded()
             return .movePart(from: decoded.fromIndex, to: decoded.toIndex)
+        case let .setKeySignature(wire):
+            let decoded = wire.decoded()
+            return .setKeySignature(measureIndex: decoded.measureIndex, concertKey: decoded.concertKey)
+        case let .removeKeySignature(wire):
+            return .removeKeySignature(measureIndex: wire.decoded())
         }
     }
 }
@@ -882,5 +910,40 @@ public struct MovePartIntentWire {
 
     public func decoded() -> (fromIndex: Int, toIndex: Int) {
         (fromIndex: Int(fromIndex), toIndex: Int(toIndex))
+    }
+}
+
+/// `setKeySignature`'s payload — which bar declares the key, and which key it declares.
+@WireFormat
+public struct SetKeySignatureIntentWire {
+    public var measureIndex: Int32
+    /// `KeySignature.concertKey`: -7 (C♭) … +7 (C♯), sharps positive. Zig-zag varint, so the flat keys cost the
+    /// same one byte the sharp ones do.
+    public var concertKey: Int32
+
+    public init(measureIndex: Int, concertKey: Int) {
+        self.measureIndex = Int32(measureIndex)
+        self.concertKey = Int32(concertKey)
+    }
+
+    public func decoded() -> (measureIndex: Int, concertKey: Int) {
+        (measureIndex: Int(measureIndex), concertKey: Int(concertKey))
+    }
+}
+
+/// `removeKeySignature`'s payload. Byte-identical to `MeasureIndexIntentWire` and deliberately its own struct: the
+/// three measure-index intents that share that one are all structural (insert / delete a whole column), while this
+/// one addresses what a bar *declares*, and the two families are free to diverge — a courtesy or a scope flag would
+/// land here and nowhere near `insertMeasure`.
+@WireFormat
+public struct RemoveKeySignatureIntentWire {
+    public var measureIndex: Int32
+
+    public init(measureIndex: Int) {
+        self.measureIndex = Int32(measureIndex)
+    }
+
+    public func decoded() -> Int {
+        Int(measureIndex)
     }
 }
