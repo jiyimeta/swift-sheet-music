@@ -108,25 +108,23 @@ struct DrawProgramFlatTests {
         }
     }
 
-    #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
-        @Test("computeWithPages agrees with computeWithDocument")
-        func computeWithPagesAgrees() {
-            // `LayoutEngine.layout` asserts that the CoreText provider is installed
-            // on a CoreText-capable platform, and this is the one test here that
-            // engraves rather than round-tripping a hand-built page.
-            _ = TestSupport.installApple
-            let score = Score(
-                division: 480,
-                metaTags: ["workTitle": "flat"],
-                titleFrame: ScoreFrame(heightSp: 10, texts: [FrameText(style: .title, text: "flat")]),
-            )
-            let viaPages = LayoutBridge.computeWithPages(
-                score: score, pageWidthMM: 210, pageHeightMM: 297, options: .verticalDefault,
-            )
-            let viaDocument = LayoutBridge.computeWithDocument(
-                score: score, pageWidthMM: 210, pageHeightMM: 297, options: .verticalDefault,
-            )
-            #expect(DrawProgramCodec.encode(pages: viaPages.pages) == viaDocument.encoded)
-        }
-    #endif
+    @Test("computeWithPages agrees with computeWithDocument")
+    func computeWithPagesAgrees() {
+        // `LayoutEngine.layout` asserts that the CoreText provider is installed
+        // on a CoreText-capable platform, and this is the one test here that
+        // engraves rather than round-tripping a hand-built page.
+        _ = TestSupport.installFontMetrics
+        let score = Score(
+            division: 480,
+            metaTags: ["workTitle": "flat"],
+            titleFrame: ScoreFrame(heightSp: 10, texts: [FrameText(style: .title, text: "flat")]),
+        )
+        let viaPages = LayoutBridge.computeWithPages(
+            score: score, pageWidthMM: 210, pageHeightMM: 297, options: .verticalDefault,
+        )
+        let viaDocument = LayoutBridge.computeWithDocument(
+            score: score, pageWidthMM: 210, pageHeightMM: 297, options: .verticalDefault,
+        )
+        #expect(DrawProgramCodec.encode(pages: viaPages.pages) == viaDocument.encoded)
+    }
 }
