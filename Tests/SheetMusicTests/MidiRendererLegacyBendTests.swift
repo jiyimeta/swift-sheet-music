@@ -134,6 +134,46 @@ struct MidiRendererLegacyBendTests {
         #expect(reset.tick >= 959)
     }
 
+    /// Under an 8va the sounding pitch is transposed before the note
+    /// loop runs, so the span map — keyed off the UN-shifted chord — has
+    /// to be re-keyed with it. Getting this wrong loses the curve
+    /// silently: the lookup misses and the note degrades to plain.
+    ///
+    /// Built with `OttavaMidiTests`' scaffolding (the covered chord is
+    /// the one after the `begin` spanner).
+    @Test func ottavaKeepsTheCurveAndShiftsTheKey() throws {
+        let begin = Spanner(
+            kind: .ottava, rawType: "Ottava",
+            nextMeasuresOffset: 0,
+            nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
+            ottava: .init(subtype: .eightVA),
+        )
+        let end = Spanner(kind: .ottava, rawType: "Ottava", visible: false)
+        let measure = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .spanner(begin),
+            .chord(Chord(duration: .quarter, notes: [bendNote([
+                .init(time: 0, pitch: 0), .init(time: 15, pitch: 100),
+                .init(time: 60, pitch: 100),
+            ])])),
+            .spanner(end),
+        ])])
+        let score = Score(division: 480, parts: [Part(
+            id: "1",
+            instrument: Instrument(id: "test", articulations: [InstrumentArticulation()]),
+            staves: [Staff(measures: [measure])],
+        )])
+        let file = try MidiRenderer.render(score: score)
+        let track = try #require(file.tracks.last)
+        // The bent note rides the octave like any other pitch…
+        #expect(Probe.noteOns(in: track).map(\.pitch) == [60, 74])
+        // …and its curve still fires, up to the same +2 semitones.
+        let wheel = Probe.bends(in: track)
+        #expect(!wheel.isEmpty)
+        #expect(wheel.map(\.value).max() == Probe.wheel(semitones: 2))
+        #expect(wheel.last?.value == MidiEvent.pitchBendCenter)
+    }
+
     /// A tie whose partner the walk cannot reach (no tied-back chord
     /// follows): the bend is refused and the note plays plain.
     @Test func unresolvableTiePlaysPlain() throws {
