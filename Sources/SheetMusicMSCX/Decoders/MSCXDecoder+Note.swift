@@ -53,6 +53,9 @@ extension Note {
             string: (node.first("string")?.text).flatMap(Int.init),
         )
         note.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        if let bendNode = node.first("Bend") {
+            note.legacyBend = decodeLegacyBend(bendNode)
+        }
         return note
     }
 
@@ -76,9 +79,10 @@ extension Note {
     /// sides sit on the same note, which is why `guitarBendBack` is read
     /// independently of `guitarBend` rather than as an else-branch.
     ///
-    /// MS2 / MS3 wrote two of these differently — ties as a bare `<Tie>` /
-    /// `<endSpanner>` pair, guitar bends as a `<Bend>` curve — so the legacy
-    /// forms are resolved here too, the second only as a diagnostic.
+    /// MS2 / MS3 wrote ties differently — a bare `<Tie>` / `<endSpanner>`
+    /// pair — so that legacy form is resolved here too. The other MS3 legacy
+    /// form, the `<Bend>` pitch curve, is not a connector at all: it lives on
+    /// one note, so `Note.decode` reads it straight into `legacyBend`.
     private static func decodeConnectors(_ node: XMLTreeNode) -> Connectors {
         var result = Connectors()
         for spanner in node.all("Spanner") {
@@ -123,7 +127,6 @@ extension Note {
         // element), so any note-level `<endSpanner>` is a tie end.
         if node.children.contains(where: { $0.name == "Tie" }) { result.tieForward = 1 }
         if node.children.contains(where: { $0.name == "endSpanner" }) { result.tieBack = 1 }
-        warnIfLegacyBend(node)
         return result
     }
 

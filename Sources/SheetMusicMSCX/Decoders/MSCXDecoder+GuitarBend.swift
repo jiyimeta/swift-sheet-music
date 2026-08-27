@@ -73,19 +73,46 @@ extension Note {
         )
     }
 
-    /// Announce a legacy MuseScore 3 `<Bend>` child.
+    /// Decode a legacy MuseScore 3 `<Bend>` child of `<Note>` — the
+    /// pre-4.2 pitch-curve encoding, which MuseScore 3 and 4 write
+    /// identically (`TWrite::write(const Bend*, …)`,
+    /// `rw/write/twrite.cpp:825`; 3.6.2 `Bend::write`,
+    /// `libmscore/bend.cpp:285`).
     ///
-    /// MuseScore 3 encoded guitar bends as a `<Bend>` element holding a
-    /// `<point time= pitch=>` curve, entirely unlike the 4.x spanner pair, and
-    /// MuseScore 4 converts it on import (`TRead::read` for `Note`,
-    /// `rw/read400/tread.cpp:3143`). This decoder models only the 4.x form, so
-    /// a `<Bend>` would otherwise vanish without a trace.
-    static func warnIfLegacyBend(_ node: XMLTreeNode) {
-        guard node.children.contains(where: { $0.name == "Bend" }) else { return }
-        mscxDecoderWarn(
-            code: "mscx.bend.legacyUnsupported",
-            message: "Legacy MuseScore 3 <Bend> is not supported yet — element skipped",
-            location: "Note/Bend",
+    /// Reads the `<point time= pitch= vibrato=>` list, `<play>`, and the
+    /// four styled properties (`<lineWidth>`, `<fontFace>`, `<fontSize>`,
+    /// `<fontStyle>`) verbatim for byte round-trip. Other item
+    /// properties (offset, …) are ignored, matching `Note.decode`'s
+    /// handling of unknown children. A point missing `time` or `pitch`
+    /// drops the whole element with `mscx.bend.malformedPoint` — half a
+    /// curve would lay out and play as a different bend.
+    /// C++: `TRead::read(Bend*, …)` (`rw/read400/tread.cpp:1912`).
+    static func decodeLegacyBend(_ node: XMLTreeNode) -> LegacyBend? {
+        var points: [LegacyBend.Point] = []
+        for pointNode in node.children where pointNode.name == "point" {
+            guard let time = pointNode.attributes["time"].flatMap(Int.init),
+                  let pitch = pointNode.attributes["pitch"].flatMap(Int.init)
+            else {
+                mscxDecoderWarn(
+                    code: "mscx.bend.malformedPoint",
+                    message: "<Bend> point missing time/pitch — bend dropped",
+                    location: "Note/Bend",
+                )
+                return nil
+            }
+            points.append(LegacyBend.Point(
+                time: time,
+                pitch: pitch,
+                vibrato: pointNode.attributes["vibrato"].flatMap(Int.init) ?? 0,
+            ))
+        }
+        return LegacyBend(
+            points: points,
+            play: node.first("play")?.text != "0",
+            lineWidth: (node.first("lineWidth")?.text).flatMap(Double.init),
+            fontFace: node.first("fontFace")?.text,
+            fontSize: (node.first("fontSize")?.text).flatMap(Double.init),
+            fontStyle: (node.first("fontStyle")?.text).flatMap(Int.init),
         )
     }
 }

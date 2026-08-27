@@ -271,8 +271,11 @@ struct GuitarBendDecodeTests {
         #expect(decoded.diagnostics.map(\.code) == ["mscx.guitarBend.divePropertiesDropped"])
     }
 
-    @Test("a legacy MuseScore 3 <Bend> child warns and is skipped")
-    func legacyBendWarns() throws {
+    /// A legacy MuseScore 3 `<Bend>` is a curve on one note, not a spanner
+    /// pair, so it must land in `legacyBend` and leave both guitar-bend
+    /// fields alone — see `LegacyBendDecodeTests` for the curve itself.
+    @Test("a legacy MuseScore 3 <Bend> child is not a guitar bend")
+    func legacyBendIsNotAGuitarBend() throws {
         let decoded = try decodeNote("""
         <Note>
           <pitch>60</pitch>
@@ -285,7 +288,8 @@ struct GuitarBendDecodeTests {
         """)
         #expect(decoded.note.guitarBend == nil)
         #expect(!decoded.note.guitarBendBack)
-        #expect(decoded.diagnostics.map(\.code) == ["mscx.bend.legacyUnsupported"])
+        #expect(decoded.note.legacyBend?.points.count == 2)
+        #expect(decoded.diagnostics.isEmpty)
     }
 
     // MARK: - Helpers
