@@ -9,8 +9,13 @@ import SheetMusicFoundation
 /// a hairpin that stops two bars early, or a volta whose repeat ending covers the wrong bars and changes what
 /// playback actually plays.
 ///
-/// So the endpoint is re-derived from the one thing a re-bar preserves: the ABSOLUTE TICK it falls on. Resolve
-/// the old pair to a tick, find the bar the new barring puts that tick in, and read both halves back off it.
+/// So the endpoint is re-derived from the MOMENT it falls on. Resolve the old pair to an absolute tick, carry
+/// that tick across into the new barring, find the bar holding it, and read both halves back off that bar.
+///
+/// The carry across is not free. A re-bar preserves the region's tick stream but not always its LENGTH: the
+/// planner fills its last column to nominal length, so a region whose ticks do not divide by the new bar length
+/// comes out longer and pushes everything after it later by the difference. `BarGeometry.translated(_:)` is that
+/// shift, and it is why the derivation cannot look an old tick up in the new table directly.
 ///
 /// ## One derivation, two anchor classes
 ///
@@ -42,26 +47,39 @@ extension TimeSignatureRegion {
         let division: Int
         let oldStarts: [Int]
         let newStarts: [Int]
+        /// The absolute tick the region ENDS on in the old barring: everything at or past it is later in the new
+        /// score by `paddingDelta`.
+        let oldRegionEnd: Int
+        /// How much absolute time the region gained. Usually zero — but `RebarPlanner` fills its last column to
+        /// nominal length (`columnCount = ceil(totalTicks / newTicks)` plus rest padding), so a region whose ticks
+        /// do not divide by the new bar length comes out LONGER than it went in, and everything after it moves
+        /// later by exactly that. A tick read out of the old barring is therefore not yet a tick in the new one.
+        let paddingDelta: Int
 
         /// The bars after the region keep their durations: the region stops AT the next bar that declares its own
-        /// meter, so nothing past it inherits anything new.
+        /// meter, so nothing past it inherits anything new. They do move in absolute time, which is `paddingDelta`.
         init(score: Score, region: Range<Int>, columns: [MeasureSlice], signature: TimeSignature) {
             division = score.division
             let old = score.effectiveMeasureDurations()
             let nominal = Fraction(numerator: signature.numerator, denominator: signature.denominator)
+            let columnDurations = columns.map { $0.staffMeasures.first?.first?.actualLength ?? nominal }
             var new = Array(old.prefix(region.lowerBound))
-            new.append(contentsOf: columns.map {
-                $0.staffMeasures.first?.first?.actualLength ?? nominal
-            })
+            new.append(contentsOf: columnDurations)
             if region.upperBound < old.count {
                 new.append(contentsOf: old[region.upperBound...])
             }
             oldStarts = Self.startTicks(old, division: division)
             newStarts = Self.startTicks(new, division: division)
+            let oldRegionTicks = Self.ticks(old[region.clamped(to: old.indices)], division: division)
+            oldRegionEnd = oldStarts.indices.contains(region.lowerBound)
+                ? oldStarts[region.lowerBound] + oldRegionTicks
+                : Int.max
+            paddingDelta = Self.ticks(columnDurations[...], division: division) - oldRegionTicks
         }
 
         /// The absolute tick a spanner anchored in `anchorBar` and declaring these offsets ends on — the start of
-        /// bar `anchorBar + offset`, plus the fraction into it.
+        /// bar `anchorBar + offset`, plus the fraction into it. Measured in the OLD barring; run it through
+        /// `translated(_:)` before looking it up in `newStarts`.
         ///
         /// `nil` when that bar is past the end of the score. Such an endpoint is already out of range and every
         /// consumer clamps it (`HairpinRamps` with `min(measures.count - 1, …)`, `LayoutEngine.endAnchor` with a
@@ -70,6 +88,15 @@ extension TimeSignatureRegion {
             let endBar = anchorBar + offset
             guard oldStarts.indices.contains(endBar) else { return nil }
             return oldStarts[endBar] + (fraction?.ticks(division: division) ?? 0)
+        }
+
+        /// An old-barring tick as the same MUSICAL moment in the new one.
+        ///
+        /// The identity before and inside the region — those bars either did not move or were re-cut in place from
+        /// the same tick stream. At or past the region's old end it is a shift by `paddingDelta`, which is what
+        /// keeps a post-region downbeat landing on its own downbeat rather than wherever the un-padded tick fell.
+        func translated(_ tick: Int) -> Int {
+            tick >= oldRegionEnd ? tick + paddingDelta : tick
         }
 
         /// The bar of the NEW barring holding `tick` — the last one starting at or before it.
@@ -96,16 +123,26 @@ extension TimeSignatureRegion {
             }
             return starts
         }
+
+        private static func ticks(_ durations: ArraySlice<Fraction>, division: Int) -> Int {
+            durations.reduce(0) { $0 + $1.ticks(division: division) }
+        }
     }
 
     /// The `(measures, fractions)` pair naming the same absolute moment under the new barring, or `nil` when
     /// there is nothing to restate.
     ///
-    /// `nil` for a spanner declaring NEITHER offset. `MSCXEncoder` writes `<measures>` only when it is non-zero
-    /// and `<fractions>` only when it is present, so "0 and absent" is not an endpoint at all — it is a spanner
-    /// that ends inside its own bar, which stays true however that bar is re-cut. Deriving it from a tick would
+    /// `nil` for a spanner declaring NO endpoint — offset 0 and a fraction that is absent or worth no ticks.
+    /// `MSCXEncoder` writes `<measures>` only when it is non-zero, so that pair says nothing more than "ends
+    /// inside its own bar", which stays true however that bar is re-cut. It is not always spelled as `nil`
+    /// either: `MSCXDecoder+Spanner` builds a `Fraction` from any `<fractions>` node present, so a written
+    /// `0/1` arrives non-nil and has to be recognized here by its VALUE. Deriving such a pair from a tick would
     /// resolve it to the start of the anchor's OLD bar and hand back a backwards offset the moment the anchor
     /// sits past a new barline.
+    ///
+    /// `nil` too for a derivation that would point BACKWARDS from the anchor. That can only come from source
+    /// data whose endpoint already sat before its own anchor bar, and every consumer clamps a negative offset
+    /// (`max(0, nextMeasuresOffset)`); writing one would commit the clamp instead of leaving the oddity alone.
     ///
     /// `nil` too when the derivation lands on the values already there, so an untouched spanner is left byte-
     /// identical rather than rewritten to itself.
@@ -113,14 +150,19 @@ extension TimeSignatureRegion {
         _ endpoint: (offset: Int, fraction: Fraction?),
         oldAnchor: Int, newAnchor: Int, geometry: BarGeometry,
     ) -> (offset: Int, fraction: Fraction?)? {
-        guard endpoint.offset != 0 || endpoint.fraction != nil else { return nil }
-        guard let tick = geometry.endTick(
+        let declaredTicks = endpoint.fraction?.ticks(division: geometry.division) ?? 0
+        guard endpoint.offset != 0 || declaredTicks != 0 else { return nil }
+        guard let old = geometry.endTick(
             anchorBar: oldAnchor, offset: endpoint.offset, fraction: endpoint.fraction,
         ) else { return nil }
+        // The end tick comes out of the OLD barring, and a padded re-bar moves everything after the region
+        // later in absolute time — so it has to be translated before it can be looked up in the new one.
+        let tick = geometry.translated(old)
         let bar = geometry.newBar(containing: tick)
         let remainder = tick - geometry.newStarts[bar]
         let fraction = remainder == 0 ? nil : geometry.fraction(ofTicks: remainder)
         let offset = bar - newAnchor
+        guard offset >= 0 else { return nil }
         guard offset != endpoint.offset || fraction != endpoint.fraction else { return nil }
         return (offset, fraction)
     }

@@ -32,6 +32,26 @@ struct SetTimeSignatureSpannerTests {
         return score
     }
 
+    /// `uniform44()`'s bars 0–1, then an explicit 3/4 at bar 2 that bars 2–3 fill with a measure rest.
+    ///
+    /// The point of this one is that a re-bar of bar 1 alone cannot divide evenly: 1920 ticks at 1440 a bar is two
+    /// columns, so the region comes out 960 ticks LONGER and bar 2 onward moves later by that much.
+    private func changeAtBarTwo() -> Score {
+        var score = Score.blank(BlankScoreTemplate(
+            title: "T",
+            parts: [.init(instrumentID: "piano", longName: "Piano", staves: [.init(clefType: "G")])],
+            concertKey: 0, measureCount: 4,
+        ))
+        for measure in 0 ..< 2 {
+            let slot = measure == 0 ? 2 : 0
+            score.parts[0].staves[0].measures[measure].voices[0].elements[slot] =
+                .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+        }
+        score.parts[0].staves[0].measures[2].voices[0].elements
+            .insert(.timeSignature(TimeSignature(numerator: 3, denominator: 4)), at: 0)
+        return score
+    }
+
     private static func hairpin(measures: Int, fractions: Fraction? = nil) -> VoiceElement {
         .spanner(Spanner(
             kind: .hairpin, rawType: "HairPin",
@@ -178,6 +198,64 @@ struct SetTimeSignatureSpannerTests {
         #expect(Self.spanner(session.score, measure: 0)?.nextFractionsOffset == nil)
     }
 
+    // MARK: - Endpoints past a region that gained length
+
+    /// The case a same-tick lookup gets wrong. `RebarPlanner` fills its last column to nominal length, so a region
+    /// whose ticks do not divide by the new bar length comes out LONGER than it went in and pushes every bar after
+    /// it later. An endpoint on the far side of that region therefore does NOT keep its old absolute tick — it
+    /// keeps its BAR, which has moved. Looking the un-shifted tick up in the new table lands mid-bar, one bar
+    /// early.
+    ///
+    /// Both fixtures here re-bar bar 1 alone from 4/4 to 3/4: 1920 ticks becomes two 1440-tick columns, 960 ticks
+    /// of padding, and the explicit 3/4 at bar 2 is what keeps the region that short.
+    @Test("an outside-anchored endpoint past a padded region follows the bar it named, not its old tick")
+    func outsideAnchoredEndpointPastPaddedRegionFollowsItsBar() {
+        var original = changeAtBarTwo()
+        original.parts[0].staves[0].measures[0].voices[0].elements.append(Self.hairpin(measures: 2))
+        let oldEndBar = 2
+        let oldMeasureCount = Self.measureCount(original)
+
+        let session = ScoreEditSession(score: original)
+        #expect(session.apply(.setTimeSignature(measureIndex: 1, numerator: 3, denominator: 4)))
+        // Bar 1 became two bars, so every bar from 2 on is one further along: the old bar 2 is now bar 3.
+        let grew = Self.measureCount(session.score) - oldMeasureCount
+        #expect(grew == 1)
+        guard let restated = Self.spanner(session.score, measure: 0) else {
+            Issue.record("expected the hairpin still in bar 0"); return
+        }
+        #expect(restated.nextMeasuresOffset == oldEndBar + grew)
+        // Still a downbeat: the bar it names moved, it did not slide into the middle of one.
+        #expect(restated.nextFractionsOffset == nil)
+        #expect(session.undo())
+        #expect(session.score == original)
+        #expect(Self.spanner(session.score, measure: 0)?.nextMeasuresOffset == 2)
+    }
+
+    /// The same defect reached through the inside-anchored path, which shares the one derivation: the anchor is in
+    /// the region being padded and the endpoint is past it, so both ends move and only the bar identity survives.
+    @Test("an inside-anchored endpoint past a padded region follows the bar it named")
+    func insideAnchoredEndpointPastPaddedRegionFollowsItsBar() {
+        var original = changeAtBarTwo()
+        // At the head of bar 1 — the bar the re-bar splits in two — reaching the downbeat of bar 2.
+        original.parts[0].staves[0].measures[1].voices[0].elements.insert(Self.hairpin(measures: 1), at: 0)
+        let oldEndBar = 2
+        let oldMeasureCount = Self.measureCount(original)
+
+        let session = ScoreEditSession(score: original)
+        #expect(session.apply(.setTimeSignature(measureIndex: 1, numerator: 3, denominator: 4)))
+        let grew = Self.measureCount(session.score) - oldMeasureCount
+        #expect(grew == 1)
+        guard let restated = Self.spanner(session.score, measure: 1) else {
+            Issue.record("expected the hairpin at the head of the new bar 1"); return
+        }
+        // Anchored in bar 1 still, and the old bar 2 is now bar 3.
+        #expect(1 + restated.nextMeasuresOffset == oldEndBar + grew)
+        #expect(restated.nextFractionsOffset == nil)
+        #expect(session.undo())
+        #expect(session.score == original)
+        #expect(Self.spanner(session.score, measure: 1)?.nextMeasuresOffset == 1)
+    }
+
     // MARK: - Left alone
 
     /// A spanner declaring neither offset carries no endpoint information at all — `MSCXEncoder` writes
@@ -199,6 +277,29 @@ struct SetTimeSignatureSpannerTests {
         #expect(carried.count == 1)
         #expect(carried.first?.nextMeasuresOffset == 0)
         #expect(carried.first?.nextFractionsOffset == nil)
+        #expect(session.undo())
+        #expect(session.score == original)
+    }
+
+    /// "No endpoint" is not always spelled as an absent fraction. `MSCXDecoder+Spanner` builds a `Fraction` from
+    /// whatever `<fractions>` node it finds, so a file writing `0/1` decodes to a non-nil fraction worth no ticks
+    /// — the same nothing, in a spelling a `!= nil` test waves through. Here the anchor is on a bar head, so the
+    /// derivation would come back with a perfectly plausible offset 0 and rewrite the element to say `nil`;
+    /// elsewhere in the bar the very same input yields a negative offset.
+    @Test("a zero-valued fractions offset counts as no endpoint, like an absent one")
+    func spannerWithZeroFractionIsLeftAlone() {
+        var original = uniform44()
+        original.parts[0].staves[0].measures[1].voices[0].elements.insert(
+            Self.hairpin(measures: 0, fractions: Fraction(numerator: 0, denominator: 1)), at: 0,
+        )
+
+        let session = ScoreEditSession(score: original)
+        #expect(session.apply(.setTimeSignature(measureIndex: 1, numerator: 2, denominator: 4)))
+        guard let carried = Self.spanner(session.score, measure: 1) else {
+            Issue.record("expected the hairpin at the head of the new bar 1"); return
+        }
+        #expect(carried.nextMeasuresOffset == 0)
+        #expect(carried.nextFractionsOffset == Fraction(numerator: 0, denominator: 1))
         #expect(session.undo())
         #expect(session.score == original)
     }
