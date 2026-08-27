@@ -24,9 +24,12 @@ extension LayoutBridge {
     ///
     /// * **Lines and curves** become ONE running path stroked once with
     ///   the bend pen (`Sid::bendLineWidth`, `tdraw.cpp:951`). The
-    ///   geometry emits the legs contiguously, so a `moveTo` goes in only
-    ///   where a piece does not start where the previous one ended —
-    ///   otherwise a phantom connector would be stroked across the staff.
+    ///   geometry emits the legs contiguously, so in practice that is a
+    ///   single `moveTo` and a single `stroke`. A piece that does NOT
+    ///   start where the previous one ended has to be stroked off first:
+    ///   the Compose painter resets the open path on every `moveTo`
+    ///   (`ScoreCanvas.kt`), so a second subpath would silently discard
+    ///   the legs before it — where Apple's `CGPath` would keep them.
     ///   No cap/join opcode exists in `DrawCommand`; C++ uses round for
     ///   both, Compose defaults to butt/miter. At 0.15 sp the difference
     ///   is under a tenth of a point.
@@ -63,7 +66,9 @@ extension LayoutBridge {
         }
     }
 
-    /// Every `.line` / `.curve` piece as one path plus a single stroke.
+    /// Every `.line` / `.curve` piece as one running path — one stroke
+    /// per contiguous run, which for every shape the geometry actually
+    /// produces means exactly one.
     private static func encodeLegacyBendOutline(
         shape: LegacyBendShape,
         spPt: Double,
@@ -74,6 +79,15 @@ extension LayoutBridge {
 
         func moveIfNeeded(to start: CGPoint) {
             if current != start {
+                // The Compose painter RESETS the open path on a `moveTo`
+                // (`ScoreCanvas.kt`: `if (strokeStarted) path.reset()`),
+                // so a second subpath would discard the first instead of
+                // joining it. Flush what is drawn before breaking away.
+                if current != nil {
+                    out.append(.stroke(
+                        width: legacyBendLineWidthMM(spPt: spPt),
+                    ))
+                }
                 out.append(.moveTo(
                     x: Double(start.x) * ptToMMScale,
                     y: Double(start.y) * ptToMMScale,

@@ -111,10 +111,14 @@
         }
 
         /// The geometry emits legs contiguously, so the running path must
-        /// NOT restate a `moveTo` between them — and must restate one when
-        /// a piece does start somewhere else, or a phantom connector gets
-        /// stroked across the staff.
-        @Test("one moveTo per discontinuity, none between contiguous legs")
+        /// NOT restate a `moveTo` between them — that would draw a
+        /// phantom connector on Apple and, worse, throw the leg away on
+        /// Android. A piece that genuinely starts elsewhere does need one,
+        /// and it has to be preceded by its own `stroke`: the Compose
+        /// painter resets the open path on every `moveTo`
+        /// (`ScoreCanvas.kt`: `if (strokeStarted) path.reset()`), so an
+        /// unflushed first subpath would vanish instead of being drawn.
+        @Test("a discontinuity strokes the open subpath before moving")
         func outlineIsOneRunningPath() throws {
             let out = Self.commands([
                 .line(from: CGPoint(x: 0, y: 0), to: CGPoint(x: 4, y: 0)),
@@ -127,7 +131,7 @@
                 // Detached: starts nowhere near the previous end point.
                 .line(from: CGPoint(x: 20, y: -8), to: CGPoint(x: 24, y: -8)),
             ])
-            try #require(out.count == 6)
+            try #require(out.count == 7)
             #expect(out[0] == .moveTo(x: 0, y: 0))
             #expect(out[1] == .lineTo(x: 4 * Self.mm, y: 0))
             #expect(out[2] == .cubicTo(
@@ -135,10 +139,42 @@
                 cx2: 8 * Self.mm, cy2: -2 * Self.mm,
                 x: 8 * Self.mm, y: -8 * Self.mm,
             ))
-            #expect(out[3] == .moveTo(x: 20 * Self.mm, y: -8 * Self.mm))
-            #expect(out[4] == .lineTo(x: 24 * Self.mm, y: -8 * Self.mm))
-            guard case .stroke = out[5] else {
-                Issue.record("the whole outline takes a single stroke")
+            // The break flushes the first subpath BEFORE moving away.
+            guard case let .stroke(firstWidth) = out[3] else {
+                Issue.record("the open subpath is stroked before the moveTo")
+                return
+            }
+            #expect(Self.isClose(firstWidth, Self.lineWidthMM))
+            #expect(out[4] == .moveTo(x: 20 * Self.mm, y: -8 * Self.mm))
+            #expect(out[5] == .lineTo(x: 24 * Self.mm, y: -8 * Self.mm))
+            guard case .stroke = out[6] else {
+                Issue.record("the trailing subpath takes its own stroke")
+                return
+            }
+        }
+
+        /// The contract the real geometry relies on: contiguous pieces
+        /// stay ONE `moveTo` and ONE `stroke`, so the flush added for
+        /// discontinuities cannot leak an extra stroke into normal bends.
+        @Test("contiguous legs stay a single moveTo and a single stroke")
+        func contiguousOutlineTakesOneStroke() throws {
+            let out = Self.commands([
+                .line(from: CGPoint(x: 0, y: 0), to: CGPoint(x: 4, y: 0)),
+                .curve(
+                    from: CGPoint(x: 4, y: 0),
+                    control1: CGPoint(x: 6, y: 0),
+                    control2: CGPoint(x: 8, y: -2),
+                    to: CGPoint(x: 8, y: -8),
+                ),
+                .line(from: CGPoint(x: 8, y: -8), to: CGPoint(x: 12, y: -8)),
+            ])
+            try #require(out.count == 5)
+            let moveCount = out.filter { if case .moveTo = $0 { true } else { false } }
+            let strokeCount = out.filter { if case .stroke = $0 { true } else { false } }
+            #expect(moveCount.count == 1)
+            #expect(strokeCount.count == 1)
+            guard case .stroke = out[4] else {
+                Issue.record("the single stroke comes last")
                 return
             }
         }
