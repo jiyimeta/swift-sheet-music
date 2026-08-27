@@ -40,11 +40,12 @@ extension Voice {
             previousChordDuration: state.previousChordDuration,
             prevVoiceTotal: carryIn.prevVoiceTotal,
         )
-        for grace in chord.mscxFileOrderedGraces {
+        for (grace, listIndex) in chord.mscxFileOrderedGracesWithListIndex {
             state.children.append(grace.encode(
                 parentChord: chord,
                 parentForwardTieLocation: forwardDelta,
                 parentBackwardTieLocation: backwardDelta,
+                listIndex: listIndex,
                 options: options,
             ))
         }
@@ -121,6 +122,7 @@ extension Voice {
             injectedTremolo: injectedTremolo,
             previousChordNotes: state.previousChordNotes,
             forwardTiePartnerNotes: plan.forwardTiePartnerNotes[index],
+            previousChordTrailingBendGrace: state.previousChordTrailingBendGrace,
             options: options,
             staffGroup: staffGroup,
             voiceIndex: voiceIndex,
@@ -134,6 +136,7 @@ extension Voice {
                 .asFraction
             state.previousChordDuration = chordFrac
             state.previousChordNotes = chord.notes
+            state.previousChordTrailingBendGrace = chord.mscxTrailingAfterGraceBendIndex
             state.seenChordInVoice = true
             // Fraction defines `+` but no `+=`; rewriting as
             // shorthand would not compile.
@@ -154,6 +157,7 @@ extension Voice {
         injectedTremolo: Tremolo? = nil,
         previousChordNotes: ChordNotes? = nil,
         forwardTiePartnerNotes: ChordNotes? = nil,
+        previousChordTrailingBendGrace: Int? = nil,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
@@ -172,6 +176,7 @@ extension Voice {
                 injectedTremolo: injectedTremolo,
                 previousChordNotes: previousChordNotes,
                 forwardTiePartnerNotes: forwardTiePartnerNotes,
+                previousChordTrailingBendGrace: previousChordTrailingBendGrace,
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,

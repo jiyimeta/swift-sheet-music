@@ -42,19 +42,26 @@ extension Voice {
     /// `prevChordNotes` is that chord's note list, which the `<notes>`
     /// half of a backward tie's `<location>` is measured against — see
     /// `TieEndpoint`.
+    /// `prevChordTrailingBendGrace` is that chord's
+    /// `mscxTrailingAfterGraceBendIndex` — the `<grace>` ordinal a guitar
+    /// bend's `<prev>` needs when the bend started on the previous chord's
+    /// last after-grace rather than on the chord itself.
     struct VoiceTieCarry {
         var prevChordDuration: Fraction?
         var prevVoiceTotal: Fraction?
         var prevChordNotes: ChordNotes?
+        var prevChordTrailingBendGrace: Int?
 
         init(
             prevChordDuration: Fraction? = nil,
             prevVoiceTotal: Fraction? = nil,
             prevChordNotes: ChordNotes? = nil,
+            prevChordTrailingBendGrace: Int? = nil,
         ) {
             self.prevChordDuration = prevChordDuration
             self.prevVoiceTotal = prevVoiceTotal
             self.prevChordNotes = prevChordNotes
+            self.prevChordTrailingBendGrace = prevChordTrailingBendGrace
         }
     }
 
@@ -132,6 +139,7 @@ extension Voice {
                 prevChordDuration: state.previousChordDuration,
                 prevVoiceTotal: state.voiceTotal,
                 prevChordNotes: state.previousChordNotes,
+                prevChordTrailingBendGrace: state.previousChordTrailingBendGrace,
             ),
         )
     }
@@ -198,6 +206,9 @@ extension Voice {
         /// measures — the partner a backward tie's `<notes>` delta is
         /// taken against.
         var previousChordNotes: ChordNotes?
+        /// The `<grace>` ordinal of that same chord's last after-grace when it
+        /// begins a guitar bend — see `VoiceTieCarry`.
+        var previousChordTrailingBendGrace: Int?
         var seenChordInVoice = false
         var voiceTotal = Fraction(numerator: 0, denominator: 1)
         /// Two-chord tremolo (`span == .between`) lives only on the
@@ -210,6 +221,7 @@ extension Voice {
         init(carryIn: VoiceTieCarry) {
             previousChordDuration = carryIn.prevChordDuration
             previousChordNotes = carryIn.prevChordNotes
+            previousChordTrailingBendGrace = carryIn.prevChordTrailingBendGrace
         }
     }
 

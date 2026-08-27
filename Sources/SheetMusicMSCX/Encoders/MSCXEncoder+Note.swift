@@ -5,8 +5,10 @@ import SheetMusicXMLTools
 extension Note {
     /// Build a `<Note>` element. Emits pitch / tpc / optional
     /// accidental / optional headType, plus `<Spanner type="Tie">`
-    /// markers for `tieForward` / `tieBack` and a
-    /// `<Spanner type="Glissando">` block when `glissando` is set.
+    /// markers for `tieForward` / `tieBack`, a
+    /// `<Spanner type="Glissando">` block when `glissando` is set, and a
+    /// `<Spanner type="GuitarBend">` pair for `guitarBend` /
+    /// `guitarBendBack` — see `guitarBendSpanners`.
     /// `chordLines` are the owning chord's `ChordLine`s whose
     /// `noteIndex` points at *this* note. MuseScore nests those inside
     /// the `<Note>` (`TWrite::write(const Note*, …)` walks
@@ -15,6 +17,8 @@ extension Note {
     func encode(
         tieForwardEndpoint: TieEndpoint? = nil,
         tieBackEndpoint: TieEndpoint? = nil,
+        guitarBendForwardEndpoint: TieEndpoint? = nil,
+        guitarBendBackEndpoint: TieEndpoint? = nil,
         options: MSCXEncoderOptions = .init(),
         drumDefaultHead: String? = nil,
         chordLines: [ChordLine] = [],
@@ -84,6 +88,10 @@ extension Note {
         for chordLine in chordLines {
             children.append(chordLine.encode(options: options))
         }
+        children.append(contentsOf: guitarBendSpanners(
+            forwardEndpoint: guitarBendForwardEndpoint,
+            backEndpoint: guitarBendBackEndpoint,
+        ))
         children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Note", children: children)
     }
@@ -144,7 +152,10 @@ extension Note {
         )
     }
 
-    private func locationElement(from endpoint: TieEndpoint) -> XMLTreeNode {
+    /// Serialize one endpoint's `<location>`. Shared by ties and guitar
+    /// bends — MuseScore has a single `Location` reader/writer pair serving
+    /// every connector type, neither of which branches on the spanner.
+    func locationElement(from endpoint: TieEndpoint) -> XMLTreeNode {
         // Element order matches MuseScore Studio's own writer:
         // `<measures>` precedes `<fractions>`, which precede `<grace>`,
         // which precedes `<notes>` (`TWrite::write(const Location*, …)`,
@@ -194,6 +205,19 @@ extension Note {
             // type, GuitarBend and Tie alike; neither branches on which
             // spanner it's serializing.
             children.append(XMLTreeNode(name: "grace", text: String(index)))
+        case let .graceOfDistantChord(measures, fractions, graceIndex):
+            // Same field order and same default elision as the two cases
+            // above — `<measures>` then `<fractions>` then `<grace>` — only
+            // with all three present at once.
+            if let measures {
+                children.append(XMLTreeNode(
+                    name: "measures", text: String(measures),
+                ))
+            }
+            if let fractions, fractions.numerator != 0 {
+                children.append(fractionsNode(fractions))
+            }
+            children.append(XMLTreeNode(name: "grace", text: String(graceIndex)))
         }
         // `<notes>` elides at its `0` default, so a tie between two
         // notes that share a pitch rank — every tie whose endpoints are
@@ -208,7 +232,7 @@ extension Note {
         return XMLTreeNode(name: "location", children: children)
     }
 
-    private func fractionsNode(_ f: Fraction) -> XMLTreeNode {
+    func fractionsNode(_ f: Fraction) -> XMLTreeNode {
         XMLTreeNode(
             name: "fractions",
             text: "\(f.numerator)/\(f.denominator)",

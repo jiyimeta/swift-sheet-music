@@ -15,11 +15,20 @@ extension Chord {
     /// this chord's own graces overrides the corresponding argument
     /// per-note — see `graceBeforeTieBackEndpoints()` and
     /// `graceAfterTieForwardEndpoints()`.
+    ///
+    /// `bendNeighbourForward` / `bendNeighbourBackward` are the same two
+    /// neighbour-chord deltas *unguarded* by any tie: a guitar bend needs them
+    /// on chords that carry no tie at all. `previousChordTrailingBendGrace`
+    /// completes the backward one when the previous chord's last after-grace
+    /// is what a bend ends from — see `Chord.guitarBendBackEndpoint`.
     func encodeAsChord(
         tieForwardLocation: TieLocation? = nil,
         tieBackLocation: TieLocation? = nil,
         tieForwardPartnerNotes: ChordNotes? = nil,
         tieBackPartnerNotes: ChordNotes? = nil,
+        bendNeighbourForward: TieLocation? = nil,
+        bendNeighbourBackward: TieLocation? = nil,
+        previousChordTrailingBendGrace: Int? = nil,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
@@ -109,6 +118,14 @@ extension Chord {
                             forPitch: note.pitch, partner: tieBackPartnerNotes,
                         ))
                     },
+                guitarBendForwardEndpoint: guitarBendForwardEndpoint(
+                    for: note, neighbourChord: bendNeighbourForward,
+                ),
+                guitarBendBackEndpoint: guitarBendBackEndpoint(
+                    for: note,
+                    neighbourChord: bendNeighbourBackward,
+                    previousChordTrailingBendGrace: previousChordTrailingBendGrace,
+                ),
                 options: options,
                 drumDefaultHead: isPercussionV3 ? "normal" : nil,
                 chordLines: chordLines.filter { $0.noteIndex == noteIndex },
