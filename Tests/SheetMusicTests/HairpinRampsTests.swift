@@ -204,4 +204,42 @@ struct HairpinRampsCollectTests {
         #expect(ramps[1].startVelocity == 96)
         #expect(ramps[1].endVelocity == 49)
     }
+
+    /// End-to-end through MidiRenderer: the collected ramp is applied to
+    /// the rendered note-on velocities.
+    @Test func noteVelocitiesRampLinearly() throws {
+        let s = staff([
+            makeMeasure([
+                .dynamic(mp()), .spanner(cresc()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([
+                .dynamic(f()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+        ])
+        let part = Part(
+            id: "P1",
+            instrument: instrument(),
+            staves: [s],
+        )
+        let (events, _, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0, staff: s, part: part,
+            route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
+            division: division,
+            plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+        )
+        let velocities: [Int] = events.compactMap {
+            if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }
+        }
+        // 4 onsets in measure 1 ramp from 64 toward 96; chord at the
+        // hairpin end (start of measure 2) is set by the bracket
+        // Dynamic to 96 and is therefore exactly 96.
+        #expect(velocities.first == 64)
+        #expect(velocities[4] == 96)
+        // Strictly monotonic across the ramp, no flat plateau.
+        for i in 0 ..< 4 {
+            #expect(velocities[i] < velocities[i + 1])
+        }
+    }
 }
