@@ -94,8 +94,21 @@ extension Note {
                     result.glissando = decodeGlissando(glissNode)
                 }
             case "GuitarBend":
-                if hasNext, let bendNode = spanner.first("GuitarBend") {
-                    result.guitarBend = decodeGuitarBend(bendNode)
+                if hasNext {
+                    // A begin side with no `<GuitarBend>` block is malformed —
+                    // MuseScore's writer always emits the payload on the
+                    // `<next>` side — and dropping it silently would leave the
+                    // end note's `guitarBendBack` pointing at nothing.
+                    if let bendNode = spanner.first("GuitarBend") {
+                        result.guitarBend = decodeGuitarBend(bendNode)
+                    } else {
+                        mscxDecoderWarn(
+                            code: "mscx.guitarBend.missingPayload",
+                            message: "<Spanner type=\"GuitarBend\"> has <next> "
+                                + "but no <GuitarBend> block — bend dropped",
+                            location: "Note/Spanner[GuitarBend]",
+                        )
+                    }
                 }
                 if hasPrev { result.guitarBendBack = true }
             default:

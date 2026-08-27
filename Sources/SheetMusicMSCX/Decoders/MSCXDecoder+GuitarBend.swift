@@ -26,6 +26,20 @@ extension Note {
     /// are the C++ defaults rather than zero: 0 for the start factor, 1 for
     /// the end factor, `.auto` for the hold line.
     ///
+    /// ## `<direction>` is dropped without a diagnostic
+    ///
+    /// `writeProperty(item, xml, Pid::DIRECTION)` sits *outside* the `isDive()`
+    /// block (`rw/write/twrite.cpp:1557`), so any user-flipped bend carries it,
+    /// not just a whammy one — which is why it is not in `diveOnlyProperties`.
+    /// It is deliberately silent rather than announced: the property is purely
+    /// which side of the note the bend arc is drawn on, this package does not
+    /// render guitar bends at all yet, and `DirectionV::AUTO` is the default,
+    /// so the element is absent from every score nobody hand-flipped —
+    /// including all six vendored fixtures. Announcing it would fire on
+    /// exactly the scores where the drop is least consequential. Model it as a
+    /// `GuitarBend` field when bend rendering lands; until then the C++
+    /// citation above is the whole story.
+    ///
     /// C++: `TWrite::write(const GuitarBend*, …)` (`rw/write/twrite.cpp:1543`),
     /// `TRead::read(GuitarBend*, …)` (`rw/read460/tread.cpp:2860`).
     static func decodeGuitarBend(_ node: XMLTreeNode) -> GuitarBend? {

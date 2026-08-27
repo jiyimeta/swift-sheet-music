@@ -208,6 +208,47 @@ struct GuitarBendDecodeTests {
         #expect(decoded.diagnostics.map(\.code) == ["mscx.guitarBend.unknownType"])
     }
 
+    /// A begin side with no `<GuitarBend>` block is malformed — MuseScore's
+    /// writer always emits the payload on the `<next>` side. Dropping it
+    /// silently would strand the end note's `guitarBendBack`.
+    @Test("a <next> side with no payload block warns")
+    func missingPayloadWarns() throws {
+        let decoded = try decodeNote("""
+        <Note>
+          <pitch>60</pitch>
+          <tpc>14</tpc>
+          <Spanner type="GuitarBend">
+            <next><location><fractions>1/4</fractions></location></next>
+          </Spanner>
+        </Note>
+        """)
+        #expect(decoded.note.guitarBend == nil)
+        #expect(!decoded.note.guitarBendBack)
+        #expect(decoded.diagnostics.map(\.code) == ["mscx.guitarBend.missingPayload"])
+    }
+
+    /// `<direction>` is dropped on purpose and deliberately *not* announced —
+    /// see `Note.decodeGuitarBend`'s doc comment for why. Pinned so the
+    /// silence is a decision rather than an oversight.
+    @Test("a user-flipped <direction> is dropped silently")
+    func directionDroppedSilently() throws {
+        let decoded = try decodeNote("""
+        <Note>
+          <pitch>60</pitch>
+          <tpc>14</tpc>
+          <Spanner type="GuitarBend">
+            <GuitarBend>
+              <guitarBendType>0</guitarBendType>
+              <direction>down</direction>
+            </GuitarBend>
+            <next><location><fractions>1/4</fractions></location></next>
+          </Spanner>
+        </Note>
+        """)
+        #expect(decoded.note.guitarBend?.type == .bend)
+        #expect(decoded.diagnostics.isEmpty)
+    }
+
     /// The whammy-bar types carry four extra properties this model does not
     /// hold. The bend itself still decodes; only the extras are announced.
     @Test("dive-only properties are dropped with a warning")
