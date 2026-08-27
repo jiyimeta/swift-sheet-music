@@ -373,6 +373,17 @@ extension MidiRenderer {
                     voiceIndex: voiceIndex,
                 )
                 : nil
+            // A legacy `<Bend>` curve needs the note's whole sounding
+            // length, so its tie chain is resolved here — one element's
+            // ticks are not enough, and the walk cannot see forward once
+            // it is inside `renderChordWithGraces`.
+            let legacyBendSpans = MidiRenderer.legacyBendSpans(
+                chord: chord,
+                voiceElements: voiceElements,
+                elementIndex: elementIndex,
+                measureDuration: measureDuration,
+                division: division,
+            )
             // Apply swing: shift the onset and adjust the played
             // duration per the active swing state. `localTick` itself
             // continues to advance by the chord's nominal duration so
@@ -424,6 +435,7 @@ extension MidiRenderer {
                 division: division,
                 glissandoEndPitch: glissandoEndPitch,
                 bendChainSlots: bendChainSlots,
+                legacyBendSpans: legacyBendSpans,
                 currentKey: currentKey,
                 events: &events,
                 playedTicksOverride: adjust == .none

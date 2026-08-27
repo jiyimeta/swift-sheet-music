@@ -13,7 +13,11 @@ extension MidiRenderer {
         bendWheelValue(semitones: Double(quarterTones) / 2.0)
     }
 
-    private static func bendWheelValue(semitones: Double) -> Int {
+    /// Wheel value for a semitone offset at the same 12-semitone
+    /// sensitivity. Shared with the legacy `<Bend>` curve
+    /// (`MidiRenderer+LegacyBend.swift`), whose 50-units-per-semitone scale
+    /// lands on fractional semitones.
+    static func bendWheelValue(semitones: Double) -> Int {
         let sensitivity = 12.0
         let offset = max(-8192.0, min(8191.0, semitones / sensitivity * 8191.0))
         return MidiEvent.pitchBendCenter + Int(offset.rounded())

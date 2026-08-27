@@ -1,4 +1,6 @@
 import SheetMusicCore
+
+// swiftlint:disable file_length
 import SheetMusicFoundation
 
 extension MidiRenderer {
@@ -85,6 +87,7 @@ extension MidiRenderer {
         division: Int,
         glissandoEndPitch: Int?,
         bendChainSlots: BendChainChordSlots? = nil,
+        legacyBendSpans: [Int: Int] = [:],
         currentKey: Int,
         events: inout [TimedMidiEvent],
         playedTicksOverride: Int? = nil,
@@ -223,6 +226,21 @@ extension MidiRenderer {
                         startTick: mainOnset, durationTicks: playedTicks,
                         velocity: mainVelocity, channel: channel,
                         currentKey: currentKey, events: &events,
+                    )
+                } else if let legacyBend = note.legacyBend,
+                          let totalTicks = legacyBendSpans[note.pitch]
+                {
+                    // Last of the three: the MS4 spanner is the newer
+                    // encoding of the same gesture (`Note.legacyBend`), and
+                    // glissando keeps the priority it had before bends
+                    // existed. `legacyBendSpans` has already refused every
+                    // shape that must play plain, so nothing is re-guarded.
+                    renderLegacyBendNote(
+                        note: note, bend: legacyBend,
+                        startTick: mainOnset, durationTicks: gatedTicks,
+                        totalTicks: totalTicks,
+                        velocity: mainVelocity, channel: channel,
+                        events: &events,
                     )
                 } else {
                     emitNoteEventsForGrace(
