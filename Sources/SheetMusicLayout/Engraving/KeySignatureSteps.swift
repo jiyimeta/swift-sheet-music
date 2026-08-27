@@ -47,6 +47,40 @@ public enum KeySignatureSteps {
         return Array(table.prefix(count))
     }
 
+    /// Steps for the naturals that cancel `priorKey` — the positions of
+    /// the OUTGOING key's own accidentals, in that key's own engraving
+    /// order, so D→C draws naturals at F♯ and C♯. A key with no
+    /// accidentals has nothing to cancel and yields an empty array.
+    ///
+    /// This is deliberately the outgoing key's table and not the
+    /// incoming one: a natural belongs where the accidental it retires
+    /// used to sit. MuseScore does the same in `KeySig::layout`, which
+    /// walks the old key's `KeySigEvent` when building the naturals it
+    /// draws ahead of the new signature.
+    public static func naturalSteps(
+        cancelling priorKey: Int, clef: NotatedClef,
+    ) -> [Int] {
+        steps(
+            sharps: max(0, priorKey), flats: max(0, -priorKey), clef: clef,
+        )
+    }
+
+    /// The naturals an explicit key change from `priorKey` to `newKey`
+    /// draws, under the engraving rule this package implements: only a
+    /// change that lands on C (zero accidentals) cancels, and it cancels
+    /// the whole outgoing key. Every other change draws its new
+    /// signature alone.
+    ///
+    /// Cancelling on every reduction (G→F showing a natural for F♯) is a
+    /// possible future style option; MuseScore's default — and Behind
+    /// Bars — is the zero-accidental rule.
+    public static func cancellationNaturals(
+        priorKey: Int, newKey: Int, clef: NotatedClef,
+    ) -> [Int] {
+        guard newKey == 0, priorKey != 0 else { return [] }
+        return naturalSteps(cancelling: priorKey, clef: clef)
+    }
+
     /// Horizontal advance between consecutive accidentals. 1 sp causes
     /// visible overlap at 5+-accidental keys (sharp glyphs are ~1 sp
     /// wide but the optical side-bearing needs more breathing room);

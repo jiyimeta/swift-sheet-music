@@ -54,7 +54,7 @@ extension LayoutEngine {
     ) -> [CGFloat] {
         switch element {
         case let .clef(_, p, _),
-             let .keySignature(_, _, _, p),
+             let .keySignature(_, _, _, _, p),
              let .timeSignature(_, _, p),
              let .barLine(_, p, _),
              let .textMark(_, _, p),

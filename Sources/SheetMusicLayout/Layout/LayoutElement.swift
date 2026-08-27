@@ -45,8 +45,17 @@ public enum LayoutElement: Sendable, Equatable {
     /// thing off the preceding clef segment in `TLayout::layoutKeySig`
     /// — so a bass staff's sharps land on F3 / C3 / … instead of the
     /// treble positions. See `KeySignatureSteps`.
+    ///
+    /// `naturals` carries the staff steps of the cancellation naturals
+    /// drawn AHEAD of the signature itself, already resolved against
+    /// `clef` (unlike `sharps` / `flats`, which are counts the renderer
+    /// resolves). It is non-empty only for an explicit change that lands
+    /// on C while a non-zero key was in force — see
+    /// `KeySignatureSteps.cancellationNaturals`. In that case `sharps`
+    /// and `flats` are both 0 and the naturals are the only glyphs.
     case keySignature(
-        sharps: Int, flats: Int, clef: NotatedClef, origin: CGPoint,
+        sharps: Int, flats: Int, clef: NotatedClef,
+        naturals: [Int] = [], origin: CGPoint,
     )
     case timeSignature(numerator: Int, denominator: Int, origin: CGPoint)
     /// `origin.y` is the vertical center of the barline's stroke — for

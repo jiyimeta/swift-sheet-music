@@ -438,6 +438,10 @@ extension LayoutEngine {
                 // explicit one it hasn't been walked yet.
                 let clef = firstVoiceLeadingClefRawType(measure: measure)
                     .map(NotatedClef.init(rawType:)) ?? currentClef
+                // No naturals: this is a system-head REDRAW of the key
+                // already in force, not a change. `synthesizeLeadingKeySig`
+                // is false for a key of 0 anyway, so there is never
+                // anything to cancel here.
                 out.append(.keySignature(
                     sharps: max(0, k),
                     flats: max(0, -k),
@@ -497,6 +501,12 @@ extension LayoutEngine {
                         invisibleOut.append(element)
                     }
                 case let .keySignature(key):
+                    // Cancellation naturals read the key this explicit
+                    // signature RETIRES, so capture it before the
+                    // slot-preservation update below overwrites it.
+                    // Both emission paths — the measure head and the
+                    // mid-measure `timedX` column — go through here.
+                    let retiredKey = currentKey
                     // Slot-preservation: `currentKey` is the active
                     // signature for accidental rendering downstream;
                     // update it regardless of glyph visibility.
@@ -508,6 +518,11 @@ extension LayoutEngine {
                         sharps: max(0, key.concertKey),
                         flats: max(0, -key.concertKey),
                         clef: currentClef,
+                        naturals: KeySignatureSteps.cancellationNaturals(
+                            priorKey: retiredKey,
+                            newKey: key.concertKey,
+                            clef: currentClef,
+                        ),
                         origin: CGPoint(x: keyX, y: staffMidY),
                     )
                     if key.visible {

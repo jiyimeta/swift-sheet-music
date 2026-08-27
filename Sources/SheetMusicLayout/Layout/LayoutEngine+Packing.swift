@@ -66,7 +66,7 @@ extension LayoutEngine {
             }
             return baseline
         }
-        let minWidths: [CGFloat] = (0 ..< measureCount).map { i in // swiftlint:disable:this closure_body_length
+        let cachedMinWidths: [CGFloat] = (0 ..< measureCount).map { i in // swiftlint:disable:this closure_body_length
             let measuresAt = staves.map { staff in
                 i < staff.measures.count ? staff.measures[i] : nil
             }
@@ -126,6 +126,24 @@ extension LayoutEngine {
                 placements: [:],
             )
             return overridden
+        }
+
+        // Cancellation naturals widen a measure that the per-measure
+        // width cache cannot see them in — the naturals come from the
+        // PRECEDING key, which is deliberately not part of that cache's
+        // predicate. Add their advance outside the cache, exactly as
+        // `synthHeaderOverhead` is added outside it for a system head.
+        // Collapsed multi-measure-rest bars keep their override width
+        // (a run never contains a key change).
+        let cancellationWidths = cancellationNaturalWidths(
+            staves: staves, metrics: context.metrics,
+        )
+        let minWidths: [CGFloat] = cachedMinWidths.indices.map { i in
+            guard plan.runLength(startingAt: i) == nil,
+                  !plan.isInteriorOfRun(i),
+                  i < cancellationWidths.count
+            else { return cachedMinWidths[i] }
+            return cachedMinWidths[i] + cancellationWidths[i]
         }
 
         // Clef state persists ACROSS systems: engraving convention

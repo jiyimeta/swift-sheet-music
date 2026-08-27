@@ -1142,11 +1142,15 @@ extension LayoutBridge {
 
     // MARK: - Key signature
 
+    // `naturals` are pre-resolved steps (the layout engine matched them
+    // to the clef); they are drawn FIRST, ahead of the new signature,
+    // exactly as the two Apple renderers do.
     // swiftlint:disable:next function_parameter_count
     static func encodeKeySignature(
         sharps: Int,
         flats: Int,
         clef: NotatedClef,
+        naturals: [Int] = [],
         originX: Double,
         originY: Double,
         sp: Double,
@@ -1160,12 +1164,14 @@ extension LayoutBridge {
             sharps: sharps, flats: flats, clef: clef,
         )
         let advance = Double(KeySignatureSteps.advance(sp: CGFloat(sp)))
-        for (i, step) in steps.enumerated() {
+        let run = naturals.map { ($0, SMuFLCodepoint.accidentalNatural) }
+            + steps.map { ($0, codepoint) }
+        for (i, entry) in run.enumerated() {
             let stepDy = Double(KeySignatureSteps.stepDy(
-                step: step, sp: CGFloat(sp),
+                step: entry.0, sp: CGFloat(sp),
             ))
             emitCenterAnchoredGlyph(
-                codepoint: codepoint,
+                codepoint: entry.1,
                 cxPt: originX + Double(i) * advance,
                 cyPt: originY + stepDy,
                 sizePt: glyphSize,
