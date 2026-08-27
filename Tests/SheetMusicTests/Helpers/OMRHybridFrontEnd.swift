@@ -55,6 +55,52 @@
             /// there is no separate lobotomy mode for glyphs because the
             /// detector itself, run with no training, already supplies one.
             case detectorGlyphs
+            /// The four hybrid-VERTICAL modes. `truthVerticals` swaps the
+            /// whole predicted vertical set for the labels' and wins
+            /// +2.5 durP50 / +4.6 durMean; these take one component of
+            /// that swap each, so the fix round that follows targets the
+            /// component that actually dominates rather than the whole.
+            /// See `OMRVerticalHybrid` for what each one does and why the
+            /// matching has to be coverage-based.
+            case snapVerticalEndpoints
+            case dropVerticalFalsePositives
+            case addVerticalMisses
+            case unflagVerticals
+            /// Two COMBINATIONS, because the singles measured an
+            /// interaction rather than three addends: `unflagVerticals`
+            /// alone loses 23 durP50 — the `isStem` head-to-end gate is
+            /// load-bearing while 24% of the vertical set is junk — and
+            /// `truthVerticals` clears that gate on a set that has no
+            /// junk in it. Neither single can tell those apart; a clean
+            /// set WITH the gate off can.
+            case cleanUnflagVerticals
+            case snapUnflagVerticals
+            /// All four at once. Its gap to `truthVerticals` is what the
+            /// components CANNOT reach — the leniency in "explained"
+            /// (a stroke inside a truth's y-window at a compatible x
+            /// survives here and does not survive the oracle) and the
+            /// merged-vs-split representation the oracle also replaces.
+            /// Without it, the residual would be attributed to whichever
+            /// component was measured last.
+            case allVerticalComponents
+
+            /// Which vertical-set edits this mode applies, in order.
+            /// Distinct from `substituted`: these modes keep the raster's
+            /// own verticals and EDIT them, so nothing is filtered out
+            /// and nothing is taken from the oracle wholesale.
+            var verticalHybrid: [OMRVerticalHybrid.Operation] {
+                switch self {
+                case .snapVerticalEndpoints: [.snapEndpoints]
+                case .dropVerticalFalsePositives: [.dropFalsePositives]
+                case .addVerticalMisses: [.addMisses]
+                case .cleanUnflagVerticals: [.dropFalsePositives, .unflagRaster]
+                case .snapUnflagVerticals: [.snapEndpoints, .unflagRaster]
+                case .allVerticalComponents:
+                    [.dropFalsePositives, .snapEndpoints, .addMisses, .unflagRaster]
+                case .unflagVerticals: [.unflagRaster]
+                default: []
+                }
+            }
 
             /// Every path kind this mode takes from the oracle instead of
             /// the raster front-end. Empty for the modes that substitute
@@ -488,28 +534,93 @@
                     )
                 }
                 walked.glyphs += pageGlyphs
-                var pagePaths = filter(analysis.paths, mode: mode)
-                let substituted = mode.substituted
-                if !substituted.isEmpty {
-                    pagePaths += reframe(
-                        oracle.walked.paths.filter {
-                            $0.pageIndex == index && substituted.contains($0.kind)
-                        },
-                        page: page, transform: analysis.transform,
-                    )
-                }
-                if ProcessInfo.processInfo
-                    .environment["OMR_HYBRID_DROP_GLYPH_VERTICALS"] == "1"
-                {
-                    pagePaths = dropVerticalsInsideGlyphs(
-                        pagePaths, glyphs: vocabulary,
-                        spacingPt: analysis.staffSpacingPt,
-                    )
-                }
-                walked.paths += pagePaths
+                walked.paths += composedPaths(
+                    oracle: oracle, page: page, analysis: analysis,
+                    vocabulary: vocabulary, mode: mode, index: index,
+                )
                 sizes[index] = analysis.pageSizePt
             }
             return (walked, sizes, oracle.pageCount)
+        }
+
+        /// One page's PATHS: the raster front-end's, minus whatever this
+        /// mode lobotomizes or substitutes, plus the oracle's for the
+        /// kinds it takes wholesale, then the vertical-component edits.
+        static func composedPaths(
+            oracle: OMROracleFrontEnd.Replay, page: OMRPageLabels,
+            analysis: RasterPageAnalysis, vocabulary: [ClassifiedGlyph],
+            mode: Mode, index: Int,
+        ) -> [PathSegment] {
+            var pagePaths = filter(analysis.paths, mode: mode)
+            let substituted = mode.substituted
+            if !substituted.isEmpty {
+                pagePaths += reframe(
+                    oracle.walked.paths.filter {
+                        $0.pageIndex == index && substituted.contains($0.kind)
+                    },
+                    page: page, transform: analysis.transform,
+                )
+            }
+            if !mode.verticalHybrid.isEmpty {
+                pagePaths = hybridVerticals(
+                    mode.verticalHybrid, pagePaths: pagePaths,
+                    truth: oracle.walked.paths.filter {
+                        $0.pageIndex == index && $0.kind == .vertical
+                    },
+                    page: page, analysis: analysis, mode: mode, index: index,
+                )
+            }
+            if ProcessInfo.processInfo
+                .environment["OMR_HYBRID_DROP_GLYPH_VERTICALS"] == "1"
+            {
+                pagePaths = dropVerticalsInsideGlyphs(
+                    pagePaths, glyphs: vocabulary,
+                    spacingPt: analysis.staffSpacingPt,
+                )
+            }
+            return pagePaths
+        }
+
+        /// One page's paths with the vertical set edited in place.
+        ///
+        /// Verticals are replaced/dropped WHERE THEY SIT and rescued
+        /// truths are appended last, so a no-op edit reproduces `.full`'s
+        /// path order byte for byte. The per-page `[vhybrid]` line is how
+        /// the decomposition is counted — `compose` is a static function
+        /// with no place to accumulate, and a mutable global in a Swift 6
+        /// test target is not worth the ceremony when the log is being
+        /// aggregated anyway.
+        static func hybridVerticals(
+            _ operations: [OMRVerticalHybrid.Operation], pagePaths: [PathSegment],
+            truth: [PathSegment], page: OMRPageLabels, analysis: RasterPageAnalysis,
+            mode: Mode, index: Int,
+        ) -> [PathSegment] {
+            let reframed = reframe(truth, page: page, transform: analysis.transform)
+            var paths = pagePaths
+            for operation in operations {
+                let edit = OMRVerticalHybrid.apply(
+                    operation,
+                    detected: paths.filter { $0.kind == .vertical },
+                    truth: reframed,
+                    spacing: Double(analysis.staffSpacingPt),
+                )
+                var cursor = 0
+                var rebuilt: [PathSegment] = []
+                for path in paths {
+                    guard path.kind == .vertical else {
+                        rebuilt.append(path)
+                        continue
+                    }
+                    if let kept = edit.kept[cursor] { rebuilt.append(kept) }
+                    cursor += 1
+                }
+                print(
+                    "[vhybrid] mode=\(mode.rawValue) op=\(operation) page=\(index) "
+                        + "spacingPt=\(analysis.staffSpacingPt) \(edit.stats.line)",
+                )
+                paths = rebuilt + edit.added
+            }
+            return paths
         }
 
         /// `.detectorGlyphs` asking for a detector it wasn't given must
