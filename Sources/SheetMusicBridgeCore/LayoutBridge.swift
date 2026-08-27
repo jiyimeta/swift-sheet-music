@@ -724,8 +724,18 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case .guitarBend:
-            break // Encoded in Task 5
+        case let .guitarBend(fromOrigin, vertex, toOrigin, slight):
+            encodeGuitarBend(
+                fromXPt: mox + Double(fromOrigin.x),
+                fromYPt: moy + Double(fromOrigin.y),
+                vertexXPt: mox + Double(vertex.x),
+                vertexYPt: moy + Double(vertex.y),
+                toXPt: mox + Double(toOrigin.x),
+                toYPt: moy + Double(toOrigin.y),
+                slight: slight,
+                spPt: sp,
+                into: &out,
+            )
 
         case let .spannerSegment(
             kind, fromOrigin, toOrigin, continuesLeft, continuesRight, text,
