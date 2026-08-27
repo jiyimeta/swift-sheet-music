@@ -275,6 +275,10 @@ extension PDFImporter {
     /// would let `applyTupletMarks` choose a three-note run straddling the
     /// tuplet's edge. The window is only a bound — the run inside it is
     /// chosen by the clean-sum gate plus the digit's own centre.
+    ///
+    /// The range is read through `beamMemberSpan`, i.e. with the same
+    /// `beamEndpointPad` every other consumer of a beam's x-range applies —
+    /// see that function for why reading it raw was wrong.
     private static func beamWindow(
         digit: TextGlyph, paths: [PathSegment],
         spatium: CGFloat, pageIndex: Int,
@@ -283,14 +287,56 @@ extension PDFImporter {
         let digitY = digit.origin.y
         let candidates = paths.filter { p in
             guard p.kind == .beam, p.pageIndex == pageIndex else { return false }
-            let span = p.quad?.xRange ?? (p.rect.minX ... p.rect.maxX)
-            guard span.contains(digitX) else { return false }
+            guard beamMemberSpan(p).contains(digitX) else { return false }
             return abs(p.rect.midY - digitY)
                 <= tupletBeamDigitYTolSpatia * spatium
         }
         return candidates
-            .map { $0.quad?.xRange ?? ($0.rect.minX ... $0.rect.maxX) }
+            .map(beamMemberSpan)
             .min { ($0.upperBound - $0.lowerBound) < ($1.upperBound - $1.lowerBound) }
+    }
+
+    /// A beam's x-range as a MEMBERSHIP window — padded by
+    /// `beamEndpointPad`, exactly as `fullBeamSpans` pads it.
+    ///
+    /// `beamEndpointPad` exists because a beam's drawn endpoints coincide
+    /// with its outermost stems only in a VECTOR PDF. `beamWindow` used to
+    /// be the one place that read the same range RAW, and it hands its
+    /// result straight to `applyTupletMarks` as the member-run window —
+    /// where the upper bound gets no slack at all, precisely on the
+    /// assumption that "the rightmost true member's stem sits at or inside
+    /// the mark's right edge already". A raster beam breaks that
+    /// assumption: a fitted slab cannot include the columns where its own
+    /// outermost stems stand (beam + stem ink merges there and lands on no
+    /// ladder rung), so its range stops INSIDE them even after
+    /// `RasterPage.extendedSpan` walks it back out.
+    ///
+    /// The consequence was not a truncated run but usually no tuplet at
+    /// all: drop one end note of a triplet and the remaining two sum to
+    /// 1/8 × 2/3 = 1/12, which `cleanScale` refuses, so the mark is
+    /// discarded and the whole bar is left to rhythm reconciliation.
+    ///
+    /// MEASURED, v2-eval, 32 renders (2026-08-27). The beam oracle's whole
+    /// remaining advantage was this one range:
+    ///
+    ///     mode                      durP50  durMean
+    ///     detected, raw range         85.5     74.5
+    ///     detected, padded (this)     88.0     76.4
+    ///     truthBeams (oracle)         88.0     76.6
+    ///
+    /// with 10 renders improved and none regressed. The three components
+    /// of the oracle's beams were priced separately
+    /// (`OMRHybridFrontEnd.Mode`): its x-ranges are worth +2.5 durP50, its
+    /// 574 fewer false positives −0.1 durMean, and its 31 extra beams
+    /// exactly zero. The ledger agrees — over the 11 renders the oracle
+    /// improved, its beams differ by 5 lost and 4 gained LEVELS in total,
+    /// against 370 stem inclusions lost to the unpadded range
+    /// (`[beamdiag] windowDrop`), and only 14 of 5042 matched beam ends
+    /// stop more than the pad short.
+    static func beamMemberSpan(_ beam: PathSegment) -> ClosedRange<CGFloat> {
+        let raw = beam.quad?.xRange ?? (beam.rect.minX ... beam.rect.maxX)
+        return (raw.lowerBound - beamEndpointPad)
+            ... (raw.upperBound + beamEndpointPad)
     }
 
     /// Whether a short vertical hook stands at `x` next to the arm's y.

@@ -184,8 +184,49 @@
             #expect(marks.count == 1)
             #expect(marks.first?.anchor == .beam)
             let span = try? #require(marks.first?.xRange)
-            // The 457.3..467.9 secondary, not the 457.3..480.1 primary.
-            #expect(abs((span?.upperBound ?? 0) - 467.9) < 0.01)
+            // The 457.3..467.9 secondary, not the 457.3..480.1 primary —
+            // read through `beamMemberSpan`, so both ends carry
+            // `beamEndpointPad`.
+            #expect(
+                abs((span?.upperBound ?? 0) - (467.9 + PDFImporter.beamEndpointPad))
+                    < 0.01,
+            )
+            #expect(
+                abs((span?.lowerBound ?? 0) - (457.3 - PDFImporter.beamEndpointPad))
+                    < 0.01,
+            )
+        }
+
+        /// The same secondary beam TRUNCATED by 1.0pt at each end, which is
+        /// what a raster-fitted slab looks like. `beamMemberSpan` restores
+        /// it: the mark's span must still reach the stems the beam is
+        /// really drawn between (457.3 and 467.9). See
+        /// `PDFImporterTupletApplyTests`
+        /// `.aBeamTruncatedInsideItsOwnEndStemsKeepsTheOuterMembers` for
+        /// what that costs downstream when it does not.
+        @Test func aTruncatedBeamStillSpansTheStemsItIsDrawnBetween() {
+            let marks = PDFImporter.detectTupletMarks(
+                texts: [Self.digit("3", x: 461.16, y: 126.1)],
+                paths: Self.truncatedDrumBeams,
+                staffYLines: Self.drumYLines,
+                xRange: Self.drumCellX,
+                pageIndex: 0,
+            )
+            #expect(marks.count == 1)
+            let span = marks.first?.xRange
+            #expect((span?.lowerBound ?? .infinity) <= 457.3)
+            #expect((span?.upperBound ?? 0) >= 467.9)
+        }
+
+        /// `drumBeams` with the secondary slab pulled 1.0pt inside its own
+        /// end stems at both ends — well within `beamEndpointPad`. The
+        /// triplet's outer members stand at the UNTRUNCATED 457.3 / 467.9.
+        static var truncatedDrumBeams: [PathSegment] {
+            drumStaffLines + [
+                beam(xLo: 457.3, xHi: 480.1, yLo: 124.2, yHi: 125.6),
+                beam(xLo: 458.3, xHi: 466.9, yLo: 122.1, yHi: 123.5),
+                beam(xLo: 472.8, xHi: 480.1, yLo: 122.1, yHi: 123.5),
+            ]
         }
 
         /// A measure number sits at the system's left edge with no beam or
@@ -287,7 +328,13 @@
             // width rather than from the empty bbox.
             let centre = try? #require(marks.first?.digitCenterX)
             #expect((centre ?? 0) > 461.16)
-            #expect(abs((marks.first?.xRange.upperBound ?? 0) - 467.9) < 0.01)
+            // The secondary's 467.9, plus `beamMemberSpan`'s pad.
+            #expect(
+                abs(
+                    (marks.first?.xRange.upperBound ?? 0)
+                        - (467.9 + PDFImporter.beamEndpointPad),
+                ) < 0.01,
+            )
         }
 
         /// The same physical digit engraved through a different CTM must
