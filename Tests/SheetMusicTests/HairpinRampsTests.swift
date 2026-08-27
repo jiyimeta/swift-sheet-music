@@ -79,6 +79,10 @@ struct HairpinRampsCollectTests {
         Dynamic(subtype: "p", velocity: 49)
     }
 
+    private func ppp() -> Dynamic {
+        Dynamic(subtype: "ppp", velocity: 16)
+    }
+
     private func quarter() -> VoiceElement {
         .chord(Chord(
             duration: .quarter,
@@ -205,6 +209,100 @@ struct HairpinRampsCollectTests {
         #expect(ramps[1].endVelocity == 49)
     }
 
+    /// Only a Dynamic anchored at the hairpin's own end tick brackets
+    /// it. MuseScore 4 resolves the end level from the dynamic *snapped*
+    /// to the last hairpin segment
+    /// (`PlaybackContext::findNominalEndDynamicType` →
+    /// `HairpinSegment::findElementToSnapAfter`), never from the next
+    /// dynamic wherever it happens to be. A `ppp` four measures later
+    /// describes a different passage, not this hairpin's target.
+    @Test func distantDynamicDoesNotBracketTheHairpin() {
+        let s = staff([
+            makeMeasure([
+                .dynamic(mp()), .spanner(cresc()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([quarter(), quarter(), quarter(), quarter()]),
+            makeMeasure([quarter(), quarter(), quarter(), quarter()]),
+            makeMeasure([quarter(), quarter(), quarter(), quarter()]),
+            makeMeasure([
+                .dynamic(ppp()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+        ])
+        let ramps = HairpinRamps.collect(
+            voiceIndex: 0, staff: s,
+            instrument: instrument(), division: division,
+        )
+        #expect(ramps.first?.endVelocity == 64 + HairpinRamps.defaultDeltaVelocity)
+    }
+
+    /// A bracketing Dynamic that contradicts the wedge — a crescendo
+    /// ending on a *quieter* mark — is not the hairpin's target either.
+    /// MuseScore 4 keeps the default step in that case
+    /// (`useNominalLevelTo` requires `nominalLevelTo > levelFrom` for a
+    /// crescendo); MuseScore 3.6 flattens the ramp instead
+    /// (`ChangeMap::cleanupStage3`). Either way it never ramps backwards.
+    @Test func endDynamicContradictingTheWedgeIsIgnored() {
+        let s = staff([
+            makeMeasure([
+                .dynamic(mp()), .spanner(cresc()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([
+                .dynamic(p()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+        ])
+        let ramps = HairpinRamps.collect(
+            voiceIndex: 0, staff: s,
+            instrument: instrument(), division: division,
+        )
+        #expect(ramps.first?.endVelocity == 64 + HairpinRamps.defaultDeltaVelocity)
+    }
+
+    /// Mirror of `endDynamicContradictingTheWedgeIsIgnored` for a
+    /// diminuendo running into a *louder* mark.
+    @Test func endDynamicContradictingTheDiminuendoIsIgnored() {
+        let s = staff([
+            makeMeasure([
+                .dynamic(f()), .spanner(decresc()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([
+                .dynamic(Dynamic(subtype: "ff", velocity: 112)),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+        ])
+        let ramps = HairpinRamps.collect(
+            voiceIndex: 0, staff: s,
+            instrument: instrument(), division: division,
+        )
+        #expect(ramps.first?.endVelocity == 96 - HairpinRamps.defaultDeltaVelocity)
+    }
+
+    /// An explicit `<veloChange>` is MuseScore 3's own way of spelling
+    /// the ramp's size, and it wins over the bracketing Dynamic there:
+    /// `Score::updateHairpin` passes it straight to `addRamp`, and only
+    /// a change of `0` sends `ChangeMap` looking for a neighbouring fix.
+    @Test func explicitVeloChangeWinsOverBracketDynamic() {
+        let s = staff([
+            makeMeasure([
+                .dynamic(mp()), .spanner(cresc(veloChange: 20)),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([
+                .dynamic(f()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+        ])
+        let ramps = HairpinRamps.collect(
+            voiceIndex: 0, staff: s,
+            instrument: instrument(), division: division,
+        )
+        #expect(ramps.first?.endVelocity == 84) // 64 + 20, not the f's 96
+    }
+
     /// End-to-end through MidiRenderer: the collected ramp is applied to
     /// the rendered note-on velocities.
     @Test func noteVelocitiesRampLinearly() throws {
@@ -241,5 +339,39 @@ struct HairpinRampsCollectTests {
         for i in 0 ..< 4 {
             #expect(velocities[i] < velocities[i + 1])
         }
+    }
+
+    /// A Dynamic the wedge could not adopt still governs its own note.
+    /// The ramp has to stop just short of it, exactly as MuseScore 4
+    /// trims the span (`spannerTo -= Fraction::eps()` when a dynamic
+    /// sits on the end tick and is not the level being ramped to) —
+    /// otherwise the ramp's own end value would overwrite the mark the
+    /// engraver wrote.
+    @Test func ignoredEndDynamicStillSoundsAtItsOwnTick() throws {
+        let s = staff([
+            makeMeasure([
+                .dynamic(mp()), .spanner(cresc()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([
+                .dynamic(p()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+        ])
+        let part = Part(id: "P1", instrument: instrument(), staves: [s])
+        let (events, _, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0, staff: s, part: part,
+            route: MidiRenderer.PartChannelRoute(
+                defaultChannel: 0, defaultPort: 0, switches: [],
+            ),
+            division: division,
+            plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+        )
+        let velocities: [Int] = events.compactMap {
+            if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }
+        }
+        #expect(velocities.first == 64)
+        // Downbeat of measure 2: the `p`, not the crescendo's target.
+        #expect(velocities[4] == 49)
     }
 }

@@ -46,10 +46,10 @@ enum HairpinRamps {
 
     /// Walk one voice in original (pre-repeat) ticks and resolve every
     /// `<HairPin>` into a concrete `HairpinRamp`. End velocity priority:
-    /// (a) a `Dynamic` whose original tick is at-or-after the hairpin's
-    /// end tick, (b) `<veloChange>` from the payload, (c) ±10 default.
-    /// Sign comes from the subtype (cresc → +, decresc → −) and the
-    /// final velocity is clamped to `1...127`.
+    /// (a) `<veloChange>` from the payload, (b) a `Dynamic` anchored on
+    /// the hairpin's own end tick *and* pointing the way the wedge does,
+    /// (c) ±10 default. Sign comes from the subtype (cresc → +,
+    /// decresc → −) and the final velocity is clamped to `1...127`.
     static func collect(
         voiceIndex: Int,
         staff: Staff,
@@ -158,18 +158,52 @@ enum HairpinRamps {
         }
     }
 
+    /// The end level a hairpin reaches, and the tick it reaches it on.
+    ///
+    /// Only a `Dynamic` sitting on the hairpin's own end tick can serve
+    /// as its target, and only when it points the way the wedge does.
+    /// Both restrictions are MuseScore's: MS4 reads the end level off
+    /// the dynamic *snapped to the last hairpin segment*
+    /// (`PlaybackContext::findNominalEndDynamicType`) and adopts it only
+    /// when `isCrescendo ? levelTo > levelFrom : levelTo < levelFrom`,
+    /// falling back to a single dynamic step otherwise. MS3 arrives at
+    /// the same place from the other side: `ChangeMap::cleanupStage3`
+    /// will happily read a distant fix, then flattens the ramp whenever
+    /// the two disagree about direction. A crescendo must never ramp
+    /// *down* — the wedge, not the next mark in the part, says which way
+    /// this passage goes.
+    ///
+    /// An unusable dynamic on the end tick still owns its own note, so
+    /// the ramp stops one tick short of it, mirroring MS4's
+    /// `spannerTo -= Fraction::eps()`.
     private static func resolveRamp(_ p: Pending, dynList: [DynPoint]) -> HairpinRamp {
-        let endVel: Int
-        if let dyn = dynList.first(where: { $0.tick >= p.endTick }) {
-            endVel = dyn.velocity
-        } else {
-            let delta = p.payload.veloChange ?? defaultDeltaVelocity
-            let signed = p.payload.subtype.isCrescendo ? delta : -delta
-            endVel = max(1, min(127, p.startVelocity + signed))
+        let isCrescendo = p.payload.subtype.isCrescendo
+        func stepped(by delta: Int) -> Int {
+            max(1, min(127, p.startVelocity + (isCrescendo ? delta : -delta)))
         }
+        let anchored = dynList.first { $0.tick == p.endTick }
+        let adoptable = anchored.map {
+            isCrescendo ? $0.velocity > p.startVelocity : $0.velocity < p.startVelocity
+        } ?? false
+
+        let endVel: Int
+        if let veloChange = p.payload.veloChange, veloChange != 0 {
+            // MS3's own spelling of the ramp size (`Score::updateHairpin`
+            // hands it straight to `ChangeMap::addRamp`); only a change of
+            // 0 sends MuseScore looking for a neighbouring fix.
+            endVel = stepped(by: veloChange)
+        } else if adoptable, let anchored {
+            endVel = max(1, min(127, anchored.velocity))
+        } else {
+            endVel = stepped(by: defaultDeltaVelocity)
+        }
+
+        let endTick = anchored != nil && !adoptable
+            ? max(p.startTick + 1, p.endTick - 1)
+            : p.endTick
         return HairpinRamp(
             startTick: p.startTick,
-            endTick: p.endTick,
+            endTick: endTick,
             startVelocity: p.startVelocity,
             endVelocity: endVel,
             method: p.payload.veloChangeMethod,
