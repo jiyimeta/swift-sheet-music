@@ -162,34 +162,78 @@
             return out + paths.filter { $0.kind != "horizontal" }
         }
 
+        /// The dy gate `staffLineRecall` applies, in staff spaces.
+        ///
+        /// Named rather than inlined so a probe can report how far a
+        /// near-miss sits from the gate it failed, in the gate's own
+        /// units, without a second copy of the number.
+        static let staffLineDyGateInSpaces = 0.25
+
+        /// The x-overlap gate `staffLineRecall` applies, as a fraction of
+        /// the TRUTH line's width. Same reason as above.
+        static let staffLineOverlapGate = 0.8
+
         static func staffLineRecall(
             predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
             staffSpacingPt: Double,
         ) -> (matched: Int, total: Int, endpointErrPt: [Double]) {
             let tLines = truth.filter { $0.kind == "horizontal" }
             let pLines = predicted.filter { $0.kind == "horizontal" }
-            var used = Set<Int>()
-            var matched = 0
+            let assign = staffLineAssignment(
+                predicted: pLines, truth: tLines, staffSpacingPt: staffSpacingPt,
+            )
             var errs: [Double] = []
-            for t in tLines {
+            for (ti, pi) in assign.truthPartner.enumerated() where pi != nil {
+                guard let pi else { continue }
+                errs.append(abs(pLines[pi].rectPt[0] - tLines[ti].rectPt[0]))
+                errs.append(abs(pLines[pi].rectPt[2] - tLines[ti].rectPt[2]))
+            }
+            return (assign.truthPartner.compactMap(\.self).count, tLines.count, errs)
+        }
+
+        /// WHICH prediction each truth staff line is paired with, rather
+        /// than only how many pair at all.
+        ///
+        /// Extracted for the same reason `barlineAssignment` was: a truth
+        /// line that matched nothing may have found no candidate, or may
+        /// have found one an EARLIER truth line already consumed — the
+        /// greedy `used` set makes those two indistinguishable in the
+        /// count, and they want opposite fixes. `staffLineRecall` is
+        /// written in terms of this, so the two can never disagree.
+        ///
+        /// Both arrays must already be filtered to `kind == "horizontal"`;
+        /// the returned indices refer to them.
+        static func staffLineAssignment(
+            predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
+            staffSpacingPt: Double,
+        ) -> (truthPartner: [Int?], predMatched: [Bool]) {
+            var partner = [Int?](repeating: nil, count: truth.count)
+            var used = [Bool](repeating: false, count: predicted.count)
+            for (ti, t) in truth.enumerated() {
                 var best: (idx: Int, dy: Double)?
-                for (i, p) in pLines.enumerated() where !used.contains(i) {
+                for (i, p) in predicted.enumerated() where !used[i] {
+                    guard staffLinePairs(p, t, staffSpacingPt: staffSpacingPt) else { continue }
                     let dy = abs(p.rectPt[1] - t.rectPt[1])
-                    let xOverlap = min(p.rectPt[2], t.rectPt[2]) - max(p.rectPt[0], t.rectPt[0])
-                    let tWidth = t.rectPt[2] - t.rectPt[0]
-                    guard dy <= 0.25 * staffSpacingPt, tWidth > 0,
-                          xOverlap >= 0.8 * tWidth else { continue }
                     if best == nil || dy < best?.dy ?? .infinity { best = (i, dy) }
                 }
                 if let best {
-                    used.insert(best.idx)
-                    matched += 1
-                    let p = pLines[best.idx]
-                    errs.append(abs(p.rectPt[0] - t.rectPt[0]))
-                    errs.append(abs(p.rectPt[2] - t.rectPt[2]))
+                    used[best.idx] = true
+                    partner[ti] = best.idx
                 }
             }
-            return (matched, tLines.count, errs)
+            return (partner, used)
+        }
+
+        /// The pair test itself: within the dy gate, and covering at least
+        /// `staffLineOverlapGate` of the truth line's width.
+        static func staffLinePairs(
+            _ p: OMRPageLabels.Path, _ t: OMRPageLabels.Path, staffSpacingPt: Double,
+        ) -> Bool {
+            let dy = abs(p.rectPt[1] - t.rectPt[1])
+            let xOverlap = min(p.rectPt[2], t.rectPt[2]) - max(p.rectPt[0], t.rectPt[0])
+            let tWidth = t.rectPt[2] - t.rectPt[0]
+            return dy <= staffLineDyGateInSpaces * staffSpacingPt && tWidth > 0
+                && xOverlap >= staffLineOverlapGate * tWidth
         }
 
         static func barlinePR(

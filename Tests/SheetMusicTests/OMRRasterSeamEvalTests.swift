@@ -56,6 +56,10 @@
             /// detector's own drop record. Gated on
             /// `OMR_BEAM_SLAB_PROBE=1`; see `OMRBeamSlabProbe`.
             var beamslab = OMRBeamSlabProbe.Totals()
+            /// Mechanism-level attribution of the STAFF-LINE loss, with a
+            /// counterfactual per candidate gate. Gated on
+            /// `OMR_STAFFLINE_DIAG=1`; see `OMRStaffLineDiagnostics`.
+            var sldiag = OMRStaffLineDiagnostics.Totals()
         }
 
         @Test func rasterPathsAgainstLabels() throws {
@@ -90,6 +94,9 @@
                 OMRBeamDiagnostics.report(totals.beamdiag)
             }
             if RasterBeamProbe.enabled { OMRBeamSlabProbe.report(totals.beamslab) }
+            if OMRStaffLineDiagnostics.enabled {
+                OMRStaffLineDiagnostics.report(totals.sldiag)
+            }
             OMRVerticalGranularity.report(totals.vgran)
             for key in Set(totals.endReal.keys).union(totals.endFalse.keys).sorted() {
                 print(
@@ -193,14 +200,10 @@
             let spacing = analysis.staffSpacingPt > 0
                 ? analysis.staffSpacingPt : OMRSeamMetrics.staffSpacing(page: page)
 
-            // Both sides through the same merge: the labels carry one
-            // staff line as up to ten segments and the raster emits one,
-            // and a one-to-one match between those two representations
-            // scores a perfect detector at one over the fragment count.
-            let lines = OMRSeamMetrics.staffLineRecall(
-                predicted: OMRSeamMetrics.mergedHorizontals(predicted.paths),
-                truth: OMRSeamMetrics.mergedHorizontals(truthPaths),
-                staffSpacingPt: spacing,
+            let lines = staffLines(
+                dir: dir, labelFile: labelFile, predicted: predicted.paths,
+                truth: truthPaths, analysis: analysis, page: page,
+                spacing: spacing, into: &totals,
             )
             totals.lineMatched += lines.matched
             totals.lineTotal += lines.total
@@ -261,6 +264,89 @@
                 "[beamdiag][page] render=\(URL(fileURLWithPath: dir).lastPathComponent) "
                     + "file=\(labelFile) " + OMRBeamDiagnostics.row(row),
             )
+        }
+
+        /// The staff-line recall, and — under `OMR_STAFFLINE_DIAG=1` —
+        /// the mechanism attribution and downstream staff count beside it.
+        ///
+        /// Both sides go through the same merge: the labels carry one
+        /// staff line as up to ten segments and the raster emits one, and
+        /// a one-to-one match between those two representations scores a
+        /// perfect detector at one over the fragment count.
+        func staffLines(
+            dir: String, labelFile: String,
+            predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
+            analysis: RasterPageAnalysis, page: OMRPageLabels, spacing: Double,
+            into totals: inout Totals,
+        ) -> (matched: Int, total: Int, endpointErrPt: [Double]) {
+            let mergedPredicted = OMRSeamMetrics.mergedHorizontals(predicted)
+            let mergedTruth = OMRSeamMetrics.mergedHorizontals(truth)
+            let lines = OMRSeamMetrics.staffLineRecall(
+                predicted: mergedPredicted, truth: mergedTruth, staffSpacingPt: spacing,
+            )
+            staffLineDiagnostics(
+                dir: dir, labelFile: labelFile,
+                predicted: mergedPredicted.filter { $0.kind == "horizontal" },
+                truth: mergedTruth.filter { $0.kind == "horizontal" },
+                truthFragments: truth.filter { $0.kind == "horizontal" },
+                analysis: analysis, page: page, spacing: spacing, into: &totals,
+            )
+            return lines
+        }
+
+        /// Mechanism-level attribution of the staff-line loss, and the
+        /// downstream staff count both ways, one row per page. Off unless
+        /// `OMR_STAFFLINE_DIAG=1`.
+        ///
+        /// The oracle replay is what makes the staff-count column
+        /// possible, and it is also the expensive part — which is why it
+        /// sits behind the gate and in its own function.
+        func staffLineDiagnostics(
+            dir: String, labelFile: String,
+            predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
+            truthFragments: [OMRPageLabels.Path],
+            analysis: RasterPageAnalysis, page: OMRPageLabels, spacing: Double,
+            into totals: inout Totals,
+        ) {
+            guard OMRStaffLineDiagnostics.enabled else { return }
+            var row = OMRStaffLineDiagnostics.accumulate(
+                predicted: predicted, truth: truth, truthFragments: truthFragments,
+                spacingPt: spacing, into: &totals.sldiag,
+            )
+            let index = page.page.index
+            if let oracle = try? OMROracleFrontEnd.replay(pages: [page]) {
+                // Through the SAME reframe and the SAME vocabulary filter
+                // the hybrid's `truthStaffLines` mode uses, so this column
+                // and the bisect's per-render deltas describe one
+                // experiment rather than two.
+                let truthSegments = OMRHybridFrontEnd.reframe(
+                    oracle.walked.paths.filter { $0.pageIndex == index },
+                    page: page, transform: analysis.transform,
+                )
+                let glyphs = OMRHybridFrontEnd.reframe(
+                    OMRHybridFrontEnd.detectorVocabularyGlyphs(
+                        oracle.walked.glyphs.filter { $0.geometry.pageIndex == index },
+                    ),
+                    page: page, transform: analysis.transform,
+                )
+                OMRStaffLineDiagnostics.staves(
+                    predicted: predicted,
+                    rasterPaths: analysis.paths, truthPaths: truthSegments,
+                    glyphs: glyphs, pageIndex: index, spacingPt: spacing,
+                    into: &totals.sldiag, row: &row,
+                )
+            }
+            let location = "render=\(URL(fileURLWithPath: dir).lastPathComponent) "
+                + "file=\(labelFile)"
+            print(
+                "[sldiag][page] " + location + " sp=\(String(format: "%.2f", spacing)) "
+                    + OMRStaffLineDiagnostics.row(row),
+            )
+            for line in OMRStaffLineDiagnostics.solidMissRows(
+                row, prefix: "[sldiag][solidmiss] " + location,
+            ) {
+                print(line)
+            }
         }
 
         /// The env-gated profiles. Off by default and factored out of
