@@ -42,6 +42,11 @@ enum EditReplayStep {
 ///   trailing rest after it, at element 2 — again unreferenced elsewhere) and then deleting that SAME element 1,
 ///   which collapses the whole bar to a single measure rest. The shrink doesn't move element 1 itself, so the
 ///   delete that follows still finds the chord it expects.
+/// - **The M3 signature steps (11a-12b) address a MEASURE, never an element**, so none of the above applies to
+///   them — but they move the ground under anything that would. Step 11a inserts a key signature at the head of
+///   measure 1, shifting every element index in that bar by one; steps 12a/12b re-bar measures 1 onward and change
+///   how many measures the score even has (three bars, then twelve, then four). They are last in the array for
+///   exactly that reason: nothing after them addresses a measure OR an element by fixed position.
 ///
 /// ## Identical fingerprints are not redundant steps
 ///
@@ -63,9 +68,14 @@ enum EditReplayStep {
 /// apply-or-undo step, so "redo" needs no new convention while still exercising an undo immediately followed by
 /// the state it undid coming back.
 enum EditReplayScript {
-    /// Fourteen steps over `EditingFixtures.replayFixture()`, covering every `EditIntent` case (see this type's doc
-    /// comment for the index-stability argument behind their ordering).
-    static func standard(staff: StaffAddress) -> [EditReplayStep] {
+    /// Eighteen steps over `EditingFixtures.replayFixture()` (see this type's doc comment for the index-stability
+    /// argument behind their ordering).
+    ///
+    /// Covers every `EditIntent` case that names a slot or a bar: the SP0/SP1/SP2 note and slot intents, plus M3's
+    /// four signature intents. The M1/M2 structural intents (`insertMeasure`, `deleteMeasure`, `addPart`,
+    /// `removePart`, `movePart`) are still not scripted here — they have their own command-level tests, and adding
+    /// them would renumber every measure and staff index the steps below address.
+    static func standard(staff: StaffAddress) -> [EditReplayStep] { // swiftlint:disable:this function_body_length
         func rest(_ measure: Int, _ element: Int) -> RestID {
             RestID(staff: staff, measureIndex: measure, voiceIndex: 0, elementIndex: element)
         }
@@ -130,10 +140,30 @@ enum EditReplayScript {
         // changing and changing back again is safe.
         let step10Undo = EditReplayStep.undo
         let step10Redo = EditReplayStep.intent(.removeTuplet(at: slot(0, 4)))
+        // Step 11a: declare E-flat major at measure 1. The fixture is in D major, so this is a real change of key
+        // rather than a restatement: it inserts a key signature at the head of a bar that carried none, and the
+        // planner re-spells the span it governs (measures 1 onward) against the new key.
+        let step11a = EditReplayStep.intent(.setKeySignature(measureIndex: 1, concertKey: -3))
+        // Step 11b: take it away again, so the span falls back to the D major measure 0 still declares. Paired with
+        // 11a deliberately: `RemoveKeySignature` has a pre-image inverse of its own, and a script that only ever
+        // set a key would never encode the removal's wire bytes at all.
+        let step11b = EditReplayStep.intent(.removeKeySignature(measureIndex: 1))
+        // Step 12a: 3/16 at measure 1 — a real RE-BAR, not just a glyph swap. The region (measures 1...2, since no
+        // later bar declares its own meter) holds eight quarters, which re-partition into eleven bars of three
+        // sixteenths, and the A4 quarter at the head of measure 1 — four sixteenths long, in a bar only three wide —
+        // is CUT by the first new barline: it comes back as an eighth plus a sixteenth filling the new measure 1,
+        // tied on into a sixteenth opening measure 2. A meter whose bar is at least a quarter long would have left
+        // every note whole and exercised only the re-partition, so the denominator is 16 on purpose.
+        let step12a = EditReplayStep.intent(.setTimeSignature(measureIndex: 1, numerator: 3, denominator: 16))
+        // Step 12b: remove it, re-barring the same span back to the 4/4 measure 0 declares. NOT an arithmetic undo
+        // of 12a and deliberately so: 12a's last bar was padded to a full 3/16, so the span comes back one sixteenth
+        // longer than it went in and the score settles at four measures rather than the three it started with. This
+        // is the removal's own re-bar path, reached through its own wire bytes.
+        let step12b = EditReplayStep.intent(.removeTimeSignature(measureIndex: 1))
 
         return [
             step1, step2, step3, step4, step5a, step5b, step6, step7, step7b, step8a, step8b, step9, step10Undo,
-            step10Redo,
+            step10Redo, step11a, step11b, step12a, step12b,
         ]
     }
 

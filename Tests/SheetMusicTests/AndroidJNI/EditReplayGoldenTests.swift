@@ -6,11 +6,12 @@
     @testable import SheetMusicMSCX
     import Testing
 
-    /// The host half of SP0/SP1's acceptance test: `EditReplayScript.standard`'s fourteen steps, run through the
+    /// The host half of SP0/SP1's acceptance test: `EditReplayScript.standard`'s eighteen steps, run through the
     /// same JNI entry points a device calls, with the resulting wire bytes and fingerprints committed as
     /// instrumented-test assets under `Android/SheetMusicAndroid/src/androidTest/assets/editReplay/`.
     /// `EditSessionReplayTest.kt` reads those assets back and replays them on-device via `nativeApplyEditIntent` /
-    /// `nativeEditUndo`, asserting the same fifteen fingerprints this test computes.
+    /// `nativeEditUndo`, asserting the same nineteen fingerprints this test computes. Its `EXPECTED_STEP_COUNT`
+    /// tracks `EditReplayScript.standard(staff:).count` by hand — a step added here has to move that constant too.
     ///
     /// Kotlin never builds an intent here, because it never does in production either: the host's Swift core is
     /// always the one that applies an intent to its authoritative score and encodes it, and Kotlin's job is only to
