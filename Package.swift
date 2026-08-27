@@ -240,6 +240,7 @@ if isWasm {
                 "SheetMusicCore",
                 "SheetMusicEditWire",
                 "SheetMusicFoundation",
+                "SheetMusicLayout",
                 "SheetMusicMIDI",
                 "SheetMusicMSCX",
             ],

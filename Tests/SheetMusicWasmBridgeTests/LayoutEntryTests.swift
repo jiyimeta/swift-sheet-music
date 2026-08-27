@@ -1,5 +1,6 @@
 @testable import SheetMusicBridgeCore
 import SheetMusicFoundation
+import SheetMusicLayout
 @testable import SheetMusicWasmBridge
 import Testing
 
@@ -145,6 +146,20 @@ struct LayoutEntryTests {
 
     @Test("installSMuFLMetrics accepts a well-formed table")
     func installAcceptsWellFormedTable() {
+        // `installSMuFLMetrics` mutates the process-wide `FontMetrics.provider`
+        // — the same global `Tests/SheetMusicTests` suites read after installing
+        // the real Bravura table through `TestSupport.installFontMetrics`. Both
+        // test targets link into one merged wasm test binary/process (`swift
+        // package … js test` builds every declared test target together), so
+        // without a restore this single-glyph synthetic table stays installed
+        // for whichever `SheetMusicTests` suite happens to read
+        // `FontMetrics.provider` next — silently substituting stub-shaped
+        // glyph bboxes for codepoints this table never measured (e.g.
+        // articulation glyphs) and failing tests that assert exact geometry,
+        // with no relation to which font-metrics provider they intended to use.
+        let previousProvider = FontMetrics.provider
+        defer { FontMetrics.provider = previousProvider }
+
         // SMFT v2 with a single glyph, assembled by hand so the wasm suite needs
         // no preopened directory. Layout: magic | version | f64 referenceSize |
         // u32 count | (u32 codepoint + f32 × 5). See `SMuFLMetricsTable.swift`.
