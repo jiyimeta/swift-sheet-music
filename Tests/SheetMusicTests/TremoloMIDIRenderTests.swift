@@ -124,4 +124,64 @@ struct TremoloVoiceRenderTests {
         }
         #expect(pitchOns == [60, 64, 60, 64])
     }
+
+    /// A tremolo under a hairpin swells across its own strokes. Each
+    /// stroke is a separate attack, so each reads the ramp at its own
+    /// tick — MuseScore does this explicitly, and says why:
+    ///
+    ///     // Get the velocity used for this note from the staff
+    ///     // This allows correct playback of tremolos even without SND enabled.
+    ///     int velo = staff->velocities().val(nonUnwoundTick);
+    ///
+    /// (`CompatMidiRender::collectNote`, where `nonUnwoundTick` is the
+    /// *NoteEvent's* onset, not the chord's.) Sampling the ramp once at
+    /// the chord onset instead flattens a rolled crescendo — exactly
+    /// the case a drum roll under a wedge is written for.
+    @Test func tremoloStrokesRampAcrossTheHairpin() throws {
+        let chord = Chord(
+            duration: .whole,
+            notes: [Note(pitch: 60, tpc: 14)],
+            tremolo: Tremolo(subtype: .r16),
+        )
+        let measure = Measure(voices: [Voice(elements: [
+            .dynamic(Dynamic(subtype: "mp", velocity: 64)),
+            .spanner(Spanner(
+                kind: .hairpin, rawType: "HairPin",
+                nextMeasuresOffset: 1,
+                hairpin: .init(subtype: .crescendo, veloChange: 40),
+            )),
+            .chord(chord),
+        ])])
+        let staff = Staff(measures: [
+            measure,
+            Measure(voices: [Voice(elements: [.chord(Chord(
+                duration: .whole, notes: [Note(pitch: 60, tpc: 14)],
+            ))])]),
+        ])
+        let (events, _, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0,
+            staff: staff,
+            part: Self.makePart(staff: staff),
+            route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
+            division: 480,
+            plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
+        )
+        let strokeVelocities = events
+            .filter { $0.tick < 1920 }
+            .compactMap { e -> Int? in
+                if case let .noteOn(_, _, v) = e.event { return v }
+                return nil
+            }
+        // `1 << subtype.rawValue` strokes, spread over the whole note.
+        #expect(strokeVelocities.count == 4)
+        #expect(strokeVelocities.first == 64)
+        #expect(strokeVelocities.last ?? 0 > 64)
+        for i in 1 ..< strokeVelocities.count {
+            #expect(
+                strokeVelocities[i] >= strokeVelocities[i - 1],
+                "stroke \(i) must not fall back below its predecessor",
+            )
+        }
+        #expect(Set(strokeVelocities).count > 1, "the roll must actually swell")
+    }
 }
