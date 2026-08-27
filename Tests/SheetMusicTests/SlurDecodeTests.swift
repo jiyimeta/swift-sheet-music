@@ -25,11 +25,18 @@ struct SlurDecodeTests {
     /// quietly starting to drop data these fixtures carry.
     ///
     /// It is also what pins the `<Slur>` allowlist honest: every payload child
-    /// either of these scores carries is either modeled or allowlisted with a
-    /// citing comment, so a real dropped property shows up as a failure here.
-    @Test("the vendored fixtures decode without any diagnostic", arguments: [
+    /// these scores carry is either modeled or allowlisted with a citing
+    /// comment, so a real dropped property shows up as a failure here.
+    /// `slur_ms4_glissando_legato` is MuseScore's own file;
+    /// `slur_ms4_resave` is this package's byte-parity fixture, and gating it
+    /// here means the encoder can never write something its own decoder would
+    /// have to warn about.
+    ///
+    /// `slur_ms3_exchangevoices` is *not* in this list — its cross-voice slur
+    /// is one real, known loss, gated in `SlurLocationDiagnosticsTests`.
+    @Test("the clean fixtures decode without any diagnostic", arguments: [
         "slur_ms4_glissando_legato",
-        "slur_ms3_exchangevoices",
+        "slur_ms4_resave",
     ])
     func fixturesDecodeWithoutDiagnostics(_ fixture: String) throws {
         let result = try MSCXParser.parseWithDiagnostics(

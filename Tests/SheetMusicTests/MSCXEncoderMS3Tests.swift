@@ -333,45 +333,31 @@ struct MSCXEncoderMS3Tests {
         #expect(!keySig.children.map(\.name).contains("concertKey"))
     }
 
-    /// MuseScore has one `Location` writer and it emits
-    /// `staves, voices, measures, fractions, grace, notes` — 3.6.2
-    /// (`Location::write`, `libmscore/location.cpp:52-63`) and master
-    /// (`TWrite::write(const Location*, …)`, `rw/write/twrite.cpp:2237-2238`)
-    /// alike. So does this encoder, in every target version.
-    @Test("v3 Spanner location emits <measures> before <fractions>")
-    func v3SpannerLocationOrderReversed() throws {
-        let spanner = Spanner(
-            kind: .hairpin,
-            rawType: "HairPin",
-            nextMeasuresOffset: 1,
-            nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
-        )
-        let xml = spanner.encode(options: .init(targetVersion: .v3))
-        let location = try #require(xml.first("next")?.first("location"))
-        #expect(location.children.map(\.name) == ["measures", "fractions"])
-    }
-
-    /// The v4 dialect writes the *same* order. This test used to pin
-    /// `["fractions", "measures"]`, which matched no MuseScore source of
-    /// either era and no fixture in this repository — every vendored file
+    /// Both dialects, one order. MuseScore has a single `Location` writer —
+    /// `staves, voices, measures, fractions, grace, notes` — in 3.6.2
+    /// (`libmscore/location.cpp:52-63`) and master
+    /// (`rw/write/twrite.cpp:2237-2238`) alike, so this encoder no longer
+    /// branches on the target version (`Spanner.relativeLocationChildren`).
+    /// The `.v4` case used to pin `["fractions", "measures"]`, an order with
+    /// no upstream source and no fixture behind it — every vendored file
     /// carrying `<measures>` is MS3-era and measures-first
-    /// (`testVoltaDynamic.mscx:228`, `testSingleNoteDynamics.mscx:106`,
-    /// `slur_ms3_exchangevoices.mscx:205-210`). The version branch in
-    /// `Spanner.relativeLocationChildren` is gone; this pins the corrected
-    /// order so it cannot come back.
-    @Test("v4 Spanner location emits <measures> before <fractions> too")
-    func v4SpannerLocationOrderMatchesV3() throws {
+    /// (`testVoltaDynamic.mscx:228`, `slur_ms3_exchangevoices.mscx:205-210`).
+    @Test(
+        "Spanner location emits <measures> before <fractions>",
+        arguments: [MSCXVersion.v3, .v4],
+    )
+    func spannerLocationOrderIsMeasuresFirst(_ version: MSCXVersion) throws {
         let spanner = Spanner(
             kind: .hairpin,
             rawType: "HairPin",
             nextMeasuresOffset: 1,
             nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
         )
-        let xml = spanner.encode(options: .init(targetVersion: .v4))
+        let xml = spanner.encode(options: .init(targetVersion: version))
         let location = try #require(xml.first("next")?.first("location"))
         #expect(location.children.map(\.name) == ["measures", "fractions"])
-        // …and the two dialects now agree element for element.
-        #expect(xml == spanner.encode(options: .init(targetVersion: .v3)))
+        #expect(location.first("measures")?.text == "1")
+        #expect(location.first("fractions")?.text == "1/4")
     }
 
     @Test("v3 Spanner skip-if-default still applies")

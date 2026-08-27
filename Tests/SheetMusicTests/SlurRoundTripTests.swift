@@ -105,6 +105,12 @@ struct SlurRoundTripTests {
     /// `<prev>` lands on the chord at the target position *within the same
     /// voice* — bar 2 voice 2's second quarter, not bar 2 voice 1's. Voice 1
     /// keeps only the marker of the slur that really is its own.
+    ///
+    /// The loss is announced on the way in, not discovered here:
+    /// `mscx.slur.locationDropped`, gated by
+    /// `SlurDecodeTests.ms3FixtureWarnsOnlyOnTheVoiceHop`. This test uses
+    /// `MSCXParser.parse`, which discards diagnostics, and asserts only where
+    /// the marker ends up.
     @Test("a cross-voice slur keeps its begin side and re-homes its <prev>")
     func crossVoiceSlurEndStaysInItsOwnVoice() throws {
         let score = try MSCXParser.parse(

@@ -143,6 +143,7 @@ extension Chord {
                 continue
             }
             warnDroppedSlurProperties(spannerNode)
+            warnDroppedSlurLocation(spannerNode)
             if let spanner = try? Spanner.decode(spannerNode) {
                 result.append(spanner)
             }
@@ -171,6 +172,45 @@ extension Chord {
         mscxDecoderWarn(
             code: "mscx.slur.propertiesDropped",
             message: "<Slur> children not modeled and dropped: "
+                + dropped.joined(separator: ", "),
+            location: "Chord/Spanner[Slur]",
+        )
+    }
+
+    /// `<next><location>` children `Spanner.decode` actually reads. MuseScore's
+    /// `Location` carries six fields and one writer emits them all —
+    /// `staves, voices, measures, fractions, grace, notes` (3.6.2
+    /// `Location::write`, `libmscore/location.cpp:52-63`; master
+    /// `TWrite::write(const Location*, …)`, `rw/write/twrite.cpp:2229-2243`,
+    /// which adds `timeTick`). This model holds two of them.
+    private static let slurKnownLocationChildren: Set = [
+        "measures",
+        "fractions",
+    ]
+
+    /// Announce, in one diagnostic per slur, every `<next><location>` child
+    /// the model cannot hold — tags sorted and deduped.
+    ///
+    /// The one that really occurs is `<voices>`: a slur whose two ends live in
+    /// different voices writes the voice delta there, and
+    /// `slur_ms3_exchangevoices.mscx:221-230` is exactly that. Dropping it
+    /// moves the slur's end — the encoder can only re-home the `<prev>` within
+    /// the begin side's own voice — so it is real data loss and must be said
+    /// out loud rather than passed over. `<staves>` (cross-staff slur),
+    /// `<grace>`, `<notes>` and `<timeTick>` are the same story, less common.
+    ///
+    /// This deliberately does *not* touch `Spanner.decode`: voice-level
+    /// spanners share that reader and are out of scope here.
+    private static func warnDroppedSlurLocation(_ spannerNode: XMLTreeNode) {
+        guard let location = spannerNode.first("next")?.first("location")
+        else { return }
+        let dropped = Set(location.children.map(\.name))
+            .subtracting(slurKnownLocationChildren)
+            .sorted()
+        guard !dropped.isEmpty else { return }
+        mscxDecoderWarn(
+            code: "mscx.slur.locationDropped",
+            message: "<Slur> <next><location> children not modeled and dropped: "
                 + dropped.joined(separator: ", "),
             location: "Chord/Spanner[Slur]",
         )
