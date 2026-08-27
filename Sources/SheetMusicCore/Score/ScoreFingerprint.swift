@@ -23,8 +23,10 @@ import SheetMusicFoundation
 /// - Not covered on `Measure`: `startRepeat`, `endRepeatCount`, `measureRepeatCount`, `markers`, `jumps`,
 ///   `lineBreak`, `pageBreak`, `sectionBreak`. `actualLength` and `irregular` ARE covered — M3's re-barring writes
 ///   both — and so is `Staff.measures.count`; `Staff.defaultClefType` is not.
-/// - Not covered on the system lane: `Score.systemMeasures` itself is covered (measure index, position and the
-///   fields that give each element its musical identity), but the display trivia hanging off each element is not —
+/// - Not covered on the system lane: `Score.systemMeasures`'s ELEMENTS are covered (measure index, position and the
+///   fields that give each one its musical identity), but the lane's LENGTH is not — an empty `SystemMeasure` and an
+///   absent one are indistinguishable to this walk, deliberately, so that a score built in memory and the same score
+///   parsed from MSCX still agree; see `combineSystemLane`. Nor is the display trivia hanging off each element —
 ///   `offsetX` / `offsetY`, `properties` (fonts), `elementProperties` (visibility/color), `RehearsalMark.frame`,
 ///   `InstrumentChange.isUserInitialized`. Same reasoning as the `Chord` / `Note` bullets above.
 /// - The walk's own shape: it emits a flat sequence of staff blocks with no part/staff-count delimiter, so two
