@@ -35,6 +35,14 @@ public struct Note: Sendable, Equatable {
     /// suppresses, and lets the end side be re-emitted on encode. Mirrors
     /// `tieBack`. C++: `Note::bendBack()`.
     public var guitarBendBack: Bool
+    /// Legacy MuseScore 3 bend curve on this note. Coexistence with
+    /// `guitarBend` cannot occur in real files (the encodings belong to
+    /// different eras). Where both appear anyway, playback takes the MS4
+    /// spanner and skips this curve, while layout draws both — the same
+    /// as MuseScore, where a `Bend` is an `el()` item laid out
+    /// independently of the spanner.
+    /// C++: `Note::bend()` (the `ElementType::BEND` entry of `el()`).
+    public var legacyBend: LegacyBend?
     /// Notehead shape override (e.g. "cross" for hi-hat, "diamond" for
     /// percussion rim, "triangle-down" for cowbell). When nil, the
     /// standard notehead for the duration is used.
@@ -92,6 +100,7 @@ public struct Note: Sendable, Equatable {
         glissando: Glissando? = nil,
         guitarBend: GuitarBend? = nil,
         guitarBendBack: Bool = false,
+        legacyBend: LegacyBend? = nil,
         headType: String? = nil,
         parentheses: NoteParentheses = .none,
         isSmall: Bool = false,
@@ -112,6 +121,7 @@ public struct Note: Sendable, Equatable {
         self.glissando = glissando
         self.guitarBend = guitarBend
         self.guitarBendBack = guitarBendBack
+        self.legacyBend = legacyBend
         self.headType = headType
         self.parentheses = parentheses
         self.isSmall = isSmall

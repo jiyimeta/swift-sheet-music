@@ -1,4 +1,6 @@
 import SheetMusicCore
+
+// swiftlint:disable file_length
 import SheetMusicFoundation
 
 extension MidiRenderer {
@@ -85,6 +87,7 @@ extension MidiRenderer {
         division: Int,
         glissandoEndPitch: Int?,
         bendChainSlots: BendChainChordSlots? = nil,
+        legacyBendSpans: [Int: Int] = [:],
         currentKey: Int,
         events: inout [TimedMidiEvent],
         playedTicksOverride: Int? = nil,
@@ -101,6 +104,19 @@ extension MidiRenderer {
         }
         // The chain's sounding key rides the ottava like every other pitch.
         let shiftedBendSlots = bendChainSlots.map { shifted($0, by: pitchShift) }
+        // …and so does the key of the legacy-bend span map, which the note
+        // loop looks up with a TRANSPOSED pitch. Without this the lookup
+        // misses under any ottava and the curve is lost with no diagnostic.
+        // The 0…127 clamp can fold two source pitches onto one key at the
+        // extremes; the source pitches are walked in ascending order so the
+        // lower one wins deterministically (a Dictionary's own iteration
+        // order is not stable across runs).
+        let shiftedLegacySpans = pitchShift == 0 ? legacyBendSpans : Dictionary(
+            legacyBendSpans.keys.sorted().map {
+                (min(127, max(0, $0 + pitchShift)), legacyBendSpans[$0] ?? 0)
+            },
+            uniquingKeysWith: { first, _ in first },
+        )
         // `playedTicksOverride` is set by the swing pass to express
         // a chord whose audible length differs from its written
         // duration (off-beat shift / down-beat extension). The grace
@@ -223,6 +239,21 @@ extension MidiRenderer {
                         startTick: mainOnset, durationTicks: playedTicks,
                         velocity: mainVelocity, channel: channel,
                         currentKey: currentKey, events: &events,
+                    )
+                } else if let legacyBend = note.legacyBend,
+                          let totalTicks = shiftedLegacySpans[note.pitch]
+                {
+                    // Last of the three: the MS4 spanner is the newer
+                    // encoding of the same gesture (`Note.legacyBend`), and
+                    // glissando keeps the priority it had before bends
+                    // existed. `legacyBendSpans` has already refused every
+                    // shape that must play plain, so nothing is re-guarded.
+                    renderLegacyBendNote(
+                        note: note, bend: legacyBend,
+                        startTick: mainOnset, durationTicks: gatedTicks,
+                        totalTicks: totalTicks,
+                        velocity: mainVelocity, channel: channel,
+                        events: &events,
                     )
                 } else {
                     emitNoteEventsForGrace(

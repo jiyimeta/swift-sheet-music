@@ -737,6 +737,18 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
+        case let .legacyBend(shape):
+            // The shape carries absolute coords, so the whole thing
+            // shifts at once instead of point by point (mirrors the
+            // Apple dispatch in `ScoreLayerBuilder+Element`).
+            encodeLegacyBend(
+                shape: shape.translated(
+                    by: CGPoint(x: CGFloat(mox), y: CGFloat(moy)),
+                ),
+                spPt: sp,
+                into: &out,
+            )
+
         case let .spannerSegment(
             kind, fromOrigin, toOrigin, continuesLeft, continuesRight, text,
         ):

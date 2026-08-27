@@ -41,8 +41,8 @@ extension LayoutElementShape {
         case let .note(_, _, _, _, p, _, _, _):
             return [noteheadRect(center: p, mag: 1, sp: sp)]
         case .articulation, .fermata, .breath, .tieArc, .tupletLabel,
-             .glissandoLine, .guitarBend, .arpeggioWiggle, .chordLine,
-             .tremoloBars:
+             .glissandoLine, .guitarBend, .legacyBend, .arpeggioWiggle,
+             .chordLine, .tremoloBars:
             return decorationRects(for: element, sp: sp)
         case .ledgerLine:
             // `LayoutElementShape.kind(of:)` already returns `nil` for
@@ -103,6 +103,21 @@ extension LayoutElementShape {
                 spanRect(from, vertex, thickness: sp * 0.3),
                 spanRect(vertex, to, thickness: sp * 0.3),
             ]
+        case let .legacyBend(shape):
+            // One rect per stroked leg, endpoints only — the same
+            // approximation `.guitarBend` makes for its cubic. Arrows sit
+            // on a leg's own tip and labels are covered by the vertical
+            // reservation in `LayoutEngine.elementYPoints`.
+            return shape.pieces.compactMap { piece in
+                switch piece {
+                case let .line(from, to):
+                    return spanRect(from, to, thickness: sp * 0.3)
+                case let .curve(from, _, _, to):
+                    return spanRect(from, to, thickness: sp * 0.3)
+                case .arrow, .label:
+                    return nil
+                }
+            }
         case let .arpeggioWiggle(top, bottom, _):
             return [spanRect(top, bottom, thickness: sp)]
         case let .chordLine(shape, origin, _):

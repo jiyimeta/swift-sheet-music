@@ -177,9 +177,18 @@ public enum LayoutEngine {
         let systemsWithBends = attachGuitarBends(
             to: systemsWithGliss, pairs: bendPairs, metrics: metrics,
         )
+        // Legacy MuseScore 3 `<Bend>` curves ride the same post-pass.
+        // They need no pairing — the whole curve hangs off one notehead —
+        // but they read the same `firstPass` note origins, and their
+        // rise target is measured off the staff top, which only the
+        // laid-out system knows.
+        let legacyBends = resolveLegacyBends(for: firstPass, score: score)
+        let systemsWithLegacyBends = attachLegacyBends(
+            to: systemsWithBends, resolved: legacyBends, metrics: metrics,
+        )
         return LayoutDocument(
             size: firstPass.size,
-            systems: systemsWithBends,
+            systems: systemsWithLegacyBends,
             metrics: metrics,
             titleFrame: titleFrame,
         )

@@ -257,6 +257,13 @@ extension ScoreLayerBuilder {
                 slight: slight,
                 metrics: metrics, height: height, into: parent,
             )
+        case let .legacyBend(shape):
+            // The shape carries absolute coords, so the whole thing
+            // shifts at once instead of point by point.
+            drawLegacyBend(
+                shape: shape.translated(by: base),
+                metrics: metrics, height: height, into: parent,
+            )
         case let .chordLine(shape, origin, thickness):
             drawChordLine(
                 shape: shape, origin: shift(origin),

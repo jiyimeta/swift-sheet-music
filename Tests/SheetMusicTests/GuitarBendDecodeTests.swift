@@ -227,26 +227,66 @@ struct GuitarBendDecodeTests {
         #expect(decoded.diagnostics.map(\.code) == ["mscx.guitarBend.missingPayload"])
     }
 
-    /// `<direction>` is dropped on purpose and deliberately *not* announced —
-    /// see `Note.decodeGuitarBend`'s doc comment for why. Pinned so the
-    /// silence is a decision rather than an oversight.
-    @Test("a user-flipped <direction> is dropped silently")
-    func directionDroppedSilently() throws {
-        let decoded = try decodeNote("""
-        <Note>
-          <pitch>60</pitch>
-          <tpc>14</tpc>
-          <Spanner type="GuitarBend">
-            <GuitarBend>
-              <guitarBendType>0</guitarBendType>
-              <direction>down</direction>
-            </GuitarBend>
-            <next><location><fractions>1/4</fractions></location></next>
-          </Spanner>
-        </Note>
-        """)
+    /// `<direction>` — which side of the note the bend arc is drawn on — is
+    /// not modeled. MuseScore writes the tag only when the user flipped it off
+    /// `DirectionV::AUTO`, so its presence is always real user intent.
+    @Test("a user-flipped <direction> is dropped with a warning")
+    func directionDroppedWarns() throws {
+        let decoded = try decodePayload("<direction>down</direction>")
         #expect(decoded.note.guitarBend?.type == .bend)
-        #expect(decoded.diagnostics.isEmpty)
+        #expect(decoded.diagnostics.map(\.code) == ["mscx.guitarBend.directionDropped"])
+    }
+
+    /// Payload children that lose nothing and so must never warn:
+    ///
+    /// - `<direction>auto</direction>` — MuseScore never serializes
+    ///   `DirectionV::AUTO`, but a hand-written file may spell it out.
+    /// - `<eid>` — see `LegacyBendDecodeTests.eidIsSilentlyElided`.
+    /// - `<anchor>` — `SLine`'s spanner anchor, written unconditionally for
+    ///   every guitar bend (`rw/write/twrite.cpp:1606`, reached from
+    ///   `TWrite::write(const GuitarBend*, …)`'s trailing
+    ///   `writeProperties(SLine*, …)` at `:1568`) and re-emitted verbatim by
+    ///   this package's encoder. The `<eid>` + `<anchor>` pair is exactly what
+    ///   every vendored fixture carries.
+    @Test("children that lose nothing produce no diagnostic", arguments: [
+        "<direction>auto</direction>",
+        "<eid>4123456789012345</eid>",
+        "<anchor>3</anchor>",
+        "<eid>11974368821379</eid><anchor>3</anchor>",
+    ])
+    func silentPayloadChildren(_ payload: String) throws {
+        let decoded = try decodePayload(payload)
+        #expect(decoded.note.guitarBend?.type == .bend)
+        #expect(decoded.diagnostics.map(\.code) == [])
+    }
+
+    /// The inline tests install a collector by hand; the fixture tests go
+    /// through `MSCXParser.parse`, which *discards* diagnostics — so a green
+    /// fixture suite was never evidence that the vendored scores decode
+    /// cleanly. This is that evidence. Every one of these carries `<eid>` and
+    /// `<anchor>` on each payload, and none may produce a diagnostic.
+    @Test("the vendored fixtures decode without any diagnostic", arguments: [
+        "guitarbend_simple", "guitarbend_prebend", "guitarbend_gracebend",
+        "guitarbend_release_twice", "guitarbend_slightbend", "guitarbend_tied",
+    ])
+    func fixturesDecodeWithoutDiagnostics(_ fixture: String) throws {
+        let result = try MSCXParser.parseWithDiagnostics(
+            MSCXFixtureLoader.mscxData(fixture),
+        )
+        #expect(result.diagnostics.map(\.code) == [])
+    }
+
+    /// Item properties (`offset`, `visible`, …) sit alongside the bend's own
+    /// payload and are not modeled; the bend still decodes.
+    @Test("unmodeled <GuitarBend> children are announced in one diagnostic")
+    func unknownPayloadChildrenWarn() throws {
+        let decoded = try decodePayload(
+            "<offset x=\"1\" y=\"2\"/><visible>0</visible>",
+        )
+        #expect(decoded.note.guitarBend?.type == .bend)
+        #expect(decoded.diagnostics.map(\.code) == ["mscx.guitarBend.propertiesDropped"])
+        #expect(decoded.diagnostics.first?.message
+            == "<GuitarBend> children not modeled and dropped: offset, visible")
     }
 
     /// The whammy-bar types carry four extra properties this model does not
@@ -271,8 +311,11 @@ struct GuitarBendDecodeTests {
         #expect(decoded.diagnostics.map(\.code) == ["mscx.guitarBend.divePropertiesDropped"])
     }
 
-    @Test("a legacy MuseScore 3 <Bend> child warns and is skipped")
-    func legacyBendWarns() throws {
+    /// A legacy MuseScore 3 `<Bend>` is a curve on one note, not a spanner
+    /// pair, so it must land in `legacyBend` and leave both guitar-bend
+    /// fields alone — see `LegacyBendDecodeTests` for the curve itself.
+    @Test("a legacy MuseScore 3 <Bend> child is not a guitar bend")
+    func legacyBendIsNotAGuitarBend() throws {
         let decoded = try decodeNote("""
         <Note>
           <pitch>60</pitch>
@@ -285,7 +328,8 @@ struct GuitarBendDecodeTests {
         """)
         #expect(decoded.note.guitarBend == nil)
         #expect(!decoded.note.guitarBendBack)
-        #expect(decoded.diagnostics.map(\.code) == ["mscx.bend.legacyUnsupported"])
+        #expect(decoded.note.legacyBend?.points.count == 2)
+        #expect(decoded.diagnostics.isEmpty)
     }
 
     // MARK: - Helpers
@@ -299,6 +343,25 @@ struct GuitarBendDecodeTests {
             try Note.decode(node)
         }
         return (note, collector.entries)
+    }
+
+    /// Decode a plain `<Note>` carrying a begin-side `GuitarBend` spanner
+    /// whose payload holds `<guitarBendType>0</guitarBendType>` plus
+    /// `extraChildren` — the boilerplate every payload-level diagnostic test
+    /// would otherwise repeat.
+    private func decodePayload(
+        _ extraChildren: String,
+    ) throws -> (note: Note, diagnostics: [ScoreDiagnostic]) {
+        try decodeNote("""
+        <Note>
+          <pitch>60</pitch>
+          <tpc>14</tpc>
+          <Spanner type="GuitarBend">
+            <GuitarBend><guitarBendType>0</guitarBendType>\(extraChildren)</GuitarBend>
+            <next><location><fractions>1/4</fractions></location></next>
+          </Spanner>
+        </Note>
+        """)
     }
 
     private func parse(_ fixture: String) throws -> Score {

@@ -105,6 +105,8 @@ extension LayoutEngine {
             // control point (which the curve never reaches, so this
             // over-reserves slightly rather than clipping).
             return [from.y, vertex.y, to.y]
+        case let .legacyBend(shape):
+            return legacyBendYPoints(shape: shape, sp: sp)
         case let .arpeggioWiggle(top, bot, _):
             return [top.y, bot.y]
         case let .chordLine(shape, origin, _):
@@ -118,6 +120,33 @@ extension LayoutEngine {
             return [from.y, to.y]
         case let .harmony(lh):
             return [CGFloat(lh.y)]
+        }
+    }
+
+    /// Y extent of a legacy bend: every piece's own points, plus the top
+    /// of each label's text box.
+    ///
+    /// A `.label` anchor is the leg's tip and the text sits ABOVE it, so
+    /// the anchor alone under-reserves by a line. 1.5 sp ≈ the 8 pt Edwin
+    /// line (`TextStyleType.bend`) at the default spatium — a conservative
+    /// reservation in the same spirit as the `.guitarBend` vertex comment.
+    /// Callers that pass no `sp` only want a representative Y, so they get
+    /// the anchor unpadded.
+    private static func legacyBendYPoints(
+        shape: LegacyBendShape, sp: CGFloat?,
+    ) -> [CGFloat] {
+        shape.pieces.flatMap { piece -> [CGFloat] in
+            switch piece {
+            case let .line(from, to):
+                return [from.y, to.y]
+            case let .curve(from, control1, control2, to):
+                return [from.y, control1.y, control2.y, to.y]
+            case let .arrow(tip, _):
+                return [tip.y]
+            case let .label(_, anchor):
+                guard let sp else { return [anchor.y] }
+                return [anchor.y, anchor.y - sp * 1.5]
+            }
         }
     }
 

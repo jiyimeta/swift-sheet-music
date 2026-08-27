@@ -124,6 +124,11 @@ extension LayoutEngine {
                 toOrigin: shift(to),
                 slight: slight,
             )
+        case let .legacyBend(shape):
+            // Every piece is in one frame, so the shape shifts whole.
+            return .legacyBend(
+                shape: shape.translated(by: CGPoint(x: 0, y: dy)),
+            )
         case let .arpeggioWiggle(top, bot, subtype):
             return .arpeggioWiggle(
                 top: shift(top),
