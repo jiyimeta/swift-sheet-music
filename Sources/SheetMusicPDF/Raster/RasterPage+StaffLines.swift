@@ -99,6 +99,37 @@ extension RasterPage {
     /// recorded beside it.
     static let staffLineMinWidthFractionOfWidest = 0.20
 
+    /// How wide a row of a line blob has to be, against the blob's widest
+    /// row, to count as part of the LINE rather than as ink that merged
+    /// into it.
+    ///
+    /// A staff line's blob is not always only the line. Where a beam, a
+    /// slur or a dense row of noteheads presses against the line, the rows
+    /// beside it also produce a run wide enough to clear
+    /// `staffLineMinWidthPt`, and `blobs` merges those rows in — on ONE
+    /// side, so the blob grows asymmetrically. Its yTop/yBottom midpoint
+    /// then sits two to four raster rows away from the ink.
+    ///
+    /// The error is not cosmetic, because the downstream evenness gate
+    /// prices it per STAFF: `pathDetectedStaves` keeps a five-line group
+    /// only while `gapCV(ys) < 0.1`, so ONE displaced line among five
+    /// costs all five. Measured on v2-eval, 27 of 574 staves were dropped
+    /// with every one of their five lines emitted and exactly one of them
+    /// off by 0.8–1.3pt against a 4.56pt spacing, while its neighbours
+    /// stayed inside ±0.3pt.
+    ///
+    /// Loosening the gate is not the alternative: kept staves already
+    /// reach cv 0.095, so the margin cannot absorb these without letting
+    /// in groups that are not staves. The line has to be located
+    /// correctly instead.
+    ///
+    /// 0.5 separates the two populations with room on both sides — a
+    /// staff line spans its system, whereas the ink that touches it spans
+    /// a beam or a chord — and the walk below is anchored on the widest
+    /// row and CONTIGUOUS, so a wide run further down the blob cannot
+    /// rejoin across the narrow rows that disowned it.
+    static let staffLineCoreRowWidthFraction = 0.5
+
     /// Staff-line spacing in pixels, from the row projection's peak
     /// spacing; nil when the page has no staff.
     ///
@@ -238,6 +269,10 @@ extension RasterPage {
         var x1: Int
         var yTop: Int
         var yBottom: Int
+        /// Total run width on each row from `yTop` to `yBottom`, in raster
+        /// order. Kept because the bounding box alone cannot say WHERE in
+        /// the blob the line is — see `staffLineCoreRowWidthFraction`.
+        var rowWidths: [Int]
     }
 
     /// Vertically adjacent runs that overlap in x become one blob.
@@ -258,24 +293,69 @@ extension RasterPage {
                 {
                     blob.x0 = min(blob.x0, run.x0)
                     blob.x1 = max(blob.x1, run.x1)
-                    blob.yBottom = y
+                    // Several runs of one row can join the same blob; they
+                    // are all that row's contribution, so they share its
+                    // slot rather than adding one each.
+                    if extended {
+                        blob.rowWidths[blob.rowWidths.count - 1] += run.x1 - run.x0 + 1
+                    } else {
+                        blob.yBottom = y
+                        blob.rowWidths.append(run.x1 - run.x0 + 1)
+                        extended = true
+                    }
                     consumed[i] = true
-                    extended = true
                 }
                 if extended { next.append(blob) } else { closed.append(blob) }
             }
             for (i, run) in runs.enumerated() where !consumed[i] {
-                next.append(LineBlob(x0: run.x0, x1: run.x1, yTop: y, yBottom: y))
+                next.append(LineBlob(
+                    x0: run.x0, x1: run.x1, yTop: y, yBottom: y,
+                    rowWidths: [run.x1 - run.x0 + 1],
+                ))
             }
             open = next
         }
         return closed + open
     }
 
+    /// Where the LINE is inside its blob: the width-weighted centroid of
+    /// the rows contiguous with the widest one that are themselves at
+    /// least `staffLineCoreRowWidthFraction` of it.
+    ///
+    /// NOT the bounding box's midpoint, which merged ink drags off the
+    /// line — see `staffLineCoreRowWidthFraction`. Weighted rather than
+    /// snapped to the widest row alone so a line whose ink covers an even
+    /// number of rows still reports the half-row centre between them.
+    private static func centerRow(_ blob: LineBlob) -> Double {
+        let midpoint = Double(blob.yTop + blob.yBottom) / 2
+        guard let widest = blob.rowWidths.max(), widest > 0,
+              let peak = blob.rowWidths.firstIndex(of: widest)
+        else { return midpoint }
+        let floor = Double(widest) * staffLineCoreRowWidthFraction
+        var first = peak
+        while first > 0, Double(blob.rowWidths[first - 1]) >= floor {
+            first -= 1
+        }
+        var last = peak
+        while last + 1 < blob.rowWidths.count,
+              Double(blob.rowWidths[last + 1]) >= floor
+        {
+            last += 1
+        }
+        var weight = 0.0
+        var moment = 0.0
+        for row in first ... last {
+            weight += Double(blob.rowWidths[row])
+            moment += Double(blob.rowWidths[row]) * Double(blob.yTop + row)
+        }
+        guard weight > 0 else { return midpoint }
+        return moment / weight
+    }
+
     private static func segment(
         from blob: LineBlob, transform: PageTransform, pageIndex: Int,
     ) -> PathSegment {
-        let midRow = Double(blob.yTop + blob.yBottom) / 2
+        let midRow = centerRow(blob)
         let left = transform.point(x: Double(blob.x0), y: midRow)
         let right = transform.point(x: Double(blob.x1 + 1), y: midRow)
         let thicknessPt = Double(blob.yBottom - blob.yTop + 1) * (72.0 / transform.dpi)

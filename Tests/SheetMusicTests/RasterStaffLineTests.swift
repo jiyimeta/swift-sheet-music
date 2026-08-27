@@ -172,6 +172,56 @@
             #expect(abs((ys.first ?? 0) - 31.68) < 0.5)
         }
 
+        /// INK THAT MERGES INTO A LINE MUST NOT MOVE THE LINE.
+        ///
+        /// Where a beam, a slur or a dense row of noteheads sits against
+        /// a staff line, the rows beside the line also produce a run wide
+        /// enough to clear the 50pt gate, and `blobs` merges them into the
+        /// line's blob — on ONE side only. Taking the blob's yTop/yBottom
+        /// midpoint then reports the line several raster rows away from
+        /// where its ink actually is.
+        ///
+        /// That is not a cosmetic error. `pathDetectedStaves` gates a
+        /// five-line group on `gapCV(ys) < 0.1`, so one displaced line
+        /// among five costs the WHOLE staff: measured on v2-eval, 27 of
+        /// 574 staves were dropped with all five of their lines emitted
+        /// and exactly one of them off by 0.8–1.3pt against a 4.56pt
+        /// spacing.
+        ///
+        /// Here the line is 820px wide and the merged block only 320px,
+        /// five rows of it, so the midpoint lands 2.5 rows (0.6pt at
+        /// 300dpi) below the ink.
+        @Test func mergedInkDoesNotDragTheLineCentre() {
+            var bmp = RasterTestBitmaps.blank(widthPx: 900, heightPx: 300, dpi: 300)
+            RasterTestBitmaps.hLine(&bmp, y: 150, x0: 40, x1: 860, thickness: 1)
+            RasterTestBitmaps.hLine(&bmp, y: 151, x0: 300, x1: 620, thickness: 5)
+            let mask = RasterPage.binarize(bmp)
+            let segs = RasterPage.staffLineSegments(
+                mask, spacingPx: 12, transform: Self.transform(bmp), pageIndex: 0,
+            )
+            #expect(segs.count == 1)
+            // Row 150 of a 300px page at 300dpi is page y 36.0pt; half a
+            // raster row is 0.12pt.
+            #expect(abs(Double(segs.first?.rect.midY ?? 0) - 36.0) <= 0.12)
+        }
+
+        /// …while a line that is genuinely thick keeps its true centre,
+        /// including the half-row offset an even thickness implies. Fixing
+        /// the merge above by snapping to one row would lose that.
+        ///
+        /// Four rows at 150–153 centre on 151.5, page y
+        /// (300 − 151.5) × 72/300 = 35.64pt.
+        @Test func aThickLineKeepsItsSubRowCentre() {
+            var bmp = RasterTestBitmaps.blank(widthPx: 900, heightPx: 300, dpi: 300)
+            RasterTestBitmaps.hLine(&bmp, y: 150, x0: 40, x1: 860, thickness: 4)
+            let mask = RasterPage.binarize(bmp)
+            let segs = RasterPage.staffLineSegments(
+                mask, spacingPx: 12, transform: Self.transform(bmp), pageIndex: 0,
+            )
+            #expect(segs.count == 1)
+            #expect(abs(Double(segs.first?.rect.midY ?? 0) - 35.64) <= 0.05)
+        }
+
         /// Segments carry MEASURED ink thickness, not the vector path's
         /// raw `w` operand (which is ~12.9pt for a staff line drawing
         /// 0.9pt of ink). Nothing downstream gates staff lines on it, but
