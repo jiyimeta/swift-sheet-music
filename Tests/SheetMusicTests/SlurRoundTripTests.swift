@@ -112,12 +112,14 @@ struct SlurRoundTripTests {
     }
 
     /// A slur whose begin side is marked invisible still writes its begin
-    /// side. `Spanner.encode` dispatches begin-vs-end on `visible` because a
-    /// *voice-level* end side is modeled as an invisible spanner; a
-    /// chord-anchored one never is — `Chord.spanners` holds begin sides only
-    /// (the `<prev>`-only markers are dropped on decode and recomputed here),
-    /// so `<visible>` means what it says.
-    @Test("an invisible slur still encodes as a begin side")
+    /// side, and writes the flag with it. `Spanner.encode` dispatches
+    /// begin-vs-end on `visible` because a *voice-level* end side is modeled
+    /// as an invisible spanner; a chord-anchored one never is —
+    /// `Chord.spanners` holds begin sides only (the `<prev>`-only markers are
+    /// dropped on decode and recomputed here), so `<visible>` means what it
+    /// says and has to survive the write. `decodeVisible` reads it back off
+    /// the `<Slur>` payload child, so that is where it goes.
+    @Test("an invisible slur encodes as a begin side carrying <visible>0")
     func invisibleSlurStillEncodesTheBeginSide() throws {
         var slur = Self.slur(fractions: Fraction(numerator: 1, denominator: 2))
         slur.visible = false
@@ -125,6 +127,10 @@ struct SlurRoundTripTests {
         chord.spanners = [slur]
         let spanner = try #require(chord.encodeAsChord().first("Spanner"))
         #expect(spanner.children.map(\.name) == ["Slur", "next"])
+        #expect(spanner.first("Slur")?.first("visible")?.text == "0")
+        // …and comes back invisible rather than silently un-hidden.
+        #expect(Chord.decodeChordSpanners(chord.encodeAsChord())
+            .first?.visible == false)
     }
 
     /// The end marker is the negation of the begin offsets, in the

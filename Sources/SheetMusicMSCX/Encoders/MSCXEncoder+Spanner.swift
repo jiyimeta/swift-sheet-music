@@ -45,7 +45,20 @@ extension Spanner {
         let placementNode: [XMLTreeNode] = placement.map {
             [XMLTreeNode(name: "placement", text: $0.rawValue)]
         } ?? []
-        let leading = beginTextNode + placementNode
+        // `<visible>0</visible>`, which `decodeVisible` reads off this same
+        // payload child. Unreachable from `encode(options:)` — that one only
+        // builds a payload when `visible` is true, because a voice-level end
+        // side *is* the invisible case — so this exists for the
+        // chord-anchored begin side, where `visible` means what it says and
+        // dropping it would silently un-hide a hidden slur.
+        //
+        // Before `<placement>`, matching MuseScore's property order
+        // (`TWrite::writeItemProperties`, `rw/write/twrite.cpp:572-580`,
+        // writes `Pid::VISIBLE` ahead of `Pid::PLACEMENT`).
+        let visibleNode: [XMLTreeNode] = visible
+            ? []
+            : [XMLTreeNode(name: "visible", text: "0")]
+        let leading = beginTextNode + visibleNode + placementNode
         if kind == .volta, !voltaEndings.isEmpty {
             let endingsText = voltaEndings.map(String.init).joined(separator: ", ")
             return XMLTreeNode(name: rawType, children: leading + [
