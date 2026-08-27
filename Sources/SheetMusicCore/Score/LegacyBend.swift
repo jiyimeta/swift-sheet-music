@@ -33,6 +33,14 @@ public struct LegacyBend: Sendable, Equatable {
     /// Defaults live in the style table (`Sid::bendLineWidth` 0.15 sp,
     /// `Sid::bendFontFace` "Edwin" 8 pt normal) and are NOT duplicated
     /// here. `lineWidth` is in spatium units.
+    ///
+    /// Round-trip only: these four fields are decoded and re-encoded so a
+    /// restyled bend survives a load/save byte-identically, but nothing
+    /// reads them afterwards. Layout and all three drawing paths (Canvas,
+    /// CALayer, and the layout bridge) use the `LegacyBendGeometry`
+    /// constants and the `TextStyleType.bend` defaults unconditionally,
+    /// so a restyled bend draws exactly like an unstyled one. Threading
+    /// the overrides through `LegacyBendShape` is a recorded follow-up.
     public var lineWidth: Double?
     public var fontFace: String?
     public var fontSize: Double?

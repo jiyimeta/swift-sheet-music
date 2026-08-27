@@ -37,7 +37,10 @@ public struct Note: Sendable, Equatable {
     public var guitarBendBack: Bool
     /// Legacy MuseScore 3 bend curve on this note. Coexistence with
     /// `guitarBend` cannot occur in real files (the encodings belong to
-    /// different eras); where both appear, the MS4 spanner wins.
+    /// different eras). Where both appear anyway, playback takes the MS4
+    /// spanner and skips this curve, while layout draws both — the same
+    /// as MuseScore, where a `Bend` is an `el()` item laid out
+    /// independently of the spanner.
     /// C++: `Note::bend()` (the `ElementType::BEND` entry of `el()`).
     public var legacyBend: LegacyBend?
     /// Notehead shape override (e.g. "cross" for hi-hat, "diamond" for
