@@ -231,6 +231,7 @@
                 into: &totals,
             )
             runProbes(
+                dir: dir, labelFile: labelFile,
                 predicted: predicted.paths, truth: truthPaths,
                 analysis: analysis, page: page, spacing: spacing, into: &totals,
             )
@@ -353,11 +354,19 @@
         /// `evaluate` so adding one never pushes that function over the
         /// body-length cap.
         func runProbes(
+            dir: String, labelFile: String,
             predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
             analysis: RasterPageAnalysis, page: OMRPageLabels,
             spacing: Double, into totals: inout Totals,
         ) {
             let env = ProcessInfo.processInfo.environment
+            if env["OMR_VFALSE_DUMP"] == "1" {
+                dumpGateVerticals(
+                    dir: dir, labelFile: labelFile,
+                    predicted: predicted, truth: truth,
+                    page: page, transform: analysis.transform, spacing: spacing,
+                )
+            }
             if env["OMR_VERTICAL_PROBE"] == "1" {
                 profileVerticals(
                     predicted: predicted, truth: truth,
@@ -552,6 +561,116 @@
                     totals.vFalse[key, default: 0] += 1
                 }
             }
+        }
+    }
+
+    /// The per-item vertical dump, in an extension because the suite body
+    /// sits at SwiftLint's `type_body_length` ceiling.
+    extension OMRRasterSeamEvalHarness {
+        /// One `[vfalse]` line per predicted vertical, with a `[vpage]`
+        /// header carrying the page's spacing — the per-item form the
+        /// aggregated `[endprofile]` cannot give. Off unless
+        /// `OMR_VFALSE_DUMP=1`.
+        ///
+        /// Two findings this dump already carried, kept here so the next
+        /// reader trusts its fields the right amount: the `[vpage]`
+        /// spacing is `analysis.staffSpacingPt`, the estimator's OWN
+        /// output, and it is printed precisely because a broken estimate
+        /// (cov_flags page 1's blade-pitch collapse) silently shrinks
+        /// every sp-denominated field below; and rows are emitted for
+        /// EVERY vertical — a notehead-window guard here once hid exactly
+        /// the columns under diagnosis, because the window is itself
+        /// spacing-denominated (endSp prints 99.0 when no notehead is in
+        /// the window).
+        func dumpGateVerticals(
+            dir: String, labelFile: String,
+            predicted: [OMRPageLabels.Path], truth: [OMRPageLabels.Path],
+            page: OMRPageLabels, transform: PageTransform, spacing: Double,
+        ) {
+            guard spacing > 0,
+                  let replay = try? OMROracleFrontEnd.replay(pages: [page])
+            else { return }
+            let render = URL(fileURLWithPath: dir).lastPathComponent
+            let glyphs = OMRHybridFrontEnd.reframe(
+                replay.walked.glyphs.filter { $0.geometry.pageIndex == page.page.index },
+                page: page, transform: transform,
+            )
+            let heads = glyphs.filter {
+                OMRLabelClassNames.className(for: $0.semantic).hasPrefix("notehead")
+            }
+            let tBars = truth.filter { $0.kind == "vertical" }
+            let window = 1.4 * spacing
+            print(
+                "[vpage] render=\(render) file=\(labelFile) "
+                    + String(format: "spacingPt=%.3f ", spacing)
+                    + "verticals=\(predicted.filter { $0.kind == "vertical" }.count)",
+            )
+            for p in predicted where p.kind == "vertical" {
+                let px = (p.rectPt[0] + p.rectPt[2]) / 2
+                var endDist = Double.greatestFiniteMagnitude
+                for head in heads {
+                    guard abs(Double(head.geometry.origin.x) - px) <= window
+                    else { continue }
+                    let hy = Double(head.geometry.origin.y)
+                    endDist = min(
+                        endDist,
+                        min(abs(hy - p.rectPt[1]), abs(hy - p.rectPt[3])),
+                    )
+                }
+                if endDist == .greatestFiniteMagnitude { endDist = 99.0 * spacing }
+                print(gateVerticalRow(
+                    p, px: px, endDist: endDist, truth: tBars, glyphs: glyphs,
+                    spacing: spacing, render: render, labelFile: labelFile,
+                ))
+            }
+        }
+
+        /// The `[vfalse]` row for one vertical.
+        func gateVerticalRow(
+            _ p: OMRPageLabels.Path, px: Double, endDist: Double,
+            truth: [OMRPageLabels.Path], glyphs: [ClassifiedGlyph],
+            spacing: Double, render: String, labelFile: String,
+        ) -> String {
+            let py = (p.rectPt[1] + p.rectPt[3]) / 2
+            var match: OMRPageLabels.Path?
+            var matchDist = 0.5 * spacing
+            for t in truth {
+                let dx = (t.rectPt[0] + t.rectPt[2]) / 2 - px
+                let dy = (t.rectPt[1] + t.rectPt[3]) / 2 - py
+                let d = (dx * dx + dy * dy).squareRoot()
+                if d <= matchDist {
+                    matchDist = d
+                    match = t
+                }
+            }
+            var nearName = "-"
+            var nearDist = Double.greatestFiniteMagnitude
+            for g in glyphs {
+                let dx = Double(g.geometry.origin.x) - px
+                let dy = Double(g.geometry.origin.y) - py
+                let d = (dx * dx + dy * dy).squareRoot()
+                if d < nearDist {
+                    nearDist = d
+                    nearName = OMRLabelClassNames.className(for: g.semantic)
+                }
+            }
+            var row = "[vfalse] render=\(render) file=\(labelFile) "
+                + "real=\(match == nil ? 0 : 1) "
+                + String(
+                    format: "x=%.1f y0=%.1f y1=%.1f hSp=%.2f endSp=%.2f ",
+                    px, p.rectPt[1], p.rectPt[3],
+                    (p.rectPt[3] - p.rectPt[1]) / spacing, endDist / spacing,
+                )
+                + "near=\(nearName) "
+                + String(format: "ndSp=%.2f", nearDist / spacing)
+            if let t = match {
+                row += String(
+                    format: " dTopSp=%.2f dBotSp=%.2f",
+                    (p.rectPt[1] - t.rectPt[1]) / spacing,
+                    (p.rectPt[3] - t.rectPt[3]) / spacing,
+                )
+            }
+            return row
         }
     }
 #endif
