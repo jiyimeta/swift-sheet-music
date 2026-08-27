@@ -212,8 +212,7 @@ public enum LayoutElement: Sendable, Equatable {
     /// the `count` consecutive rest measures starting at this layout
     /// measure's `measureIndex`. Origin is the SMuFL anchor at the
     /// horizontal center of the measure, vertically centered on the
-    /// middle staff line. The width payload is added in Task 11
-    /// once the renderer requirements are clearer.
+    /// middle staff line.
     case multiMeasureRest(
         count: Int,
         origin: CGPoint,

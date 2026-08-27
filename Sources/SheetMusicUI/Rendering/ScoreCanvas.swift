@@ -479,8 +479,11 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 lineWidth: metrics.sp * 0.1,
             )
         case .multiMeasureRest:
-            // Drawn by MultiMeasureRestRenderer in Task 10/11. Stub for
-            // exhaustive switch; Task 11 replaces this with the real call.
+            // The CALayer path implements this
+            // (`ScoreLayerBuilder+Misc.drawMultiMeasureRest`, called
+            // from `ScoreLayerBuilder+Element`); the Canvas path does
+            // not draw multi-measure rests yet — a known dual-renderer
+            // parity gap (tracked 2026-08-27).
             break
         case let .tremoloBars(anchor, barCount):
             let shiftedAnchor: TremoloAnchor

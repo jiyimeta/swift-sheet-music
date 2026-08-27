@@ -143,8 +143,8 @@ public final class SwiftySynthBackend: SynthBackend {
         // resolved by `MetronomeClickResolver` — and only falls back to SHARING
         // the score's SoundFont (GM wood blocks) when the host supplies none.
         // Sharing unconditionally is what made a host-supplied click inaudible
-        // during playback while offline export, which renders the metronome on
-        // AUMIDISynth, still used it. That synth runs reverb/chorus OFF with a
+        // during playback while offline export, which then rendered the
+        // metronome on AUMIDISynth, still used it. That synth runs reverb/chorus OFF with a
         // tiny voice pool — clicks need neither — so it adds almost no per-block
         // DSP, which matters on CPU-tight lightweight SoundFonts where the
         // constant cost of an always-on effects chain could otherwise miss the

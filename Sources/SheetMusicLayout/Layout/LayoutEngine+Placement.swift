@@ -990,13 +990,13 @@ extension LayoutEngine {
                             lyric.text, sp: metrics.sp,
                         )
                         // Hyphens between this syllable and the
-                        // previous one in the same verse. Only emitted
-                        // when both endpoints are visible (a hidden
-                        // syllable on either end takes the early
-                        // `continue` above and never reaches here, so
-                        // the test here is simply that the current
-                        // lyric is visible — the previous one was too
-                        // by induction).
+                        // previous one in the same verse. Only the
+                        // CURRENT syllable must be visible; the
+                        // previous endpoint may have been a hidden
+                        // lyric, whose early `continue` above still
+                        // recorded it in `previousLyric` — the hyphen
+                        // then starts from the hidden lyric's slot
+                        // (see the hidden-lyrics comment above).
                         if lyric.visible,
                            let prev = previousLyric[verseIdx],
                            connectsWithHyphen(
