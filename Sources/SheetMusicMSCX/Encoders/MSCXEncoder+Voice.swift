@@ -248,7 +248,6 @@ extension Voice {
         mutating func claimSlurEndMarkers(
             forChordRest element: VoiceElement,
             at position: Fraction,
-            options: MSCXEncoderOptions,
         ) -> [XMLTreeNode] {
             guard case .chord = element else { return [] }
             let claimed = pendingSlurEnds.filter {
@@ -258,7 +257,7 @@ extension Voice {
             pendingSlurEnds.removeAll {
                 $0.measuresAway == 0 && $0.fraction == position
             }
-            return claimed.map { $0.marker(options: options) }
+            return claimed.map { $0.marker() }
         }
     }
 

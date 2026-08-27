@@ -23,13 +23,14 @@ struct MSCXPendingSlurEnd: Sendable, Equatable {
     var prevMeasures: Int
     var prevFractions: Fraction?
 
-    /// The marker element for this record.
-    func marker(options: MSCXEncoderOptions) -> XMLTreeNode {
+    /// The marker element for this record. Version-independent: MuseScore's
+    /// single `Location` writer has emitted `<measures>` before `<fractions>`
+    /// in every era — see `Spanner.relativeLocationChildren`.
+    func marker() -> XMLTreeNode {
         Spanner.chordAnchoredEndMarker(
             rawType: rawType,
             measures: prevMeasures,
             fractions: prevFractions,
-            options: options,
         )
     }
 

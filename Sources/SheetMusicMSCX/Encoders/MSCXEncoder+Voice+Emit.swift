@@ -116,7 +116,7 @@ extension Voice {
         // registering their targets — are measured from it.
         let chordPosition = state.voiceTotal
         let slurEndMarkers = state.claimSlurEndMarkers(
-            forChordRest: element, at: chordPosition, options: options,
+            forChordRest: element, at: chordPosition,
         )
         try state.children.append(encode(
             element: element,

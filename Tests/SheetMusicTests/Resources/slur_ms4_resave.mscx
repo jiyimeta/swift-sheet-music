@@ -69,8 +69,8 @@
               <Slur/>
               <next>
                 <location>
-                  <fractions>-1/2</fractions>
                   <measures>1</measures>
+                  <fractions>-1/2</fractions>
                 </location>
               </next>
             </Spanner>
@@ -95,8 +95,8 @@
             <Spanner type="Slur">
               <prev>
                 <location>
-                  <fractions>1/2</fractions>
                   <measures>-1</measures>
+                  <fractions>1/2</fractions>
                 </location>
               </prev>
             </Spanner>

@@ -333,6 +333,11 @@ struct MSCXEncoderMS3Tests {
         #expect(!keySig.children.map(\.name).contains("concertKey"))
     }
 
+    /// MuseScore has one `Location` writer and it emits
+    /// `staves, voices, measures, fractions, grace, notes` — 3.6.2
+    /// (`Location::write`, `libmscore/location.cpp:52-63`) and master
+    /// (`TWrite::write(const Location*, …)`, `rw/write/twrite.cpp:2237-2238`)
+    /// alike. So does this encoder, in every target version.
     @Test("v3 Spanner location emits <measures> before <fractions>")
     func v3SpannerLocationOrderReversed() throws {
         let spanner = Spanner(
@@ -346,8 +351,16 @@ struct MSCXEncoderMS3Tests {
         #expect(location.children.map(\.name) == ["measures", "fractions"])
     }
 
-    @Test("v4 Spanner location order unchanged (fractions first)")
-    func v4SpannerLocationOrderUnchanged() throws {
+    /// The v4 dialect writes the *same* order. This test used to pin
+    /// `["fractions", "measures"]`, which matched no MuseScore source of
+    /// either era and no fixture in this repository — every vendored file
+    /// carrying `<measures>` is MS3-era and measures-first
+    /// (`testVoltaDynamic.mscx:228`, `testSingleNoteDynamics.mscx:106`,
+    /// `slur_ms3_exchangevoices.mscx:205-210`). The version branch in
+    /// `Spanner.relativeLocationChildren` is gone; this pins the corrected
+    /// order so it cannot come back.
+    @Test("v4 Spanner location emits <measures> before <fractions> too")
+    func v4SpannerLocationOrderMatchesV3() throws {
         let spanner = Spanner(
             kind: .hairpin,
             rawType: "HairPin",
@@ -356,7 +369,9 @@ struct MSCXEncoderMS3Tests {
         )
         let xml = spanner.encode(options: .init(targetVersion: .v4))
         let location = try #require(xml.first("next")?.first("location"))
-        #expect(location.children.map(\.name) == ["fractions", "measures"])
+        #expect(location.children.map(\.name) == ["measures", "fractions"])
+        // …and the two dialects now agree element for element.
+        #expect(xml == spanner.encode(options: .init(targetVersion: .v3)))
     }
 
     @Test("v3 Spanner skip-if-default still applies")

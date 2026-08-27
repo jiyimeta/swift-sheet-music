@@ -16,7 +16,7 @@ extension Spanner {
         var children: [XMLTreeNode] = []
         if visible {
             children.append(payloadElement(options: options))
-            if let next = nextLocationElement(options: options) {
+            if let next = nextLocationElement() {
                 children.append(next)
             }
         } else {
@@ -96,11 +96,10 @@ extension Spanner {
 
     /// `<next><location>…</location></next>`. Returns nil when both
     /// offsets are at their defaults (no end-side anchor needed).
-    private func nextLocationElement(options: MSCXEncoderOptions = .init()) -> XMLTreeNode? {
+    private func nextLocationElement() -> XMLTreeNode? {
         let locationChildren = Self.relativeLocationChildren(
             measures: nextMeasuresOffset,
             fractions: nextFractionsOffset,
-            options: options,
         )
         guard !locationChildren.isEmpty else { return nil }
         return XMLTreeNode(name: "next", children: [
@@ -114,34 +113,42 @@ extension Spanner {
     /// written whenever the model holds one, `nil` standing for "MuseScore
     /// elided it".
     ///
-    /// Element order differs by target version: v4 emits `<fractions>` then
-    /// `<measures>`, matching what MuseScore 4 wrote when this encoder's
-    /// spanner fixtures were captured
-    /// (`engraving/types/location.cpp::Location::write`); v3 emits
-    /// `<measures>` then `<fractions>`, matching MuseScore 3 — and matching
-    /// the `<prev>` markers in `slur_ms3_exchangevoices.mscx:252-259`.
+    /// **`<measures>` before `<fractions>`, in every target version.**
+    /// MuseScore has only ever had one `Location` writer and it has always
+    /// emitted `staves, voices, measures, fractions, grace, notes`:
+    ///
+    /// - 3.6.2 `Location::write`, `libmscore/location.cpp:52-63`
+    /// - master `TWrite::write(const Location*, …)`,
+    ///   `rw/write/twrite.cpp:2229-2243` (`:2237-2238` for these two)
+    ///
+    /// This encoder used to branch on `options.targetVersion` and emit
+    /// `<fractions>` first for `.v4`. That order matched no MuseScore source
+    /// of either era, and no fixture in this repository pinned it — every
+    /// vendored file carrying `<measures>` is MS3-era and measures-first
+    /// (`testVoltaDynamic.mscx`, `testSingleNoteDynamics.mscx`,
+    /// `slur_ms3_exchangevoices.mscx:205-210` and `:252-259`). The branch is
+    /// gone; both dialects now write what MuseScore writes.
+    ///
+    /// `Note.locationElement(from:)` (`MSCXEncoder+Note.swift`) is the same
+    /// order for the same reason — it serves ties, guitar bends and
+    /// glissandos, which share MuseScore's single `Location` reader/writer
+    /// pair. The two writers stay separate only because that one also handles
+    /// `<grace>` / `<notes>`; their field order is one decision, cited here.
     private static func relativeLocationChildren(
         measures: Int,
         fractions: Fraction?,
-        options: MSCXEncoderOptions,
     ) -> [XMLTreeNode] {
-        let fractionsNode: XMLTreeNode? = fractions.map {
-            XMLTreeNode(
-                name: "fractions",
-                text: "\($0.numerator)/\($0.denominator)",
+        var locationChildren: [XMLTreeNode] = []
+        if measures != 0 {
+            locationChildren.append(
+                XMLTreeNode(name: "measures", text: String(measures)),
             )
         }
-        let measuresNode: XMLTreeNode? = measures != 0
-            ? XMLTreeNode(name: "measures", text: String(measures))
-            : nil
-        var locationChildren: [XMLTreeNode] = []
-        switch options.targetVersion {
-        case .v2, .v3:
-            if let measuresNode { locationChildren.append(measuresNode) }
-            if let fractionsNode { locationChildren.append(fractionsNode) }
-        case .v4:
-            if let fractionsNode { locationChildren.append(fractionsNode) }
-            if let measuresNode { locationChildren.append(measuresNode) }
+        if let fractions {
+            locationChildren.append(XMLTreeNode(
+                name: "fractions",
+                text: "\(fractions.numerator)/\(fractions.denominator)",
+            ))
         }
         return locationChildren
     }
@@ -169,8 +176,7 @@ extension Spanner {
             attributes: ["type": rawType],
             children: [
                 payloadElement(options: options),
-                nextLocationElement(options: options)
-                    ?? XMLTreeNode(name: "next"),
+                nextLocationElement() ?? XMLTreeNode(name: "next"),
             ],
         )
     }
@@ -191,7 +197,6 @@ extension Spanner {
         rawType: String,
         measures: Int,
         fractions: Fraction?,
-        options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
         XMLTreeNode(
             name: "Spanner",
@@ -203,7 +208,6 @@ extension Spanner {
                         children: relativeLocationChildren(
                             measures: measures,
                             fractions: fractions,
-                            options: options,
                         ),
                     ),
                 ]),

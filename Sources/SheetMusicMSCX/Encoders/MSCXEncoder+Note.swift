@@ -174,10 +174,14 @@ extension Note {
     func locationElement(from endpoint: TieEndpoint) -> XMLTreeNode {
         // Element order matches MuseScore Studio's own writer:
         // `<measures>` precedes `<fractions>`, which precede `<grace>`,
-        // which precedes `<notes>` (`TWrite::write(const Location*, …)`,
-        // `rw/write/twrite.cpp:2229-2243`). MuseScore's parser appears
-        // tolerant of any order, but matching upstream keeps diffs
-        // against MuseScore-saved files clean.
+        // which precedes `<notes>` — version-independent, because MuseScore
+        // has a single `Location` writer serving every connector type and it
+        // is unchanged between 3.6.2 (`Location::write`,
+        // `libmscore/location.cpp:52-63`) and master
+        // (`TWrite::write(const Location*, …)`, `rw/write/twrite.cpp:2229-2243`).
+        // `Spanner.relativeLocationChildren` (`MSCXEncoder+Spanner.swift`)
+        // writes the same order for the same reason; the two stay separate
+        // only because this one also emits `<grace>` / `<notes>`.
         var children: [XMLTreeNode] = []
         switch endpoint.location {
         case let .sameMeasure(fractions):

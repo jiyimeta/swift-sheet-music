@@ -182,31 +182,34 @@ struct SlurRoundTripTests {
         #expect(chords[3].all("Spanner").isEmpty)
     }
 
-    /// Same slur, v4 target: the two `<location>` children swap. This
-    /// encoder's v4 dialect writes `<fractions>` before `<measures>` for
-    /// spanner locations — pinned since `MSCXEncoderMS3Tests`'
-    /// `v4SpannerLocationOrderUnchanged`, and shared here so a chord-anchored
-    /// pair reads the same way as a voice-level one within one file. (Current
-    /// MuseScore master writes `<measures>` first in both dialects,
-    /// `TWrite::write(const Location*, …)`, `rw/write/twrite.cpp:2229`; both
-    /// readers look children up by name.)
-    @Test("the v4 export writes the same pair with v4 <location> order")
+    /// Same slur, v4 target: byte-for-byte the same pair. MuseScore has one
+    /// `Location` writer, `<measures>` before `<fractions>` in both eras
+    /// (3.6.2 `Location::write`, `libmscore/location.cpp:52-63`; master
+    /// `TWrite::write(const Location*, …)`, `rw/write/twrite.cpp:2237-2238`),
+    /// so this encoder no longer branches on the target version — see
+    /// `Spanner.relativeLocationChildren`.
+    @Test("the v4 export writes the identical pair, measures-first")
     func crossBarlineEndMarkerFollowsV4LocationOrder() throws {
-        let node = try Self.crossBarlineStaff().encodeTopLevel(
+        let staff = Self.crossBarlineStaff()
+        let node = try staff.encodeTopLevel(
             staffID: "1", options: .init(targetVersion: .v4),
         )
         let beginLocation = try #require(
             node.all("Measure")[0].first("voice")?.all("Chord").last?
                 .first("Spanner")?.first("next")?.first("location"),
         )
-        #expect(beginLocation.children.map(\.name) == ["fractions", "measures"])
+        #expect(beginLocation.children.map(\.name) == ["measures", "fractions"])
         let endLocation = try #require(
             node.all("Measure")[1].first("voice")?.all("Chord").first?
                 .first("Spanner")?.first("prev")?.first("location"),
         )
-        #expect(endLocation.children.map(\.name) == ["fractions", "measures"])
+        #expect(endLocation.children.map(\.name) == ["measures", "fractions"])
         #expect(endLocation.first("measures")?.text == "-1")
         #expect(endLocation.first("fractions")?.text == "1/2")
+        // The two dialects now produce the identical staff.
+        try #expect(node == staff.encodeTopLevel(
+            staffID: "1", options: .init(targetVersion: .v3),
+        ))
     }
 
     /// A chord that both ends one slur and begins another writes the end
