@@ -45,6 +45,9 @@ public enum LayoutElementShape {
         // rather than adding a `ShapeItemKind` case that `AutoplaceRules`
         // and every `allCases` walk would then have to account for.
         case .guitarBend: .glissando
+        // A legacy `<Bend>` is note-attached ink above the staff, same as
+        // the modern bend — it reuses the same slot for the same reason.
+        case .legacyBend: .glissando
         case .measureNumber: .measureNumber
         case .harmony: .harmony
         case .rehearsalMark: .rehearsalMark

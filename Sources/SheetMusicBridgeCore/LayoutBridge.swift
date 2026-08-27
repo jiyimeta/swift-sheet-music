@@ -737,6 +737,10 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
+        case .legacyBend:
+            // Drawn in a later task.
+            break
+
         case let .spannerSegment(
             kind, fromOrigin, toOrigin, continuesLeft, continuesRight, text,
         ):

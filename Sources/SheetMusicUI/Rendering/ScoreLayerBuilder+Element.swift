@@ -257,6 +257,9 @@ extension ScoreLayerBuilder {
                 slight: slight,
                 metrics: metrics, height: height, into: parent,
             )
+        case .legacyBend:
+            // Drawn in a later task.
+            break
         case let .chordLine(shape, origin, thickness):
             drawChordLine(
                 shape: shape, origin: shift(origin),

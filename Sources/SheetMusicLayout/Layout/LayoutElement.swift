@@ -291,6 +291,14 @@ public enum LayoutElement: Sendable, Equatable {
         toOrigin: CGPoint,
         slight: Bool,
     )
+    /// A legacy MuseScore 3 bend (`<Bend>` pitch curve): pre-computed
+    /// draw pieces in system-local coords. See `LegacyBendGeometry`.
+    /// C++: `TLayout::layoutBend` / `TDraw::draw(const Bend*)`.
+    ///
+    /// Unlike `.guitarBend` this carries no anchors of its own — the
+    /// curve has as many legs as the bend has points, so the geometry is
+    /// resolved once at layout time and the pieces travel together.
+    case legacyBend(shape: LegacyBendShape)
     case arpeggioWiggle(
         top: CGPoint,
         bottom: CGPoint,

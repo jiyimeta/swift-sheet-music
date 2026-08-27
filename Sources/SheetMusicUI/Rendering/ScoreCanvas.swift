@@ -391,6 +391,9 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 from: shift(from), vertex: shift(vertex), to: shift(to),
                 slight: slight, metrics: metrics,
             )
+        case .legacyBend:
+            // Drawn in a later task.
+            break
         case let .chordLine(shape, origin, thickness):
             ChordLineRenderer.draw(
                 context: &context,
