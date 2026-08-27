@@ -32,6 +32,12 @@ struct SlurRoundTripTests {
     /// equals first). Whole-file v3 byte parity is deliberately not a gate —
     /// the encoder normalizes unrelated MS3-era fields, exactly as
     /// `LegacyBendRoundTripTests` documents for its own fixtures.
+    ///
+    /// The two same-voice slurs are checked against MuseScore's own bytes:
+    /// the re-encoded `<prev>` must sit on the chord MuseScore put it on and
+    /// carry the values MuseScore wrote there. Nothing weaker would catch a
+    /// marker that lands one chord early or late, since the slur *count* is
+    /// blind to placement.
     @Test("the MS3 fixture reaches a fixed point with all three slurs intact")
     func ms3FixtureModelRoundTrips() throws {
         let score = try MSCXParser.parse(
@@ -43,6 +49,49 @@ struct SlurRoundTripTests {
         #expect(encoded == secondPass)
         #expect(Self.slurCount(in: score) == 3)
         #expect(Self.slurCount(in: reDecoded) == Self.slurCount(in: score))
+        try Self.expectMS3EndMarkersMatchMuseScore(in: encoded)
+    }
+
+    /// The two same-voice slurs of `slur_ms3_exchangevoices.mscx`, asserted in
+    /// the RE-ENCODED tree against the bytes MuseScore itself wrote.
+    ///
+    /// 1. Same-measure slur, begun on bar 1's first eighth
+    ///    (`:89-97`, `<fractions>7/8`). MuseScore's `<prev>` is on bar 1's
+    ///    **8th** eighth — the `pitch 72` chord — reading
+    ///    `<fractions>-7/8</fractions>` (`:149-157`).
+    /// 2. Barline-crossing slur, begun on bar 2's `half` at `1/2`
+    ///    (`:200-211`, `<measures>1` + `<fractions>-1/2`). MuseScore's
+    ///    `<prev>` is on bar 3's opening `half` — the `pitch 71` chord —
+    ///    reading `<measures>-1</measures><fractions>1/2</fractions>`
+    ///    (`:250-259`), measures-first, which is the order this encoder now
+    ///    writes in every target version.
+    ///
+    /// The cross-voice slur is deliberately absent here: its `<prev>` legally
+    /// moves voice, and `crossVoiceSlurEndStaysInItsOwnVoice` owns that case.
+    private static func expectMS3EndMarkersMatchMuseScore(in encoded: Data) throws {
+        let measures = try #require(
+            XMLTreeParser.parse(encoded).first("Score")?
+                .first("Staff")?.all("Measure"),
+        )
+        #expect(measures.count == 3)
+
+        let bar1 = try #require(measures[0].first("voice")).all("Chord")
+        #expect(bar1.count == 8)
+        #expect(bar1[7].first("Note")?.first("pitch")?.text == "72")
+        let sameMeasure = try #require(
+            bar1[7].first("Spanner")?.first("prev")?.first("location"),
+        )
+        #expect(sameMeasure.children.map(\.name) == ["fractions"])
+        #expect(sameMeasure.first("fractions")?.text == "-7/8")
+
+        let bar3 = try #require(measures[2].first("voice")).all("Chord")
+        #expect(bar3[0].first("Note")?.first("pitch")?.text == "71")
+        let crossBarline = try #require(
+            bar3[0].first("Spanner")?.first("prev")?.first("location"),
+        )
+        #expect(crossBarline.children.map(\.name) == ["measures", "fractions"])
+        #expect(crossBarline.first("measures")?.text == "-1")
+        #expect(crossBarline.first("fractions")?.text == "1/2")
     }
 
     /// The known limitation, pinned rather than left to be rediscovered.
