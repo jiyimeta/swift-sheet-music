@@ -74,6 +74,8 @@ struct EditRefusalTests {
             .cannotDeleteOnlyMeasure,
             .cannotRemoveLastPart,
             .cannotRemoveInitialSignature,
+            .rebarWouldSplitTuplet(measureIndex: 2),
+            .rebarWouldDisplaceBarlineMarker(measureIndex: 3),
             .unexpected(description: "boom"),
         ]
     }

@@ -53,6 +53,16 @@ public struct EditRefusal: Sendable, Hashable {
         /// signature there, and a host saying otherwise would be telling the user something untrue. The way to
         /// change what bar 1 declares is `.setKeySignature`, which has no "remove" to refuse.
         case cannotRemoveInitialSignature
+        /// Re-barring a region at a new meter would put a new barline inside a tuplet. A tuplet is an
+        /// indivisible rhythmic unit — its members' lengths are the tuplet's to decide — so the region is
+        /// refused rather than re-spelled into something no engraver would write. `measureIndex` names the
+        /// PRE-EDIT bar the tuplet lives in, so a host can point at it.
+        case rebarWouldSplitTuplet(measureIndex: Int)
+        /// Re-barring a region at a new meter would move a barline marker — a repeat sign, a `Marker` /
+        /// `Jump`, or a special barline — off the barline it marks. Such a marker only means anything ON a
+        /// barline, so the region is refused rather than have it silently slide. `measureIndex` names the
+        /// PRE-EDIT bar carrying the marker.
+        case rebarWouldDisplaceBarlineMarker(measureIndex: Int)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -101,6 +111,10 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.cannotRemoveLastPart"
         case .cannotRemoveInitialSignature:
             "edit.cannotRemoveInitialSignature"
+        case .rebarWouldSplitTuplet:
+            "edit.rebarWouldSplitTuplet"
+        case .rebarWouldDisplaceBarlineMarker:
+            "edit.rebarWouldDisplaceBarlineMarker"
         case .unexpected:
             "edit.unexpected"
         }
@@ -151,6 +165,10 @@ public struct EditRefusal: Sendable, Hashable {
             "a score must keep at least one part"
         case .cannotRemoveInitialSignature:
             "a score's opening signature cannot be removed"
+        case let .rebarWouldSplitTuplet(measureIndex):
+            "re-barring would split the tuplet in measure \(measureIndex)"
+        case let .rebarWouldDisplaceBarlineMarker(measureIndex):
+            "re-barring would displace the barline marker on measure \(measureIndex)"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
