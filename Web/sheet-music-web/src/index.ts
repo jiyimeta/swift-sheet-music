@@ -19,6 +19,8 @@ import {
   type EditIntent,
   type EditOutcome,
   type EditSessionState,
+  type ElementRef,
+  type NoteRef,
   type SelectedItem,
   type SelectedItemKind,
 } from "./edit.js";
@@ -146,6 +148,17 @@ export interface ScorePosition {
   readonly tickInMeasure: number;
 }
 
+/** A timeline-addressable item; tuplets and clefs have no timeline entry. */
+export type TimelineItemRef =
+  | ({ readonly kind: "note" } & NoteRef)
+  | ({ readonly kind: "rest" } & ElementRef);
+
+/** The sounding pitch and the staff's flattened score-order index. */
+export interface PitchAndStaff {
+  readonly pitch: number;
+  readonly staffIndex: number;
+}
+
 /**
  * Where to draw the playback cursor, in document millimetres — the same unit
  * the draw program uses, so one `pxPerMM` scales both.
@@ -178,6 +191,9 @@ export interface StaffDescriptor {
   readonly partName: string;
   readonly isPartVisibleInScore: boolean;
   readonly defaultClefRawType: string;
+  readonly trackName: string;
+  readonly instrumentLongName: string;
+  readonly groupRawValue: string;
 }
 
 /** A document rectangle in millimetres. */
@@ -451,6 +467,41 @@ export interface BridgeExports {
     handle: number,
     playerSeconds: number,
   ): number[] | Float64Array;
+  stepMeasureCursor(
+    handle: number,
+    measureIndex: number,
+    tickInMeasure: number,
+    direction: number,
+  ): number[] | Float64Array;
+  cursorAdvancedByBeats(
+    handle: number,
+    measureIndex: number,
+    tickInMeasure: number,
+    beats: number,
+  ): number[] | Float64Array;
+  pitchAndStaffOfNote(
+    handle: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    noteIndexInChord: number,
+  ): number[] | Float64Array;
+  itemEndTick(
+    handle: number,
+    kind: number,
+    partIndex: number,
+    staffIndexInPart: number,
+    measureIndex: number,
+    voiceIndex: number,
+    elementIndex: number,
+    noteIndexInChord: number,
+  ): number;
+  earliestOf(
+    handle: number,
+    itemScalars: number[],
+  ): number[] | Float64Array;
   measureIndexAtPlayerSeconds(handle: number, playerSeconds: number): number;
   loopPlayerSeconds(
     handle: number,
@@ -480,6 +531,41 @@ export interface GMInstrument {
 
 function asDoubles(value: number[] | Float64Array): Float64Array {
   return value instanceof Float64Array ? value : Float64Array.from(value);
+}
+
+function scorePosition(value: number[] | Float64Array): ScorePosition | null {
+  const scalars = asDoubles(value);
+  if (scalars.length !== 2) return null;
+  return { measureIndex: scalars[0]!, tickInMeasure: scalars[1]! };
+}
+
+function timelineItemScalars(item: TimelineItemRef): [number, number, number, number, number, number, number] {
+  return [
+    item.kind === "note" ? 0 : 1,
+    item.partIndex,
+    item.staffIndexInPart,
+    item.measureIndex,
+    item.voiceIndex,
+    item.elementIndex,
+    item.kind === "note" ? item.noteIndexInChord : -1,
+  ];
+}
+
+function timelineItem(value: number[] | Float64Array): TimelineItemRef | null {
+  const scalars = asDoubles(value);
+  if (scalars.length !== 7) return null;
+  const element = {
+    partIndex: scalars[1]!,
+    staffIndexInPart: scalars[2]!,
+    measureIndex: scalars[3]!,
+    voiceIndex: scalars[4]!,
+    elementIndex: scalars[5]!,
+  };
+  if (scalars[0] === 0) {
+    return { kind: "note", ...element, noteIndexInChord: scalars[6]! };
+  }
+  if (scalars[0] === 1) return { kind: "rest", ...element };
+  return null;
 }
 
 function resolveLayoutMode(mode: LayoutMode | undefined): number {
@@ -886,14 +972,68 @@ export class Score {
    * does not resolve.
    */
   positionAtPlayerSeconds(playerSeconds: number): ScorePosition | null {
-    const position = asDoubles(
+    return scorePosition(
       this.bridge.positionAtPlayerSeconds(this.live(), playerSeconds),
     );
-    if (position.length !== 2) return null;
-    return {
-      measureIndex: position[0]!,
-      tickInMeasure: position[1]!,
-    };
+  }
+
+  /** Steps one measure, or returns `null` when the bridge returns `[]`. */
+  stepMeasureCursor(
+    from: ScorePosition,
+    direction: "backward" | "forward",
+  ): ScorePosition | null {
+    return scorePosition(
+      this.bridge.stepMeasureCursor(
+        this.live(),
+        from.measureIndex,
+        from.tickInMeasure,
+        direction === "backward" ? 0 : 1,
+      ),
+    );
+  }
+
+  /** Advances by quarter-note beats, or returns `null` for the `[]` sentinel. */
+  cursorAdvancedByBeats(
+    from: ScorePosition,
+    beats: number,
+  ): ScorePosition | null {
+    return scorePosition(
+      this.bridge.cursorAdvancedByBeats(
+        this.live(),
+        from.measureIndex,
+        from.tickInMeasure,
+        beats,
+      ),
+    );
+  }
+
+  /** Resolves a note, or returns `null` when the bridge returns `[]`. */
+  pitchAndStaffOfNote(note: NoteRef): PitchAndStaff | null {
+    const result = asDoubles(this.bridge.pitchAndStaffOfNote(
+      this.live(),
+      note.partIndex,
+      note.staffIndexInPart,
+      note.measureIndex,
+      note.voiceIndex,
+      note.elementIndex,
+      note.noteIndexInChord,
+    ));
+    if (result.length !== 2) return null;
+    return { pitch: result[0]!, staffIndex: result[1]! };
+  }
+
+  /** Returns the item's notated end tick; `-1` is the unresolved sentinel. */
+  itemEndTick(item: TimelineItemRef): number {
+    const scalars = timelineItemScalars(item);
+    return this.bridge.itemEndTick(this.live(), ...scalars);
+  }
+
+  /** Returns the earliest item, or `null` when the bridge returns `[]`. */
+  earliestOf(items: readonly TimelineItemRef[]): TimelineItemRef | null {
+    return timelineItem(this.bridge.earliestOf(
+      this.live(),
+      items.flatMap(timelineItemScalars),
+    ));
   }
 
   /** The measure sounding at a player position, or `-1` for an empty score. */

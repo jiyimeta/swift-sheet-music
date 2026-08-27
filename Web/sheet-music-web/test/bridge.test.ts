@@ -269,6 +269,9 @@ describe("wasm bridge parity with the Apple build", () => {
           partName: "Piano",
           isPartVisibleInScore: true,
           defaultClefRawType: "G",
+          trackName: "",
+          instrumentLongName: "Piano",
+          groupRawValue: "pitched",
         },
         {
           partIndex: 1,
@@ -276,8 +279,136 @@ describe("wasm bridge parity with the Apple build", () => {
           partName: "Drums",
           isPartVisibleInScore: false,
           defaultClefRawType: "PERC",
+          trackName: "",
+          instrumentLongName: "Drums",
+          groupRawValue: "percussion",
         },
       ]);
+    } finally {
+      score.release();
+    }
+  });
+
+  it("steps measure cursors and maps an unresolved position to null", () => {
+    const score = sheetMusic.loadScore(inspectorScoreBytes);
+    try {
+      expect(
+        score.stepMeasureCursor(
+          { measureIndex: 0, tickInMeasure: 0 },
+          "forward",
+        ),
+      ).toEqual({ measureIndex: 1, tickInMeasure: 0 });
+      expect(
+        score.stepMeasureCursor(
+          { measureIndex: 99, tickInMeasure: 0 },
+          "backward",
+        ),
+      ).toBeNull();
+    } finally {
+      score.release();
+    }
+  });
+
+  it("advances cursors by beats and maps non-finite input to null", () => {
+    const score = sheetMusic.loadScore(inspectorScoreBytes);
+    try {
+      expect(
+        score.cursorAdvancedByBeats(
+          { measureIndex: 0, tickInMeasure: 1_440 },
+          2,
+        ),
+      ).toEqual({ measureIndex: 1, tickInMeasure: 480 });
+      expect(
+        score.cursorAdvancedByBeats(
+          { measureIndex: 0, tickInMeasure: 0 },
+          Number.POSITIVE_INFINITY,
+        ),
+      ).toBeNull();
+    } finally {
+      score.release();
+    }
+  });
+
+  it("reports note pitch and staff and maps an unresolved note to null", () => {
+    const score = sheetMusic.loadScore(inspectorScoreBytes);
+    try {
+      expect(
+        score.pitchAndStaffOfNote({
+          partIndex: 0,
+          staffIndexInPart: 0,
+          measureIndex: 0,
+          voiceIndex: 0,
+          elementIndex: 0,
+          noteIndexInChord: 0,
+        }),
+      ).toEqual({ pitch: 60, staffIndex: 0 });
+      expect(
+        score.pitchAndStaffOfNote({
+          partIndex: 0,
+          staffIndexInPart: 0,
+          measureIndex: 0,
+          voiceIndex: 0,
+          elementIndex: 99,
+          noteIndexInChord: 0,
+        }),
+      ).toBeNull();
+    } finally {
+      score.release();
+    }
+  });
+
+  it("reports item end ticks and preserves the -1 sentinel", () => {
+    const score = sheetMusic.loadScore(inspectorScoreBytes);
+    try {
+      expect(
+        score.itemEndTick({
+          kind: "note",
+          partIndex: 0,
+          staffIndexInPart: 0,
+          measureIndex: 0,
+          voiceIndex: 0,
+          elementIndex: 0,
+          noteIndexInChord: 0,
+        }),
+      ).toBe(1_920);
+      expect(
+        score.itemEndTick({
+          kind: "rest",
+          partIndex: 0,
+          staffIndexInPart: 0,
+          measureIndex: 0,
+          voiceIndex: 0,
+          elementIndex: 0,
+        }),
+      ).toBe(-1);
+    } finally {
+      score.release();
+    }
+  });
+
+  it("chooses the earliest timeline item and maps no resolution to null", () => {
+    const score = sheetMusic.loadScore(inspectorScoreBytes);
+    try {
+      const later = {
+        kind: "note" as const,
+        partIndex: 0,
+        staffIndexInPart: 0,
+        measureIndex: 1,
+        voiceIndex: 0,
+        elementIndex: 0,
+        noteIndexInChord: 0,
+      };
+      const earlier = {
+        kind: "note" as const,
+        partIndex: 0,
+        staffIndexInPart: 0,
+        measureIndex: 0,
+        voiceIndex: 0,
+        elementIndex: 0,
+        noteIndexInChord: 0,
+      };
+      expect(score.earliestOf([later, earlier])).toEqual(earlier);
+      expect(score.earliestOf([])).toBeNull();
     } finally {
       score.release();
     }
