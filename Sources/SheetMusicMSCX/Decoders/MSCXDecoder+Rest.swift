@@ -21,6 +21,11 @@ enum MSCXRestDecoder {
         )
         var rest = Chord(duration: duration, notes: [])
         rest.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        // A slur may begin or end on a rest — MuseScore anchors them to any
+        // `ChordRest`, and its writer treats `<Rest>` and `<Chord>` through
+        // the same `TWrite::writeProperties(const ChordRest*, …)`. Share the
+        // chord helper so the rest path reports the same losses.
+        rest.spanners = Chord.decodeChordSpanners(node)
         return rest
     }
 
