@@ -225,6 +225,22 @@ struct LegacyBendDecodeTests {
         #expect(decoded.diagnostics.map(\.code) == ["mscx.bend.duplicateDropped"])
     }
 
+    /// `legacyBends(inFixture:)` goes through `MSCXParser.parse`, which
+    /// *discards* diagnostics — so the fixture tests above are no evidence
+    /// that the vendored MS3 scores decode cleanly. This is that evidence,
+    /// and the MS3 half of `GuitarBendDecodeTests`'s equivalent gate.
+    @Test("the vendored MS3 fixtures decode without any diagnostic", arguments: [
+        "legacybend_ms3_canonical",
+        "legacybend_ms3_play_and_beams",
+        "legacybend_ms4_resave",
+    ])
+    func fixturesDecodeWithoutDiagnostics(_ fixture: String) throws {
+        let result = try MSCXParser.parseWithDiagnostics(
+            MSCXFixtureLoader.mscxData(fixture),
+        )
+        #expect(result.diagnostics.map(\.code) == [])
+    }
+
     // MARK: - Helpers
 
     private func decodeNote(

@@ -237,18 +237,43 @@ struct GuitarBendDecodeTests {
         #expect(decoded.diagnostics.map(\.code) == ["mscx.guitarBend.directionDropped"])
     }
 
-    /// MuseScore never serializes `DirectionV::AUTO`, but a hand-written or
-    /// re-exported file can spell the default out — that loses nothing, so it
-    /// must not warn. `<eid>` is exempt for its own reason: see
-    /// `LegacyBendDecodeTests.eidIsSilentlyElided`.
-    @Test("a default <direction> and an <eid> are both silent")
-    func defaultDirectionAndEidAreSilent() throws {
-        let direction = try decodePayload("<direction>auto</direction>")
-        #expect(direction.note.guitarBend?.type == .bend)
-        #expect(direction.diagnostics.isEmpty)
-        let eid = try decodePayload("<eid>4123456789012345</eid>")
-        #expect(eid.note.guitarBend?.type == .bend)
-        #expect(eid.diagnostics.isEmpty)
+    /// Payload children that lose nothing and so must never warn:
+    ///
+    /// - `<direction>auto</direction>` — MuseScore never serializes
+    ///   `DirectionV::AUTO`, but a hand-written file may spell it out.
+    /// - `<eid>` — see `LegacyBendDecodeTests.eidIsSilentlyElided`.
+    /// - `<anchor>` — `SLine`'s spanner anchor, written unconditionally for
+    ///   every guitar bend (`rw/write/twrite.cpp:1606`, reached from
+    ///   `TWrite::write(const GuitarBend*, …)`'s trailing
+    ///   `writeProperties(SLine*, …)` at `:1568`) and re-emitted verbatim by
+    ///   this package's encoder. The `<eid>` + `<anchor>` pair is exactly what
+    ///   every vendored fixture carries.
+    @Test("children that lose nothing produce no diagnostic", arguments: [
+        "<direction>auto</direction>",
+        "<eid>4123456789012345</eid>",
+        "<anchor>3</anchor>",
+        "<eid>11974368821379</eid><anchor>3</anchor>",
+    ])
+    func silentPayloadChildren(_ payload: String) throws {
+        let decoded = try decodePayload(payload)
+        #expect(decoded.note.guitarBend?.type == .bend)
+        #expect(decoded.diagnostics.map(\.code) == [])
+    }
+
+    /// The inline tests install a collector by hand; the fixture tests go
+    /// through `MSCXParser.parse`, which *discards* diagnostics — so a green
+    /// fixture suite was never evidence that the vendored scores decode
+    /// cleanly. This is that evidence. Every one of these carries `<eid>` and
+    /// `<anchor>` on each payload, and none may produce a diagnostic.
+    @Test("the vendored fixtures decode without any diagnostic", arguments: [
+        "guitarbend_simple", "guitarbend_prebend", "guitarbend_gracebend",
+        "guitarbend_release_twice", "guitarbend_slightbend", "guitarbend_tied",
+    ])
+    func fixturesDecodeWithoutDiagnostics(_ fixture: String) throws {
+        let result = try MSCXParser.parseWithDiagnostics(
+            MSCXFixtureLoader.mscxData(fixture),
+        )
+        #expect(result.diagnostics.map(\.code) == [])
     }
 
     /// Item properties (`offset`, `visible`, …) sit alongside the bend's own

@@ -29,6 +29,17 @@ extension Note {
         "GuitarBendHold",
         "direction",
         eidChildName,
+        // `<anchor>` is `SLine`'s spanner anchor, not a bend property:
+        // `TWrite::write(const GuitarBend*, …)` ends with
+        // `writeProperties(static_cast<const SLine*>(item), …)`
+        // (`rw/write/twrite.cpp:1568`), which writes `Pid::ANCHOR` (`:1606`)
+        // — so every guitar bend MuseScore 4 writes carries `<anchor>3</anchor>`.
+        // It holds no user data: the value is constant `Spanner::Anchor::NOTE`
+        // for a bend, and this package re-emits it unconditionally on encode
+        // (`MSCXEncoder+GuitarBend.swift:108`, and `:115` for the hold line),
+        // so nothing is lost. Warning on it would fire on 100% of real MS4
+        // bends for a tag that round-trips byte-identically.
+        "anchor",
     ])
 
     /// `<Bend>` children `decodeLegacyBend` models. Everything else is
@@ -94,6 +105,44 @@ extension Note {
         )
     }
 
+    /// Report every property a `<GuitarBend>` payload carries that this model
+    /// does not hold: the whammy-bar extras, a user-flipped `<direction>`, and
+    /// anything outside `guitarBendKnownChildren`.
+    ///
+    /// Called *before* `decodeGuitarBend`'s `<guitarBendType>` guard, matching
+    /// `decodeLegacyBend`, which warns before its own early return. The
+    /// invariant both share: report what the payload loses, then decide
+    /// whether the element itself survives. Deferring these until after the
+    /// guard would make the property report depend on an unrelated failure —
+    /// an unrecognized type would silently swallow it, and fixing the type
+    /// would then surface a second round of warnings.
+    private static func warnDroppedGuitarBendProperties(_ node: XMLTreeNode) {
+        if node.children.contains(where: { diveOnlyProperties.contains($0.name) }) {
+            mscxDecoderWarn(
+                code: "mscx.guitarBend.divePropertiesDropped",
+                message: "Whammy-bar bend properties are not modeled yet and were dropped",
+                location: "Note/Spanner[GuitarBend]",
+            )
+        }
+        // A `<direction/>` with no text warns too: an empty value is not a
+        // recognized `DirectionV` spelling, so it is an unknown override
+        // rather than the elided default.
+        let direction = node.first("direction")?.text
+        if let direction, !defaultDirections.contains(direction) {
+            mscxDecoderWarn(
+                code: "mscx.guitarBend.directionDropped",
+                message: "Bend arc side override <direction> is not modeled — dropped",
+                location: "Note/Spanner[GuitarBend]",
+            )
+        }
+        warnUnknownChildren(
+            of: node,
+            known: guitarBendKnownChildren,
+            code: "mscx.guitarBend.propertiesDropped",
+            location: "Note/Spanner[GuitarBend]",
+        )
+    }
+
     /// Decode a `<GuitarBend>` block — the payload child of the begin side of
     /// a `<Spanner type="GuitarBend">` pair.
     ///
@@ -118,6 +167,7 @@ extension Note {
     /// C++: `TWrite::write(const GuitarBend*, …)` (`rw/write/twrite.cpp:1543`),
     /// `TRead::read(GuitarBend*, …)` (`rw/read460/tread.cpp:2860`).
     static func decodeGuitarBend(_ node: XMLTreeNode) -> GuitarBend? {
+        warnDroppedGuitarBendProperties(node)
         guard let rawType = (node.first("guitarBendType")?.text).flatMap(Int.init),
               let type = GuitarBendType(rawValue: rawType)
         else {
@@ -128,27 +178,6 @@ extension Note {
             )
             return nil
         }
-        if node.children.contains(where: { diveOnlyProperties.contains($0.name) }) {
-            mscxDecoderWarn(
-                code: "mscx.guitarBend.divePropertiesDropped",
-                message: "Whammy-bar bend properties are not modeled yet and were dropped",
-                location: "Note/Spanner[GuitarBend]",
-            )
-        }
-        let direction = node.first("direction")?.text
-        if let direction, !defaultDirections.contains(direction) {
-            mscxDecoderWarn(
-                code: "mscx.guitarBend.directionDropped",
-                message: "Bend arc side override <direction> is not modeled — dropped",
-                location: "Note/Spanner[GuitarBend]",
-            )
-        }
-        warnUnknownChildren(
-            of: node,
-            known: guitarBendKnownChildren,
-            code: "mscx.guitarBend.propertiesDropped",
-            location: "Note/Spanner[GuitarBend]",
-        )
         let showHoldLine = (node.first("bendShowHoldLine")?.text)
             .flatMap(Int.init)
             .flatMap(GuitarBend.ShowHoldLine.init(rawValue:)) ?? .auto
