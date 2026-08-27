@@ -169,9 +169,17 @@ public enum LayoutEngine {
         let systemsWithGliss = attachGlissandi(
             to: systemsWithTies, pairs: glissPairs, metrics: metrics,
         )
+        // Guitar bends resolve alongside glissandi and for the same
+        // reason: a bend's target is the next chord, which may live in
+        // the next measure. Note origins come from `firstPass` too —
+        // neither the tie nor the glissando pass moves a notehead.
+        let bendPairs = resolveGuitarBends(for: firstPass, score: score)
+        let systemsWithBends = attachGuitarBends(
+            to: systemsWithGliss, pairs: bendPairs, metrics: metrics,
+        )
         return LayoutDocument(
             size: firstPass.size,
-            systems: systemsWithGliss,
+            systems: systemsWithBends,
             metrics: metrics,
             titleFrame: titleFrame,
         )

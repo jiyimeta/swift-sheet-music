@@ -25,6 +25,16 @@ public struct Note: Sendable, Equatable {
     /// Glissando starting on this note and sweeping to the next chord's note.
     /// C++: `<Spanner type="Glissando">` attached to a `<Note>`.
     public var glissando: Glissando?
+    /// Guitar bend starting on this note. Mirrors `glissando`: only the
+    /// begin side of the `<Spanner type="GuitarBend">` pair carries the
+    /// payload. A slight bend begins and ends on the same note, so it sets
+    /// both this and `guitarBendBack`. C++: `Note::bendFor()`.
+    public var guitarBend: GuitarBend?
+    /// True when a `<Spanner type="GuitarBend">` *ends* on this note (the
+    /// `<prev>`-only placeholder). Marks the note whose attack playback
+    /// suppresses, and lets the end side be re-emitted on encode. Mirrors
+    /// `tieBack`. C++: `Note::bendBack()`.
+    public var guitarBendBack: Bool
     /// Notehead shape override (e.g. "cross" for hi-hat, "diamond" for
     /// percussion rim, "triangle-down" for cowbell). When nil, the
     /// standard notehead for the duration is used.
@@ -56,6 +66,11 @@ public struct Note: Sendable, Equatable {
     /// `userVelocity` is 0, where it stays at MuseScore 4's default
     /// (`.user`). C++: `Note::veloType()` / `<veloType>`.
     public var velocityType: NoteVelocityType
+    /// Guitar tablature position — `<fret>` / `<string>` on `<Note>`.
+    /// Decoded and re-emitted verbatim; no layout use yet (tab staves are
+    /// not rendered). C++: `Note::fret()` / `Note::string()`.
+    public var fret: Int?
+    public var string: Int?
     /// Base element properties shared with every engravable element.
     /// Currently carries only `<visible>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
@@ -75,12 +90,16 @@ public struct Note: Sendable, Equatable {
         tieForward: Int? = nil,
         tieBack: Int? = nil,
         glissando: Glissando? = nil,
+        guitarBend: GuitarBend? = nil,
+        guitarBendBack: Bool = false,
         headType: String? = nil,
         parentheses: NoteParentheses = .none,
         isSmall: Bool = false,
         play: Bool = true,
         userVelocity: Int = 0,
         velocityType: NoteVelocityType = .user,
+        fret: Int? = nil,
+        string: Int? = nil,
         visible: Bool = true,
     ) {
         self.pitch = pitch
@@ -91,12 +110,16 @@ public struct Note: Sendable, Equatable {
         self.tieForward = tieForward
         self.tieBack = tieBack
         self.glissando = glissando
+        self.guitarBend = guitarBend
+        self.guitarBendBack = guitarBendBack
         self.headType = headType
         self.parentheses = parentheses
         self.isSmall = isSmall
         self.play = play
         self.userVelocity = userVelocity
         self.velocityType = velocityType
+        self.fret = fret
+        self.string = string
         elementProperties = ElementProperties(visible: visible)
     }
 }

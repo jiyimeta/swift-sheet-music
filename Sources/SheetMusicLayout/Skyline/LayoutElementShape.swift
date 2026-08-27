@@ -40,6 +40,11 @@ public enum LayoutElementShape {
         case .chordLine: .chordLine
         case .arpeggioWiggle: .arpeggio
         case .glissandoLine: .glissando
+        // A guitar bend is a note-attached line drawn in the base
+        // skyline exactly like a glissando, so it reuses that slot
+        // rather than adding a `ShapeItemKind` case that `AutoplaceRules`
+        // and every `allCases` walk would then have to account for.
+        case .guitarBend: .glissando
         case .measureNumber: .measureNumber
         case .harmony: .harmony
         case .rehearsalMark: .rehearsalMark

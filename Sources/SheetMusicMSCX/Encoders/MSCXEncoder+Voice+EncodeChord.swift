@@ -20,6 +20,7 @@ extension Voice {
         injectedTremolo: Tremolo?,
         previousChordNotes: ChordNotes? = nil,
         forwardTiePartnerNotes: ChordNotes? = nil,
+        previousChordTrailingBendGrace: Int? = nil,
         options: MSCXEncoderOptions,
         staffGroup: String,
         voiceIndex: Int,
@@ -41,6 +42,18 @@ extension Voice {
             previousChordDuration: previousChordDuration,
             prevVoiceTotal: prevVoiceTotal,
         )
+        // The same two deltas without the "does this chord carry a tie?"
+        // guard: a guitar bend needs them on chords that carry no tie at all.
+        let bendForward = forwardTieDelta(
+            chord: chord,
+            isLastChordOfVoice: isLastChordOfVoice,
+            voiceBarLength: voiceBarLength,
+        )
+        let bendBackward = backwardTieDelta(
+            isFirstChordOfVoice: isFirstChordOfVoice,
+            previousChordDuration: previousChordDuration,
+            prevVoiceTotal: prevVoiceTotal,
+        )
         return unscaledChord.notes.isEmpty
             ? unscaledChord.encodeAsRest(
                 options: options, in: effectiveDuration,
@@ -50,6 +63,9 @@ extension Voice {
                 tieBackLocation: tieBack,
                 tieForwardPartnerNotes: forwardTiePartnerNotes,
                 tieBackPartnerNotes: previousChordNotes,
+                bendNeighbourForward: bendForward,
+                bendNeighbourBackward: bendBackward,
+                previousChordTrailingBendGrace: previousChordTrailingBendGrace,
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,

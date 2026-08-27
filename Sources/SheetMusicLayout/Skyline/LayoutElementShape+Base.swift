@@ -41,7 +41,8 @@ extension LayoutElementShape {
         case let .note(_, _, _, _, p, _, _, _):
             return [noteheadRect(center: p, mag: 1, sp: sp)]
         case .articulation, .fermata, .breath, .tieArc, .tupletLabel,
-             .glissandoLine, .arpeggioWiggle, .chordLine, .tremoloBars:
+             .glissandoLine, .guitarBend, .arpeggioWiggle, .chordLine,
+             .tremoloBars:
             return decorationRects(for: element, sp: sp)
         case .ledgerLine:
             // `LayoutElementShape.kind(of:)` already returns `nil` for
@@ -94,6 +95,14 @@ extension LayoutElementShape {
             return [spanRect(from, to, thickness: sp * 1.5)]
         case let .glissandoLine(from, to, _, _):
             return [spanRect(from, to, thickness: sp * 0.3)]
+        case let .guitarBend(from, vertex, to, _):
+            // Both legs of the polyline (both halves of the cubic for a
+            // slight bend), so the vertex's ink is covered rather than
+            // just the chord between the endpoints.
+            return [
+                spanRect(from, vertex, thickness: sp * 0.3),
+                spanRect(vertex, to, thickness: sp * 0.3),
+            ]
         case let .arpeggioWiggle(top, bottom, _):
             return [spanRect(top, bottom, thickness: sp)]
         case let .chordLine(shape, origin, _):

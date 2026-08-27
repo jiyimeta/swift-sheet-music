@@ -99,20 +99,16 @@ extension LayoutEngine {
              // `LedgerLinePass`), so folding it in here is harmless.
              let .ledgerLine(from, to, _):
             return [from.y, to.y]
+        case let .guitarBend(from, vertex, to, _):
+            // The vertex is the extreme point of both shapes — the peak
+            // of an angular bend's polyline, and the slight bend's cubic
+            // control point (which the curve never reaches, so this
+            // over-reserves slightly rather than clipping).
+            return [from.y, vertex.y, to.y]
         case let .arpeggioWiggle(top, bot, _):
             return [top.y, bot.y]
         case let .chordLine(shape, origin, _):
-            switch shape {
-            case let .path(segments):
-                // The path can run a full spatium above / below its
-                // origin, so both extremes must reach the bbox.
-                let box = ChordLineGeometry.boundingBox(of: segments)
-                return [origin.y + box.minY, origin.y + box.maxY]
-            case .glyph:
-                // Centre-anchored; the generic glyphPad in
-                // `elementYBounds` covers the ink extent.
-                return [origin.y]
-            }
+            return chordLineYPoints(shape: shape, origin: origin)
         case let .tremoloBars(anchor, _):
             switch anchor {
             case let .single(c): return [c.y]
@@ -122,6 +118,24 @@ extension LayoutEngine {
             return [from.y, to.y]
         case let .harmony(lh):
             return [CGFloat(lh.y)]
+        }
+    }
+
+    /// Y extent of a chord line. Split out of `elementYPoints` to keep
+    /// that function under the 60-line body limit.
+    private static func chordLineYPoints(
+        shape: ChordLineShape, origin: CGPoint,
+    ) -> [CGFloat] {
+        switch shape {
+        case let .path(segments):
+            // The path can run a full spatium above / below its origin,
+            // so both extremes must reach the bbox.
+            let box = ChordLineGeometry.boundingBox(of: segments)
+            return [origin.y + box.minY, origin.y + box.maxY]
+        case .glyph:
+            // Centre-anchored; the generic glyphPad in `elementYBounds`
+            // covers the ink extent.
+            return [origin.y]
         }
     }
 

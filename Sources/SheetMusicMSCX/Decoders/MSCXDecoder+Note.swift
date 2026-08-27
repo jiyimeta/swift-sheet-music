@@ -19,37 +19,7 @@ extension Note {
             ))
         }
         let (accidental, accidentalBracket, accidentalRole) = decodeAccidentalNode(node)
-        // MuseScore 5.x encodes ties inside `<Note>` as
-        // `<Spanner type="Tie">` with `<next>` (start) or `<prev>` (end).
-        // Numbering is positional in MSCX; default to 1 when present.
-        var tieForward: Int?
-        var tieBack: Int?
-        var glissando: Glissando?
-        for spanner in node.all("Spanner") {
-            switch spanner.attributes["type"] {
-            case "Tie":
-                if spanner.children.contains(where: { $0.name == "next" }) { tieForward = 1 }
-                if spanner.children.contains(where: { $0.name == "prev" }) { tieBack = 1 }
-            case "Glissando":
-                // The Glissando block is only present on the start note
-                // (the one with <next>). End notes carry only <prev>.
-                if let glissNode = spanner.first("Glissando"),
-                   spanner.children.contains(where: { $0.name == "next" })
-                {
-                    glissando = decodeGlissando(glissNode)
-                }
-            default:
-                continue
-            }
-        }
-        // MS2 / MS3 legacy tie encoding: `<Tie id="N">` directly on
-        // the start note, `<endSpanner id="N"/>` on the end note.
-        // C++: MuseScore 2 `libmscore/note.cpp` `Note::read`. Only
-        // ties attach to notes at this level in MS2 (slurs sit on
-        // chords / segments, glissandi use their own `<Glissando>`
-        // element), so any note-level `<endSpanner>` is a tie end.
-        if node.children.contains(where: { $0.name == "Tie" }) { tieForward = 1 }
-        if node.children.contains(where: { $0.name == "endSpanner" }) { tieBack = 1 }
+        let connectors = decodeConnectors(node)
         let headType = decodeHeadType(node.first("head")?.text)
         // MuseScore writes `<small>1</small>` on the note when it is
         // displayed at a reduced size; absent means normal size.
@@ -65,18 +35,96 @@ extension Note {
             accidental: accidental,
             accidentalBracket: accidentalBracket,
             accidentalRole: accidentalRole,
-            tieForward: tieForward,
-            tieBack: tieBack,
-            glissando: glissando,
+            tieForward: connectors.tieForward,
+            tieBack: connectors.tieBack,
+            glissando: connectors.glissando,
+            guitarBend: connectors.guitarBend,
+            guitarBendBack: connectors.guitarBendBack,
             headType: headType,
             parentheses: parentheses,
             isSmall: isSmall,
             play: play,
             userVelocity: userVelocity,
             velocityType: velocityType,
+            // Tablature position. `first` looks only at direct children of
+            // `<Note>`, so the similarly-named `<string>` elements in
+            // `<Staff><StringData>` — the instrument tuning — never reach here.
+            fret: (node.first("fret")?.text).flatMap(Int.init),
+            string: (node.first("string")?.text).flatMap(Int.init),
         )
         note.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return note
+    }
+
+    /// The note-attached connectors a `<Note>`'s children encode. Grouped
+    /// into one value because a single walk of the children resolves all of
+    /// them, and `Note.decode` is otherwise at the body-length limit.
+    private struct Connectors {
+        var tieForward: Int?
+        var tieBack: Int?
+        var glissando: Glissando?
+        var guitarBend: GuitarBend?
+        var guitarBendBack = false
+    }
+
+    /// Walk a `<Note>`'s children for everything that connects it to another
+    /// note: ties, glissandi and guitar bends.
+    ///
+    /// MuseScore 4 / 5 encode all three as `<Spanner type="…">` children
+    /// carrying `<next>` (begin side) or `<prev>` (end side); only the begin
+    /// side holds the payload block. A slight bend is the one case where both
+    /// sides sit on the same note, which is why `guitarBendBack` is read
+    /// independently of `guitarBend` rather than as an else-branch.
+    ///
+    /// MS2 / MS3 wrote two of these differently — ties as a bare `<Tie>` /
+    /// `<endSpanner>` pair, guitar bends as a `<Bend>` curve — so the legacy
+    /// forms are resolved here too, the second only as a diagnostic.
+    private static func decodeConnectors(_ node: XMLTreeNode) -> Connectors {
+        var result = Connectors()
+        for spanner in node.all("Spanner") {
+            let hasNext = spanner.children.contains { $0.name == "next" }
+            let hasPrev = spanner.children.contains { $0.name == "prev" }
+            switch spanner.attributes["type"] {
+            case "Tie":
+                // Numbering is positional in MSCX; default to 1 when present.
+                if hasNext { result.tieForward = 1 }
+                if hasPrev { result.tieBack = 1 }
+            case "Glissando":
+                if hasNext, let glissNode = spanner.first("Glissando") {
+                    result.glissando = decodeGlissando(glissNode)
+                }
+            case "GuitarBend":
+                if hasNext {
+                    // A begin side with no `<GuitarBend>` block is malformed —
+                    // MuseScore's writer always emits the payload on the
+                    // `<next>` side — and dropping it silently would leave the
+                    // end note's `guitarBendBack` pointing at nothing.
+                    if let bendNode = spanner.first("GuitarBend") {
+                        result.guitarBend = decodeGuitarBend(bendNode)
+                    } else {
+                        mscxDecoderWarn(
+                            code: "mscx.guitarBend.missingPayload",
+                            message: "<Spanner type=\"GuitarBend\"> has <next> "
+                                + "but no <GuitarBend> block — bend dropped",
+                            location: "Note/Spanner[GuitarBend]",
+                        )
+                    }
+                }
+                if hasPrev { result.guitarBendBack = true }
+            default:
+                continue
+            }
+        }
+        // MS2 / MS3 legacy tie encoding: `<Tie id="N">` directly on
+        // the start note, `<endSpanner id="N"/>` on the end note.
+        // C++: MuseScore 2 `libmscore/note.cpp` `Note::read`. Only
+        // ties attach to notes at this level in MS2 (slurs sit on
+        // chords / segments, glissandi use their own `<Glissando>`
+        // element), so any note-level `<endSpanner>` is a tie end.
+        if node.children.contains(where: { $0.name == "Tie" }) { result.tieForward = 1 }
+        if node.children.contains(where: { $0.name == "endSpanner" }) { result.tieBack = 1 }
+        warnIfLegacyBend(node)
+        return result
     }
 
     /// Decode the per-note velocity override: `<velocity>` (the value)

@@ -114,6 +114,15 @@ extension MidiRenderer {
                 voiceIndex: voiceIndex,
             ) else { continue }
 
+            // Guitar-bend chains resolve in a pre-pass over the whole voice:
+            // a chain's suppression decisions depend on elements the walk has
+            // not reached yet (does the next chord close the chain?), so they
+            // cannot be taken element by element. Keyed by element index the
+            // way `glissandoEndPitch` is resolved per element below.
+            let bendChainSlots = guitarBendChains(
+                voiceElements: effectiveVoice.elements,
+            )
+
             // When a new iteration loops back to original measure 0 (e.g. volta
             // playback returning to the top of the score), re-emit timeSig + reset
             // tempo to default — matches MuseScore's exportmidi behavior where
@@ -249,6 +258,7 @@ extension MidiRenderer {
                 renderVoiceElement(
                     element,
                     elementIndex: elementIndex,
+                    bendChainSlots: bendChainSlots[elementIndex],
                     voiceElements: effectiveVoice.elements,
                     voiceTuplets: effectiveVoice.tuplets,
                     measures: staff.measures,
@@ -295,6 +305,7 @@ extension MidiRenderer {
     private static func renderVoiceElement( // swiftlint:disable:this function_body_length
         _ element: VoiceElement,
         elementIndex: Int,
+        bendChainSlots: BendChainChordSlots?,
         voiceElements: [VoiceElement],
         voiceTuplets: [Tuplet],
         measures: [Measure],
@@ -412,6 +423,7 @@ extension MidiRenderer {
                 tempoBps: currentTempoBps,
                 division: division,
                 glissandoEndPitch: glissandoEndPitch,
+                bendChainSlots: bendChainSlots,
                 currentKey: currentKey,
                 events: &events,
                 playedTicksOverride: adjust == .none

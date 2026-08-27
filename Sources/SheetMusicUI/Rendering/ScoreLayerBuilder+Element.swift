@@ -251,6 +251,12 @@ extension ScoreLayerBuilder {
                 text: text,
                 metrics: metrics, height: height, into: parent,
             )
+        case let .guitarBend(from, vertex, to, slight):
+            drawGuitarBend(
+                from: shift(from), vertex: shift(vertex), to: shift(to),
+                slight: slight,
+                metrics: metrics, height: height, into: parent,
+            )
         case let .chordLine(shape, origin, thickness):
             drawChordLine(
                 shape: shape, origin: shift(origin),
