@@ -249,6 +249,13 @@ excluded:
   - "**/.build"
   - "**/.swiftpm"
   - "Examples/Apple"
+  # Untracked PDF spike harnesses (.git/info/exclude) — measurement probes
+  # gated behind SM_PDF_SPIKE, not shipped code. Linting them made a personal
+  # scratch file able to fail `preflight.sh --apple` for the whole checkout.
+  - "Tests/SheetMusicTests/PDFClefInspectSpikeTests.swift"
+  - "Tests/SheetMusicTests/PDFCorpusGroundTruthSpikeTests.swift"
+  - "Tests/SheetMusicTests/PDFGibbsGroundTruthSpikeTests.swift"
+  - "Tests/SheetMusicTests/PDFSimpleFontEncodingProbeSpikeTests.swift"
   # Machine-generated SMuFL codepoint tables — do not lint
   - "Sources/SheetMusicLayout/Engraving/SMuFLCodepoints+Noteheads.swift"
   - "Sources/SheetMusicLayout/Engraving/SMuFLCodepoints+Accidentals.swift"

@@ -1,5 +1,8 @@
 --allman false
 --redundanttype inferred
+# Untracked PDF spike harnesses (.git/info/exclude): personal measurement
+# probes, not shipped code — keep the formatter gate from failing on them.
+--exclude Tests/SheetMusicTests/PDFClefInspectSpikeTests.swift,Tests/SheetMusicTests/PDFCorpusGroundTruthSpikeTests.swift,Tests/SheetMusicTests/PDFGibbsGroundTruthSpikeTests.swift,Tests/SheetMusicTests/PDFSimpleFontEncodingProbeSpikeTests.swift
 --disable andOperator
 --disable unusedArguments
 --disable opaqueGenericParameters

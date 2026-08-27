@@ -283,6 +283,19 @@ if isWasm {
         ]
     }
 
+    // The untracked PDF spike harnesses (Tests/SheetMusicTests/PDF*SpikeTests.swift,
+    // excluded via .git/info/exclude) wrap their bodies in `#if SM_PDF_SPIKE`. They
+    // read a private corpus from the local disk and are measurement probes, not
+    // gates — and because SwiftPM compiles every file under Tests/ regardless of
+    // git, an API drift in an un-updated spike file used to break `swift test` for
+    // everyone. Opt in explicitly when running them:
+    //   SWIFT_SHEET_MUSIC_PDF_SPIKE=1 swift test --filter PDFCorpus
+    if ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_PDF_SPIKE"] == "1" {
+        sheetMusicTestsSwiftSettings += [
+            .define("SM_PDF_SPIKE"),
+        ]
+    }
+
     targets += [
         .testTarget(
             name: "SheetMusicTests",
