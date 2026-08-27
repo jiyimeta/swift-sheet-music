@@ -73,6 +73,23 @@ struct RebarPlannerTests {
         )
     }
 
+    private static func alignedRests(_ ticks: Int, from rtickStart: Int) -> [VoiceElement] {
+        DurationChangeAlgorithm.alignedRests(
+            forTicks: ticks, rtickStart: rtickStart, division: division,
+        )
+    }
+
+    /// A `<location>` jog, written the way the MSCX decoder writes one: a fraction-of-a-whole-note delta.
+    private static func jog(_ numerator: Int, _ denominator: Int) -> VoiceElement {
+        .locationShift(delta: Fraction(numerator: numerator, denominator: denominator))
+    }
+
+    private static func shifts(_ elements: [VoiceElement]) -> [Fraction] {
+        elements.compactMap {
+            if case let .locationShift(delta) = $0 { delta } else { nil }
+        }
+    }
+
     private static func refusalReason(_ body: () throws -> Void) -> EditRefusal.Reason? {
         do {
             try body()
@@ -345,6 +362,87 @@ struct RebarPlannerTests {
         #expect(second.voices[1].elements.count == 1)
 
         #expect(plan.columns[2].staffMeasures[0][0].voices.count == 1)
+    }
+
+    // MARK: - Location shifts
+
+    /// The shape a `<location>` pair takes in essentially every imported MuseScore file: a displaced
+    /// untimed element is jogged out to its own tick and straight back, so the voice cursor never moves.
+    @Test("a jog-out/jog-back pair around a dynamic leaves the voice cursor where it was")
+    func untimedJogPairKeepsTheCursor() throws {
+        let dynamic = VoiceElement.dynamic(Dynamic(subtype: "f", velocity: 96))
+        let score = Self.score([
+            Measure(voices: [Voice(elements: [
+                Self.timeSignature44,
+                Self.chord(.quarter, pitch: 60),
+                Self.jog(1, 4),
+                dynamic,
+                Self.jog(-1, 4),
+                Self.chord(.quarter, pitch: 62),
+                Self.chord(.quarter, pitch: 64),
+                Self.chord(.quarter, pitch: 65),
+            ])]),
+        ])
+        let plan = try RebarPlanner.rebar(region: 0 ..< 1, in: score, numerator: 3, denominator: 4)
+        #expect(plan.columns.count == 2)
+
+        // The dynamic is anchored at tick 960 while the cursor sits at 480, so it is written as +1/4, the
+        // dynamic, -1/4 — and the quarter that follows still starts at 480, its own tick.
+        #expect(Self.content(plan, 0) == [
+            Self.chord(.quarter, pitch: 60),
+            Self.jog(1, 4),
+            dynamic,
+            Self.jog(-1, 4),
+            Self.chord(.quarter, pitch: 62),
+            Self.chord(.quarter, pitch: 64),
+        ])
+        // Three quarters fill the 3/4 column exactly: the jog invented no rests and swallowed no time.
+        #expect(Self.durations(Self.content(plan, 0)) == [.quarter, .quarter, .quarter])
+        #expect(Self.content(plan, 1)
+            == [Self.chord(.quarter, pitch: 65)] + Self.alignedRests(960, from: 480))
+    }
+
+    @Test("a leading gap in a higher voice survives re-barring as a locationShift")
+    func higherVoiceLeadingShiftPreserved() throws {
+        let upper = Voice(elements: [Self.timeSignature44, Self.chord(.whole)])
+        // Voice 2 enters a quarter late: MuseScore spells that lead-in as a `<location>`, not as a rest.
+        let lower = Voice(elements: [Self.jog(1, 4), Self.chord(.half, pitch: 55)])
+        let score = Self.score([Measure(voices: [upper, lower])])
+        let plan = try RebarPlanner.rebar(region: 0 ..< 1, in: score, numerator: 3, denominator: 4)
+        #expect(plan.columns.count == 2)
+
+        let first = plan.columns[0].staffMeasures[0][0]
+        #expect(first.voices.count == 2)
+        #expect(first.voices[1].elements == [Self.jog(1, 4), Self.chord(.half, pitch: 55)])
+        #expect(!first.voices[1].elements.contains { $0.isRest })
+        // The voice stops before the new barline; its trailing gap stays a gap rather than becoming rests.
+        #expect(plan.columns[1].staffMeasures[0][0].voices.count == 1)
+    }
+
+    /// Ruling 5: a FORWARD gap in voice 0 is re-emitted as rests, not as a `.locationShift`. The main voice
+    /// owns the bar's tick budget, so a hole in it is silence that has to be written — MuseScore parity.
+    /// Every other gap (a higher voice, or any backwards jog) keeps its shift; see the two tests above.
+    @Test("a forward gap in voice 0 materializes as rests, not as a locationShift")
+    func voiceZeroGapMaterializesAsRests() throws {
+        let score = Self.score([
+            Measure(voices: [Voice(elements: [
+                Self.timeSignature44,
+                Self.chord(.quarter, pitch: 60),
+                Self.jog(1, 2),
+                Self.chord(.quarter, pitch: 62),
+            ])]),
+        ])
+        // 2/4 columns fall at 960; the second chord sits at 1440, half a bar past the first one's end.
+        let plan = try RebarPlanner.rebar(region: 0 ..< 1, in: score, numerator: 2, denominator: 4)
+        #expect(plan.columns.count == 2)
+
+        #expect(Self.content(plan, 0)
+            == [Self.chord(.quarter, pitch: 60)] + Self.alignedRests(480, from: 480))
+        #expect(Self.content(plan, 1)
+            == Self.alignedRests(480, from: 0) + [Self.chord(.quarter, pitch: 62)])
+        for column in plan.columns.indices {
+            #expect(Self.shifts(Self.voice0(plan, column).elements).isEmpty)
+        }
     }
 
     // MARK: - System lane
