@@ -35,6 +35,13 @@ cd "$REPO_ROOT"
 # Not in the `sheet-music-wasm` graph: Apple hosts and UI, the Android JNI
 # bridge, the codegen tools, and the two wasm probes (which link the bridge but
 # ship nothing).
+#
+# Every entry here has to be checked against the TRANSITIVE closure of
+# SheetMusicWasmEntry in Package.swift, not against what the target's name
+# suggests. `SheetMusicLoader` was excluded on that reading and had to come back:
+# it reaches the binary through SheetMusicBridgeCore (Package.swift:210), whose
+# `ScoreBridge.sniff` / `loadScore` re-export `ScoreLoader`. An entry that is
+# wrong in this direction reopens the exact blindness the digest exists to close.
 EXCLUDED=(
     CJNI
     CSequencerHostTime
@@ -46,7 +53,6 @@ EXCLUDED=(
     SheetMusicAudioApple
     SheetMusicAudioSwiftySynth
     SheetMusicLayoutApple
-    SheetMusicLoader
     SheetMusicPDF
     SheetMusicUI
     WasmParityProbe
