@@ -251,6 +251,8 @@ extension ScoreLayerBuilder {
                 text: text,
                 metrics: metrics, height: height, into: parent,
             )
+        case .guitarBend:
+            break // Drawn in Task 5
         case let .chordLine(shape, origin, thickness):
             drawChordLine(
                 shape: shape, origin: shift(origin),

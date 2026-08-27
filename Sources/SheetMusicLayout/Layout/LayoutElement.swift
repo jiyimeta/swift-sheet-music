@@ -270,6 +270,27 @@ public enum LayoutElement: Sendable, Equatable {
         wavy: Bool,
         text: String?,
     )
+    /// A guitar bend, in one of the two shapes MuseScore's
+    /// `GuitarBendLayout::layoutStandardStaff`
+    /// (`rendering/score/guitarbendlayout.cpp:82`) dispatches between:
+    ///
+    /// * `slight == false` — an **angular** bend (`bend`, `preBend`,
+    ///   `graceNoteBend`): a two-segment polyline
+    ///   `fromOrigin → vertex → toOrigin`, where `vertex` is the peak
+    ///   `GuitarBendGeometry.vertex(from:to:sp:up:)` computed.
+    /// * `slight == true` — a **slight** bend: a short fixed cubic hook
+    ///   off one notehead, where `vertex` is the cubic's single control
+    ///   point rather than a corner, and `toOrigin` is
+    ///   `fromOrigin + GuitarBendGeometry.slightBendEnd(sp:)`.
+    ///
+    /// All three points are in the same (measure- or system-local)
+    /// frame, so the translate pass shifts them together.
+    case guitarBend(
+        fromOrigin: CGPoint,
+        vertex: CGPoint,
+        toOrigin: CGPoint,
+        slight: Bool,
+    )
     case arpeggioWiggle(
         top: CGPoint,
         bottom: CGPoint,

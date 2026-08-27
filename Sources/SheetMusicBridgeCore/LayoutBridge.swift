@@ -724,6 +724,9 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
+        case .guitarBend:
+            break // Encoded in Task 5
+
         case let .spannerSegment(
             kind, fromOrigin, toOrigin, continuesLeft, continuesRight, text,
         ):

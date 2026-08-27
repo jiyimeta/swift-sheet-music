@@ -114,6 +114,16 @@ extension LayoutEngine {
                 wavy: wavy,
                 text: text,
             )
+        case let .guitarBend(from, vertex, to, slight):
+            // All three points live in the same frame, so they shift
+            // together (the slight bend's `vertex` and `toOrigin` are
+            // absolute here, not offsets from `fromOrigin`).
+            return .guitarBend(
+                fromOrigin: shift(from),
+                vertex: shift(vertex),
+                toOrigin: shift(to),
+                slight: slight,
+            )
         case let .arpeggioWiggle(top, bot, subtype):
             return .arpeggioWiggle(
                 top: shift(top),

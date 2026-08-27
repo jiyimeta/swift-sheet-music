@@ -103,7 +103,12 @@ extension LayoutEngine {
     /// are skipped. When the current measure is exhausted, continues
     /// into subsequent measures of the same staff; measures where
     /// `voiceIndex` doesn't exist (voice absent) are skipped entirely.
-    private static func nextChordLocation(
+    ///
+    /// Internal rather than private because `collectGuitarBends`
+    /// (`LayoutEngine+GuitarBends.swift`) needs the identical "next real
+    /// chord in this voice" rule — a guitar bend's target is the next
+    /// chord exactly as a glissando's is.
+    static func nextChordLocation(
         in staff: Staff,
         afterMeasure: Int,
         voiceIndex: Int,
