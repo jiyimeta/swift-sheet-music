@@ -29,6 +29,12 @@ extension KeySignature {
                 children.append(XMLTreeNode(name: "actualKey", text: String(writtenKey)))
             }
         }
+        // MuseScore writes `<showCourtesySig>` after the key value and only when the courtesy is off
+        // (`TWrite::write(const KeySig*, …)`), so the default omits the tag and existing fixtures stay
+        // byte-stable.
+        if !showCourtesy {
+            children.append(XMLTreeNode(name: "showCourtesySig", text: "0"))
+        }
         children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "KeySig", children: children)
     }

@@ -5,6 +5,10 @@ public struct KeySignature: Sendable, Equatable {
     /// Sharp/flat count: -7 (Cb) … +7 (C#). 0 = C major / a minor.
     public var concertKey: Int
 
+    /// MuseScore `<showCourtesySig>` — whether the end-of-system courtesy for this signature is drawn.
+    /// Layout reads it, nothing else does.
+    public var showCourtesy: Bool
+
     /// Base element properties shared with every engravable element.
     /// Currently carries only `<visible>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
@@ -15,8 +19,9 @@ public struct KeySignature: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
-    public init(concertKey: Int, visible: Bool = true) {
+    public init(concertKey: Int, visible: Bool = true, showCourtesy: Bool = true) {
         self.concertKey = concertKey
+        self.showCourtesy = showCourtesy
         elementProperties = ElementProperties(visible: visible)
     }
 }
