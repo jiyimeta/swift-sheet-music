@@ -25,6 +25,35 @@
             #expect(abs((spacing ?? 0) - 12) <= 1)
         }
 
+        /// The blade-comb failure `cov_flags` page 1 exposed: a page of
+        /// same-pitch 64th figures repeats every flag blade at one y
+        /// across the page width, those rows reach 0.4-0.55 of the row
+        /// projection's peak, they crossed the old 0.5×peak threshold,
+        /// and the estimated spacing collapsed from the staff-line pitch
+        /// to the BLADE pitch — taking every sp-denominated constant
+        /// downstream with it (533 verticals emitted against ~230, dur
+        /// 48 / pitch 46 on the render). The staff lines are still the
+        /// widest rows on the page; the estimator has to prefer them.
+        @Test func repeatedShortInkRowsDoNotCollapseTheSpacing() {
+            var bmp = Self.page(spacingPx: 12)
+            // A comb of 12 rows at 55% of the staff-line width, pitched
+            // at 8 px — sized to cross the old 0.5×peak threshold and
+            // stay under the shipped fraction.
+            for i in 0 ..< 12 {
+                RasterTestBitmaps.hLine(
+                    &bmp, y: 200 + 8 * i, x0: 100, x1: 545, thickness: 1,
+                )
+            }
+            let mask = RasterPage.binarize(bmp)
+            let spacing = RasterPage.estimateStaffSpacingPx(mask)
+            #expect(abs((spacing ?? 0) - 12) <= 1)
+            // Break-and-restore: the OLD threshold on the SAME mask
+            // reproduces the collapse, so the shipped fraction is proven
+            // load-bearing rather than decorative.
+            let broken = RasterPage.estimateStaffSpacingPx(mask, peakFraction: 0.5)
+            #expect(abs((broken ?? 0) - 8) <= 1)
+        }
+
         @Test func aBlankPageHasNoStaffSpacing() {
             let blank = RasterTestBitmaps.blank(widthPx: 200, heightPx: 200, dpi: 300)
             #expect(RasterPage.estimateStaffSpacingPx(RasterPage.binarize(blank)) == nil)

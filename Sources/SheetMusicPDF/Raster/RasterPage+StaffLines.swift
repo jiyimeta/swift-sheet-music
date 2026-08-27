@@ -149,6 +149,34 @@ extension RasterPage {
     /// removes far more. 0.9 sits between them with room on both sides.
     static let staffLineCoreSpanFloor = 0.9
 
+    /// Least fraction of the row projection's PEAK a row must reach to
+    /// count as a staff-line row in `estimateStaffSpacingPx`.
+    ///
+    /// The old value was 0.5, and 0.5 has a measured failure: on
+    /// `cov_flags` page 1 — four staves of nothing but 64th figures, all
+    /// at the same pitch, so every flag blade repeats at the SAME y
+    /// across the page width — the blade rows reach 0.4-0.5 of the peak,
+    /// cross the threshold, and the median gap collapses from the staff
+    /// line pitch (19px) to the blade pitch (12px). Every sp-denominated
+    /// constant downstream inherits the broken spacing: the vertical
+    /// length floor admits ~300 junk columns on that page (533 emitted
+    /// against ~230 expected), junk competes for noteheads, and the
+    /// render scores dur 48 / pitch 46 against an oracle-verticals 100.
+    ///
+    /// Row-count fractions on that page are bimodal with a wide gap —
+    /// contaminating rows at 0.4-0.5 of peak (208 rows), true staff-line
+    /// rows at 1.0 (45 rows), and only 5 rows in between — so the
+    /// fraction sits in the middle of the empty band. All 69 clean
+    /// v2-eval pages estimate correctly at every fraction in
+    /// [0.55, 0.9]; 0.65 is a mid-plateau reading (the same rule the
+    /// Otsu and deskew maxima needed), taken low enough to keep margin
+    /// for degraded pages, whose eroded lines thin the peak rows.
+    ///
+    /// `OMR_ROW_PROJ_FRAC` overrides it for a sweep, the same way
+    /// `OMR_VERTICAL_MIN_SP` overrides the vertical floor.
+    static let rowProjectionPeakFraction =
+        sweepOverride("OMR_ROW_PROJ_FRAC") ?? 0.65
+
     /// Staff-line spacing in pixels, from the row projection's peak
     /// spacing; nil when the page has no staff.
     ///
@@ -157,8 +185,15 @@ extension RasterPage {
     /// that needs no threshold of its own — and a row projection needs
     /// none: measured against the labels it recovers 91-96% of staff
     /// lines by itself, which is far more than locating their spacing
-    /// requires.
-    static func estimateStaffSpacingPx(_ mask: InkMask) -> Double? {
+    /// requires. (`rowProjectionPeakFraction` is relative to the page's
+    /// own peak, not an absolute — the bootstrapping claim survives it.)
+    /// `peakFraction` is a parameter (defaulted to the shipped constant)
+    /// so a test can hold the blade-contamination mask fixed and flip
+    /// only the threshold — the break-and-restore pair that proves the
+    /// constant is load-bearing without mutating process environment.
+    static func estimateStaffSpacingPx(
+        _ mask: InkMask, peakFraction: Double = rowProjectionPeakFraction,
+    ) -> Double? {
         var projection = [Int](repeating: 0, count: mask.height)
         for y in 0 ..< mask.height {
             var count = 0
@@ -168,7 +203,8 @@ extension RasterPage {
             projection[y] = count
         }
         guard let peak = projection.max(), peak > 0 else { return nil }
-        let centers = runCenters(projection, threshold: peak / 2)
+        let threshold = max(1, Int(Double(peak) * peakFraction))
+        let centers = runCenters(projection, threshold: threshold)
         guard centers.count >= 2 else { return nil }
 
         var gaps: [Double] = []
