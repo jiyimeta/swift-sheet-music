@@ -14,7 +14,9 @@ companion to the per-library `README`s and the reference notes under
   rendering, PDF export, and playback.
 - **Goal:** a Foundation-only subset that cross-compiles to Android, so
   parsing, the model, MIDI, and layout geometry are reusable from Kotlin.
-- **Non-goal:** a notation *editor*. The model is immutable value types;
+- **Non-goal:** an interactive notation-editor *UI*. Editing APIs do
+  exist — the `EditCommand` set under `SheetMusicCore/Editing` (see
+  `docs/edit-commands.md`) — but the model is immutable value types;
   editing is expressed as producing a new `Score`, not mutating a live
   object graph.
 - **Non-goal:** runtime coupling to the MuseScore application. Behaviour
@@ -39,7 +41,7 @@ SheetMusicLayoutApple CoreText font-metrics provider for Layout (Apple-only)
 SheetMusicUI          SwiftUI notation viewer (Apple-only)
 SheetMusicAudioCore   Foundation-only audio value types (Android-compatible)
 SheetMusicAudioApple  AVAudioEngine playback + audio-file export (Apple-only)
-SheetMusicPDF         PDF export (Apple-only)
+SheetMusicPDF         PDF import (pure Swift, cross-platform) + PDF export (Apple-only)
 ```
 
 `SheetMusic` re-exports Core + MSCX + MusicXML + MIDI with
@@ -57,8 +59,8 @@ targets) are resolved inside rendering passes, not stored in the types.
   `enum`, `Sendable`, with no reference identity. This makes scores
   trivially shareable across concurrency domains and makes rendering a
   pure function of the input.
-- **One responsibility per file**, with a hard 300-line cap enforced by
-  SwiftLint. When a file outgrows its purpose it is split by concern
+- **One responsibility per file** — SwiftLint warns past 400 lines.
+  When a file outgrows its purpose it is split by concern
   (e.g. `MidiRenderer` → `MidiRenderer+Voice.swift`, `+Repeats.swift`,
   `+Header.swift`), not left to sprawl.
 - **Errors via `throws`.** A single `SheetMusicError` enum; no `Result`
@@ -117,7 +119,9 @@ to fonts through a `FontMetricsProvider` dependency-injection seam:
 
 - On Apple platforms, `SheetMusicLayoutApple` supplies a CoreText-backed
   provider (auto-installed transitively by `SheetMusicUI` / `SheetMusicPDF`).
-- On Android, the host wires a `Paint`-based provider; absent one, a
+- On Android, the host installs a Bravura-measured SMuFL metrics table
+  (`BravuraMetricsBuilder.buildTable` →
+  `SheetMusicJNI.nativeInstallSMuFLMetrics`); absent one, a
   `StubFontMetricsProvider` returns rectangle approximations so layout
   still produces sane geometry.
 
@@ -142,8 +146,12 @@ Audio is split so that the platform-neutral value types live in
 `LoopRange`, `PlaybackState`, `AudioFileFormat`, and friends. The timeline
 is a pure function of the score; the platform engines only schedule it.
 
-- **Apple** (`SheetMusicAudioApple`): an `AVAudioEngine` graph with a
-  per-staff `AVAudioUnitSampler`, driven by the shared timeline, exposing
+- **Apple** (`SheetMusicAudioApple`): an `AVAudioEngine` graph feeding
+  two multi-timbral AUMIDISynth units (melodic + percussion — chosen
+  over `AVAudioUnitSampler`, whose one-node-per-staff graph it replaced)
+  behind an injectable `SynthBackend` seam;
+  `SheetMusicAudioSwiftySynth` supplies the default stealing-free
+  pure-Swift SoundFont backend. Driven by the shared timeline, exposing
   a chord-by-chord `currentCursor`. Audio-file export renders the same
   graph offline.
 - **Android** (`Android/SheetMusicAudioAndroid/`, Kotlin): FluidSynth via
@@ -153,8 +161,9 @@ is a pure function of the score; the platform engines only schedule it.
 
 ## Android strategy
 
-The Foundation-only targets (Core / MSCX / MusicXML / MIDI / Layout /
-AudioCore) cross-compile with the official swift.org Android SDK. Kotlin
+The Foundation-only targets (Core / MSCX / MusicXML / MIDI / Loader /
+Layout / AudioCore / EditWire / PDF import) cross-compile with the
+official swift.org Android SDK. Kotlin
 consumes them through a JNI bridge whose wire format is generated from
 Swift `@WireFormat` types by the
 [`swift-wirelet`](https://github.com/jiyimeta/swift-wirelet) Gradle plugin
@@ -172,14 +181,18 @@ constraint rather than by taste:
   source file physically lives here.
 - **`Sources/SheetMusicBridgeCore`** holds everything those entry points
   call: the layout and draw-program bridge, the handle tables, the SMuFL
-  metrics table and the wire codecs. It depends on neither `SheetMusicPDF`,
-  `SheetMusicEditWire` nor SwiftJava, which is what lets it build for
-  WebAssembly — so a browser bridge reuses this implementation instead of
-  growing a second one beside it.
+  metrics table and the wire codecs. It depends on neither `SheetMusicPDF`
+  nor SwiftJava, which is what lets it build for WebAssembly — so a
+  browser bridge reuses this implementation instead of growing a second
+  one beside it. (`SheetMusicEditWire` *is* a dependency, and that is
+  fine: it has built for wasm since Wirelet 0.4.1.)
 
-The wirelet Gradle plugin scans `SheetMusicBridgeCore/Metadata` and
-`SheetMusicBridgeCore/Audio` for the `@WireFormat` types it turns into
-Kotlin codecs.
+The wirelet Gradle plugin scans `SheetMusicBridgeCore/Metadata`,
+`SheetMusicBridgeCore/Audio` and `SheetMusicBridgeCore/Draw`, plus
+`SheetMusicEditWire/Path` and `SheetMusicEditWire/Geometry`, for the
+`@WireFormat` types it turns into Kotlin codecs.
 
-`SheetMusicUI` and `SheetMusicPDF` remain Apple-only; Android rendering
-draws from the layout geometry plus its own `Paint` provider.
+`SheetMusicUI` remains Apple-only, as does `SheetMusicPDF`'s *export*
+half; the PDF *importer* is a pure-Swift reader that ships on Android
+too. Android rendering draws from the layout geometry plus the
+Bravura-measured SMuFL metrics table the host installs.

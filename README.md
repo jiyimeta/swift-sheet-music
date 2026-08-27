@@ -34,13 +34,15 @@ Swift Android SDK; the rest are Apple-only.
 | `SheetMusicMSCX` | ✓ | MuseScore file I/O: `.mscx` / `.mscz` read + write, including brackets, harmony / chord symbols, articulations, ornaments, MS3-compatibility export (`MSCXEncoderOptions(targetVersion: .v3)`). |
 | `SheetMusicMusicXML` | ✓ | MusicXML import: `.musicxml` plain XML + `.mxl` zipped containers. |
 | `SheetMusicMIDI` | ✓ | In-memory MIDI model, score → MIDI rendering, Standard MIDI File read + write. |
-| `SheetMusicLayout` | ✓ | Pure-geometry layout engine. Foundation-only, no Apple frameworks. Talks to glyphs through a `FontMetricsProvider` DI seam so Apple hosts can wire CoreText and Android hosts can wire a `Paint`-based provider. |
+| `SheetMusicLoader` | ✓ | Single format-dispatch entry point: bytes → `Score` across `.mscx` / `.mscz` / `.musicxml` / `.mxl`. Exported so consumers that parse score files themselves (e.g. Android JNI libraries) never re-spell the format table. |
+| `SheetMusicLayout` | ✓ | Pure-geometry layout engine. Foundation-only, no Apple frameworks. Talks to glyphs through a `FontMetricsProvider` DI seam so Apple hosts can wire CoreText and Android hosts can install a Bravura-measured SMuFL metrics table. |
 | `SheetMusicAudioCore` | ✓ | Foundation-only audio value types (`PlaybackTimeline`, `MetronomeBeat`, `GMInstrument`, `MixerChannel`, `LoopRange`, `PlaybackState`, `AudioFileFormat`, …) shared between the Apple and Android playback engines. |
 | `SheetMusicLayoutApple` |   | CoreText-backed `FontMetricsProvider` for `SheetMusicLayout`. Auto-installed by `SheetMusicUI` and `SheetMusicPDF`. |
 | `SheetMusicUI` |   | SwiftUI read-only notation viewer (iOS 17+ / macOS 14+ / tvOS 17+). Bundles Bravura SMuFL font (SIL OFL). |
 | `SheetMusicAudio` |   | Apple-only audio umbrella. Re-exports `SheetMusicAudioCore` + `SheetMusicAudioApple`. |
-| `SheetMusicAudioApple` |   | AVAudioEngine-backed `PlaybackEngine` + audio-file export. Per-staff `AVAudioUnitSampler`s, `SoundfontResolver` protocol, single-note preview, timeline-driven playback with chord-by-chord cursor via `PlaybackEngine.currentCursor`. |
-| `SheetMusicPDF` |   | PDF export (iOS 17+ / macOS 14+). Reuses `SheetMusicUI`'s layout + drawing pipeline through an `ImageRenderer` → `CGPDFContext` bridge, so glyphs stay vector. |
+| `SheetMusicAudioApple` |   | AVAudioEngine-backed `PlaybackEngine` + audio-file export. Two multi-timbral AUMIDISynth units (melodic + percussion) behind an injectable `SynthBackend` seam, `SoundfontResolver` protocol, single-note preview, timeline-driven playback with chord-by-chord cursor via `PlaybackEngine.currentCursor`. |
+| `SheetMusicAudioSwiftySynth` |   | Pure-Swift SoundFont2 `SynthBackend` (via [SwiftySynth](https://github.com/jiyimeta/swiftysynth)) — the default stealing-free synth for `PlaybackEngine`. |
+| `SheetMusicPDF` | ✓ | PDF import via a pure-Swift reader (all platforms, including Android) + PDF export (Apple-only, iOS 17+ / macOS 14+). Export reuses `SheetMusicUI`'s layout + drawing pipeline through an `ImageRenderer` → `CGPDFContext` bridge, so glyphs stay vector. |
 
 Android playback is delivered out-of-band as the
 `io.github.jiyimeta:sheet-music-audio-android` Kotlin Gradle module
@@ -131,7 +133,7 @@ repository URL. Requires Swift 6.2+ / Xcode 16+.
 | macOS | 14 | full |
 | tvOS | 17 | model, formats, MIDI, layout, SwiftUI, audio (no PDF) |
 | watchOS | 10 | model, formats, MIDI, layout (UI / audio / PDF are iOS / macOS / tvOS only) |
-| Android | API 28 | Foundation-only subset (Core / MSCX / MusicXML / MIDI / Layout / AudioCore) via the Swift Android SDK + Kotlin AAR — see [Android](#android) |
+| Android | API 28 | Foundation-only subset (Core / MSCX / MusicXML / MIDI / Loader / Layout / AudioCore / EditWire / PDF import) via the Swift Android SDK + Kotlin AAR — see [Android](#android) |
 
 ## Example
 
@@ -250,7 +252,8 @@ glyphs are vector, and a single set of options covers both surfaces.
 ## Android
 
 The Foundation-only subset of the package (Core / MSCX / MusicXML /
-MIDI / Layout / AudioCore) cross-compiles to Android via the
+MIDI / Loader / Layout / AudioCore / EditWire / PDF import)
+cross-compiles to Android via the
 [Swift 6.3 official Android SDK](https://www.swift.org/install/). Two
 companion Kotlin Gradle modules under `Android/` ship as `.aar`
 artifacts to GitHub Packages:
@@ -374,9 +377,13 @@ GitHub PAT with `read:packages` scope) before running any Gradle
 task. Supported ABIs: `arm64-v8a`, `x86_64`. Lowest API level: 28.
 
 Format support on Android matches Apple: `.mscz`, `.mscx`,
-`.musicxml`, `.mxl` all parse. Glyph rendering on Android uses a
-`StubFontMetricsProvider` rectangle approximation today — a
-SMuFL-aware Android provider is a future phase.
+`.musicxml`, `.mxl` all parse. Glyph rendering on Android is
+SMuFL-aware: `BravuraMetricsBuilder.buildTable` measures a Bravura
+metrics table on the Kotlin side and installs it via
+`SheetMusicJNI.nativeInstallSMuFLMetrics` (see
+[`Android/SheetMusicAndroid/README.md`](Android/SheetMusicAndroid/README.md)).
+Absent that install, layout falls back to a `StubFontMetricsProvider`
+rectangle approximation.
 
 ## Coverage
 
