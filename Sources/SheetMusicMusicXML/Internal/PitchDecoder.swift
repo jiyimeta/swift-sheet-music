@@ -43,8 +43,10 @@ enum PitchDecoder {
 
     /// Decode a MusicXML `<unpitched>` block (`<display-step>` + `<display-octave>`)
     /// into a MIDI pitch number. Used for percussion notation where the staff
-    /// position is purely visual; the actual drum sound is selected via
-    /// `<midi-unpitched>` on the part's `<score-instrument>` (not yet wired).
+    /// position is purely visual; the actual drum sound is normally selected
+    /// via `<midi-unpitched>` on the part's `<score-instrument>` (decoded by
+    /// `MusicXMLDrumTable`) — this function is the fallback for parts
+    /// without a usable mapping.
     /// Returns a `(midi, tpc)` pair like `decode(pitchNode:)` so callers can
     /// treat unpitched notes uniformly. TPC defaults to the natural TPC of the
     /// display step (no accidentals are meaningful for unpitched notes).

@@ -23,7 +23,7 @@ public struct BracketItem: Sendable, Equatable, Codable {
     public var span: Int
     public var column: Int
     /// Base element properties shared with every engravable element.
-    /// Currently carries only `<visible>`; see `ElementProperties`.
+    /// Carries `<visible>` and `<color>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
     /// MuseScore `<visible>0</visible>` attribute flag. When false the
     /// bracket is hidden from rendered/printed output. Sugar over

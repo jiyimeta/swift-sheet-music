@@ -50,7 +50,7 @@ public enum MeasureAccidentals {
     ///
     /// Measure-scoped because accidental state is: it is seeded from the key signature at every barline, so an edit
     /// can only ever disturb the bar it lands in. Comparing measures rather than trusting the command's reported
-    /// location keeps chains that span bars (`CrossBarNoteInputPlanner`) covered without special-casing them.
+    /// location keeps chains that span bars (`CrossBarInputPlanner`) covered without special-casing them.
     public static func renotationCommands(in current: Score, changedFrom previous: Score) -> [any EditCommand] {
         var commands: [any EditCommand] = []
         for (partIndex, part) in current.parts.enumerated() {

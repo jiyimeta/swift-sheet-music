@@ -80,9 +80,9 @@ extension FontMetricsProvider {
 /// `SheetMusicPDF`); non-Apple hosts leave the Stub in place or assign
 /// their own provider.
 public enum FontMetrics {
-    /// App-launch-time-once mutation; reader path is read-only. Same
-    /// unchecked-Sendable rationale as the existing `bboxCache`/`fontCache`
-    /// statics elsewhere in this target.
+    /// `nonisolated(unsafe)` is sound here because the provider is
+    /// mutated exactly once, at app launch before any layout runs;
+    /// every access after that is a read.
     public nonisolated(unsafe) static var provider: any FontMetricsProvider
         = StubFontMetricsProvider()
 }

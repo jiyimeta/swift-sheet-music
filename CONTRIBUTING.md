@@ -61,7 +61,7 @@ only on push to `main` and on manual dispatch. Android changes are
 therefore verified locally, before merging:
 
 ```bash
-Scripts/preflight.sh            # Apple swift test + Android
+Scripts/preflight.sh            # full suite: Apple + wasm + Android
 Scripts/preflight.sh --apple    # Apple / SwiftPM only (fast)
 ```
 

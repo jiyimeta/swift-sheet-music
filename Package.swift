@@ -11,8 +11,9 @@ import Foundation
 import PackageDescription
 
 /// When SWIFT_SHEET_MUSIC_ANDROID=1 is exported, the manifest assembles a
-/// reduced targets/products array that excludes Apple-only sub-libraries
-/// (Layout / UI / PDF / Audio / RenderPreviews). See
+/// reduced targets/products array that excludes the Apple-only sub-libraries
+/// (LayoutApple / UI / Audio / AudioApple / AudioSwiftySynth / RenderPreviews);
+/// Layout and PDF (in its import-only Android shape) still ship. See
 /// docs/superpowers/specs/2026-05-18-android-toolchain-design.md.
 let isAndroid = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_ANDROID"] == "1"
 /// When SWIFT_SHEET_MUSIC_WASM=1 is exported, the manifest also offers the
@@ -193,7 +194,7 @@ var targets: [Target] = [
     // Deliberately depends on neither SheetMusicPDF nor SwiftJava: PDF has no wasm shape and is
     // still on the Foundation umbrella, and SwiftJava does not cross-compile to WASI. Keeping
     // both out is what makes this target buildable for wasm at all — see `Scripts/wasm-size.sh`
-    // and CLAUDE.md's "Size is the constraint". SheetMusicEditWire is fine by contrast: it has
+    // and docs/development/webassembly.md's "Size gates". SheetMusicEditWire is fine by contrast: it has
     // built for wasm since Wirelet 0.4.1, and on Android it is already linked into this same
     // `.so` through SheetMusicAndroidJNI, so naming it here adds no second image.
     .target(
@@ -599,7 +600,7 @@ let packageDependencies: [Package.Dependency] = [
     // 0.4.1 imports FoundationEssentials where it exists. Before it, the
     // umbrella arrived through this package and cost ~10 MB brotli in any
     // WebAssembly graph containing SheetMusicAudioCore or
-    // SheetMusicEditWire — see CLAUDE.md "WebAssembly build".
+    // SheetMusicEditWire — see docs/development/webassembly.md ("Size gates").
     .package(
         url: "https://github.com/jiyimeta/swift-wirelet.git",
         exact: "0.5.0",

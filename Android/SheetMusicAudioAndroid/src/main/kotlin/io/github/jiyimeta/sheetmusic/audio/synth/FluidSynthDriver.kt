@@ -65,14 +65,11 @@ internal class FluidSynthDriver private constructor(
     }
 
     override fun handleMidiEvent(rawEvent: Long) {
-        // The MIDI event reaches us packed; unpack the conventional
-        // 4-byte SMF-style word and re-dispatch via fluid_synth note/cc/etc.
-        // For now we route the most common shapes — noteOn/noteOff/cc.
-        // The packing format is defined by AndroidPlaybackEngine's
-        // PlayerDriver callback (Phase 9 Task 34); for now this
-        // method is a stub that subclasses can override or that the
-        // Phase 10 wiring fills in. Defer the real implementation
-        // until the player callback shape is concrete.
+        // Intentionally inert. Production playback never routes events
+        // through here: the SMF player is attached directly to the single
+        // synth handle, so FluidSynth dispatches player events natively.
+        // Nothing calls this method outside test fakes; it exists only to
+        // satisfy the [SynthDriver] interface.
     }
 
     override fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int =

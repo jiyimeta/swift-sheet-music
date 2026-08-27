@@ -87,10 +87,10 @@ extension Voice {
     /// duration (TimeSignature × actualLength). Used to resolve
     /// `.measure` rests and to drive cross-measure tie offsets when
     /// a voice contains a measure-filling rest. The 4/4 default is
-    /// a source-compatibility shim for callers that do not yet
+    /// a source-compatibility shim for callers that do not
     /// supply it; non-`.measure` voices behave identically with or
-    /// without the real value, so the default is safe until decoders
-    /// start emitting `.measure` rests.
+    /// without the real value, but callers encoding voices that
+    /// contain `.measure` rests must supply the effective duration.
     func encode(
         carryIn: VoiceTieCarry,
         isStaffHead: Bool = false,
