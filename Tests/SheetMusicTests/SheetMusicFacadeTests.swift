@@ -6,16 +6,14 @@ import Foundation
 import Testing
 
 struct SheetMusicFacadeTests {
-    #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
-        @Test func loadScoreMSCZData() throws {
-            let url = try #require(
-                TestResources.url(forResource: "midi01", withExtension: "mscz"),
-            )
-            let bytes = try Data(contentsOf: url)
-            let score = try SheetMusic.loadScore(msczData: bytes)
-            #expect(score.division == 480)
-        }
-    #endif
+    @Test func loadScoreMSCZData() throws {
+        let url = try #require(
+            TestResources.url(forResource: "midi01", withExtension: "mscz"),
+        )
+        let bytes = try Data(contentsOf: url)
+        let score = try SheetMusic.loadScore(msczData: bytes)
+        #expect(score.division == 480)
+    }
 
     @Test func loadScoreMSCXData() throws {
         let url = try #require(
@@ -35,39 +33,37 @@ struct SheetMusicFacadeTests {
         #expect(score.parts.count == 1)
     }
 
-    #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
-        @Test func loadScoreMSCZURL() throws {
-            let url = try #require(
-                TestResources.url(forResource: "midi01", withExtension: "mscz"),
-            )
-            let score = try SheetMusic.loadScore(msczURL: url)
-            #expect(score.parts.count == 1)
-        }
+    @Test func loadScoreMSCZURL() throws {
+        let url = try #require(
+            TestResources.url(forResource: "midi01", withExtension: "mscz"),
+        )
+        let score = try SheetMusic.loadScore(msczURL: url)
+        #expect(score.parts.count == 1)
+    }
 
-        @Test func saveMSCZDataRoundTrip() throws {
-            let mscx = try #require(
-                TestResources.url(forResource: "midi01", withExtension: "mscx"),
-            )
-            let mscxData = try Data(contentsOf: mscx)
-            let msczData = try SheetMusic.saveMSCZ(mscxData: mscxData)
-            let score = try SheetMusic.loadScore(msczData: msczData)
-            let direct = try SheetMusic.loadScore(mscxData: mscxData)
-            #expect(score == direct)
-        }
+    @Test func saveMSCZDataRoundTrip() throws {
+        let mscx = try #require(
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
+        )
+        let mscxData = try Data(contentsOf: mscx)
+        let msczData = try SheetMusic.saveMSCZ(mscxData: mscxData)
+        let score = try SheetMusic.loadScore(msczData: msczData)
+        let direct = try SheetMusic.loadScore(mscxData: mscxData)
+        #expect(score == direct)
+    }
 
-        @Test func saveMSCZURLRoundTrip() throws {
-            let mscx = try #require(
-                TestResources.url(forResource: "midi01", withExtension: "mscx"),
-            )
-            let mscxData = try Data(contentsOf: mscx)
-            let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
-                .appendingPathComponent("facade-test-\(UUID().uuidString).mscz")
-            defer { try? FileManager.default.removeItem(at: tmp) }
-            try SheetMusic.saveMSCZ(mscxData: mscxData, to: tmp)
-            let score = try SheetMusic.loadScore(msczURL: tmp)
-            #expect(score.division == 480)
-        }
-    #endif
+    @Test func saveMSCZURLRoundTrip() throws {
+        let mscx = try #require(
+            TestResources.url(forResource: "midi01", withExtension: "mscx"),
+        )
+        let mscxData = try Data(contentsOf: mscx)
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("facade-test-\(UUID().uuidString).mscz")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try SheetMusic.saveMSCZ(mscxData: mscxData, to: tmp)
+        let score = try SheetMusic.loadScore(msczURL: tmp)
+        #expect(score.division == 480)
+    }
 
     @Test func loadScoreFromMidiData() throws {
         let bytes = Data([

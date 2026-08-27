@@ -69,18 +69,15 @@ struct AccidentalDecodeTests {
 
 // Safety-net: every Accidental case's rawValue (= SymId name) must exist in the
 // SMuFL byName resolver. A failure here means a typo'd SymId name — fix the table.
-// Apple-only because SheetMusicLayout is not Android-compatible.
-#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
-    @testable import SheetMusicLayout
+@testable import SheetMusicLayout
 
-    struct AccidentalSymIdSafetyNetTests {
-        @Test func allCasesHaveValidSymId() {
-            for acc in Accidental.allCases {
-                #expect(
-                    SMuFLCodepoint.byName(acc.mscxSubtype) != nil,
-                    "\(acc): '\(acc.mscxSubtype)' not found in SMuFL byName table",
-                )
-            }
+struct AccidentalSymIdSafetyNetTests {
+    @Test func allCasesHaveValidSymId() {
+        for acc in Accidental.allCases {
+            #expect(
+                SMuFLCodepoint.byName(acc.mscxSubtype) != nil,
+                "\(acc): '\(acc.mscxSubtype)' not found in SMuFL byName table",
+            )
         }
     }
-#endif
+}
