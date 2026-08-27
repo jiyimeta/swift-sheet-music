@@ -127,6 +127,70 @@
             /// quantisation or something larger, which is the difference
             /// between fixing the emitted y and fixing the gate.
             var lostDetail: [String] = []
+            /// SIGNED y-error of every MATCHED truth line, in twentieths
+            /// of a staff space (0.05 sp buckets, floored so the sign
+            /// survives).
+            ///
+            /// The mechanism histograms above only see lines the metric
+            /// MISSED, and its dy gate is 0.25 sp = 1.14pt here — wider
+            /// than any error that still matches. So a detector that
+            /// places every line half a raster row low is invisible to
+            /// all of them, and that is precisely the residue round one
+            /// could not resolve. Signed rather than absolute because
+            /// bias and jitter want opposite fixes: a bias is one
+            /// rounding site, jitter is not fixable at all.
+            var matchedDy: [Int: Int] = [:]
+            var matchedDyN = 0
+            var matchedDySum = 0.0
+            var matchedDySumSq = 0.0
+            /// The same, restricted to lines the ink test calls real
+            /// staff lines. Ledger rows that happen to match drag the
+            /// unrestricted mean toward their own geometry.
+            var matchedDySolid: [Int: Int] = [:]
+            var geometry = StaffGeometry()
+        }
+
+        /// What the DOWNSTREAM consumer sees when the raster's staff and
+        /// the truth-line staff are the same staff.
+        ///
+        /// `detectStaves` output is not consumed as five line y's.
+        /// `staffAnchor` reads `yLines.first` and `yLines.last` and
+        /// nothing between them; `barlineCandidates` reads the same two
+        /// plus `xRange`; the three middle lines only ever appear inside
+        /// `gapCV`, which is a pass/fail the staff already passed. So a
+        /// per-line dy histogram can be alarming and cost nothing, and a
+        /// dy on ONE of the two outer lines can be tiny and cost a whole
+        /// score. These counters are keyed to what is actually read.
+        struct StaffGeometry {
+            /// Aligned staff pairs seen.
+            var pairs = 0
+            /// `raster.yLines.first − truth.yLines.first`, 0.05 sp buckets.
+            /// This is `StaffAnchor.bottomY`: the pitch origin.
+            var anchorDy: [Int: Int] = [:]
+            /// `rasterSpan − truthSpan` over the outer lines, 0.05 sp
+            /// buckets. This is 4 × `StaffAnchor.lineSpacing`: the pitch
+            /// scale.
+            var spanErr: [Int: Int] = [:]
+            /// max |dy| over the five lines, 0.05 sp buckets — the sweep
+            /// the round-one report asked for.
+            var maxAbsDy: [Int: Int] = [:]
+            /// THE counterfactual for pitch. For a notehead sitting
+            /// exactly on truth staff position k (half-spaces from the
+            /// bottom line), does the raster's own anchor quantise it to
+            /// k? Counted per position and per staff.
+            var pitchFlipStaves = 0
+            var pitchFlipByPosition: [Int: Int] = [:]
+            /// `barlineCandidates.count` both ways, per aligned pair.
+            var barlineDelta: [Int: Int] = [:]
+            var barlinePairsEqual = 0
+            /// xRange edges, `raster − truth`, in whole staff spaces.
+            var xLoErr: [Int: Int] = [:]
+            var xHiErr: [Int: Int] = [:]
+            /// One row per aligned pair that differs in something the
+            /// consumer reads. Printed, not bucketed: on a corpus of 572
+            /// staves the population that differs is small and each
+            /// member names a page.
+            var detail: [String] = []
         }
 
         /// What one page contributed, for the per-page row.
@@ -148,6 +212,13 @@
             var stavesRaster = 0
             var stavesSubstituted = 0
             var stavesAligned = 0
+            /// This page's matched-line dy, so the histogram can be
+            /// crossed against the per-render score deltas rather than
+            /// only read as a corpus aggregate.
+            var dyN = 0
+            var dySum = 0.0
+            var dyAbsMax = 0.0
+            var dySumSq = 0.0
         }
 
         /// A merged truth line is a real STAFF LINE only if this much of
@@ -198,10 +269,14 @@
                     ? Int(((t.rectPt[2] - t.rectPt[0]) / widest * 20).rounded(.down)) : 0
                 let inkKey = Int((ink * 20).rounded(.down))
                 if solid { row.solid += 1 }
-                if assign.truthPartner[ti] != nil {
+                if let pi = assign.truthPartner[ti] {
                     totals.widthFracHit[widthKey, default: 0] += 1
                     totals.inkFracHit[inkKey, default: 0] += 1
                     totals.positionHit[places[ti], default: 0] += 1
+                    recordMatchedDy(
+                        dySp: (predicted[pi].rectPt[1] - t.rectPt[1]) / spacingPt,
+                        solid: solid, into: &totals, row: &row,
+                    )
                     if solid {
                         totals.solidMatched += 1
                         row.solidMatched += 1
@@ -234,6 +309,26 @@
             totals.predTotal += row.pred
             totals.predUnmatched += row.predUnmatched
             return row
+        }
+
+        /// Bucket one matched line's signed y-error at 0.05 staff spaces.
+        ///
+        /// `.down` rather than `.toNearestOrAwayFromZero` so the buckets
+        /// tile the axis without a double-width one straddling zero,
+        /// which is the shape that would make a bias look symmetric.
+        static func recordMatchedDy(
+            dySp: Double, solid: Bool, into totals: inout Totals, row: inout Row,
+        ) {
+            let bucket = Int((dySp / 0.05).rounded(.down))
+            totals.matchedDy[bucket, default: 0] += 1
+            totals.matchedDyN += 1
+            totals.matchedDySum += dySp
+            totals.matchedDySumSq += dySp * dySp
+            if solid { totals.matchedDySolid[bucket, default: 0] += 1 }
+            row.dyN += 1
+            row.dySum += dySp
+            row.dySumSq += dySp * dySp
+            row.dyAbsMax = max(row.dyAbsMax, abs(dySp))
         }
 
         /// How much of a merged line's span its unmerged fragments cover.
@@ -378,7 +473,7 @@
             predicted: [OMRPageLabels.Path],
             rasterPaths: [PathSegment], truthPaths: [PathSegment],
             glyphs: [ClassifiedGlyph], pageIndex: Int, spacingPt: Double,
-            into totals: inout Totals, row: inout Row,
+            label: String, into totals: inout Totals, row: inout Row,
         ) {
             let substituted = rasterPaths.filter { $0.kind != .horizontal }
                 + truthPaths.filter { $0.kind == .horizontal }
@@ -393,18 +488,24 @@
             var aligned = 0
             for staff in b {
                 let mid = midline(staff.yLines)
-                var found = false
+                var partner: SheetMusicPDF.Staff?
                 for (i, other) in a.enumerated()
                     where !used[i] && abs(midline(other.yLines) - mid) <= tolerance
                 {
                     used[i] = true
                     aligned += 1
-                    found = true
+                    partner = other
                     break
+                }
+                if let partner {
+                    compareGeometry(
+                        raster: partner, truth: staff, spacingPt: spacingPt,
+                        label: label, into: &totals.geometry,
+                    )
                 }
                 evenness(
                     of: staff, predicted: predicted, spacingPt: spacingPt,
-                    survived: found, into: &totals,
+                    survived: partner != nil, label: label, into: &totals,
                 )
             }
             row.stavesRaster = a.count
@@ -448,7 +549,7 @@
         /// threshold.
         static func evenness(
             of staff: SheetMusicPDF.Staff, predicted: [OMRPageLabels.Path], spacingPt: Double,
-            survived: Bool, into totals: inout Totals,
+            survived: Bool, label: String, into totals: inout Totals,
         ) {
             guard spacingPt > 0, staff.yLines.count == 5 else { return }
             var ys: [Double] = []
@@ -486,7 +587,7 @@
                 let truthGaps = (1 ..< 5)
                     .map { Double(staff.yLines[$0] - staff.yLines[$0 - 1]) }
                 totals.lostDetail.append(
-                    "cv=" + String(format: "%.3f", cv)
+                    label + " cv=" + String(format: "%.3f", cv)
                         + " sp=" + String(format: "%.2f", spacingPt)
                         + " rasterGaps=" + gaps.map { String(format: "%.2f", $0) }
                         .joined(separator: ",")

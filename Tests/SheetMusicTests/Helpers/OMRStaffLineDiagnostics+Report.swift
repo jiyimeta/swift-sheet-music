@@ -17,7 +17,20 @@
                 + "pred=\(row.pred) predFalse=\(row.predUnmatched) " + mech
                 + " stavesRaster=\(row.stavesRaster) "
                 + "stavesTruthLines=\(row.stavesSubstituted) "
-                + "stavesAligned=\(row.stavesAligned)"
+                + "stavesAligned=\(row.stavesAligned) "
+                + "dyN=\(row.dyN) dyMean=" + String(format: "%+.4f", mean(row))
+                + " dySd=" + String(format: "%.4f", sd(row))
+                + " dyAbsMax=" + String(format: "%.4f", row.dyAbsMax)
+        }
+
+        private static func mean(_ row: Row) -> Double {
+            row.dyN > 0 ? row.dySum / Double(row.dyN) : 0
+        }
+
+        private static func sd(_ row: Row) -> Double {
+            guard row.dyN > 1 else { return 0 }
+            let n = Double(row.dyN)
+            return max(0, row.dySumSq / n - (row.dySum / n) * (row.dySum / n)).squareRoot()
         }
 
         /// One line per REAL staff line the front-end did not emit —
@@ -74,6 +87,36 @@
             reportCounterfactuals(totals)
             reportPopulation(totals)
             reportStaves(totals)
+            reportMatchedDy(totals)
+            reportGeometry(totals.geometry)
+        }
+
+        /// The SIGNED error of the lines the metric was happy with.
+        ///
+        /// Reported as mean / sd / shape rather than as |dy|, because
+        /// those separate the only two answers that matter: a mean far
+        /// from zero with a small sd is one rounding site and is fixable;
+        /// a mean at zero with a wide sd is per-line jitter and is not.
+        private static func reportMatchedDy(_ totals: Totals) {
+            let n = Double(totals.matchedDyN)
+            guard n > 0 else { return }
+            let mean = totals.matchedDySum / n
+            let variance = max(0, totals.matchedDySumSq / n - mean * mean)
+            print(
+                "[sldiag][mdy][SUMMARY] n=\(totals.matchedDyN) "
+                    + "meanSp=" + String(format: "%+.4f", mean)
+                    + " sdSp=" + String(format: "%.4f", variance.squareRoot())
+                    + " meanPt=" + String(format: "%+.4f", mean * 4.56),
+            )
+            var running = 0
+            for b in totals.matchedDy.keys.sorted() {
+                running += totals.matchedDy[b] ?? 0
+                print(
+                    "[sldiag][mdy] dySp=" + String(format: "%+.2f", Double(b) * 0.05)
+                        + " n=\(totals.matchedDy[b] ?? 0) "
+                        + "solid=\(totals.matchedDySolid[b] ?? 0) cum=\(running)",
+                )
+            }
         }
 
         /// The two gate sweeps, as cumulative recoveries.
@@ -153,6 +196,53 @@
             }
             for detail in totals.lostDetail.sorted() {
                 print("[sldiag][lost] " + detail)
+            }
+        }
+
+        /// What the consumers of a KEPT staff actually read, both ways.
+        ///
+        /// `geo` is priced in consumer units on purpose: `flip` is a
+        /// wrong PITCH for every note on that staff position and `bars`
+        /// is a wrong MEASURE GRID, whereas a dy bucket is only a number
+        /// until something reads it.
+        private static func reportGeometry(_ geo: StaffGeometry) {
+            guard geo.pairs > 0 else { return }
+            print(
+                "[sldiag][geo][SUMMARY] pairs=\(geo.pairs) "
+                    + "pitchFlipStaves=\(geo.pitchFlipStaves) "
+                    + "barlineEqual=\(geo.barlinePairsEqual) "
+                    + "barlineDiff=\(geo.pairs - geo.barlinePairsEqual)",
+            )
+            sweep(geo.anchorDy, tag: "anchorDy", scale: 0.05)
+            sweep(geo.spanErr, tag: "spanErr", scale: 0.05)
+            sweep(geo.maxAbsDy, tag: "maxAbsDy", scale: 0.05)
+            for k in geo.pitchFlipByPosition.keys.sorted() {
+                print("[sldiag][geo][flip] position=\(k) staves=\(geo.pitchFlipByPosition[k] ?? 0)")
+            }
+            for d in geo.barlineDelta.keys.sorted() {
+                print("[sldiag][geo][bars] delta=\(d) pairs=\(geo.barlineDelta[d] ?? 0)")
+            }
+            for d in geo.xLoErr.keys.sorted() {
+                print("[sldiag][geo][xlo] dSp=\(d) pairs=\(geo.xLoErr[d] ?? 0)")
+            }
+            for d in geo.xHiErr.keys.sorted() {
+                print("[sldiag][geo][xhi] dSp=\(d) pairs=\(geo.xHiErr[d] ?? 0)")
+            }
+            for detail in geo.detail.sorted() {
+                print("[sldiag][geo][staff] " + detail)
+            }
+        }
+
+        /// One bucketed quantity with its cumulative column — the form
+        /// every counterfactual in this probe is read in.
+        private static func sweep(_ histogram: [Int: Int], tag: String, scale: Double) {
+            var running = 0
+            for b in histogram.keys.sorted() {
+                running += histogram[b] ?? 0
+                print(
+                    "[sldiag][geo][\(tag)] sp=" + String(format: "%+.2f", Double(b) * scale)
+                        + " n=\(histogram[b] ?? 0) cum=\(running)",
+                )
             }
         }
     }

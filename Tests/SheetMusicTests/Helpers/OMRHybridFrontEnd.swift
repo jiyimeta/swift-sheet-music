@@ -34,6 +34,22 @@
             case noBeams
             case nullFrontEnd
             case truthStaffLines
+            /// The two halves of `truthStaffLines`, split at
+            /// `lineClusterWidthGate` = 50pt.
+            ///
+            /// That mode hands back TWO different things at once, and its
+            /// +3.5 durP50 cannot be attributed while they are joined.
+            /// The raster front-end's own horizontal gate is 50pt
+            /// (`staffLineMinWidthPt`), so everything narrower is a
+            /// population it cannot emit AT ALL — ledger lines,
+            /// tuplet-bracket arms — while everything wider is the same
+            /// five staff lines it did emit, in different places and with
+            /// different ends. `truthStaffLinesWide` substitutes only the
+            /// second; `truthStaffLinesNarrow` keeps every raster path
+            /// and ADDS only the first. Their fixes are unrelated: one is
+            /// a localisation defect, the other is a missing detector.
+            case truthStaffLinesWide
+            case truthStaffLinesNarrow
             case truthVerticals
             case truthBeams
             /// Every path kind from the oracle at once — with label
@@ -119,12 +135,26 @@
             /// upstream of the front-end entirely".
             var substituted: Set<PathSegment.Kind> {
                 switch self {
-                case .truthStaffLines: [.horizontal]
+                case .truthStaffLines, .truthStaffLinesWide: [.horizontal]
                 case .truthVerticals: [.vertical]
                 case .truthBeams: [.beam]
                 case .truthPaths: [.horizontal, .vertical, .beam, .rectangle]
                 default: []
                 }
+            }
+
+            /// Whether a SUBSTITUTED oracle path survives this mode's
+            /// width split. Only the two half-modes narrow it.
+            func admitsOracle(_ path: PathSegment) -> Bool {
+                guard self == .truthStaffLinesWide, path.kind == .horizontal
+                else { return true }
+                return path.rect.width > PDFImporter.lineClusterWidthGate
+            }
+
+            /// Whether this mode ADDS the oracle's sub-gate horizontals on
+            /// top of the raster's own paths.
+            var addsNarrowOracleHorizontals: Bool {
+                self == .truthStaffLinesNarrow
             }
         }
 
@@ -559,7 +589,18 @@
                         $0.pageIndex == index && substituted.contains($0.kind)
                     },
                     page: page, transform: analysis.transform,
-                )
+                    // AFTER the reframe: on a degraded page the frames
+                    // differ in scale, so a width gate applied before it
+                    // is a gate on the wrong page's points.
+                ).filter(mode.admitsOracle)
+            }
+            if mode.addsNarrowOracleHorizontals {
+                pagePaths += reframe(
+                    oracle.walked.paths.filter {
+                        $0.pageIndex == index && $0.kind == .horizontal
+                    },
+                    page: page, transform: analysis.transform,
+                ).filter { $0.rect.width <= PDFImporter.lineClusterWidthGate }
             }
             if !mode.verticalHybrid.isEmpty {
                 pagePaths = hybridVerticals(

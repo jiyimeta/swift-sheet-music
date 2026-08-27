@@ -206,6 +206,40 @@
             #expect(OMRHybridFrontEnd.filter(paths, mode: .truthBeams).count == 1)
         }
 
+        /// The two staff-line half-modes must PARTITION `truthStaffLines`:
+        /// one takes every oracle horizontal the line clusterer would
+        /// admit, the other takes every one it would not, and neither
+        /// takes both. If they overlapped, their deltas would double-count
+        /// the same recovery, and the attribution that says which half the
+        /// seam's +3.5 durP50 lives in would be worthless.
+        @Test func theStaffLineHalfModesSplitAtTheClusterGate() {
+            let wide = PathSegment(
+                kind: .horizontal,
+                rect: CGRect(x: 0, y: 100, width: 400, height: 0),
+                lineWidth: 0.6, pageIndex: 0, quad: nil,
+            )
+            let narrow = PathSegment(
+                kind: .horizontal,
+                rect: CGRect(x: 0, y: 108, width: 9, height: 0),
+                lineWidth: 0.6, pageIndex: 0, quad: nil,
+            )
+            #expect(OMRHybridFrontEnd.Mode.truthStaffLinesWide.substituted == [.horizontal])
+            #expect(OMRHybridFrontEnd.Mode.truthStaffLinesWide.admitsOracle(wide))
+            #expect(!OMRHybridFrontEnd.Mode.truthStaffLinesWide.admitsOracle(narrow))
+            #expect(!OMRHybridFrontEnd.Mode.truthStaffLinesWide.addsNarrowOracleHorizontals)
+            // The narrow half keeps every raster path — it ADDS, it does
+            // not substitute — so its `substituted` must stay empty or the
+            // raster's own staff lines would vanish with it.
+            #expect(OMRHybridFrontEnd.Mode.truthStaffLinesNarrow.substituted.isEmpty)
+            #expect(OMRHybridFrontEnd.Mode.truthStaffLinesNarrow.addsNarrowOracleHorizontals)
+            #expect(
+                OMRHybridFrontEnd.filter([wide, narrow], mode: .truthStaffLinesNarrow).count == 2,
+            )
+            #expect(
+                OMRHybridFrontEnd.filter([wide, narrow], mode: .truthStaffLinesWide).isEmpty,
+            )
+        }
+
         /// One minimal page + raster analysis, built directly rather than
         /// via `OMRHarnessFixture` — that fixture's own bare 5-line-staff
         /// page ships ZERO glyphs and ZERO skew by design (see its own

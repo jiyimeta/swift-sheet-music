@@ -314,6 +314,8 @@
                 spacingPt: spacing, into: &totals.sldiag,
             )
             let index = page.page.index
+            let location = "render=\(URL(fileURLWithPath: dir).lastPathComponent) "
+                + "file=\(labelFile)"
             if let oracle = try? OMROracleFrontEnd.replay(pages: [page]) {
                 // Through the SAME reframe and the SAME vocabulary filter
                 // the hybrid's `truthStaffLines` mode uses, so this column
@@ -333,11 +335,9 @@
                     predicted: predicted,
                     rasterPaths: analysis.paths, truthPaths: truthSegments,
                     glyphs: glyphs, pageIndex: index, spacingPt: spacing,
-                    into: &totals.sldiag, row: &row,
+                    label: location, into: &totals.sldiag, row: &row,
                 )
             }
-            let location = "render=\(URL(fileURLWithPath: dir).lastPathComponent) "
-                + "file=\(labelFile)"
             print(
                 "[sldiag][page] " + location + " sp=\(String(format: "%.2f", spacing)) "
                     + OMRStaffLineDiagnostics.row(row),
