@@ -117,6 +117,44 @@ public enum MeasureAccidentals {
         return commands
     }
 
+    /// The glyph repairs every measure in `measureRange` needs against the key in force **in `score` as given** —
+    /// i.e. call this on a score that ALREADY carries the new signature, and it plans the notes that signature
+    /// leaves mis-spelled.
+    ///
+    /// This is the signature-change counterpart to `renotationCommands(in:changedFrom:)`. That one diffs measures,
+    /// so it can only reach bars whose bytes moved — and a key change moves exactly one bar (the one the new
+    /// `KeySignature` element is written into) while silently re-reading every bar after it up to the next key
+    /// change. Those bars are byte-identical and yet every accidental in them is now judged against a different
+    /// signature, so the caller names the span instead of letting a diff find it.
+    ///
+    /// Percussion is skipped — unpitched staves have no key to be in or out of, and rewriting a drum note's glyph
+    /// on tpc evidence would be meaningless. Same spelling as `AddPart.signatureReference(in:)`: a `useDrumset`
+    /// part, or a staff whose `group` is `"percussion"`.
+    ///
+    /// The range is clamped per staff, so a span running past a short staff's last bar is a no-op there rather
+    /// than a trap. Voices that come out identical produce no command, so an already-correct span returns empty.
+    public static func renotationCommands(in score: Score, measureRange: Range<Int>) -> [any EditCommand] {
+        var commands: [any EditCommand] = []
+        for (partIndex, part) in score.parts.enumerated() where !part.instrument.useDrumset {
+            for (staffIndex, staff) in part.staves.enumerated() where staff.group != "percussion" {
+                let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
+                let durations = score.effectiveMeasureDurations(partIndex: partIndex, staffIndex: staffIndex)
+                for measureIndex in measureRange.clamped(to: staff.measures.indices) {
+                    guard durations.indices.contains(measureIndex) else { continue }
+                    commands.append(contentsOf: renotate(
+                        staff.measures[measureIndex],
+                        at: address,
+                        measureIndex: measureIndex,
+                        keySig: score.activeKey(staff: address, measureIndex: measureIndex),
+                        division: score.division,
+                        measureDuration: durations[measureIndex],
+                    ))
+                }
+            }
+        }
+        return commands
+    }
+
     /// One measure's voices rewritten with the glyphs its notes actually need — one `ReplaceVoiceElements` per voice
     /// that came out different, none for the voices that didn't.
     ///

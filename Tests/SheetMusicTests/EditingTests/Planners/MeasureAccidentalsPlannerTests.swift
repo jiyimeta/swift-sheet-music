@@ -45,4 +45,39 @@ struct MeasureAccidentalsPlannerTests {
         let score = EditingFixtures.twoMeasuresOfQuarterRests(key: 2)
         #expect(MeasureAccidentals.renotationCommands(in: score, changedFrom: score).isEmpty)
     }
+
+    /// A key change reaches every bar up to the next one, not just the bar the new signature lands in — and the
+    /// bars after it are byte-identical to what they were, so the diff-based path cannot see them. The range API
+    /// is what covers them.
+    @Test func `range renotation covers measures after a key change`() {
+        // Two measures of G major (1 sharp) holding F♯s spelled without glyphs (in key), then flip the score to
+        // C major and ask for renotation over 0..<2: every F♯ now needs an explicit ♯ glyph.
+        var score = Score.blank(BlankScoreTemplate(
+            title: "T",
+            parts: [.init(instrumentID: "piano", longName: "Piano", staves: [.init(clefType: "G")])],
+            concertKey: 1, measureCount: 2,
+        ))
+        for m in 0 ..< 2 {
+            let slot = m == 0 ? 2 : 0
+            score.parts[0].staves[0].measures[m].voices[0].elements[slot] =
+                .chord(Chord(duration: .whole, notes: [Note(pitch: 66, tpc: 20)])) // F♯4, in-key in G major
+        }
+        // Flip the stored key to C major the way SetKeySignature will: rewrite the measure-0 element.
+        guard case .keySignature = score.parts[0].staves[0].measures[0].voices[0].elements[0]
+        else { Issue.record("expected key sig at [0]"); return }
+        score.parts[0].staves[0].measures[0].voices[0].elements[0] = .keySignature(KeySignature(concertKey: 0))
+
+        let repairs = MeasureAccidentals.renotationCommands(in: score, measureRange: 0 ..< 2)
+        #expect(repairs.count == 2) // BOTH measures need a repair — the diff-based path would only find bar 0
+        var repaired = score
+        for command in repairs {
+            _ = try? command.apply(to: &repaired)
+        }
+        for m in 0 ..< 2 {
+            let slot = m == 0 ? 2 : 0
+            guard case let .chord(chord) = repaired.parts[0].staves[0].measures[m].voices[0].elements[slot]
+            else { Issue.record("chord"); return }
+            #expect(chord.notes[0].accidental == .sharp) // F♯ out of key now carries its glyph
+        }
+    }
 }
