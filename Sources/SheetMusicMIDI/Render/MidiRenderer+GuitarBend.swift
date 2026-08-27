@@ -171,13 +171,28 @@ extension MidiRenderer {
     /// - The chord is CONSUMED by a preceding `.between` tremolo. Such a chord
     ///   has `tremolo == nil` itself, so the check above cannot see it — the
     ///   voice walker `continue`s past it before `renderVoiceElement` runs.
-    ///   That skip is the ONLY one the voice walker performs, so this closes
-    ///   the whole "the renderer never reaches this slot" class.
+    ///
+    /// The voice walker performs exactly two `continue`s over a chord
+    /// (`MidiRenderer+Voice.swift`): the tremolo-consumed follower, and the
+    /// tremolo-CARRYING chord that routes to `renderTremoloChord` instead.
+    /// The second is already covered by the `chord.tremolo == nil` test above,
+    /// so between them the two clauses close the whole "the renderer never
+    /// reaches this slot" class. (The walker's other `continue`s skip a whole
+    /// measure or a whole voice, above the level of the element array this
+    /// walk is handed, so they cannot strand a slot inside it.)
+    ///
+    /// A note-less chord hosts no position at all, its graces included: the
+    /// renderer's grace path hangs off the parent chord's notes, so a grace
+    /// slot on a chord with nothing to strike would never be reached either.
+    /// The parser cannot build such a chord today, so the guard is structural;
+    /// `chainMap_skipsGracesOfANoteLessChord` pins it by handing the walk a
+    /// hand-built element array.
     private static func chainPositions(in voiceElements: [VoiceElement]) -> [ChainPosition] {
         let skipped = tremoloConsumedIndices(in: voiceElements)
         var positions: [ChainPosition] = []
         for (elementIndex, element) in voiceElements.enumerated() {
-            guard case let .chord(chord) = element else { continue }
+            guard case let .chord(chord) = element, !chord.notes.isEmpty
+            else { continue }
             let renderable = !skipped.contains(elementIndex)
                 && chord.tremolo == nil && chord.arpeggio == nil
             for (graceIndex, grace) in chord.graceNotesBefore.enumerated()
@@ -188,12 +203,10 @@ extension MidiRenderer {
                     note: renderable ? bendChainNote(in: grace.notes) : nil,
                 ))
             }
-            if !chord.notes.isEmpty {
-                positions.append(ChainPosition(
-                    elementIndex: elementIndex, grace: nil,
-                    note: renderable ? bendChainNote(in: chord.notes) : nil,
-                ))
-            }
+            positions.append(ChainPosition(
+                elementIndex: elementIndex, grace: nil,
+                note: renderable ? bendChainNote(in: chord.notes) : nil,
+            ))
             for (graceIndex, grace) in chord.graceNotesAfter.enumerated()
                 where !grace.notes.isEmpty
             {

@@ -45,7 +45,7 @@ extension MidiRenderer {
     ) {
         // A muted note (`<play>0</play>`) emits no MIDI. Mirrors the
         // `if (!note->play()) return;` guard in CompatMidiRender::collectNote.
-        // `chainCapableNote` already refuses to build a chain through one, so
+        // `bendChainNote` already refuses to build a chain through one, so
         // this is belt and braces.
         guard note.play else { return }
         let velocity = note.customizedVelocity(velocity)

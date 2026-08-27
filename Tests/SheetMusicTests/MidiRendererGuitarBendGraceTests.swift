@@ -335,4 +335,28 @@ struct MidiRendererGuitarBendGraceTests {
         ]
         #expect(MidiRenderer.guitarBendChains(voiceElements: elements).isEmpty)
     }
+
+    /// A note-less chord hosts no chain position at all, its graces included.
+    /// The renderer's grace path hangs off the parent chord's notes, so a slot
+    /// on a grace whose parent strikes nothing would never be reached, and an
+    /// unreached slot emits a note-off with no note-on. The parser cannot build
+    /// such a chord today; the guard is structural.
+    @Test("a note-less chord hosts no chain position, graces included")
+    func chainMap_skipsGracesOfANoteLessChord() {
+        let grace = GraceChord(
+            graceType: .appoggiatura,
+            duration: .eighth,
+            notes: [Note(
+                pitch: 60, tpc: 14, guitarBend: GuitarBend(type: .graceNoteBend),
+            )],
+        )
+        let elements: [VoiceElement] = [
+            .chord(Chord(duration: .quarter, notes: [], graceNotesBefore: [grace])),
+            .chord(Chord(
+                duration: .quarter,
+                notes: [Note(pitch: 62, tpc: 16, guitarBendBack: true)],
+            )),
+        ]
+        #expect(MidiRenderer.guitarBendChains(voiceElements: elements).isEmpty)
+    }
 }
