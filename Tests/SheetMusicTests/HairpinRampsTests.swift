@@ -129,7 +129,7 @@ struct HairpinRampsCollectTests {
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
         )
-        #expect(ramps.count == 1)
+        #expect(ramps.filter { $0.role == .wedge }.count == 1)
         #expect(ramps.first?.startVelocity == 64)
         #expect(ramps.first?.endVelocity == 96)
     }
@@ -203,10 +203,11 @@ struct HairpinRampsCollectTests {
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
         )
-        #expect(ramps.count == 2)
-        #expect(ramps[0].endVelocity == 96)
-        #expect(ramps[1].startVelocity == 96)
-        #expect(ramps[1].endVelocity == 49)
+        let wedges = ramps.filter { $0.role == .wedge }
+        #expect(wedges.count == 2)
+        #expect(wedges[0].endVelocity == 96)
+        #expect(wedges[1].startVelocity == 96)
+        #expect(wedges[1].endVelocity == 49)
     }
 
     /// Only a Dynamic anchored at the hairpin's own end tick brackets
@@ -339,6 +340,112 @@ struct HairpinRampsCollectTests {
         for i in 0 ..< 4 {
             #expect(velocities[i] < velocities[i + 1])
         }
+    }
+
+    /// The level a hairpin reaches is where the part stays until the
+    /// next Dynamic says otherwise — a crescendo is not undone by its
+    /// own last note. Both MuseScore generations hold it: MS3's
+    /// `ChangeMap::val` returns `cachedEndVal` for every tick past a
+    /// ramp until the next event, and MS4 writes the ramp's levels into
+    /// the same dynamics map the following notes read.
+    @Test func theLevelReachedHoldsUntilTheNextDynamic() throws {
+        let s = staff([
+            makeMeasure([
+                .dynamic(mp()), .spanner(cresc()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([
+                .dynamic(f()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([quarter(), quarter(), quarter(), quarter()]),
+        ])
+        let part = Part(id: "P1", instrument: instrument(), staves: [s])
+        let (events, _, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0, staff: s, part: part,
+            route: MidiRenderer.PartChannelRoute(
+                defaultChannel: 0, defaultPort: 0, switches: [],
+            ),
+            division: division,
+            plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+        )
+        let velocities: [Int] = events.compactMap {
+            if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }
+        }
+        #expect(velocities.count == 12)
+        // Measure 3 sits past the wedge with no dynamic of its own and
+        // stays at the `f` the crescendo arrived on.
+        #expect(Array(velocities[8...]) == Array(repeating: 96, count: 4))
+    }
+
+    /// …but a level nobody wrote down does not travel. A part with a
+    /// dozen `cresc.` wedges and no dynamic at all — the shape of most
+    /// hand-entered charts — would otherwise ratchet up by the default
+    /// step per wedge and never come back down, an invented number
+    /// compounding across the whole piece. MuseScore 3 has no default
+    /// step to compound (`veloChange` defaults to 0), and both MuseScore
+    /// generations export such a part at a flat level.
+    @Test func aGuessedLevelStaysInsideItsOwnWedge() throws {
+        let s = staff([
+            makeMeasure([
+                .dynamic(mp()), .spanner(cresc()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([quarter(), quarter(), quarter(), quarter()]),
+            makeMeasure([
+                .spanner(cresc()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([quarter(), quarter(), quarter(), quarter()]),
+        ])
+        let part = Part(id: "P1", instrument: instrument(), staves: [s])
+        let (events, _, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0, staff: s, part: part,
+            route: MidiRenderer.PartChannelRoute(
+                defaultChannel: 0, defaultPort: 0, switches: [],
+            ),
+            division: division,
+            plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+        )
+        let velocities: [Int] = events.compactMap {
+            if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }
+        }
+        let reached = 64 + HairpinRamps.defaultDeltaVelocity
+        // Each wedge swells to the same guessed level and relaxes; the
+        // second starts from the written `mp`, not from the first's guess.
+        #expect(velocities[0] == 64)
+        #expect(velocities[4] == reached)
+        #expect(velocities[5] == 64)
+        #expect(velocities[8] == 64)
+        #expect(velocities[12] == reached)
+        #expect(velocities.max() == reached)
+    }
+
+    /// A second hairpin picks up where the first left off. MS3 spells
+    /// this out in `ChangeMap::cleanupStage3`: a ramp with no fix at its
+    /// own tick takes the previous event's value, and for a preceding
+    /// ramp that value is its `cachedEndVal`.
+    @Test func aSecondHairpinStartsFromTheFirstsEndLevel() {
+        let s = staff([
+            makeMeasure([
+                .dynamic(mp()), .spanner(cresc(veloChange: 20)),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([
+                .spanner(cresc()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([quarter(), quarter(), quarter(), quarter()]),
+        ])
+        let ramps = HairpinRamps.collect(
+            voiceIndex: 0, staff: s,
+            instrument: instrument(), division: division,
+        )
+        let wedges = ramps.filter { $0.role == .wedge }
+        #expect(wedges.count == 2)
+        let reached = 64 + 20 // the first wedge's own `<veloChange>`
+        #expect(wedges[1].startVelocity == reached)
+        #expect(wedges[1].endVelocity == reached + HairpinRamps.defaultDeltaVelocity)
     }
 
     /// A Dynamic the wedge could not adopt still governs its own note.
