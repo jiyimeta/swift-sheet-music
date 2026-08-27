@@ -114,8 +114,16 @@ extension Score {
             // (notes' `<tpc2>`, key signatures' `<accidental>`) needs it. Hand the measure
             // encoders a copy of the options carrying this part's offset; parts that don't
             // transpose keep the incoming 0 and so keep their existing output byte-for-byte.
+            //
+            // A drumset part is exempt. Its `<pitch>` is a kit slot, not a pitch on a line of fifths, and every
+            // other stage already treats it that way — the renderer and the note-input path both skip drumset
+            // parts. A hand-authored transposition on such a part would otherwise have the encoder emit `<tpc2>`
+            // and shifted key accidentals for notation nothing displays that way. Defensive: the catalog gives no
+            // drum kit a transposition, so this only fires on a file that arrived with one.
             var partOptions = options
-            partOptions.writtenFifthsOffset = entry.part.instrument.writtenFifthsOffset
+            partOptions.writtenFifthsOffset = entry.part.instrument.useDrumset
+                ? 0
+                : entry.part.instrument.writtenFifthsOffset
             for (staffIndexInPart, pair) in zip(entry.part.staves, entry.ids).enumerated() {
                 let staff = pair.0
                 let id = pair.1

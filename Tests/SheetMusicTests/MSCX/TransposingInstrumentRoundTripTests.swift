@@ -250,4 +250,32 @@ struct TransposingInstrumentRoundTripTests {
         let decoded = try MSCXParser.parse(data)
         #expect(try Self.firstKeySignature(of: decoded).concertKey == expectedKey)
     }
+
+    /// A drumset part's `<pitch>` is a kit slot, not a pitch on a line of fifths, and every other stage treats it
+    /// that way — the renderer and the note-input path both skip drumset parts. So a transposition that somehow
+    /// reached one must not make the encoder write `<tpc2>` and shifted key accidentals for notation nothing
+    /// displays that way. The catalog gives no kit a transposition; this guards a file that arrived with one.
+    @Test("a drumset part's transposition never reaches the written-notation tags")
+    func drumsetPartIgnoresTransposition() throws {
+        var score = Score.blank(BlankScoreTemplate(
+            title: "T",
+            parts: [.init(
+                instrumentID: "drumset",
+                staves: [.init(clefType: "PERC")],
+                transposeDiatonic: -1,
+                transposeChromatic: -2,
+                isDrums: true,
+            )],
+            measureCount: 1,
+        ))
+        // A snare hit, written the way a drum staff carries one.
+        score.parts[0].staves[0].measures[0].voices[0].elements[1] =
+            .chord(Chord(duration: .whole, notes: [Note(pitch: 38, tpc: 16)]))
+        #expect(score.parts[0].instrument.useDrumset)
+        #expect(score.parts[0].instrument.writtenFifthsOffset != 0)
+
+        let xml = try Self.encodedXML(score)
+
+        #expect(!xml.contains("<tpc2>"))
+    }
 }
