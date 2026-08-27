@@ -404,8 +404,9 @@ class AndroidPlaybackEngine internal constructor(
     // ── prepare ──────────────────────────────────────────────────────
 
     /**
-     * Loads score data from the Swift bridge, creates per-staff synthesizers,
-     * initializes the player and stream, and transitions to [PlaybackState.PREPARED].
+     * Loads score data from the Swift bridge, creates the single FluidSynth
+     * engine and assigns per-strip channels, initializes the player and
+     * stream, and transitions to [PlaybackState.PREPARED].
      *
      * @param scoreHandle opaque handle obtained from the JNI score-loading API.
      * @throws AudioBackendException.InvalidScoreHandle if the timeline summary is malformed.
