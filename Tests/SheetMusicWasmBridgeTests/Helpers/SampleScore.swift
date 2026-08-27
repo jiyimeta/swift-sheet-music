@@ -174,6 +174,7 @@ enum SampleScore {
             parts: [
                 Part(
                     id: "piano",
+                    trackName: "Keyboard Track",
                     instrument: Instrument(id: "piano", longName: "Piano"),
                     staves: [
                         Staff(defaultClefType: "G", measures: [measure]),
@@ -182,12 +183,38 @@ enum SampleScore {
                 ),
                 Part(
                     id: "drums",
+                    trackName: "Rhythm Track",
                     instrument: Instrument(id: "drums", longName: "Drums"),
-                    staves: [Staff(defaultClefType: "PERC", measures: [measure])],
+                    staves: [Staff(group: "percussion", defaultClefType: "PERC", measures: [measure])],
                     isVisibleInScore: false,
                 ),
             ],
             metaTags: ["workTitle": "wasm staves", "composer": "test"],
+        )
+    }
+
+    /// Notes and rests at distinct ticks for the scalar tick-introspection surface.
+    static func tickIntrospectionScore() -> Score {
+        Score(
+            division: 480,
+            parts: [
+                Part(
+                    id: "1",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [Staff(measures: [Measure(voices: [Voice(elements: [
+                        .chord(Chord(
+                            duration: .quarter,
+                            notes: ChordNotes([Note(pitch: 60, tpc: 14), Note(pitch: 64, tpc: 18)]),
+                        )),
+                        .chord(Chord(duration: .quarter, notes: ChordNotes([]))),
+                        .chord(Chord(
+                            duration: .half,
+                            notes: ChordNotes([Note(pitch: 67, tpc: 15)]),
+                        )),
+                    ])])])],
+                ),
+            ],
+            metaTags: ["workTitle": "wasm tick introspection", "composer": "test"],
         )
     }
 

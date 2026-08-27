@@ -197,5 +197,8 @@ struct StaffDescriptorTests {
         #expect(descriptors.map(\.partName) == ["Piano", "Piano", "Drums"])
         #expect(descriptors.map(\.defaultClefRawType) == ["G", "F", "PERC"])
         #expect(descriptors.map(\.isPartVisibleInScore) == [true, true, false])
+        #expect(descriptors.map(\.trackName) == ["Keyboard Track", "Keyboard Track", "Rhythm Track"])
+        #expect(descriptors.map(\.instrumentLongName) == ["Piano", "Piano", "Drums"])
+        #expect(descriptors.map(\.groupRawValue) == ["pitched", "pitched", "percussion"])
     }
 }

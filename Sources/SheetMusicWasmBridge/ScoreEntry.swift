@@ -74,6 +74,9 @@ let scoreTable = HandleTable<Score>()
     public var partName: String
     public var isPartVisibleInScore: Bool
     public var defaultClefRawType: String
+    public var trackName: String
+    public var instrumentLongName: String
+    public var groupRawValue: String
 
     public init(
         partIndex: Int,
@@ -81,12 +84,18 @@ let scoreTable = HandleTable<Score>()
         partName: String,
         isPartVisibleInScore: Bool,
         defaultClefRawType: String,
+        trackName: String,
+        instrumentLongName: String,
+        groupRawValue: String,
     ) {
         self.partIndex = partIndex
         self.staffIndexInPart = staffIndexInPart
         self.partName = partName
         self.isPartVisibleInScore = isPartVisibleInScore
         self.defaultClefRawType = defaultClefRawType
+        self.trackName = trackName
+        self.instrumentLongName = instrumentLongName
+        self.groupRawValue = groupRawValue
     }
 }
 
@@ -174,12 +183,16 @@ let scoreTable = HandleTable<Score>()
     for (partIndex, part) in parts.enumerated() {
         for (staffIndex, staff) in part.staves.enumerated() {
             if flatIndex == index {
+                let scorePart = score.parts[partIndex]
                 return StaffDescriptor(
                     partIndex: partIndex,
                     staffIndexInPart: staffIndex,
                     partName: part.name,
                     isPartVisibleInScore: part.isVisibleInScore != 0,
                     defaultClefRawType: staff.defaultClefRawType,
+                    trackName: scorePart.trackName ?? "",
+                    instrumentLongName: scorePart.instrument.longName ?? "",
+                    groupRawValue: scorePart.staves[staffIndex].group,
                 )
             }
             flatIndex += 1

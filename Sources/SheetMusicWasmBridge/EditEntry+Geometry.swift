@@ -115,7 +115,7 @@ import SheetMusicLayout
     let scoreHandle = Int64(handle)
     guard let score = scoreTable.value(for: scoreHandle),
           let entry = LayoutDocumentCache.entry(for: scoreHandle),
-          let item = editItemID(
+          let item = scalarScoreItemID(
               kind: kind,
               partIndex: partIndex,
               staffIndexInPart: staffIndexInPart,
@@ -184,44 +184,6 @@ private func editHitItem(from item: ScoreItemID, in score: Score) -> EditHitItem
             tpc: 0,
         )
     case .clef:
-        return nil
-    }
-}
-
-private func editItemID(
-    kind: String,
-    partIndex: Int,
-    staffIndexInPart: Int,
-    measureIndex: Int,
-    voiceIndex: Int,
-    elementIndex: Int,
-    noteIndexInChord: Int,
-) -> ScoreItemID? {
-    let staff = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndexInPart)
-    switch kind {
-    case "note":
-        return .note(NoteID(
-            staff: staff,
-            measureIndex: measureIndex,
-            voiceIndex: voiceIndex,
-            elementIndex: elementIndex,
-            noteIndexInChord: noteIndexInChord,
-        ))
-    case "rest":
-        return .rest(RestID(
-            staff: staff,
-            measureIndex: measureIndex,
-            voiceIndex: voiceIndex,
-            elementIndex: elementIndex,
-        ))
-    case "tuplet":
-        return .tuplet(TupletID(
-            staff: staff,
-            measureIndex: measureIndex,
-            voiceIndex: voiceIndex,
-            startElementIndex: elementIndex,
-        ))
-    default:
         return nil
     }
 }

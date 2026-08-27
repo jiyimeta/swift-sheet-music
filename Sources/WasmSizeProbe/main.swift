@@ -166,6 +166,24 @@ let seekPositionSeconds = playerSecondsForPosition(
     handle: wasmHandle, measureIndex: 1, tickInMeasure: 480,
 )
 let seekPosition = positionAtPlayerSeconds(handle: wasmHandle, playerSeconds: seekPositionSeconds)
+let steppedPosition = stepMeasureCursor(
+    handle: wasmHandle, measureIndex: 0, tickInMeasure: 0, direction: 1,
+)
+let advancedPosition = cursorAdvancedByBeats(
+    handle: wasmHandle, measureIndex: 0, tickInMeasure: 0, beats: 1,
+)
+let notePitchAndStaff = pitchAndStaffOfNote(
+    handle: wasmHandle, partIndex: 0, staffIndexInPart: 0,
+    measureIndex: 0, voiceIndex: 0, elementIndex: 0, noteIndexInChord: 0,
+)
+let noteEndTick = itemEndTick(
+    handle: wasmHandle, kind: 0, partIndex: 0, staffIndexInPart: 0,
+    measureIndex: 0, voiceIndex: 0, elementIndex: 0, noteIndexInChord: 0,
+)
+let earliestItem = earliestOf(
+    handle: wasmHandle,
+    itemScalars: [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+)
 let atMeasure = measureIndexAtPlayerSeconds(handle: wasmHandle, playerSeconds: 0)
 let preRoll = countInSeconds(handle: wasmHandle, fromPlayerSeconds: 0)
 let markCount = rehearsalMarkCount(handle: wasmHandle)
@@ -264,6 +282,10 @@ print(
     "playback tap=\(tapSeconds) seek=\(seekSeconds) "
         + "posSeek=\(seekPositionSeconds) pos=\(seekPosition.count) "
         + "at=\(atMeasure) preRoll=\(preRoll)",
+)
+print(
+    "playback navigation=\(steppedPosition.count)/\(advancedPosition.count) "
+        + "note=\(notePitchAndStaff.count) end=\(noteEndTick) earliest=\(earliestItem.count)",
 )
 print(
     "score marks=\(markCount) firstMark=\(firstMark?.text ?? "-") "
