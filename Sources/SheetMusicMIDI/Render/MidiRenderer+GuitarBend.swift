@@ -68,9 +68,12 @@ extension MidiRenderer {
     /// same limitation; bends are single-note in practice.
     static func guitarBendChains(voiceElements: [VoiceElement]) -> [Int: BendChainSlot] {
         var slots: [Int: BendChainSlot] = [:]
+        let skipped = tremoloConsumedIndices(in: voiceElements)
         var index = 0
         while index < voiceElements.count {
-            guard let chain = bendChain(voiceElements: voiceElements, startingAt: index) else {
+            guard let chain = bendChain(
+                voiceElements: voiceElements, startingAt: index, skipped: skipped,
+            ) else {
                 index += 1
                 continue
             }
@@ -99,8 +102,9 @@ extension MidiRenderer {
     private static func bendChain(
         voiceElements: [VoiceElement],
         startingAt startIndex: Int,
+        skipped: Set<Int>,
     ) -> [(Int, BendChainSlot)]? {
-        guard let head = chainCapableNote(in: voiceElements, at: startIndex),
+        guard let head = chainCapableNote(in: voiceElements, at: startIndex, skipped: skipped),
               let headBend = head.guitarBend,
               startsChain(headBend.type)
         else { return nil }
@@ -125,7 +129,9 @@ extension MidiRenderer {
                 return chain
             }
             guard let nextIndex = nextSoundingChordIndex(in: voiceElements, after: index),
-                  let follower = chainCapableNote(in: voiceElements, at: nextIndex),
+                  let follower = chainCapableNote(
+                      in: voiceElements, at: nextIndex, skipped: skipped,
+                  ),
                   follower.guitarBendBack
             else { return nil }
             let target = (follower.pitch - basePitch) * 2
@@ -164,15 +170,27 @@ extension MidiRenderer {
     }
 
     /// `bendChainNote` for the element at `index`, gated on that chord going
-    /// through the plain note loop of `renderChordWithGraces`. A tremolo or
-    /// arpeggio chord takes a different path that never consults the chain
-    /// map, so admitting one would leave a note-on without its note-off.
-    /// A muted note (`<play>0</play>`) and a tied one are excluded for the
-    /// same reason — see `guitarBendChains` for what a tie costs here.
+    /// through the plain note loop of `renderChordWithGraces`. A chord that
+    /// takes any other path never consults the chain map, so admitting one
+    /// would leave a slot unrendered — and a chain missing its start emits a
+    /// note-off with no note-on, which `resolveUnisonOverlap` then discards,
+    /// silencing the whole chain instead of merely un-bending it. Three
+    /// exclusions, all of that shape:
+    ///
+    /// - The chord CARRIES a tremolo or an arpeggio (their own render paths).
+    /// - The chord is CONSUMED by a preceding `.between` tremolo. Such a chord
+    ///   has `tremolo == nil` itself, so the check above does not see it —
+    ///   `renderTremoloChord` absorbs it into the stroke expansion and the
+    ///   voice walker `continue`s past it before `renderVoiceElement` runs.
+    ///   That skip is the ONLY one the voice walker performs, which is why
+    ///   `skipped` closes the whole "the renderer never reaches this slot"
+    ///   class rather than just this one case.
+    /// - The note is muted (`<play>0</play>`) or tied — see `guitarBendChains`
+    ///   for what a tie costs here.
     private static func chainCapableNote(
-        in voiceElements: [VoiceElement], at index: Int,
+        in voiceElements: [VoiceElement], at index: Int, skipped: Set<Int>,
     ) -> Note? {
-        guard index >= 0, index < voiceElements.count,
+        guard index >= 0, index < voiceElements.count, !skipped.contains(index),
               case let .chord(chord) = voiceElements[index],
               chord.tremolo == nil, chord.arpeggio == nil,
               let note = bendChainNote(in: chord), note.play,
@@ -181,9 +199,40 @@ extension MidiRenderer {
         return note
     }
 
+    /// Element indices a `.between` tremolo swallows, mirroring the lookup in
+    /// `renderTremoloChord`: the next `.chord` element after each `.between`
+    /// chord, rests included (the tremolo pairs with whatever chord element
+    /// follows, exactly as MuseScore's editor re-pairs it).
+    private static func tremoloConsumedIndices(in voiceElements: [VoiceElement]) -> Set<Int> {
+        var consumed: Set<Int> = []
+        for (index, element) in voiceElements.enumerated() {
+            guard case let .chord(chord) = element,
+                  chord.tremolo?.span == .between
+            else { continue }
+            for j in (index + 1) ..< voiceElements.count {
+                if case .chord = voiceElements[j] {
+                    consumed.insert(j)
+                    break
+                }
+            }
+        }
+        return consumed
+    }
+
     /// Index of the next element that actually sounds. Rests are `.chord`
     /// elements with no notes, so they are skipped exactly as
     /// `glissandoEndPitch` skips them.
+    ///
+    /// The walk deliberately steps over non-chord elements, and that is safe:
+    /// `VoiceElement` has no case that makes `renderVoiceElement` skip a later
+    /// chord, and none of them (`.dynamic`, `.locationShift`, `.breath`,
+    /// `.spanner`, the signatures) changes which MIDI key or channel a chain
+    /// member lands on. In particular there is **no** `.instrumentChange`
+    /// voice element — a mid-part channel switch reaches the walker as a
+    /// tick-keyed `PartChannelRoute` entry, never as an element — so refusing
+    /// chains that step over an element would not close the "channel switches
+    /// inside a chain" hazard. That one needs the chain's channel pinned at
+    /// its head, the way `sustainedChannel` pins a tie's.
     private static func nextSoundingChordIndex(
         in voiceElements: [VoiceElement], after index: Int,
     ) -> Int? {

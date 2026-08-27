@@ -277,6 +277,41 @@ struct MidiRendererGuitarBendTests {
         #expect(slots[2] == nil)
     }
 
+    /// A `.between` tremolo swallows the FOLLOWING chord — which carries no
+    /// tremolo of its own, so the "does this chord carry a tremolo" check
+    /// cannot see it. The voice walker `continue`s past that index before
+    /// `renderVoiceElement` runs, so a chain starting there would never emit
+    /// its note-on while the chain end still emitted a note-off, and
+    /// `resolveUnisonOverlap` would discard the orphan — silencing both notes
+    /// instead of merely leaving them unbent.
+    @Test("a chain starting on a tremolo-consumed chord is refused")
+    func chainMap_dropsChainConsumedByBetweenTremolo() throws {
+        let tremolo = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 67, tpc: 15)],
+            tremolo: Tremolo(subtype: .r8, span: .between),
+        )
+        // Consumed by the tremolo above AND the would-be chain start.
+        let bendStart = Chord(duration: .quarter, notes: [Self.bendNote(pitch: 60)])
+        let bendEnd = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 62, tpc: 16, guitarBendBack: true)],
+        )
+        let elements: [VoiceElement] = [.chord(tremolo), .chord(bendStart), .chord(bendEnd)]
+        #expect(MidiRenderer.guitarBendChains(voiceElements: elements).isEmpty)
+
+        let file = try MidiRenderer.render(
+            score: Self.makeScore(chords: [tremolo, bendStart, bendEnd]),
+        )
+        let track = try #require(file.tracks.first)
+        // The bend end falls back to a plain attack; without the guard it
+        // emitted only an orphan note-off and never sounded at all.
+        #expect(Self.noteOns(in: track).filter { $0.pitch == 62 }.count == 1)
+        #expect(Self.noteOffs(in: track).filter { $0.pitch == 62 }.count == 1)
+        #expect(Self.bends(in: track).isEmpty, "a refused chain drives no wheel")
+        Self.assertBalancedNoteEvents(track: track)
+    }
+
     /// A chain whose destination is not reachable — the closing `<prev>` side
     /// is missing — is dropped whole, so every member keeps a plain attack and
     /// the note-on/off stream stays balanced.
