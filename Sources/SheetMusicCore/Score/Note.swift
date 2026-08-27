@@ -56,6 +56,11 @@ public struct Note: Sendable, Equatable {
     /// `userVelocity` is 0, where it stays at MuseScore 4's default
     /// (`.user`). C++: `Note::veloType()` / `<veloType>`.
     public var velocityType: NoteVelocityType
+    /// Guitar tablature position — `<fret>` / `<string>` on `<Note>`.
+    /// Decoded and re-emitted verbatim; no layout use yet (tab staves are
+    /// not rendered). C++: `Note::fret()` / `Note::string()`.
+    public var fret: Int?
+    public var string: Int?
     /// Base element properties shared with every engravable element.
     /// Currently carries only `<visible>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
@@ -81,6 +86,8 @@ public struct Note: Sendable, Equatable {
         play: Bool = true,
         userVelocity: Int = 0,
         velocityType: NoteVelocityType = .user,
+        fret: Int? = nil,
+        string: Int? = nil,
         visible: Bool = true,
     ) {
         self.pitch = pitch
@@ -97,6 +104,8 @@ public struct Note: Sendable, Equatable {
         self.play = play
         self.userVelocity = userVelocity
         self.velocityType = velocityType
+        self.fret = fret
+        self.string = string
         elementProperties = ElementProperties(visible: visible)
     }
 }

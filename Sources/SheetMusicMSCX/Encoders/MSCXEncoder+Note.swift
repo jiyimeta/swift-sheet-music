@@ -68,6 +68,18 @@ extension Note {
         if !play {
             children.append(XMLTreeNode(name: "play", text: "0"))
         }
+        // Tablature position, immediately after `<play>`: MuseScore's
+        // property order is `… USER_VELOCITY, PLAY, TUNING, FRET, STRING,
+        // …, HEAD_TYPE, …` (`TWrite::write(const Note*, …)`,
+        // `rw/write/twrite.cpp:2378-2380`). `<veloType>` is appended below
+        // rather than here because both generations write it far later —
+        // MuseScore 3 after `HEAD_TYPE`, MuseScore 4 not at all.
+        if let fret {
+            children.append(XMLTreeNode(name: "fret", text: String(fret)))
+        }
+        if let string {
+            children.append(XMLTreeNode(name: "string", text: String(string)))
+        }
         appendVelocityType(into: &children, targetVersion: options.targetVersion)
         for chordLine in chordLines {
             children.append(chordLine.encode(options: options))
