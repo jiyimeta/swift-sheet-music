@@ -509,7 +509,10 @@ extension LayoutEngine {
     /// Walk voice 0 of `measure` summing chord durations to recover the
     /// measure's tick width. `measureDuration` is used to resolve any
     /// `.measure` rest — pass the effective duration for this measure.
-    private static func measureTickCount(
+    ///
+    /// Shared (not `private`) with `LayoutEngine+Slurs.swift`, whose end
+    /// anchor normalises across bar lines with the same tick widths.
+    static func measureTickCount(
         _ m: Measure,
         division: Int,
         measureDuration: Fraction,
