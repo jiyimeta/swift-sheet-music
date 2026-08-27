@@ -62,6 +62,11 @@ public struct BlankScoreTemplate: Sendable, Equatable {
     public var timeDenominator: Int
     public var tempoBPM: Double
     public var measureCount: Int
+    /// Anacrusis: the actual length of the opening bar when it is shorter (or longer) than the time
+    /// signature. `nil` — the default — means every bar follows the time signature, exactly as before this
+    /// option existed. `measureCount` counts total bars INCLUDING the pickup, so a 4-bar template with a
+    /// pickup is the pickup plus three full bars, not four.
+    public var pickup: Fraction?
 
     public init(
         title: String, composer: String? = nil,
@@ -69,6 +74,7 @@ public struct BlankScoreTemplate: Sendable, Equatable {
         bracketGroups: [Range<Int>] = [],
         concertKey: Int = 0, timeNumerator: Int = 4, timeDenominator: Int = 4,
         tempoBPM: Double = 120, measureCount: Int = 32,
+        pickup: Fraction? = nil,
     ) {
         self.title = title
         self.composer = composer
@@ -79,6 +85,7 @@ public struct BlankScoreTemplate: Sendable, Equatable {
         self.timeDenominator = timeDenominator
         self.tempoBPM = tempoBPM
         self.measureCount = max(1, measureCount)
+        self.pickup = pickup
     }
 }
 
@@ -163,6 +170,11 @@ extension Score {
     /// the key and time signature (percussion staves the time signature only); every measure holds a single
     /// full-measure rest; `systemMeasures` is created in parallel with the tempo on measure 0.
     ///
+    /// A `template.pickup` turns that first measure into an anacrusis on every staff: it declares its own
+    /// `actualLength` and is `irregular`, so it drops out of the displayed measure numbering. Its content is
+    /// unchanged — the single `.measure` rest resolves against `actualLength` wherever a duration is needed
+    /// (`[Measure].effectiveMeasureDurations()`), and the signatures stay where they are.
+    ///
     /// Part ids are `"1"`, `"2"`, … in document order — the mscx convention the encoder re-synthesizes
     /// anyway, and unique by construction so hosts can key per-part state off them.
     public static func blank(_ template: BlankScoreTemplate) -> Score {
@@ -170,11 +182,15 @@ extension Score {
             numerator: template.timeNumerator,
             denominator: template.timeDenominator,
         )
-        let firstMeasure = Measure(voices: [Voice(elements: [
-            .keySignature(KeySignature(concertKey: template.concertKey)),
-            .timeSignature(timeSignature),
-            .rest(duration: .measure),
-        ])])
+        let firstMeasure = Measure(
+            voices: [Voice(elements: [
+                .keySignature(KeySignature(concertKey: template.concertKey)),
+                .timeSignature(timeSignature),
+                .rest(duration: .measure),
+            ])],
+            actualLength: template.pickup,
+            irregular: template.pickup != nil,
+        )
         let laterMeasure = Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
         let measures = [firstMeasure]
             + Array(repeating: laterMeasure, count: template.measureCount - 1)

@@ -1,3 +1,4 @@
+import Foundation
 @testable import SheetMusicCore
 import SheetMusicMSCX
 import Testing
@@ -312,5 +313,115 @@ struct BlankScoreTests {
         let reparsed = try MSCXParser.parse(MSCXEncoder.encode(score))
         // See `roundTrip()` above for why `source` is normalized away.
         #expect(reparsed.withSource(.unknown) == score.withSource(.unknown))
+    }
+
+    // MARK: - Pickup (anacrusis)
+
+    /// A grand-staff part next to two single-staff ones, so "every staff" is four bar-0s spread over both
+    /// measure chains the factory builds — the pitched one and the key-stripped percussion copy.
+    private func pickupEnsembleTemplate(
+        pickup: Fraction?, measures: Int = 4,
+    ) -> BlankScoreTemplate {
+        BlankScoreTemplate(
+            title: "Anacrusis",
+            parts: [
+                .init(instrumentID: "flute", longName: "Flute", staves: [.init(clefType: "G")], gmProgram: 73),
+                .init(
+                    instrumentID: "piano", longName: "Piano",
+                    staves: [.init(clefType: "G"), .init(clefType: "F")],
+                ),
+                .init(
+                    instrumentID: "drumset", longName: "Drum Kit",
+                    staves: [.init(clefType: "PERC", isPercussion: true)], isDrums: true,
+                ),
+            ],
+            concertKey: 2, timeNumerator: 3, timeDenominator: 4,
+            tempoBPM: 90, measureCount: measures, pickup: pickup,
+        )
+    }
+
+    @Test("a pickup makes bar 0 of every staff irregular and touches no other bar")
+    func pickupMarksEveryStaffsFirstBar() {
+        let quarter = Fraction(numerator: 1, denominator: 4)
+        let score = Score.blank(pickupEnsembleTemplate(pickup: quarter))
+        let staves = score.parts.flatMap(\.staves)
+        #expect(staves.count == 4)
+        for staff in staves {
+            // `measureCount` counts total bars, the pickup included — asking for 4 gets 4, not 5.
+            #expect(staff.measures.count == 4)
+            #expect(staff.measures[0].actualLength == quarter)
+            #expect(staff.measures[0].irregular)
+            // Content is untouched: the bar still holds exactly one measure rest, which now resolves
+            // against `actualLength` instead of the 3/4 nominal.
+            #expect(staff.measures[0].voices[0].elements.last?.isMeasureRest == true)
+            #expect(staff.measures[0].voices[0].elements.filter(\.isMeasureRest).count == 1)
+            for measure in staff.measures.dropFirst() {
+                #expect(measure.actualLength == nil)
+                #expect(!measure.irregular)
+                #expect(measure.voices[0].elements == [.rest(duration: .measure)])
+            }
+        }
+        // Signatures stay on measure 0 as before — key + time on a pitched staff, time alone on the drum one.
+        let pitchedFirst = staves[0].measures[0].voices[0].elements
+        #expect(pitchedFirst[0] == .keySignature(KeySignature(concertKey: 2)))
+        #expect(pitchedFirst[1] == .timeSignature(TimeSignature(numerator: 3, denominator: 4)))
+        let drumFirst = staves[3].measures[0].voices[0].elements
+        #expect(drumFirst[0] == .timeSignature(TimeSignature(numerator: 3, denominator: 4)))
+        // The measure rest in bar 0 is a quarter long; every later bar keeps the nominal 3/4.
+        let threeFour = Fraction(numerator: 3, denominator: 4)
+        #expect(score.effectiveMeasureDurations() == [quarter, threeFour, threeFour, threeFour])
+    }
+
+    @Test("the pickup is skipped by the displayed measure numbering")
+    func pickupIsExcludedFromDisplayedMeasureNumbers() {
+        let score = Score.blank(pickupEnsembleTemplate(pickup: Fraction(numerator: 1, denominator: 8)))
+        #expect(score.displayedMeasureNumber(at: 0) == nil)
+        #expect(score.displayedMeasureNumber(at: 1) == 1)
+        #expect(score.displayedMeasureNumber(at: 2) == 2)
+        #expect(score.displayedMeasureNumber(at: 3) == 3)
+    }
+
+    @Test("a pickup template round-trips through mscx, len attribute and all")
+    func pickupRoundTripsThroughMSCX() throws {
+        let quarter = Fraction(numerator: 1, denominator: 4)
+        let score = Score.blank(pickupEnsembleTemplate(pickup: quarter))
+        let data = try MSCXEncoder.encode(score)
+        let xml = try #require(String(bytes: data, encoding: .utf8))
+        #expect(xml.contains(#"len="1/4""#))
+        #expect(xml.contains("<irregular>1</irregular>"))
+        let reparsed = try MSCXParser.parse(data)
+        // See `roundTrip()` above for why `source` is normalized away.
+        #expect(reparsed.withSource(.unknown) == score.withSource(.unknown))
+        for staff in reparsed.parts.flatMap(\.staves) {
+            #expect(staff.measures[0].actualLength == quarter)
+            #expect(staff.measures[0].irregular)
+            #expect(staff.measures.dropFirst().allSatisfy { $0.actualLength == nil && !$0.irregular })
+        }
+    }
+
+    /// Regression pin on the default. The expected chain below is the one the factory built before the
+    /// option existed, written out by hand, so it stays an independent statement of "unchanged" rather
+    /// than a mirror of whatever the factory now does. The encoded bytes must likewise carry neither of
+    /// the two markers a pickup introduces.
+    @Test("a template naming no pickup builds exactly what the pre-pickup factory built")
+    func nilPickupMatchesThePrePickupShape() throws {
+        let score = Score.blank(pianoTemplate())
+        let firstMeasure = Measure(voices: [Voice(elements: [
+            .keySignature(KeySignature(concertKey: 2)),
+            .timeSignature(TimeSignature(numerator: 3, denominator: 4)),
+            .rest(duration: .measure),
+        ])])
+        let laterMeasure = Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
+        let expected = [firstMeasure] + Array(repeating: laterMeasure, count: 3)
+        for staff in score.parts.flatMap(\.staves) {
+            #expect(staff.measures == expected)
+        }
+        let xml = try #require(String(bytes: MSCXEncoder.encode(score), encoding: .utf8))
+        #expect(!xml.contains("len="))
+        #expect(!xml.contains("<irregular>"))
+        // Spelling the default out changes nothing.
+        var explicitNil = pianoTemplate()
+        explicitNil.pickup = nil
+        #expect(Score.blank(explicitNil) == score)
     }
 }
