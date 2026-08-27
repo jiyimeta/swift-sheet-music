@@ -39,7 +39,9 @@ public struct Chord: Sendable, Equatable {
     /// (slurs foremost; `TWrite::writeProperties(const ChordRest*, …)`
     /// writes spanner start markers there). The end side is not stored:
     /// the encoder recomputes it from the begin offsets. v1 consumers
-    /// handle `.slur`; other kinds round-trip through here untouched.
+    /// handle `.slur`; other kinds, if placed here programmatically,
+    /// encode through the same machinery. (Decoding does *not* fill them:
+    /// a non-slur chord-level `<Spanner>` warns and is dropped.)
     /// C++: `Spanner` anchored `Anchor::SEGMENT`/chord-rest.
     public var spanners: [Spanner]
     /// Base element properties shared with every engravable element.

@@ -359,8 +359,6 @@ extension LayoutEngine {
         }
         // Branch 1: rest start. Short-circuits the parity branch as the
         // C++'s `&& chord1` guard does, and lands on `!up()` == false.
-        // Branch 1: rest start. Short-circuits the parity branch as the
-        // C++'s `&& chord1` guard does, and lands on `!up()` == false.
         guard let startStem else { return false }
         if pairing.multiVoice {
             // `end.voiceIndex` is today always equal to `start.voiceIndex`

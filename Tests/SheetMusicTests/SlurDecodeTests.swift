@@ -337,7 +337,100 @@ struct SlurDecodeTests {
         #expect(decoded.diagnostics.map(\.code) == ["mscx.slur.propertiesDropped"])
     }
 
+    // MARK: - Grace notes
+
+    /// A grace chord can start a slur — MuseScore's own
+    /// `selectionfilter_gracesandslurs.mscx` writes
+    /// `<Spanner type="Slur">…<next><location><fractions>` inside an
+    /// `<acciaccatura/>` chord. `GraceChord` holds no spanner list, so the
+    /// begin side cannot be modeled; the loss must be *announced* rather than
+    /// disappear, since the matching `<prev>` end marker is consumed silently
+    /// by design and the pair would otherwise vanish without a trace.
+    ///
+    /// The grace note itself must still survive and attach to its parent.
+    @Test("a grace chord's begin-side slur is dropped with a diagnostic")
+    func graceChordSlurWarns() throws {
+        let decoded = try decodeVoice("""
+        <voice>
+          <Chord>
+            <acciaccatura/>
+            <durationType>eighth</durationType>
+            <Spanner type="Slur">
+              <Slur>
+                </Slur>
+              <next>
+                <location>
+                  <fractions>1/8</fractions>
+                  </location>
+                </next>
+              </Spanner>
+            <Note>
+              <pitch>72</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <durationType>quarter</durationType>
+            <Note>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        """)
+        guard case let .chord(parent) = decoded.voice.elements.first else {
+            Issue.record("expected a parent chord")
+            return
+        }
+        #expect(parent.graceNotesBefore.count == 1)
+        #expect(parent.graceNotesBefore.first?.notes.first?.pitch == 72)
+        #expect(decoded.diagnostics.map(\.code) == ["mscx.chord.spannerDropped"])
+        #expect(decoded.diagnostics.first?.message.contains("grace-note") == true)
+    }
+
+    /// The diagnostic is scoped to grace chords that actually carry a begin
+    /// side: an ordinary grace note stays silent.
+    @Test("a grace chord without spanners decodes silently")
+    func graceChordWithoutSlurIsSilent() throws {
+        let decoded = try decodeVoice("""
+        <voice>
+          <Chord>
+            <acciaccatura/>
+            <durationType>eighth</durationType>
+            <Note>
+              <pitch>72</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <durationType>quarter</durationType>
+            <Note>
+              <pitch>71</pitch>
+              <tpc>19</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        """)
+        guard case let .chord(parent) = decoded.voice.elements.first else {
+            Issue.record("expected a parent chord")
+            return
+        }
+        #expect(parent.graceNotesBefore.count == 1)
+        #expect(decoded.diagnostics.isEmpty)
+    }
+
     // MARK: - Helpers
+
+    private func decodeVoice(
+        _ xml: String,
+    ) throws -> (voice: Voice, diagnostics: [ScoreDiagnostic]) {
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let collector = MSCXDiagnosticCollector()
+        let voice = try MSCXParserContext.$collector.withValue(collector) {
+            try Voice.decode(node)
+        }
+        return (voice, collector.entries)
+    }
 
     private func decodeChord(
         _ xml: String,

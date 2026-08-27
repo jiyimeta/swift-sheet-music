@@ -121,6 +121,24 @@ extension Voice {
                     // graces don't consume tuplet time — see
                     // CompatMidiRender::renderGraceNotesBefore.
                     let inner = try Chord.decode(child)
+                    // `GraceChord` carries no spanner list, so a slur that
+                    // *begins* on a grace note cannot be modeled. Its `<prev>`
+                    // end marker is consumed in silence by design, so without
+                    // this the whole pair would vanish untraced — MuseScore's
+                    // own `selectionfilter_gracesandslurs.mscx` writes exactly
+                    // this shape. One diagnostic per grace chord, naming the
+                    // types it carried.
+                    if !inner.spanners.isEmpty {
+                        let types = Set(inner.spanners.map(\.rawType))
+                            .sorted()
+                            .joined(separator: "/")
+                        mscxDecoderWarn(
+                            code: "mscx.chord.spannerDropped",
+                            message: "grace-note <Spanner type=\"\(types)\"> "
+                                + "is not modeled — dropped",
+                            location: "Chord[grace]/Spanner",
+                        )
+                    }
                     pendingGraces.append(GraceChord(
                         graceType: graceType,
                         duration: inner.duration,
