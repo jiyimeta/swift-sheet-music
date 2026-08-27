@@ -4,7 +4,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct GlyphNameTableTests {
+    struct GlyphNameTableTests {
         @Test func mapsCanonicalSMuFLNames() {
             #expect(GlyphNameTable.semantic(glyphName: "gClef") == .clefG)
             #expect(GlyphNameTable.semantic(glyphName: "fClef") == .clefF)

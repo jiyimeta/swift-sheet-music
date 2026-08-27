@@ -30,7 +30,7 @@
     ///
     /// The invariant below is the scale-independence itself: the SAME
     /// engraving rendered at two staff sizes must import to the same chord.
-    @MainActor struct PDFImporterStemWindowScaleTests {
+    struct PDFImporterStemWindowScaleTests {
         private nonisolated static var bravuraAvailable: Bool {
             guard #available(macOS 15.0, *) else { return false }
             return BravuraFont.register

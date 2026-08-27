@@ -11,7 +11,7 @@
     /// noteheads at all, which is how the bug slipped through: the leading
     /// region used to end at the first NOTEHEAD, so an empty bar's scan ran
     /// past its rest all the way to the courtesy.
-    @MainActor struct PDFImporterCourtesySignatureTests {
+    struct PDFImporterCourtesySignatureTests {
         private func synthStaff() -> SheetMusicPDF.Staff {
             SheetMusicPDF.Staff(
                 pageIndex: 0,

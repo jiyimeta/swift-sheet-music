@@ -28,7 +28,7 @@
     ///     stem end is a chord-height farther away, which is why the corpus
     ///     shows legitimate notehead-to-flag distances spread over 1.1 … 4.5
     ///     sp with a tail past 5 sp instead of one tight cluster.
-    @MainActor struct PDFImporterFlagAttachTests {
+    struct PDFImporterFlagAttachTests {
         private nonisolated static var bravuraAvailable: Bool {
             guard #available(macOS 15.0, *) else { return false }
             return BravuraFont.register

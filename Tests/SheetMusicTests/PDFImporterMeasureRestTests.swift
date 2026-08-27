@@ -9,7 +9,7 @@
     /// not a literal whole note. MuseScore engraves a full-measure rest with
     /// `restWhole` in every time signature, so the glyph alone cannot tell a
     /// 2/4 empty bar from a 4/4 one — the bar length does.
-    @MainActor struct PDFImporterMeasureRestTests {
+    struct PDFImporterMeasureRestTests {
         private func rest(
             _ duration: NoteDuration, x: CGFloat = 100, y: CGFloat = 500,
         ) -> RhythmElement {

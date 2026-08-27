@@ -10,7 +10,6 @@
     /// installed through `TestSupport.installApple`) so the geometry the
     /// hit-tester walks is the production layout, not a fake.
     @Suite("nearestEngineCursor")
-    @MainActor
     struct NearestEngineCursorTests {
         private let _installApple = TestSupport.installApple
 

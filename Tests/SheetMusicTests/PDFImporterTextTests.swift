@@ -5,7 +5,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFImporterTextTests {
+    struct PDFImporterTextTests {
         private let pageSize = CGSize(width: 595, height: 842)
 
         private func text(

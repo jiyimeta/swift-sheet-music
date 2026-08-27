@@ -9,7 +9,7 @@
         import SheetMusicLayoutApple
     #endif
 
-    @MainActor struct ShapeDescriptorTests {
+    struct ShapeDescriptorTests {
         /// N horizontal bars stacked vertically — a stand-in for the N flags
         /// of a rest or a beamed flag glyph. Growing the bounding box by
         /// 20pt per bar is a reasonable proxy for how the box actually grows

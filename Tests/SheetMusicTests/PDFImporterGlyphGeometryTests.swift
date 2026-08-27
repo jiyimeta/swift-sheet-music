@@ -5,7 +5,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFImporterGlyphGeometryTests {
+    struct PDFImporterGlyphGeometryTests {
         @Test func geometryIsHashableAndValueEqual() {
             let a = GlyphGeometry(
                 origin: CGPoint(x: 10, y: 20), advance: 5,

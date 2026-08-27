@@ -10,7 +10,7 @@
     /// default). MuseScore emits one TextGlyph per character, so the digits
     /// arrive split and must be merged before parsing. Copyright-clean
     /// synthetic input (same unit style as the other importer tests).
-    @MainActor struct PDFImporterTempoTests {
+    struct PDFImporterTempoTests {
         private let yLines: [CGFloat] = [490, 495, 500, 505, 510]
 
         private func system(measureXRanges: [ClosedRange<CGFloat>]) -> ImportSystem {

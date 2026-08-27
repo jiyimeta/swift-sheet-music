@@ -4,7 +4,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct BravuraExemplarsTests {
+    struct BravuraExemplarsTests {
         /// Pairs whose Bravura outlines are IDENTICAL after normalization, so
         /// no shape-only descriptor can separate them. Measured 2026-07-26.
         ///
