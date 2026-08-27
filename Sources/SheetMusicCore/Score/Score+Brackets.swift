@@ -66,8 +66,8 @@ extension Score {
     /// `staffOriginX - 0.5 sp - column * sp`, and `LayoutEngine.bracketGutterInfo` sizes the whole gutter as
     /// `maxColumn + 1`. So a group bracket left at column 1 after the brace at column 0 was removed with its part
     /// draws one `sp` further left than anything needs and reserves a gutter column nothing occupies. `RemovePart`
-    /// and `MovePart` write their result to the score the user saves, which is why it is compacted rather than
-    /// left for the layout engine to shrug at.
+    /// writes its result to the score the user SAVES (`filtered(hidingStaves:)`, the other caller, only renders from
+    /// it), which is why it is compacted rather than left for the layout engine to shrug at.
     ///
     /// The renumbering is GLOBAL over the pass's result rather than per anchor staff. Brackets sharing a column
     /// share a spine position across the whole system — that is the alignment a nested layout depends on — so
