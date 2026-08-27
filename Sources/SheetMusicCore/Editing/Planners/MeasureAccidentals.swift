@@ -43,6 +43,42 @@ public enum MeasureAccidentals {
         return (pitch, natural.tpc + 7 * alteration)
     }
 
+    /// `plannedPitch`, resolved in the WRITTEN space of the target staff: `letter` means the note the user SEES on
+    /// that staff, and the returned `(pitch, tpc)` are the CONCERT values to store. Falls through to `plannedPitch`
+    /// unchanged wherever `writtenPitchView()` would leave the staff alone (concert-pitch part, drumset,
+    /// percussion).
+    ///
+    /// This is not a nicety on a transposing staff, it is the whole meaning of the key: a B♭ clarinet in concert C
+    /// major reads D major, so the letter C means the C♯ that key signature already spells — concert B♮. Planning
+    /// the same letter against the concert score writes a concert C, which that staff engraves as a D.
+    ///
+    /// `nearestTo` stays CONCERT at the call site (it comes from the previous note in the stored score); the
+    /// conversion for the octave search happens here.
+    ///
+    /// **Cost:** one `writtenPitchView()` — a full-score value copy — per call, i.e. per keystroke. Accepted
+    /// rather than transformed in place because the octave search and the bar's accidental state both have to
+    /// read the written key AND the written spelling of every earlier note in the measure, and only the view
+    /// produces those consistently. The editor already re-lays-out the whole score on every keystroke, so this
+    /// rides underneath work an order of magnitude larger; revisit it only if that stops being true.
+    public static func plannedConcertPitch(
+        forWrittenLetter letter: Character,
+        nearestTo concertReference: Int?,
+        at location: VoiceElementID,
+        in score: Score,
+    ) -> (pitch: Int, tpc: Int)? {
+        let offsets = score.writtenSpaceOffsets(staff: location.staff, measureIndex: location.measureIndex)
+        guard offsets.pitch != 0 || offsets.fifths != 0 else {
+            return plannedPitch(forLetter: letter, nearestTo: concertReference, at: location, in: score)
+        }
+        guard let planned = plannedPitch(
+            forLetter: letter,
+            nearestTo: concertReference.map { $0 + offsets.pitch },
+            at: location,
+            in: score.writtenPitchView(),
+        ) else { return nil }
+        return (planned.pitch - offsets.pitch, planned.tpc - offsets.fifths)
+    }
+
     // MARK: - Keeping the written glyphs true
 
     /// The glyph repairs `current` needs after an edit turned `previous` into it: every measure whose music changed,
