@@ -16,7 +16,6 @@
     struct ElementColorRenderTests {
         private let _installApple = TestSupport.installApple
 
-        @MainActor
         @Test("Red noteheads / beam / lyric / text-harmony render red")
         // swiftlint:disable:next function_body_length
         func redElementsRenderRed() throws {

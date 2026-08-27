@@ -5,7 +5,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFImporterContentStreamTests {
+    struct PDFImporterContentStreamTests {
         @Test func extractsAsciiTextOrigin() throws {
             let data = PDFFixtureBuilder.build(
                 glyphs: [.init(

@@ -28,7 +28,7 @@
     /// a chord's two noteheads at one x, an accidental and a dot in the same
     /// bar, two beamed notes, a tie arc anchored between equidistant
     /// noteheads, and two text runs on one baseline.
-    @MainActor struct PDFImporterStreamOrderInvarianceTests {
+    struct PDFImporterStreamOrderInvarianceTests {
         private static let staffBottom: CGFloat = 400
         private static let lineGap: CGFloat = 8
 

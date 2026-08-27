@@ -10,7 +10,7 @@
     /// fixture is needed. Covers (A3) per-note rect capture in `decodeRhythm`,
     /// (A5) the `voiceAssignment` permutation that backs both the value path
     /// and the geometry indices, and (B) the `PDFScoreGeometry` query API.
-    @MainActor struct PDFImporterGeometryTests {
+    struct PDFImporterGeometryTests {
         // MARK: - Fixtures
 
         private func notehead(

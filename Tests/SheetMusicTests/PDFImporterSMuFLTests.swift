@@ -4,7 +4,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFImporterSMuFLTests {
+    struct PDFImporterSMuFLTests {
         @Test func mapsBraceCodepointToBraceSemantic() {
             #expect(PDFImporter.smuflSemantic(codepoint: 0xE000) == .brace)
         }

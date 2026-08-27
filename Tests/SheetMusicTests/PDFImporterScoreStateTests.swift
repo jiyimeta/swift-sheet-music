@@ -5,7 +5,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFImporterScoreStateTests {
+    struct PDFImporterScoreStateTests {
         private func synthStaff() -> SheetMusicPDF.Staff {
             SheetMusicPDF.Staff(
                 pageIndex: 0,

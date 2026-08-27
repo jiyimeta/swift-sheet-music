@@ -13,7 +13,6 @@
         private let _installApple = TestSupport.installApple
 
         @available(macOS 15.0, iOS 16.0, *)
-        @MainActor
         @Test("staff-default clef layer is attached to its ScoreItemID")
         func staffDefaultClefAttached() throws {
             _ = BravuraFont.register
