@@ -130,6 +130,29 @@
             #expect(stems == [stem])
         }
 
+        /// The gate's WIDTH, as an executable claim. A stem whose ink
+        /// stops 0.4 sp short of its notehead — a beam-trimmed stem, or
+        /// one whose end row fell below the binarizer's threshold — is a
+        /// stem, and the shipped 0.25 rejected it. Widening to 0.5 is
+        /// what the v2-eval grid in `isStem` bought: dur mean 71.6 ->
+        /// 73.2, pitch p50 96.5 -> 100.0. The false population's knee is
+        /// still above this, at 0.65.
+        @Test func aStemEndingJustShortOfItsNoteheadIsStillAStem() {
+            let head = Self.notehead(x: 50, y: 110)
+            let x = 50 + Self.spatium * 1.2
+            let shortOfHead = Self.vertical(
+                x: x, y0: 110 + Self.spatium * 0.4, y1: 110 + Self.spatium * 3,
+            )
+            let stems = Self.stems(in: Self.measure(glyphs: [head]), paths: [shortOfHead])
+            #expect(stems == [shortOfHead])
+            // …and the gate has NOT simply gone away: 0.6 sp is still out.
+            let tooFar = Self.vertical(
+                x: x, y0: 110 + Self.spatium * 0.6, y1: 110 + Self.spatium * 3,
+            )
+            let none = Self.stems(in: Self.measure(glyphs: [head]), paths: [tooFar])
+            #expect(none.isEmpty)
+        }
+
         /// A chord only needs ONE head to certify its stem — the one at
         /// the attaching end. An interior head sits mid-stroke and would
         /// fail the end test on its own.

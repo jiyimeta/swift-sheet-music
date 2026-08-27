@@ -373,6 +373,7 @@
                     + "jitterSp=\(Self.jitterSigma()) rows=\(rows) "
                     + "vFloorSp=\(RasterPage.verticalMinLengthInSpaces) "
                     + "vBeamedFloorSp=\(RasterPage.verticalBeamedMinLengthInSpaces) "
+                    + "stemHeadEndTolSp=\(PDFImporter.stemHeadEndToleranceInSpaces) "
                     + "peakRSS=\(OMRPageBitmapLoader.peakResidentMB())MB",
             )
         }

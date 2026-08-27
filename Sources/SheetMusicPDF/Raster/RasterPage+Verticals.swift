@@ -35,7 +35,9 @@ extension RasterPage {
     /// can ask whether one sits at an END of the vertical. With that in
     /// place the floor's job is only to keep notehead-interior ink and
     /// pure noise out, and it can drop to admit the real stems. Swept
-    /// again, at `stemHeadEndToleranceInSpaces` = 0.25:
+    /// again, at the `stemHeadEndToleranceInSpaces` of the time, 0.25
+    /// (that gate has since moved to 0.5; the grid below re-took this
+    /// column there and 2.5 still wins):
     ///
     ///     floor         pitch p50   pitch mean   dur p50   dur mean
     ///     2.0           94          72.4         74        63.3
@@ -47,6 +49,23 @@ extension RasterPage {
     /// less admitted ink. Exact measure counts are 142/198 at every value
     /// including the old 3.5 — structure never moved, which is the
     /// signature of a change confined to the stem consumer.
+    ///
+    /// **The floor and the end gate are NOT two halves of one filter**,
+    /// which is worth stating because it looks like they should be — the
+    /// floor cuts short junk, the gate cuts junk no notehead sits at the
+    /// end of, and nobody had swept them together. Swept as a GRID on
+    /// v2-eval at the gate's new 0.5, the floor does nothing at all:
+    ///
+    ///     floor   pitch p50   pitch mean   dur p50   dur mean
+    ///     2.0     100.0       76.8         82.0      73.2
+    ///     2.25    100.0       76.8         82.0      73.2
+    ///     2.5     100.0       76.8         82.0      73.2
+    ///     3.0      99.0       76.6         81.5      73.0
+    ///
+    /// Identical to the decimal below 3.0, and 3.0 is WORSE — raising it
+    /// to cut false positives (which it does: seam fp 3739 -> 852) costs
+    /// real beamed stems for nothing, because the gate has already
+    /// rejected the junk the floor was aimed at. 2.5 stays.
     ///
     /// `OMR_VERTICAL_MIN_SP` overrides it for a sweep — see
     /// `sweepOverride` below.
@@ -86,8 +105,8 @@ extension RasterPage {
     /// **SUPERSEDED, and now equal to the plain floor, which makes the
     /// beam-touch branch below unreachable.** The rule was a proxy for
     /// the question `isStem` can now ask directly — is this vertical a
-    /// note's stem? — and the proxy is strictly worse. Measured at
-    /// `stemHeadEndToleranceInSpaces` = 0.25:
+    /// note's stem? — and the proxy is strictly worse. Measured at the
+    /// `stemHeadEndToleranceInSpaces` of the time, 0.25:
     ///
     ///     plain / beamed   pitch p50   dur p50
     ///     3.5 / 2.5        96          60      <- rescue live

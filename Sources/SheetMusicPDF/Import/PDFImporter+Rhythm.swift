@@ -384,6 +384,36 @@ extension PDFImporter {
         // quarter of a staff space wide — so the threshold sits at 0.50,
         // below the knee rather than on it.
         //
+        // THE CONSTANT DID NOT MATCH THAT SENTENCE: it shipped at 0.25
+        // while the paragraph above chose 0.50, and nothing had ever
+        // measured the difference END TO END. Swept on v2-eval (32
+        // scorable renders), floor held at 2.5 sp:
+        //
+        //     gate    pitch p50   pitch mean   dur p50   dur mean
+        //     0.25    96.5        76.5         82.0      71.6
+        //     0.40    100.0       76.9         82.0      72.1
+        //     0.45    100.0       76.8         82.0      73.2
+        //     0.50    100.0       76.8         82.0      73.2
+        //     0.55    100.0       76.8         82.0      73.2
+        //     0.60    99.0        76.5         80.0      72.8
+        //     0.65    78.0        65.3         64.0      62.3
+        //     0.75    75.0        62.9         59.0      59.4
+        //     off     72.0        62.6         59.0      59.6
+        //
+        // The path-level knee shows up unchanged in the SCORE metric, and
+        // 0.50 is the midpoint of the [0.45, 0.55] plateau rather than an
+        // endpoint of it — the same reading rule the Otsu and deskew
+        // maxima needed. Paired against 0.25 it is 9 renders better, 2
+        // worse (worst −6), and it takes pitch p50 to the 100.0 that
+        // ORACLE verticals reach.
+        //
+        // The LENGTH FLOOR is not a second half of this filter, which is
+        // what the grid was run to find out. At gate 0.50 the floor does
+        // nothing — 2.0, 2.25 and 2.5 are the same 73.2 / 76.8 to the
+        // decimal, and 3.0 is slightly WORSE (73.0 / 76.6) because it
+        // starts cutting real beamed stems. There is no interaction to
+        // tune: the gate carries the whole separation.
+        //
         // Gated on provenance, so this is unreachable on the vector path
         // and byte-identity there is a property of the code rather than a
         // measurement. Tuplet-bracket hooks, phantom verticals from thin
@@ -405,7 +435,15 @@ extension PDFImporter {
     /// How close a notehead must sit to one END of a RASTER-detected
     /// vertical for that vertical to be that note's stem, in staff
     /// spaces. See the measurement table in `isStem`.
-    static let stemHeadEndToleranceInSpaces: CGFloat = 0.25
+    ///
+    /// `OMR_STEM_HEAD_END_TOL_SP` overrides it for a sweep, the same way
+    /// `OMR_VERTICAL_MIN_SP` overrides the length floor — see
+    /// `RasterPage.sweepOverride`. This gate and that floor are the two
+    /// halves of one false-positive filter, so they have to be swept as a
+    /// GRID off ONE release build; a value large enough to admit every
+    /// vertical (999) is how the gate is turned off for a measurement.
+    static let stemHeadEndToleranceInSpaces: CGFloat =
+        RasterPage.sweepOverride("OMR_STEM_HEAD_END_TOL_SP").map { CGFloat($0) } ?? 0.5
 
     /// Whether `path`'s y-span reaches BOTH outer staff lines (within ~1.5pt)
     /// — the signature of a barline as opposed to a note stem. With no usable
