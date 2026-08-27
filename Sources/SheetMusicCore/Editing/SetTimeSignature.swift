@@ -51,9 +51,7 @@ public struct SetTimeSignature: EditCommand {
         guard measureIndex >= 0, measureIndex < MeasureStructure.measureCount(of: score), !score.parts.isEmpty
         else { throw Self.refused(.targetNotFound(affectedLocation)) }
         guard TimeSignatureRegion.isWritable(numerator: numerator, denominator: denominator) else {
-            throw Self.refused(.unexpected(
-                description: "unwritable time signature \(numerator)/\(denominator)",
-            ))
+            throw Self.refused(.invalidTimeSignatureValue(numerator: numerator, denominator: denominator))
         }
         return try TimeSignatureRegion.rebar(
             &score, from: measureIndex,

@@ -264,6 +264,28 @@ struct SetTimeSignatureTests {
         #expect(!session.canUndo)
     }
 
+    /// The planner passes an unwritable pair straight through — it can never equal the meter in force, so it never
+    /// resolves to `.nothingToApply` — which means the command's own guard is what a host actually meets. It answers
+    /// with a coded reason rather than `.unexpected`: nothing foreign escaped here, the numbers are simply not a
+    /// signature, and a bridge surfacing `edit.unexpected` would tell the host it had hit a bug in the engine.
+    @Test("a meter no notation can express is refused with a coded reason, not an unexpected error")
+    func unwritableMeterRefusedWithCode() {
+        for (numerator, denominator) in [(0, 4), (64, 4), (4, 0), (4, 3), (4, 64)] {
+            let score = uniform44()
+            let session = ScoreEditSession(score: score)
+            #expect(!session.apply(
+                .setTimeSignature(measureIndex: 0, numerator: numerator, denominator: denominator),
+            ))
+            #expect(
+                session.lastRefusal?.reason
+                    == .invalidTimeSignatureValue(numerator: numerator, denominator: denominator),
+            )
+            #expect(session.lastRefusal?.code == "edit.invalidTimeSignatureValue")
+            #expect(session.score == score)
+            #expect(!session.canUndo)
+        }
+    }
+
     @Test("removing where no explicit change exists resolves to nothing to apply")
     func removeWhereNoChangePlansToNothing() {
         let score = changeAtBarTwo()

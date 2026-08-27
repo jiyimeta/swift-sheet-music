@@ -63,6 +63,11 @@ public struct EditRefusal: Sendable, Hashable {
         /// barline, so the region is refused rather than have it silently slide. `measureIndex` names the
         /// PRE-EDIT bar carrying the marker.
         case rebarWouldDisplaceBarlineMarker(measureIndex: Int)
+        /// The numbers given for a meter do not name a signature that can be written at all — the numerator is
+        /// outside `1...63` (MuseScore's own ceiling) or the denominator is not one of `1, 2, 4, 8, 16, 32`, the
+        /// powers of two a note duration exists for. `SetTimeSignature` refuses rather than re-bar a region at a
+        /// length nothing can engrave. A host's picker never produces these; a command built directly can.
+        case invalidTimeSignatureValue(numerator: Int, denominator: Int)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -115,6 +120,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.rebarWouldSplitTuplet"
         case .rebarWouldDisplaceBarlineMarker:
             "edit.rebarWouldDisplaceBarlineMarker"
+        case .invalidTimeSignatureValue:
+            "edit.invalidTimeSignatureValue"
         case .unexpected:
             "edit.unexpected"
         }
@@ -169,6 +176,8 @@ public struct EditRefusal: Sendable, Hashable {
             "re-barring would split the tuplet in measure \(measureIndex)"
         case let .rebarWouldDisplaceBarlineMarker(measureIndex):
             "re-barring would displace the barline marker on measure \(measureIndex)"
+        case let .invalidTimeSignatureValue(numerator, denominator):
+            "unwritable time signature \(numerator)/\(denominator)"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
