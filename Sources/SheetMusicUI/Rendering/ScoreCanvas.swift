@@ -391,9 +391,14 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 from: shift(from), vertex: shift(vertex), to: shift(to),
                 slight: slight, metrics: metrics,
             )
-        case .legacyBend:
-            // Drawn in a later task.
-            break
+        case let .legacyBend(shape):
+            // The shape carries absolute coords, so the whole thing
+            // shifts at once instead of point by point.
+            LegacyBendRenderer.draw(
+                context: &context,
+                shape: shape.translated(by: base),
+                metrics: metrics,
+            )
         case let .chordLine(shape, origin, thickness):
             ChordLineRenderer.draw(
                 context: &context,
