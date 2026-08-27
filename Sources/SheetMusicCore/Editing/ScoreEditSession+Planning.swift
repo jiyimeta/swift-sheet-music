@@ -92,6 +92,15 @@ extension ScoreEditSession {
             // bar declares. Factored into `structuralCommand` for the same reason the six note edits below are
             // factored into `directNoteEditCommand`: to keep this switch under SwiftLint's body budget.
             return try structuralCommand(for: intent, in: score)
+        case let .setTimeSignature(measureIndex, numerator, denominator):
+            // Dispatched from this switch rather than folded into `structuralCommand` alongside the other
+            // shape-changing intents: that fold is a chain of `if case`s ending in `return nil`, where a case
+            // nobody added would resolve to "nothing to apply" instead of failing to build.
+            return setTimeSignatureCommand(
+                at: measureIndex, numerator: numerator, denominator: denominator, in: score,
+            )
+        case let .removeTimeSignature(measureIndex):
+            return removeTimeSignatureCommand(at: measureIndex, in: score)
         case let .setNotePitch(location, pitch, tpc, accidental):
             return retuneCommand(at: location, pitch: pitch, tpc: tpc, accidental: accidental, in: score)
         case .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet, .removeTuplet:

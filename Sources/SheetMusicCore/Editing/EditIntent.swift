@@ -103,4 +103,20 @@ public enum EditIntent: Sendable, Equatable {
     /// its own: the bars after a removed change are byte-identical and yet every accidental in them is now judged
     /// against a different signature.
     case removeKeySignature(measureIndex: Int)
+
+    /// Set the time signature in force from `measureIndex` to the next explicit time change (or the end of the
+    /// score), RE-BARRING that region: its content is re-partitioned into bars of the new length, notes the new
+    /// barlines cut are split and tied, and the score's measure count may change. One undo step.
+    ///
+    /// Resolves to nothing to apply when that meter is already the one in force there — the same rule
+    /// `.setKeySignature` and `.movePart` apply to an edit that would restore the score to itself. Refused as a
+    /// whole, with the score untouched, when the new barring would split a tuplet
+    /// (`.rebarWouldSplitTuplet`) or slide a repeat sign off the barline it marks
+    /// (`.rebarWouldDisplaceBarlineMarker`): a re-bar is one edit, so it either lands or it does not.
+    case setTimeSignature(measureIndex: Int, numerator: Int, denominator: Int)
+
+    /// Remove the explicit time change at `measureIndex`, re-barring its span back to the meter that was in force
+    /// before it. Refused with `.cannotRemoveInitialSignature` at measure 0; plans to nothing when no explicit
+    /// time change exists there.
+    case removeTimeSignature(measureIndex: Int)
 }

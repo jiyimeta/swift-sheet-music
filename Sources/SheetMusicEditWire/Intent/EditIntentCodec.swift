@@ -53,10 +53,12 @@ import Wirelet
 /// 18 = movePart(MovePartIntentWire)
 /// 19 = setKeySignature(SetKeySignatureIntentWire)
 /// 20 = removeKeySignature(RemoveKeySignatureIntentWire)
+/// 21 = setTimeSignature(SetTimeSignatureIntentWire)
+/// 22 = removeTimeSignature(RemoveTimeSignatureIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
-/// creation and 19…20 for M3 signature changes; 0…4 predate them all and must keep their indices and byte layout.
+/// creation and 19…22 for M3 signature changes; 0…4 predate them all and must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -251,6 +253,18 @@ import Wirelet
 /// ```
 /// tag 1: measureIndex  i32, zig-zag varint
 /// ```
+///
+/// `SetTimeSignatureIntentWire` (`setTimeSignature`'s payload):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// tag 2: numerator     i32, zig-zag varint — 1…63
+/// tag 3: denominator   i32, zig-zag varint — 1, 2, 4, 8, 16 or 32
+/// ```
+///
+/// `RemoveTimeSignatureIntentWire` (`removeTimeSignature`'s payload):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -387,8 +401,15 @@ public enum EditIntentWire {
     case setKeySignature(SetKeySignatureIntentWire)
     /// Appended for M3 signature changes — index 20.
     case removeKeySignature(RemoveKeySignatureIntentWire)
+    /// Appended for M3 signature changes — index 21.
+    case setTimeSignature(SetTimeSignatureIntentWire)
+    /// Appended for M3 signature changes — index 22.
+    case removeTimeSignature(RemoveTimeSignatureIntentWire)
 
-    public init(from intent: EditIntent) {
+    /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
+    /// compiler's insistence that every case be encoded here is the only thing standing between an appended
+    /// intent and a payload that never reaches the far side.
+    public init(from intent: EditIntent) { // swiftlint:disable:this function_body_length
         switch intent {
         case let .inputNote(location, pitch, tpc, duration):
             self = .inputNote(InputNoteIntentWire(location: location, pitch: pitch, tpc: tpc, duration: duration))
@@ -445,6 +466,12 @@ public enum EditIntentWire {
             )
         case let .removeKeySignature(measureIndex):
             self = .removeKeySignature(RemoveKeySignatureIntentWire(measureIndex: measureIndex))
+        case let .setTimeSignature(measureIndex, numerator, denominator):
+            self = .setTimeSignature(SetTimeSignatureIntentWire(
+                measureIndex: measureIndex, numerator: numerator, denominator: denominator,
+            ))
+        case let .removeTimeSignature(measureIndex):
+            self = .removeTimeSignature(RemoveTimeSignatureIntentWire(measureIndex: measureIndex))
         }
     }
 
@@ -521,6 +548,14 @@ public enum EditIntentWire {
             return .setKeySignature(measureIndex: decoded.measureIndex, concertKey: decoded.concertKey)
         case let .removeKeySignature(wire):
             return .removeKeySignature(measureIndex: wire.decoded())
+        case let .setTimeSignature(wire):
+            let decoded = wire.decoded()
+            return .setTimeSignature(
+                measureIndex: decoded.measureIndex,
+                numerator: decoded.numerator, denominator: decoded.denominator,
+            )
+        case let .removeTimeSignature(wire):
+            return .removeTimeSignature(measureIndex: wire.decoded())
         }
     }
 }
@@ -937,6 +972,44 @@ public struct SetKeySignatureIntentWire {
 /// land here and nowhere near `insertMeasure`.
 @WireFormat
 public struct RemoveKeySignatureIntentWire {
+    public var measureIndex: Int32
+
+    public init(measureIndex: Int) {
+        self.measureIndex = Int32(measureIndex)
+    }
+
+    public func decoded() -> Int {
+        Int(measureIndex)
+    }
+}
+
+/// `setTimeSignature`'s payload — which bar declares the meter, and which meter it declares.
+///
+/// The two halves travel as separate fields rather than as one packed number: a host picks them independently,
+/// and the range each is valid over (`1…63` over `1, 2, 4, 8, 16, 32`) is stated by `SetTimeSignature.apply`,
+/// which both images reach from these same scalars.
+@WireFormat
+public struct SetTimeSignatureIntentWire {
+    public var measureIndex: Int32
+    public var numerator: Int32
+    public var denominator: Int32
+
+    public init(measureIndex: Int, numerator: Int, denominator: Int) {
+        self.measureIndex = Int32(measureIndex)
+        self.numerator = Int32(numerator)
+        self.denominator = Int32(denominator)
+    }
+
+    public func decoded() -> (measureIndex: Int, numerator: Int, denominator: Int) {
+        (measureIndex: Int(measureIndex), numerator: Int(numerator), denominator: Int(denominator))
+    }
+}
+
+/// `removeTimeSignature`'s payload. Byte-identical to `RemoveKeySignatureIntentWire` and deliberately its own
+/// struct, for the reason that one is separate from `MeasureIndexIntentWire`: the two removals address different
+/// declarations and are free to diverge.
+@WireFormat
+public struct RemoveTimeSignatureIntentWire {
     public var measureIndex: Int32
 
     public init(measureIndex: Int) {

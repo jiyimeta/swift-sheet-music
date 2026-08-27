@@ -154,6 +154,10 @@ struct EditIntentCodecTests {
             .setKeySignature(measureIndex: 2, concertKey: -3),
             .setKeySignature(measureIndex: 0, concertKey: 7),
             .removeKeySignature(measureIndex: 5),
+            // Indices 21…22. The numerator and denominator are deliberately unequal to each other and to the
+            // measure index, so a field written into the wrong tag cannot survive the round trip looking right.
+            .setTimeSignature(measureIndex: 3, numerator: 7, denominator: 8),
+            .removeTimeSignature(measureIndex: 4),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -199,6 +203,12 @@ struct EditIntentCodecTests {
         // standing between "drop this key change" and "insert a bar here".
         #expect(EditIntentCodec.encode(.setKeySignature(measureIndex: 0, concertKey: 0))[1] == 19)
         #expect(EditIntentCodec.encode(.removeKeySignature(measureIndex: 0))[1] == 20)
+        // `.removeTimeSignature`'s payload is byte-identical to `.removeKeySignature`'s, and confusing the two
+        // would drop the wrong declaration and re-bar (or re-spell) a span nobody asked about.
+        #expect(EditIntentCodec.encode(
+            .setTimeSignature(measureIndex: 0, numerator: 3, denominator: 4),
+        )[1] == 21)
+        #expect(EditIntentCodec.encode(.removeTimeSignature(measureIndex: 0))[1] == 22)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field

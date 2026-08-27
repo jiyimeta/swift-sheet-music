@@ -1,6 +1,7 @@
 import SheetMusicFoundation
 
-/// `ScoreEditSession`'s planning half for the signature intents: `.setKeySignature` / `.removeKeySignature`.
+/// `ScoreEditSession`'s planning half for the signature intents: `.setKeySignature` / `.removeKeySignature` and
+/// `.setTimeSignature` / `.removeTimeSignature`.
 ///
 /// Split off `ScoreEditSession+Planning.swift` when that file reached SwiftLint's 400-line budget — the same cut,
 /// for the same reason, that produced it from `ScoreEditSession.swift`. The seam is a real one: every intent here
@@ -44,6 +45,40 @@ extension ScoreEditSession {
               KeySignatureStaves.explicitKey(in: score, staff: reference, measureIndex: measureIndex) != nil
         else { return nil }
         return try keyChangeCommand(RemoveKeySignature(measureIndex: measureIndex), in: score)
+    }
+
+    /// `.setTimeSignature`: the meter write and the re-barring of the span it governs, as one command.
+    ///
+    /// `nil` when that meter is already the one in force at `measureIndex` — the score already says this, and
+    /// planning it anyway would push an undo entry that restores the score to itself, the same dead ⌘Z
+    /// `.setKeySignature` and `.movePart` both refuse. A bar that declares its own meter IS the meter in force
+    /// there, so this one test covers both "nothing to change" shapes.
+    ///
+    /// Nothing is bundled onto the command here, unlike the key intents next door: a re-bar moves the BYTES of
+    /// every bar in its region, so the session's own diff-driven `renotatingAccidentals` pass already reaches
+    /// each of them and re-spells whatever the new barlines moved. The key intents need their span named
+    /// explicitly precisely because they move only one bar's bytes while re-reading the rest.
+    ///
+    /// The range is NOT validated here: `SetTimeSignature.apply` states it once, and so are the numerator and
+    /// denominator — an unwritable pair is never equal to the meter in force, so it reaches the command.
+    static func setTimeSignatureCommand(
+        at measureIndex: Int, numerator: Int, denominator: Int, in score: Score,
+    ) -> (any EditCommand)? {
+        let inForce = TimeSignatureRegion.signature(inForceAt: measureIndex, in: score)
+        guard inForce.numerator != numerator || inForce.denominator != denominator else { return nil }
+        return SetTimeSignature(measureIndex: measureIndex, numerator: numerator, denominator: denominator)
+    }
+
+    /// `.removeTimeSignature`: the removal, plus the re-barring of the span that reverts with it.
+    ///
+    /// `nil` when the bar declares no meter of its own — there is no change there to remove, which is nothing to
+    /// apply rather than a refusal. Measure 0 DOES declare one, so it reaches `RemoveTimeSignature.apply` and
+    /// comes back as `.cannotRemoveInitialSignature`; that refusal is the command's to state, not this planner's.
+    static func removeTimeSignatureCommand(at measureIndex: Int, in score: Score) -> (any EditCommand)? {
+        guard measureIndex == 0
+            || TimeSignatureRegion.explicitSignature(in: score, measureIndex: measureIndex) != nil
+        else { return nil }
+        return RemoveTimeSignature(measureIndex: measureIndex)
     }
 
     /// `command` bundled with the glyph repairs the span it governs needs, as one undo step.
