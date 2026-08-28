@@ -125,6 +125,53 @@ struct TremoloVoiceRenderTests {
         #expect(pitchOns == [60, 64, 60, 64])
     }
 
+    /// The engraved shape this exists for: a roll starting on a `ppp`
+    /// partway through a measure, under a crescendo that lands on the
+    /// `f` at the next downbeat. Every stroke between them has to climb.
+    @Test func aRollFromPppToFClimbsAcrossItsStrokes() throws {
+        let note = Note(pitch: 60, tpc: 14)
+        let measure1 = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: [note])),
+            .chord(Chord(duration: .quarter, notes: [note])),
+            .chord(Chord(duration: .quarter, notes: [note])),
+            .dynamic(Dynamic(subtype: "ppp", velocity: 16)),
+            .spanner(Spanner(
+                kind: .hairpin, rawType: "HairPin",
+                nextMeasuresOffset: 1,
+                hairpin: .init(subtype: .crescendo),
+            )),
+            .chord(Chord(
+                duration: .quarter, notes: [note],
+                tremolo: Tremolo(subtype: .r16),
+            )),
+        ])])
+        let measure2 = Measure(voices: [Voice(elements: [
+            .dynamic(Dynamic(subtype: "f", velocity: 96)),
+            .chord(Chord(duration: .whole, notes: [note])),
+        ])])
+        let staff = Staff(measures: [measure1, measure2])
+        let (events, _, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0,
+            staff: staff,
+            part: Self.makePart(staff: staff),
+            route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
+            division: 480,
+            plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
+        )
+        let strokes = events
+            .filter { $0.tick >= 1440 && $0.tick < 1920 }
+            .compactMap { e -> Int? in
+                if case let .noteOn(_, _, v) = e.event { return v }
+                return nil
+            }
+        #expect(strokes.count == 4)
+        #expect(strokes.first == 16)
+        #expect(strokes.last ?? 0 > 60, "the last stroke should be approaching the f")
+        for i in 1 ..< strokes.count {
+            #expect(strokes[i] > strokes[i - 1], "stroke \(i) must be louder")
+        }
+    }
+
     /// A tremolo under a hairpin swells across its own strokes. Each
     /// stroke is a separate attack, so each reads the ramp at its own
     /// tick — MuseScore does this explicitly, and says why:

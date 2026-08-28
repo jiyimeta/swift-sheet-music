@@ -318,11 +318,18 @@ enum HairpinRamps {
         )
     }
 
-    /// Hairpin end tick = (start measure base + nextMeasures-worth of
-    /// measure ticks) + nextFractions delta. When both offsets are
-    /// zero we still need a usable end tick; default to start +
-    /// remainder of the start measure (one beat fallback if even
-    /// that is zero).
+    /// End tick = startTick + Σ (next-measures-worth of measure ticks)
+    /// + nextFractions delta. MuseScore's `<location>` (the `<next>`
+    /// child) is **relative to the begin spanner's own tick**, so the
+    /// offset is added to `startTick` rather than re-derived from a
+    /// measure base: a hairpin written from beat 4 to the next downbeat
+    /// carries `<measures>1</measures><fractions>-7/8</fractions>`, and
+    /// measuring that from the measure base instead of from beat 4
+    /// lands the end before the start. Falls back to `startTick + 1` so
+    /// the range stays non-empty.
+    ///
+    /// Same resolution as `OttavaRanges.computeEndTick` and
+    /// `LayoutEngine.endAnchor`.
     private static func computeEndTick(
         startTick: Int,
         startMeasureIndex: Int,
@@ -330,37 +337,24 @@ enum HairpinRamps {
         measures: [Measure],
         division: Int,
     ) -> Int {
-        // Sum measure-ticks from the start measure forward by
-        // `nextMeasuresOffset` measures. The end tick is therefore the
-        // base of measure (start + offset).
-        let measureDurations = measures.effectiveMeasureDurations()
-        func mDuration(_ i: Int) -> Fraction {
-            i < measureDurations.count
-                ? measureDurations[i]
-                : Fraction(numerator: 4, denominator: 4)
-        }
-        var endMeasureBase = 0
-        for i in 0 ..< startMeasureIndex {
-            endMeasureBase += MidiRenderer.measureTicks(
-                measure: measures[i], division: division,
-                measureDuration: mDuration(i),
-            )
-        }
-        let lastIndex = min(
-            measures.count - 1,
+        var measureSpan = 0
+        let endIndex = min(
+            measures.count,
             startMeasureIndex + max(0, spanner.nextMeasuresOffset),
         )
-        for i in startMeasureIndex ..< lastIndex {
-            endMeasureBase += MidiRenderer.measureTicks(
-                measure: measures[i], division: division,
-                measureDuration: mDuration(i),
-            )
+        if startMeasureIndex < endIndex {
+            let measureDurations = measures.effectiveMeasureDurations()
+            for i in startMeasureIndex ..< endIndex {
+                let mDuration = i < measureDurations.count
+                    ? measureDurations[i]
+                    : Fraction(numerator: 4, denominator: 4)
+                measureSpan += MidiRenderer.measureTicks(
+                    measure: measures[i], division: division,
+                    measureDuration: mDuration,
+                )
+            }
         }
         let fractionDelta = spanner.nextFractionsOffset?.ticks(division: division) ?? 0
-        let computed = endMeasureBase + fractionDelta
-        if computed > startTick { return computed }
-        // Defensive fallback: ensure endTick > startTick so
-        // `interpolate` always sees a valid span.
-        return startTick + 1
+        return max(startTick + 1, startTick + measureSpan + fractionDelta)
     }
 }

@@ -342,6 +342,48 @@ struct HairpinRampsCollectTests {
         }
     }
 
+    /// A hairpin that starts partway through a measure ends where its
+    /// `<location>` says, and that location is **relative to the
+    /// hairpin's own tick** — `<measures>1</measures>` walks one
+    /// measure on from there and `<fractions>-7/8</fractions>` then
+    /// steps back, which is how MuseScore spells "from beat 4 of this
+    /// measure to the next downbeat". Re-deriving the end from the
+    /// measure base instead drops the hairpin's own offset, and the
+    /// subtraction lands the end *before* the start — collapsing a real
+    /// crescendo to a single tick, which reads at playback as the wedge
+    /// having no effect at all.
+    ///
+    /// `OttavaRanges.computeEndTick` and `LayoutEngine.endAnchor`
+    /// already resolve it this way; this is the third copy agreeing.
+    @Test func aHairpinStartingMidMeasureEndsWhereItsLocationSays() {
+        let s = staff([
+            makeMeasure([
+                quarter(), quarter(), quarter(),
+                .dynamic(ppp()),
+                .spanner(Spanner(
+                    kind: .hairpin, rawType: "HairPin",
+                    nextMeasuresOffset: 1,
+                    nextFractionsOffset: Fraction(numerator: -3, denominator: 4),
+                    hairpin: .init(subtype: .crescendo),
+                )),
+                quarter(),
+            ]),
+            makeMeasure([
+                .dynamic(f()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+        ])
+        let ramps = HairpinRamps.collect(
+            voiceIndex: 0, staff: s,
+            instrument: instrument(), division: division,
+        )
+        let wedge = ramps.first { $0.role == .wedge }
+        #expect(wedge?.startTick == 1440)
+        #expect(wedge?.endTick == 1920)
+        #expect(wedge?.startVelocity == 16)
+        #expect(wedge?.endVelocity == 96)
+    }
+
     /// The level a hairpin reaches is where the part stays until the
     /// next Dynamic says otherwise — a crescendo is not undone by its
     /// own last note. Both MuseScore generations hold it: MS3's
