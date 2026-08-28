@@ -426,14 +426,27 @@ extension LayoutEngine {
 
     /// Pull a hairpin's right edge clear of the dynamic anchored at the
     /// hairpin's own end tick — the "make space after" half of
-    /// `TLayout::manageHairpinSnapping`. `notBefore` is the segment's
-    /// own left edge, so a measure crowded enough that both trims cross
-    /// degenerates to a zero-length line rather than a reversed one.
+    /// `TLayout::manageHairpinSnapping`.
     ///
     /// `endTick == 0` is `endAnchor`'s right-edge sentinel: the hairpin
     /// stops at the bar line, so the dynamic that ends it sits at the
     /// downbeat of the NEXT measure and is already to the right of the
     /// line. Nothing to trim.
+    ///
+    /// Whatever the trims leave, the wedge keeps MuseScore's one-spatium
+    /// minimum (`if (x < _spatium) { x = _spatium; }` in the same
+    /// layout). Without it a crowded measure — a wide `ppp` on the last
+    /// beat, the bar line just past it — pushes the start beyond the
+    /// end, and a reversed span does not draw a short hairpin: the wedge
+    /// is built with its apex at `from` and its mouth at `to`, so the
+    /// two swap and a crescendo reads on the page as a diminuendo.
+    ///
+    /// Only the SHRINK half of MuseScore's snapping is ported. It also
+    /// EXTENDS a wedge that stops more than 3 sp short of its dynamic;
+    /// that lengthens lines which do not collide today, and MuseScore's
+    /// own rendering of the case that prompted this — a roll under a
+    /// swell, `ppp` to the bar line with the `f` just past it — leaves
+    /// the wedge short rather than reaching for the mark.
     static func snappedHairpinEndX(
         _ x: CGFloat,
         anchor: SpannerAnchor,
@@ -441,16 +454,22 @@ extension LayoutEngine {
         metrics: StaffMetrics,
         notBefore: CGFloat,
     ) -> CGFloat {
-        guard anchor.kind == .hairpin, anchor.endTick > 0,
-              let extent = dynamicExtent(
-                  in: measure,
-                  staffIndex: anchor.endStaff,
-                  tick: anchor.endTick,
-              )
-        else { return x }
-        let trimmed = measure.originX + extent.minX
-            - metrics.sp * hairpinDynamicsDistanceSp
-        return max(min(x, trimmed), notBefore)
+        guard anchor.kind == .hairpin else { return x }
+        var end = x
+        if anchor.endTick > 0,
+           let extent = dynamicExtent(
+               in: measure,
+               staffIndex: anchor.endStaff,
+               tick: anchor.endTick,
+           )
+        {
+            end = min(
+                x,
+                measure.originX + extent.minX
+                    - metrics.sp * hairpinDynamicsDistanceSp,
+            )
+        }
+        return max(end, notBefore + metrics.sp)
     }
 
     /// Union of the measure-local ink spans of every dynamic this
