@@ -71,6 +71,10 @@ struct HairpinRampsCollectTests {
         Dynamic(subtype: "mp", velocity: 64)
     }
 
+    private func mf() -> Dynamic {
+        Dynamic(subtype: "mf", velocity: 80)
+    }
+
     private func f() -> Dynamic {
         Dynamic(subtype: "f", velocity: 96)
     }
@@ -522,5 +526,155 @@ struct HairpinRampsCollectTests {
         #expect(velocities.first == 64)
         // Downbeat of measure 2: the `p`, not the crescendo's target.
         #expect(velocities[4] == 49)
+    }
+}
+
+/// How a wedge treats the Dynamics written along it.
+///
+/// Split from `HairpinRampsCollectTests` so each suite stays readable;
+/// these render through `MidiRenderer` because what matters is the
+/// velocity each beat actually sounds at.
+struct HairpinCheckpointTests {
+    private let division = 480
+
+    private func instrument() -> Instrument {
+        Instrument(id: "piano", articulations: [])
+    }
+
+    private func quarter() -> VoiceElement {
+        .chord(Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+        ))
+    }
+
+    private func ppp() -> Dynamic {
+        Dynamic(subtype: "ppp", velocity: 16)
+    }
+
+    private func mf() -> Dynamic {
+        Dynamic(subtype: "mf", velocity: 80)
+    }
+
+    private func f() -> Dynamic {
+        Dynamic(subtype: "f", velocity: 96)
+    }
+
+    private func makeMeasure(_ elements: [VoiceElement]) -> Measure {
+        Measure(voices: [Voice(elements: elements)])
+    }
+
+    private func staff(_ measures: [Measure]) -> Staff {
+        Staff(measures: measures)
+    }
+
+    private func cresc(measures: Int = 1) -> Spanner {
+        Spanner(
+            kind: .hairpin, rawType: "HairPin",
+            nextMeasuresOffset: measures,
+            hairpin: .init(subtype: .crescendo),
+        )
+    }
+
+    /// Dynamics written under a wedge are checkpoints it passes through,
+    /// not decoration. A `ppp` crescendo through `pp` and `mf` to `f`
+    /// hits each mark at the beat it is written on, and climbs between
+    /// them — so every level played is either a mark the engraver wrote
+    /// or an interpolation between two of them.
+    ///
+    /// Neither MuseScore does this, and both lose information doing it:
+    /// MS3 deletes any dynamic enclosed in a hairpin outright
+    /// (`ChangeMap::cleanupStage1` — "remove any ramps **or fixes** that
+    /// are completely enclosed within other ramps"), so it plays a
+    /// smooth 16 → 96 and the marks never sound; MS4's live playback
+    /// overwrites them with the hairpin's own curve — rendering this
+    /// score to audio from MuseScore 4 gives a waveform identical to
+    /// the same score with the marks deleted. MS4's MIDI export is the
+    /// closest: it keeps the marks (its `VelocityMap` drops MS3's
+    /// erase-enclosed-fixes branch) but plateaus between them.
+    @Test func writtenDynamicsInsideTheWedgeArePassedThrough() throws {
+        let s = staff([
+            makeMeasure([
+                .dynamic(ppp()), .spanner(cresc(measures: 2)),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([
+                .dynamic(Dynamic(subtype: "pp", velocity: 33)),
+                quarter(), quarter(),
+                .dynamic(mf()),
+                quarter(), quarter(),
+            ]),
+            makeMeasure([
+                .dynamic(f()),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+        ])
+        let part = Part(id: "P1", instrument: instrument(), staves: [s])
+        let (events, _, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0, staff: s, part: part,
+            route: MidiRenderer.PartChannelRoute(
+                defaultChannel: 0, defaultPort: 0, switches: [],
+            ),
+            division: division,
+            plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+        )
+        let v: [Int] = events.compactMap {
+            if case let .noteOn(_, _, x) = $0.event { return x } else { return nil }
+        }
+        // Each mark sounds at its own beat.
+        #expect(v[0] == 16) // ppp
+        #expect(v[4] == 33) // pp
+        #expect(v[6] == 80) // mf
+        #expect(v[8] == 96) // f
+        // …and the beats between them climb rather than plateau.
+        for i in 1 ... 3 {
+            #expect(v[i] > v[i - 1] && v[i] < 33)
+        }
+        #expect(v[5] > 33 && v[5] < 80)
+        #expect(v[7] > 80 && v[7] < 96)
+    }
+
+    /// A mark that contradicts the wedge stops the ramp without losing
+    /// its own level: a crescendo written over a `pp` cannot climb *to*
+    /// a level below where it started, so it stays flat until the `pp`,
+    /// which then sounds as written — and the wedge resumes climbing
+    /// from there to the next mark. MuseScore 3 loses both marks here
+    /// (it erases them, then flattens the ramp it can no longer
+    /// resolve) and MuseScore 4's live playback ignores them, including
+    /// the `ff`.
+    @Test func aQuieterMarkStopsTheClimbButKeepsItsOwnLevel() throws {
+        let s = staff([
+            makeMeasure([
+                .spanner(cresc(measures: 2)),
+                quarter(), quarter(), quarter(), quarter(),
+            ]),
+            makeMeasure([
+                .dynamic(Dynamic(subtype: "pp", velocity: 33)),
+                quarter(), quarter(),
+                .dynamic(Dynamic(subtype: "ff", velocity: 112)),
+                quarter(), quarter(),
+            ]),
+            makeMeasure([quarter(), quarter(), quarter(), quarter()]),
+        ])
+        let part = Part(id: "P1", instrument: instrument(), staves: [s])
+        let (events, _, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0, staff: s, part: part,
+            route: MidiRenderer.PartChannelRoute(
+                defaultChannel: 0, defaultPort: 0, switches: [],
+            ),
+            division: division,
+            plan: MidiRenderer.playbackPlan(for: s.measures, division: division),
+        )
+        let v: [Int] = events.compactMap {
+            if case let .noteOn(_, _, x) = $0.event { return x } else { return nil }
+        }
+        // Nothing to climb to, so the wedge waits at the running level.
+        #expect(Array(v[0 ... 3]) == Array(repeating: 80, count: 4))
+        #expect(v[4] == 33) // the pp sounds as written
+        #expect(v[5] > 33 && v[5] < 112) // then climbs toward the ff
+        #expect(v[6] == 112) // ff
+        // Past the last mark the wedge has nothing left to aim at, and
+        // the level it reached holds beyond the wedge's end.
+        #expect(Array(v[6...]) == Array(repeating: 112, count: v.count - 6))
     }
 }

@@ -124,11 +124,13 @@ enum HairpinRamps {
                     .last { $0.tick <= p.startTick }?.tick ?? Int.min
                 if reached.tick > lastMark { startVelocity = reached.velocity }
             }
-            let ramp = resolveRamp(
+            let segments = resolveRamp(
                 p, startVelocity: startVelocity, dynList: dynList,
             )
-            resolved.append(ramp)
-            reached = (ramp.endTick, ramp.endVelocity)
+            resolved.append(contentsOf: segments)
+            if let last = segments.last {
+                reached = (last.endTick, last.endVelocity)
+            }
         }
         return resolved
     }
@@ -149,8 +151,12 @@ enum HairpinRamps {
         wedges.compactMap { wedge in
             let from = wedge.endTick + 1
             let nextMark = dynList.first { $0.tick >= from }?.tick ?? Int.max
+            // From `wedge.endTick`, not from `from`: a wedge split at its
+            // checkpoints hands off to the next segment either on its own
+            // end tick or one past it, and both must cancel the hold
+            // rather than let it shadow the segment that follows.
             let nextWedge = wedges
-                .lazy.map(\.startTick).filter { $0 >= from }.min() ?? Int.max
+                .lazy.map(\.startTick).filter { $0 >= wedge.endTick }.min() ?? Int.max
             let until = min(nextMark, nextWedge) - 1
             guard until >= from else { return nil }
             return HairpinRamp(
@@ -226,65 +232,95 @@ enum HairpinRamps {
         }
     }
 
-    /// The end level a hairpin reaches, and the tick it reaches it on.
+    /// Resolve one wedge into the segments it actually plays.
     ///
-    /// Only a `Dynamic` sitting on the hairpin's own end tick can serve
-    /// as its target, and only when it points the way the wedge does.
-    /// Both restrictions are MuseScore's: MS4 reads the end level off
-    /// the dynamic *snapped to the last hairpin segment*
-    /// (`PlaybackContext::findNominalEndDynamicType`) and adopts it only
-    /// when `isCrescendo ? levelTo > levelFrom : levelTo < levelFrom`.
-    /// MS3 arrives at the same place from the other side:
-    /// `ChangeMap::cleanupStage3` will happily read a distant fix, then
-    /// flattens the ramp whenever the two disagree about direction. A
-    /// crescendo must never ramp *down* — the wedge, not the next mark
-    /// in the part, says which way this passage goes.
+    /// Every `Dynamic` written under the wedge — inside it or on its end
+    /// tick — is a checkpoint: the wedge climbs to that mark, reaching
+    /// it on the beat the engraver put it on, and carries on from there
+    /// to the next one. So every level this produces is either a mark
+    /// the score states or an interpolation between two of them, and a
+    /// wedge with no mark to aim at produces no change at all.
     ///
-    /// When nothing says where the wedge lands, it stays flat. That is
-    /// MS3's behavior outright (`Hairpin::veloChange` defaults to 0 and
-    /// `ChangeMap` flattens what it cannot resolve) and what MuseScore 4
-    /// exports too, since its MIDI export runs the same
-    /// `CompatMidiRender` path. MS4's *live* playback does invent a
-    /// dynamic step here, but a guessed level is one this score never
-    /// states, and it compounds: 31 of the 72 hairpin-bearing scores in
-    /// the corpus carry hairpins and not one dynamic, so a per-wedge
-    /// step ratchets a whole part upward with nothing asking for it.
+    /// A mark that contradicts the wedge — a crescendo running into a
+    /// *quieter* mark — cannot be climbed to, so that stretch stays
+    /// flat and the mark still sounds at its own tick; the wedge
+    /// resumes from it toward whatever comes next. The direction test
+    /// is MS4's (`PlaybackContext::handleHairpin`, `useNominalLevelTo`
+    /// requires `isCrescendo ? levelTo > levelFrom : levelTo <
+    /// levelFrom`); ending a flat stretch one tick short of the mark
+    /// mirrors its `spannerTo -= Fraction::eps()`.
     ///
-    /// An unusable dynamic on the end tick still owns its own note, so
-    /// the ramp stops one tick short of it, mirroring MS4's
-    /// `spannerTo -= Fraction::eps()`.
+    /// Neither MuseScore plays the marks under a wedge, and both lose
+    /// what the engraver wrote doing it. MS3 erases every dynamic
+    /// enclosed in a hairpin (`ChangeMap::cleanupStage1`: "remove any
+    /// ramps **or fixes** that are completely enclosed within other
+    /// ramps"), so `ppp` cresc `pp` `mf` `f` plays as a smooth 16 → 96
+    /// with the middle marks silent — and a wedge over `pp` then `ff`
+    /// with nothing at its end loses both marks *and* the ramp. MS4's
+    /// live playback overwrites them with the hairpin's own dynamics
+    /// curve: rendering such a score to audio from MuseScore 4 produces
+    /// a waveform identical to the same score with the marks deleted.
+    /// MS4's MIDI export keeps them (its `VelocityMap` has no
+    /// erase-enclosed-fixes branch) but plateaus between them rather
+    /// than climbing.
+    ///
+    /// `<veloChange>` outranks the marks: it is MS3's own spelling of
+    /// the ramp size, handed straight to `ChangeMap::addRamp`, and only
+    /// a change of 0 sends MuseScore looking for a neighbouring fix.
     private static func resolveRamp(
         _ p: Pending, startVelocity: Int, dynList: [DynPoint],
-    ) -> HairpinRamp {
+    ) -> [HairpinRamp] {
         let isCrescendo = p.payload.subtype.isCrescendo
-        let anchored = dynList.first { $0.tick == p.endTick }
-        let adoptable = anchored.map {
-            isCrescendo ? $0.velocity > startVelocity : $0.velocity < startVelocity
-        } ?? false
-
-        let endVel: Int
-        if let veloChange = p.payload.veloChange, veloChange != 0 {
-            // MS3's own spelling of the ramp size (`Score::updateHairpin`
-            // hands it straight to `ChangeMap::addRamp`); only a change of
-            // 0 sends MuseScore looking for a neighbouring fix.
-            let signed = isCrescendo ? veloChange : -veloChange
-            endVel = max(1, min(127, startVelocity + signed))
-        } else if adoptable, let anchored {
-            endVel = max(1, min(127, anchored.velocity))
-        } else {
-            endVel = startVelocity
+        func segment(from: Int, to: Int, start: Int, end: Int) -> HairpinRamp {
+            HairpinRamp(
+                startTick: from,
+                endTick: max(from + 1, to),
+                startVelocity: start,
+                endVelocity: end,
+                method: p.payload.veloChangeMethod,
+            )
         }
 
-        let endTick = anchored != nil && !adoptable
-            ? max(p.startTick + 1, p.endTick - 1)
-            : p.endTick
-        return HairpinRamp(
-            startTick: p.startTick,
-            endTick: endTick,
-            startVelocity: startVelocity,
-            endVelocity: endVel,
-            method: p.payload.veloChangeMethod,
-        )
+        if let veloChange = p.payload.veloChange, veloChange != 0 {
+            let signed = isCrescendo ? veloChange : -veloChange
+            return [segment(
+                from: p.startTick, to: p.endTick,
+                start: startVelocity,
+                end: max(1, min(127, startVelocity + signed)),
+            )]
+        }
+
+        let checkpoints = dynList
+            .filter { $0.tick > p.startTick && $0.tick <= p.endTick }
+            .sorted { $0.tick < $1.tick }
+
+        var segments: [HairpinRamp] = []
+        var tick = p.startTick
+        var velocity = startVelocity
+        for mark in checkpoints {
+            let level = max(1, min(127, mark.velocity))
+            let climbable = isCrescendo ? level > velocity : level < velocity
+            if climbable {
+                segments.append(segment(
+                    from: tick, to: mark.tick, start: velocity, end: level,
+                ))
+            } else if mark.tick - 1 > tick {
+                // Flat up to the mark, which then governs its own note.
+                segments.append(segment(
+                    from: tick, to: mark.tick - 1,
+                    start: velocity, end: velocity,
+                ))
+            }
+            tick = mark.tick
+            velocity = level
+        }
+        // Past the last mark the wedge has nothing left to aim at.
+        if tick < p.endTick || segments.isEmpty {
+            segments.append(segment(
+                from: tick, to: p.endTick, start: velocity, end: velocity,
+            ))
+        }
+        return segments
     }
 
     /// End tick = startTick + Σ (next-measures-worth of measure ticks)
