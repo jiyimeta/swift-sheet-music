@@ -63,9 +63,11 @@
             )])
         }
 
-        private static func layout(_ score: Score) -> LayoutDocument {
+        private static func layout(
+            _ score: Score, availableWidth: CGFloat = 800,
+        ) -> LayoutDocument {
             LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800,
+                score: score, options: .init(), availableWidth: availableWidth,
             )
         }
 
@@ -234,6 +236,115 @@
             let width0 = (byStaff[0]?.first).map { $0.maxX - $0.minX } ?? 0
             let width1 = (byStaff[1]?.first).map { $0.maxX - $0.minX } ?? 0
             #expect(width1 > width0)
+        }
+
+        /// Two measures: a `ppp` and a crescendo on the last beat of the
+        /// first, and the `f` the wedge is heading for on the downbeat
+        /// of the second — the shape a roll under a swell takes, and the
+        /// one that breaks if the wedge has to stop at the bar line.
+        private static func acrossBarline() -> Score {
+            let note = Note(pitch: 60, tpc: 14)
+            var first: [VoiceElement] = []
+            for beat in 0 ..< 4 {
+                if beat == 3 {
+                    first.append(.dynamic(Dynamic(subtype: "ppp", velocity: 16)))
+                    first.append(.spanner(Spanner(
+                        kind: .hairpin, rawType: "HairPin",
+                        nextMeasuresOffset: 1,
+                        nextFractionsOffset: Fraction(
+                            numerator: -3, denominator: 4,
+                        ),
+                        hairpin: .init(subtype: .crescendo),
+                    )))
+                }
+                first.append(.chord(Chord(duration: .quarter, notes: [note])))
+            }
+            var second: [VoiceElement] = [
+                .dynamic(Dynamic(subtype: "f", velocity: 96)),
+            ]
+            for _ in 0 ..< 4 {
+                second.append(.chord(Chord(duration: .quarter, notes: [note])))
+            }
+            return Score(division: division, parts: [Part(
+                id: "1",
+                instrument: Instrument(id: "x"),
+                staves: [Staff(measures: [
+                    Measure(voices: [Voice(elements: first)]),
+                    Measure(voices: [Voice(elements: second)]),
+                ])],
+            )])
+        }
+
+        @Test("A wedge ending on a bar line stops there, ahead of its dynamic")
+        func endStopsAtTheBarline() {
+            guard #available(macOS 15.0, *) else { return }
+            let doc = Self.layout(Self.acrossBarline())
+            guard let system = doc.systems.first,
+                  system.measures.count >= 2,
+                  let segment = Self.segmentX(system)
+            else {
+                Issue.record("expected one system with two measures")
+                return
+            }
+            let next = system.measures[1]
+            guard let extent = next.dynamicExtents.first(where: { $0.tick == 0 })
+            else {
+                Issue.record("expected the f's extent on the downbeat")
+                return
+            }
+            // The mark the wedge is heading for is in the next measure,
+            // so nothing trims the end and it keeps its bar-line inset.
+            // MuseScore would reach across for a mark more than 3 sp
+            // away (`manageHairpinSnapping`, EXTEND_THRESHOLD), but its
+            // own rendering of this score leaves the wedge short — the
+            // `f` sits just past the line. Only the shrink half is
+            // ported, so this pins that the end is NOT pulled forward.
+            #expect(segment.to < next.origin.x + extent.minX)
+            #expect(segment.to > segment.from)
+        }
+
+        @Test("A crowded wedge keeps MuseScore's one-spatium minimum")
+        func crowdedWedgeKeepsMinimumLength() {
+            guard #available(macOS 15.0, *) else { return }
+            // Wide marks one beat apart: the two trims cross, and what
+            // is left is not a hairpin at all.
+            let note = Note(pitch: 60, tpc: 14)
+            var elements: [VoiceElement] = []
+            for beat in 0 ..< 4 {
+                if beat == 2 {
+                    elements.append(.dynamic(Dynamic(subtype: "sfz", velocity: 96)))
+                    elements.append(.spanner(Spanner(
+                        kind: .hairpin, rawType: "HairPin",
+                        nextMeasuresOffset: 0,
+                        nextFractionsOffset: Fraction(
+                            numerator: 1, denominator: 4,
+                        ),
+                        hairpin: .init(subtype: .crescendo),
+                    )))
+                }
+                if beat == 3 {
+                    elements.append(.dynamic(Dynamic(subtype: "fff", velocity: 112)))
+                }
+                elements.append(.chord(Chord(duration: .quarter, notes: [note])))
+            }
+            let doc = Self.layout(Score(division: Self.division, parts: [Part(
+                id: "1",
+                instrument: Instrument(id: "x"),
+                staves: [Staff(measures: [
+                    Measure(voices: [Voice(elements: elements)]),
+                ])],
+            )]), availableWidth: 200)
+            guard let system = doc.systems.first,
+                  let segment = Self.segmentX(system)
+            else {
+                Issue.record("expected one system with a hairpin segment")
+                return
+            }
+            // `if (x < _spatium) { x = _spatium; }` — a wedge whose two
+            // trims cross is clamped to a minimum length, never drawn
+            // backwards. A reversed span mirrors the glyph: the apex
+            // lands on the right and a crescendo reads as a diminuendo.
+            #expect(segment.to - segment.from >= doc.metrics.sp - 0.001)
         }
     }
 #endif
