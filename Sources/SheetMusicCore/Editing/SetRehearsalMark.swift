@@ -134,7 +134,9 @@ public struct SetRehearsalMark: EditCommand {
         if let restoredLane {
             score.systemMeasures = restoredLane
         } else {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            // `SheetMusicFoundation`'s equivalent, for the reason `setRehearsalMarkCommand` gives: `CharacterSet`
+            // is absent from `FoundationEssentials`, so the Foundation spelling does not build for wasm.
+            let trimmed = text.trimmingWhitespaceAndNewlines()
             guard !trimmed.isEmpty else { throw Self.refused(.emptyRehearsalMarkText) }
             RehearsalMarkLane.pad(&score)
             RehearsalMarkLane.write(trimmed, into: &score.systemMeasures[measureIndex])

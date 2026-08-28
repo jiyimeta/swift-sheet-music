@@ -45,8 +45,11 @@ enum EditReplayStep {
 /// - **The M3 signature steps (11a-12b) address a MEASURE, never an element**, so none of the above applies to
 ///   them — but they move the ground under anything that would. Step 11a inserts a key signature at the head of
 ///   measure 1, shifting every element index in that bar by one; steps 12a/12b re-bar measures 1 onward and change
-///   how many measures the score even has (three bars, then twelve, then four). They are last in the array for
-///   exactly that reason: nothing after them addresses a measure OR an element by fixed position.
+///   how many measures the score even has (three bars, then twelve, then four). They come after everything that
+///   addresses an ELEMENT for exactly that reason: nothing past them names a slot by fixed position.
+/// - **The M4 rehearsal-mark steps (13a/13b) address a measure too**, and are the only steps that run after the
+///   re-bar. Measure 1 is a safe target for them because 12b settles the score at four measures — one MORE than it
+///   started with, never fewer — so the bar they name exists whatever the re-bar did to the ones around it.
 ///
 /// ## Identical fingerprints are not redundant steps
 ///
@@ -59,6 +62,11 @@ enum EditReplayStep {
 /// each `nativeApplyEditIntent` call returned `true` — drop that boolean assertion and a future edit here
 /// that starts refusing silently would still pass on fingerprints alone.
 ///
+/// Step 13b is the same situation reached from the other direction: rather than repeating its neighbor it lands
+/// back on step 12b's value, because the system lane is hashed by its occupants and the mark it removed is the only
+/// occupant either step ever put there. Same guard, same reason it is not droppable — it is the only step in this
+/// script that encodes `removeRehearsalMark`'s wire bytes at all.
+///
 /// ## Undo / redo
 ///
 /// The device-side harness (`EditSessionReplayTest.kt`) tells an edit step from an undo step by asset presence —
@@ -68,13 +76,13 @@ enum EditReplayStep {
 /// apply-or-undo step, so "redo" needs no new convention while still exercising an undo immediately followed by
 /// the state it undid coming back.
 enum EditReplayScript {
-    /// Eighteen steps over `EditingFixtures.replayFixture()` (see this type's doc comment for the index-stability
+    /// Twenty steps over `EditingFixtures.replayFixture()` (see this type's doc comment for the index-stability
     /// argument behind their ordering).
     ///
     /// Covers every `EditIntent` case that names a slot or a bar: the SP0/SP1/SP2 note and slot intents, plus M3's
-    /// four signature intents. The M1/M2 structural intents (`insertMeasure`, `deleteMeasure`, `addPart`,
-    /// `removePart`, `movePart`) are still not scripted here — they have their own command-level tests, and adding
-    /// them would renumber every measure and staff index the steps below address.
+    /// four signature intents and M4's two rehearsal-mark intents. The M1/M2 structural intents (`insertMeasure`,
+    /// `deleteMeasure`, `addPart`, `removePart`, `movePart`) are still not scripted here — they have their own
+    /// command-level tests, and adding them would renumber every measure and staff index the steps below address.
     static func standard(staff: StaffAddress) -> [EditReplayStep] { // swiftlint:disable:this function_body_length
         func rest(_ measure: Int, _ element: Int) -> RestID {
             RestID(staff: staff, measureIndex: measure, voiceIndex: 0, elementIndex: element)
@@ -160,10 +168,28 @@ enum EditReplayScript {
         // longer than it went in and the score settles at four measures rather than the three it started with. This
         // is the removal's own re-bar path, reached through its own wire bytes.
         let step12b = EditReplayStep.intent(.removeTimeSignature(measureIndex: 1))
+        // Step 13a: name measure 1 "A". A rehearsal mark is the first SYSTEM-lane edit in this script — every step
+        // above it moves voice elements — so it is also the first one whose wire bytes carry a string, and the
+        // first whose fingerprint moves through `combineSystemLane` rather than through a staff's measures. Which
+        // lane it meets depends on how the fixture was spelled: the in-memory `EditingFixtures.replayFixture()`
+        // that `EditReplayDeterminismTests` starts from leaves `systemMeasures` empty, so the write pads the lane
+        // out to one entry per measure first, while the `fixture.mscx` `EditReplayGoldenTests` loads always decodes
+        // one (empty) `SystemMeasure` per bar, where that pad is a no-op. One script over both spellings covers
+        // both paths.
+        let step13a = EditReplayStep.intent(.setRehearsalMark(measureIndex: 1, text: "A"))
+        // Step 13b: take it away again. Paired with 13a deliberately, for the reason 11a/11b are paired:
+        // `RemoveRehearsalMark` has its own inverse and its own wire bytes, and a script that only ever set a mark
+        // would encode neither. It is NOT an arithmetic undo of 13a — the removal drops the mark WITHOUT
+        // un-padding the lane 13a may have grown — and yet the fingerprint lands back on 12b's exactly. That is
+        // correct, not a sign the step was inert: `combineSystemLane` feeds the lane by its OCCUPANTS and never by
+        // its length, precisely so a padded-but-empty lane and an absent one hash alike (see `ScoreFingerprint`).
+        // What proves this step ran is the same thing that proves steps 3 and 4 did — see "Identical fingerprints
+        // are not redundant steps" on this type.
+        let step13b = EditReplayStep.intent(.removeRehearsalMark(measureIndex: 1))
 
         return [
             step1, step2, step3, step4, step5a, step5b, step6, step7, step7b, step8a, step8b, step9, step10Undo,
-            step10Redo, step11a, step11b, step12a, step12b,
+            step10Redo, step11a, step11b, step12a, step12b, step13a, step13b,
         ]
     }
 

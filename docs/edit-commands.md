@@ -68,6 +68,8 @@ own substantive logic.
 | `PasteVoiceElements` | ⌘V (range, multi-element, cross-measure spill, tuplet-aware) | — |
 | `InsertMeasure` | menu command (structural) | — |
 | `DeleteMeasure` | menu command (structural) | — |
+| `SetRehearsalMark` | menu command (system lane) — set / rename a bar's mark | — |
+| `RemoveRehearsalMark` | menu command (system lane) — clear a bar's mark | — |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -110,7 +112,9 @@ section above).
   marking.
 - [ ] **`SetDynamic`** *(sugar)* — pp / p / mf / f / ff / etc.
 - [ ] **`SetStaffText`** *(sugar)* — arbitrary text label.
-- [ ] **`SetRehearsalMark`** *(sugar)* — A / B / C boxed labels.
+- [x] **`SetRehearsalMark`** / **`RemoveRehearsalMark`** — set /
+  rename / remove the mark on one bar. Implemented; see
+  "A. Implemented" above.
 - [ ] **`SetFermata`** *(sugar)* — toggle fermata after / over an
   element.
 
@@ -187,8 +191,9 @@ Roughly ordered by impact. A reasonable sweep:
    `SetAccidentalsInRange` / …) — pure sugar, ergonomic wins for
    the editor UX.
 5. Text-mark commands together (`SetTempo` /`SetDynamic` /
-   `SetStaffText` / `SetRehearsalMark`) — shared shape, easy to
-   batch.
+   `SetStaffText`) — shared shape, easy to batch.
+   (`SetRehearsalMark` / `RemoveRehearsalMark` have landed already —
+   see "A. Implemented" above.)
 6. Chord/note property commands (`SetArpeggio` / `SetGlissando` /
    `SetNoteHeadType`) — small, isolated.
 7. `MoveToVoice` — voice editing.

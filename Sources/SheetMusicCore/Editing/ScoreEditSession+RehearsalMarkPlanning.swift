@@ -22,7 +22,10 @@ extension ScoreEditSession {
     static func setRehearsalMarkCommand(
         at measureIndex: Int, text: String, in score: Score,
     ) -> (any EditCommand)? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // `SheetMusicFoundation`'s equivalent rather than `trimmingCharacters(in: .whitespacesAndNewlines)`:
+        // `CharacterSet` is one of the pieces `FoundationEssentials` does not carry, so the Foundation spelling
+        // does not compile for wasm at all. See that helper's doc comment.
+        let trimmed = text.trimmingWhitespaceAndNewlines()
         guard RehearsalMarkLane.mark(in: score, measureIndex: measureIndex)?.text != trimmed else { return nil }
         return SetRehearsalMark(measureIndex: measureIndex, text: trimmed)
     }

@@ -30,7 +30,7 @@ import org.junit.runner.RunWith
 class EditSessionReplayTest {
     companion object {
         /** Must track `EditReplayScript.standard(staff:).count` on the host exactly — see the assertion below. */
-        private const val EXPECTED_STEP_COUNT = 18
+        private const val EXPECTED_STEP_COUNT = 20
     }
 
     @Test
