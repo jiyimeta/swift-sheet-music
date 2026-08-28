@@ -68,6 +68,15 @@ own substantive logic.
 | `PasteVoiceElements` | ⌘V (range, multi-element, cross-measure spill, tuplet-aware) | — |
 | `InsertMeasure` | menu command (structural) | — |
 | `DeleteMeasure` | menu command (structural) | — |
+| `CreateTuplet` | ⌘+digit on a non-tuplet element | — |
+| `RemoveTuplet` | ⌘+digit on an existing tuplet member | — |
+| `AddPart` | not in the example — driven by a host app's instruments sheet | — |
+| `RemovePart` | not in the example — driven by a host app's instruments sheet | — |
+| `MovePart` | not in the example — driven by a host app's instruments sheet | — |
+| `SetKeySignature` | not in the example — driven by a host app's signature sheet | — |
+| `RemoveKeySignature` | not in the example — driven by a host app's signature sheet | — |
+| `SetTimeSignature` | not in the example — driven by a host app's signature sheet | — |
+| `RemoveTimeSignature` | not in the example — driven by a host app's signature sheet | — |
 | `SetRehearsalMark` | menu command (system lane) — set / rename a bar's mark | — |
 | `RemoveRehearsalMark` | menu command (system lane) — clear a bar's mark | — |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
@@ -87,15 +96,21 @@ section above).
 
 ### Structural
 
-- [ ] **`CreateTuplet`** — convert a range of consecutive timed
+- [x] **`CreateTuplet`** — convert a range of consecutive timed
   elements into a tuplet (Ctrl+3 = triplet, Ctrl+5 = quintuplet, …).
   Modifies `Voice.tuplets` + rebuilds element durations.
-- [ ] **`RemoveTuplet`** — drop a tuplet wrapper and restore its
-  constituents to ordinary durations.
+  Implemented; see "A. Implemented" above.
+- [x] **`RemoveTuplet`** — drop a tuplet wrapper and restore its
+  constituents to ordinary durations. Implemented; see
+  "A. Implemented" above.
 - [ ] **`MoveToVoice`** — move a chord or rest from one voice to
   another within the same measure.
 - [x] **`InsertMeasure`** / **`DeleteMeasure`** — measure-level
   structural ops. Implemented; see "A. Implemented" above.
+- [x] **`AddPart`** / **`RemovePart`** / **`MovePart`** — part-level
+  structural ops: add an instrument, drop one (re-anchoring the
+  brackets and system elements that outlive it), reorder the score.
+  Implemented; see "A. Implemented" above.
 - [ ] **`SetBarLineSubtype`** *(sugar)* — change a barline
   (regular / double / repeat / end).
 - [ ] **`SetMeasureRepeat`** — replace a measure's content with a
@@ -105,9 +120,11 @@ section above).
 
 - [ ] **`SetClef`** at a position — including mid-measure clef
   changes.
-- [ ] **`SetKeySignature`** at a position.
-- [ ] **`SetTimeSignature`** at a measure start — with downstream
-  tick-budget recompute.
+- [x] **`SetKeySignature`** / **`RemoveKeySignature`** at a position.
+  Implemented; see "A. Implemented" above.
+- [x] **`SetTimeSignature`** / **`RemoveTimeSignature`** at a measure
+  start — with downstream tick-budget recompute. Implemented; see
+  "A. Implemented" above.
 - [ ] **`SetTempo`** *(sugar)* — insert / edit / remove a tempo
   marking.
 - [ ] **`SetDynamic`** *(sugar)* — pp / p / mf / f / ff / etc.
@@ -184,9 +201,11 @@ sense.
 Roughly ordered by impact. A reasonable sweep:
 
 1. `CreateTuplet` / `RemoveTuplet` — rhythm editing core.
+   (Landed — see "A. Implemented" above.)
 2. `SetDots` — cheap, but unlocks dotted durations from the
    keyboard.
 3. `InsertMeasure` / `DeleteMeasure` — structural foundation.
+   (Landed — see "A. Implemented" above.)
 4. Range commands (`TransposeRange` / `DeleteRange` /
    `SetAccidentalsInRange` / …) — pure sugar, ergonomic wins for
    the editor UX.
