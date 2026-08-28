@@ -23,6 +23,7 @@ extension Score {
                 ),
             )
         }
+        try rejectPreMuseScore2(root: root)
         guard let scoreNode = root.first("Score") else {
             throw SheetMusicError.malformedScore(ScoreFault(
                 code: "mscx.score.missing",
@@ -143,6 +144,34 @@ extension Score {
     /// surface a "MuseScore 2" badge. A warning is logged because the
     /// decoder itself is MS3/MS4-shaped — MS2 files are parsed
     /// best-effort and the resulting `Score` may be incomplete.
+    /// MuseScore 1 keeps the score's children directly under
+    /// `<museScore>` — there is no `<Score>` element to find — so the
+    /// reader's first structural check fails and reports a missing
+    /// `<Score>`, which describes the symptom and hides the cause. Say
+    /// which generation the file is instead: these are still in the
+    /// wild (the corpus has one saved in 2015), and the answer for a
+    /// caller is to re-save it from MuseScore, not to go looking for a
+    /// damaged file.
+    ///
+    /// MuseScore 2 is deliberately not rejected here — it is
+    /// `<Score>`-shaped and `detectVersion` parses it leniently with a
+    /// warning.
+    private static func rejectPreMuseScore2(root: XMLTreeNode) throws {
+        guard let versionAttr = root.attributes["version"],
+              let major = versionAttr.split(separator: ".").first,
+              let majorInt = Int(major), majorInt <= 1
+        else { return }
+        throw SheetMusicError.malformedScore(ScoreFault(
+            code: "mscx.version.unsupported",
+            message: """
+            MuseScore \(majorInt) file (museScore version="\(versionAttr)"); \
+            this reader supports MuseScore 3 and 4 shapes, and parses \
+            MuseScore 2 leniently — re-save the file from MuseScore to open it
+            """,
+            location: "museScore",
+        ))
+    }
+
     private static func detectVersion(
         root: XMLTreeNode, scoreNode: XMLTreeNode,
     ) -> MSCXVersion {
