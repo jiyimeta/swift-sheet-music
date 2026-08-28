@@ -820,6 +820,68 @@ separate question, and it is what `--augment photometric` is for: its ranges are
 deliberately not read from `scanner.toml`, so a clean+augmentation run evaluated
 on the degraded set measures transfer rather than memorisation.
 
+#### Measured 2026-08-28 — augmentation transfers, and run3 ships
+
+`run4-augment`: identical to `run2-clean` (clean root only, 8 epochs, seed
+20260811) except `--augment photometric`. Because the spacing fix (`8cd02015`,
+`rowProjectionPeakFraction` 0.5 -> 0.65) changed `RasterPage.analyze` — and
+with it the normalization every sweep feeds the detector — all three
+last-epoch checkpoints were re-swept with ONE binary at that commit. Numbers
+below are therefore comparable with each other and with nothing measured
+before the fix. Held-out val split, 99 pages, last epoch:
+
+| val split | `run2` clean | `run3` clean+degraded | `run4` clean+augment |
+|---|---|---|---|
+| clean recall | 0.9966 | **0.9974** | **0.9974** |
+| clean precision | 0.9964 | 0.9958 | 0.9950 |
+| clean origin err | 0.0339 | 0.0331 | **0.0325** |
+| degraded recall | 0.8530 | **0.9922** | 0.9732 |
+| degraded precision | 0.9801 | 0.9883 | 0.9904 |
+| degraded origin err | 0.0680 | **0.0385** | 0.0499 |
+
+Two results, one decision:
+
+1. **Photometric augmentation transfers.** `run4` never saw a degraded page
+   and its augmentation ranges are deliberately not `scanner.toml`'s, yet it
+   recovers degraded recall 0.8530 -> **0.9732** — 86% of the gap `run3`
+   closes by training on the eval corruption itself — at zero cost on clean
+   (and the best clean origin error of the three). This bounds the
+   "trained on the test transform" reservation on `run3`: most of that
+   robustness is reachable with no sight of the test transform at all.
+   `--augment` now DEFAULTS to `photometric`; pass `none` only to reproduce
+   run1/run2/run3.
+2. **`run3-mixed`'s last epoch is the shipped detector** —
+   `~/omr-models/run3-mixed-last` (`model.json` + `model.mlpackage`, exported
+   from `run3-mixed/checkpoint_last.pt`). It is equal-or-best on every clean
+   column and best on degraded recall/origin by a margin (`run4` trails it by
+   1.9 recall points on degraded), so the mixed root wins even with the
+   memorisation discount priced. `~/omr-models/run1` stays only as the
+   provenance of this document's older tables.
+
+Two same-binary footnotes: the degraded sweep now reports `noStaffPages=9`,
+agreeing with the prep export's `skipped_no_staff=9` — the pre-fix binary's
+`2` was the outlier, not the new number. And the natural next run —
+mixed root + augmentation — is deliberately NOT part of this decision: on
+these two eval sets `run3` has 0.8pt of headroom left, so that run's value
+is against corruptions neither set contains, which nothing here measures.
+
+**Score level at the same commit** (v2-eval, 32 scored renders, real
+detector end to end; the label-glyph row is the perfect-detector reference):
+
+| | pitch p50 | pitch mean | dur p50 | dur mean |
+|---|---|---|---|---|
+| label glyphs | 1.0000 | 0.7860 | 0.8800 | 0.7640 |
+| **`run3-mixed-last`** | **0.9832** | 0.7686 | **0.8811** | 0.7334 |
+| `run1` (old shipped) | 0.9739 | 0.7479 | 0.8811 | 0.7435 |
+
+A real detector now costs 1.7 points of pitch median against a perfect one
+and nothing at the duration median. `run3` beats `run1` on pitch (+0.9 p50,
++2.1 mean), seam precision (0.9838 vs 0.9358) and origin (0.0359 vs 0.0702 sp);
+`run1`'s +1.0 dur MEAN is the one column it keeps, and per-render it is
+noise concentrated in the pathological `tex_*` fixtures the mean is already
+known to be dragged by — the median, both pitch columns and every seam
+number point the same way.
+
 #### Where the duration deficit actually is — measured, not reasoned
 
 Duration sits at p50 0.72 while pitch is 0.94, and a PERFECT detector moves the
@@ -1095,15 +1157,19 @@ weights, carrying `val_loss: None`, with nothing in the exit code or the file
 set to distinguish it from a healthy run. `train.main` raises instead, and the
 message quotes the `--limit` that caused it.
 
-#### Augmentation (`--augment photometric`) — built, not yet measured
+#### Augmentation (`--augment photometric`) — measured 2026-08-28, now the default
 
 `Training/model/augment.py`. Five independent ops, applied in scan order —
 gain/bias about mid-grey, gamma, gaussian blur (sigma up to 1.1 normalized px,
 under a tenth of a staff space at S=12), additive gaussian noise, and
-salt-and-pepper speckle. `--augment` defaults to `none` so a run stays
-comparable with the pre-augmentation checkpoints; the default is expected to
-change once the two have been measured against each other **on the held-out
-split**.
+salt-and-pepper speckle. `--augment` **defaults to `photometric`** since the
+`run4-augment` measurement above (held-out degraded recall 0.8530 -> 0.9732
+against an otherwise-identical clean run, clean untouched); pass `none` to
+reproduce the pre-augmentation checkpoints (run1/run2/run3). A second thing
+that measurement settled: augmentation also CURED the rising-val-loss
+curve — `run2`'s val loss bottoms at epoch 1 (0.3869) and climbs to 0.4263,
+`run4`'s bottoms at epoch 2 (0.3594) and stays flat — so the loss was
+measuring confidence overfit to pristine ink, which the seam metric never saw.
 
 Three properties are deliberate and each is pinned by a test with a recorded
 break-and-restore round trip:

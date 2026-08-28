@@ -73,16 +73,18 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                               "an unpinned epoch would then also double "
                               "the optimizer steps, confounding the data "
                               "change with a schedule change.")
-    parser.add_argument("--augment", type=str, default="none",
+    parser.add_argument("--augment", type=str, default="photometric",
                          choices=["none", "photometric"],
                          help="Training-tile augmentation (train split "
-                              "only). Default 'none' so a run is "
-                              "comparable with the pre-augmentation "
-                              "checkpoints; 'photometric' applies "
-                              "model.augment.PhotometricAugment. The "
-                              "default is expected to change once the two "
-                              "have been measured against each other on "
-                              "the held-out split.")
+                              "only). Default 'photometric' "
+                              "(model.augment.PhotometricAugment), decided "
+                              "by the 2026-08-28 measurement: against an "
+                              "otherwise-identical clean run it moved "
+                              "held-out DEGRADED recall 0.8530 -> 0.9732 "
+                              "on a corruption never trained on, and cost "
+                              "nothing on clean. Pass 'none' only to "
+                              "reproduce the pre-augmentation checkpoints "
+                              "(run1/run2/run3).")
     parser.add_argument("--workers", type=int, default=None,
                          help="DataLoader worker processes. Default: "
                               "cpu_count - 2, capped at 8. 0 loads in the "
