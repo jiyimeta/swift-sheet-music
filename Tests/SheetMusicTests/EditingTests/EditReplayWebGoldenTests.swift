@@ -196,7 +196,8 @@
                 self.init(op: "removeTuplet")
                 self.at = ElementPath(at)
             case .composite, .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart,
-                 .setKeySignature, .removeKeySignature, .setTimeSignature, .removeTimeSignature:
+                 .setKeySignature, .removeKeySignature, .setTimeSignature, .removeTimeSignature,
+                 .setRehearsalMark, .removeRehearsalMark:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }

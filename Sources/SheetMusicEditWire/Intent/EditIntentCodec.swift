@@ -55,10 +55,13 @@ import Wirelet
 /// 20 = removeKeySignature(RemoveKeySignatureIntentWire)
 /// 21 = setTimeSignature(SetTimeSignatureIntentWire)
 /// 22 = removeTimeSignature(RemoveTimeSignatureIntentWire)
+/// 23 = setRehearsalMark(SetRehearsalMarkIntentWire)
+/// 24 = removeRehearsalMark(RemoveRehearsalMarkIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
-/// creation and 19…22 for M3 signature changes; 0…4 predate them all and must keep their indices and byte layout.
+/// creation, 19…22 for M3 signature changes and 23…24 for M4 rehearsal marks; 0…4 predate them all and must keep
+/// their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -265,6 +268,19 @@ import Wirelet
 /// ```
 /// tag 1: measureIndex  i32, zig-zag varint
 /// ```
+///
+/// `SetRehearsalMarkIntentWire` (`setRehearsalMark`'s payload):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// tag 2: text          string — UTF-8, trimmed engine-side, never empty after trimming
+/// ```
+///
+/// `RemoveRehearsalMarkIntentWire` (`removeRehearsalMark`'s payload). Byte-identical to
+/// `RemoveTimeSignatureIntentWire` and deliberately its own struct, for the reason that one is separate from
+/// `RemoveKeySignatureIntentWire`: the removals address different things and are free to diverge.
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -405,6 +421,10 @@ public enum EditIntentWire {
     case setTimeSignature(SetTimeSignatureIntentWire)
     /// Appended for M3 signature changes — index 22.
     case removeTimeSignature(RemoveTimeSignatureIntentWire)
+    /// Appended for M4 rehearsal marks — index 23. Never renumber anything above it.
+    case setRehearsalMark(SetRehearsalMarkIntentWire)
+    /// Appended for M4 rehearsal marks — index 24.
+    case removeRehearsalMark(RemoveRehearsalMarkIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -472,6 +492,10 @@ public enum EditIntentWire {
             ))
         case let .removeTimeSignature(measureIndex):
             self = .removeTimeSignature(RemoveTimeSignatureIntentWire(measureIndex: measureIndex))
+        case let .setRehearsalMark(measureIndex, text):
+            self = .setRehearsalMark(SetRehearsalMarkIntentWire(measureIndex: measureIndex, text: text))
+        case let .removeRehearsalMark(measureIndex):
+            self = .removeRehearsalMark(RemoveRehearsalMarkIntentWire(measureIndex: measureIndex))
         }
     }
 
@@ -556,6 +580,11 @@ public enum EditIntentWire {
             )
         case let .removeTimeSignature(wire):
             return .removeTimeSignature(measureIndex: wire.decoded())
+        case let .setRehearsalMark(wire):
+            let decoded = wire.decoded()
+            return .setRehearsalMark(measureIndex: decoded.measureIndex, text: decoded.text)
+        case let .removeRehearsalMark(wire):
+            return .removeRehearsalMark(measureIndex: wire.decoded())
         }
     }
 }
@@ -1010,6 +1039,42 @@ public struct SetTimeSignatureIntentWire {
 /// declarations and are free to diverge.
 @WireFormat
 public struct RemoveTimeSignatureIntentWire {
+    public var measureIndex: Int32
+
+    public init(measureIndex: Int) {
+        self.measureIndex = Int32(measureIndex)
+    }
+
+    public func decoded() -> Int {
+        Int(measureIndex)
+    }
+}
+
+/// `setRehearsalMark`'s payload — which bar carries the mark, and what it reads.
+///
+/// `text` is the only string an edit intent has ever carried besides `PartPlanWire`'s names, and it is free-form on
+/// purpose: a mark is "A", "1サビ", "Coda" — whatever the composer wrote. The engine trims it and refuses an empty
+/// result, so no length or character rule is stated here.
+@WireFormat
+public struct SetRehearsalMarkIntentWire {
+    public var measureIndex: Int32
+    public var text: String
+
+    public init(measureIndex: Int, text: String) {
+        self.measureIndex = Int32(measureIndex)
+        self.text = text
+    }
+
+    public func decoded() -> (measureIndex: Int, text: String) {
+        (measureIndex: Int(measureIndex), text: text)
+    }
+}
+
+/// `removeRehearsalMark`'s payload. Byte-identical to `RemoveTimeSignatureIntentWire` and deliberately its own
+/// struct, for the reason that one is separate from `RemoveKeySignatureIntentWire`: the removals address different
+/// things and are free to diverge.
+@WireFormat
+public struct RemoveRehearsalMarkIntentWire {
     public var measureIndex: Int32
 
     public init(measureIndex: Int) {

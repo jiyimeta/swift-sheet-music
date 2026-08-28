@@ -158,6 +158,11 @@ struct EditIntentCodecTests {
             // measure index, so a field written into the wrong tag cannot survive the round trip looking right.
             .setTimeSignature(measureIndex: 3, numerator: 7, denominator: 8),
             .removeTimeSignature(measureIndex: 4),
+            // Appended for M4 rehearsal marks — indices 23…24. The mark's text is deliberately non-ASCII: it is
+            // the only free-form string an intent carries, and a UTF-8 regression that truncated to the character
+            // count (or dropped a continuation byte) would still round-trip an ASCII mark looking correct.
+            .setRehearsalMark(measureIndex: 3, text: "1サビ"),
+            .removeRehearsalMark(measureIndex: 4),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -209,6 +214,13 @@ struct EditIntentCodecTests {
             .setTimeSignature(measureIndex: 0, numerator: 3, denominator: 4),
         )[1] == 21)
         #expect(EditIntentCodec.encode(.removeTimeSignature(measureIndex: 0))[1] == 22)
+        // Appended for M4 rehearsal marks. `.removeRehearsalMark`'s payload is byte-identical to
+        // `.removeTimeSignature`'s in turn, so the discriminator is again the only thing standing between dropping
+        // a mark and re-barring the span after it. `setRehearsalMark` is read from a one-character mark: it is the
+        // second variable-length payload in this file, and a long mark would push the frame's length prefix past
+        // 127 and break the `bytes[1]` framing assumption this whole test rests on, exactly as `addPart` above.
+        #expect(EditIntentCodec.encode(.setRehearsalMark(measureIndex: 0, text: "A"))[1] == 23)
+        #expect(EditIntentCodec.encode(.removeRehearsalMark(measureIndex: 0))[1] == 24)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field

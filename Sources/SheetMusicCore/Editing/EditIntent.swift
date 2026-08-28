@@ -119,4 +119,18 @@ public enum EditIntent: Sendable, Equatable {
     /// before it. Refused with `.cannotRemoveInitialSignature` at measure 0; plans to nothing when no explicit
     /// time change exists there.
     case removeTimeSignature(measureIndex: Int)
+
+    /// Write `text` as the rehearsal mark at the head of `measureIndex` — replacing the mark that bar already
+    /// carries, or creating one where it carried none. The text is trimmed of surrounding whitespace before it is
+    /// written, and only the text changes: a renamed mark keeps the frame, color and offsets it was drawn with.
+    ///
+    /// Resolves to nothing to apply when that bar already carries this exact text — the same rule
+    /// `.setKeySignature` and `.movePart` apply to an edit that would restore the score to itself. Text that is
+    /// empty after trimming reaches `SetRehearsalMark.apply` and is refused there as `.emptyRehearsalMarkText`;
+    /// an out-of-range `measureIndex` is refused there as `.targetNotFound`, so one place states each rule.
+    case setRehearsalMark(measureIndex: Int, text: String)
+
+    /// Remove the rehearsal mark at `measureIndex`. Plans to nothing when that bar carries none. No measure-0
+    /// exception, unlike the signature removals: bar 1's mark is a mark like any other.
+    case removeRehearsalMark(measureIndex: Int)
 }

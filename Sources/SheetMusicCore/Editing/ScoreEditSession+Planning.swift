@@ -87,10 +87,11 @@ extension ScoreEditSession {
         case let .writeRest(location, duration):
             return writeRestCommand(at: location, duration: duration, in: score)
         case .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart,
-             .setKeySignature, .removeKeySignature:
-            // The intents that change the score's SHAPE rather than its notes — measure columns, parts, and what a
-            // bar declares. Factored into `structuralCommand` for the same reason the six note edits below are
-            // factored into `directNoteEditCommand`: to keep this switch under SwiftLint's body budget.
+             .setKeySignature, .removeKeySignature, .setRehearsalMark, .removeRehearsalMark:
+            // The intents that change the score's SHAPE rather than its notes — measure columns, parts, what a bar
+            // declares, and the rehearsal mark it carries. Factored into `structuralCommand` for the same reason the
+            // six note edits below are factored into `directNoteEditCommand`: to keep this switch under SwiftLint's
+            // body budget.
             return try structuralCommand(for: intent, in: score)
         case let .setTimeSignature(measureIndex, numerator, denominator):
             // Dispatched from this switch rather than folded into `structuralCommand` alongside the other
@@ -298,7 +299,8 @@ extension ScoreEditSession {
         )
     }
 
-    /// The seven intents that change the score's shape: the measure columns, the parts, and what a bar declares.
+    /// The nine intents that change the score's shape: the measure columns, the parts, what a bar declares, and the
+    /// rehearsal mark it carries.
     ///
     /// Reached only via `command(for:in:depth:)`'s combined case above, so — exactly like `directNoteEditCommand`
     /// — the `if case` chain below never needs to handle the intents that function keeps for itself.
@@ -327,6 +329,12 @@ extension ScoreEditSession {
         }
         if case let .removeKeySignature(measureIndex) = intent {
             return try removeKeySignatureCommand(at: measureIndex, in: score)
+        }
+        if case let .setRehearsalMark(measureIndex, text) = intent {
+            return setRehearsalMarkCommand(at: measureIndex, text: text, in: score)
+        }
+        if case let .removeRehearsalMark(measureIndex) = intent {
+            return removeRehearsalMarkCommand(at: measureIndex, in: score)
         }
         return nil
     }
