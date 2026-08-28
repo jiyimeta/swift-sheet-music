@@ -77,6 +77,7 @@ struct EditRefusalTests {
             .rebarWouldSplitTuplet(measureIndex: 2),
             .rebarWouldDisplaceBarlineMarker(measureIndex: 3),
             .invalidTimeSignatureValue(numerator: 0, denominator: 3),
+            .emptyRehearsalMarkText,
             .unexpected(description: "boom"),
         ]
     }

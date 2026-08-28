@@ -68,6 +68,11 @@ public struct EditRefusal: Sendable, Hashable {
         /// powers of two a note duration exists for. `SetTimeSignature` refuses rather than re-bar a region at a
         /// length nothing can engrave. A host's picker never produces these; a command built directly can.
         case invalidTimeSignatureValue(numerator: Int, denominator: Int)
+        /// A rehearsal mark whose text is empty (or whitespace only) is not a mark — it would engrave as a bare
+        /// frame with nothing in it. `SetRehearsalMark` refuses rather than write one. A host's sheet disables its
+        /// confirm button on an empty field, so this is what a command built directly answers, the same role
+        /// `.invalidTimeSignatureValue` plays for `SetTimeSignature`.
+        case emptyRehearsalMarkText
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -122,6 +127,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.rebarWouldDisplaceBarlineMarker"
         case .invalidTimeSignatureValue:
             "edit.invalidTimeSignatureValue"
+        case .emptyRehearsalMarkText:
+            "edit.emptyRehearsalMarkText"
         case .unexpected:
             "edit.unexpected"
         }
@@ -178,6 +185,8 @@ public struct EditRefusal: Sendable, Hashable {
             "re-barring would displace the barline marker on measure \(measureIndex)"
         case let .invalidTimeSignatureValue(numerator, denominator):
             "unwritable time signature \(numerator)/\(denominator)"
+        case .emptyRehearsalMarkText:
+            "rehearsal mark text is empty"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
