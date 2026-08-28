@@ -7,7 +7,8 @@ import SheetMusicFoundation
 /// run to splice into and no tuplet index to shift. What replaces it is this lane.
 enum RehearsalMarkLane {
     /// The rehearsal mark on `measureIndex`, or `nil` when that bar carries none — the first one, on the deliberate
-    /// premise that one bar carries one mark (see the plan's decided semantics).
+    /// premise that one bar carries one mark (see the plan's decided semantics), which `write` below enforces on
+    /// every bar it touches.
     static func mark(in score: Score, measureIndex: Int) -> RehearsalMark? {
         guard score.systemMeasures.indices.contains(measureIndex) else { return nil }
         return mark(in: score.systemMeasures, measureIndex: measureIndex)
@@ -48,6 +49,13 @@ enum RehearsalMarkLane {
     /// the reason `SetKeySignature.write` gives about a key: this states which text, not how it is drawn, so an
     /// imported mark's frame, color, offsets and font overrides survive a rename.
     ///
+    /// It then COLLAPSES the bar to that one mark, dropping any further rehearsal mark the bar carried. Only an
+    /// import can produce a multi-mark bar, but until the collapse the three operations disagreed about what the
+    /// bar's mark is: the read above returns the FIRST one, so a rename touched only that, while `removeMarks`
+    /// drops them all and the reading surface's mark bar lists every one of them. Enforcing "one bar, one mark" here
+    /// turns the premise the read and the removal both already rest on into a fact. Marks past the first are the
+    /// only thing dropped — the bar's tempo, system text and swing are not this pair's business.
+    ///
     /// The insert lands before the first element positioned later than the bar's start, because
     /// `SystemMeasure.elements` is stored in document order.
     ///
@@ -60,6 +68,9 @@ enum RehearsalMarkLane {
             guard var existing = mark(of: measure.elements[index].element) else { continue }
             existing.text = text
             measure.elements[index].element = .rehearsalMark(existing)
+            var rest = Array(measure.elements[(index + 1)...])
+            rest.removeAll { mark(of: $0.element) != nil }
+            measure.elements.replaceSubrange((index + 1)..., with: rest)
             return
         }
         let insertion = measure.elements.firstIndex { $0.position > .start } ?? measure.elements.count
@@ -81,6 +92,9 @@ enum RehearsalMarkLane {
 
 /// Writes `text` as the rehearsal mark at the head of `measureIndex` — replacing the mark that bar already carries,
 /// or creating one where it carried none.
+///
+/// One bar carries one mark afterwards, whatever it carried before: a bar an import gave several marks is collapsed
+/// to the first, renamed. See `RehearsalMarkLane.write`.
 ///
 /// ## The inverse
 ///

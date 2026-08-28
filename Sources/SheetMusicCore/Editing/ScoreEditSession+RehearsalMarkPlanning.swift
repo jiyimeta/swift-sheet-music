@@ -19,6 +19,12 @@ extension ScoreEditSession {
     ///
     /// Empty text is deliberately NOT caught here: `SetRehearsalMark.apply` states that rule, so a host gets the
     /// same `.emptyRehearsalMarkText` whether the command was reached through this intent or built directly.
+    ///
+    /// One consequence of that guard, worth stating rather than fixing: a bar an import gave several marks is
+    /// collapsed to one only by a rename that actually CHANGES the text. Re-submitting the bar's own text plans
+    /// nothing, so `RehearsalMarkLane.write` never runs and the extra mark stays. That is the guard doing its job —
+    /// a self-restoring undo entry is precisely what it exists to prevent — and the next real rename collapses the
+    /// bar anyway.
     static func setRehearsalMarkCommand(
         at measureIndex: Int, text: String, in score: Score,
     ) -> (any EditCommand)? {
