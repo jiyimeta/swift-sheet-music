@@ -158,6 +158,17 @@ public enum LayoutEngine {
         let systemsWithTies = attachTies(
             to: systemsWithSpanners, pairs: ties, metrics: metrics,
         )
+        // Chord-anchored slurs ride the tie pass's own emission: a slur
+        // pair is structurally a `TiePair` (two absolute origins plus a
+        // side) and MuseScore draws both with the same cubic, so they go
+        // through `attachArcs` — including its cross-system BEGIN / END
+        // split — instead of a second copy of it. Note origins come from
+        // `firstPass` for the same reason ties' do: attaching arcs adds
+        // spanners, never moves a notehead.
+        let slurPairs = resolveSlurs(for: firstPass, score: score)
+        let systemsWithSlurs = attachArcs(
+            to: systemsWithTies, pairs: slurPairs, metrics: metrics,
+        )
         // Glissandi are resolved last (spanners → ties → glissandi) in
         // a post-pass that mirrors ties — it can pair a glissando with
         // its target chord even across a measure/system boundary,
@@ -167,7 +178,7 @@ public enum LayoutEngine {
         // attach new spanners, not new note origins).
         let glissPairs = resolveGlissandi(for: firstPass, score: score)
         let systemsWithGliss = attachGlissandi(
-            to: systemsWithTies, pairs: glissPairs, metrics: metrics,
+            to: systemsWithSlurs, pairs: glissPairs, metrics: metrics,
         )
         // Guitar bends resolve alongside glissandi and for the same
         // reason: a bend's target is the next chord, which may live in

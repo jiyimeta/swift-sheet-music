@@ -120,15 +120,10 @@ extension LayoutEngine {
                         // origin gives the system-local midline.
                         let noteMidYLocal = (absolute.y - system.origin.y)
                             + CGFloat(n.step) * sp / 2
-                        var staffIndex = 0
-                        var bestDist = CGFloat.infinity
-                        for (i, mid) in staffMidYsLocal.enumerated() {
-                            let d = abs(mid - noteMidYLocal)
-                            if d < bestDist {
-                                bestDist = d
-                                staffIndex = i
-                            }
-                        }
+                        let staffIndex = nearestStaffIndex(
+                            toMidYLocal: noteMidYLocal,
+                            in: staffMidYsLocal,
+                        )
 
                         if let back = n.tieBack {
                             let key = TieKey(
@@ -159,7 +154,26 @@ extension LayoutEngine {
         return pairs
     }
 
-    static func attachTies( // swiftlint:disable:this function_body_length
+    /// Tie-named entry point for `attachArcs`, kept because the pipeline
+    /// and the tie tests name the pass they are exercising.
+    static func attachTies(
+        to systems: [LayoutSystem],
+        pairs: [TiePair],
+        metrics: StaffMetrics,
+    ) -> [LayoutSystem] {
+        attachArcs(to: systems, pairs: pairs, metrics: metrics)
+    }
+
+    /// Attach resolved arc pairs to their systems' `spanners` as
+    /// `.tieArc` elements, splitting a pair whose ends straddle a system
+    /// break into BEGIN / END halves.
+    ///
+    /// Shared by the tie pass and the chord-anchored slur pass
+    /// (`LayoutEngine+Slurs.swift`): a slur pair is structurally a
+    /// `TiePair` — two absolute origins plus a side — and MuseScore draws
+    /// both with the same cubic, so both want this emission verbatim
+    /// rather than a second copy of it.
+    static func attachArcs( // swiftlint:disable:this function_body_length
         to systems: [LayoutSystem],
         pairs: [TiePair],
         metrics: StaffMetrics,
@@ -278,6 +292,25 @@ extension LayoutEngine {
             }
         }
         return firstX.isFinite ? firstX : 0
+    }
+
+    /// Index of the staff whose midline sits closest to `midYLocal` (both
+    /// system-local). Extracted from `resolveTies` so the slur pass can key
+    /// its anchors by the same staff identity — the one that stays STABLE
+    /// across a system break, unlike an absolute midline Y.
+    static func nearestStaffIndex(
+        toMidYLocal midYLocal: CGFloat, in staffMidYsLocal: [CGFloat],
+    ) -> Int {
+        var best = 0
+        var bestDistance = CGFloat.infinity
+        for (index, mid) in staffMidYsLocal.enumerated() {
+            let distance = abs(mid - midYLocal)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = index
+            }
+        }
+        return best
     }
 
     static func systemIndex(

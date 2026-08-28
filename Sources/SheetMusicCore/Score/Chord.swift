@@ -34,6 +34,16 @@ public struct Chord: Sendable, Equatable {
     /// off this chord. A chord may carry several — e.g. a scoop into
     /// the note and a fall out of it. C++: `Chord::_chordLines`.
     public var chordLines: [ChordLine]
+    /// Spanners anchored on this chord/rest — the begin side of
+    /// `<Spanner>` children MuseScore nests inside `<Chord>`/`<Rest>`
+    /// (slurs foremost; `TWrite::writeProperties(const ChordRest*, …)`
+    /// writes spanner start markers there). The end side is not stored:
+    /// the encoder recomputes it from the begin offsets. v1 consumers
+    /// handle `.slur`; other kinds, if placed here programmatically,
+    /// encode through the same machinery. (Decoding does *not* fill them:
+    /// a non-slur chord-level `<Spanner>` warns and is dropped.)
+    /// C++: `Spanner` anchored `Anchor::SEGMENT`/chord-rest.
+    public var spanners: [Spanner]
     /// Base element properties shared with every engravable element.
     /// Carries `<visible>` and `<color>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
@@ -82,6 +92,7 @@ public struct Chord: Sendable, Equatable {
         articulations: [ChordArticulation] = [],
         tremolo: Tremolo? = nil,
         chordLines: [ChordLine] = [],
+        spanners: [Spanner] = [],
         visible: Bool = true,
         stemVisible: Bool = true,
         beamVisible: Bool = true,
@@ -95,6 +106,7 @@ public struct Chord: Sendable, Equatable {
         self.articulations = articulations
         self.tremolo = tremolo
         self.chordLines = chordLines
+        self.spanners = spanners
         self.stemVisible = stemVisible
         self.beamVisible = beamVisible
         elementProperties = ElementProperties(visible: visible)

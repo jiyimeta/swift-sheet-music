@@ -110,6 +110,14 @@ extension Voice {
                 options: options,
             )
         }
+        // The chord's own position within the measure, read before the
+        // cursor advances past it: both halves of the chord-anchored slur
+        // bookkeeping — the end markers landing here and the begin sides
+        // registering their targets — are measured from it.
+        let chordPosition = state.voiceTotal
+        let slurEndMarkers = state.claimSlurEndMarkers(
+            forChordRest: element, at: chordPosition,
+        )
         try state.children.append(encode(
             element: element,
             activeTuplets: state.stack,
@@ -123,11 +131,17 @@ extension Voice {
             previousChordNotes: state.previousChordNotes,
             forwardTiePartnerNotes: plan.forwardTiePartnerNotes[index],
             previousChordTrailingBendGrace: state.previousChordTrailingBendGrace,
+            slurEndMarkers: slurEndMarkers,
             options: options,
             staffGroup: staffGroup,
             voiceIndex: voiceIndex,
         ))
         if case let .chord(chord) = element {
+            // Register the end targets of the begin sides this chord/rest
+            // carries, so a later chord in this voice can claim them.
+            state.pendingSlurEnds.append(
+                contentsOf: chord.pendingSlurEnds(at: chordPosition),
+            )
             // Resolve `.measure` so `asFraction` cannot trap when
             // accumulating the voice total / previous-chord duration
             // for cross-measure tie offsets.
@@ -158,6 +172,7 @@ extension Voice {
         previousChordNotes: ChordNotes? = nil,
         forwardTiePartnerNotes: ChordNotes? = nil,
         previousChordTrailingBendGrace: Int? = nil,
+        slurEndMarkers: [XMLTreeNode] = [],
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
@@ -177,6 +192,7 @@ extension Voice {
                 previousChordNotes: previousChordNotes,
                 forwardTiePartnerNotes: forwardTiePartnerNotes,
                 previousChordTrailingBendGrace: previousChordTrailingBendGrace,
+                slurEndMarkers: slurEndMarkers,
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,

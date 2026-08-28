@@ -59,7 +59,161 @@ extension Chord {
             stemVisible: stemVisible,
         )
         chord.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        chord.spanners = decodeChordSpanners(node)
         return chord
+    }
+
+    /// `<Slur>` payload children this decoder either models or knowingly
+    /// elides. Everything else is unmodeled and reported by
+    /// `mscx.slur.propertiesDropped`.
+    ///
+    /// `placement`, `visible` and `beginText` are MODELED, not elided:
+    /// `Spanner.decode` scans the payload child for all three
+    /// (`MSCXDecoder+Spanner.swift`, `decodePlacement` / `decodeVisible` /
+    /// `decodeBeginText`) and lands them on `Spanner`. Warning on them would
+    /// report a loss that does not happen.
+    ///
+    /// The rest are the allowlist:
+    ///
+    /// - `eid` — MuseScore 4.6's regenerated internal element id. No decoder
+    ///   in this package models it anywhere, it carries no user data (4.6
+    ///   mints a fresh one on every save), and warning on it would fire on
+    ///   every element of every 4.6 score. Same reasoning, same silence, as
+    ///   `Note.eidChildName` in `MSCXDecoder+GuitarBend.swift`.
+    /// - `linkedMain` / `linked` — part-linking bookkeeping. MuseScore tags
+    ///   the master copy of a linked element `<linkedMain/>` and every linked
+    ///   copy `<linked>…</linked>` (4.2 `TWrite::writeProperties(const
+    ///   EngravingItem*, …)`, `rw/write/twrite.cpp:307` and `:314`; 3.6.2
+    ///   `Element::writeProperties`, `libmscore/element.cpp:602`). The writer
+    ///   recomputes both from the score's link structure rather than reading
+    ///   them back off the element, and they appear on *every* element of
+    ///   *every* score that has parts or a linked tablature staff — the
+    ///   vendored `slur_ms4_glissando_legato.mscx` carries one inside the
+    ///   `<Slur>` of both its begin sides, and they are the only payload
+    ///   children it has. Announcing them would bury the diagnostics that
+    ///   report real data loss.
+    private static let slurKnownChildren: Set = [
+        "placement",
+        "visible",
+        "beginText",
+        "eid",
+        "linkedMain",
+        "linked",
+    ]
+
+    /// Chord-anchored `<Spanner>` children. MuseScore writes slurs ONLY
+    /// here — begin side (payload + `<next>`) inside the start chord/rest, a
+    /// `<prev>`-only marker inside the end one. Its `ChordRest` writer walks
+    /// the spanner map and skips everything that is not a slur outright
+    /// (`if (s->generated() || !s->isSlur() || …) continue;` —
+    /// `TWrite::writeProperties(const ChordRest*, …)`,
+    /// `rw/write/twrite.cpp:1093`, the loop at `:1135`), which is why any
+    /// other type found here is announced rather than decoded.
+    ///
+    /// The `<prev>` side carries no model state — the encoder recomputes it
+    /// from the begin side's `<next>` — so only begin sides are returned.
+    ///
+    /// `XMLTreeNode.all` matches direct children only, so the note-anchored
+    /// spanners (glissando, guitar bend, tie) that live inside `<Note>` are
+    /// not seen here.
+    static func decodeChordSpanners(_ node: XMLTreeNode) -> [Spanner] {
+        var result: [Spanner] = []
+        for spannerNode in node.all("Spanner") {
+            let rawType = spannerNode.attributes["type"] ?? ""
+            guard rawType == Spanner.Kind.slur.rawValue else {
+                mscxDecoderWarn(
+                    code: "mscx.chord.spannerDropped",
+                    message: "Chord-level <Spanner type=\"\(rawType)\"> is not modeled — dropped",
+                    location: "Chord/Spanner",
+                )
+                continue
+            }
+            guard spannerNode.children.contains(where: { $0.name == "next" }) else {
+                // A `<prev>`-only element is the end marker of a pair whose
+                // begin side lives on an earlier chord: nothing to keep, and
+                // nothing lost. Neither side present is a shape MuseScore
+                // never writes — it can be neither placed nor discarded.
+                if !spannerNode.children.contains(where: { $0.name == "prev" }) {
+                    mscxDecoderWarn(
+                        code: "mscx.chord.spannerDropped",
+                        message: "Chord-level <Spanner type=\"Slur\"> missing <next>/<prev> — dropped",
+                        location: "Chord/Spanner",
+                    )
+                }
+                continue
+            }
+            warnDroppedSlurProperties(spannerNode)
+            warnDroppedSlurLocation(spannerNode)
+            if let spanner = try? Spanner.decode(spannerNode) {
+                result.append(spanner)
+            }
+        }
+        return result
+    }
+
+    /// Announce, in one diagnostic per slur, every `<Slur>` payload child
+    /// outside `slurKnownChildren` — tags sorted and deduped.
+    ///
+    /// The realistic strays are the slur's own shape and style properties
+    /// (`up` for the forced arc side, `lineType` for solid / dotted / dashed,
+    /// `SlurSegment` for a user-dragged control point) plus the generic item
+    /// properties MuseScore writes on any element (`offset`, `color`,
+    /// `autoplace`, `track`, …). None of them are modeled, so the loss is
+    /// reported rather than passed over.
+    ///
+    /// A slur with no `<Slur>` payload child at all loses nothing and is
+    /// silent.
+    private static func warnDroppedSlurProperties(_ spannerNode: XMLTreeNode) {
+        guard let slurNode = spannerNode.first("Slur") else { return }
+        let dropped = Set(slurNode.children.map(\.name))
+            .subtracting(slurKnownChildren)
+            .sorted()
+        guard !dropped.isEmpty else { return }
+        mscxDecoderWarn(
+            code: "mscx.slur.propertiesDropped",
+            message: "<Slur> children not modeled and dropped: "
+                + dropped.joined(separator: ", "),
+            location: "Chord/Spanner[Slur]",
+        )
+    }
+
+    /// `<next><location>` children `Spanner.decode` actually reads. MuseScore's
+    /// `Location` carries six fields and one writer emits them all —
+    /// `staves, voices, measures, fractions, grace, notes` (3.6.2
+    /// `Location::write`, `libmscore/location.cpp:52-63`; master
+    /// `TWrite::write(const Location*, …)`, `rw/write/twrite.cpp:2229-2243`,
+    /// which adds `timeTick`). This model holds two of them.
+    private static let slurKnownLocationChildren: Set = [
+        "measures",
+        "fractions",
+    ]
+
+    /// Announce, in one diagnostic per slur, every `<next><location>` child
+    /// the model cannot hold — tags sorted and deduped.
+    ///
+    /// The one that really occurs is `<voices>`: a slur whose two ends live in
+    /// different voices writes the voice delta there, and
+    /// `slur_ms3_exchangevoices.mscx:221-230` is exactly that. Dropping it
+    /// moves the slur's end — the encoder can only re-home the `<prev>` within
+    /// the begin side's own voice — so it is real data loss and must be said
+    /// out loud rather than passed over. `<staves>` (cross-staff slur),
+    /// `<grace>`, `<notes>` and `<timeTick>` are the same story, less common.
+    ///
+    /// This deliberately does *not* touch `Spanner.decode`: voice-level
+    /// spanners share that reader and are out of scope here.
+    private static func warnDroppedSlurLocation(_ spannerNode: XMLTreeNode) {
+        guard let location = spannerNode.first("next")?.first("location")
+        else { return }
+        let dropped = Set(location.children.map(\.name))
+            .subtracting(slurKnownLocationChildren)
+            .sorted()
+        guard !dropped.isEmpty else { return }
+        mscxDecoderWarn(
+            code: "mscx.slur.locationDropped",
+            message: "<Slur> <next><location> children not modeled and dropped: "
+                + dropped.joined(separator: ", "),
+            location: "Chord/Spanner[Slur]",
+        )
     }
 
     /// Decode the `<Lyrics>` children of a `<Chord>` node — one per

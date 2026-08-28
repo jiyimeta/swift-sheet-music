@@ -333,30 +333,31 @@ struct MSCXEncoderMS3Tests {
         #expect(!keySig.children.map(\.name).contains("concertKey"))
     }
 
-    @Test("v3 Spanner location emits <measures> before <fractions>")
-    func v3SpannerLocationOrderReversed() throws {
+    /// Both dialects, one order. MuseScore has a single `Location` writer —
+    /// `staves, voices, measures, fractions, grace, notes` — in 3.6.2
+    /// (`libmscore/location.cpp:52-63`) and master
+    /// (`rw/write/twrite.cpp:2237-2238`) alike, so this encoder no longer
+    /// branches on the target version (`Spanner.relativeLocationChildren`).
+    /// The `.v4` case used to pin `["fractions", "measures"]`, an order with
+    /// no upstream source and no fixture behind it — every vendored file
+    /// carrying `<measures>` is MS3-era and measures-first
+    /// (`testVoltaDynamic.mscx:228`, `slur_ms3_exchangevoices.mscx:205-210`).
+    @Test(
+        "Spanner location emits <measures> before <fractions>",
+        arguments: [MSCXVersion.v3, .v4],
+    )
+    func spannerLocationOrderIsMeasuresFirst(_ version: MSCXVersion) throws {
         let spanner = Spanner(
             kind: .hairpin,
             rawType: "HairPin",
             nextMeasuresOffset: 1,
             nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
         )
-        let xml = spanner.encode(options: .init(targetVersion: .v3))
+        let xml = spanner.encode(options: .init(targetVersion: version))
         let location = try #require(xml.first("next")?.first("location"))
         #expect(location.children.map(\.name) == ["measures", "fractions"])
-    }
-
-    @Test("v4 Spanner location order unchanged (fractions first)")
-    func v4SpannerLocationOrderUnchanged() throws {
-        let spanner = Spanner(
-            kind: .hairpin,
-            rawType: "HairPin",
-            nextMeasuresOffset: 1,
-            nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
-        )
-        let xml = spanner.encode(options: .init(targetVersion: .v4))
-        let location = try #require(xml.first("next")?.first("location"))
-        #expect(location.children.map(\.name) == ["fractions", "measures"])
+        #expect(location.first("measures")?.text == "1")
+        #expect(location.first("fractions")?.text == "1/4")
     }
 
     @Test("v3 Spanner skip-if-default still applies")
