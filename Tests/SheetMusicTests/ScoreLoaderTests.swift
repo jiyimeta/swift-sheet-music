@@ -1,5 +1,7 @@
 import Foundation
+import SheetMusicCore
 import SheetMusicLoader
+import SheetMusicMSCX
 import Testing
 
 /// Covers what `ScoreLoader` adds over the sniffing it inherited from `ScoreBridge` (whose own suite still exercises
@@ -60,5 +62,54 @@ struct ScoreLoaderTests {
         #expect(throws: (any Error).self) {
             try ScoreLoader.loadScore(bytes: Data("not a score".utf8))
         }
+    }
+
+    /// MuseScore 1.x, which keeps the score's children directly under
+    /// `<museScore>` with no `<Score>` wrapper at all.
+    private static let museScore1 = Data("""
+    <?xml version="1.0" encoding="UTF-8"?>
+    <museScore version="1.14">
+      <programVersion>1.2</programVersion>
+      <Division>480</Division>
+      <Staff id="1">
+        <Measure number="1"/>
+        </Staff>
+      </museScore>
+    """.utf8)
+
+    /// A file the reader cannot open should say which format it is,
+    /// not which format it isn't. MuseScore 1 files are still out there
+    /// — the corpus has one saved in 2015 — and the reader supports
+    /// MS3/MS4 shapes (MS2 is parsed leniently with a warning).
+    @Test
+    func museScore1SaysSoRatherThanBlamingTheStructure() throws {
+        let error = #expect(throws: SheetMusicError.self) {
+            try ScoreLoader.loadScore(bytes: Self.museScore1)
+        }
+        guard case let .malformedScore(fault) = try #require(error) else {
+            Issue.record("expected a malformedScore fault, got \(String(describing: error))")
+            return
+        }
+        #expect(fault.code == "mscx.version.unsupported")
+        #expect(fault.message.contains("1.14"))
+    }
+
+    /// …and the `.mscz` path must not bury it. A ZIP is either `.mscz`
+    /// or `.mxl`, so the loader tries MuseScore and falls back to MXL —
+    /// but once the container has yielded a `<museScore>` document, the
+    /// MuseScore error is the true one. Reporting the MXL attempt's
+    /// "no `<score-partwise>`" instead sends the reader looking for a
+    /// MusicXML problem in a MuseScore file.
+    @Test
+    func aMuseScoreFaultSurvivesTheMxlFallback() throws {
+        let container = try MSCZWriter.write(mscxData: Self.museScore1)
+        let error = #expect(throws: SheetMusicError.self) {
+            try ScoreLoader.loadScore(bytes: container)
+        }
+        guard case let .malformedScore(fault) = try #require(error) else {
+            Issue.record("expected a malformedScore fault, got \(String(describing: error))")
+            return
+        }
+        #expect(fault.code == "mscx.version.unsupported")
     }
 }

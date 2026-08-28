@@ -123,8 +123,13 @@
                     done += 1
                 } catch {
                     failed += 1
+                    // The relative path, not the basename: a score
+                    // library routinely holds several copies of a piece
+                    // under one name, and naming only the file sends the
+                    // reader to whichever copy they find first — which
+                    // may be one that loads perfectly.
                     FileHandle.standardError.write(Data(
-                        "SKIP \(url.lastPathComponent): \(error)\n".utf8,
+                        "SKIP \(relativeName(of: url, under: root)): \(error)\n".utf8,
                     ))
                 }
             }
