@@ -128,6 +128,10 @@ struct TremoloVoiceRenderTests {
     /// The engraved shape this exists for: a roll starting on a `ppp`
     /// partway through a measure, under a crescendo that lands on the
     /// `f` at the next downbeat. Every stroke between them has to climb.
+    ///
+    /// The wedge starts on beat 4 and is spelled the way MuseScore
+    /// writes that span — one measure on from beat 4, less the 3/4 that
+    /// takes it back to the barline.
     @Test func aRollFromPppToFClimbsAcrossItsStrokes() throws {
         let note = Note(pitch: 60, tpc: 14)
         let measure1 = Measure(voices: [Voice(elements: [
@@ -138,6 +142,7 @@ struct TremoloVoiceRenderTests {
             .spanner(Spanner(
                 kind: .hairpin, rawType: "HairPin",
                 nextMeasuresOffset: 1,
+                nextFractionsOffset: Fraction(numerator: -3, denominator: 4),
                 hairpin: .init(subtype: .crescendo),
             )),
             .chord(Chord(

@@ -25,8 +25,6 @@ struct HairpinRamp: Equatable {
 }
 
 enum HairpinRamps {
-    static let defaultDeltaVelocity = 10
-
     /// Linear interpolation. v1: non-`.normal` methods fall through
     /// to the linear branch — leaves an obvious extension point for
     /// future curve work.
@@ -59,8 +57,9 @@ enum HairpinRamps {
     /// `<HairPin>` into a concrete `HairpinRamp`. End velocity priority:
     /// (a) `<veloChange>` from the payload, (b) a `Dynamic` anchored on
     /// the hairpin's own end tick *and* pointing the way the wedge does,
-    /// (c) ±10 default. Sign comes from the subtype (cresc → +,
-    /// decresc → −) and the final velocity is clamped to `1...127`.
+    /// (c) no change — a wedge with nothing to aim at is flat. Sign comes
+    /// from the subtype (cresc → +, decresc → −) and the final velocity
+    /// is clamped to `1...127`.
     static func collect(
         voiceIndex: Int,
         staff: Staff,
@@ -104,13 +103,8 @@ enum HairpinRamps {
             measureBase += mTicks
         }
 
-        let resolved = resolveChained(pending, dynList: dynList)
-        let wedges = resolved.map(\.ramp)
-        return wedges + holds(
-            after: resolved.filter(\.endIsWritten).map(\.ramp),
-            wedges: wedges,
-            dynList: dynList,
-        )
+        let wedges = resolveChained(pending, dynList: dynList)
+        return wedges + holds(after: wedges, dynList: dynList)
     }
 
     /// Resolve the wedges in tick order, each starting from whatever the
@@ -120,8 +114,8 @@ enum HairpinRamps {
     /// "the cached end value if [the previous event] is a ramp".
     private static func resolveChained(
         _ pending: [Pending], dynList: [DynPoint],
-    ) -> [Resolved] {
-        var resolved: [Resolved] = []
+    ) -> [HairpinRamp] {
+        var resolved: [HairpinRamp] = []
         var reached: (tick: Int, velocity: Int)?
         for p in pending.sorted(by: { $0.startTick < $1.startTick }) {
             var startVelocity = p.startVelocity
@@ -130,38 +124,13 @@ enum HairpinRamps {
                     .last { $0.tick <= p.startTick }?.tick ?? Int.min
                 if reached.tick > lastMark { startVelocity = reached.velocity }
             }
-            let one = resolveRamp(
+            let ramp = resolveRamp(
                 p, startVelocity: startVelocity, dynList: dynList,
             )
-            resolved.append(one)
-            reached = one.endIsWritten
-                ? (one.ramp.endTick, one.ramp.endVelocity)
-                : reached
+            resolved.append(ramp)
+            reached = (ramp.endTick, ramp.endVelocity)
         }
         return resolved
-    }
-
-    /// A resolved wedge plus whether its end level came from the score
-    /// or from us.
-    ///
-    /// `endIsWritten` is true when the engraver said where the wedge
-    /// lands — a Dynamic anchored on its end tick, or an explicit
-    /// `<veloChange>`. It is false for the `defaultDeltaVelocity` guess,
-    /// which stands in for a target the score never states.
-    ///
-    /// The distinction governs how far that level travels. A level the
-    /// score states holds until the next mark and the next wedge starts
-    /// from it, as in MuseScore. A level we guessed stays inside its own
-    /// wedge: MS3 never propagates one (it has no default step at all —
-    /// `veloChange` defaults to 0 and `ChangeMap` flattens what it
-    /// cannot resolve), and while MS4 does hold its default step, doing
-    /// so compounds. Real charts carry a dozen `cresc.` wedges and not
-    /// one dynamic; holding a guess there ratchets the whole part up by
-    /// a step per wedge and never comes down, which is neither what the
-    /// engraver wrote nor what either MuseScore exports.
-    private struct Resolved {
-        let ramp: HairpinRamp
-        let endIsWritten: Bool
     }
 
     /// The level a wedge reaches is where the part stays until the next
@@ -175,9 +144,9 @@ enum HairpinRamps {
     /// that resolves velocity by tick — holds the level without knowing
     /// it has to.
     private static func holds(
-        after held: [HairpinRamp], wedges: [HairpinRamp], dynList: [DynPoint],
+        after wedges: [HairpinRamp], dynList: [DynPoint],
     ) -> [HairpinRamp] {
-        held.compactMap { wedge in
+        wedges.compactMap { wedge in
             let from = wedge.endTick + 1
             let nextMark = dynList.first { $0.tick >= from }?.tick ?? Int.max
             let nextWedge = wedges
@@ -264,57 +233,57 @@ enum HairpinRamps {
     /// Both restrictions are MuseScore's: MS4 reads the end level off
     /// the dynamic *snapped to the last hairpin segment*
     /// (`PlaybackContext::findNominalEndDynamicType`) and adopts it only
-    /// when `isCrescendo ? levelTo > levelFrom : levelTo < levelFrom`,
-    /// falling back to a single dynamic step otherwise. MS3 arrives at
-    /// the same place from the other side: `ChangeMap::cleanupStage3`
-    /// will happily read a distant fix, then flattens the ramp whenever
-    /// the two disagree about direction. A crescendo must never ramp
-    /// *down* — the wedge, not the next mark in the part, says which way
-    /// this passage goes.
+    /// when `isCrescendo ? levelTo > levelFrom : levelTo < levelFrom`.
+    /// MS3 arrives at the same place from the other side:
+    /// `ChangeMap::cleanupStage3` will happily read a distant fix, then
+    /// flattens the ramp whenever the two disagree about direction. A
+    /// crescendo must never ramp *down* — the wedge, not the next mark
+    /// in the part, says which way this passage goes.
+    ///
+    /// When nothing says where the wedge lands, it stays flat. That is
+    /// MS3's behavior outright (`Hairpin::veloChange` defaults to 0 and
+    /// `ChangeMap` flattens what it cannot resolve) and what MuseScore 4
+    /// exports too, since its MIDI export runs the same
+    /// `CompatMidiRender` path. MS4's *live* playback does invent a
+    /// dynamic step here, but a guessed level is one this score never
+    /// states, and it compounds: 31 of the 72 hairpin-bearing scores in
+    /// the corpus carry hairpins and not one dynamic, so a per-wedge
+    /// step ratchets a whole part upward with nothing asking for it.
     ///
     /// An unusable dynamic on the end tick still owns its own note, so
     /// the ramp stops one tick short of it, mirroring MS4's
     /// `spannerTo -= Fraction::eps()`.
     private static func resolveRamp(
         _ p: Pending, startVelocity: Int, dynList: [DynPoint],
-    ) -> Resolved {
+    ) -> HairpinRamp {
         let isCrescendo = p.payload.subtype.isCrescendo
-        func stepped(by delta: Int) -> Int {
-            max(1, min(127, startVelocity + (isCrescendo ? delta : -delta)))
-        }
         let anchored = dynList.first { $0.tick == p.endTick }
         let adoptable = anchored.map {
             isCrescendo ? $0.velocity > startVelocity : $0.velocity < startVelocity
         } ?? false
 
         let endVel: Int
-        let endIsWritten: Bool
         if let veloChange = p.payload.veloChange, veloChange != 0 {
             // MS3's own spelling of the ramp size (`Score::updateHairpin`
             // hands it straight to `ChangeMap::addRamp`); only a change of
             // 0 sends MuseScore looking for a neighbouring fix.
-            endVel = stepped(by: veloChange)
-            endIsWritten = true
+            let signed = isCrescendo ? veloChange : -veloChange
+            endVel = max(1, min(127, startVelocity + signed))
         } else if adoptable, let anchored {
             endVel = max(1, min(127, anchored.velocity))
-            endIsWritten = true
         } else {
-            endVel = stepped(by: defaultDeltaVelocity)
-            endIsWritten = false
+            endVel = startVelocity
         }
 
         let endTick = anchored != nil && !adoptable
             ? max(p.startTick + 1, p.endTick - 1)
             : p.endTick
-        return Resolved(
-            ramp: HairpinRamp(
-                startTick: p.startTick,
-                endTick: endTick,
-                startVelocity: startVelocity,
-                endVelocity: endVel,
-                method: p.payload.veloChangeMethod,
-            ),
-            endIsWritten: endIsWritten,
+        return HairpinRamp(
+            startTick: p.startTick,
+            endTick: endTick,
+            startVelocity: startVelocity,
+            endVelocity: endVel,
+            method: p.payload.veloChangeMethod,
         )
     }
 

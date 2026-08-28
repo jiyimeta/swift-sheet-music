@@ -149,7 +149,14 @@ struct HairpinRampsCollectTests {
         #expect(ramps.first?.endVelocity == 84) // 64 + 20
     }
 
-    @Test func noBracketNoVeloChangeUsesDefaultDelta() {
+    /// A wedge with nothing to aim at does nothing. MuseScore 3 defaults
+    /// `Hairpin::veloChange` to 0 and `ChangeMap::cleanupStage3` flattens
+    /// any ramp it cannot resolve to a neighbouring fix, so a crescendo
+    /// with no Dynamic in reach is silent there; MuseScore 4's MIDI
+    /// export, which runs the same `CompatMidiRender` path, agrees.
+    /// Inventing a level instead would put a number in the playback that
+    /// nobody wrote in the score.
+    @Test func noBracketNoVeloChangeDoesNotRamp() {
         let s = staff([
             makeMeasure([
                 .dynamic(mp()), .spanner(cresc()),
@@ -161,7 +168,8 @@ struct HairpinRampsCollectTests {
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
         )
-        #expect(ramps.first?.endVelocity == 64 + HairpinRamps.defaultDeltaVelocity)
+        #expect(ramps.first?.startVelocity == 64)
+        #expect(ramps.first?.endVelocity == 64)
     }
 
     @Test func decrescendoSign() {
@@ -216,7 +224,8 @@ struct HairpinRampsCollectTests {
     /// (`PlaybackContext::findNominalEndDynamicType` →
     /// `HairpinSegment::findElementToSnapAfter`), never from the next
     /// dynamic wherever it happens to be. A `ppp` four measures later
-    /// describes a different passage, not this hairpin's target.
+    /// describes a different passage, not this hairpin's target — so the
+    /// wedge is left with nothing to aim at and stays flat.
     @Test func distantDynamicDoesNotBracketTheHairpin() {
         let s = staff([
             makeMeasure([
@@ -235,15 +244,13 @@ struct HairpinRampsCollectTests {
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
         )
-        #expect(ramps.first?.endVelocity == 64 + HairpinRamps.defaultDeltaVelocity)
+        #expect(ramps.first?.endVelocity == 64)
     }
 
     /// A bracketing Dynamic that contradicts the wedge — a crescendo
-    /// ending on a *quieter* mark — is not the hairpin's target either.
-    /// MuseScore 4 keeps the default step in that case
-    /// (`useNominalLevelTo` requires `nominalLevelTo > levelFrom` for a
-    /// crescendo); MuseScore 3.6 flattens the ramp instead
-    /// (`ChangeMap::cleanupStage3`). Either way it never ramps backwards.
+    /// ending on a *quieter* mark — is not the hairpin's target either,
+    /// and MuseScore 3.6 flattens the ramp when the two disagree about
+    /// direction (`ChangeMap::cleanupStage3`). It never ramps backwards.
     @Test func endDynamicContradictingTheWedgeIsIgnored() {
         let s = staff([
             makeMeasure([
@@ -259,7 +266,7 @@ struct HairpinRampsCollectTests {
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
         )
-        #expect(ramps.first?.endVelocity == 64 + HairpinRamps.defaultDeltaVelocity)
+        #expect(ramps.first?.endVelocity == 64)
     }
 
     /// Mirror of `endDynamicContradictingTheWedgeIsIgnored` for a
@@ -279,7 +286,7 @@ struct HairpinRampsCollectTests {
             voiceIndex: 0, staff: s,
             instrument: instrument(), division: division,
         )
-        #expect(ramps.first?.endVelocity == 96 - HairpinRamps.defaultDeltaVelocity)
+        #expect(ramps.first?.endVelocity == 96)
     }
 
     /// An explicit `<veloChange>` is MuseScore 3's own way of spelling
@@ -420,14 +427,12 @@ struct HairpinRampsCollectTests {
         #expect(Array(velocities[8...]) == Array(repeating: 96, count: 4))
     }
 
-    /// …but a level nobody wrote down does not travel. A part with a
-    /// dozen `cresc.` wedges and no dynamic at all — the shape of most
-    /// hand-entered charts — would otherwise ratchet up by the default
-    /// step per wedge and never come back down, an invented number
-    /// compounding across the whole piece. MuseScore 3 has no default
-    /// step to compound (`veloChange` defaults to 0), and both MuseScore
-    /// generations export such a part at a flat level.
-    @Test func aGuessedLevelStaysInsideItsOwnWedge() throws {
+    /// …and a part that never says where its wedges land keeps one
+    /// level throughout. A dozen `cresc.` and not one dynamic is the
+    /// shape of most hand-entered charts; MuseScore 3.6.2 and MuseScore
+    /// 4 both export such a part flat, and inventing a step per wedge
+    /// would ratchet it up with nothing in the score asking for it.
+    @Test func aPartWithNoWrittenTargetsStaysLevel() throws {
         let s = staff([
             makeMeasure([
                 .dynamic(mp()), .spanner(cresc()),
@@ -452,15 +457,8 @@ struct HairpinRampsCollectTests {
         let velocities: [Int] = events.compactMap {
             if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }
         }
-        let reached = 64 + HairpinRamps.defaultDeltaVelocity
-        // Each wedge swells to the same guessed level and relaxes; the
-        // second starts from the written `mp`, not from the first's guess.
-        #expect(velocities[0] == 64)
-        #expect(velocities[4] == reached)
-        #expect(velocities[5] == 64)
-        #expect(velocities[8] == 64)
-        #expect(velocities[12] == reached)
-        #expect(velocities.max() == reached)
+        #expect(velocities.count == 16)
+        #expect(velocities.allSatisfy { $0 == 64 })
     }
 
     /// A second hairpin picks up where the first left off. MS3 spells
@@ -487,7 +485,9 @@ struct HairpinRampsCollectTests {
         #expect(wedges.count == 2)
         let reached = 64 + 20 // the first wedge's own `<veloChange>`
         #expect(wedges[1].startVelocity == reached)
-        #expect(wedges[1].endVelocity == reached + HairpinRamps.defaultDeltaVelocity)
+        // The second wedge has nothing to aim at, so it holds that level
+        // rather than falling back to the `mp`.
+        #expect(wedges[1].endVelocity == reached)
     }
 
     /// A Dynamic the wedge could not adopt still governs its own note.
