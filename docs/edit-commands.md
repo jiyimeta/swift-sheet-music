@@ -81,6 +81,9 @@ own substantive logic.
 | `SetStaffDefaultClef` | not in the example — driven by a host app's clef picker | — |
 | `SetRehearsalMark` | menu command (system lane) — set / rename a bar's mark | — |
 | `RemoveRehearsalMark` | menu command (system lane) — clear a bar's mark | — |
+| `CreateVoice` | not in the example — the drum pad, writing into a voice the bar lacks | — |
+| `SplitRest` | not in the example — the drum pad's column caret, landing inside a rest | — |
+| `SetNoteHead` | not in the example — the drum pad, writing a cross-head hi-hat | sugar |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -107,6 +110,13 @@ section above).
   "A. Implemented" above.
 - [ ] **`MoveToVoice`** — move a chord or rest from one voice to
   another within the same measure.
+- [x] **`CreateVoice`** — append a voice to one measure, filled with a
+  full-measure rest. `ReplaceVoiceElements` refuses a voice that does
+  not exist, so this is what a write into a bar's second voice goes
+  through first. Implemented; see "A. Implemented" above.
+- [x] **`SplitRest`** — split one rest into two beat-aligned runs at a
+  tick offset, so a caret that landed inside a rest has a slot to
+  write into. Implemented; see "A. Implemented" above.
 - [x] **`InsertMeasure`** / **`DeleteMeasure`** — measure-level
   structural ops. Implemented; see "A. Implemented" above.
 - [x] **`AddPart`** / **`RemovePart`** / **`MovePart`** — part-level
@@ -141,8 +151,8 @@ section above).
 
 - [ ] **`SetArpeggio`** *(sugar)* — `Chord.arpeggio`.
 - [ ] **`SetGlissando`** *(sugar)* — `Note.glissando`.
-- [ ] **`SetNoteHeadType`** *(sugar)* — `Note.headType` (cross /
-  diamond / triangle / …).
+- [x] **`SetNoteHead`** *(sugar)* — `Note.headType` (cross / diamond /
+  triangle / …). Implemented; see "A. Implemented" above.
 - [ ] **`SetDots`** *(sugar)* — augmentation dot (`.fraction(...)`);
   thin wrapper over `SetChordDuration`.
 
@@ -215,7 +225,8 @@ Roughly ordered by impact. A reasonable sweep:
    `SetStaffText`) — shared shape, easy to batch.
    (`SetRehearsalMark` / `RemoveRehearsalMark` have landed already —
    see "A. Implemented" above.)
-6. Chord/note property commands (`SetArpeggio` / `SetGlissando` /
-   `SetNoteHeadType`) — small, isolated.
+6. Chord/note property commands (`SetArpeggio` / `SetGlissando`) —
+   small, isolated. (`SetNoteHead` has landed already — see
+   "A. Implemented" above.)
 7. `MoveToVoice` — voice editing.
 8. Spanner commands once `Spanner` subtypes are confirmed.

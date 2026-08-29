@@ -9,6 +9,16 @@ and this project adheres to
 
 ### Added
 
+- `GMDrumset` publishes the General MIDI drum kit as one table — line, notehead, voice, stem and name per
+  pitch — absorbing the three private functions the MSCX encoder held them in, and `GMPercussion.drumLineMap`
+  becomes its lines-only projection.
+- `Instrument.drumset`: a score's own drum kit, decoded whole from `<Drum>` instead of for its `<line>` alone,
+  so an imported chart keeps the notehead, voice, stem, name and shortcut it was written with and re-encodes
+  to them. `Instrument.drumLineMap` is unchanged as the lines-only view, readable and writable as before.
+- `CreateVoice` / `SplitRest` / `SetNoteHead` edit commands, with `EditIntent.createVoice(staff:measureIndex:voiceIndex:)`
+  / `.splitRest(at:tickOffset:)` / `.setNoteHead(at:headType:)` and `EditIntentCodec` wire support
+  (indices 25…27) — what drum note entry needs to route a key to its own voice, write at a caret's tick, and
+  give a note a cross notehead. `.createVoice` plans to nothing when the measure already has that voice.
 - `Score.blank(_:)` + `BlankScoreTemplate`: build an empty score in code — any number of parts, each with
   its own staves, instrument names, GM program, transposition pair and optional drum kit, plus `.normal`
   bracket groups over part ranges (SATB, string quartet). `Part.init(blankPlan:id:measures:)` is the

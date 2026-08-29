@@ -47,9 +47,14 @@ enum EditReplayStep {
 ///   measure 1, shifting every element index in that bar by one; steps 12a/12b re-bar measures 1 onward and change
 ///   how many measures the score even has (three bars, then twelve, then four). They come after everything that
 ///   addresses an ELEMENT for exactly that reason: nothing past them names a slot by fixed position.
-/// - **The M4 rehearsal-mark steps (13a/13b) address a measure too**, and are the only steps that run after the
+/// - **The M4 rehearsal-mark steps (13a/13b) address a measure too**, and are among the steps that run after the
 ///   re-bar. Measure 1 is a safe target for them because 12b settles the score at four measures — one MORE than it
 ///   started with, never fewer — so the bar they name exists whatever the re-bar did to the ones around it.
+/// - **The M6 drum steps (14a-14c) address measure 3 — the last bar 12b settles on — and voice 1, which 14a
+///   itself creates.** That is what makes them index-stable after a re-bar nobody can predict the element layout
+///   of: 14a names only a measure, and 14b/14c address element 0 of a voice one step older than they are, whose
+///   sole occupant was put there by this script. No earlier step touches voice 1 anywhere, and nothing runs after
+///   them.
 ///
 /// ## Identical fingerprints are not redundant steps
 ///
@@ -76,13 +81,14 @@ enum EditReplayStep {
 /// apply-or-undo step, so "redo" needs no new convention while still exercising an undo immediately followed by
 /// the state it undid coming back.
 enum EditReplayScript {
-    /// Twenty steps over `EditingFixtures.replayFixture()` (see this type's doc comment for the index-stability
-    /// argument behind their ordering).
+    /// Twenty-three steps over `EditingFixtures.replayFixture()` (see this type's doc comment for the
+    /// index-stability argument behind their ordering).
     ///
     /// Covers every `EditIntent` case that names a slot or a bar: the SP0/SP1/SP2 note and slot intents, plus M3's
-    /// four signature intents and M4's two rehearsal-mark intents. The M1/M2 structural intents (`insertMeasure`,
-    /// `deleteMeasure`, `addPart`, `removePart`, `movePart`) are still not scripted here — they have their own
-    /// command-level tests, and adding them would renumber every measure and staff index the steps below address.
+    /// four signature intents, M4's two rehearsal-mark intents and M6's three drum note-entry intents. The M1/M2
+    /// structural intents (`insertMeasure`, `deleteMeasure`, `addPart`, `removePart`, `movePart`) are still not
+    /// scripted here — they have their own command-level tests, and adding them would renumber every measure and
+    /// staff index the steps below address.
     static func standard(staff: StaffAddress) -> [EditReplayStep] { // swiftlint:disable:this function_body_length
         func rest(_ measure: Int, _ element: Int) -> RestID {
             RestID(staff: staff, measureIndex: measure, voiceIndex: 0, elementIndex: element)
@@ -186,10 +192,36 @@ enum EditReplayScript {
         // What proves this step ran is the same thing that proves steps 3 and 4 did — see "Identical fingerprints
         // are not redundant steps" on this type.
         let step13b = EditReplayStep.intent(.removeRehearsalMark(measureIndex: 1))
+        // Step 14a: grow a second voice on the LAST measure — the drum pad's "the feet voice isn't there yet" case,
+        // and the first step in this script to address a voice other than 0. It names a measure rather than an
+        // element, so it is index-stable whatever the re-bar left behind, the same property 13a/13b rely on.
+        let step14a = EditReplayStep.intent(.createVoice(staff: staff, measureIndex: 3, voiceIndex: 1))
+        // Step 14b: split that new voice's full-measure rest at the half bar — the column caret's "landed inside a
+        // rest" case. Element 0 is the whole of a voice this script itself just created one step earlier, so its
+        // index cannot have drifted, and `.measure` resolves against the 4/4 bar to 1920 ticks.
+        let step14b = EditReplayStep.intent(.splitRest(
+            at: VoiceElementID(staff: staff, measureIndex: 3, voiceIndex: 1, elementIndex: 0), tickOffset: 960,
+        ))
+        // Step 14c: write a cross-head closed hi-hat into the first half of it, as ONE composite — the exact shape
+        // a drum key issues, and the only step in this script that encodes `setNoteHead`'s wire bytes at all. The
+        // head intent addresses a note that does not exist when the composite is PLANNED; planning builds commands
+        // from scalars without reading the score, and the composite applies them in order.
+        let step14c = EditReplayStep.intent(.composite([
+            .inputNote(
+                at: RestID(staff: staff, measureIndex: 3, voiceIndex: 1, elementIndex: 0),
+                pitch: 42, tpc: 14, duration: nil,
+            ),
+            .setNoteHead(
+                at: NoteID(
+                    staff: staff, measureIndex: 3, voiceIndex: 1, elementIndex: 0, noteIndexInChord: 0,
+                ),
+                headType: "cross",
+            ),
+        ]))
 
         return [
             step1, step2, step3, step4, step5a, step5b, step6, step7, step7b, step8a, step8b, step9, step10Undo,
-            step10Redo, step11a, step11b, step12a, step12b, step13a, step13b,
+            step10Redo, step11a, step11b, step12a, step12b, step13a, step13b, step14a, step14b, step14c,
         ]
     }
 
