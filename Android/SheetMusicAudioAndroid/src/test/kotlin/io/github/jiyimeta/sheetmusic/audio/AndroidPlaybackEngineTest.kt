@@ -220,10 +220,12 @@ class AndroidPlaybackEngineTest {
         bridge: FakeJniBridge = FakeJniBridge(),
         playerBindings: RecordingBindings = RecordingBindings(),
         fakeSynthDrivers: MutableList<FakeSynthDriver> = mutableListOf(),
+        oboeFactory: () -> OboeStream = { FakeOboeStream.create() },
     ): AndroidPlaybackEngine = newEngineForTests(
         bridge = bridge,
         playerBindings = playerBindings,
         fakeSynthDrivers = fakeSynthDrivers,
+        oboeFactory = oboeFactory,
     ).also { managedEngines += it }
 
     @Before
@@ -626,7 +628,8 @@ class AndroidPlaybackEngineTest {
                 oboe.playCount.get() > playBefore,
             )
 
-            advanceTimeBy(50 + 20)
+            // The note (50) plus the release tail the stream is held open for (800), plus slack.
+            advanceTimeBy(50 + 800 + 20)
             testScheduler.runCurrent()
 
             assertTrue(
@@ -648,7 +651,8 @@ class AndroidPlaybackEngineTest {
         val noteID = NoteID(StaffAddress(0, 0), 0, 0, 0, 0)
         engine.playPreview(noteID, durationMillis = 50)
 
-        advanceTimeBy(50 + 20)
+        // The note (50) plus the release tail the stream is held open for (800), plus slack.
+        advanceTimeBy(50 + 800 + 20)
         testScheduler.runCurrent()
 
         assertEquals(
@@ -673,7 +677,8 @@ class AndroidPlaybackEngineTest {
             engine.playPreview(noteID, durationMillis = 50)
             engine.playPreview(noteID, durationMillis = 50)
 
-            advanceTimeBy(50 + 20)
+            // The note (50) plus the release tail the stream is held open for (800), plus slack.
+            advanceTimeBy(50 + 800 + 20)
             testScheduler.runCurrent()
 
             assertEquals(
@@ -2213,10 +2218,64 @@ class AndroidPlaybackEngineTest {
         assertEquals(listOf("noteOff(0,67)"), synth.calls)
     }
 
+    // ── Preview release tail ────────────────────────────────────────────
+    //
+    // The Oboe stream is what renders a note's release, so parking it the instant the note-off is sent chops
+    // the tail into a click. `SheetMusicAudioApple` defers its own engine park for the same span and says so.
+
+    @Test
+    fun `the output stream stays open through a preview's release tail`() = runTest(testDispatcher) {
+        val oboe = NoOpOboeStream()
+        val engine = previewEngine(pitch = 60, oboe = oboe)
+        oboe.calls.clear()
+
+        engine.playPreview(anyNoteId(), durationMillis = 500L)
+        assertEquals(listOf("play"), oboe.calls)
+
+        // The note has ended, but its release has not rendered yet.
+        advanceTimeBy(501)
+        assertEquals("parked mid-release: ${oboe.calls}", listOf("play"), oboe.calls)
+
+        advanceTimeBy(800)
+        assertEquals(listOf("play", "stop"), oboe.calls)
+    }
+
+    @Test
+    fun `a preview during the release tail keeps the stream running`() = runTest(testDispatcher) {
+        val oboe = NoOpOboeStream()
+        val engine = previewEngine(pitch = 60, oboe = oboe)
+        oboe.calls.clear()
+
+        engine.playPreview(anyNoteId(), durationMillis = 500L)
+        advanceTimeBy(700) // the first note has ended; its tail is still running out
+        engine.playPreview(anyNoteId(), durationMillis = 500L)
+
+        // Where the first preview's park would have landed. The second note owns the stream now.
+        advanceTimeBy(601)
+        assertEquals("parked out from under the second note: ${oboe.calls}", listOf("play", "play"), oboe.calls)
+
+        // And it is parked once, after the SECOND note's own tail.
+        advanceTimeBy(700)
+        assertEquals(listOf("play", "play", "stop"), oboe.calls)
+    }
+
+    @Test
+    fun `millisUntilPreviewSilent covers the note and its tail`() = runTest(testDispatcher) {
+        val engine = previewEngine(pitch = 60)
+        assertEquals(0L, engine.millisUntilPreviewSilent())
+
+        engine.playPreview(anyNoteId(), durationMillis = 500L)
+
+        // Real time, not the scheduler's: its one reader is a host deciding how long to wait for real.
+        val remaining = engine.millisUntilPreviewSilent()
+        assertTrue("expected the note (500) plus its tail (800), got $remaining", remaining in 1_000L..1_300L)
+    }
+
     /** A prepared engine whose bridge resolves any note to [pitch] on staff 0. */
     private suspend fun previewEngine(
-        fakeSynthDrivers: MutableList<FakeSynthDriver>,
+        fakeSynthDrivers: MutableList<FakeSynthDriver> = mutableListOf(),
         pitch: Int,
+        oboe: NoOpOboeStream = NoOpOboeStream(),
     ): AndroidPlaybackEngine {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
@@ -2224,7 +2283,11 @@ class AndroidPlaybackEngineTest {
             renderMidiResult = minimalSmf,
             pitchAndStaffOfNoteResult = packedPitchAndStaff(pitch, staffIndex = 0),
         )
-        return tracked(bridge = bridge, fakeSynthDrivers = fakeSynthDrivers).also { it.prepare(1L) }
+        return tracked(
+            bridge = bridge,
+            fakeSynthDrivers = fakeSynthDrivers,
+            oboeFactory = { oboe },
+        ).also { it.prepare(1L) }
     }
 
     /**

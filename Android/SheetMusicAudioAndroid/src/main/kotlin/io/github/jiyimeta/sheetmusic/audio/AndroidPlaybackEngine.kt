@@ -195,6 +195,14 @@ class AndroidPlaybackEngine internal constructor(
          */
         private const val COUNT_IN_HANDOVER_POLL_MILLIS = 2L
 
+        /**
+         * How long the output stream stays open past a preview's note-off, so the note's release renders.
+         *
+         * `SheetMusicAudioApple.previewReleaseTail` is the same span for the same reason, and says so: parking
+         * the graph mid-release chops the tail into a click. By-ear tunable — move the two together.
+         */
+        private const val PREVIEW_RELEASE_TAIL_MILLIS = 800L
+
         /** Production bridge backed by [SheetMusicAudioJNI]. */
         val defaultBridge: JniBridge = object : JniBridge {
             override fun renderMidi(h: Long) = SheetMusicAudioJNI.nativeRenderMidi(h)
@@ -1083,6 +1091,8 @@ class AndroidPlaybackEngine internal constructor(
             engine.previewNoteOff(previousChannel, previousPitch)
         }
         activePreview = liveChannel to pitch
+        previewSilentAtNanos =
+            System.nanoTime() + (durationMillis + PREVIEW_RELEASE_TAIL_MILLIS) * 1_000_000L
 
         engine.previewNoteOn(liveChannel, pitch, velocity)
         val generation = previewGeneration
@@ -1094,14 +1104,43 @@ class AndroidPlaybackEngine internal constructor(
                 engine.previewNoteOff(liveChannel, pitch)
                 activePreview = null
             }
-            if (startedStreamForPreview &&
-                previewStreamHolders.decrementAndGet() == 0 &&
-                _state.value != PlaybackState.PLAYING
-            ) {
+            if (!startedStreamForPreview) return@launch
+            // Keep the output stream open for the note's release before parking it again. That stream is what
+            // RENDERS the release: stopping it the instant the note-off is sent truncates the tail into a click,
+            // which is what a single audition in an idle Reader sounded like. `SheetMusicAudioApple` defers its
+            // own engine park across the same span, for the same reason (`previewReleaseTail`).
+            //
+            // The hold is released only after that wait, so one hold covers a note AND its tail. A preview
+            // arriving during the tail therefore takes its own hold, which both keeps the stream running and
+            // hands the park obligation to the newer note — no generation check is needed here to get that.
+            delay(PREVIEW_RELEASE_TAIL_MILLIS)
+            if (previewStreamHolders.decrementAndGet() == 0 && _state.value != PlaybackState.PLAYING) {
                 oboeStream?.stop()
             }
         }
     }
+
+    /**
+     * How much longer a preview will be audible in milliseconds — its remaining ring time plus the release
+     * tail — or `0` when none is sounding.
+     *
+     * For a host that has to STOP this engine to do something else: Folino re-prepares it to adopt an edited
+     * score, and stopping it silences whatever preview the edit itself just started. Acting the instant the
+     * edit lands therefore cut the user's own audition off a frame in. The answer belongs here rather than in
+     * the caller's copy of the preview duration, because the tail is this engine's business and the caller
+     * has no way to know it.
+     */
+    fun millisUntilPreviewSilent(): Long =
+        ((previewSilentAtNanos - System.nanoTime()) / 1_000_000L).coerceAtLeast(0L)
+
+    /**
+     * `System.nanoTime()` at which the preview started by the last [playPreview] falls silent.
+     *
+     * A monotonic reading rather than a wall clock, and deliberately not the test scheduler's virtual time:
+     * its one reader is a host deciding how long to wait in real time.
+     */
+    @Volatile
+    private var previewSilentAtNanos: Long = 0L
 
     /**
      * The preview currently sounding as (channel, pitch), or `null` when none is.
