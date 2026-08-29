@@ -1064,10 +1064,36 @@ class AndroidPlaybackEngine internal constructor(
             previewStreamHolders.incrementAndGet()
             oboeStream?.play()
         }
+
+        // Supersede the preview already sounding, if any. Without this the two overlap on one voice pool and — far
+        // worse — the OLD note's end action fires on its own schedule and silences the NEW note partway through.
+        // That is audible as previews going missing when notes are entered or stepped quickly: it strikes exactly
+        // when the new preview lands on the same channel and pitch as the one it replaced (a pitch stepped up and
+        // back, the same letter twice, the same note re-selected), and not otherwise, which is why it presented as
+        // intermittent. `SheetMusicAudioApple`'s `playPreview` has carried the same two guards for a long time; this
+        // is that behaviour, not a new policy.
+        //
+        // Stopping the previous note by its own (channel, pitch) rather than Apple's CC 120 on a foreign channel is
+        // a deliberate difference in the MESSAGE, not in the behaviour. Apple's branch exists to work around
+        // AUMIDISynth swallowing a CC 120 sent immediately before a note-on on the same channel; FluidSynth needs no
+        // such workaround, and a plain note-off is both more precise — it silences exactly the note this engine
+        // started — and gentler, since it lets the release envelope run instead of chopping the voice.
+        previewGeneration += 1
+        activePreview?.let { (previousChannel, previousPitch) ->
+            engine.previewNoteOff(previousChannel, previousPitch)
+        }
+        activePreview = liveChannel to pitch
+
         engine.previewNoteOn(liveChannel, pitch, velocity)
+        val generation = previewGeneration
         previewScope.launch {
             delay(durationMillis)
-            engine.previewNoteOff(liveChannel, pitch)
+            // A newer preview has already taken this one's place and silenced it; ending it again would silence the
+            // NEWER note instead. The stream hold is still released below, because this call took one out.
+            if (generation == previewGeneration) {
+                engine.previewNoteOff(liveChannel, pitch)
+                activePreview = null
+            }
             if (startedStreamForPreview &&
                 previewStreamHolders.decrementAndGet() == 0 &&
                 _state.value != PlaybackState.PLAYING
@@ -1076,6 +1102,26 @@ class AndroidPlaybackEngine internal constructor(
             }
         }
     }
+
+    /**
+     * The preview currently sounding as (channel, pitch), or `null` when none is.
+     *
+     * Read and written from [playPreview] (the caller's thread) and from the [previewScope] coroutine that ends a
+     * preview, hence `@Volatile`. Guarding it with [previewGeneration] rather than a lock is enough: the only
+     * decision either side makes is "is this still the preview I started", and a monotonically increasing counter
+     * answers that without either party needing to see the other's write.
+     */
+    @Volatile
+    private var activePreview: Pair<Int, Int>? = null
+
+    /**
+     * Bumped by every [playPreview]; a scheduled end action fires only while it still matches.
+     *
+     * The Apple engine's `previewGeneration` exists for the identical reason and its comment states it plainly —
+     * the pending end action must not "fire late and cut this new note".
+     */
+    @Volatile
+    private var previewGeneration: Long = 0L
 
     /** Clears the current score cursor without affecting playback state. */
     fun clearCursor() { _currentCursor.value = null }

@@ -2148,6 +2148,85 @@ class AndroidPlaybackEngineTest {
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
+    // ── Preview supersede ───────────────────────────────────────────────
+    //
+    // The contract these pin is the one `SheetMusicAudioApple`'s `playPreview` states in its own comments: at most
+    // one preview sounds at a time, a new one supersedes the previous, and a superseded end action must not fire.
+    // Both engines are expected to behave this way; only the MIDI messages they use to get there are theirs.
+
+    /** Packs a pitch and staff index the way `JniBridge.pitchAndStaffOfNote` answers. */
+    private fun packedPitchAndStaff(pitch: Int, staffIndex: Int): Long =
+        (pitch.toLong() shl 32) or staffIndex.toLong()
+
+    /** Any note — the fake bridge resolves every one of them to the same pitch, which is the point. */
+    private fun anyNoteId() = NoteID(StaffAddress(0, 0), 0, 0, 0, 0)
+
+    @Test
+    fun `a second preview silences the first`() = runTest(testDispatcher) {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = previewEngine(synths, pitch = 60)
+
+        engine.playPreview(anyNoteId(), durationMillis = 500L)
+        val synth = synths.first()
+        synth.calls.clear()
+        engine.playPreview(anyNoteId(), durationMillis = 500L)
+
+        // The previous note is released before the new one starts, rather than the two piling onto one voice pool.
+        assertEquals(listOf("noteOff(0,60)", "noteOn(0,60,96)"), synth.calls)
+    }
+
+    @Test
+    fun `a superseded preview's end does not silence the note that replaced it`() = runTest(testDispatcher) {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = previewEngine(synths, pitch = 60)
+
+        engine.playPreview(anyNoteId(), durationMillis = 500L)
+        advanceTimeBy(100)
+        engine.playPreview(anyNoteId(), durationMillis = 500L)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        // Where the FIRST preview's end was scheduled. It must pass in silence: the note it would have ended is not
+        // the note now sounding. Before the generation guard this fired `noteOff(0,60)` and killed the second
+        // preview 100 ms in — heard as an edit whose preview simply went missing, but only when the new note landed
+        // on the same channel and pitch as the old one.
+        advanceTimeBy(450)
+        assertTrue("a superseded end must be silent, got ${synth.calls}", synth.calls.isEmpty())
+
+        // The surviving preview still ends on its own schedule.
+        advanceTimeBy(100)
+        assertEquals(listOf("noteOff(0,60)"), synth.calls)
+    }
+
+    @Test
+    fun `an unsuperseded preview still ends on time`() = runTest(testDispatcher) {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = previewEngine(synths, pitch = 67)
+
+        engine.playPreview(anyNoteId(), durationMillis = 500L)
+        val synth = synths.first()
+        synth.calls.clear()
+
+        advanceTimeBy(499)
+        assertTrue("it must still be ringing, got ${synth.calls}", synth.calls.isEmpty())
+        advanceTimeBy(2)
+        assertEquals(listOf("noteOff(0,67)"), synth.calls)
+    }
+
+    /** A prepared engine whose bridge resolves any note to [pitch] on staff 0. */
+    private suspend fun previewEngine(
+        fakeSynthDrivers: MutableList<FakeSynthDriver>,
+        pitch: Int,
+    ): AndroidPlaybackEngine {
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = encodeStaffParamsArray(listOf(StaffParams(0, 0, 0, false, 0L))),
+            renderMidiResult = minimalSmf,
+            pitchAndStaffOfNoteResult = packedPitchAndStaff(pitch, staffIndex = 0),
+        )
+        return tracked(bridge = bridge, fakeSynthDrivers = fakeSynthDrivers).also { it.prepare(1L) }
+    }
+
     /**
      * Creates a prepared engine with [staffCount] staves.
      * Registers the engine in [managedEngines] so [tearDown] calls
