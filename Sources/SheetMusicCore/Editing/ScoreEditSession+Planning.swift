@@ -78,7 +78,17 @@ extension ScoreEditSession {
                     reason: .compositeTooDeep(limit: maxCompositeIntentDepth),
                 ))
             }
-            let commands = try intents.compactMap { try command(for: $0, in: score, depth: depth + 1) }
+            // Each member is planned against the score AS THE MEMBERS BEFORE IT LEFT IT, not against the score the
+            // composite started from. A composite is a sequence, and every planner that reads the score — the
+            // cross-bar planners, the `.measure` promotion, the full-measure collapse — is asking about the state
+            // its own command will meet. Planning them all against the opening state answers those questions about
+            // a score that will no longer exist by the time they run: a write into a voice a previous member
+            // creates would ask "does this bar fill from beat one?" of a voice that is not there yet, and promote a
+            // quarter rest to a measure rest on the strength of it.
+            //
+            // The scratch score is a value copy and never leaves this function; a member that throws while being
+            // planned forward is left to throw again for real at apply time, where the refusal is recorded.
+            let commands = try compositeCommands(for: intents, in: score, depth: depth)
             guard let first = commands.first else { return nil }
             guard commands.count > 1 else { return first }
             return CompositeEditCommand(commands: commands, location: first.affectedLocation)
@@ -116,6 +126,31 @@ extension ScoreEditSession {
             // budget, not because they belong to a different subsystem.
             return try directNoteEditCommand(for: intent)
         }
+    }
+
+    /// A composite's members, each planned against the score AS THE MEMBERS BEFORE IT LEFT IT rather than against
+    /// the score the composite started from.
+    ///
+    /// A composite is a sequence, and every planner that reads the score — the cross-bar planners, the `.measure`
+    /// promotion, the full-measure collapse — is asking about the state its own command will meet. Planning them
+    /// all against the opening state answers those questions about a score that will no longer exist by the time
+    /// they run: a write into a voice a previous member creates would ask "does this bar fill from beat one?" of a
+    /// voice that is not there yet, and promote a quarter rest to a measure rest on the strength of it.
+    ///
+    /// The scratch score is a value copy and never leaves this function. A member that throws while being planned
+    /// forward is left to throw again for real at apply time, where the refusal is recorded and the composite rolls
+    /// back.
+    private static func compositeCommands(
+        for intents: [EditIntent], in score: Score, depth: Int,
+    ) throws -> [any EditCommand] {
+        var working = score
+        var commands: [any EditCommand] = []
+        for intent in intents {
+            guard let planned = try command(for: intent, in: working, depth: depth + 1) else { continue }
+            _ = try? planned.apply(to: &working)
+            commands.append(planned)
+        }
+        return commands
     }
 
     /// `.inputNote`: write a note into a rest slot, re-timing the slot to `duration` in the same undo step.

@@ -7,6 +7,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- A `.composite` intent's members are now planned one after another, each against the score the members before it
+  left — not all against the score the composite started from. Every planner that reads the score (the cross-bar
+  planners, the `.measure` promotion, the full-measure collapse) is asking about the state its own command will
+  meet, and a write into a voice an earlier member creates used to ask that question of a voice that was not there
+  yet.
+
 ### Added
 
 - `GMDrumset` publishes the General MIDI drum kit as one table — line, notehead, voice, stem and name per
