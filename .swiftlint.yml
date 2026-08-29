@@ -358,6 +358,23 @@ custom_rules:
     regex: '(?m)^[ \t]*(?:@[A-Za-z_]+[ \t]+)*import[ \t]+(?:(?:class|struct|enum|protocol|typealias|func|var|let)[ \t]+)?Foundation(?:XML|Networking)?\b'
     message: "Portable targets must import SheetMusicFoundation, not the Foundation umbrella — it links ICU into the WebAssembly binary (~13 MB brotli vs ~3.2 MB). See Sources/SheetMusicFoundation."
     severity: error
+  # The rule above guards the IMPORT, which is not the whole hole: a portable
+  # target can import the shim correctly and still reach a Foundation-only API
+  # through its Apple-side re-export. Such a file compiles on Apple and dies
+  # only in the wasm build, which is the slow half of the gate. `CharacterSet`
+  # is the one that actually bit — `trimmingCharacters(in:)` rode three commits
+  # before `Scripts/wasm-build-web.sh` caught it. Comments are excluded because
+  # the shim's own call sites explain, by name, what they are avoiding.
+  no_foundation_only_api:
+    name: "Foundation-Only API In Portable Target"
+    included: 'Sources/(?:SheetMusic(?:Core|XMLTools|Zip|MIDI|MSCX|MusicXML|Layout|AudioCore|EditWire|BridgeCore|WasmBridge)?|WasmSizeProbe)/'
+    regex: '\bCharacterSet\b|\.trimmingCharacters\(in:'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "CharacterSet is absent from FoundationEssentials, so this builds on Apple and fails the wasm gate. Use SheetMusicFoundation's trimmingWhitespaceAndNewlines(), or add the equivalent there."
+    severity: error
   no_prose_error_codes:
     name: "Prose In Error Code"
     included: '(?:Sources|Tests|Tools|Package\.swift)'

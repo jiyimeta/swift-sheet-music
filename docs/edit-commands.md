@@ -53,6 +53,7 @@ own substantive logic.
 
 | Command | Trigger in macOS example | Sugar? |
 | --- | --- | --- |
+| `InputNote` | note-input letter keys (writes a note into a rest) | — |
 | `SetNotePitch` | ↑ / ↓ (±1 semitone) | — |
 | `SetAccidental` | toolbar (♭♭ ♭ ♮ ♯ 𝄪 + clear) | sugar |
 | `AddNoteToChord` | Shift+letter | sugar |
@@ -77,6 +78,7 @@ own substantive logic.
 | `RemoveKeySignature` | not in the example — driven by a host app's signature sheet | — |
 | `SetTimeSignature` | not in the example — driven by a host app's signature sheet | — |
 | `RemoveTimeSignature` | not in the example — driven by a host app's signature sheet | — |
+| `SetStaffDefaultClef` | not in the example — driven by a host app's clef picker | — |
 | `SetRehearsalMark` | menu command (system lane) — set / rename a bar's mark | — |
 | `RemoveRehearsalMark` | menu command (system lane) — clear a bar's mark | — |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
