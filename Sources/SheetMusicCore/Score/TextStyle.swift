@@ -33,6 +33,9 @@ public enum TextStyleType: String, Sendable, CaseIterable {
     case footer
     case pageNumber
     case glissando
+    /// Bend-amount label ("full", "1/2", …) on a legacy MuseScore 3
+    /// `<Bend>`. C++: `mu::engraving::TextStyleType::BEND`.
+    case bend
 }
 
 /// Frame around a text element. Mirrors MuseScore's `FrameType`
@@ -172,6 +175,12 @@ extension TextStyleType {
         case .glissando:
             return TextStyleDefaults(
                 face: "Edwin", size: 8, style: [.italic],
+            )
+        // Sid::bendFontFace = "Edwin", size 8, normal
+        // (styledef.cpp:1512-1516).
+        case .bend:
+            return TextStyleDefaults(
+                face: "Edwin", size: 8, style: [],
             )
         }
     }

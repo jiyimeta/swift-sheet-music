@@ -386,6 +386,20 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 from: shift(from), to: shift(to),
                 wavy: wavy, text: text, metrics: metrics,
             )
+        case let .guitarBend(from, vertex, to, slight):
+            GuitarBendRenderer.draw(
+                context: &context,
+                from: shift(from), vertex: shift(vertex), to: shift(to),
+                slight: slight, metrics: metrics,
+            )
+        case let .legacyBend(shape):
+            // The shape carries absolute coords, so the whole thing
+            // shifts at once instead of point by point.
+            LegacyBendRenderer.draw(
+                context: &context,
+                shape: shape.translated(by: base),
+                metrics: metrics,
+            )
         case let .chordLine(shape, origin, thickness):
             ChordLineRenderer.draw(
                 context: &context,
@@ -474,8 +488,11 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 lineWidth: metrics.sp * 0.1,
             )
         case .multiMeasureRest:
-            // Drawn by MultiMeasureRestRenderer in Task 10/11. Stub for
-            // exhaustive switch; Task 11 replaces this with the real call.
+            // The CALayer path implements this
+            // (`ScoreLayerBuilder+Misc.drawMultiMeasureRest`, called
+            // from `ScoreLayerBuilder+Element`); the Canvas path does
+            // not draw multi-measure rests yet — a known dual-renderer
+            // parity gap (tracked 2026-08-27).
             break
         case let .tremoloBars(anchor, barCount):
             let shiftedAnchor: TremoloAnchor

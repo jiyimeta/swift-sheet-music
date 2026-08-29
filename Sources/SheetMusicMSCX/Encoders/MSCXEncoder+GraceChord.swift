@@ -77,10 +77,18 @@ extension GraceChord {
     /// optional so a grace can still be encoded standalone; without it
     /// the delta is `0`, which is correct exactly when both tied notes
     /// are alone in their chords.
+    /// `listIndex` is this grace's position within the parent's own
+    /// `graceNotesBefore` / `graceNotesAfter` list. Guitar bends chain from
+    /// one grace of a run to the next, so a grace has to know where in its run
+    /// it sits to name its neighbour — see `guitarBendForwardEndpoint`. Ties
+    /// never need it (the tie encoder resolves grace partners from the parent
+    /// side instead), so it defaults to `0`, the value that makes a lone grace
+    /// behave identically.
     func encode(
         parentChord: Chord? = nil,
         parentForwardTieLocation: TieLocation? = nil,
         parentBackwardTieLocation: TieLocation? = nil,
+        listIndex: Int = 0,
         options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
@@ -99,6 +107,18 @@ extension GraceChord {
                     towardsParent: graceType.isAfter,
                     awayFromParent: parentBackwardTieLocation,
                     parentChord: parentChord,
+                ),
+                guitarBendForwardEndpoint: guitarBendForwardEndpoint(
+                    for: note,
+                    parentChord: parentChord,
+                    listIndex: listIndex,
+                    awayFromParent: parentForwardTieLocation,
+                ),
+                guitarBendBackEndpoint: guitarBendBackEndpoint(
+                    for: note,
+                    parentChord: parentChord,
+                    listIndex: listIndex,
+                    awayFromParent: parentBackwardTieLocation,
                 ),
                 options: options,
             ))

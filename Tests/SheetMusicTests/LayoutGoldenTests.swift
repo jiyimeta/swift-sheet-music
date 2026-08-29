@@ -39,7 +39,7 @@
         /// Regenerate whenever the digest legitimately changes — the
         /// test prints the actual hash on mismatch.
         private static let expectedDigestSHA256 =
-            "2adaebc451d775b4d56d146250279a4ff60edfda18a24e9c31727429d57da966"
+            "e7314362fd0a2a3adbc9e3a750c79f18d0aa53469deb34e33bc18e1b5eff0d1c"
 
         @Test("write digest")
         func writeDigest() throws {

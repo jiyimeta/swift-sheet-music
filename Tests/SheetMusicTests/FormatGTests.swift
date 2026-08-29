@@ -131,11 +131,18 @@ struct FormatGTests {
         /// and exponent-form boundaries the decimal grid never hits. Random
         /// doubles have full-length expansions, so they do not land on the
         /// exact ties covered by `exactTieDivergence`.
+        ///
+        /// 50k patterns, not more: at ~0.3 ms per differential check this test
+        /// alone set the whole run's wall clock when it swept 1M (307 s
+        /// measured, with every other suite long finished). The 100M soak
+        /// below is the exhaustive sweep; this default run only has to catch
+        /// an implementation drift, which any window of the fixed-seed
+        /// sequence does equally well.
         @Test("random bit patterns match printf")
         func randomBitPatterns() {
             var generator = SplitMix64(seed: 0x5EED_1234_ABCD_0001)
             var checked = 0
-            while checked < 1_000_000 {
+            while checked < 50000 {
                 let value = Double(bitPattern: generator.next())
                 guard value.isFinite else { continue }
                 expectMatchesPrintf(value)

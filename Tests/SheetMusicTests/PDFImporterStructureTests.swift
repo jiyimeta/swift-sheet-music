@@ -5,7 +5,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFImporterStructureTests {
+    struct PDFImporterStructureTests {
         private func vertical(
             x: CGFloat, lineWidth: CGFloat = 0.5,
             yRange: ClosedRange<CGFloat> = 480 ... 520,

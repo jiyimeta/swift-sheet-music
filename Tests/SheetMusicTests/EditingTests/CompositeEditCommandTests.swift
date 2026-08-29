@@ -118,7 +118,6 @@ struct CompositeEditCommandTests {
     }
 
     @Test("apply through ScoreEditor is one undo stack entry")
-    @MainActor
     func oneUndoStep() throws {
         let editor = ScoreEditor(
             score: EditingFixtures.fourQuarterRests(),

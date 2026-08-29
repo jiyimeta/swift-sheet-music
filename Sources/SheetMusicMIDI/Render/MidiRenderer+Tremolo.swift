@@ -113,15 +113,22 @@ extension MidiRenderer {
             in: ottavaRanges,
             at: localTick + originalTickDelta,
         )
-        let segVelocity = HairpinRamps.active(
-            in: hairpinRamps,
-            at: localTick + originalTickDelta,
-        ).map {
-            HairpinRamps.interpolate(
-                ramp: $0,
-                atOriginalTick: localTick + originalTickDelta,
-            )
-        } ?? velocity
+        // Sampled per stroke rather than once for the chord: each stroke
+        // is its own attack, so a tremolo under a hairpin swells across
+        // its own strokes. C++: `CompatMidiRender::collectNote` reads
+        // `staff->velocities().val(nonUnwoundTick)` at the *NoteEvent's*
+        // onset, commented there as what "allows correct playback of
+        // tremolos even without SND enabled".
+        let strokeVelocity: (Int) -> Int = { strokeTick in
+            let originalTick = strokeTick + originalTickDelta
+            return HairpinRamps.active(
+                in: hairpinRamps, at: originalTick,
+            ).map {
+                HairpinRamps.interpolate(
+                    ramp: $0, atOriginalTick: originalTick,
+                )
+            } ?? velocity
+        }
         emitTremoloSegments(
             segments,
             chord: chord,
@@ -129,7 +136,7 @@ extension MidiRenderer {
             startTick: localTick,
             channel: channel,
             pitchShift: pitchShift,
-            velocity: segVelocity,
+            velocityAtStroke: strokeVelocity,
             events: &events,
         )
         // Advance localTick by the start-chord's own duration only.
@@ -185,12 +192,9 @@ extension MidiRenderer {
         startTick: Int,
         channel: Int,
         pitchShift: Int,
-        velocity: Int,
+        velocityAtStroke: (Int) -> Int,
         events: inout [TimedMidiEvent],
     ) {
-        let velocityByPitch = tremoloVelocities(
-            chord: chord, baseVelocity: velocity,
-        )
         // Every stroke of a two-note tremolo — including the ones
         // sounding the follower's pitches — takes its velocity from the
         // *start* chord. That is not an approximation: MuseScore builds
@@ -201,9 +205,6 @@ extension MidiRenderer {
         // C++: `CompatMidiRender::renderTremolo`, the
         //      `TremoloChordType::TremoloFirstChord` branch and the
         //      `TremoloSecondChord` `events->clear()` beside it.
-        let followerFallback = chord.notes.first.map {
-            $0.customizedVelocity(velocity)
-        } ?? velocity
         let tiedBackPitches = Set(
             chord.notes.filter { $0.tieBack != nil }.map(\.pitch),
         )
@@ -223,6 +224,13 @@ extension MidiRenderer {
         }
         var cursor = startTick
         for (segIndex, seg) in segments.enumerated() {
+            let strokeVelocity = velocityAtStroke(cursor)
+            let velocityByPitch = tremoloVelocities(
+                chord: chord, baseVelocity: strokeVelocity,
+            )
+            let followerFallback = chord.notes.first.map {
+                $0.customizedVelocity(strokeVelocity)
+            } ?? strokeVelocity
             for pitch in seg.pitches {
                 let shifted = min(127, max(0, pitch + pitchShift))
                 let suppressOn = tiedBackPitches.contains(pitch)

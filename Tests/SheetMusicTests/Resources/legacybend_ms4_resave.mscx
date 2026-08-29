@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Style>
+      <spatium>1.75</spatium>
+    </Style>
+    <metaTag name="composer">Composer / arranger</metaTag>
+    <metaTag name="workTitle">Untitled score</metaTag>
+    <Part id="1">
+      <Staff id="1">
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+        </StaffType>
+        <defaultClef>G8vb</defaultClef>
+      </Staff>
+      <trackName>Acoustic Guitar</trackName>
+      <Instrument id="guitar-steel">
+        <longName>Acoustic Guitar</longName>
+        <shortName>Guit.</shortName>
+        <trackName>Acoustic Guitar</trackName>
+        <minPitchP>40</minPitchP>
+        <maxPitchP>84</maxPitchP>
+        <minPitchA>40</minPitchA>
+        <maxPitchA>83</maxPitchA>
+        <Channel name="open">
+          <program value="25"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <TimeSig>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+          </TimeSig>
+          <Chord>
+            <durationType>half</durationType>
+            <Note>
+              <Accidental>
+                <subtype>accidentalSharp</subtype>
+              </Accidental>
+              <Bend>
+                <point pitch="0" time="0" vibrato="0"/>
+                <point pitch="100" time="15" vibrato="0"/>
+                <point pitch="100" time="60" vibrato="0"/>
+              </Bend>
+              <Spanner type="Tie">
+                <Tie/>
+                <next>
+                  <location>
+                    <fractions>1/2</fractions>
+                  </location>
+                </next>
+              </Spanner>
+              <pitch>54</pitch>
+              <tpc>20</tpc>
+            </Note>
+          </Chord>
+          <Chord>
+            <durationType>half</durationType>
+            <Note>
+              <Spanner type="Tie">
+                <prev>
+                  <location>
+                    <fractions>-1/2</fractions>
+                  </location>
+                </prev>
+              </Spanner>
+              <pitch>54</pitch>
+              <tpc>20</tpc>
+            </Note>
+          </Chord>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

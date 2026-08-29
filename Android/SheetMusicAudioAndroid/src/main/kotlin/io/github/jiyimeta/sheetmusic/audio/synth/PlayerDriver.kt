@@ -5,13 +5,12 @@ import io.github.jiyimeta.sheetmusic.audio.native.FluidSynthNative
 /**
  * Thin wrapper over fluid_player_t. Owns the player handle.
  *
- * Per Phase 9 plan: the SMF passed to [load] has each event's channel
- * field rewritten to its track index by the Swift bridge
- * (AudioMidiBridge.relabelChannelsToTrackIndex). The
- * fluid_player_set_playback_callback hook will route events to the
- * matching per-staff fluid_synth based on event.channel. Wiring the
- * playback callback is Phase 10 work — for now PlayerDriver just
- * exposes load/play/stop/seek.
+ * The SMF passed to [load] arrives with its channels already remapped on
+ * the Swift side: AudioMidiBridge.renderMidi applies the deduped
+ * LiveChannelPlan via MidiChannelRemap, so each event's channel is the
+ * live mixer-strip channel. The player is attached directly to the
+ * single fluid_synth handle at construction — there is no per-staff
+ * synth routing and no playback callback.
  *
  * Lifecycle: [load] → [play] → ([seekTick] | [stop]) → [close].
  * [close] is safe to call multiple times.

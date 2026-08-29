@@ -42,19 +42,32 @@ extension Voice {
     /// `prevChordNotes` is that chord's note list, which the `<notes>`
     /// half of a backward tie's `<location>` is measured against — see
     /// `TieEndpoint`.
+    /// `prevChordTrailingBendGrace` is that chord's
+    /// `mscxTrailingAfterGraceBendIndex` — the `<grace>` ordinal a guitar
+    /// bend's `<prev>` needs when the bend started on the previous chord's
+    /// last after-grace rather than on the chord itself.
+    /// `pendingSlurEnds` are chord-anchored spanner end markers whose begin
+    /// side was passed in an earlier measure of this same voice and whose
+    /// target measure has not been reached yet — see `MSCXPendingSlurEnd`.
     struct VoiceTieCarry {
         var prevChordDuration: Fraction?
         var prevVoiceTotal: Fraction?
         var prevChordNotes: ChordNotes?
+        var prevChordTrailingBendGrace: Int?
+        var pendingSlurEnds: [MSCXPendingSlurEnd]
 
         init(
             prevChordDuration: Fraction? = nil,
             prevVoiceTotal: Fraction? = nil,
             prevChordNotes: ChordNotes? = nil,
+            prevChordTrailingBendGrace: Int? = nil,
+            pendingSlurEnds: [MSCXPendingSlurEnd] = [],
         ) {
             self.prevChordDuration = prevChordDuration
             self.prevVoiceTotal = prevVoiceTotal
             self.prevChordNotes = prevChordNotes
+            self.prevChordTrailingBendGrace = prevChordTrailingBendGrace
+            self.pendingSlurEnds = pendingSlurEnds
         }
     }
 
@@ -82,10 +95,10 @@ extension Voice {
     /// duration (TimeSignature × actualLength). Used to resolve
     /// `.measure` rests and to drive cross-measure tie offsets when
     /// a voice contains a measure-filling rest. The 4/4 default is
-    /// a source-compatibility shim for callers that do not yet
+    /// a source-compatibility shim for callers that do not
     /// supply it; non-`.measure` voices behave identically with or
-    /// without the real value, so the default is safe until decoders
-    /// start emitting `.measure` rests.
+    /// without the real value, but callers encoding voices that
+    /// contain `.measure` rests must supply the effective duration.
     func encode(
         carryIn: VoiceTieCarry,
         isStaffHead: Bool = false,
@@ -135,6 +148,9 @@ extension Voice {
                 prevChordDuration: state.previousChordDuration,
                 prevVoiceTotal: state.voiceTotal,
                 prevChordNotes: state.previousChordNotes,
+                prevChordTrailingBendGrace: state.previousChordTrailingBendGrace,
+                pendingSlurEnds: MSCXPendingSlurEnd
+                    .carriedToNextMeasure(state.pendingSlurEnds),
             ),
         )
     }
@@ -204,6 +220,9 @@ extension Voice {
         /// measures — the partner a backward tie's `<notes>` delta is
         /// taken against.
         var previousChordNotes: ChordNotes?
+        /// The `<grace>` ordinal of that same chord's last after-grace when it
+        /// begins a guitar bend — see `VoiceTieCarry`.
+        var previousChordTrailingBendGrace: Int?
         var seenChordInVoice = false
         var voiceTotal = Fraction(numerator: 0, denominator: 1)
         /// Two-chord tremolo (`span == .between`) lives only on the
@@ -212,10 +231,39 @@ extension Voice {
         /// `<Tremolo>` block (MuseScore's serialized form repeats the
         /// `c8/c16/c32` element on both chords). Cleared on consume.
         var pendingFollowerTremolo: Tremolo?
+        /// Chord-anchored spanner end markers still looking for their chord.
+        /// Records for *this* measure carry `measuresAway == 0`; the walk
+        /// claims one when the cursor reaches its `fraction`.
+        var pendingSlurEnds: [MSCXPendingSlurEnd]
 
         init(carryIn: VoiceTieCarry) {
             previousChordDuration = carryIn.prevChordDuration
             previousChordNotes = carryIn.prevChordNotes
+            previousChordTrailingBendGrace = carryIn.prevChordTrailingBendGrace
+            pendingSlurEnds = carryIn.pendingSlurEnds
+        }
+
+        /// Take the end markers that belong on a chord/rest at `position`,
+        /// removing them from the pending list. Order among several markers
+        /// on one chord is the order their begin sides were seen, which is
+        /// start-tick order — what MuseScore's own spanner-map walk produces.
+        ///
+        /// Non-chord elements claim nothing: a `<KeySig>` or `<Dynamic>` shares
+        /// the cursor position but is not a `ChordRest` and cannot host the
+        /// marker, and claiming there would consume the record.
+        mutating func claimSlurEndMarkers(
+            forChordRest element: VoiceElement,
+            at position: Fraction,
+        ) -> [XMLTreeNode] {
+            guard case .chord = element else { return [] }
+            let claimed = pendingSlurEnds.filter {
+                $0.measuresAway == 0 && $0.fraction == position
+            }
+            guard !claimed.isEmpty else { return [] }
+            pendingSlurEnds.removeAll {
+                $0.measuresAway == 0 && $0.fraction == position
+            }
+            return claimed.map { $0.marker() }
         }
     }
 

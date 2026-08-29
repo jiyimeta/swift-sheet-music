@@ -26,7 +26,7 @@
     /// assumed the pen position. Both are load-bearing here — `digitExtent`
     /// reads `origin.x` and `renderedSize`, never `bbox` — so this file would
     /// have gone red on either.
-    @MainActor struct PDFSyntheticTupletTests {
+    struct PDFSyntheticTupletTests {
         /// The fixture draws its noteheads with the bundled Bravura, which
         /// reaches CoreText through `BravuraFont` and so needs macOS 15 while
         /// this package deploys to macOS 14. CI runs macOS 15.

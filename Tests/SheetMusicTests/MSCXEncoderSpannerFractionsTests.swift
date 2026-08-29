@@ -66,8 +66,20 @@ struct MSCXEncoderSpannerFractionsTests {
         return try Spanner.decode(#require(reparsed.first("Spanner")))
     }
 
-    @Test("Encoder emits <fractions> before <measures>")
-    func encoderEmitsFractionsBeforeMeasures() throws {
+    /// MuseScore's one `Location` writer emits
+    /// `staves, voices, measures, fractions, grace, notes` — 3.6.2
+    /// (`Location::write`, `libmscore/location.cpp:52-63`) and master
+    /// (`TWrite::write(const Location*, …)`, `rw/write/twrite.cpp:2237-2238`)
+    /// alike — and every vendored fixture carrying both children agrees
+    /// (`testVoltaDynamic.mscx:228`, `slur_ms3_exchangevoices.mscx:205-210`).
+    ///
+    /// This test used to pin the opposite order for the default (`.v4`)
+    /// dialect. That was a defect with no upstream source and no fixture
+    /// behind it; `Spanner.relativeLocationChildren` no longer branches on the
+    /// target version. `decodeFractionsAndMeasures` above still feeds the
+    /// reversed order, so the reader's tolerance stays covered.
+    @Test("Encoder emits <measures> before <fractions>")
+    func encoderEmitsMeasuresBeforeFractions() throws {
         let spanner = Spanner(
             kind: .hairpin,
             rawType: "HairPin",
@@ -79,7 +91,7 @@ struct MSCXEncoderSpannerFractionsTests {
             xml.first("next")?.first("location"),
         )
         let names = location.children.map(\.name)
-        #expect(names == ["fractions", "measures"])
+        #expect(names == ["measures", "fractions"])
         #expect(location.first("fractions")?.text == "1/4")
         #expect(location.first("measures")?.text == "1")
     }

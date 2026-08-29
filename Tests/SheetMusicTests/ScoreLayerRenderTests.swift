@@ -12,7 +12,6 @@
     struct ScoreLayerRenderTests {
         private let _installApple = TestSupport.installApple
 
-        @MainActor
         @Test("Rendered system layer contains non-white pixels where a notehead is expected")
         func renderedTreeHasInk() throws { // swiftlint:disable:this function_body_length
             guard #available(macOS 15.0, *) else { return }

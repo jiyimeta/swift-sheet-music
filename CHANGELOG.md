@@ -63,6 +63,117 @@ and this project adheres to
   `filtered(hidingStaves:)` (whose result is only displayed) in one place. The renumbering is global rather than
   per anchor staff, so brackets that share a column keep sharing one.
 
+## [2.1.0] - 2026-08-29
+
+### Added
+
+- Guitar bends. MuseScore 4 `<GuitarBend>` spanners decode into the note
+  model (with `<fret>` / `<string>`), encode back with real endpoint
+  `<location>` markers, lay out as angular or slight bend geometry, draw
+  in both the Canvas and CALayer renderers, and play: a bend chain sounds
+  as one note whose pitch-wheel curve follows the written shape, grace-note
+  bends and tied chains included.
+- Legacy MuseScore 3 bends. The older `<Bend>` element — a curve of
+  `<point>` pairs rather than a spanner — decodes into a `LegacyBend`
+  model, lays out and draws through the same renderers, plays through the
+  pitch wheel, and is written back into MuseScore 4's writer slot.
+- Slurs between chords. Chord-anchored slur spanners decode and encode
+  (with computed end markers, and hidden slurs staying hidden), and arc
+  through the tie attach pass rather than being dropped.
+- `SM_VELOCITY_DIR=… swift run render-previews` writes a note-on velocity
+  digest for every score under a directory: count, a fingerprint over
+  every `(tick, pitch, velocity)` triple, and min / mean / max. Playback
+  work had no before/after gate — a dynamics change can move every note
+  in a corpus without moving a pixel, so the PNG diff sees nothing.
+
+### Changed
+
+- Hairpins play the dynamics written along them. A wedge climbs to each
+  mark, arriving on the beat it is written on, and carries on from there:
+  every level played is either a mark the score states or an interpolation
+  between two of them. A mark that contradicts the wedge — a crescendo
+  running into a quieter mark — is not climbed to; that stretch stays
+  flat and the mark still sounds at its own tick.
+- A hairpin with nothing to aim at no longer invents a level. Previously
+  a wedge with no bracketing dynamic ramped by ±10; that number is in no
+  score, and it compounds — 31 of the 72 hairpin-bearing scores in the
+  test corpus carry hairpins and not one dynamic. MuseScore 3.6 leaves
+  such a wedge silent (`Hairpin::veloChange` defaults to 0), and both
+  MuseScore generations export it flat. Scores that relied on the old
+  behavior now need the dynamic written in.
+- The level a hairpin reaches holds until the next dynamic, and a second
+  wedge starts from it, as in both MuseScore generations. A crescendo is
+  no longer undone by its own last note.
+
+### Fixed
+
+- A hairpin's end is measured from the hairpin, not from the bar line.
+  MuseScore's `<location>` is relative to the spanner's own tick, so a
+  wedge written from beat 4 to the next downbeat carries
+  `<measures>1</measures><fractions>-7/8</fractions>`; measuring that
+  from the bar line put the end *before* the start and collapsed the ramp
+  to a single tick, which played as no crescendo at all. 27 of 667 corpus
+  scores change. `OttavaRanges` and the layout's `endAnchor` already
+  resolved it correctly — this was the third copy of the rule.
+- A tremolo under a hairpin swells across its own strokes. The velocity
+  was sampled once at the chord onset, flattening exactly the notes meant
+  to carry the swell — a drum roll under a crescendo is the case this is
+  written for.
+- A crowded hairpin no longer draws backwards. The wedge is built with
+  its apex at its start and its mouth at its end, so a span whose ends
+  cross comes out mirrored, and a crescendo reads on the page as a
+  diminuendo. Wedges now keep MuseScore's one-spatium minimum.
+- A closed `FluidSynthDriver` is inert rather than fatal on Android.
+- Opening a MuseScore 1 file says so, instead of reporting a MusicXML
+  root element that was never going to be there. MuseScore 1 keeps the
+  score's children directly under `<museScore>`, so the reader failed on
+  a missing `<Score>` and the `.mscz` path then replaced even that with
+  the MusicXML fallback's complaint. A `.mscz` whose container yielded a
+  `<museScore>` document now reports the MuseScore reader's verdict.
+- A slur starting on a rest arcs below without the parity branch, and a
+  grace-note slur drop is diagnosed rather than silent.
+- `<location>` is written measures-first in every target version. The v4
+  writer emitted fractions-first, which MuseScore reads either way but
+  no MuseScore-written file spells.
+- Dropped `<Bend>` / `<GuitarBend>` properties and unread `<location>`
+  fields on a chord-anchored slur are reported as diagnostics rather
+  than skipped silently.
+
+### Notes
+
+- `LayoutElement` gains `.guitarBend` and `.legacyBend`, and
+  `TextStyleType` gains `.bend`. Both are public non-frozen enums, so a
+  host switching over them exhaustively needs a `default` clause. No
+  public symbol was removed and no signature changed.
+- Known, unchanged in this release: `.mscz` containers written with ZIP
+  data descriptors (bit 3) cannot be opened; one corpus score is unstable
+  across a second encoder pass (a trailing `<Tempo>` `<location>` moves
+  from `1/4` to `5/8`); tremolo stroke counts are a fixed count per
+  subtype rather than MuseScore's duration ÷ stroke length.
+
+## [2.0.1] - 2026-08-26
+
+### Fixed
+
+- The Android audio writer is joined before its `AudioTrack` is released.
+  `OboeStream.close()` released the track straight after `stop()`, and `stop()`
+  only *asked* the writer to end: it spends most of its life inside
+  `AudioTrack.write(..., WRITE_BLOCKING)`, a blocking native call rather than a
+  suspension point, so `cancel()` could not reach it. Freeing the track under a
+  thread still writing to it crashed natively inside
+  `BpBinder::onLastStrongRef` — intermittently, and with a backtrace naming
+  teardown rather than whatever triggered it. The same window let the writer
+  call back into its `Producer` after `close()` returned, while
+  `AndroidPlaybackEngine.teardown` was already tearing down the synth and the
+  metronome mixer, so one missing join exposed three objects. `pause()` /
+  `flush()` now precede the cancel, since they are what actually returns a
+  parked write, and the join is bounded so a writer stuck beyond this class's
+  reach cannot hang the caller. Reached far more often by a host that
+  re-prepares playback per edit than by one that only tears down on leaving.
+- A 64th flag anchors back along the stem, so its Y gets its own bound in the
+  PDF importer.
+- The PDF importer reads 5, 7 and 9 tuplet digits, not only 3 and 6.
+
 ## [2.0.0] - 2026-08-25
 
 ### Fixed
@@ -1974,7 +2085,9 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.0...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/2.1.0...HEAD
+[2.1.0]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.1...2.1.0
+[2.0.1]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.15.0...2.0.0
 [1.13.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.13.0...1.13.1
 [1.13.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.12.0...1.13.0

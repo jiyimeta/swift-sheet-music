@@ -25,7 +25,7 @@
     /// harness) does NOT assert anything — it only prints six `[SUMMARY]`
     /// lines for a human to diff by eye each round. There is no other
     /// automated gate that would catch a broken flag; this test is it.
-    @MainActor struct PDFImporterShapeMatchingGateTests {
+    struct PDFImporterShapeMatchingGateTests {
         /// `PDFImportOptions.diagnostics` is `@Sendable`, so a captured `var`
         /// array can't be mutated from inside the closure under strict
         /// concurrency. Same reference-typed sink shape as

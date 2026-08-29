@@ -52,6 +52,13 @@
             try CorpusRender.run()
             return true
         }
+        // Corpus note-on velocity digest (SM_VELOCITY_DIR=… swift run
+        // render-previews), the BEFORE/AFTER gate for playback-dynamics
+        // work, where nothing on screen moves.
+        if VelocityReport.isRequested {
+            try VelocityReport.run()
+            return true
+        }
         return false
     }
 

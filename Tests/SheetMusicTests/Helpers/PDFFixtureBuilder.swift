@@ -6,7 +6,6 @@
     /// Builds a single-page PDF in memory. Used to stand in for
     /// real MuseScore PDFs in unit tests of the content-stream walker
     /// and downstream stages.
-    @MainActor
     enum PDFFixtureBuilder {
         struct GlyphPlacement {
             var unicodeScalar: UnicodeScalar // SMuFL PUA codepoint or ASCII

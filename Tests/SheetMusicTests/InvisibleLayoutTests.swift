@@ -1042,5 +1042,84 @@
             #expect(ledgerLines(on, inInvisible: false).isEmpty)
             #expect(ledgerLines(on, inInvisible: true).count == 1)
         }
+
+        // MARK: - Arpeggio (wiggle emission)
+
+        /// Build the smallest valid one-measure score whose single chord
+        /// carries an arpeggio with controllable visibility (Recipe C:
+        /// wiggle emission gated by `arpeggio.visible` and
+        /// `showsInvisibleElements`).
+        private func scoreWithArpeggioChord(arpeggioVisible: Bool) -> Score {
+            var arp = Arpeggio(subtype: 0)
+            arp.visible = arpeggioVisible
+            let note = Note(pitch: 60, tpc: 14)
+            var chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+            chord.arpeggio = arp
+            return scoreWithSingleChord(chord)
+        }
+
+        @Test func hiddenArpeggioDroppedWhenToggleOff() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithArpeggioChord(arpeggioVisible: false),
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 800,
+            )
+            let wiggles = doc.systems.flatMap(\.measures).flatMap(\.elements)
+                .filter { if case .arpeggioWiggle = $0 { true } else { false } }
+            let invisibleWiggles = doc.systems.flatMap(\.measures).flatMap(\.invisibleElements)
+                .filter { if case .arpeggioWiggle = $0 { true } else { false } }
+            #expect(wiggles.isEmpty)
+            #expect(invisibleWiggles.isEmpty)
+        }
+
+        @Test func hiddenArpeggioTaggedWhenToggleOn() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithArpeggioChord(arpeggioVisible: false),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            let wiggles = doc.systems.flatMap(\.measures).flatMap(\.elements)
+                .filter { if case .arpeggioWiggle = $0 { true } else { false } }
+            let invisibleWiggles = doc.systems.flatMap(\.measures).flatMap(\.invisibleElements)
+                .filter { if case .arpeggioWiggle = $0 { true } else { false } }
+            #expect(wiggles.isEmpty)
+            #expect(invisibleWiggles.count == 1)
+        }
+
+        @Test func visibleArpeggioRoutesToMainList() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithArpeggioChord(arpeggioVisible: true),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            let wiggles = doc.systems.flatMap(\.measures).flatMap(\.elements)
+                .filter { if case .arpeggioWiggle = $0 { true } else { false } }
+            let invisibleWiggles = doc.systems.flatMap(\.measures).flatMap(\.invisibleElements)
+                .filter { if case .arpeggioWiggle = $0 { true } else { false } }
+            #expect(wiggles.count == 1)
+            #expect(invisibleWiggles.isEmpty)
+        }
+
+        // MARK: - Container defaults
+
+        @Test func measureDefaultsToEmptyInvisible() {
+            let m = LayoutMeasure(
+                measureIndex: 0, origin: .zero, width: 10, elements: [],
+            )
+            #expect(m.invisibleElements.isEmpty)
+        }
+
+        @Test func systemDefaultsToEmptyInvisibleSpanners() {
+            let s = LayoutSystem(
+                origin: .zero,
+                size: CGSize(width: 10, height: 10),
+                measures: [],
+                staffOrigins: [],
+                partLabels: [],
+                spanners: [],
+                sp: 4,
+            )
+            #expect(s.invisibleSpanners.isEmpty)
+        }
     }
 #endif

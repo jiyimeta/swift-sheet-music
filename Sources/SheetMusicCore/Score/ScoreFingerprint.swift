@@ -14,7 +14,9 @@ import SheetMusicFoundation
 /// - Not covered on `Chord`: `elementProperties` (both `visible` and `color`) — display-only, and no edit command
 ///   in this package sets either half of it.
 /// - Not covered on `Note`: `elementProperties.color` — the other half, `visible`, is covered via `Note.visible`
-///   below; `color` is author-supplied paint no edit command in this package sets.
+///   below; `color` is author-supplied paint no edit command in this package sets. Also `fret` and `string` (the
+///   tablature position, a rendering of the pitch this walk already covers) and `guitarBend` / `guitarBendBack`
+///   (import-only notation, set by no edit command).
 /// - Not covered within the nested types the walk now recurses into: `Arpeggio.elementProperties`,
 ///   `Lyric.elementProperties`, and `ChordLine.elementProperties` (visibility/color on those attachments, same
 ///   reasoning as the two bullets above), plus `Lyric.properties` (text positioning/formatting) and

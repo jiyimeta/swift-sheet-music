@@ -1,7 +1,6 @@
 @testable import SheetMusicCore
 import Testing
 
-@MainActor
 @Suite("ScoreEditor")
 struct ScoreEditorTests {
     private static let restAt1 = RestID(

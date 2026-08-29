@@ -35,7 +35,7 @@ public struct Breath: Sendable, Equatable {
     public var pause: Double
 
     /// Base element properties shared with every engravable element.
-    /// Currently carries only `<visible>`; see `ElementProperties`.
+    /// Carries `<visible>` and `<color>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
 
     /// Sugar over `elementProperties.visible`.
