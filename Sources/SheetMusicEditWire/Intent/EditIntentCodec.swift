@@ -57,11 +57,14 @@ import Wirelet
 /// 22 = removeTimeSignature(RemoveTimeSignatureIntentWire)
 /// 23 = setRehearsalMark(SetRehearsalMarkIntentWire)
 /// 24 = removeRehearsalMark(RemoveRehearsalMarkIntentWire)
+/// 25 = createVoice(CreateVoiceIntentWire)
+/// 26 = splitRest(SplitRestIntentWire)
+/// 27 = setNoteHead(SetNoteHeadIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
-/// creation, 19…22 for M3 signature changes and 23…24 for M4 rehearsal marks; 0…4 predate them all and must keep
-/// their indices and byte layout.
+/// creation, 19…22 for M3 signature changes, 23…24 for M4 rehearsal marks and 25…27 for M6 drum note entry;
+/// 0…4 predate them all and must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -281,6 +284,27 @@ import Wirelet
 /// ```
 /// tag 1: measureIndex  i32, zig-zag varint
 /// ```
+///
+/// `CreateVoiceIntentWire` (`createVoice`'s payload):
+/// ```
+/// tag 1: staff         StaffAddressWire, see layout above
+/// tag 2: measureIndex  i32, zig-zag varint
+/// tag 3: voiceIndex    i32, zig-zag varint
+/// ```
+///
+/// `SplitRestIntentWire` (`splitRest`'s payload):
+/// ```
+/// tag 1: location    VoiceElementIDWire, see layout above
+/// tag 2: tickOffset  i32, zig-zag varint — ticks from the START of the rest, never 0 and never its length
+/// ```
+///
+/// `SetNoteHeadIntentWire` (`setNoteHead`'s payload):
+/// ```
+/// tag 1: location  NoteIDWire, see PathIDCodecs.swift
+/// tag 2: hasHead   u8, varint — 0 = clear the override, 1 = write `head`
+/// tag 3: head      string — UTF-8; the encoder writes "" when hasHead == 0, so a byte-for-byte parity check
+///                  between platforms should expect that empty string, not an absent tag
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -425,6 +449,12 @@ public enum EditIntentWire {
     case setRehearsalMark(SetRehearsalMarkIntentWire)
     /// Appended for M4 rehearsal marks — index 24.
     case removeRehearsalMark(RemoveRehearsalMarkIntentWire)
+    /// Appended for M6 drum note entry — index 25. Never renumber anything above it.
+    case createVoice(CreateVoiceIntentWire)
+    /// Appended for M6 drum note entry — index 26.
+    case splitRest(SplitRestIntentWire)
+    /// Appended for M6 drum note entry — index 27.
+    case setNoteHead(SetNoteHeadIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -496,6 +526,14 @@ public enum EditIntentWire {
             self = .setRehearsalMark(SetRehearsalMarkIntentWire(measureIndex: measureIndex, text: text))
         case let .removeRehearsalMark(measureIndex):
             self = .removeRehearsalMark(RemoveRehearsalMarkIntentWire(measureIndex: measureIndex))
+        case let .createVoice(staff, measureIndex, voiceIndex):
+            self = .createVoice(CreateVoiceIntentWire(
+                staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex,
+            ))
+        case let .splitRest(location, tickOffset):
+            self = .splitRest(SplitRestIntentWire(location: location, tickOffset: tickOffset))
+        case let .setNoteHead(location, headType):
+            self = .setNoteHead(SetNoteHeadIntentWire(location: location, headType: headType))
         }
     }
 
@@ -585,6 +623,17 @@ public enum EditIntentWire {
             return .setRehearsalMark(measureIndex: decoded.measureIndex, text: decoded.text)
         case let .removeRehearsalMark(wire):
             return .removeRehearsalMark(measureIndex: wire.decoded())
+        case let .createVoice(wire):
+            let decoded = wire.decoded()
+            return .createVoice(
+                staff: decoded.staff, measureIndex: decoded.measureIndex, voiceIndex: decoded.voiceIndex,
+            )
+        case let .splitRest(wire):
+            let decoded = wire.decoded()
+            return .splitRest(at: decoded.location, tickOffset: decoded.tickOffset)
+        case let .setNoteHead(wire):
+            let decoded = wire.decoded()
+            return .setNoteHead(at: decoded.location, headType: decoded.headType)
         }
     }
 }
@@ -1083,5 +1132,61 @@ public struct RemoveRehearsalMarkIntentWire {
 
     public func decoded() -> Int {
         Int(measureIndex)
+    }
+}
+
+/// `createVoice`'s payload — which measure of which staff grows a voice, and which index it takes.
+@WireFormat
+public struct CreateVoiceIntentWire {
+    public var staff: StaffAddressWire
+    public var measureIndex: Int32
+    public var voiceIndex: Int32
+
+    public init(staff: StaffAddress, measureIndex: Int, voiceIndex: Int) {
+        self.staff = StaffAddressWire(from: staff)
+        self.measureIndex = Int32(measureIndex)
+        self.voiceIndex = Int32(voiceIndex)
+    }
+
+    public func decoded() -> (staff: StaffAddress, measureIndex: Int, voiceIndex: Int) {
+        (staff: staff.decoded(), measureIndex: Int(measureIndex), voiceIndex: Int(voiceIndex))
+    }
+}
+
+/// `splitRest`'s payload — the rest, and how far into it the new slot boundary falls.
+@WireFormat
+public struct SplitRestIntentWire {
+    public var location: VoiceElementIDWire
+    public var tickOffset: Int32
+
+    public init(location: VoiceElementID, tickOffset: Int) {
+        self.location = VoiceElementIDWire(from: location)
+        self.tickOffset = Int32(tickOffset)
+    }
+
+    public func decoded() -> (location: VoiceElementID, tickOffset: Int) {
+        (location: location.decoded(), tickOffset: Int(tickOffset))
+    }
+}
+
+/// `setNoteHead`'s payload — the note, and the notehead override to write onto it.
+///
+/// The head is spelled as a presence flag plus a string rather than as an `Optional<String>` for the reason
+/// `InputNoteIntentWire` spells its optional duration that way: the macro emits `unknownTag` for any missing
+/// non-optional field, and "clear the override" has to be distinguishable from "write an empty head".
+@WireFormat
+public struct SetNoteHeadIntentWire {
+    public var location: NoteIDWire
+    public var hasHead: UInt8
+    public var head: String
+
+    public init(location: NoteID, headType: String?) {
+        self.location = NoteIDWire(from: location)
+        hasHead = headType == nil ? 0 : 1
+        head = headType ?? ""
+    }
+
+    public func decoded() -> (location: NoteID, headType: String?) {
+        (location: location.decoded(), headType: hasHead == 0 ? nil : head)
     }
 }

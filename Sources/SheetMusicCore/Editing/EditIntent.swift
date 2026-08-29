@@ -133,4 +133,28 @@ public enum EditIntent: Sendable, Equatable {
     /// Remove the rehearsal mark at `measureIndex`. Plans to nothing when that bar carries none. No measure-0
     /// exception, unlike the signature removals: bar 1's mark is a mark like any other.
     case removeRehearsalMark(measureIndex: Int)
+
+    /// Append a voice, filled with one full-measure rest, to `measureIndex` of `staff`.
+    ///
+    /// Plans to nothing when the measure already has that voice — the same rule `.setKeySignature` and
+    /// `.movePart` apply to an edit that would restore the score to itself, and the one that lets a drum key
+    /// compose `[createVoice, write]` unconditionally: a composite is all-or-nothing, so a refusal here would
+    /// take the write with it. A voice index that would leave a hole below it is refused as `.targetNotFound` by
+    /// `CreateVoice.apply`, so one place states the range.
+    case createVoice(staff: StaffAddress, measureIndex: Int, voiceIndex: Int)
+
+    /// Split the rest at `at` so a slot boundary falls `tickOffset` ticks into it, both halves spelled
+    /// beat-aligned. What a column caret landing INSIDE a rest needs before anything can be written there, since
+    /// every write command in this package targets a slot rather than a tick.
+    ///
+    /// An offset of zero, or one at or past the rest's own length, is refused as `.insufficientRoom` by
+    /// `SplitRest.apply`; a slot holding a chord is refused as `.wrongElementKind`.
+    case splitRest(at: VoiceElementID, tickOffset: Int)
+
+    /// Write `headType` as one note's notehead override, or clear it with `nil`.
+    ///
+    /// Composed after `.inputNote` / `.addNoteToChord` — as one `.composite`, so it is one undo step — this is
+    /// how a drum key writes a cross-head hi-hat: those two intents carry pitch and spelling only, and widening
+    /// their wire payload would move byte layouts that are already committed.
+    case setNoteHead(at: NoteID, headType: String?)
 }

@@ -163,6 +163,15 @@ struct EditIntentCodecTests {
             // count (or dropped a continuation byte) would still round-trip an ASCII mark looking correct.
             .setRehearsalMark(measureIndex: 3, text: "1サビ"),
             .removeRehearsalMark(measureIndex: 4),
+            // Appended for M6 drum note entry — indices 25…27. The three field values of `.createVoice` are
+            // distinct so a field written into the wrong tag cannot survive looking right, the same reason
+            // `.setTimeSignature`'s are. `.setNoteHead` is here twice: the present flag is the only thing telling
+            // "write this head" from "clear the override", and a regression that dropped it would still round-trip
+            // the non-nil case correctly.
+            .createVoice(staff: staff, measureIndex: 7, voiceIndex: 1),
+            .splitRest(at: slot, tickOffset: 240),
+            .setNoteHead(at: note, headType: "cross"),
+            .setNoteHead(at: note, headType: nil),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -221,6 +230,21 @@ struct EditIntentCodecTests {
         // 127 and break the `bytes[1]` framing assumption this whole test rests on, exactly as `addPart` above.
         #expect(EditIntentCodec.encode(.setRehearsalMark(measureIndex: 0, text: "A"))[1] == 23)
         #expect(EditIntentCodec.encode(.removeRehearsalMark(measureIndex: 0))[1] == 24)
+        // Appended for M6 drum note entry. `.setNoteHead` is read with its head cleared, which keeps its payload
+        // short for the same `bytes[1]` framing reason `setRehearsalMark` above uses a one-character mark — a long
+        // head name would push the frame's length prefix past 127.
+        #expect(EditIntentCodec.encode(
+            .createVoice(staff: staff, measureIndex: 0, voiceIndex: 1),
+        )[1] == 25)
+        #expect(EditIntentCodec.encode(.splitRest(at: slot, tickOffset: 240))[1] == 26)
+        #expect(EditIntentCodec.encode(
+            .setNoteHead(
+                at: NoteID(
+                    staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 0, noteIndexInChord: 0,
+                ),
+                headType: nil,
+            ),
+        )[1] == 27)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field

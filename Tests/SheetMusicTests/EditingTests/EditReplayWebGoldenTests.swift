@@ -197,7 +197,8 @@
                 self.at = ElementPath(at)
             case .composite, .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart,
                  .setKeySignature, .removeKeySignature, .setTimeSignature, .removeTimeSignature,
-                 .setRehearsalMark, .removeRehearsalMark:
+                 .setRehearsalMark, .removeRehearsalMark,
+                 .createVoice, .splitRest, .setNoteHead:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }
