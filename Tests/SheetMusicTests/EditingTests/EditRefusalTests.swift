@@ -78,6 +78,7 @@ struct EditRefusalTests {
             .rebarWouldDisplaceBarlineMarker(measureIndex: 3),
             .invalidTimeSignatureValue(numerator: 0, denominator: 3),
             .emptyRehearsalMarkText,
+            .voiceAlreadyExists(staff: staff, measureIndex: 0, voiceIndex: 1),
             .unexpected(description: "boom"),
         ]
     }

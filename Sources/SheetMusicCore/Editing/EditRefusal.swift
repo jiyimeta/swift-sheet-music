@@ -73,6 +73,10 @@ public struct EditRefusal: Sendable, Hashable {
         /// confirm button on an empty field, so this is what a command built directly answers, the same role
         /// `.invalidTimeSignatureValue` plays for `SetTimeSignature`.
         case emptyRehearsalMarkText
+        /// `CreateVoice` was asked for a voice the measure already has. Distinct from `.targetNotFound` for the
+        /// reason `.cannotRemoveLastPart` is: the voice IS there, and a host saying otherwise would be telling
+        /// the user something untrue — the caller should be writing into it rather than creating it.
+        case voiceAlreadyExists(staff: StaffAddress, measureIndex: Int, voiceIndex: Int)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -129,6 +133,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.invalidTimeSignatureValue"
         case .emptyRehearsalMarkText:
             "edit.emptyRehearsalMarkText"
+        case .voiceAlreadyExists:
+            "edit.voiceAlreadyExists"
         case .unexpected:
             "edit.unexpected"
         }
@@ -187,6 +193,8 @@ public struct EditRefusal: Sendable, Hashable {
             "unwritable time signature \(numerator)/\(denominator)"
         case .emptyRehearsalMarkText:
             "rehearsal mark text is empty"
+        case let .voiceAlreadyExists(staff, measureIndex, voiceIndex):
+            "measure \(measureIndex) of \(staff) already has voice \(voiceIndex)"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
