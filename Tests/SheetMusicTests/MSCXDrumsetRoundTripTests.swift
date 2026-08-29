@@ -70,4 +70,52 @@ struct MSCXDrumsetRoundTripTests {
 
         #expect(instrument.drumset.isEmpty)
     }
+
+    @Test("a MuseScore drumset re-encodes to the bytes it was decoded from")
+    func reEncodesFaithfully() throws {
+        let node = try XMLTreeParser.parse(Data(Self.museScoreDrum.utf8))
+        let instrument = try Instrument.decode(node)
+        let encoded = instrument.encode()
+
+        let drums = encoded.all("Drum")
+        #expect(drums.count == 2)
+        let bass = try #require(drums.first { $0.attributes["pitch"] == "36" })
+        #expect(bass.children.map(\.name) == ["head", "line", "voice", "name", "stem", "shortcut"])
+        #expect(bass.first("head")?.text == "normal")
+        #expect(bass.first("line")?.text == "7")
+        #expect(bass.first("voice")?.text == "1")
+        #expect(bass.first("name")?.text == "Bass Drum 1")
+        #expect(bass.first("stem")?.text == "2")
+        #expect(bass.first("shortcut")?.text == "B")
+
+        let ride = try #require(drums.first { $0.attributes["pitch"] == "51" })
+        #expect(ride.children.map(\.name) == ["head", "line", "voice", "name", "stem"])
+        #expect(ride.first("head")?.text == "diamond")
+        #expect(ride.first("name")?.text == "Ride (my chart)")
+    }
+
+    /// The §6a gate: a kit this package AUTHORS — `Score.blank`'s drum part, whose entries come entirely from
+    /// `GMDrumset` — must still encode to the exact bytes it did before the drumset was a real type. The golden
+    /// was recorded from the pre-change encoder; a diff here means a GM default moved.
+    @Test("an authored drum part encodes byte-identically to the recorded golden")
+    func authoredKitIsByteIdentical() throws {
+        let template = BlankScoreTemplate(
+            title: "Drums",
+            parts: [.init(
+                instrumentID: "drumset", longName: "Drum Kit",
+                staves: [.init(clefType: "PERC", isPercussion: true)],
+                isDrums: true,
+            )],
+            measureCount: 1,
+        )
+        let score = Score.blank(template)
+        let encoded = XMLTreeSerializer.serialize(score.parts[0].instrument.encode())
+
+        let goldenURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Resources/drumsetEncodeGolden.xml")
+        let golden = try Data(contentsOf: goldenURL)
+
+        #expect(encoded == golden)
+    }
 }
