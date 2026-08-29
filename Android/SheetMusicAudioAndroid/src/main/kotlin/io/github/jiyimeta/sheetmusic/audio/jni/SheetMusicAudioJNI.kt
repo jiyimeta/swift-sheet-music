@@ -130,4 +130,46 @@ internal object SheetMusicAudioJNI {
             arena,
         ).toByteArray()
     }
+
+    // ── Note auditions ───────────────────────────────────────────────
+    //
+    // The policy behind these lives in Swift and the Apple engine runs the same code. See
+    // `NotePreviewBridge.swift`; this side only sends the MIDI its own synth wants.
+
+    fun nativePreviewPolicyCreate(): Long = SwiftJavaJNI.nativePreviewPolicyCreate()
+
+    fun nativePreviewPolicyRelease(policyHandle: Long) {
+        SwiftJavaJNI.nativePreviewPolicyRelease(policyHandle)
+    }
+
+    fun nativePreviewPolicyBegin(
+        policyHandle: Long,
+        channel: Int,
+        pitch: Int,
+        velocity: Int,
+        isDrum: Boolean,
+        ringMilliseconds: Int,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePreviewPolicyBegin(
+            policyHandle,
+            channel,
+            pitch,
+            velocity,
+            isDrum,
+            ringMilliseconds,
+            arena,
+        ).toByteArray()
+    }
+
+    fun nativePreviewPolicyEnd(policyHandle: Long, generation: Long): Long =
+        SwiftJavaJNI.nativePreviewPolicyEnd(policyHandle, generation)
+
+    fun nativePreviewPolicySilence(policyHandle: Long): Long =
+        SwiftJavaJNI.nativePreviewPolicySilence(policyHandle)
+
+    fun nativeMasterTuningControlChanges(cents: Double): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeMasterTuningControlChanges(cents, arena).toByteArray()
+    }
 }

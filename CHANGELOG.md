@@ -7,6 +7,34 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Note auditions on Android no longer go missing while notes are entered
+  quickly, and no longer click. A new audition now supersedes the one it
+  replaces and invalidates its pending end — without which the old note's
+  end fired on its own schedule and silenced the new one, audible only when
+  the two shared a channel and pitch, so it presented as intermittent. The
+  output stream is also held open past the note-off for the note's release,
+  which used to be cut off mid-decay on every audition sounded from an idle
+  reader. The Apple engine has carried both behaviours for a long time.
+
+### Changed
+
+- `NotePreviewPolicy` in `SheetMusicAudioCore` now owns those decisions for
+  both platforms: which audition supersedes which, how long a drum rings
+  against a melodic note, and how long the audio graph has to keep rendering
+  after a note-off. `AndroidPlaybackEngine` reaches it over JNI
+  (`nativePreviewPolicy*`) and executes the plan it answers with; the MIDI
+  messages each engine sends are still its own, because FluidSynth and
+  AUMIDISynth genuinely differ there. Android previously held a hand-written
+  copy of the Apple engine's state machine, which is how it came to be
+  missing both of the behaviours above.
+- Android's master-tuning RPN comes from the shared `MasterTuning`
+  (`nativeMasterTuningControlChanges`) rather than a Kotlin port of the same
+  arithmetic kept in step by golden assertions on each side. Goldens catch a
+  change made twice and made differently; they say nothing about a change
+  made once.
+
 ## [2.1.0] - 2026-08-29
 
 ### Added

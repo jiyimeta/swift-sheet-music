@@ -1,5 +1,6 @@
 package io.github.jiyimeta.sheetmusic.audio.synth
 
+import io.github.jiyimeta.sheetmusic.audio.fakes.MarkerMasterTuning
 import android.content.Context
 import android.net.Uri
 import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
@@ -99,8 +100,18 @@ class FluidSynthEngineTest {
 
     private var capturedSynth: FakeSynth? = null
 
+    /**
+     * A [FluidSynthEngine] whose master-tuning source is the marker stand-in.
+     *
+     * Turning cents into an RPN is `MasterTuning` in SheetMusicAudioCore now — shared with the Apple engine
+     * and pinned by `MasterTuningTests` there — so this file supplies the numbers rather than recomputing
+     * them, and asserts on what its subject actually decides.
+     */
+    private fun fluidSynthEngine(synthFactory: (sampleRate: Int) -> SynthDriver) =
+        FluidSynthEngine(synthFactory, MarkerMasterTuning::invoke)
+
     private fun buildEngine(): FluidSynthEngine {
-        return FluidSynthEngine(
+        return fluidSynthEngine(
             synthFactory = { _ ->
                 FakeSynth().also { capturedSynth = it }
             },
@@ -122,7 +133,7 @@ class FluidSynthEngineTest {
 
     @Test fun setupStaves_createsOneDriverForAllStaves() {
         var createCount = 0
-        val engine = FluidSynthEngine(synthFactory = { _ ->
+        val engine = fluidSynthEngine(synthFactory = { _ ->
             createCount++
             FakeSynth().also { capturedSynth = it }
         })
@@ -277,7 +288,7 @@ class FluidSynthEngineTest {
     @Test fun setupStaves_teardownOldSynthFirst() {
         var createCount = 0
         val synths = mutableListOf<FakeSynth>()
-        val engine = FluidSynthEngine(synthFactory = { _ ->
+        val engine = fluidSynthEngine(synthFactory = { _ ->
             createCount++
             FakeSynth().also { synths += it }
         })
@@ -295,7 +306,7 @@ class FluidSynthEngineTest {
     // ── Bug 1: drum channel routing ─────────────────────────────────────────
 
     @Test fun setupStaves_drumStaff_callsSetChannelTypeDrum() {
-        val engine = FluidSynthEngine(synthFactory = { _ ->
+        val engine = fluidSynthEngine(synthFactory = { _ ->
             FakeSynth().also { capturedSynth = it }
         })
         engine.setupStaves(
@@ -342,7 +353,7 @@ class FluidSynthEngineTest {
     @Test fun setupStaves_doesNotOpenBreathControllerOnDrumChannels() {
         // A percussion preset has no single-note-dynamics gating to release,
         // and CC2 there would be an unrequested change to drum-kit behavior.
-        val engine = FluidSynthEngine(synthFactory = { _ ->
+        val engine = fluidSynthEngine(synthFactory = { _ ->
             FakeSynth().also { capturedSynth = it }
         })
         engine.setupStaves(
@@ -365,7 +376,7 @@ class FluidSynthEngineTest {
     }
 
     @Test fun setupStaves_drumStaff_selectsBank128() {
-        val engine = FluidSynthEngine(synthFactory = { _ ->
+        val engine = fluidSynthEngine(synthFactory = { _ ->
             FakeSynth().also { capturedSynth = it }
         })
         engine.setupStaves(
@@ -512,7 +523,7 @@ class FluidSynthEngineTest {
     }
 
     @Test fun setStaffProgram_onDrumStaff_usesBank128() {
-        val engine = FluidSynthEngine(synthFactory = { _ ->
+        val engine = fluidSynthEngine(synthFactory = { _ ->
             FakeSynth().also { capturedSynth = it }
         })
         engine.setupStaves(
