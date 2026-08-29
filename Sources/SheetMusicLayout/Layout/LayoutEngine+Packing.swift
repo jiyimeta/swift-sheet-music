@@ -484,6 +484,16 @@ extension LayoutEngine {
                     ? staff.measures[abs] : nil
             }
         }
+        // The lane can be shorter than the measure count (a score that
+        // carries no system elements leaves it empty), so index it
+        // defensively rather than assuming it parallels the measures —
+        // the same guard `buildSystem` uses when it reads the lane.
+        let systemMeasuresForRange: [SystemMeasure] = (0 ..< measureCount)
+            .map { local in
+                let abs = measureStart + local
+                return abs < context.score.systemMeasures.count
+                    ? context.score.systemMeasures[abs] : SystemMeasure()
+            }
         let melismaForRange: [[[MelismaContinuation]]]
         melismaForRange = (0 ..< staves.count).map { staffIdx in
             (0 ..< measureCount).map { local in
@@ -517,6 +527,7 @@ extension LayoutEngine {
             availableWidth: context.availableWidth,
             division: context.score.division,
             measuresPerStaff: measuresPerStaff,
+            systemMeasuresForRange: systemMeasuresForRange,
             effectiveMelismaTicks: context.effectiveMelismaTicks,
             melismaContinuationsForRange: melismaForRange,
             drumLineMaps: drumLineMaps,

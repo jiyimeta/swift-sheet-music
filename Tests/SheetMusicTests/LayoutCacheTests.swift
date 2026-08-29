@@ -133,6 +133,161 @@
             #expect(cache.placementMisses == 1)
         }
 
+        /// `sampleScore()` with a rehearsal mark written into the system
+        /// lane at `measureIndex` and NOTHING else changed — no staff, no
+        /// measure, no voice. This is the shape of a rehearsal-mark /
+        /// tempo / system-text edit.
+        private static func addingRehearsalMark(
+            _ text: String,
+            atMeasure measureIndex: Int,
+            of score: Score,
+        ) -> Score {
+            let measureCount = score.parts[0].staves[0].measures.count
+            var lane = (0 ..< measureCount).map { idx in
+                idx < score.systemMeasures.count
+                    ? score.systemMeasures[idx] : SystemMeasure()
+            }
+            lane[measureIndex].elements.append(PositionedSystemElement(
+                position: .start,
+                element: .rehearsalMark(RehearsalMark(text: text)),
+            ))
+            return Score(
+                division: score.division,
+                parts: score.parts,
+                systemMeasures: lane,
+            )
+        }
+
+        /// True when any system of `doc` draws a `.rehearsalMark`.
+        private static func drawsRehearsalMark(_ doc: LayoutDocument) -> Bool {
+            doc.systems.contains { system in
+                system.measures.contains { measure in
+                    measure.elements.contains { element in
+                        if case .rehearsalMark = element { return true }
+                        return false
+                    }
+                }
+            }
+        }
+
+        /// An edit that touches ONLY `Score.systemMeasures` must still
+        /// invalidate the system that contains the edited bar. Every
+        /// per-staff `Measure` is bit-identical across such an edit, so
+        /// without the system lane in `SystemInputs` the whole system is
+        /// served from the cache and the mark never reaches the page.
+        @Test("System-lane-only edit invalidates the containing system")
+        func systemLaneOnlyEditMisses() {
+            guard #available(macOS 15.0, *) else { return }
+            let scoreA = Self.sampleScore()
+            let cache = LayoutCache()
+            _ = LayoutEngine.layout(
+                score: scoreA, options: .init(),
+                availableWidth: 800, cache: cache,
+            )
+            let scoreB = Self.addingRehearsalMark(
+                "A", atMeasure: 1, of: scoreA,
+            )
+            _ = LayoutEngine.layout(
+                score: scoreB, options: .init(),
+                availableWidth: 800, cache: cache,
+            )
+            // No staff measure changed, so the per-measure width entries
+            // legitimately all hit — the mark adds no width.
+            #expect(cache.widthHits == 3)
+            #expect(cache.widthMisses == 0)
+            // ...but the system carrying measure 1 must rebuild.
+            #expect(cache.systemHits == 0)
+            #expect(cache.systemMisses == 1)
+        }
+
+        /// The user-visible half of the case above: after the same
+        /// system-lane-only edit through a warm cache, the re-engraved
+        /// document must actually contain the mark. Pins the symptom
+        /// rather than the cache statistic, so a "fix" that invalidates
+        /// the entry without reaching placement still fails here.
+        @Test("System-lane-only edit reaches placement: the mark is drawn")
+        func systemLaneOnlyEditDrawsMark() {
+            guard #available(macOS 15.0, *) else { return }
+            let scoreA = Self.sampleScore()
+            let cache = LayoutCache()
+            let cold = LayoutEngine.layout(
+                score: scoreA, options: .init(),
+                availableWidth: 800, cache: cache,
+            )
+            #expect(!Self.drawsRehearsalMark(cold))
+            let scoreB = Self.addingRehearsalMark(
+                "A", atMeasure: 1, of: scoreA,
+            )
+            let warm = LayoutEngine.layout(
+                score: scoreB, options: .init(),
+                availableWidth: 800, cache: cache,
+            )
+            #expect(Self.drawsRehearsalMark(warm))
+            // And the warm result must match a layout that never saw a
+            // cache — a cache may only skip work, never change output.
+            let uncached = LayoutEngine.layout(
+                score: scoreB, options: .init(), availableWidth: 800,
+            )
+            #expect(warm.systems == uncached.systems)
+        }
+
+        /// `MultiMeasureRestPlanner.plan` is derived from
+        /// `Score.systemMeasures` too — a mark written into the middle of a
+        /// collapsible run splits it. The plan is rebuilt on every
+        /// `LayoutEngine.layout` call (it is computed at layout entry, not
+        /// inside `buildSystem`), and the split it produces reaches the
+        /// system predicate twice over: through the changed `widths`, and
+        /// through `systemMeasuresForRange`. Pinned here because the two
+        /// derivations of the same lane have to stay in agreement.
+        @Test("Mark splitting a multi-measure-rest run reaches a warm cache")
+        func multiMeasureRestRunSplitThroughCache() {
+            guard #available(macOS 15.0, *) else { return }
+            let note = Note(pitch: 60, tpc: 14)
+            let sounding = Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .whole, notes: [note])),
+            ])])
+            let rest = Measure(voices: [Voice(elements: [
+                .rest(duration: .measure),
+            ])])
+            let measures = [sounding, rest, rest, rest, rest, sounding]
+            let scoreA = Score(
+                division: 480,
+                parts: [Part(
+                    id: "1", instrument: Instrument(id: "x"),
+                    staves: [Staff(measures: measures)],
+                )],
+            )
+            let options = ScoreViewOptions(
+                multiMeasureRest: .collapse(minimumMeasures: 2),
+            )
+            let cache = LayoutCache()
+            let cold = LayoutEngine.layout(
+                score: scoreA, options: options,
+                availableWidth: 1200, cache: cache,
+            )
+            #expect(Self.restRunLengths(cold) == [4])
+            // Mark on measure 3 — the middle of the run. Measures 1-2 stay
+            // collapsible (a run of 2); measure 4 alone no longer meets the
+            // 2-measure minimum, so exactly one H-bar survives.
+            let scoreB = Self.addingRehearsalMark(
+                "A", atMeasure: 3, of: scoreA,
+            )
+            let warm = LayoutEngine.layout(
+                score: scoreB, options: options,
+                availableWidth: 1200, cache: cache,
+            )
+            #expect(Self.restRunLengths(warm) == [2])
+            #expect(Self.drawsRehearsalMark(warm))
+            let uncached = LayoutEngine.layout(
+                score: scoreB, options: options, availableWidth: 1200,
+            )
+            // Measures 3 and 4 were run INTERIORS on the cold call and are
+            // drawn individually now. They only come back at a real width if
+            // `Entry.minWidth` kept the natural width rather than the
+            // collapse override — see `minWidthSurvivesLeavingACollapsedRun`.
+            #expect(warm.systems == uncached.systems)
+        }
+
         /// The transition a `LayoutCache` has to survive: a measure that was
         /// INSIDE a collapsed run and then leaves it must come back at its
         /// natural width. Driven by the plainest trigger there is — toggling

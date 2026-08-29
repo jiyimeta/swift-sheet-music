@@ -136,6 +136,19 @@ public final class LayoutCache: @unchecked Sendable {
         /// Per-staff measures for the range. `[staffIdx][localIdx]`,
         /// where `localIdx = absolute measureIdx - measureStart`.
         let measuresPerStaff: [[Measure?]]
+        /// The system lane sliced to this range: one `SystemMeasure` per
+        /// measure, `[localIdx]` with the same `localIdx = absolute
+        /// measureIdx - measureStart` indexing as `measuresPerStaff`.
+        /// `buildSystem` reads it to route tempo / rehearsal-mark /
+        /// system-text elements onto their staff.
+        ///
+        /// `measuresPerStaff` cannot stand in for this: system-level
+        /// elements do not live on any staff's `Measure`, so writing a
+        /// rehearsal mark, a tempo or a piece of system text changes
+        /// NOTHING in any staff's measures — every other field here stays
+        /// bit-identical. Without it a system-lane-only edit serves a
+        /// stale cached system and the mark never reaches the page.
+        let systemMeasuresForRange: [SystemMeasure]
         /// The score-wide melisma data — `placeMeasureElements` reads
         /// it via `effectiveMelismaTicks` keys that touch this range.
         let effectiveMelismaTicks: [MelismaLyricKey: Int]
