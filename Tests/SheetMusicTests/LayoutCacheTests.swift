@@ -133,6 +133,67 @@
             #expect(cache.placementMisses == 1)
         }
 
+        /// The transition a `LayoutCache` has to survive: a measure that was
+        /// INSIDE a collapsed run and then leaves it must come back at its
+        /// natural width. Driven by the plainest trigger there is — toggling
+        /// `multiMeasureRest` off through a warm cache, no score edit at all,
+        /// which is enough because the plan is deliberately not part of the
+        /// per-measure width predicate. When the entry stored the post-
+        /// override width, the three ex-interior bars came back at width 0.
+        @Test("minWidth survives a measure leaving a collapsed run")
+        func minWidthSurvivesLeavingACollapsedRun() {
+            guard #available(macOS 15.0, *) else { return }
+            let note = Note(pitch: 60, tpc: 14)
+            let sounding = Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .whole, notes: [note])),
+            ])])
+            let rest = Measure(voices: [Voice(elements: [
+                .rest(duration: .measure),
+            ])])
+            let score = Score(
+                division: 480,
+                parts: [Part(
+                    id: "1", instrument: Instrument(id: "x"),
+                    staves: [Staff(measures: [
+                        sounding, rest, rest, rest, rest, sounding,
+                    ])],
+                )],
+            )
+            let cache = LayoutCache()
+            let collapsed = LayoutEngine.layout(
+                score: score,
+                options: ScoreViewOptions(
+                    multiMeasureRest: .collapse(minimumMeasures: 2),
+                ),
+                availableWidth: 1200, cache: cache,
+            )
+            // Precondition: the run really did collapse, so the entries this
+            // test is about were written under an override.
+            #expect(Self.restRunLengths(collapsed) == [4])
+            let warm = LayoutEngine.layout(
+                score: score, options: ScoreViewOptions(),
+                availableWidth: 1200, cache: cache,
+            )
+            // Every bar is drawn individually again — none at width 0.
+            let widths = warm.systems.flatMap(\.measures).map(\.width)
+            #expect(widths.count == 6)
+            #expect(widths.allSatisfy { $0 > 0 })
+            #expect(Self.restRunLengths(warm).isEmpty)
+            let uncached = LayoutEngine.layout(
+                score: score, options: ScoreViewOptions(),
+                availableWidth: 1200,
+            )
+            #expect(widths == uncached.systems.flatMap(\.measures).map(\.width))
+            #expect(warm.systems == uncached.systems)
+        }
+
+        /// H-bar lengths in document order.
+        private static func restRunLengths(_ doc: LayoutDocument) -> [Int] {
+            doc.systems
+                .flatMap(\.measures)
+                .compactMap(\.multiMeasureRest)
+        }
+
         /// Realistic equivalence: layouts of a parsed mscx fixture must
         /// be byte-identical between cache-less and cache-aware paths.
         @Test("Real mscx fixture: cache-aware layout matches cache-less")

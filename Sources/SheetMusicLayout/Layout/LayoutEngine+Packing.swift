@@ -66,7 +66,18 @@ extension LayoutEngine {
             }
             return baseline
         }
-        let cachedMinWidths: [CGFloat] = (0 ..< measureCount).map { i in // swiftlint:disable:this closure_body_length
+        // The collapsed-run override is a PROJECTION of the cached width,
+        // never the cached width itself. `Entry.minWidth` means "this
+        // measure's natural width"; the override means "what it is drawn at
+        // under the CURRENT multi-measure-rest plan", which is an output.
+        // Storing the output and then feeding it back in as the next call's
+        // baseline destroys the natural width for good: the plan is
+        // deliberately not part of the entry's predicate, so a measure that
+        // has once been a run interior would keep width 0 on every later hit
+        // — including after the run splits or the policy is switched off.
+        // So the entry always stores the PRE-override width, and the override
+        // is applied only to the value this closure RETURNS.
+        let cachedMinWidths: [CGFloat] = (0 ..< measureCount).map { i in
             let measuresAt = staves.map { staff in
                 i < staff.measures.count ? staff.measures[i] : nil
             }
@@ -77,27 +88,12 @@ extension LayoutEngine {
                prior.measures == measuresAt,
                prior.measureDuration == durationAt
             {
-                // Cache hit: copy the prior entry forward, then apply
-                // the collapsed-run override so subsequent reads see
-                // the correct width directly from the cache.
-                let overridden = collapsedOverride(for: i, baseline: prior.minWidth)
-                if overridden != prior.minWidth {
-                    // Rebuild entry with the overridden width so
-                    // subsequent cache reads see the collapsed value.
-                    context.cache?.entries[i] = LayoutCache.Entry(
-                        measures: prior.measures,
-                        sp: prior.sp,
-                        division: prior.division,
-                        measureDuration: prior.measureDuration,
-                        minWidth: overridden,
-                        tickAggregate: prior.tickAggregate,
-                        placements: prior.placements,
-                    )
-                } else {
-                    context.cache?.entries[i] = prior
-                }
+                // Cache hit: copy the prior entry forward verbatim. Its
+                // `minWidth` is the natural width, so it stays valid under
+                // any plan — only the returned value is overridden.
+                context.cache?.entries[i] = prior
                 context.cache?.widthHits += 1
-                return overridden
+                return collapsedOverride(for: i, baseline: prior.minWidth)
             }
             context.cache?.widthMisses += 1
             let baseHeader = computeHeaderSchedule(
@@ -115,17 +111,16 @@ extension LayoutEngine {
                 division: division,
                 measureDuration: durationAt,
             )
-            let overridden = collapsedOverride(for: i, baseline: result.width)
             context.cache?.entries[i] = LayoutCache.Entry(
                 measures: measuresAt,
                 sp: sp,
                 division: division,
                 measureDuration: durationAt,
-                minWidth: overridden,
+                minWidth: result.width,
                 tickAggregate: result.aggregate,
                 placements: [:],
             )
-            return overridden
+            return collapsedOverride(for: i, baseline: result.width)
         }
 
         // Cancellation naturals widen a measure that the per-measure

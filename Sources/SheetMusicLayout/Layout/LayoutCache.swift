@@ -72,6 +72,13 @@ public final class LayoutCache: @unchecked Sendable {
         let measureDuration: Fraction
 
         /// --- Output of crossStaffMinimumMeasureWidth ---
+        ///
+        /// The measure's NATURAL width, before any multi-measure-rest
+        /// collapse override. `packSystems` applies that override to what it
+        /// returns, never to what it stores here: the plan is not part of
+        /// this entry's predicate, so a stored override would be re-read as
+        /// the baseline on the next hit and the natural width would be lost
+        /// the first time the measure was collapsed.
         let minWidth: CGFloat
 
         /// --- Output of aggregatedTickWeights, shared between the
