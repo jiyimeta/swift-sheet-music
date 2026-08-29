@@ -106,7 +106,7 @@ extension ScoreEditSession {
         // head. Factored into `drumInputCommand` for the same reason the shape-changing intents are factored into
         // `structuralCommand`, and written on one line for the same reason again: this switch is at the body
         // budget, and a case per intent would put it over.
-        case .createVoice, .splitRest, .setNoteHead: return drumInputCommand(for: intent, in: score)
+        case .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry: return drumInputCommand(for: intent, in: score)
         case let .setNotePitch(location, pitch, tpc, accidental):
             return retuneCommand(at: location, pitch: pitch, tpc: tpc, accidental: accidental, in: score)
         case .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet, .removeTuplet:

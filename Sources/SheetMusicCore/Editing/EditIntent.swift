@@ -157,4 +157,15 @@ public enum EditIntent: Sendable, Equatable {
     /// how a drum key writes a cross-head hi-hat: those two intents carry pitch and spelling only, and widening
     /// their wire payload would move byte layouts that are already committed.
     case setNoteHead(at: NoteID, headType: String?)
+
+    /// Write `entry` as `pitch`'s row in the part's drum kit, or remove that row with `nil`.
+    ///
+    /// A drum key pressed for an instrument the open chart never used has no line to be drawn on, and the layout
+    /// engine falls back to the pitched diatonic formula — putting the note somewhere no engraver would. Repairing
+    /// that is a change to the score, so it travels as an intent like every other one, rather than as a mutation
+    /// only one platform performs.
+    ///
+    /// An out-of-range `partIndex` is refused as `.targetNotFound` by `SetDrumsetEntry.apply`, so one place states
+    /// the range.
+    case setDrumsetEntry(partIndex: Int, pitch: Int, entry: DrumsetEntry?)
 }

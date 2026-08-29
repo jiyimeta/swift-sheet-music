@@ -60,10 +60,11 @@ import Wirelet
 /// 25 = createVoice(CreateVoiceIntentWire)
 /// 26 = splitRest(SplitRestIntentWire)
 /// 27 = setNoteHead(SetNoteHeadIntentWire)
+/// 28 = setDrumsetEntry(SetDrumsetEntryIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
-/// creation, 19…22 for M3 signature changes, 23…24 for M4 rehearsal marks and 25…27 for M6 drum note entry;
+/// creation, 19…22 for M3 signature changes, 23…24 for M4 rehearsal marks and 25…28 for M6 drum note entry;
 /// 0…4 predate them all and must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
@@ -305,6 +306,22 @@ import Wirelet
 /// tag 3: head      string — UTF-8; the encoder writes "" when hasHead == 0, so a byte-for-byte parity check
 ///                  between platforms should expect that empty string, not an absent tag
 /// ```
+///
+/// `SetDrumsetEntryIntentWire` (`setDrumsetEntry`'s payload). The one intent payload that carries a whole model
+/// value rather than scalars naming one — a `DrumsetEntry` IS scalars, five of them plus an optional string, so it
+/// is spelled out field by field here rather than shipped as a nested type only this intent would use:
+/// ```
+/// tag 1: partIndex    i32, zig-zag varint
+/// tag 2: pitch        i32, zig-zag varint — 35…81
+/// tag 3: hasEntry     u8, varint — 0 = REMOVE this pitch's row, 1 = write the fields below
+/// tag 4: name         string — UTF-8; "" when hasEntry == 0
+/// tag 5: head         string — UTF-8; "" when hasEntry == 0
+/// tag 6: line         i32, zig-zag varint — MuseScore's line number, negative above the staff
+/// tag 7: voiceIndex   i32, zig-zag varint
+/// tag 8: stem         i32, zig-zag varint — MuseScore's own encoding: 1 = up, 2 = down
+/// tag 9: hasShortcut  u8, varint
+/// tag 10: shortcut    string — UTF-8; "" when hasShortcut == 0
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -455,6 +472,8 @@ public enum EditIntentWire {
     case splitRest(SplitRestIntentWire)
     /// Appended for M6 drum note entry — index 27.
     case setNoteHead(SetNoteHeadIntentWire)
+    /// Appended for M6 drum note entry — index 28.
+    case setDrumsetEntry(SetDrumsetEntryIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -534,6 +553,10 @@ public enum EditIntentWire {
             self = .splitRest(SplitRestIntentWire(location: location, tickOffset: tickOffset))
         case let .setNoteHead(location, headType):
             self = .setNoteHead(SetNoteHeadIntentWire(location: location, headType: headType))
+        case let .setDrumsetEntry(partIndex, pitch, entry):
+            self = .setDrumsetEntry(SetDrumsetEntryIntentWire(
+                partIndex: partIndex, pitch: pitch, entry: entry,
+            ))
         }
     }
 
@@ -634,6 +657,11 @@ public enum EditIntentWire {
         case let .setNoteHead(wire):
             let decoded = wire.decoded()
             return .setNoteHead(at: decoded.location, headType: decoded.headType)
+        case let .setDrumsetEntry(wire):
+            let decoded = wire.decoded()
+            return .setDrumsetEntry(
+                partIndex: decoded.partIndex, pitch: decoded.pitch, entry: decoded.entry,
+            )
         }
     }
 }
@@ -1188,5 +1216,54 @@ public struct SetNoteHeadIntentWire {
 
     public func decoded() -> (location: NoteID, headType: String?) {
         (location: location.decoded(), headType: hasHead == 0 ? nil : head)
+    }
+}
+
+/// `setDrumsetEntry`'s payload — which part's kit, which pitch, and the row to write there.
+///
+/// `DrumsetEntry`'s fields are inlined rather than nested: they are five scalars and an optional string, and a
+/// nested wire struct only this intent would ever use buys nothing but a second length prefix.
+@WireFormat
+public struct SetDrumsetEntryIntentWire {
+    public var partIndex: Int32
+    public var pitch: Int32
+    public var hasEntry: UInt8
+    public var name: String
+    public var head: String
+    public var line: Int32
+    public var voiceIndex: Int32
+    public var stem: Int32
+    public var hasShortcut: UInt8
+    public var shortcut: String
+
+    public init(partIndex: Int, pitch: Int, entry: DrumsetEntry?) {
+        self.partIndex = Int32(partIndex)
+        self.pitch = Int32(pitch)
+        hasEntry = entry == nil ? 0 : 1
+        name = entry?.name ?? ""
+        head = entry?.head ?? ""
+        line = Int32(entry?.line ?? 0)
+        voiceIndex = Int32(entry?.voiceIndex ?? 0)
+        stem = Int32(entry?.stem ?? 1)
+        hasShortcut = entry?.shortcut == nil ? 0 : 1
+        shortcut = entry?.shortcut ?? ""
+    }
+
+    public func decoded() -> (partIndex: Int, pitch: Int, entry: DrumsetEntry?) {
+        guard hasEntry != 0 else {
+            return (partIndex: Int(partIndex), pitch: Int(pitch), entry: nil)
+        }
+        return (
+            partIndex: Int(partIndex),
+            pitch: Int(pitch),
+            entry: DrumsetEntry(
+                name: name,
+                head: head,
+                line: Int(line),
+                voiceIndex: Int(voiceIndex),
+                stem: Int(stem),
+                shortcut: hasShortcut == 0 ? nil : shortcut,
+            ),
+        )
     }
 }

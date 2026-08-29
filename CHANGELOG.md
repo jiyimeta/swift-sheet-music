@@ -15,10 +15,12 @@ and this project adheres to
 - `Instrument.drumset`: a score's own drum kit, decoded whole from `<Drum>` instead of for its `<line>` alone,
   so an imported chart keeps the notehead, voice, stem, name and shortcut it was written with and re-encodes
   to them. `Instrument.drumLineMap` is unchanged as the lines-only view, readable and writable as before.
-- `CreateVoice` / `SplitRest` / `SetNoteHead` edit commands, with `EditIntent.createVoice(staff:measureIndex:voiceIndex:)`
-  / `.splitRest(at:tickOffset:)` / `.setNoteHead(at:headType:)` and `EditIntentCodec` wire support
-  (indices 25…27) — what drum note entry needs to route a key to its own voice, write at a caret's tick, and
-  give a note a cross notehead. `.createVoice` plans to nothing when the measure already has that voice.
+- `CreateVoice` / `SplitRest` / `SetNoteHead` / `SetDrumsetEntry` edit commands, with
+  `EditIntent.createVoice(staff:measureIndex:voiceIndex:)` / `.splitRest(at:tickOffset:)` /
+  `.setNoteHead(at:headType:)` / `.setDrumsetEntry(partIndex:pitch:entry:)` and `EditIntentCodec` wire support
+  (indices 25…28) — what drum note entry needs to route a key to its own voice, write at a caret's tick, give a
+  note a cross notehead, and repair a kit that never named the drum being written. `.createVoice` and
+  `.setDrumsetEntry` both plan to nothing when the score already says what they would write.
 - `Score.blank(_:)` + `BlankScoreTemplate`: build an empty score in code — any number of parts, each with
   its own staves, instrument names, GM program, transposition pair and optional drum kit, plus `.normal`
   bracket groups over part ranges (SATB, string quartet). `Part.init(blankPlan:id:measures:)` is the

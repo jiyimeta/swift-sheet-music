@@ -32,6 +32,15 @@ extension ScoreEditSession {
             return SplitRest(at: location, tickOffset: tickOffset)
         case let .setNoteHead(location, headType):
             return SetNoteHead(at: location, headType: headType)
+        case let .setDrumsetEntry(partIndex, pitch, entry):
+            // Nothing to do when the kit already says exactly this — restating a row the score already carries
+            // would push an undo entry that restores the score to itself, the rule `.setKeySignature` follows.
+            guard score.parts.indices.contains(partIndex),
+                  score.parts[partIndex].instrument.drumset[pitch] != entry
+            else {
+                return nil
+            }
+            return SetDrumsetEntry(partIndex: partIndex, pitch: pitch, entry: entry)
         default:
             return nil
         }

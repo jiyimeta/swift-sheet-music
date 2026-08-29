@@ -84,6 +84,7 @@ own substantive logic.
 | `CreateVoice` | not in the example — the drum pad, writing into a voice the bar lacks | — |
 | `SplitRest` | not in the example — the drum pad's column caret, landing inside a rest | — |
 | `SetNoteHead` | not in the example — the drum pad, writing a cross-head hi-hat | sugar |
+| `SetDrumsetEntry` | not in the example — the drum pad, repairing a kit that never named this drum | — |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -117,6 +118,11 @@ section above).
 - [x] **`SplitRest`** — split one rest into two beat-aligned runs at a
   tick offset, so a caret that landed inside a rest has a slot to
   write into. Implemented; see "A. Implemented" above.
+- [x] **`SetDrumsetEntry`** — write (or remove) one pitch's row in a
+  part's drum kit. Without a row the layout engine falls back to the
+  pitched diatonic formula and draws the drum on a wrong line, so a pad
+  that can write an instrument the chart never used has to be able to
+  repair it. Implemented; see "A. Implemented" above.
 - [x] **`InsertMeasure`** / **`DeleteMeasure`** — measure-level
   structural ops. Implemented; see "A. Implemented" above.
 - [x] **`AddPart`** / **`RemovePart`** / **`MovePart`** — part-level

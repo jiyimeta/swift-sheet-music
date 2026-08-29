@@ -97,6 +97,7 @@ struct EditIntentCodecTests {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     @Test func `every new intent round-trips`() throws {
         let staff = StaffAddress(partIndex: 1, staffIndexInPart: 1)
         let note = NoteID(staff: staff, measureIndex: 2, voiceIndex: 1, elementIndex: 3, noteIndexInChord: 1)
@@ -172,6 +173,19 @@ struct EditIntentCodecTests {
             .splitRest(at: slot, tickOffset: 240),
             .setNoteHead(at: note, headType: "cross"),
             .setNoteHead(at: note, headType: nil),
+            // Index 28. Three shapes, because the payload carries the only optional-within-optional this codec has:
+            // a full row with a shortcut, one without, and the removal that is an add's own inverse.
+            .setDrumsetEntry(
+                partIndex: 1, pitch: 42,
+                entry: DrumsetEntry(
+                    name: "Closed Hi-Hat", head: "cross", line: -1, voiceIndex: 0, stem: 1, shortcut: "H",
+                ),
+            ),
+            .setDrumsetEntry(
+                partIndex: 0, pitch: 36,
+                entry: DrumsetEntry(name: "Bass Drum 1", head: "normal", line: 6, voiceIndex: 1, stem: 2),
+            ),
+            .setDrumsetEntry(partIndex: 0, pitch: 36, entry: nil),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -245,6 +259,8 @@ struct EditIntentCodecTests {
                 headType: nil,
             ),
         )[1] == 27)
+        // Read with the entry removed, which keeps the payload short for the same `bytes[1]` framing reason.
+        #expect(EditIntentCodec.encode(.setDrumsetEntry(partIndex: 0, pitch: 42, entry: nil))[1] == 28)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field
