@@ -23,15 +23,26 @@ extension Instrument {
         // <useDrumset>1</useDrumset> marks the instrument as a percussion kit.
         // The renderer routes drumset parts to GM channel 10 (0-indexed: 9).
         let useDrumset = (node.first("useDrumset")?.text).flatMap { Int($0) } == 1
-        // <Drum pitch="42"><line>5</line>…</Drum> — per-pitch staff
-        // line mapping for drum instruments.
-        var drumLineMap: [Int: Int] = [:]
+        // <Drum pitch="42"><head>cross</head><line>-1</line><voice>0</voice><name>…</name><stem>1</stem></Drum>
+        // — the whole per-pitch engraving entry. `<line>` is the one child that is load-bearing enough to skip
+        // the entry over: without it there is nothing to place the notehead by. The others fall back to the GM
+        // conventions rather than dropping the drum, because a `<Drum>` that reaches MuseScore without them is
+        // ignored outright.
+        var drumset: [Int: DrumsetEntry] = [:]
         for drum in node.all("Drum") {
             guard let pitchStr = drum.attributes["pitch"],
                   let pitch = Int(pitchStr),
                   let lineStr = drum.first("line")?.text,
                   let line = Int(lineStr) else { continue }
-            drumLineMap[pitch] = line
+            let fallback = GMDrumset.entry(forPitch: pitch, line: line)
+            drumset[pitch] = DrumsetEntry(
+                name: drum.first("name")?.text ?? fallback.name,
+                head: drum.first("head")?.text ?? fallback.head,
+                line: line,
+                voiceIndex: (drum.first("voice")?.text).flatMap { Int($0) } ?? fallback.voiceIndex,
+                stem: (drum.first("stem")?.text).flatMap { Int($0) } ?? fallback.stem,
+                shortcut: drum.first("shortcut")?.text,
+            )
         }
         return Instrument(
             id: id,
@@ -45,7 +56,7 @@ extension Instrument {
             articulations: articulations,
             channels: channels,
             useDrumset: useDrumset,
-            drumLineMap: drumLineMap,
+            drumset: drumset,
             // `<transposeDiatonic>` / `<transposeChromatic>` are omitted for a concert-pitch
             // instrument; both default to 0, which `Instrument` reads as non-transposing.
             transposeDiatonic: node.first("transposeDiatonic").flatMap { Int($0.text) } ?? 0,
