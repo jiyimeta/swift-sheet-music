@@ -207,6 +207,14 @@ struct EditIntentCodecTests {
                 entry: DrumsetEntry(name: "Bass Drum 1", head: "normal", line: 6, voiceIndex: 1, stem: 2),
             ),
             .setDrumsetEntry(partIndex: 0, pitch: 36, entry: nil),
+            // Index 29. Four shapes, because each name carries its own present flag and a cleared name is not an
+            // empty one: dropping either flag would still round-trip the both-present case correctly.
+            .setPartNames(at: 1, longName: "なおき", shortName: "な"),
+            .setPartNames(at: 1, longName: "なおき", shortName: nil),
+            .setPartNames(at: 1, longName: nil, shortName: "な"),
+            .setPartNames(at: 1, longName: nil, shortName: nil),
+            // An empty name is a name the score declares, and must not come back as a cleared one.
+            .setPartNames(at: 1, longName: "", shortName: ""),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -282,6 +290,8 @@ struct EditIntentCodecTests {
         )[1] == 27)
         // Read with the entry removed, which keeps the payload short for the same `bytes[1]` framing reason.
         #expect(EditIntentCodec.encode(.setDrumsetEntry(partIndex: 0, pitch: 42, entry: nil))[1] == 28)
+        // Appended for part renaming.
+        #expect(EditIntentCodec.encode(.setPartNames(at: 0, longName: nil, shortName: nil))[1] == 29)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field

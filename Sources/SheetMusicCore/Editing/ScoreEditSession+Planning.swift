@@ -96,7 +96,7 @@ extension ScoreEditSession {
             return try writeNoteCommand(at: location, pitch: pitch, tpc: tpc, duration: duration, in: score)
         case let .writeRest(location, duration):
             return writeRestCommand(at: location, duration: duration, in: score)
-        case .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart,
+        case .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart, .setPartNames,
              .setKeySignature, .removeKeySignature, .setRehearsalMark, .removeRehearsalMark:
             // The intents that change the score's SHAPE rather than its notes — measure columns, parts, what a bar
             // declares, and the rehearsal mark it carries. Factored into `structuralCommand` for the same reason the
@@ -363,6 +363,13 @@ extension ScoreEditSession {
             // empty composite is reported, as `.nothingToApply`. Out-of-range indices are deliberately NOT caught
             // here: `MovePart.apply` states the range once, so the answer is the same however it is reached.
             return from == to ? nil : MovePart(from: from, to: to)
+        }
+        if case let .setPartNames(index, longName, shortName) = intent {
+            // A rename to the names a part already has restores the score to itself — nothing to apply, the rule the
+            // move above follows. An out-of-range index falls through to `SetPartNames.apply`, which states it once.
+            let instrument = score.parts.indices.contains(index) ? score.parts[index].instrument : nil
+            let unchanged = instrument.map { $0.longName == longName && $0.shortName == shortName } ?? false
+            return unchanged ? nil : SetPartNames(partIndex: index, longName: longName, shortName: shortName)
         }
         if case let .setKeySignature(measureIndex, concertKey) = intent {
             return try setKeySignatureCommand(at: measureIndex, concertKey: concertKey, in: score)

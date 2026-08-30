@@ -200,6 +200,36 @@
             #expect(cache.systemMisses == 1)
         }
 
+        /// Renaming a part touches no measure and no system-lane
+        /// element — every other `SystemInputs` field is bit-identical
+        /// across it — so without the part labels in the key the system
+        /// is served from the cache and the staff keeps its old name on
+        /// screen. Same hole as the system lane above, found on a
+        /// device: the rename reached the score and the row, and the
+        /// engraved label did not move.
+        @Test("Renaming a part invalidates the system that draws its label")
+        func partRenameMisses() {
+            guard #available(macOS 15.0, *) else { return }
+            var score = Self.sampleScore()
+            score.parts[0].instrument.longName = "Flute"
+            let cache = LayoutCache()
+            _ = LayoutEngine.layout(
+                score: score, options: .init(),
+                availableWidth: 800, cache: cache,
+            )
+            score.parts[0].instrument.longName = "なおき"
+            let after = LayoutEngine.layout(
+                score: score, options: .init(),
+                availableWidth: 800, cache: cache,
+            )
+            // No staff measure changed, so the per-measure widths hit.
+            #expect(cache.widthMisses == 0)
+            // ...but the one system has to rebuild, and draw the new name.
+            #expect(cache.systemHits == 0)
+            #expect(cache.systemMisses == 1)
+            #expect(after.systems.first?.partLabels.map(\.text) == ["なおき"])
+        }
+
         /// The user-visible half of the case above: after the same
         /// system-lane-only edit through a warm cache, the re-engraved
         /// document must actually contain the mark. Pins the symptom

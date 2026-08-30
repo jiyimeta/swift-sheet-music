@@ -157,6 +157,24 @@ public final class LayoutCache: @unchecked Sendable {
         /// Drum maps per staff. Static for the score; included so a
         /// part-instrument change invalidates affected systems.
         let drumLineMaps: [[Int: Int]?]
+        /// The part label this system actually draws, per part —
+        /// the long name (with its `trackName` fallback) on the first
+        /// system, the abbreviation on every other. Resolved rather
+        /// than both forms, so renaming only the abbreviation leaves
+        /// the first system's cache entry alone, and vice versa.
+        ///
+        /// Nothing else here can see a rename: the names live on the
+        /// part's instrument, not in any measure, so every other field
+        /// stays bit-identical — the same hole `systemMeasuresForRange`
+        /// documents for the system lane. Without it a renamed part
+        /// keeps its old label on screen until something unrelated
+        /// happens to evict the system.
+        ///
+        /// The width matters as much as the text: `labelWidth` measures
+        /// these same strings to reserve the system's opening indent,
+        /// so a longer name must re-wrap the system, not just re-letter
+        /// it.
+        let partLabels: [String]
         let totalMeasures: Int
         let options: ScoreViewOptions
         /// Every spanner anchor overlapping this range, since

@@ -61,11 +61,12 @@ import Wirelet
 /// 26 = splitRest(SplitRestIntentWire)
 /// 27 = setNoteHead(SetNoteHeadIntentWire)
 /// 28 = setDrumsetEntry(SetDrumsetEntryIntentWire)
+/// 29 = setPartNames(SetPartNamesIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
-/// creation, 19…22 for M3 signature changes, 23…24 for M4 rehearsal marks and 25…28 for M6 drum note entry;
-/// 0…4 predate them all and must keep their indices and byte layout.
+/// creation, 19…22 for M3 signature changes, 23…24 for M4 rehearsal marks, 25…28 for M6 drum note entry and 29
+/// for part renaming; 0…4 predate them all and must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -310,6 +311,17 @@ import Wirelet
 ///                  between platforms should expect that empty string, not an absent tag
 /// ```
 ///
+/// `SetPartNamesIntentWire` (`setPartNames`'s payload). Two optional strings, each spelled as the `has` + value
+/// pair `SetNoteHeadIntentWire` uses — a cleared name and an empty one are different things here, since an empty
+/// abbreviation would still be a name the score declares:
+/// ```
+/// tag 1: partIndex     i32, zig-zag varint
+/// tag 2: hasLongName   u8, varint — 0 = clear the long name, 1 = write `longName`
+/// tag 3: longName      string — UTF-8; the encoder writes "" when hasLongName == 0
+/// tag 4: hasShortName  u8, varint — 0 = clear the abbreviation, 1 = write `shortName`
+/// tag 5: shortName     string — UTF-8; the encoder writes "" when hasShortName == 0
+/// ```
+///
 /// `SetDrumsetEntryIntentWire` (`setDrumsetEntry`'s payload). The one intent payload that carries a whole model
 /// value rather than scalars naming one — a `DrumsetEntry` IS scalars, five of them plus an optional string, so it
 /// is spelled out field by field here rather than shipped as a nested type only this intent would use:
@@ -481,6 +493,8 @@ public enum EditIntentWire {
     case setNoteHead(SetNoteHeadIntentWire)
     /// Appended for M6 drum note entry — index 28.
     case setDrumsetEntry(SetDrumsetEntryIntentWire)
+    /// Appended for part renaming — index 29. Never renumber anything above it.
+    case setPartNames(SetPartNamesIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -563,6 +577,10 @@ public enum EditIntentWire {
         case let .setDrumsetEntry(partIndex, pitch, entry):
             self = .setDrumsetEntry(SetDrumsetEntryIntentWire(
                 partIndex: partIndex, pitch: pitch, entry: entry,
+            ))
+        case let .setPartNames(partIndex, longName, shortName):
+            self = .setPartNames(SetPartNamesIntentWire(
+                partIndex: partIndex, longName: longName, shortName: shortName,
             ))
         }
     }
@@ -668,6 +686,11 @@ public enum EditIntentWire {
             let decoded = wire.decoded()
             return .setDrumsetEntry(
                 partIndex: decoded.partIndex, pitch: decoded.pitch, entry: decoded.entry,
+            )
+        case let .setPartNames(wire):
+            let decoded = wire.decoded()
+            return .setPartNames(
+                at: decoded.partIndex, longName: decoded.longName, shortName: decoded.shortName,
             )
         }
     }
@@ -1285,6 +1308,36 @@ public struct SetNoteHeadIntentWire {
 
     public func decoded() -> (location: NoteID, headType: String?) {
         (location: location.decoded(), headType: hasHead == 0 ? nil : head)
+    }
+}
+
+/// `setPartNames`'s payload — which part, and the two names to write onto it.
+///
+/// Each name is a `has` flag plus a string rather than an absent tag, so "clear this name" and "set it to the
+/// empty string" stay distinguishable across the wire. `SetNoteHeadIntentWire` spells its one optional the same
+/// way, and for the same reason.
+@WireFormat
+public struct SetPartNamesIntentWire {
+    public var partIndex: Int32
+    public var hasLongName: UInt8
+    public var longName: String
+    public var hasShortName: UInt8
+    public var shortName: String
+
+    public init(partIndex: Int, longName: String?, shortName: String?) {
+        self.partIndex = Int32(partIndex)
+        hasLongName = longName == nil ? 0 : 1
+        self.longName = longName ?? ""
+        hasShortName = shortName == nil ? 0 : 1
+        self.shortName = shortName ?? ""
+    }
+
+    public func decoded() -> (partIndex: Int, longName: String?, shortName: String?) {
+        (
+            partIndex: Int(partIndex),
+            longName: hasLongName == 0 ? nil : longName,
+            shortName: hasShortName == 0 ? nil : shortName,
+        )
     }
 }
 

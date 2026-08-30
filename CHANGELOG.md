@@ -7,8 +7,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `SetPartNames` renames a part: the long name engraved at the left of the first system, and the abbreviation
+  engraved there on every system after it. Both names travel in one command, so a host editing both gets one
+  undo step rather than two that can be taken back into a half-renamed score, and `nil` clears rather than
+  leaving a name alone — a part with no abbreviation engraves no label from the second system on, which is a
+  thing a score can want to say. Reachable as `EditIntent.setPartNames`, which resolves to nothing to apply
+  when both names already read that way, and over the wire as case 29.
+- `Part.trackName` and `Instrument.id` are deliberately untouched by the rename, so a part called "なおき" keeps
+  playing the piano it is: the sound, the transposition and the drum kit all key off the id, and `trackName` is
+  where a host reads the instrument's own name back from.
+
 ### Fixed
 
+- A part rename now invalidates the systems that draw its label. `LayoutCache.SystemInputs` carried no part
+  name, and a rename touches no measure and no system-lane element — so every other input stayed bit-identical,
+  the cached system was served, and the staff kept its old name on screen. The label the system actually draws
+  is part of the key now (the long name on the first system, the abbreviation on the others), which also
+  re-wraps the system when a longer name widens its opening indent.
 - `EditIntentCodec.decode` bounds nesting while it parses, not after. The depth limit only ever ran on the
   finished tree, so a deeply nested `composite` payload overflowed the stack building that tree and never
   reached the guard. On WebAssembly the overflow did not even crash there: the shadow stack is 128 KiB and
