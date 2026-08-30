@@ -2,6 +2,7 @@
     import CoreGraphics
 #endif
 import Foundation
+import SheetMusicCore
 
 /// One rasterized page → the `buildScore` inputs for it.
 ///
@@ -25,7 +26,10 @@ enum RasterFrontEnd {
     }
 
     /// The assembly step alone, for a caller that already holds the raster
-    /// analysis.
+    /// analysis. REQUIRES `analysis.deskewed != nil` (built via
+    /// `RasterPage.analyze(_:pageIndex:keepDeskewed: true)`) — throws
+    /// otherwise, rather than handing the detector an analysis it will
+    /// silently do nothing with.
     ///
     /// The eval harness computes `RasterPageAnalysis` once per page (with
     /// `keepDeskewed: true`) because its bisect modes need it too, and
@@ -34,10 +38,29 @@ enum RasterFrontEnd {
     /// seam `.full` and `.detectorGlyphs` route through so their numbers
     /// and the product path's stay one computation, not two that happen to
     /// agree today.
+    ///
+    /// The `deskewed` check exists because `assembled` is `internal`, so
+    /// it is reachable by every future caller in this module — not just
+    /// `page` above and today's eval harness. `OMRGlyphDetector.glyphs`
+    /// returns `[]` with NO inference and, if `diagnostics` is `nil`, no
+    /// diagnostic either when handed an analysis without `deskewed` — the
+    /// exact "many successful-looking rows, zero notes, no error" failure
+    /// a previous task's fix round removed from the harness. Enforcing it
+    /// here closes the same hole at the interface, not just at today's one
+    /// call site.
     static func assembled(
         analysis: RasterPageAnalysis, pageIndex: Int, detector: any OMRGlyphDetecting,
         diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?,
     ) throws -> (walked: WalkedContent, pageSize: CGSize) {
+        guard analysis.deskewed != nil else {
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "omr.rasterFrontEnd.missingDeskewed",
+                message: "RasterFrontEnd.assembled: analysis for page \(pageIndex) has no "
+                    + "deskewed bitmap — build it with "
+                    + "RasterPage.analyze(_:pageIndex:keepDeskewed: true), or the detector "
+                    + "silently returns no glyphs with no diagnostic",
+            ))
+        }
         let glyphs = try detector.glyphs(
             pageIndex: pageIndex, analysis: analysis, diagnostics: diagnostics,
         )

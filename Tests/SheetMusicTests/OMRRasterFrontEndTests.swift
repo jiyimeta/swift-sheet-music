@@ -57,5 +57,26 @@
             #expect(result.walked.paths == RasterPage.analyze(bitmap, pageIndex: 0).paths)
             #expect(!result.walked.paths.isEmpty, "the stub staff must yield staff-line paths")
         }
+
+        /// `assembled` is `internal`, so every future caller in this
+        /// module can reach it directly — not just `page`, which always
+        /// analyzes with `keepDeskewed: true`. An analysis built WITHOUT
+        /// that flag has `deskewed == nil`, and `OMRGlyphDetector.glyphs`
+        /// silently returns `[]` for one with no diagnostic when
+        /// `diagnostics` is `nil` — the exact "successful-looking rows,
+        /// zero notes, no error" failure a previous task's fix round
+        /// removed from the harness. `assembled` must refuse such an
+        /// analysis rather than hand it to the detector.
+        @Test func assembledThrowsWithoutADeskewedAnalysis() {
+            let bitmap = Self.fiveLineStaff(width: 600, height: 400, dpi: 300)
+            let analysis = RasterPage.analyze(bitmap, pageIndex: 0) // no keepDeskewed: true
+            #expect(analysis.deskewed == nil)
+            #expect(throws: (any Error).self) {
+                try RasterFrontEnd.assembled(
+                    analysis: analysis, pageIndex: 0, detector: StubDetector(glyphs: []),
+                    diagnostics: nil,
+                )
+            }
+        }
     }
 #endif

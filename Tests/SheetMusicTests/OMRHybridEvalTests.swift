@@ -261,7 +261,12 @@
                 ),
                 degrees: 1.5,
             )
-            let analysis = RasterPage.analyze(bitmap, pageIndex: 0)
+            // keepDeskewed: true — `.full` and `.detectorGlyphs` route
+            // through `RasterFrontEnd.assembled`, which requires it (Task
+            // 8's fix round). This fixture's own tests never touch the
+            // deskewed bitmap themselves; they only need this analysis to
+            // satisfy that contract like any other caller's would.
+            let analysis = RasterPage.analyze(bitmap, pageIndex: 0, keepDeskewed: true)
             let size = analysis.pageSizePt
             let glyph = OMRPageLabels.Glyph(
                 className: "noteheadBlack", bboxPt: nil,
