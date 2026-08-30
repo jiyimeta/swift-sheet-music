@@ -8,84 +8,19 @@
     @testable import SheetMusicUI
     import Testing
 
-    /// The vocabulary check is the one gate here that never needs a
-    /// model: `OMRDetectorFrontEnd.checkVocabulary` is pure, and these
-    /// four cases are the whole of that gate's evidence (task-14 brief). A
-    /// model whose class list disagrees with the frozen table — reorder,
-    /// unknown name, wrong length — must throw, not warn: it would
-    /// otherwise assemble a plausible-looking score out of the wrong
-    /// symbols and nothing downstream would notice.
+    /// `OMRDetectorFrontEnd.applyDecodeOverrides` is the one piece of pure,
+    /// model-free logic left on the test-side adapter after the migration to
+    /// the product detector (`OMRGlyphDetector` + `CoreMLTileClassifier`,
+    /// Tasks 5-6) — vocabulary and numeric manifest validation moved to
+    /// `OMRModelManifest.validate()` and are covered by
+    /// `OMRModelManifestTests` now. Spec §11's sweep varies the three decode
+    /// constants over ONE exported model, via the environment.
     struct OMRDetectorFrontEndTests {
-        @Test func aModelWhoseClassListMatchesTheFrozenTableLoads() throws {
-            try OMRDetectorFrontEnd.checkVocabulary(OMRPrepTargets.trainableVocabulary)
-        }
-
-        @Test func aReorderedClassListIsRejected() {
-            var classes = OMRPrepTargets.trainableVocabulary
-            classes.swapAt(0, 1)
-            // A model whose class 7 means something else than the table's
-            // class 7 builds a plausible score out of the wrong symbols,
-            // and nothing downstream notices. This must throw, not warn.
-            #expect(throws: (any Error).self) {
-                try OMRDetectorFrontEnd.checkVocabulary(classes)
-            }
-        }
-
-        @Test func anUnknownClassNameIsRejected() {
-            #expect(throws: (any Error).self) {
-                try OMRDetectorFrontEnd.checkVocabulary(
-                    OMRPrepTargets.trainableVocabulary + ["noteheadTriangle"],
-                )
-            }
-        }
-
-        @Test func aShortClassListIsRejected() {
-            #expect(throws: (any Error).self) {
-                try OMRDetectorFrontEnd.checkVocabulary(
-                    Array(OMRPrepTargets.trainableVocabulary.dropLast()),
-                )
-            }
-        }
-
-        /// A same-length, reordered class list is the load-bearing case
-        /// (index 7 quietly meaning something else than the frozen
-        /// table's index 7) and the hardest to notice from a bare
-        /// "N classes does not match M classes" message, since N == M
-        /// here. The error must name the first differing index and both
-        /// class names there.
-        @Test func aReorderedClassListNamesTheFirstDifferingIndexAndBothNames() {
-            var classes = OMRPrepTargets.trainableVocabulary
-            classes.swapAt(0, 1)
-            do {
-                try OMRDetectorFrontEnd.checkVocabulary(classes)
-                Issue.record("expected checkVocabulary to throw")
-            } catch {
-                guard case let SheetMusicError.malformedScore(fault) = error else {
-                    Issue.record("expected .malformedScore, got \(error)")
-                    return
-                }
-                let reason = fault.message
-                #expect(reason.contains("index 0"))
-                #expect(reason.contains(classes[0]))
-                #expect(reason.contains(OMRPrepTargets.trainableVocabulary[0]))
-            }
-        }
-    }
-
-    /// `checkNumerics` is pure, same reasoning as `checkVocabulary`: a
-    /// manifest field that decodes fine but is semantically nonsense
-    /// (`staff_space_px: 0`) must throw at load time rather than let
-    /// `glyphs(page:analysis:)` silently return `[]` on every page and
-    /// read as a clean `recall=0.0000` (task-14 brief follow-up). `std`
-    /// and `overlap` reach the same class of silent failure by their own
-    /// roads — see `checkNumerics`' doc comment — and are covered here
-    /// too.
-    struct OMRDetectorFrontEndNumericsTests {
         private static func sampleManifest(
             staffSpacePx: Double = 12, tile: Int = 384, overlap: Int = 64, stride: Int = 4,
             std: Double = 1, topK: Int = 300,
-        ) -> OMRDetectorFrontEnd.Manifest {
-            OMRDetectorFrontEnd.Manifest(
+        ) -> OMRModelManifest {
+            OMRModelManifest(
                 classes: OMRPrepTargets.trainableVocabulary,
                 staffSpacePx: staffSpacePx, tile: tile, overlap: overlap, stride: stride,
                 mean: 0, std: std, threshold: 0.3, topK: topK, nmsRadiusSp: 0.5,
@@ -93,59 +28,6 @@
             )
         }
 
-        @Test func aManifestWithAllPositiveFieldsLoads() throws {
-            try OMRDetectorFrontEnd.checkNumerics(Self.sampleManifest())
-        }
-
-        @Test func aZeroStaffSpacePxIsRejected() {
-            #expect(throws: (any Error).self) {
-                try OMRDetectorFrontEnd.checkNumerics(Self.sampleManifest(staffSpacePx: 0))
-            }
-        }
-
-        @Test func aZeroTileIsRejected() {
-            #expect(throws: (any Error).self) {
-                try OMRDetectorFrontEnd.checkNumerics(Self.sampleManifest(tile: 0))
-            }
-        }
-
-        @Test func aZeroStrideIsRejected() {
-            #expect(throws: (any Error).self) {
-                try OMRDetectorFrontEnd.checkNumerics(Self.sampleManifest(stride: 0))
-            }
-        }
-
-        @Test func aZeroTopKIsRejected() {
-            #expect(throws: (any Error).self) {
-                try OMRDetectorFrontEnd.checkNumerics(Self.sampleManifest(topK: 0))
-            }
-        }
-
-        /// `std: 0` decodes fine but divides by zero in `makeInput`'s
-        /// `(raw - mean) / std`, turning every tile's input — and so the
-        /// model's output — into NaN. That reads exactly like the
-        /// `staff_space_px: 0` failure this gate already guards: a
-        /// clean-looking empty sweep with no diagnostic anywhere.
-        @Test func aZeroStdIsRejected() {
-            #expect(throws: (any Error).self) {
-                try OMRDetectorFrontEnd.checkNumerics(Self.sampleManifest(std: 0))
-            }
-        }
-
-        /// A negative `overlap` does not fail outright (`OMRTiling.
-        /// origins`' step clamps to `max(1, tile - overlap)`) — it
-        /// silently opens a gap between adjacent tiles' pixel windows
-        /// that `OMRTiling.coreRange`'s midpoint partition has no way to
-        /// notice, so pixels in the gap are never run through the model
-        /// by any tile and vanish from every detection.
-        @Test func aNegativeOverlapIsRejected() {
-            #expect(throws: (any Error).self) {
-                try OMRDetectorFrontEnd.checkNumerics(Self.sampleManifest(overlap: -1))
-            }
-        }
-
-        /// Spec §11's sweep varies the three decode constants over ONE
-        /// exported model, via the environment.
         @Test func decodeOverridesReplaceOnlyTheThreeDecodeConstants() {
             let base = Self.sampleManifest()
             let out = OMRDetectorFrontEnd.applyDecodeOverrides(
@@ -211,32 +93,32 @@
             #expect(onlyNms.topK == base.topK)
         }
 
-        /// An overridden value goes through `checkNumerics` like any
-        /// other, so a sweep cannot walk into a configuration the loader
-        /// would have refused from a manifest — `top_k: 0` detects
-        /// nothing and reads as a detector failure.
+        /// An overridden value goes through `validate()` like any other
+        /// manifest, so a sweep cannot walk into a configuration the loader
+        /// would have refused from a manifest — `top_k: 0` detects nothing
+        /// and reads as a detector failure.
         @Test func anOverriddenValueIsStillCheckedForSanity() {
             let out = OMRDetectorFrontEnd.applyDecodeOverrides(
                 to: Self.sampleManifest(), environment: ["OMR_DECODE_TOP_K": "0"],
             )
             #expect(throws: (any Error).self) {
-                try OMRDetectorFrontEnd.checkNumerics(out)
+                try out.validate()
             }
         }
     }
 
     /// `model.json`'s `decode_defaults_measured` and `checkpoint` fields
-    /// used to pass through `Manifest` entirely unread — `JSONDecoder`
+    /// used to pass through the manifest entirely unread — `JSONDecoder`
     /// silently ignores any key with no matching property, so a typo'd
     /// property name would have failed exactly the same silent way. Both
-    /// are now load-bearing: the eval harness's summary line prints
-    /// `decodeDefaultsMeasured` (finding #5) and
-    /// `OMRDetectorFrontEndModelTests` reads `checkpoint` (finding #3).
+    /// are load-bearing: the eval harness's summary line prints
+    /// `decodeDefaultsMeasured` and `OMRDetectorFrontEndModelTests` reads
+    /// `checkpoint`. This decodes the exact key set/shapes
+    /// `Training/model/export.py`'s `_write_manifest` writes, including the
+    /// provenance keys `OMRModelManifest` deliberately does NOT decode, so
+    /// their presence never breaks the load.
     struct OMRDetectorFrontEndManifestDecodeTests {
         @Test func decodesDecodeDefaultsMeasuredAndCheckpointFromRealExportShapedJSON() throws {
-            // Same key set/shapes `Training/model/export.py`'s
-            // `_write_manifest` writes (see that function), including the
-            // provenance keys `Manifest` deliberately does NOT decode.
             let classesJSON = OMRPrepTargets.trainableVocabulary
                 .map { "\"\($0)\"" }.joined(separator: ",")
             let json = """
@@ -260,7 +142,7 @@
             }
             """
             let manifest = try JSONDecoder().decode(
-                OMRDetectorFrontEnd.Manifest.self, from: Data(json.utf8),
+                OMRModelManifest.self, from: Data(json.utf8),
             )
             #expect(manifest.decodeDefaultsMeasured == true)
             #expect(manifest.checkpoint == "/Users/x/run1-train/checkpoint.pt")
@@ -375,7 +257,9 @@
 
             let (bitmap, page) = try Self.realPageWithSymbols()
             let analysis = RasterPage.analyze(bitmap, pageIndex: 0, keepDeskewed: true)
-            let glyphs = try frontEnd.glyphs(page: page, analysis: analysis)
+            let glyphs = try frontEnd.glyphs(
+                pageIndex: page.page.index, analysis: analysis, diagnostics: nil,
+            )
             // The floor model (`--checkpoint random`) is untrained BY
             // DESIGN and must find NOTHING — it exists as the P3d-G1
             // floor, not as a candidate detector (verified: the
@@ -389,7 +273,7 @@
             // check passes vacuously against the floor model, which is
             // exactly the failure mode this test used to have (see the
             // fix report).
-            if frontEnd.checkpoint == "random" {
+            if frontEnd.manifest.checkpoint == "random" {
                 #expect(glyphs.isEmpty)
             } else {
                 #expect(!glyphs.isEmpty)

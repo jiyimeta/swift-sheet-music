@@ -571,7 +571,9 @@
                     // would apply the label transform a second time, and
                     // jittering it would be simulating noise on top of the
                     // detector's own (real) noise.
-                    pageGlyphs = try detector.glyphs(page: page, analysis: analysis)
+                    pageGlyphs = try detector.glyphs(
+                        pageIndex: index, analysis: analysis, diagnostics: nil,
+                    )
                 default:
                     pageGlyphs = jitter(
                         reframe(vocabulary, page: page, transform: analysis.transform),

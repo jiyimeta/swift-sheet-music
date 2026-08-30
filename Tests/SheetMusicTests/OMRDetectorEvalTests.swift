@@ -211,10 +211,10 @@
                     + "recall=\(String(format: "%.4f", recall)) "
                     + "precision=\(String(format: "%.4f", precision)) "
                     + "meanOriginErrSp=\(String(format: "%.4f", meanErr)) "
-                    + "threshold=\(String(format: "%.4f", detector.threshold)) "
-                    + "topK=\(detector.topK) "
-                    + "nmsRadiusSp=\(String(format: "%.4f", detector.nmsRadiusSp)) "
-                    + "decodeDefaultsMeasured=\(detector.decodeDefaultsMeasured)",
+                    + "threshold=\(String(format: "%.4f", detector.manifest.threshold)) "
+                    + "topK=\(detector.manifest.topK) "
+                    + "nmsRadiusSp=\(String(format: "%.4f", detector.manifest.nmsRadiusSp)) "
+                    + "decodeDefaultsMeasured=\(detector.manifest.decodeDefaultsMeasured)",
             )
             // The same seam numbers partitioned by dataset split. These
             // are their own lines rather than fields of the summary
@@ -302,10 +302,25 @@
         /// oracle would, restricted to the detector vocabulary and
         /// reframed into the front-end's own frame — the same pattern as
         /// `OMRHybridFrontEndTests.LabelReplayDetector`.
+        ///
+        /// Holds `pages` because the protocol only hands `glyphs` a
+        /// `pageIndex: Int`, not the full `OMRPageLabels` this fake needs
+        /// to replay the oracle — the real detector needs no such thing,
+        /// which is exactly why the protocol dropped it.
         struct LabelReplayDetector: OMRGlyphDetecting {
+            let pages: [OMRPageLabels]
+
             func glyphs(
-                page: OMRPageLabels, analysis: RasterPageAnalysis,
+                pageIndex: Int, analysis: RasterPageAnalysis,
+                diagnostics _: (@Sendable (PDFImportDiagnostic) -> Void)?,
             ) throws -> [ClassifiedGlyph] {
+                guard let page = pages.first(where: { $0.page.index == pageIndex }) else {
+                    throw SheetMusicError.malformedScore(ScoreFault(
+                        code: "omr.detector",
+                        message: "LabelReplayDetector: no page \(pageIndex) among "
+                            + "\(pages.map(\.page.index).sorted())",
+                    ))
+                }
                 let oracle = try OMROracleFrontEnd.replay(pages: [page])
                 let vocabulary = OMRHybridFrontEnd.detectorVocabularyGlyphs(oracle.walked.glyphs)
                 return OMRHybridFrontEnd.reframe(vocabulary, page: page, transform: analysis.transform)
@@ -338,8 +353,12 @@
 
         /// render.json + score.pdf marker + labels + source.mscx + a
         /// real raster PNG — the well-formed case `.detectorGlyphs`
-        /// succeeds on.
-        static func stageGoodRender(at dir: String) throws {
+        /// succeeds on. Returns the staged page so a caller can build a
+        /// `LabelReplayDetector` that answers for the SAME page the sweep
+        /// will load back off disk (the protocol only hands the detector a
+        /// `pageIndex`, not the full `OMRPageLabels`).
+        @discardableResult
+        static func stageGoodRender(at dir: String) throws -> OMRPageLabels {
             try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
             let (page, score) = try stagePage(glyphs: [noteheadGlyph])
             let bitmap = RasterTestBitmaps.staff(
@@ -347,6 +366,7 @@
             )
             try OMRPrepPNG.write(bitmap, to: URL(fileURLWithPath: "\(dir)/page_0.png"))
             try stageCommonFiles(dir: dir, page: page, score: score)
+            return page
         }
 
         /// render.json + labels + source.mscx, NO `page_0.png` — the
@@ -369,7 +389,8 @@
         /// still run the seam pass over this directory and must NOT
         /// throw for the missing source — that is `seamOnly`, not
         /// `failed`.
-        static func stageFrozenRender(at dir: String) throws {
+        @discardableResult
+        static func stageFrozenRender(at dir: String) throws -> OMRPageLabels {
             try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
             let (page, _) = try stagePage(glyphs: [noteheadGlyph])
             let bitmap = RasterTestBitmaps.staff(
@@ -383,6 +404,7 @@
             try OMRLabelSchema.encodeCanonical(page)
                 .write(to: URL(fileURLWithPath: "\(dir)/page_0.labels.json"))
             // Deliberately no source.mscx — `freeze` never copies it.
+            return page
         }
 
         private static var noteheadGlyph: OMRPageLabels.Glyph {
@@ -425,7 +447,8 @@
         /// exactly like a page P3a's staff detector missed. The label
         /// glyph (a real notehead) is unaffected — it comes from `page`'s
         /// own glyph list, not from the bitmap.
-        static func stageNoStaffRender(at dir: String) throws {
+        @discardableResult
+        static func stageNoStaffRender(at dir: String) throws -> OMRPageLabels {
             try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
             let (page, _) = try stagePage(glyphs: [noteheadGlyph])
             let blank = RasterTestBitmaps.blank(widthPx: 900, heightPx: 500, dpi: 300)
@@ -437,6 +460,7 @@
             try OMRLabelSchema.encodeCanonical(page)
                 .write(to: URL(fileURLWithPath: "\(dir)/page_0.labels.json"))
             // Deliberately no source.mscx — `freeze` never copies it.
+            return page
         }
 
         /// `frozen.json` + labels, NO `page_0.png` and NO `source.mscx` —
@@ -464,7 +488,8 @@
         /// `source.mscx` is present-but-garbage — the exact case that
         /// used to leak this render's seam contribution (`pages`/tp/fp/fn)
         /// into the running totals before `MSCXParser.parse` threw.
-        static func stageRenderWithUnparseableSource(at dir: String) throws {
+        @discardableResult
+        static func stageRenderWithUnparseableSource(at dir: String) throws -> OMRPageLabels {
             try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
             let (page, _) = try stagePage(glyphs: [noteheadGlyph])
             let bitmap = RasterTestBitmaps.staff(
@@ -479,6 +504,7 @@
                 .write(to: URL(fileURLWithPath: "\(dir)/page_0.labels.json"))
             try Data("this is not valid mscx xml".utf8)
                 .write(to: URL(fileURLWithPath: "\(dir)/source.mscx"))
+            return page
         }
 
         /// "aaa_broken" sorts before "bbb_good" so the walk hits the
@@ -490,10 +516,10 @@
                 .appendingPathComponent("omr-detect-eval-wiring-\(UUID().uuidString)").path
             defer { try? FileManager.default.removeItem(atPath: root) }
             try Self.stageBrokenRender(at: "\(root)/aaa_broken")
-            try Self.stageGoodRender(at: "\(root)/bbb_good")
+            let goodPage = try Self.stageGoodRender(at: "\(root)/bbb_good")
 
             let result = try OMRDetectorEvalSweep.sweep(
-                root: root, detector: LabelReplayDetector(), matchSp: 0.5,
+                root: root, detector: LabelReplayDetector(pages: [goodPage]), matchSp: 0.5,
             )
             #expect(result.renders == 2)
             #expect(result.totals.failed == 1)
@@ -518,10 +544,10 @@
             let root = FileManager.default.temporaryDirectory
                 .appendingPathComponent("omr-detect-eval-frozen-\(UUID().uuidString)").path
             defer { try? FileManager.default.removeItem(atPath: root) }
-            try Self.stageFrozenRender(at: "\(root)/frozen_0001")
+            let page = try Self.stageFrozenRender(at: "\(root)/frozen_0001")
 
             let result = try OMRDetectorEvalSweep.sweep(
-                root: root, detector: LabelReplayDetector(), matchSp: 0.5,
+                root: root, detector: LabelReplayDetector(pages: [page]), matchSp: 0.5,
             )
             #expect(result.renders == 1)
             #expect(result.totals.pages == 1)
@@ -545,10 +571,10 @@
             let root = FileManager.default.temporaryDirectory
                 .appendingPathComponent("omr-detect-eval-nostaff-\(UUID().uuidString)").path
             defer { try? FileManager.default.removeItem(atPath: root) }
-            try Self.stageNoStaffRender(at: "\(root)/aaa_nostaff")
+            let page = try Self.stageNoStaffRender(at: "\(root)/aaa_nostaff")
 
             let result = try OMRDetectorEvalSweep.sweep(
-                root: root, detector: LabelReplayDetector(), matchSp: 0.5,
+                root: root, detector: LabelReplayDetector(pages: [page]), matchSp: 0.5,
             )
             #expect(result.totals.failed == 0)
             #expect(result.totals.seamOnly == 1)
@@ -577,8 +603,11 @@
             defer { try? FileManager.default.removeItem(atPath: root) }
             try Self.stageFrozenRenderMissingImage(at: "\(root)/frozen_missing")
 
+            // The missing image means `evaluateSeam` never runs for this
+            // page (`skippedNoAnalysis`), so the detector is never called —
+            // an empty `pages` list is fine here.
             let result = try OMRDetectorEvalSweep.sweep(
-                root: root, detector: LabelReplayDetector(), matchSp: 0.5,
+                root: root, detector: LabelReplayDetector(pages: []), matchSp: 0.5,
             )
             #expect(result.renders == 1)
             #expect(result.totals.pages == 0)
@@ -605,10 +634,10 @@
             let root = FileManager.default.temporaryDirectory
                 .appendingPathComponent("omr-detect-eval-badsource-\(UUID().uuidString)").path
             defer { try? FileManager.default.removeItem(atPath: root) }
-            try Self.stageRenderWithUnparseableSource(at: "\(root)/aaa_badsource")
+            let page = try Self.stageRenderWithUnparseableSource(at: "\(root)/aaa_badsource")
 
             let result = try OMRDetectorEvalSweep.sweep(
-                root: root, detector: LabelReplayDetector(), matchSp: 0.5,
+                root: root, detector: LabelReplayDetector(pages: [page]), matchSp: 0.5,
             )
             #expect(result.totals.failed == 1)
             #expect(result.totals.pages == 0)
@@ -622,17 +651,22 @@
         /// per page" is a measured claim rather than a reading of the
         /// call sites.
         final class CountingDetector: OMRGlyphDetecting, @unchecked Sendable {
-            private let inner = LabelReplayDetector()
+            private let inner: LabelReplayDetector
             private let lock = NSLock()
             private(set) var calls = 0
 
+            init(pages: [OMRPageLabels]) {
+                inner = LabelReplayDetector(pages: pages)
+            }
+
             func glyphs(
-                page: OMRPageLabels, analysis: RasterPageAnalysis,
+                pageIndex: Int, analysis: RasterPageAnalysis,
+                diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?,
             ) throws -> [ClassifiedGlyph] {
                 lock.lock()
                 calls += 1
                 lock.unlock()
-                return try inner.glyphs(page: page, analysis: analysis)
+                return try inner.glyphs(pageIndex: pageIndex, analysis: analysis, diagnostics: diagnostics)
             }
         }
 
@@ -651,9 +685,9 @@
             let root = FileManager.default.temporaryDirectory
                 .appendingPathComponent("omr-detect-eval-once-\(UUID().uuidString)").path
             defer { try? FileManager.default.removeItem(atPath: root) }
-            try Self.stageGoodRender(at: "\(root)/aaa_good")
+            let page = try Self.stageGoodRender(at: "\(root)/aaa_good")
 
-            let detector = CountingDetector()
+            let detector = CountingDetector(pages: [page])
             let result = try OMRDetectorEvalSweep.sweep(
                 root: root, detector: detector, matchSp: 0.5,
             )
@@ -672,15 +706,21 @@
                 widthPx: 900, heightPx: 500, dpi: 300, topY: 200, spacingPx: 16,
             )
             let analysis = RasterPage.analyze(bitmap, pageIndex: 0)
-            let glyphs = try LabelReplayDetector().glyphs(page: page, analysis: analysis)
+            let glyphs = try LabelReplayDetector(pages: [page]).glyphs(
+                pageIndex: page.page.index, analysis: analysis, diagnostics: nil,
+            )
             #expect(!glyphs.isEmpty, "the fixture must produce glyphs, or this proves nothing")
 
             let present = OMRPrecomputedDetector(byPageIndex: [0: glyphs])
-            #expect(try present.glyphs(page: page, analysis: analysis).count == glyphs.count)
+            #expect(
+                try present.glyphs(
+                    pageIndex: page.page.index, analysis: analysis, diagnostics: nil,
+                ).count == glyphs.count,
+            )
 
             let absent = OMRPrecomputedDetector(byPageIndex: [7: glyphs])
             #expect(throws: SheetMusicError.self) {
-                try absent.glyphs(page: page, analysis: analysis)
+                try absent.glyphs(pageIndex: page.page.index, analysis: analysis, diagnostics: nil)
             }
         }
     }

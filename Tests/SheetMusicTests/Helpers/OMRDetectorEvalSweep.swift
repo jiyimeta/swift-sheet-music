@@ -293,7 +293,7 @@
             )
             let truth = OMRHybridFrontEnd.reframe(vocabulary, page: page, transform: analysis.transform)
             let predicted = try OMRDetectTiming.shared.measure("detect") {
-                try detector.glyphs(page: page, analysis: analysis)
+                try detector.glyphs(pageIndex: page.page.index, analysis: analysis, diagnostics: nil)
             }
             let result = OMRDetectTiming.shared.measure("seamMatch") {
                 OMRDetectorMetrics.match(

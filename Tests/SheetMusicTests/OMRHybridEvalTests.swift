@@ -285,10 +285,24 @@
         /// filtered to the detector vocabulary, reframed into the
         /// front-end's frame. Standing in for "a perfect detector", it is
         /// what the anti-vacuity test feeds `.detectorGlyphs`.
+        ///
+        /// Holds `pages` because the protocol only hands `glyphs` a
+        /// `pageIndex: Int`, not the full `OMRPageLabels` this fake needs
+        /// to replay the oracle.
         struct LabelReplayDetector: OMRGlyphDetecting {
+            let pages: [OMRPageLabels]
+
             func glyphs(
-                page: OMRPageLabels, analysis: RasterPageAnalysis,
+                pageIndex: Int, analysis: RasterPageAnalysis,
+                diagnostics _: (@Sendable (PDFImportDiagnostic) -> Void)?,
             ) throws -> [ClassifiedGlyph] {
+                guard let page = pages.first(where: { $0.page.index == pageIndex }) else {
+                    throw SheetMusicError.malformedScore(ScoreFault(
+                        code: "omr.detector",
+                        message: "LabelReplayDetector: no page \(pageIndex) among "
+                            + "\(pages.map(\.page.index).sorted())",
+                    ))
+                }
                 let oracle = try OMROracleFrontEnd.replay(pages: [page])
                 let vocabulary = OMRHybridFrontEnd.detectorVocabularyGlyphs(oracle.walked.glyphs)
                 return OMRHybridFrontEnd.reframe(vocabulary, page: page, transform: analysis.transform)
@@ -315,7 +329,7 @@
 
             let replayed = try OMRHybridFrontEnd.compose(
                 pages: pages, analyses: analyses, mode: .detectorGlyphs,
-                detector: LabelReplayDetector(),
+                detector: LabelReplayDetector(pages: pages),
             )
             #expect(replayed.walked.glyphs == full.walked.glyphs)
             #expect(replayed.walked.paths == full.walked.paths)
@@ -353,7 +367,7 @@
             #expect(throws: (any Error).self) {
                 try OMRHybridFrontEnd.compose(
                     pages: [page], analyses: [:], mode: .detectorGlyphs,
-                    detector: LabelReplayDetector(),
+                    detector: LabelReplayDetector(pages: [page]),
                 )
             }
         }
@@ -384,16 +398,34 @@
             Double(ProcessInfo.processInfo.environment["OMR_HYBRID_JITTER_SP"] ?? "") ?? 0
         }
 
+        /// `nil` (unset) uses the model bundled with `SheetMusicOMRModel` —
+        /// the G1 gate's whole point is that the bundled model is now the
+        /// source of truth, not a downloaded directory.
+        static func modelRoot() -> URL? {
+            ProcessInfo.processInfo.environment["OMR_MODEL_ROOT"]
+                .map { URL(fileURLWithPath: $0, isDirectory: true) }
+        }
+
         @MainActor
-        @Test func hybridAgainstSourceMscx() throws {
+        @Test func hybridAgainstSourceMscx() async throws {
             guard let root = ProcessInfo.processInfo.environment["OMR_DATA_ROOT"] else {
                 Issue.record("OMR_HYBRID_EVAL=1 but OMR_DATA_ROOT is unset")
                 return
             }
             let mode = Self.mode()
+            // Only `.detectorGlyphs` needs a real detector — every other
+            // mode composes from the label oracle / classical CV, and
+            // constructing the Core ML classifier for them would be a
+            // pointless (and, for an external OMR_MODEL_ROOT, possibly
+            // unavailable) load.
+            let detector: (any OMRGlyphDetecting)? = if mode == .detectorGlyphs {
+                try await OMRDetectorFrontEnd(modelRoot: Self.modelRoot())
+            } else {
+                nil
+            }
             var rows = 0
             for dir in try OMRHarnessDirectoryWalk.renderDirectories(root: root) {
-                switch Self.evaluate(dir: dir, mode: mode) {
+                switch Self.evaluate(dir: dir, mode: mode, detector: detector) {
                 case .skipped: continue
                 case let .row(line):
                     print(line)
@@ -422,7 +454,9 @@
         /// failure in one directory is a printed row rather than an
         /// aborted sweep — matching the other four harnesses.
         @MainActor
-        static func evaluate(dir: String, mode: OMRHybridFrontEnd.Mode) -> Outcome {
+        static func evaluate(
+            dir: String, mode: OMRHybridFrontEnd.Mode, detector: (any OMRGlyphDetecting)?,
+        ) -> Outcome {
             let fm = FileManager.default
             do {
                 let labelNames = try OMRHarnessDirectoryWalk.labelFiles(in: dir)
@@ -438,7 +472,7 @@
                 }
                 let hybrid = try OMRHybridFrontEnd.compose(
                     pages: pages, analyses: analyses(dir: dir, pages: pages), mode: mode,
-                    originJitterInSpaces: jitterSigma(),
+                    originJitterInSpaces: jitterSigma(), detector: detector,
                 )
                 let scoreB = try PDFImporter.buildScore(
                     pageCount: hybrid.pageCount, walked: hybrid.walked,

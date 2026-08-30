@@ -84,7 +84,7 @@ enum OMRDetectorDecode {
                         // peaks, and on a trained heatmap almost
                         // every one of the 62 x 96 x 96 cells is one.
                         // Exact because `threshold >= 0` (enforced by
-                        // `OMRDetectorFrontEnd.checkNumerics`) — a
+                        // `OMRModelManifest.validate`) — a
                         // suppressed cell scores 0, which is never
                         // above a non-negative threshold.
                         guard Double(value) > threshold else { continue }
