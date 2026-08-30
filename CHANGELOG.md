@@ -7,6 +7,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- `EditIntentCodec.decode` bounds nesting while it parses, not after. The depth limit only ever ran on the
+  finished tree, so a deeply nested `composite` payload overflowed the stack building that tree and never
+  reached the guard. On WebAssembly the overflow did not even crash there: the shadow stack is 128 KiB and
+  wasm-ld's default layout puts `.bss` directly beneath it, so the recursion overwrote the allocator's own
+  state and the process died later inside an unrelated `malloc`. Both bridges feed this decoder bytes from
+  the host — the browser's from JavaScript — behind a `try?` that cannot catch a stack overflow. Encoded
+  bytes are unchanged, and the accepted nesting depth (8) is unchanged.
+- WebAssembly artifacts link with a 1 MiB shadow stack (`-z stack-size`) and `--stack-first`, so an overflow
+  traps at the function responsible instead of silently corrupting static memory. This restored the
+  WebAssembly CI job, which 2.2.0 shipped red.
+
 ## [2.2.0] - 2026-08-30
 
 ### Added

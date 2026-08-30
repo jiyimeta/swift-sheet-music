@@ -77,6 +77,34 @@ Use the compatibility APIs in `SheetMusicFoundation`:
 The SwiftLint `no_foundation_umbrella` rule is the fast source-level gate. A
 genuinely platform-scoped exception needs a local disable and an explanation.
 
+## The shadow stack is the smallest resource here
+
+wasm-ld gives the shadow stack **128 KiB** by default and the Swift wasm SDK's toolset sets nothing, which is
+two orders of magnitude below what a thread gets on Apple or Android. Worse, the default layout is
+`[data][stack][heap]` with the stack growing *down*, so an overflow does not trap — it writes over `.bss`,
+including the allocator's own state, and the process dies much later inside an unrelated `malloc` with
+`RuntimeError: memory access out of bounds` and a backtrace naming none of the code responsible.
+
+Every wasm target here therefore links with `-z stack-size=1048576` and `--stack-first` (`Package.swift`, the
+`isWasm` branch). `--stack-first` puts the stack below all data so the next overflow runs off address 0 and
+traps at the offending function; wasm-ld requires `--global-base` to be at least the stack size alongside it.
+
+Two things follow for anyone writing portable code:
+
+- **Recursive decoders need a bound on the parse, not on what the parse produced.** A limit applied after the
+  tree is built cannot stop the recursion that builds it. `EditIntentCodec` shipped exactly that inversion; the
+  fix is `NestedEditIntentWire`, and its doc comment is the case study.
+- **Watch single frames, too.** A debug wasm build of this package has functions with 38 KiB and 31 KiB shadow
+  frames on their own. Frame size is readable statically: a function that needs one opens with
+  `global.get 0 ; i32.const N ; i32.sub`, and `N` is its frame.
+
+Put linker flags on the **targets**, never on `swift package -Xlinker`: a global `-Xlinker` also reaches the
+macOS host plugin tools (SwiftSyntax / BridgeJS / Wirelet macros), whose `ld` rejects wasm-ld options outright.
+
+When something does trap inside `malloc`, relink with `--stack-first` and rerun with
+`NODE_OPTIONS=--stack-trace-limit=600` before suspecting the allocator; the default 10-frame trace hides
+recursion.
+
 ## Browser bridge constraints
 
 - `Int` is 32 bits on wasm32. Carry full-width identifiers such as version

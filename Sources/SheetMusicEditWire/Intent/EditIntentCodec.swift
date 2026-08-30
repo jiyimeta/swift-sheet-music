@@ -120,6 +120,9 @@ import Wirelet
 /// tag 1: members  [EditIntentWire] — length-delimited array; each element is itself a length-delimited,
 ///                 self-describing EditIntentWire record (same top-level shape as above, recursively)
 /// ```
+/// The element type is spelled `NestedEditIntentWire` in Swift — a forwarding wrapper that bounds the parse depth
+/// — but its bytes are an `EditIntentWire`'s, so the framing above is what a decoder in any language sees.
+///
 /// The brief anticipated `@WireFormatChoice` might reject this recursion (an array of the very enum that
 /// contains it) and planned a `[Data]`-of-already-encoded-children fallback for that case. It was not needed:
 /// `Array`'s representation is a fixed-size (pointer-sized) reference to a heap buffer regardless of `Element`,
@@ -335,6 +338,10 @@ public enum EditIntentCodec {
 /// Real composites bundle at most two atomic edits (a range op wrapping two sub-commands). Anything nesting deeper
 /// than this is either a bug on the writing side or a malformed payload, and refusing it is far cheaper than
 /// discovering the hard way — via a stack overflow — that `CompositeIntentWire.members` has no built-in bound.
+///
+/// Applied twice, on purpose: `NestedEditIntentWire` stops the *parse* before it recurses, and
+/// `CompositeIntentWire.decoded(depth:)` stops the model conversion afterwards. Only the first of those can
+/// prevent the overflow; see `NestedEditIntentWire` for what happened when only the second existed.
 private let maxCompositeIntentDepth = 8
 
 /// `NoteDuration` as a discriminator plus an optional fraction. `.fraction` is the only case with a payload, so the
@@ -750,22 +757,84 @@ public struct SlotDurationIntentWire {
     }
 }
 
-@WireFormat
-public struct CompositeIntentWire {
-    public var members: [EditIntentWire]
+/// One member of a `CompositeIntentWire`: an `EditIntentWire` whose *parse* is bounded by
+/// `maxCompositeIntentDepth`.
+///
+/// The bound has to live here, not on `decoded(depth:)`. `EditIntentCodec.decode` is
+/// `EditIntentWire(decoding:).decoded()` — the whole tree is built from bytes first, and that build
+/// (`EditIntentWire` ⇄ `CompositeIntentWire` ⇄ its member array) is mutually recursive with no limit of its own,
+/// so `decoded(depth:)`'s guard could only ever fire on a tree that already exists. A payload nesting deeper than
+/// the stack allows never reached it.
+///
+/// On WebAssembly that was not a clean crash. The shadow stack is 128 KiB (wasm-ld's default; the Swift wasm SDK
+/// sets none), one nesting level of this parse costs 8-10 KiB, and wasm-ld's default layout places `.bss` directly
+/// below the stack — so the overflow did not trap, it overwrote the allocator's own state, and the failure
+/// surfaced later as an out-of-bounds trap inside an unrelated `malloc`. `try?` at the two bridge call sites
+/// cannot catch that. 20 levels was enough; the browser bridge takes these bytes from JavaScript.
+///
+/// Every `WireFormat` requirement forwards to `EditIntentWire`, so the encoding is unchanged in both directions —
+/// `Array`'s conformance calls `encode(into:)` per element and `Element(from:)` per element, and both are the
+/// wrapped type's own. This type exists only to own the counter.
+public struct NestedEditIntentWire: WireFormatEncodable, WireFormatDecodable {
+    /// How many `composite` levels enclose the value currently being parsed. Task-local rather than a global so
+    /// two concurrent decodes cannot see each other's count.
+    @TaskLocal private static var parseDepth = 0
 
-    public init(from intents: [EditIntent]) {
-        members = intents.map(EditIntentWire.init(from:))
+    public var wire: EditIntentWire
+
+    public init(_ wire: EditIntentWire) {
+        self.wire = wire
     }
 
-    /// Refuses to decode past `maxCompositeIntentDepth` levels of nesting rather than recursing arbitrarily deep —
-    /// a malformed payload with thousands of nested `composite` members would otherwise overflow the stack instead
-    /// of failing cleanly. `depth` is this composite's own nesting level; each member is one level deeper.
+    public static var wireType: WireType {
+        EditIntentWire.wireType
+    }
+
+    public func encode(into writer: inout WireFormatWriter) {
+        wire.encode(into: &writer)
+    }
+
+    public func encodePayload(into writer: inout WireFormatWriter) {
+        wire.encodePayload(into: &writer)
+    }
+
+    public init(from reader: inout WireFormatReader) throws {
+        wire = try Self.descending { try EditIntentWire(from: &reader) }
+    }
+
+    public init(decodingPayload reader: inout WireFormatReader) throws {
+        wire = try Self.descending { try EditIntentWire(decodingPayload: &reader) }
+    }
+
+    /// Runs `parse` one level deeper, refusing before it recurses rather than after.
+    private static func descending(_ parse: () throws -> EditIntentWire) throws -> EditIntentWire {
+        let depth = parseDepth + 1
+        guard depth <= maxCompositeIntentDepth else {
+            throw WireFormatError.unknownChoiceDiscriminator(UInt32(depth))
+        }
+        return try $parseDepth.withValue(depth, operation: parse)
+    }
+}
+
+@WireFormat
+public struct CompositeIntentWire {
+    /// Held as `NestedEditIntentWire` rather than `EditIntentWire` so the parse itself is depth-bounded; the bytes
+    /// are identical either way. See `NestedEditIntentWire` for why the bound cannot live in `decoded(depth:)`.
+    public var members: [NestedEditIntentWire]
+
+    public init(from intents: [EditIntent]) {
+        members = intents.map { NestedEditIntentWire(EditIntentWire(from: $0)) }
+    }
+
+    /// Refuses to decode past `maxCompositeIntentDepth` levels of nesting. This is the model-side half of the
+    /// limit `NestedEditIntentWire` already applied to the parse; it stays because it is what `EditIntent` — not
+    /// the wire — promises, and it is the half `ScoreEditSession`'s planner mirrors. `depth` is this composite's
+    /// own nesting level; each member is one level deeper.
     public func decoded(depth: Int) throws -> [EditIntent] {
         guard depth < maxCompositeIntentDepth else {
             throw WireFormatError.unknownChoiceDiscriminator(UInt32(depth))
         }
-        return try members.map { try $0.decoded(depth: depth + 1) }
+        return try members.map { try $0.wire.decoded(depth: depth + 1) }
     }
 }
 
