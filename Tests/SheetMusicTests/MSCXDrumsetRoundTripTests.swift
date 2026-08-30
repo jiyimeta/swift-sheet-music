@@ -94,28 +94,34 @@ struct MSCXDrumsetRoundTripTests {
         #expect(ride.first("name")?.text == "Ride (my chart)")
     }
 
-    /// The §6a gate: a kit this package AUTHORS — `Score.blank`'s drum part, whose entries come entirely from
-    /// `GMDrumset` — must still encode to the exact bytes it did before the drumset was a real type. The golden
-    /// was recorded from the pre-change encoder; a diff here means a GM default moved.
-    @Test("an authored drum part encodes byte-identically to the recorded golden")
-    func authoredKitIsByteIdentical() throws {
-        let template = BlankScoreTemplate(
-            title: "Drums",
-            parts: [.init(
-                instrumentID: "drumset", longName: "Drum Kit",
-                staves: [.init(clefType: "PERC", isPercussion: true)],
-                isDrums: true,
-            )],
-            measureCount: 1,
-        )
-        let score = Score.blank(template)
-        let encoded = XMLTreeSerializer.serialize(score.parts[0].instrument.encode())
+    // The §6a gate: a kit this package AUTHORS — `Score.blank`'s drum part, whose entries come entirely from
+    // `GMDrumset` — must still encode to the exact bytes it did before the drumset was a real type. The golden
+    // was recorded from the pre-change encoder; a diff here means a GM default moved.
+    //
+    // Apple-only, because it reads the golden out of the CHECKOUT through `#filePath`: a WASI test host has no
+    // preopened directory beyond the SwiftPM test bundle, so the read fails there by nature rather than by
+    // regression — the same reason `EditReplayWebGoldenTests` carries this guard.
+    #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
+        @Test("an authored drum part encodes byte-identically to the recorded golden")
+        func authoredKitIsByteIdentical() throws {
+            let template = BlankScoreTemplate(
+                title: "Drums",
+                parts: [.init(
+                    instrumentID: "drumset", longName: "Drum Kit",
+                    staves: [.init(clefType: "PERC", isPercussion: true)],
+                    isDrums: true,
+                )],
+                measureCount: 1,
+            )
+            let score = Score.blank(template)
+            let encoded = XMLTreeSerializer.serialize(score.parts[0].instrument.encode())
 
-        let goldenURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Resources/drumsetEncodeGolden.xml")
-        let golden = try Data(contentsOf: goldenURL)
+            let goldenURL = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .appendingPathComponent("Resources/drumsetEncodeGolden.xml")
+            let golden = try Data(contentsOf: goldenURL)
 
-        #expect(encoded == golden)
-    }
+            #expect(encoded == golden)
+        }
+    #endif
 }
