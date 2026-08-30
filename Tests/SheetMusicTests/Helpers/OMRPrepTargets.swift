@@ -27,10 +27,11 @@
 
         static let unreachable: Set = ["fine", "toCoda"]
 
-        /// The 62 trainable classes, in frozen table order. The model's
-        /// class index IS this array's index.
-        static let trainableVocabulary: [String] =
-            OMRLabelClassNames.detectorVocabulary.filter(isTrainable)
+        /// Forwards to the table that now lives in `SheetMusicPDF`. Kept as a
+        /// name so the label pipeline's many call sites need no churn.
+        static var trainableVocabulary: [String] {
+            OMRGlyphVocabulary.trainable
+        }
 
         static func glyphs(
             page: OMRPageLabels, transform: PageTransform, scale: Double,

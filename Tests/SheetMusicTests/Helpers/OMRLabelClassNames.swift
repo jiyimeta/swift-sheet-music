@@ -4,112 +4,32 @@
     @testable import SheetMusicPDF
 
     /// Stable string names for `SMuFLSemantic` cases — the label-format
-    /// class vocabulary (spec §7.1). The DETECTOR vocabulary is the 64
-    /// concrete classes below; `stem` / `staff5Lines` / `unknownXXXX` are
-    /// also representable but excluded from the detector vocabulary.
+    /// class vocabulary (spec §7.1). The DETECTOR vocabulary and its
+    /// class ↔ semantic table now live in `OMRGlyphVocabulary`
+    /// (`SheetMusicPDF`, reached here via `@testable import`); this type
+    /// keeps only the `className(for:)` direction, which the label-export
+    /// pipeline (a Tests-only concern) still needs.
     ///
     /// `className(for:)` is TOTAL: every `SMuFLSemantic` value maps to a
-    /// name. `semantic(forClassName:)` round-trips every name that
-    /// `className(for:)` can produce, with exactly one deliberate
-    /// exception: `restOther`, the shared fallback for `.rest(.fraction)`
-    /// and `.rest(.measure)`. That name discards the duration's
-    /// parameters, so the reverse direction cannot reconstruct which rest
-    /// it was and `semantic(forClassName: "restOther")` returns `nil` on
-    /// purpose — do not turn this into a fabricated duration. Gate P0-G1
-    /// (Task 6) needs the oracle replay to compare `Score` values
-    /// exactly; a silent wrong-but-plausible duration would corrupt that
-    /// gate, while `nil` fails loudly as intended.
-    ///
-    /// ORDER IS FROZEN: `Training/generate/vocabulary.py` mirrors this
-    /// list 1:1 and COCO category ids are positions in it. Append-only.
-    ///
-    /// Two rows are marked `// UNREACHABLE`, and the marker is load-
-    /// bearing — `Training/tests/test_vocabulary.py` parses it and
-    /// asserts it against `vocabulary.UNREACHABLE`. `fine` and `toCoda`
-    /// have no SMuFL glyph at all (the specification has only `coda`
-    /// U+E048 and `codaSquare` U+E049); MuseScore engraves both markers
-    /// as WORDS, so they arrive in the text stream, and `TextGlyph`
-    /// carries no ink box by design. Nothing can ever emit a detector
-    /// box for them. They stay in the list because it is append-only,
-    /// and gate P3c-G3 subtracts them from its denominator rather than
-    /// reporting a shortfall no run can ever fix. `PDFImporter+Structure`
-    /// does recover both markers — from that text stream — so the
-    /// score-level path has them and only the seam-level path cannot.
+    /// name. `OMRGlyphVocabulary.semantic(forClassName:)` round-trips
+    /// every name that `className(for:)` can produce, with exactly one
+    /// deliberate exception: `restOther`, the shared fallback for
+    /// `.rest(.fraction)` and `.rest(.measure)`. That name discards the
+    /// duration's parameters, so the reverse direction cannot reconstruct
+    /// which rest it was and `semantic(forClassName: "restOther")` returns
+    /// `nil` on purpose — do not turn this into a fabricated duration.
+    /// Gate P0-G1 (Task 6) needs the oracle replay to compare `Score`
+    /// values exactly; a silent wrong-but-plausible duration would
+    /// corrupt that gate, while `nil` fails loudly as intended.
     enum OMRLabelClassNames {
-        /// (className, semantic) — one row per detector class.
-        static let detectorTable: [(className: String, semantic: SMuFLSemantic)] = [
-            ("brace", .brace),
-            ("noteheadDoubleWhole", .noteheadDoubleWhole),
-            ("noteheadWhole", .noteheadWhole),
-            ("noteheadHalf", .noteheadHalf),
-            ("noteheadBlack", .noteheadBlack),
-            ("noteheadXWhole", .noteheadXWhole),
-            ("noteheadXHalf", .noteheadXHalf),
-            ("noteheadXBlack", .noteheadXBlack),
-            ("flag8thUp", .flag8thUp),
-            ("flag8thDown", .flag8thDown),
-            ("flag16thUp", .flag16thUp),
-            ("flag16thDown", .flag16thDown),
-            ("flag32ndUp", .flag32ndUp),
-            ("flag32ndDown", .flag32ndDown),
-            ("flag64thUp", .flag64thUp),
-            ("flag64thDown", .flag64thDown),
-            ("augmentationDot", .augmentationDot),
-            ("restWhole", .rest(.whole)),
-            ("restHalf", .rest(.half)),
-            ("restQuarter", .rest(.quarter)),
-            ("rest8th", .rest(.eighth)),
-            ("rest16th", .rest(.sixteenth)),
-            ("rest32nd", .rest(.thirtySecond)),
-            ("rest64th", .rest(.sixtyFourth)),
-            ("clefG", .clefG),
-            ("clefG8va", .clefG8va),
-            ("clefG8vb", .clefG8vb),
-            ("clefG15ma", .clefG15ma),
-            ("clefG15mb", .clefG15mb),
-            ("clefF", .clefF),
-            ("clefF8va", .clefF8va),
-            ("clefF8vb", .clefF8vb),
-            ("clefF15ma", .clefF15ma),
-            ("clefF15mb", .clefF15mb),
-            ("clefC", .clefC),
-            ("clefPercussion", .clefPercussion),
-            ("accidentalSharp", .accidentalSharp),
-            ("accidentalFlat", .accidentalFlat),
-            ("accidentalNatural", .accidentalNatural),
-            ("accidentalDoubleSharp", .accidentalDoubleSharp),
-            ("accidentalDoubleFlat", .accidentalDoubleFlat),
-            ("timeSig0", .timeSignatureDigit(0)),
-            ("timeSig1", .timeSignatureDigit(1)),
-            ("timeSig2", .timeSignatureDigit(2)),
-            ("timeSig3", .timeSignatureDigit(3)),
-            ("timeSig4", .timeSignatureDigit(4)),
-            ("timeSig5", .timeSignatureDigit(5)),
-            ("timeSig6", .timeSignatureDigit(6)),
-            ("timeSig7", .timeSignatureDigit(7)),
-            ("timeSig8", .timeSignatureDigit(8)),
-            ("timeSig9", .timeSignatureDigit(9)),
-            ("timeSigCommon", .timeSignatureCommon),
-            ("timeSigCutTime", .timeSignatureCutTime),
-            ("repeatBarlineDots", .repeatBarlineDots),
-            ("segno", .segno),
-            ("coda", .coda),
-            ("dalSegno", .dalSegno),
-            ("daCapo", .daCapo),
-            ("fine", .fine), // UNREACHABLE: no SMuFL glyph, drawn as text
-            ("toCoda", .toCoda), // UNREACHABLE: no SMuFL glyph, drawn as text
-            ("fermata", .fermata),
-            ("dynamic", .dynamic),
-            ("articulation", .articulation),
-            ("ornament", .ornament),
-        ]
-
-        static let detectorVocabulary: [String] = detectorTable.map(\.className)
+        /// Forwards to the table that now lives in `SheetMusicPDF`. Kept as
+        /// a name so this file's many callers need no churn.
+        static var detectorVocabulary: [String] {
+            OMRGlyphVocabulary.detectorVocabulary
+        }
 
         private static let nameBySemantic: [SMuFLSemantic: String] =
-            Dictionary(uniqueKeysWithValues: detectorTable.map { ($0.semantic, $0.className) })
-        private static let semanticByName: [String: SMuFLSemantic] =
-            Dictionary(uniqueKeysWithValues: detectorTable.map { ($0.className, $0.semantic) })
+            Dictionary(uniqueKeysWithValues: OMRGlyphVocabulary.detectorTable.map { ($0.semantic, $0.className) })
 
         /// Total: every `SMuFLSemantic` value has a name. Non-detector
         /// cases get reserved names so a label file can carry ANY walked
@@ -130,10 +50,10 @@
             case let .unknown(cp):
                 return String(format: "unknown%04X", cp)
             default:
-                // Unreachable while detectorTable covers every remaining
-                // case. A new SMuFLSemantic case added upstream lands
-                // here — and NO test catches that statically:
-                // `roundTripsEveryDetectorClass` iterates
+                // Unreachable while OMRGlyphVocabulary.detectorTable covers
+                // every remaining case. A new SMuFLSemantic case added
+                // upstream lands here — and NO test catches that
+                // statically: `roundTripsEveryDetectorClass` iterates
                 // `detectorVocabulary` (this table's own class names),
                 // so it is exhaustive over the vocabulary, never over
                 // `SMuFLSemantic`. The real detection channel is at
@@ -145,25 +65,6 @@
                 // back to this table, not to the classifier.
                 return "unknown0000"
             }
-        }
-
-        /// `"restOther"` deliberately returns `nil` — it has no unique
-        /// inverse, see the type doc comment.
-        static func semantic(forClassName name: String) -> SMuFLSemantic? {
-            if let s = semanticByName[name] { return s }
-            switch name {
-            case "stem": return .stem
-            case "staff5Lines": return .staff5Lines
-            case "rest128th": return .rest(.oneTwentyEighth)
-            case "rest256th": return .rest(.twoFiftySixth)
-            default: break
-            }
-            if name.hasPrefix("unknown"), name.count > "unknown".count,
-               let cp = UInt32(name.dropFirst("unknown".count), radix: 16)
-            {
-                return .unknown(cp)
-            }
-            return nil
         }
     }
 #endif

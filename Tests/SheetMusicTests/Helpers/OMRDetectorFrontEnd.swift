@@ -361,7 +361,7 @@
             analysis: RasterPageAnalysis, scale: Double,
         ) throws -> ClassifiedGlyph {
             let className = manifest.classes[detection.classIndex]
-            guard let semantic = OMRLabelClassNames.semantic(forClassName: className) else {
+            guard let semantic = OMRGlyphVocabulary.semantic(forClassName: className) else {
                 throw SheetMusicError.malformedScore(ScoreFault(
                     code: "omr.detector",
                     message: "OMR detector: no semantic for class \(className) — "

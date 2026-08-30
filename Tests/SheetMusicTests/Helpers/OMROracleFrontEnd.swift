@@ -37,7 +37,7 @@
             _ source: [OMRPageLabels.Glyph], pageIndex: Int,
         ) throws -> [ClassifiedGlyph] {
             try source.map { g in
-                guard let semantic = OMRLabelClassNames.semantic(forClassName: g.className) else {
+                guard let semantic = OMRGlyphVocabulary.semantic(forClassName: g.className) else {
                     throw SheetMusicError.malformedScore(ScoreFault(
                         code: "omr.oracle",
                         message: "OMR labels: unknown class \(g.className)",

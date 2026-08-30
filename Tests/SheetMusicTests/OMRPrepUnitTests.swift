@@ -242,6 +242,28 @@
             let out = OMRPrepTargets.glyphs(page: page, transform: transform, scale: 1)
             #expect(out.glyphs.isEmpty)
         }
+
+        @Test func vocabularyIsReachableFromSourcesAndStillFrozen() {
+            let table = OMRGlyphVocabulary.trainable
+            #expect(table.count == 62)
+            #expect(table.first == "brace")
+            #expect(table.last == "ornament")
+            // Hand-pasting 62 entries can duplicate one and drop another while
+            // keeping the count right; a Set comparison catches exactly that.
+            #expect(Set(table).count == table.count, "the table has a duplicate entry")
+            // Spot-check interior indices, because count/first/last are all blind
+            // to a reordering in the middle — and the class INDEX is what the
+            // model's output means. `checkVocabulary` (Task 4) pins the full order;
+            // these catch a bad paste here, before that gate exists.
+            #expect(table[4] == "noteheadBlack")
+            #expect(table[24] == "clefG")
+            #expect(table[41] == "timeSig0")
+            // The map is what turns a class index into a score element; a
+            // missing entry is a glyph silently dropped at classify time.
+            for name in table {
+                #expect(OMRGlyphVocabulary.semantic(forClassName: name) != nil, "no semantic for \(name)")
+            }
+        }
     }
 
     /// Fixture builder for `OMRPrepTargetsTests`: clean (unskewed, identity

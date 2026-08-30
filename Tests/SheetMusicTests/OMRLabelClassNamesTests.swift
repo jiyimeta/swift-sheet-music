@@ -17,7 +17,7 @@
 
         @Test func roundTripsEveryDetectorClass() {
             for name in OMRLabelClassNames.detectorVocabulary {
-                let semantic = OMRLabelClassNames.semantic(forClassName: name)
+                let semantic = OMRGlyphVocabulary.semantic(forClassName: name)
                 #expect(semantic != nil, "no semantic for \(name)")
                 if let semantic {
                     #expect(OMRLabelClassNames.className(for: semantic) == name)
@@ -30,25 +30,25 @@
             #expect(OMRLabelClassNames.className(for: .timeSignatureDigit(4)) == "timeSig4")
             #expect(OMRLabelClassNames.className(for: .noteheadBlack) == "noteheadBlack")
             #expect(OMRLabelClassNames.className(for: .clefG8vb) == "clefG8vb")
-            #expect(OMRLabelClassNames.semantic(forClassName: "timeSig9") == .timeSignatureDigit(9))
+            #expect(OMRGlyphVocabulary.semantic(forClassName: "timeSig9") == .timeSignatureDigit(9))
         }
 
         @Test func reservedClassesAreRepresentable() {
             #expect(OMRLabelClassNames.className(for: .stem) == "stem")
             #expect(OMRLabelClassNames.className(for: .staff5Lines) == "staff5Lines")
-            #expect(OMRLabelClassNames.semantic(forClassName: "stem") == .stem)
-            #expect(OMRLabelClassNames.semantic(forClassName: "staff5Lines") == .staff5Lines)
+            #expect(OMRGlyphVocabulary.semantic(forClassName: "stem") == .stem)
+            #expect(OMRGlyphVocabulary.semantic(forClassName: "staff5Lines") == .staff5Lines)
         }
 
         @Test func unknownCodepointRoundTripsThroughHexName() {
             #expect(OMRLabelClassNames.className(for: .unknown(0xE0F3)) == "unknownE0F3")
-            #expect(OMRLabelClassNames.semantic(forClassName: "unknownE0F3") == .unknown(0xE0F3))
-            #expect(OMRLabelClassNames.semantic(forClassName: "unknownZZ") == nil)
+            #expect(OMRGlyphVocabulary.semantic(forClassName: "unknownE0F3") == .unknown(0xE0F3))
+            #expect(OMRGlyphVocabulary.semantic(forClassName: "unknownZZ") == nil)
         }
 
         @Test func unmappableNamesReturnNil() {
-            #expect(OMRLabelClassNames.semantic(forClassName: "") == nil)
-            #expect(OMRLabelClassNames.semantic(forClassName: "notAClass") == nil)
+            #expect(OMRGlyphVocabulary.semantic(forClassName: "") == nil)
+            #expect(OMRGlyphVocabulary.semantic(forClassName: "notAClass") == nil)
         }
 
         @Test func restOtherIsDeliberatelyNotInvertible() {
@@ -60,7 +60,7 @@
                 Fraction(numerator: 1, denominator: 12),
             ))) == "restOther")
             #expect(OMRLabelClassNames.className(for: .rest(.measure)) == "restOther")
-            #expect(OMRLabelClassNames.semantic(forClassName: "restOther") == nil)
+            #expect(OMRGlyphVocabulary.semantic(forClassName: "restOther") == nil)
         }
     }
 #endif
