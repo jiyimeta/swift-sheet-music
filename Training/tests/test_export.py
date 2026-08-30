@@ -164,6 +164,27 @@ def test_decode_defaults_measured_flag_is_present_and_false_for_a_fresh_export(t
     assert meta["decode_defaults_measured"] is False
 
 
+def test_export_writes_a_compiled_model_directory(tmp_path):
+    """The Swift side loads model.mlmodelc directly; export must produce
+    it. `export.py`'s CLI entry point is `main(argv)`, not a bare
+    `export_model(checkpoint=..., out_dir=...)` function — this test uses
+    the same `main([...])` convention as every other test in this file,
+    with `--checkpoint random` so no checkpoint file is needed (P3d-G1's
+    floor path) and `--tile 64` to keep the Core ML conversion + compile
+    fast."""
+    out = tmp_path / "model-root"
+    exit_code = export.main([
+        "--checkpoint", "random", "--out", str(out),
+        "--tile", "64", "--staff-space-px", "12.0", "--overlap", "16",
+    ])
+    assert exit_code == 0
+    compiled = out / "model.mlmodelc"
+    assert compiled.is_dir(), f"{compiled} missing; export only wrote {sorted(p.name for p in out.iterdir())}"
+    # coremlcompiler emits a coremldata.bin inside; an empty directory is a
+    # silent failure that would surface only as a load error in Swift.
+    assert (compiled / "coremldata.bin").exists()
+
+
 def test_a_checkpoint_trained_at_a_different_width_still_round_trips(tmp_path):
     # export.py must read (width, num_classes) back from the checkpoint's
     # own tensor shapes, not assume the training default (width=32). A

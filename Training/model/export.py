@@ -1,8 +1,13 @@
 """Packages a trained (or freshly initialized) `net.SymbolNet` checkpoint
-into the three artifacts the Swift side consumes:
+into the four artifacts the Swift side consumes:
 
-- `model.mlpackage` — Apple inference. `OMRDetectorFrontEnd` runs tiles
-  through this.
+- `model.mlpackage` — the Core ML source package, kept for provenance and
+  as `model.mlmodelc`'s compile input.
+- `model.mlmodelc` — `model.mlpackage` precompiled via `coremlcompiler`.
+  This is what `OMRDetectorFrontEnd` actually loads and runs tiles
+  through: SwiftPM has no Core ML build rule, so a raw `.mlpackage`
+  resource would need `MLModel.compileModel(at:)` at every `init()`. See
+  the integration design spec, section 4.
 - `model.onnx` — the canonical artifact by design decision. Nothing in
   Swift uses it this round; it exists so the later Android phase is a
   conversion of this graph rather than a retraining.
@@ -184,6 +189,24 @@ def _export_coreml(wrapped: torch.nn.Module, example: torch.Tensor,
     mlmodel.save(str(out / "model.mlpackage"))
 
 
+def _compile_mlpackage(package_path: Path) -> Path:
+    """Compile model.mlpackage -> model.mlmodelc next to it.
+
+    The Swift package bundles the COMPILED directory: SwiftPM has no Core ML
+    build rule, so a raw .mlpackage resource would need MLModel.compileModel
+    at every init(). See the integration design spec, section 4.
+    """
+    out_dir = package_path.parent
+    subprocess.run(
+        ["xcrun", "coremlcompiler", "compile", str(package_path), str(out_dir)],
+        check=True,
+    )
+    compiled = out_dir / (package_path.stem + ".mlmodelc")
+    if not compiled.is_dir():
+        raise RuntimeError(f"coremlcompiler produced no {compiled}")
+    return compiled
+
+
 def _export_onnx(wrapped: torch.nn.Module, example: torch.Tensor, out: Path) -> None:
     onnx_path = out / "model.onnx"
     # torch 2.13 defaults `dynamo=True`, which needs the `onnxscript`
@@ -247,6 +270,8 @@ def main(argv: list[str] | None = None) -> int:
     example = torch.zeros(1, 1, args.tile, args.tile)
 
     _export_coreml(wrapped, example, args.tile, args.out)
+    compiled = _compile_mlpackage(args.out / "model.mlpackage")
+    print(f"compiled Core ML model: {compiled}")
     _export_onnx(wrapped, example, args.out)
     _write_manifest(args.out, args, hyperparams, args.checkpoint)
     return 0
