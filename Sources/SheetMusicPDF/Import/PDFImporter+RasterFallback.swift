@@ -24,6 +24,28 @@ extension PDFImporter {
         return try OMRGlyphDetector(classifier: classifier)
     }
 
+    /// Lowest resolution the fallback will rasterize at: one pixel per point.
+    /// Below this a staff line is thinner than a pixel and the classical-CV
+    /// stage has nothing to measure.
+    static let minimumRenderDPI: Double = 72
+
+    /// `omrRenderDPI` is public, so any `Double` can arrive here, and
+    /// `PDFPageRasterizer` clamps its pixel dimensions with `max(1, …)` — a
+    /// zero, negative or NaN value would therefore rasterize a 1x1 page whose
+    /// only symptom is a downstream "no staff detected on this page". Clamp
+    /// once per document and name the value that was rejected.
+    static func renderDPI(for options: PDFImportOptions) -> Double {
+        guard options.omrRenderDPI.isFinite, options.omrRenderDPI >= minimumRenderDPI else {
+            options.diagnostics?(PDFImportDiagnostic(
+                severity: .warning, location: "document",
+                message: "OMR: omrRenderDPI is \(options.omrRenderDPI), which cannot resolve a "
+                    + "staff line; rasterizing at \(minimumRenderDPI) dpi instead",
+            ))
+            return minimumRenderDPI
+        }
+        return options.omrRenderDPI
+    }
+
     /// Reads every page the vector walker found no music on.
     ///
     /// PER PAGE, so a document mixing a typeset title page with scanned music
@@ -32,13 +54,21 @@ extension PDFImporter {
     /// page's staff count, so a raster page that miscounts can push that to
     /// `nil` and drop EVERY page — vector ones included — onto the per-page
     /// heuristic. Exercised by the mixed-document test.
+    ///
+    /// NON-THROWING BY DESIGN. Every failure below degrades to today's outcome
+    /// FOR THAT PAGE — a warning and no content — because the fallback is an
+    /// enhancement over pages the importer was going to contribute nothing for.
+    /// Propagating one page's rasterization or detection failure would turn
+    /// setting `omrTileClassifier` on a 200-page mixed document into a total
+    /// parse failure over one page the vector path never read anyway.
     static func applyRasterFallback(
         to walked: inout WalkedContent,
         pageSizes: inout [Int: CGSize],
         document: PDFDocument,
         detector: any OMRGlyphDetecting,
         options: PDFImportOptions,
-    ) throws {
+    ) {
+        let dpi = renderDPI(for: options)
         for index in 0 ..< document.pageCount {
             // Music, specifically: `texts` are deliberately NOT consulted.
             // A scan often carries an invisible OCR text layer, and counting
@@ -55,11 +85,24 @@ extension PDFImporter {
                 ))
                 continue
             }
-            let bitmap = try PDFPageRasterizer.bitmap(page: page, dpi: options.omrRenderDPI)
-            let result = try RasterFrontEnd.page(
-                bitmap: bitmap, pageIndex: index, detector: detector,
-                diagnostics: options.diagnostics,
-            )
+            let result: (walked: WalkedContent, pageSize: CGSize)
+            do {
+                let bitmap = try PDFPageRasterizer.bitmap(page: page, dpi: dpi)
+                result = try RasterFrontEnd.page(
+                    bitmap: bitmap, pageIndex: index, detector: detector,
+                    diagnostics: options.diagnostics,
+                )
+            } catch {
+                // Same shape as the missing-`CGPDFPage` case above: say what
+                // was lost, and leave the page as the vector walk left it.
+                options.diagnostics?(PDFImportDiagnostic(
+                    severity: .warning, location: "page \(index)",
+                    message: "OMR: this page has no vector content and could not be read as an "
+                        + "image either; nothing was imported from it",
+                    context: "\(error)",
+                ))
+                continue
+            }
             guard !result.walked.glyphs.isEmpty || !result.walked.paths.isEmpty else {
                 // Nothing was read. Leave the page exactly as the vector walk
                 // left it — in particular its mediaBox page size, which any

@@ -123,6 +123,10 @@ public struct PDFImportOptions {
 
     /// Resolution at which a page with no vector content is rasterized. The
     /// training corpus's DPI grid is 200/300/400, so 300 sits mid-distribution.
+    ///
+    /// Values below `PDFImporter.minimumRenderDPI` (72 — one pixel per point),
+    /// and non-finite ones, are clamped with a `warning` diagnostic rather
+    /// than silently rasterizing a 1x1 page.
     public var omrRenderDPI: Double = 300
 
     /// TESTING ONLY, INTERNAL. Substitutes the whole glyph-detection stage so the

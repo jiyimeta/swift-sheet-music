@@ -40,7 +40,7 @@ extension PDFImporter {
         // analysis, not even a second pass over the pages. That is what makes
         // the byte-identical vector corpus gate meaningful.
         if let detector = try rasterDetector(for: options) {
-            try applyRasterFallback(
+            applyRasterFallback(
                 to: &content, pageSizes: &pageSizes,
                 document: document, detector: detector, options: options,
             )

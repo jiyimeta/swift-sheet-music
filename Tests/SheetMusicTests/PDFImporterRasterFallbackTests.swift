@@ -17,32 +17,58 @@
         static let pageSize = CGSize(width: 300, height: 200)
         static let renderDPI: Double = 300
 
+        /// TWO five-line staves per fixture page, not one, and that is
+        /// load-bearing: `ensembleStaffCount` discards any page whose staff
+        /// count is below 2 and reports `nil` for a GCD below 2, so a
+        /// one-staff-per-page fixture would leave `ensembleSize` at `nil` in
+        /// BOTH arms of the mixed-document test — there would be no ensemble
+        /// for a miscounting raster page to collapse, and the test would
+        /// exercise none of the coupling it exists for.
+        /// `bothFixturePagesCarryATwoStaffEnsemble` checks the fixture still
+        /// clears that gate rather than trusting these constants.
+        static let staffBandCount = 2
+
         /// The image page's bitmap, sized so that rasterizing the PDF page it
         /// is drawn into at `renderDPI` reproduces it 1:1.
         ///
-        /// Shape and thickness match the fixture `OMRRasterFrontEndTests`
-        /// already proves yields staff-line paths; only the scale differs, so
-        /// the staff spacing (29px ≈ 7pt) clears `detectStaves`'
-        /// `lineMergeTolerance` of 2pt and the lines clear its 50pt width gate.
+        /// Line shape and thickness match the fixture `OMRRasterFrontEndTests`
+        /// already proves yields staff-line paths; only the scale and the band
+        /// count differ, so the staff spacing (29px ≈ 7pt) clears
+        /// `detectStaves`' `lineMergeTolerance` of 2pt and the lines clear its
+        /// 50pt width gate. The 350px gap between bands is far outside the
+        /// 29px line spacing, so the CV window cannot read the two bands as
+        /// one ten-line staff.
         static func staffBitmap() -> GrayBitmap {
-            RasterTestBitmaps.staff(
-                widthPx: Int((pageSize.width * renderDPI / 72).rounded()),
-                heightPx: Int((pageSize.height * renderDPI / 72).rounded()),
-                dpi: renderDPI, topY: 300, spacingPx: 29,
+            let widthPx = Int((pageSize.width * renderDPI / 72).rounded())
+            let heightPx = Int((pageSize.height * renderDPI / 72).rounded())
+            var bitmap = RasterTestBitmaps.blank(
+                widthPx: widthPx, heightPx: heightPx, dpi: renderDPI,
             )
+            for band in 0 ..< staffBandCount {
+                for line in 0 ..< 5 {
+                    RasterTestBitmaps.hLine(
+                        &bitmap, y: 150 + band * 350 + line * 29,
+                        x0: widthPx / 20, x1: widthPx - widthPx / 20, thickness: 1,
+                    )
+                }
+            }
+            return bitmap
         }
 
-        /// The five-line staff the vector walker reads, as stroked paths —
-        /// the minimum `PDFImporterFaçadeTests` proves `buildScore` accepts.
+        /// The five-line staves the vector walker reads, as stroked paths —
+        /// the shape `PDFImporterFaçadeTests` proves `buildScore` accepts,
+        /// twice, for the reason on `staffBandCount`.
         static func drawVectorStaff(into context: CGContext) {
             context.setLineWidth(0.5)
             context.setStrokeColor(gray: 0, alpha: 1)
-            for i in 0 ..< 5 {
-                let y = CGFloat(80 + i * 10)
-                context.beginPath()
-                context.move(to: CGPoint(x: 25, y: y))
-                context.addLine(to: CGPoint(x: 275, y: y))
-                context.strokePath()
+            for band in 0 ..< staffBandCount {
+                for line in 0 ..< 5 {
+                    let y = CGFloat(30 + band * 100 + line * 10)
+                    context.beginPath()
+                    context.move(to: CGPoint(x: 25, y: y))
+                    context.addLine(to: CGPoint(x: 275, y: y))
+                    context.strokePath()
+                }
             }
         }
 
@@ -67,6 +93,7 @@
         enum FixtureError: Error {
             case cannotBuildImage
             case cannotBuildPDF
+            case detectorFailed(Int)
         }
 
         /// One in-memory PDF, one closure per page.
@@ -148,6 +175,17 @@
             var messages: [String] = []
         }
 
+        /// Stands in for every way one page's read can fail — a `CGContext`
+        /// the rasterizer cannot create, a model that throws mid-document.
+        struct FailingDetector: OMRGlyphDetecting {
+            func glyphs(
+                pageIndex: Int, analysis _: RasterPageAnalysis,
+                diagnostics _: (@Sendable (PDFImportDiagnostic) -> Void)?,
+            ) throws -> [ClassifiedGlyph] {
+                throw FixtureError.detectorFailed(pageIndex)
+            }
+        }
+
         // MARK: - Tests
 
         /// G3a: with a classifier set, an image-only PDF reaches `buildScore`.
@@ -171,21 +209,25 @@
         /// Both directions matter: asserting only "not asked" would pass even
         /// if the fallback were deleted outright, and a test that cannot fail
         /// is this repository's most-recorded defect class.
-        @Test func theDetectorIsAskedOnlyForPagesWithNoVectorContent() {
+        @Test func theDetectorIsAskedOnlyForPagesWithNoVectorContent() throws {
+            // Fixture construction stays OUTSIDE the `try?`: swallowing a
+            // `FixtureError` there would let the vector half pass because no
+            // document was ever parsed.
+            let vectorData = try Self.vectorPDF()
+            let imageData = try Self.imageOnlyPDF(Self.staffBitmap())
+
             let onVector = Tripwire()
             var vectorOptions = PDFImportOptions()
             vectorOptions.omrDetector = onVector
             vectorOptions.omrRenderDPI = Self.renderDPI
-            _ = try? PDFImporter.parse(pdfData: Self.vectorPDF(), options: vectorOptions)
+            _ = try? PDFImporter.parse(pdfData: vectorData, options: vectorOptions)
             #expect(onVector.pagesAsked.isEmpty, "a page with vector content must not be rasterized")
 
             let onImage = Tripwire()
             var imageOptions = PDFImportOptions()
             imageOptions.omrDetector = onImage
             imageOptions.omrRenderDPI = Self.renderDPI
-            _ = try? PDFImporter.parse(
-                pdfData: Self.imageOnlyPDF(Self.staffBitmap()), options: imageOptions,
-            )
+            _ = try? PDFImporter.parse(pdfData: imageData, options: imageOptions)
             #expect(onImage.pagesAsked == [0], "an image-only page must reach the detector exactly once")
         }
 
@@ -193,20 +235,41 @@
         /// detection, no new pass over the pages. The corpus gate is only
         /// meaningful because of this, so it is asserted directly rather than
         /// inferred from the corpus staying byte-identical.
+        ///
+        /// A detector that was never injected cannot witness this — a
+        /// tripwire nobody handed to the importer reports "not asked" however
+        /// the importer behaves. So the invariant is asserted where it is
+        /// actually decided (`rasterDetector(for:)` returning `nil`) and where
+        /// it is actually observable (the default parse says exactly the one
+        /// thing it has always said — a new pass over the pages would show up
+        /// here as extra chatter even if it changed no output).
         @Test func noClassifierAndNoDetectorEntersNoNewCodePath() throws {
-            let tripwire = Tripwire()
-            var options = PDFImportOptions()
-            options.omrDetector = tripwire
-            // The same document, once with the detector and once without.
             let data = try Self.imageOnlyPDF(Self.staffBitmap())
-            _ = try? PDFImporter.parse(pdfData: data, options: options)
-            #expect(tripwire.pagesAsked == [0], "the injected detector is what makes the page readable")
 
-            let untouched = Tripwire()
+            #expect(try PDFImporter.rasterDetector(for: PDFImportOptions()) == nil)
+
+            let log = DiagnosticLog()
+            var defaults = PDFImportOptions()
+            defaults.diagnostics = { log.messages.append($0.message) }
             #expect(throws: (any Error).self) {
-                try PDFImporter.parse(pdfData: data, options: PDFImportOptions())
+                try PDFImporter.parse(pdfData: data, options: defaults)
             }
-            #expect(untouched.pagesAsked.isEmpty)
+            #expect(log.messages.count == 1, "the default path must not gain any new diagnostic")
+            #expect(log.messages.first?.contains("omrTileClassifier") == true)
+            #expect(
+                !log.messages.contains { $0.hasPrefix("OMR:") },
+                "no diagnostic may come from the raster path when it was never entered",
+            )
+
+            // The contrast, so none of the above passes merely because the
+            // machinery is absent: the SAME document does reach a detector
+            // once one is configured.
+            let tripwire = Tripwire()
+            var configured = PDFImportOptions()
+            configured.omrDetector = tripwire
+            configured.omrRenderDPI = Self.renderDPI
+            _ = try? PDFImporter.parse(pdfData: data, options: configured)
+            #expect(tripwire.pagesAsked == [0], "the injected detector is what makes the page readable")
         }
 
         /// G3c: one vector page and one image-only page in the same document.
@@ -240,6 +303,35 @@
             )
         }
 
+        /// The precondition `aMixedDocumentLeavesTheVectorPageUnchanged`
+        /// depends on and cannot state for itself: BOTH fixture pages must
+        /// detect two staves, so the document-wide GCD is a real ensemble
+        /// (2) rather than the `nil` a one-staff-per-page fixture would leave
+        /// it at. Without this, the mixed-document test still passes but
+        /// exercises none of the coupling it exists for — so the fixture is
+        /// measured here rather than assumed from its constants.
+        @Test func bothFixturePagesCarryATwoStaffEnsemble() throws {
+            let document = try PDFImporter.openDocument(Self.vectorPDF())
+            let walk = try PDFImporter.walkDocument(document)
+            let vectorStaves = PDFImporter.detectStaves(
+                paths: walk.content.paths, classified: walk.content.glyphs, pageIndex: 0,
+            )
+            #expect(vectorStaves.count == 2, "the vector fixture page must carry two staves")
+
+            // The raster page's staves come from the same classical-CV paths
+            // the fallback merges, so they are measured the same way.
+            let analysis = RasterPage.analyze(Self.staffBitmap(), pageIndex: 0)
+            let rasterStaves = PDFImporter.detectStaves(
+                paths: analysis.paths, classified: [], pageIndex: 0,
+            )
+            #expect(rasterStaves.count == 2, "the raster fixture page must carry two staves")
+
+            #expect(
+                PDFImporter.ensembleStaffCount([vectorStaves, rasterStaves]) == 2,
+                "the mixed document must have a non-collapsed ensemble to lose",
+            )
+        }
+
         /// The coupling mechanism itself, directly — so a failure names the
         /// cause instead of pointing at a document-level symptom.
         @Test func oneMiscountingPageCollapsesTheEnsembleGCD() {
@@ -250,6 +342,48 @@
                 PDFImporter.ensembleStaffCount([eight, seven]) == nil,
                 "GCD(8,7)=1, which the importer reports as no usable ensemble",
             )
+        }
+
+        /// One page the fallback cannot read must not fail the document. The
+        /// fallback is an ENHANCEMENT over pages the importer was going to
+        /// contribute nothing for, so a failure there has to degrade to
+        /// today's outcome for that page — otherwise setting
+        /// `omrTileClassifier` on a mixed 200-page document turns a parse that
+        /// succeeded on its vector pages into a total failure over one page.
+        @Test func aPageTheFallbackCannotReadDoesNotFailTheDocument() throws {
+            let log = DiagnosticLog()
+            var options = PDFImportOptions()
+            options.omrDetector = FailingDetector()
+            options.omrRenderDPI = Self.renderDPI
+            options.diagnostics = { log.messages.append($0.message) }
+
+            let score = try PDFImporter.parse(pdfData: Self.mixedPDF(), options: options)
+            #expect(!score.parts.isEmpty, "the vector page must still be imported")
+            #expect(
+                log.messages.contains { $0.contains("could not be read as an image") },
+                "the page the fallback dropped must say so",
+            )
+        }
+
+        /// `omrRenderDPI` is public and takes any `Double`;
+        /// `PDFPageRasterizer` clamps its pixel dimensions with `max(1, …)`,
+        /// so 0 would rasterize a 1x1 page whose only symptom is a downstream
+        /// "no staff detected".
+        @Test func anUnusableRenderDPIIsClampedAndNamed() {
+            let log = DiagnosticLog()
+            var options = PDFImportOptions()
+            options.omrDetector = Tripwire()
+            options.omrRenderDPI = 0
+            options.diagnostics = { log.messages.append($0.message) }
+            _ = try? PDFImporter.parse(
+                pdfData: Self.imageOnlyPDF(Self.staffBitmap()), options: options,
+            )
+            #expect(log.messages.contains { $0.contains("omrRenderDPI is 0.0") })
+
+            var sane = PDFImportOptions()
+            sane.omrRenderDPI = Self.renderDPI
+            #expect(PDFImporter.renderDPI(for: sane) == Self.renderDPI)
+            #expect(PDFImporter.renderDPI(for: PDFImportOptions()) == 300)
         }
 
         /// §9: a page the importer cannot read must say why, and name the knob.
