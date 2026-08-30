@@ -12,6 +12,13 @@ enum PDFPageRasterizer {
     /// consumed 24GB and took the machine down. Peak is set by the LARGEST
     /// SINGLE PAGE (~18MB for A4 at 400dpi), so a caller that rasterizes one
     /// page at a time has a flat ceiling however long the document is.
+    ///
+    /// CAVEAT: a page's `/Rotate` entry is NOT honored. This draws directly
+    /// via `drawPDFPage`, not through `CGPDFPageGetDrawingTransform`, so a
+    /// page carrying `/Rotate 90` (or 180/270) rasterizes unrotated —
+    /// sideways or upside-down relative to how a viewer would show it. This
+    /// matters more than usual here: scanned PDFs — this rasterizer's whole
+    /// reason to exist — are a common source of rotated pages.
     static func bitmap(page: CGPDFPage, dpi: Double) throws -> GrayBitmap {
         try autoreleasepool {
             let box = page.getBoxRect(.mediaBox)
