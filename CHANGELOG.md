@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-30
+
 ### Added
 
 - `GMDrumset` publishes the General MIDI drum kit as one table — line, notehead, voice, stem and name per
