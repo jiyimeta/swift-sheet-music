@@ -319,6 +319,7 @@ if isWasm {
                 .product(name: "SwiftySynth", package: "swiftysynth"),
                 "SheetMusicAudioSwiftySynth",
                 "SheetMusicPDF",
+                "SheetMusicOMRModel",
                 .product(name: "Wirelet", package: "swift-wirelet"),
                 "SheetMusicFoundation",
                 "SheetMusicXMLTools",
@@ -341,6 +342,9 @@ if !isAndroid {
         // Pure-Swift, MIT SoundFont2 playback backend (SwiftySynth). Works on
         // iOS + macOS, App-Store clean — the default stealing-free synth.
         .library(name: "SheetMusicAudioSwiftySynth", targets: ["SheetMusicAudioSwiftySynth"]),
+        // Separately linkable so only a consumer that wants scanned-PDF reading carries
+        // the model's ~1.1MB. SheetMusicPDF itself never depends on it.
+        .library(name: "SheetMusicOMRModel", targets: ["SheetMusicOMRModel"]),
         .executable(name: "render-previews", targets: ["RenderPreviews"]),
     ]
     targets += [
@@ -385,6 +389,18 @@ if !isAndroid {
                 "SheetMusicMIDI",
                 "SheetMusicAudioCore",
                 "SheetMusicAudioApple",
+            ],
+        ),
+        .target(
+            name: "SheetMusicOMRModel",
+            dependencies: ["SheetMusicPDF", "SheetMusicCore"],
+            resources: [
+                // .copy, NOT .process: the model is ALREADY compiled (Training/model/export.py
+                // runs coremlcompiler). SwiftPM has no Core ML build rule of its own, and
+                // `.process` behaves differently under Xcode's build system than under plain
+                // `swift build` — .copy makes the bundle layout identical under both.
+                .copy("Resources/model.mlmodelc"),
+                .copy("Resources/model.json"),
             ],
         ),
         .executableTarget(
