@@ -7,14 +7,6 @@ and this project adheres to
 
 ## [Unreleased]
 
-### Changed
-
-- A `.composite` intent's members are now planned one after another, each against the score the members before it
-  left — not all against the score the composite started from. Every planner that reads the score (the cross-bar
-  planners, the `.measure` promotion, the full-measure collapse) is asking about the state its own command will
-  meet, and a write into a voice an earlier member creates used to ask that question of a voice that was not there
-  yet.
-
 ### Added
 
 - `GMDrumset` publishes the General MIDI drum kit as one table — line, notehead, voice, stem and name per
@@ -73,6 +65,28 @@ and this project adheres to
   special handling, and cumulative rather than per-edit, so a host reads it once when it is ready to write.
   Duplicate ids in the baseline (a malformed file) yield the identity mapping rather than a guess.
 
+### Changed
+
+- A `.composite` intent's members are now planned one after another, each against the score the members before it
+  left — not all against the score the composite started from. Every planner that reads the score (the cross-bar
+  planners, the `.measure` promotion, the full-measure collapse) is asking about the state its own command will
+  meet, and a write into a voice an earlier member creates used to ask that question of a voice that was not there
+  yet.
+- `NotePreviewPolicy` in `SheetMusicAudioCore` now owns those decisions for
+  both platforms: which audition supersedes which, how long a drum rings
+  against a melodic note, and how long the audio graph has to keep rendering
+  after a note-off. `AndroidPlaybackEngine` reaches it over JNI
+  (`nativePreviewPolicy*`) and executes the plan it answers with; the MIDI
+  messages each engine sends are still its own, because FluidSynth and
+  AUMIDISynth genuinely differ there. Android previously held a hand-written
+  copy of the Apple engine's state machine, which is how it came to be
+  missing both of the behaviours above.
+- Android's master-tuning RPN comes from the shared `MasterTuning`
+  (`nativeMasterTuningControlChanges`) rather than a Kotlin port of the same
+  arithmetic kept in step by golden assertions on each side. Goldens catch a
+  change made twice and made differently; they say nothing about a change
+  made once.
+
 ### Fixed
 
 - Re-anchoring brackets no longer leaves a hole in the bracket gutter. `column` is a horizontal coordinate —
@@ -82,6 +96,14 @@ and this project adheres to
   columns still occupied onto `0 ..< n`, which fixes `RemovePart` (whose result is saved to the file) and
   `filtered(hidingStaves:)` (whose result is only displayed) in one place. The renumbering is global rather than
   per anchor staff, so brackets that share a column keep sharing one.
+- Note auditions on Android no longer go missing while notes are entered
+  quickly, and no longer click. A new audition now supersedes the one it
+  replaces and invalidates its pending end — without which the old note's
+  end fired on its own schedule and silenced the new one, audible only when
+  the two shared a channel and pitch, so it presented as intermittent. The
+  output stream is also held open past the note-off for the note's release,
+  which used to be cut off mid-decay on every audition sounded from an idle
+  reader. The Apple engine has carried both behaviours for a long time.
 
 ## [2.1.0] - 2026-08-29
 

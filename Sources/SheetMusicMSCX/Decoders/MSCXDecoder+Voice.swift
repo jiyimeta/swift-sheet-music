@@ -70,20 +70,27 @@ extension Voice {
         // per-measure and never flushed, so it doesn't keep them
         // either.
         var pendingGraces: [GraceChord] = []
-        // Measure-relative position of the next chord/rest, in
-        // fractions-of-whole-note. Advances by each chord/rest's
-        // tuplet-scaled duration. Used to compute `MeasurePosition`
-        // for lifted system elements.
+        // Measure-relative read position, in fractions-of-whole-note.
+        // Advances by each chord/rest's tuplet-scaled duration AND by
+        // every `<location>` delta, exactly like the single tick that
+        // `ReadContext` carries: `setLocation` resolves a relative
+        // `Location` against the context's *current* tick and stores
+        // the result, so a jog stays in force for everything that
+        // follows in the voice. Used to compute `MeasurePosition` for
+        // lifted system elements.
         var cursor = Fraction(numerator: 0, denominator: 1)
-        // Accumulated `<location>` deltas that haven't yet attached
-        // to an element. Each location shifts the next non-temporal
-        // element by `delta` from the natural cursor. When the next
-        // element is a system-level one (tempo / rehearsal / staff /
-        // system text / swing) the shift is consumed by its
-        // `MeasurePosition` and dropped from the voice stream;
-        // otherwise the shift is emitted as a `.locationShift`
-        // immediately before the next voice element so downstream
-        // consumers (dynamic placement, …) keep seeing it.
+        // The net `<location>` movement not yet written into the voice
+        // stream. It is flushed as a `.locationShift` immediately
+        // before the next voice element, so downstream consumers
+        // (dynamic placement, playback, layout) walk the same cursor
+        // the reader did. Lifted system elements (tempo / rehearsal /
+        // staff / system text / swing) record their tick and leave
+        // this alone — they mark a position, they do not consume the
+        // jog — so the balanced back-then-forward pair MuseScore
+        // writes around an off-beat mark nets to zero and adds nothing
+        // to the voice. `cursor` has always already absorbed whatever
+        // is sitting here; this tracks what still needs *writing out*,
+        // never where the reader is.
         var pendingShift = Fraction(numerator: 0, denominator: 1)
         // `<Beam>` sits in the voice stream immediately before the group
         // it governs. MuseScore attaches the beam it just read to the
@@ -106,12 +113,19 @@ extension Voice {
             elements.append(element)
         }
         func lifted(_ element: SystemElement) {
-            let position = MeasurePosition(offset: cursor + pendingShift)
+            let position = MeasurePosition(offset: cursor)
             systemElements.append(PositionedSystemElement(
                 position: position,
                 element: element,
             ))
-            pendingShift = Fraction(numerator: 0, denominator: 1)
+            // `pendingShift` deliberately survives: a lifted element
+            // records where it sits but does not *consume* the jog
+            // that got there. The voice cursor stays moved for the
+            // chords and rests that follow, so the shift still has to
+            // reach the voice stream. Balanced jog pairs (the shape
+            // MuseScore writes around an off-beat mark) cancel here
+            // and emit nothing, which is why the common case adds no
+            // `.locationShift` at all.
         }
         for child in voiceChildren {
             switch child.name {
@@ -296,9 +310,19 @@ extension Voice {
                 // is relative to the current cursor; negative values
                 // jog backwards. `<measures>` only appears in
                 // spanner contexts and is ignored here.
+                //
+                // Move `cursor`, not just `pendingShift`: MuseScore
+                // keeps one tick (`ReadContext::setLocation` →
+                // `Location::toAbsolute` against the current
+                // location), so consecutive `<location>`s ACCUMULATE.
+                // A bar with two off-beat tempo marks is written as
+                // jog-back, `<Tempo>`, jog-forward, `<Tempo>`, and the
+                // second jog starts from where the first one left the
+                // cursor — not from the chord/rest boundary.
                 if let fracText = child.first("fractions")?.text,
                    let frac = Fraction(mscxString: fracText)
                 {
+                    cursor += frac
                     pendingShift += frac
                 }
             default:

@@ -1,6 +1,8 @@
 package io.github.jiyimeta.sheetmusic.audio.fakes
 
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
+import io.github.jiyimeta.sheetmusic.audio.model.PreviewPlan
+import io.github.jiyimeta.sheetmusic.audio.serialization.PreviewPlanCodec
 
 /**
  * Test double for [AndroidPlaybackEngine.JniBridge].
@@ -78,5 +80,103 @@ internal open class FakeJniBridge(
     override fun buildClickSoundFont(strongWav: ByteArray, weakWav: ByteArray): ByteArray {
         buildClickSoundFontCalls += strongWav to weakWav
         return buildClickSoundFontResult
+    }
+
+    // ── Note auditions ─────────────────────────────────────────────────────
+    //
+    // The policy these stand in for is Swift, and `NotePreviewPolicyTests` over there is what pins it. These
+    // exist so a test can hand the engine a PLAN and watch what the engine does with it, which is the whole of
+    // this side's job: send the supersede, sound the note, end the note the policy names and no other.
+
+    /** Every plan handed out, in order. */
+    val previewPolicyBeginCalls = mutableListOf<PreviewPlan>()
+
+    private var previewGeneration = 0L
+
+    /**
+     * Builds the plan for each [previewPolicyBegin]. The default plans a plain audition that supersedes
+     * nothing; override it to script a supersede, a drum's longer ring, or an unusual tail.
+     */
+    var previewPlanFor: (
+        channel: Int, pitch: Int, velocity: Int, isDrum: Boolean, ringMillis: Int,
+    ) -> PreviewPlan = { channel, pitch, velocity, isDrum, ringMillis ->
+        PreviewPlan(
+            generation = ++previewGeneration,
+            supersedesChannel = -1,
+            supersedesPitch = 0,
+            channel = channel,
+            pitch = pitch,
+            velocity = velocity,
+            isDrum = isDrum,
+            ringMilliseconds = ringMillis,
+            releaseTailMilliseconds = 800,
+        )
+    }
+
+    /**
+     * What [previewPolicyEnd] answers, packed as `channel shl 8 or pitch`, or -1 for "superseded".
+     *
+     * The default ends the newest plan's own note and nothing else — the shape the real policy has, stated
+     * once here rather than re-derived in every test that needs an audition to end normally.
+     */
+    var previewPolicyEndResult: (generation: Long) -> Long = { generation ->
+        previewPolicyBeginCalls.lastOrNull()
+            ?.takeIf { it.generation == generation }
+            ?.let { it.channel.toLong() shl 8 or it.pitch.toLong() }
+            ?: -1L
+    }
+
+    var previewPolicyCreateResult: Long = 7L
+    val previewPolicyReleaseCalls = mutableListOf<Long>()
+    val previewPolicySilenceCalls = mutableListOf<Long>()
+
+    override fun previewPolicyCreate(): Long = previewPolicyCreateResult
+
+    override fun previewPolicyRelease(policyHandle: Long) {
+        previewPolicyReleaseCalls += policyHandle
+    }
+
+    override fun previewPolicyBegin(
+        policyHandle: Long,
+        channel: Int,
+        pitch: Int,
+        velocity: Int,
+        isDrum: Boolean,
+        ringMilliseconds: Int,
+    ): ByteArray {
+        val plan = previewPlanFor(channel, pitch, velocity, isDrum, ringMilliseconds)
+        previewPolicyBeginCalls += plan
+        return PreviewPlanCodec.encode(plan)
+    }
+
+    override fun previewPolicyEnd(policyHandle: Long, generation: Long): Long =
+        previewPolicyEndResult(generation)
+
+    override fun previewPolicySilence(policyHandle: Long): Long {
+        previewPolicySilenceCalls += policyHandle
+        return -1L
+    }
+
+    /**
+     * Cents the engine asked to retune by, in order — the half of master tuning that is still this side's,
+     * now that the RPN encoding itself is shared Swift.
+     */
+    val masterTuningCalls = mutableListOf<Double>()
+
+    /**
+     * One placeholder message per retune, and none at all for zero cents.
+     *
+     * Not a marker carrying the cents, unlike [MarkerMasterTuning]: this answer goes back through
+     * `MidiControlChangeCodec`, whose bytes are bytes, so the cents could not survive the trip. Tests that
+     * care which cents were asked for read [masterTuningCalls]; tests that care about the resulting RPN build
+     * their own `AudioExporter` and inject [MarkerMasterTuning] directly.
+     */
+    override fun masterTuningControlChanges(cents: Double): ByteArray {
+        masterTuningCalls += cents
+        return if (cents == 0.0) {
+            byteArrayOf()
+        } else {
+            byteArrayOf(MarkerMasterTuning.CONTROLLER.toByte(), 1)
+        }
     }
 }

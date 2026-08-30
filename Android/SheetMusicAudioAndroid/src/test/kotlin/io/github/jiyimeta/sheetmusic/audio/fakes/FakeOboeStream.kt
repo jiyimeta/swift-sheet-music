@@ -19,10 +19,13 @@ internal object FakeOboeStream {
 }
 
 internal class NoOpOboeStream : OboeStream() {
-    override fun open() { /* skip AudioTrack construction */ }
-    override fun play() { /* no-op */ }
-    override fun stop() { /* no-op */ }
-    override fun close() { /* no-op */ }
+    /** Stream transitions in order, for tests that care about when the stream runs rather than that it does. */
+    val calls: MutableList<String> = mutableListOf()
+
+    override fun open() { calls += "open" } // and skip AudioTrack construction
+    override fun play() { calls += "play" }
+    override fun stop() { calls += "stop" }
+    override fun close() { calls += "close" }
 
     /**
      * The audio clock a test can drive.

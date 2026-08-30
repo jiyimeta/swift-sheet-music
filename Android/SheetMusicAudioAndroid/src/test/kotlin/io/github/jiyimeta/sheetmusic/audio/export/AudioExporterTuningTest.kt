@@ -4,6 +4,7 @@ import android.net.Uri
 import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import io.github.jiyimeta.sheetmusic.audio.export.fakes.FakeAudioFileEncoder
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakePlayerDriver
+import io.github.jiyimeta.sheetmusic.audio.fakes.MarkerMasterTuning
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
@@ -24,9 +25,11 @@ import org.junit.Test
  * its original key: transposed playback is a tuning shift and never a re-render, so the SMF the
  * exporter loads holds the authored pitches and nothing downstream moved them.
  *
- * Every assertion is on the fake synth's recorded call log rather than on a flag the exporter sets,
- * and every expected RPN value is written out rather than recomputed from `MasterTuning` — a test
- * that re-derives the number it is checking cannot see a wrong formula.
+ * Every assertion is on the fake synth's recorded call log rather than on a flag the exporter sets, and
+ * on the CENTS each channel was retuned by rather than on the RPN bytes that carry them. Turning cents
+ * into an RPN is `MasterTuning` in SheetMusicAudioCore, shared with the Apple exporter and pinned by
+ * `MasterTuningTests` there; this file's subject is which cents each channel gets, which is the half that
+ * was wrong on Android. `MarkerMasterTuning` is what makes the log say that outright.
  *
  * What these tests are blind to: whether FluidSynth honours the RPN, and whether the resulting audio
  * is actually at the requested pitch. Both are device observations.
@@ -80,6 +83,7 @@ class AudioExporterTuningTest {
             synthFactory = { _: Int -> synth as SynthDriver },
             playerFactory = { _: Long -> player },
             encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
+            masterTuningControlChanges = MarkerMasterTuning::invoke,
         )
         runTest {
             exporter.run(
@@ -98,20 +102,13 @@ class AudioExporterTuningTest {
         return synth.calls.toList()
     }
 
-    /** The RPN CC sequence `MasterTuning` emits, written out for [cents], not recomputed from it. */
-    private fun rpn(channel: Int, coarse: Int, fineMsb: Int, fineLsb: Int) = listOf(
-        "cc($channel,101,0)", "cc($channel,100,2)", "cc($channel,6,$coarse)", "cc($channel,38,0)",
-        "cc($channel,101,0)", "cc($channel,100,1)", "cc($channel,6,$fineMsb)", "cc($channel,38,$fineLsb)",
-        "cc($channel,101,127)", "cc($channel,100,127)",
-    )
 
     @Test
     fun aTransposedScoreRetunesTheMelodicChannel() {
         val calls = renderCalls(snapshot(masterTuningCents = 0.0, transposeSemitones = 2))
-        // +2 semitones = +200 cents: coarse RPN 64 + 2 = 66, no fine remainder (8192 = 64 << 7).
         assertTrue(
             "melodic channel 0 must carry the +2-semitone master tuning, got $calls",
-            calls.containsAll(rpn(channel = 0, coarse = 66, fineMsb = 64, fineLsb = 0)),
+            calls.contains(MarkerMasterTuning.marker(channel = 0, cents = 200.0)),
         )
     }
 
@@ -131,38 +128,39 @@ class AudioExporterTuningTest {
     @Test
     fun calibrationAndTransposeCombineOnMelodicAndCalibrationAloneOnPercussion() {
         val calls = renderCalls(snapshot(masterTuningCents = 100.0, transposeSemitones = 3))
-        // Melodic: 100 + 300 = 400 cents → coarse 64 + 4 = 68. Percussion: 100 cents → 64 + 1 = 65.
-        // The two channels must disagree, which a fixture with a zero calibration could not show.
+        // Melodic: 100 + 300 = 400 cents. Percussion: the 100 of calibration alone. The two channels must
+        // disagree, which a fixture with a zero calibration could not show.
         assertTrue(
             "melodic channel must carry calibration + transpose, got $calls",
-            calls.containsAll(rpn(channel = 0, coarse = 68, fineMsb = 64, fineLsb = 0)),
+            calls.contains(MarkerMasterTuning.marker(channel = 0, cents = 400.0)),
         )
         assertTrue(
             "drum channel must carry the calibration alone, got $calls",
-            calls.containsAll(rpn(channel = 9, coarse = 65, fineMsb = 64, fineLsb = 0)),
+            calls.contains(MarkerMasterTuning.marker(channel = 9, cents = 100.0)),
         )
     }
 
     @Test
-    fun aFractionalCalibrationCarriesItsFineHalf() {
+    fun aFractionalCalibrationReachesTheChannelUnrounded() {
         val calls = renderCalls(snapshot(masterTuningCents = -13.7, transposeSemitones = -1))
-        // -113.7 cents → coarse -1 (RPN 63), fine -13.7 cents → 8192 - 1122 = 7070 → MSB 55, LSB 30.
-        // A coarse-only implementation drops 13.7 cents and would pass every whole-semitone case.
+        // -113.7 cents, not -100: an exporter that combined the two by whole semitones would drop the 13.7
+        // and pass every other case in this file. That the fraction then survives INTO the RPN's fine half
+        // is `MasterTuningTests`' business, on the Swift side where the split lives.
         assertTrue(
-            "the fine half of the calibration must survive, got $calls",
-            calls.containsAll(rpn(channel = 0, coarse = 63, fineMsb = 55, fineLsb = 30)),
+            "the fractional calibration must survive the combination, got $calls",
+            calls.contains(MarkerMasterTuning.marker(channel = 0, cents = -113.7)),
         )
     }
 
     @Test
     fun anUntunedScoreSendsNoTuningAtAll() {
         val calls = renderCalls(snapshot(masterTuningCents = 0.0, transposeSemitones = 0))
-        // The negative control: with no calibration and no transpose the render must be byte-for-byte
-        // the sequence it produced before this change, so the RPN controllers never appear.
+        // The negative control: with no calibration and no transpose the render must be byte-for-byte the
+        // sequence it produced before tuning existed, so no retune may be asked for at all.
         assertEquals(
-            "an untuned export must send no RPN, got $calls",
+            "an untuned export must ask for no retune, got $calls",
             emptyList<String>(),
-            calls.filter { it.contains(",101,") || it.contains(",100,") || it.contains(",6,") },
+            calls.filter { it.contains(",${MarkerMasterTuning.CONTROLLER},") },
         )
     }
 }
