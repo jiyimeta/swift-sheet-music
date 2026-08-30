@@ -559,34 +559,30 @@
                     sizes[index] = oracle.pageSizes[index] ?? .zero
                     continue
                 }
-                let pageGlyphs: [ClassifiedGlyph]
                 switch mode {
-                case .detectorGlyphs:
-                    guard let detector else {
-                        throw hybridError("detectorGlyphs needs a detector")
-                    }
-                    // No `reframe` and no `jitter`: the detector works on
-                    // the front-end's OWN deskewed pixels, so its output is
-                    // already in the frame the paths are in. Reframing it
-                    // would apply the label transform a second time, and
-                    // jittering it would be simulating noise on top of the
-                    // detector's own (real) noise.
-                    pageGlyphs = try detector.glyphs(
-                        pageIndex: index, analysis: analysis, diagnostics: nil,
+                case .full, .detectorGlyphs:
+                    // Both are the PRODUCT front-end; see
+                    // `productPageAssembly`'s doc comment.
+                    let assembled = try productPageAssembly(
+                        mode: mode, page: page, index: index, analysis: analysis,
+                        vocabulary: vocabulary, originJitterInSpaces: originJitterInSpaces,
+                        detector: detector,
                     )
+                    walked.glyphs += assembled.walked.glyphs
+                    walked.paths += assembled.walked.paths
+                    sizes[index] = assembled.pageSize
                 default:
-                    pageGlyphs = jitter(
+                    walked.glyphs += jitter(
                         reframe(vocabulary, page: page, transform: analysis.transform),
                         sigmaInSpaces: originJitterInSpaces,
                         staffSpacingPt: analysis.staffSpacingPt,
                     )
+                    walked.paths += composedPaths(
+                        oracle: oracle, page: page, analysis: analysis,
+                        vocabulary: vocabulary, mode: mode, index: index,
+                    )
+                    sizes[index] = analysis.pageSizePt
                 }
-                walked.glyphs += pageGlyphs
-                walked.paths += composedPaths(
-                    oracle: oracle, page: page, analysis: analysis,
-                    vocabulary: vocabulary, mode: mode, index: index,
-                )
-                sizes[index] = analysis.pageSizePt
             }
             return (walked, sizes, oracle.pageCount)
         }
@@ -695,10 +691,78 @@
         /// throw, not silently fall back to the label oracle — a silent
         /// fallback would report label-quality numbers under a detector
         /// heading.
-        private static func hybridError(_ reason: String) -> Error {
+        /// `fileprivate` rather than `private`: `productPageAssembly`, a
+        /// top-level function in this file (kept out of this enum's body
+        /// to stay under SwiftLint's `type_body_length` ceiling), needs
+        /// it too.
+        fileprivate static func hybridError(_ reason: String) -> Error {
             SheetMusicError.malformedScore(ScoreFault(
                 code: "omr.hybrid", message: "OMRHybridFrontEnd: \(reason)",
             ))
         }
+    }
+
+    /// Wraps a precomputed glyph list as an `OMRGlyphDetecting`, so
+    /// `.full` mode can assemble its oracle-vocabulary glyphs through the
+    /// exact same `RasterFrontEnd.assembled` call `.detectorGlyphs` uses,
+    /// instead of a second, parallel assembly path that happens to agree
+    /// with it today.
+    ///
+    /// Top-level rather than nested in `OMRHybridFrontEnd` — that enum
+    /// sits at SwiftLint's `type_body_length` ceiling already (see the
+    /// note on `Mode.allBeamComponents`).
+    private struct OracleGlyphDetector: OMRGlyphDetecting {
+        let glyphs: [ClassifiedGlyph]
+
+        func glyphs(
+            pageIndex _: Int, analysis _: RasterPageAnalysis,
+            diagnostics _: (@Sendable (PDFImportDiagnostic) -> Void)?,
+        ) throws -> [ClassifiedGlyph] {
+            glyphs
+        }
+    }
+
+    /// The per-page assembly for `OMRHybridFrontEnd.compose`'s `.full`
+    /// and `.detectorGlyphs` modes — top-level for the same
+    /// `type_body_length` reason as `OracleGlyphDetector`.
+    ///
+    /// Both modes are the PRODUCT front-end — `.full` with a perfect
+    /// (oracle) glyph source standing in for the detector,
+    /// `.detectorGlyphs` with the real one — so both assemble through the
+    /// same `RasterFrontEnd.assembled` call `Sources` ships, and there is
+    /// exactly one implementation and one set of numbers between the seam
+    /// harnesses and the eventual product caller (Task 10).
+    ///
+    /// `feedingBackTheLabelGlyphsReproducesFullExactly` is what keeps this
+    /// honest: it feeds `.detectorGlyphs` a detector that returns exactly
+    /// what `.full` computes here and requires a bit-identical
+    /// `WalkedContent` back.
+    private func productPageAssembly(
+        mode: OMRHybridFrontEnd.Mode, page: OMRPageLabels, index: Int,
+        analysis: RasterPageAnalysis, vocabulary: [ClassifiedGlyph],
+        originJitterInSpaces: Double, detector: (any OMRGlyphDetecting)?,
+    ) throws -> (walked: WalkedContent, pageSize: CGSize) {
+        let pageDetector: any OMRGlyphDetecting
+        if mode == .detectorGlyphs {
+            guard let detector else {
+                throw OMRHybridFrontEnd.hybridError("detectorGlyphs needs a detector")
+            }
+            // No `reframe` and no `jitter` for the real detector: it
+            // works on the front-end's OWN deskewed pixels, so its
+            // output is already in the frame the paths are in. Reframing
+            // it would apply the label transform a second time, and
+            // jittering it would be simulating noise on top of the
+            // detector's own (real) noise.
+            pageDetector = detector
+        } else {
+            pageDetector = OracleGlyphDetector(glyphs: OMRHybridFrontEnd.jitter(
+                OMRHybridFrontEnd.reframe(vocabulary, page: page, transform: analysis.transform),
+                sigmaInSpaces: originJitterInSpaces,
+                staffSpacingPt: analysis.staffSpacingPt,
+            ))
+        }
+        return try RasterFrontEnd.assembled(
+            analysis: analysis, pageIndex: index, detector: pageDetector, diagnostics: nil,
+        )
     }
 #endif
