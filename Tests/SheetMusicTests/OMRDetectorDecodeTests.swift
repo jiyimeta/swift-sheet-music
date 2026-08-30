@@ -1,6 +1,7 @@
 #if !os(Android)
     import CoreGraphics
     import Foundation
+    @testable import SheetMusicPDF
     import Testing
 
     /// Pins `OMRDetectorDecode` to `Training/model/decode.py`'s
