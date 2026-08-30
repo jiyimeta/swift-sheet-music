@@ -16,9 +16,10 @@ extension LayoutEngine {
         switch element {
         case let .clef(t, p, anchor):
             return .clef(rawType: t, origin: shift(p), anchor: anchor)
-        case let .keySignature(s, f, clef, p):
+        case let .keySignature(s, f, clef, naturals, p):
             return .keySignature(
-                sharps: s, flats: f, clef: clef, origin: shift(p),
+                sharps: s, flats: f, clef: clef, naturals: naturals,
+                origin: shift(p),
             )
         case let .timeSignature(n, d, p):
             return .timeSignature(

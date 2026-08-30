@@ -42,6 +42,41 @@ public struct EditRefusal: Sendable, Hashable {
         case nothingToRedo
         case compositeTooDeep(limit: Int)
         case nothingToApply
+        /// A score must keep at least one measure; `DeleteMeasure` refuses when it would remove the last one.
+        case cannotDeleteOnlyMeasure
+        /// A score must keep at least one part; `RemovePart` refuses when it would remove the last one. Distinct
+        /// from `.targetNotFound` on purpose: a host showing "no such part" when the user tried to delete their
+        /// only instrument is telling them something untrue.
+        case cannotRemoveLastPart
+        /// A score's OPENING key signature is the score's key, not a change to it; `RemoveKeySignature` refuses at
+        /// measure 0. Distinct from `.targetNotFound` for the same reason `.cannotRemoveLastPart` is: there IS a
+        /// signature there, and a host saying otherwise would be telling the user something untrue. The way to
+        /// change what bar 1 declares is `.setKeySignature`, which has no "remove" to refuse.
+        case cannotRemoveInitialSignature
+        /// Re-barring a region at a new meter would put a new barline inside a tuplet. A tuplet is an
+        /// indivisible rhythmic unit — its members' lengths are the tuplet's to decide — so the region is
+        /// refused rather than re-spelled into something no engraver would write. `measureIndex` names the
+        /// PRE-EDIT bar the tuplet lives in, so a host can point at it.
+        case rebarWouldSplitTuplet(measureIndex: Int)
+        /// Re-barring a region at a new meter would move a barline marker — a repeat sign, a `Marker` /
+        /// `Jump`, or a special barline — off the barline it marks. Such a marker only means anything ON a
+        /// barline, so the region is refused rather than have it silently slide. `measureIndex` names the
+        /// PRE-EDIT bar carrying the marker.
+        case rebarWouldDisplaceBarlineMarker(measureIndex: Int)
+        /// The numbers given for a meter do not name a signature that can be written at all — the numerator is
+        /// outside `1...63` (MuseScore's own ceiling) or the denominator is not one of `1, 2, 4, 8, 16, 32`, the
+        /// powers of two a note duration exists for. `SetTimeSignature` refuses rather than re-bar a region at a
+        /// length nothing can engrave. A host's picker never produces these; a command built directly can.
+        case invalidTimeSignatureValue(numerator: Int, denominator: Int)
+        /// A rehearsal mark whose text is empty (or whitespace only) is not a mark — it would engrave as a bare
+        /// frame with nothing in it. `SetRehearsalMark` refuses rather than write one. A host's sheet disables its
+        /// confirm button on an empty field, so this is what a command built directly answers, the same role
+        /// `.invalidTimeSignatureValue` plays for `SetTimeSignature`.
+        case emptyRehearsalMarkText
+        /// `CreateVoice` was asked for a voice the measure already has. Distinct from `.targetNotFound` for the
+        /// reason `.cannotRemoveLastPart` is: the voice IS there, and a host saying otherwise would be telling
+        /// the user something untrue — the caller should be writing into it rather than creating it.
+        case voiceAlreadyExists(staff: StaffAddress, measureIndex: Int, voiceIndex: Int)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -84,6 +119,22 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.compositeTooDeep"
         case .nothingToApply:
             "edit.nothingToApply"
+        case .cannotDeleteOnlyMeasure:
+            "edit.cannotDeleteOnlyMeasure"
+        case .cannotRemoveLastPart:
+            "edit.cannotRemoveLastPart"
+        case .cannotRemoveInitialSignature:
+            "edit.cannotRemoveInitialSignature"
+        case .rebarWouldSplitTuplet:
+            "edit.rebarWouldSplitTuplet"
+        case .rebarWouldDisplaceBarlineMarker:
+            "edit.rebarWouldDisplaceBarlineMarker"
+        case .invalidTimeSignatureValue:
+            "edit.invalidTimeSignatureValue"
+        case .emptyRehearsalMarkText:
+            "edit.emptyRehearsalMarkText"
+        case .voiceAlreadyExists:
+            "edit.voiceAlreadyExists"
         case .unexpected:
             "edit.unexpected"
         }
@@ -128,6 +179,22 @@ public struct EditRefusal: Sendable, Hashable {
             "composite edit exceeded depth limit \(limit)"
         case .nothingToApply:
             "intent resolved to nothing to apply"
+        case .cannotDeleteOnlyMeasure:
+            "a score must keep at least one measure"
+        case .cannotRemoveLastPart:
+            "a score must keep at least one part"
+        case .cannotRemoveInitialSignature:
+            "a score's opening signature cannot be removed"
+        case let .rebarWouldSplitTuplet(measureIndex):
+            "re-barring would split the tuplet in measure \(measureIndex)"
+        case let .rebarWouldDisplaceBarlineMarker(measureIndex):
+            "re-barring would displace the barline marker on measure \(measureIndex)"
+        case let .invalidTimeSignatureValue(numerator, denominator):
+            "unwritable time signature \(numerator)/\(denominator)"
+        case .emptyRehearsalMarkText:
+            "rehearsal mark text is empty"
+        case let .voiceAlreadyExists(staff, measureIndex, voiceIndex):
+            "measure \(measureIndex) of \(staff) already has voice \(voiceIndex)"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }

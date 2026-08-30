@@ -72,6 +72,13 @@ public final class LayoutCache: @unchecked Sendable {
         let measureDuration: Fraction
 
         /// --- Output of crossStaffMinimumMeasureWidth ---
+        ///
+        /// The measure's NATURAL width, before any multi-measure-rest
+        /// collapse override. `packSystems` applies that override to what it
+        /// returns, never to what it stores here: the plan is not part of
+        /// this entry's predicate, so a stored override would be re-read as
+        /// the baseline on the next hit and the natural width would be lost
+        /// the first time the measure was collapsed.
         let minWidth: CGFloat
 
         /// --- Output of aggregatedTickWeights, shared between the
@@ -129,6 +136,19 @@ public final class LayoutCache: @unchecked Sendable {
         /// Per-staff measures for the range. `[staffIdx][localIdx]`,
         /// where `localIdx = absolute measureIdx - measureStart`.
         let measuresPerStaff: [[Measure?]]
+        /// The system lane sliced to this range: one `SystemMeasure` per
+        /// measure, `[localIdx]` with the same `localIdx = absolute
+        /// measureIdx - measureStart` indexing as `measuresPerStaff`.
+        /// `buildSystem` reads it to route tempo / rehearsal-mark /
+        /// system-text elements onto their staff.
+        ///
+        /// `measuresPerStaff` cannot stand in for this: system-level
+        /// elements do not live on any staff's `Measure`, so writing a
+        /// rehearsal mark, a tempo or a piece of system text changes
+        /// NOTHING in any staff's measures — every other field here stays
+        /// bit-identical. Without it a system-lane-only edit serves a
+        /// stale cached system and the mark never reaches the page.
+        let systemMeasuresForRange: [SystemMeasure]
         /// The score-wide melisma data — `placeMeasureElements` reads
         /// it via `effectiveMelismaTicks` keys that touch this range.
         let effectiveMelismaTicks: [MelismaLyricKey: Int]
@@ -150,6 +170,12 @@ public final class LayoutCache: @unchecked Sendable {
         let overlappingSpannerAnchors: [LayoutEngine.SpannerAnchor]
         /// Read by `synthesizeLineSpanners` for the ottava label.
         let ottavaNumbersOnly: Bool
+        /// The end-of-system courtesy signature this system announces —
+        /// derived from the measure that OPENS the NEXT system, which no
+        /// other field here can see. Without it a key change edited into
+        /// the following measure would leave this system serving a
+        /// cached trailing edge that never announces it.
+        let trailingCourtesy: LayoutEngine.TrailingCourtesy?
     }
 
     /// All inputs to `placeMeasureElements` for one (measure, staff).

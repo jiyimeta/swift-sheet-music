@@ -61,7 +61,11 @@ extension Score {
         let assembled = try assembleParts(
             decoded: partPairings, topLevel: topLevelStaves,
         )
-        let parts = assembled.parts
+        let parts = concertKeysResolved(
+            assembled.parts,
+            version: version,
+            storesConcertPitch: storesConcertPitch(scoreNode: scoreNode),
+        )
         let systemMeasures = assembled.systemMeasures
 
         var metaTags: [String: String] = [:]
@@ -101,6 +105,65 @@ extension Score {
             style: style,
             source: .museScore(version),
         )
+    }
+
+    /// `<Style><concertPitch>` — true when the file was saved with Concert Pitch switched on.
+    ///
+    /// MuseScore's default is off, so an absent element means "written pitch", matching
+    /// `MStyle`'s own default. `ScoreStyle` does not model the flag (it is a view mode, not
+    /// engraving state), so it is read straight off the node here.
+    private static func storesConcertPitch(scoreNode: XMLTreeNode) -> Bool {
+        guard let text = scoreNode.first("Style")?.first("concertPitch")?.text else { return false }
+        return Int(text) == 1
+    }
+
+    /// Convert every key signature of a transposing part from the WRITTEN key back to the concert
+    /// one, for files old enough to store only the written form.
+    ///
+    /// MuseScore 4 writes `<concertKey>` next to `<actualKey>`, and `KeySignature.decode` prefers
+    /// `<concertKey>`, so a v4 file already yields concert keys and is returned untouched.
+    /// MuseScore 3 and earlier wrote `<accidental>` alone — which the decoder has to shift back by
+    /// the instrument's `writtenFifthsOffset`. The instrument is only paired with its staves once
+    /// parts are assembled, which is why this is a post-pass rather than something
+    /// `KeySignature.decode` could do on its own.
+    ///
+    /// `storesConcertPitch` gates the whole conversion, mirroring MuseScore's own ≤4.0 reader
+    /// (`rw/read400/tread.cpp:1228`, `if (!score->style().styleB(Sid::concertPitch))`): a v2/v3
+    /// file saved with Concert Pitch ON already stores `<accidental>` as the CONCERT key, so
+    /// subtracting the offset from it would corrupt the import.
+    ///
+    /// Enharmonic respelling makes this lossy at the edges by nature: a written B♭ major on an
+    /// alto sax reads back as concert D♭ major even if the file was written from C♯ major. Both
+    /// spell the same pitches, and MuseScore's own round-trip collapses them the same way.
+    private static func concertKeysResolved(
+        _ parts: [Part], version: MSCXVersion, storesConcertPitch: Bool,
+    ) -> [Part] {
+        guard version == .v2 || version == .v3, !storesConcertPitch else { return parts }
+        return parts.map { part in
+            let offset = part.instrument.writtenFifthsOffset
+            guard offset != 0 else { return part }
+            var part = part
+            for staffIndex in part.staves.indices {
+                for measureIndex in part.staves[staffIndex].measures.indices {
+                    for voiceIndex in part.staves[staffIndex].measures[measureIndex].voices.indices {
+                        rewriteKeys(
+                            in: &part.staves[staffIndex].measures[measureIndex]
+                                .voices[voiceIndex].elements,
+                            offset: offset,
+                        )
+                    }
+                }
+            }
+            return part
+        }
+    }
+
+    private static func rewriteKeys(in elements: inout [VoiceElement], offset: Int) {
+        for index in elements.indices {
+            guard case var .keySignature(key) = elements[index] else { continue }
+            key.concertKey = respelledKey(key.concertKey - offset)
+            elements[index] = .keySignature(key)
+        }
     }
 
     /// MuseScore 2 wrote swing markers inside `<StaffText>` even when

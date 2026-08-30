@@ -46,9 +46,26 @@ import Wirelet
 /// 11 = removeTuplet(VoiceElementIDWire)
 /// 12 = writeNote(WriteNoteIntentWire)
 /// 13 = writeRest(SlotDurationIntentWire)
+/// 14 = insertMeasure(MeasureIndexIntentWire)
+/// 15 = deleteMeasure(MeasureIndexIntentWire)
+/// 16 = addPart(AddPartIntentWire)
+/// 17 = removePart(PartIndexIntentWire)
+/// 18 = movePart(MovePartIntentWire)
+/// 19 = setKeySignature(SetKeySignatureIntentWire)
+/// 20 = removeKeySignature(RemoveKeySignatureIntentWire)
+/// 21 = setTimeSignature(SetTimeSignatureIntentWire)
+/// 22 = removeTimeSignature(RemoveTimeSignatureIntentWire)
+/// 23 = setRehearsalMark(SetRehearsalMarkIntentWire)
+/// 24 = removeRehearsalMark(RemoveRehearsalMarkIntentWire)
+/// 25 = createVoice(CreateVoiceIntentWire)
+/// 26 = splitRest(SplitRestIntentWire)
+/// 27 = setNoteHead(SetNoteHeadIntentWire)
+/// 28 = setDrumsetEntry(SetDrumsetEntryIntentWire)
 /// ```
 ///
-/// Cases 5…11 were appended in SP1 and 12…13 in SP2; 0…4 predate them and must keep their indices and byte layout.
+/// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
+/// creation, 19…22 for M3 signature changes, 23…24 for M4 rehearsal marks and 25…28 for M6 drum note entry;
+/// 0…4 predate them all and must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -186,6 +203,125 @@ import Wirelet
 /// ```
 ///
 /// `removeTuplet` reuses `VoiceElementIDWire` directly as its payload — no wrapper struct, same pattern as `delete`.
+///
+/// `MeasureIndexIntentWire` (shared by `insertMeasure` and `deleteMeasure` — the discriminator case index is what
+/// tells the two apart, not anything in this struct; same pattern as `SlotDurationIntentWire` above):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// ```
+///
+/// `AddPartIntentWire` (`addPart`'s payload):
+/// ```
+/// tag 1: plan       PartPlanWire, see layout below
+/// tag 2: partIndex  i32, zig-zag varint
+/// ```
+///
+/// `PartPlanWire` — `BlankScoreTemplate.PartPlan`. The two optional names follow `AccidentalWire`'s present-flag
+/// pattern rather than becoming `Optional` stored properties, so every field here stays mandatory like the rest of
+/// this file:
+/// ```
+/// tag 1:  instrumentID        string
+/// tag 2:  hasLongName         u8, varint — 0 = nil, 1 = longName holds it
+/// tag 3:  longName            string — "" when hasLongName == 0
+/// tag 4:  hasShortName        u8, varint — 0 = nil, 1 = shortName holds it
+/// tag 5:  shortName           string — "" when hasShortName == 0
+/// tag 6:  staves              [StaffPlanWire] — length-delimited array, each element itself length-delimited
+/// tag 7:  transposeDiatonic   i32, zig-zag varint
+/// tag 8:  transposeChromatic  i32, zig-zag varint
+/// tag 9:  gmProgram           i32, zig-zag varint
+/// tag 10: isDrums             u8, varint — 0 / 1
+/// ```
+///
+/// `StaffPlanWire` — `BlankScoreTemplate.StaffPlan`:
+/// ```
+/// tag 1: clefType      string — the MuseScore clef token ("G", "F", "PERC", …)
+/// tag 2: isPercussion  u8, varint — 0 / 1
+/// ```
+///
+/// `PartIndexIntentWire` (`removePart`'s payload — a part-index sibling of `MeasureIndexIntentWire`, kept separate
+/// so neither struct's field has to be read as naming something it does not):
+/// ```
+/// tag 1: partIndex  i32, zig-zag varint
+/// ```
+///
+/// `MovePartIntentWire` (`movePart`'s payload):
+/// ```
+/// tag 1: fromIndex  i32, zig-zag varint
+/// tag 2: toIndex    i32, zig-zag varint
+/// ```
+///
+/// `SetKeySignatureIntentWire` (`setKeySignature`'s payload):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// tag 2: concertKey    i32, zig-zag varint — -7…+7, sharps positive
+/// ```
+///
+/// `RemoveKeySignatureIntentWire` (`removeKeySignature`'s payload):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// ```
+///
+/// `SetTimeSignatureIntentWire` (`setTimeSignature`'s payload):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// tag 2: numerator     i32, zig-zag varint — 1…63
+/// tag 3: denominator   i32, zig-zag varint — 1, 2, 4, 8, 16 or 32
+/// ```
+///
+/// `RemoveTimeSignatureIntentWire` (`removeTimeSignature`'s payload):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// ```
+///
+/// `SetRehearsalMarkIntentWire` (`setRehearsalMark`'s payload):
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// tag 2: text          string — UTF-8, trimmed engine-side, never empty after trimming
+/// ```
+///
+/// `RemoveRehearsalMarkIntentWire` (`removeRehearsalMark`'s payload). Byte-identical to
+/// `RemoveTimeSignatureIntentWire` and deliberately its own struct, for the reason that one is separate from
+/// `RemoveKeySignatureIntentWire`: the removals address different things and are free to diverge.
+/// ```
+/// tag 1: measureIndex  i32, zig-zag varint
+/// ```
+///
+/// `CreateVoiceIntentWire` (`createVoice`'s payload):
+/// ```
+/// tag 1: staff         StaffAddressWire, see layout above
+/// tag 2: measureIndex  i32, zig-zag varint
+/// tag 3: voiceIndex    i32, zig-zag varint
+/// ```
+///
+/// `SplitRestIntentWire` (`splitRest`'s payload):
+/// ```
+/// tag 1: location    VoiceElementIDWire, see layout above
+/// tag 2: tickOffset  i32, zig-zag varint — ticks from the START of the rest, never 0 and never its length
+/// ```
+///
+/// `SetNoteHeadIntentWire` (`setNoteHead`'s payload):
+/// ```
+/// tag 1: location  NoteIDWire, see PathIDCodecs.swift
+/// tag 2: hasHead   u8, varint — 0 = clear the override, 1 = write `head`
+/// tag 3: head      string — UTF-8; the encoder writes "" when hasHead == 0, so a byte-for-byte parity check
+///                  between platforms should expect that empty string, not an absent tag
+/// ```
+///
+/// `SetDrumsetEntryIntentWire` (`setDrumsetEntry`'s payload). The one intent payload that carries a whole model
+/// value rather than scalars naming one — a `DrumsetEntry` IS scalars, five of them plus an optional string, so it
+/// is spelled out field by field here rather than shipped as a nested type only this intent would use:
+/// ```
+/// tag 1: partIndex    i32, zig-zag varint
+/// tag 2: pitch        i32, zig-zag varint — 35…81
+/// tag 3: hasEntry     u8, varint — 0 = REMOVE this pitch's row, 1 = write the fields below
+/// tag 4: name         string — UTF-8; "" when hasEntry == 0
+/// tag 5: head         string — UTF-8; "" when hasEntry == 0
+/// tag 6: line         i32, zig-zag varint — MuseScore's line number, negative above the staff
+/// tag 7: voiceIndex   i32, zig-zag varint
+/// tag 8: stem         i32, zig-zag varint — MuseScore's own encoding: 1 = up, 2 = down
+/// tag 9: hasShortcut  u8, varint
+/// tag 10: shortcut    string — UTF-8; "" when hasShortcut == 0
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -307,8 +443,42 @@ public enum EditIntentWire {
     /// Appended in SP2 — index 13. Shares `SlotDurationIntentWire` with `setRestDuration` / `setChordDuration`:
     /// the payload really is the same two scalars, and the discriminator is what tells the three apart.
     case writeRest(SlotDurationIntentWire)
+    /// Appended for M1 solo scratch creation — index 14. Never renumber anything above it.
+    case insertMeasure(MeasureIndexIntentWire)
+    /// Appended for M1 solo scratch creation — index 15. Shares `MeasureIndexIntentWire` with `insertMeasure`: the
+    /// payload really is the same one scalar, and the discriminator is what tells the two apart.
+    case deleteMeasure(MeasureIndexIntentWire)
+    /// Appended for M2 ensemble creation — index 16. Never renumber anything above it.
+    case addPart(AddPartIntentWire)
+    /// Appended for M2 ensemble creation — index 17.
+    case removePart(PartIndexIntentWire)
+    /// Appended for M2 ensemble creation — index 18.
+    case movePart(MovePartIntentWire)
+    /// Appended for M3 signature changes — index 19. Never renumber anything above it.
+    case setKeySignature(SetKeySignatureIntentWire)
+    /// Appended for M3 signature changes — index 20.
+    case removeKeySignature(RemoveKeySignatureIntentWire)
+    /// Appended for M3 signature changes — index 21.
+    case setTimeSignature(SetTimeSignatureIntentWire)
+    /// Appended for M3 signature changes — index 22.
+    case removeTimeSignature(RemoveTimeSignatureIntentWire)
+    /// Appended for M4 rehearsal marks — index 23. Never renumber anything above it.
+    case setRehearsalMark(SetRehearsalMarkIntentWire)
+    /// Appended for M4 rehearsal marks — index 24.
+    case removeRehearsalMark(RemoveRehearsalMarkIntentWire)
+    /// Appended for M6 drum note entry — index 25. Never renumber anything above it.
+    case createVoice(CreateVoiceIntentWire)
+    /// Appended for M6 drum note entry — index 26.
+    case splitRest(SplitRestIntentWire)
+    /// Appended for M6 drum note entry — index 27.
+    case setNoteHead(SetNoteHeadIntentWire)
+    /// Appended for M6 drum note entry — index 28.
+    case setDrumsetEntry(SetDrumsetEntryIntentWire)
 
-    public init(from intent: EditIntent) {
+    /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
+    /// compiler's insistence that every case be encoded here is the only thing standing between an appended
+    /// intent and a payload that never reaches the far side.
+    public init(from intent: EditIntent) { // swiftlint:disable:this function_body_length
         switch intent {
         case let .inputNote(location, pitch, tpc, duration):
             self = .inputNote(InputNoteIntentWire(location: location, pitch: pitch, tpc: tpc, duration: duration))
@@ -349,13 +519,55 @@ public enum EditIntentWire {
             self = .writeNote(WriteNoteIntentWire(location: location, pitch: pitch, tpc: tpc, duration: duration))
         case let .writeRest(location, duration):
             self = .writeRest(SlotDurationIntentWire(location: location, duration: duration))
+        case let .insertMeasure(index):
+            self = .insertMeasure(MeasureIndexIntentWire(measureIndex: index))
+        case let .deleteMeasure(index):
+            self = .deleteMeasure(MeasureIndexIntentWire(measureIndex: index))
+        case let .addPart(plan, index):
+            self = .addPart(AddPartIntentWire(plan: plan, partIndex: index))
+        case let .removePart(index):
+            self = .removePart(PartIndexIntentWire(partIndex: index))
+        case let .movePart(from, to):
+            self = .movePart(MovePartIntentWire(fromIndex: from, toIndex: to))
+        case let .setKeySignature(measureIndex, concertKey):
+            self = .setKeySignature(
+                SetKeySignatureIntentWire(measureIndex: measureIndex, concertKey: concertKey),
+            )
+        case let .removeKeySignature(measureIndex):
+            self = .removeKeySignature(RemoveKeySignatureIntentWire(measureIndex: measureIndex))
+        case let .setTimeSignature(measureIndex, numerator, denominator):
+            self = .setTimeSignature(SetTimeSignatureIntentWire(
+                measureIndex: measureIndex, numerator: numerator, denominator: denominator,
+            ))
+        case let .removeTimeSignature(measureIndex):
+            self = .removeTimeSignature(RemoveTimeSignatureIntentWire(measureIndex: measureIndex))
+        case let .setRehearsalMark(measureIndex, text):
+            self = .setRehearsalMark(SetRehearsalMarkIntentWire(measureIndex: measureIndex, text: text))
+        case let .removeRehearsalMark(measureIndex):
+            self = .removeRehearsalMark(RemoveRehearsalMarkIntentWire(measureIndex: measureIndex))
+        case let .createVoice(staff, measureIndex, voiceIndex):
+            self = .createVoice(CreateVoiceIntentWire(
+                staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex,
+            ))
+        case let .splitRest(location, tickOffset):
+            self = .splitRest(SplitRestIntentWire(location: location, tickOffset: tickOffset))
+        case let .setNoteHead(location, headType):
+            self = .setNoteHead(SetNoteHeadIntentWire(location: location, headType: headType))
+        case let .setDrumsetEntry(partIndex, pitch, entry):
+            self = .setDrumsetEntry(SetDrumsetEntryIntentWire(
+                partIndex: partIndex, pitch: pitch, entry: entry,
+            ))
         }
     }
 
     /// `depth` counts how many `composite` levels enclose this node — 0 at the top of a decode. Only the
     /// `.composite` branch advances it; every other case is a leaf and ignores it. See `CompositeIntentWire.decoded`
     /// for the bound this enforces.
-    public func decoded(depth: Int = 0) throws -> EditIntent {
+    ///
+    /// One `switch` over every discriminator on purpose, past the length rule: splitting it would need a `default`
+    /// or a second exhaustive switch, and the compiler's insistence that every wire case be decoded here is the
+    /// only thing standing between an appended case and a payload that decodes as silence.
+    public func decoded(depth: Int = 0) throws -> EditIntent { // swiftlint:disable:this function_body_length
         switch self {
         case let .inputNote(wire):
             let decoded = try wire.decoded()
@@ -404,6 +616,52 @@ public enum EditIntentWire {
         case let .writeRest(wire):
             let decoded = try wire.decoded()
             return .writeRest(at: decoded.at, duration: decoded.duration)
+        case let .insertMeasure(wire):
+            return .insertMeasure(at: wire.decoded())
+        case let .deleteMeasure(wire):
+            return .deleteMeasure(at: wire.decoded())
+        case let .addPart(wire):
+            let decoded = wire.decoded()
+            return .addPart(plan: decoded.plan, at: decoded.partIndex)
+        case let .removePart(wire):
+            return .removePart(at: wire.decoded())
+        case let .movePart(wire):
+            let decoded = wire.decoded()
+            return .movePart(from: decoded.fromIndex, to: decoded.toIndex)
+        case let .setKeySignature(wire):
+            let decoded = wire.decoded()
+            return .setKeySignature(measureIndex: decoded.measureIndex, concertKey: decoded.concertKey)
+        case let .removeKeySignature(wire):
+            return .removeKeySignature(measureIndex: wire.decoded())
+        case let .setTimeSignature(wire):
+            let decoded = wire.decoded()
+            return .setTimeSignature(
+                measureIndex: decoded.measureIndex,
+                numerator: decoded.numerator, denominator: decoded.denominator,
+            )
+        case let .removeTimeSignature(wire):
+            return .removeTimeSignature(measureIndex: wire.decoded())
+        case let .setRehearsalMark(wire):
+            let decoded = wire.decoded()
+            return .setRehearsalMark(measureIndex: decoded.measureIndex, text: decoded.text)
+        case let .removeRehearsalMark(wire):
+            return .removeRehearsalMark(measureIndex: wire.decoded())
+        case let .createVoice(wire):
+            let decoded = wire.decoded()
+            return .createVoice(
+                staff: decoded.staff, measureIndex: decoded.measureIndex, voiceIndex: decoded.voiceIndex,
+            )
+        case let .splitRest(wire):
+            let decoded = wire.decoded()
+            return .splitRest(at: decoded.location, tickOffset: decoded.tickOffset)
+        case let .setNoteHead(wire):
+            let decoded = wire.decoded()
+            return .setNoteHead(at: decoded.location, headType: decoded.headType)
+        case let .setDrumsetEntry(wire):
+            let decoded = wire.decoded()
+            return .setDrumsetEntry(
+                partIndex: decoded.partIndex, pitch: decoded.pitch, entry: decoded.entry,
+            )
         }
     }
 }
@@ -663,5 +921,349 @@ public struct CreateTupletIntentWire {
 
     public func decoded() -> (location: VoiceElementID, actualNotes: Int, normalNotes: Int) {
         (location: location.decoded(), actualNotes: Int(actualNotes), normalNotes: Int(normalNotes))
+    }
+}
+
+/// Shared by `insertMeasure` and `deleteMeasure` — the discriminator case index is what tells the two apart, not
+/// anything in this struct.
+@WireFormat
+public struct MeasureIndexIntentWire {
+    public var measureIndex: Int32
+
+    public init(measureIndex: Int) {
+        self.measureIndex = Int32(measureIndex)
+    }
+
+    public func decoded() -> Int {
+        Int(measureIndex)
+    }
+}
+
+/// One staff of a `BlankScoreTemplate.PartPlan`.
+@WireFormat
+public struct StaffPlanWire {
+    /// The MuseScore clef token stored into `Staff.defaultClefType` ("G", "F", "G8vb", "C3", "PERC", …).
+    public var clefType: String
+    /// 0 / 1 — a drum / unpitched staff.
+    public var isPercussion: UInt8
+
+    public init(from plan: BlankScoreTemplate.StaffPlan) {
+        clefType = plan.clefType
+        isPercussion = plan.isPercussion ? 1 : 0
+    }
+
+    public func decoded() -> BlankScoreTemplate.StaffPlan {
+        BlankScoreTemplate.StaffPlan(clefType: clefType, isPercussion: isPercussion != 0)
+    }
+}
+
+/// `BlankScoreTemplate.PartPlan` — the instrument identity and staff list a new part is built from.
+///
+/// Deliberately not scalars-only like the rest of this file's payloads: a plan is the *recipe* for a part, not a
+/// slice of the score, so both images build the same `Part` from it and the built part never travels. The two
+/// optional names use `AccidentalWire`'s present-flag pattern rather than `Optional` stored properties, keeping
+/// every field in this file mandatory.
+@WireFormat
+public struct PartPlanWire {
+    public var instrumentID: String
+    /// 0 = `longName` is nil, 1 = it holds one.
+    public var hasLongName: UInt8
+    public var longName: String
+    /// 0 = `shortName` is nil, 1 = it holds one.
+    public var hasShortName: UInt8
+    public var shortName: String
+    public var staves: [StaffPlanWire]
+    public var transposeDiatonic: Int32
+    public var transposeChromatic: Int32
+    public var gmProgram: Int32
+    /// 0 / 1 — a drum kit.
+    public var isDrums: UInt8
+
+    public init(from plan: BlankScoreTemplate.PartPlan) {
+        instrumentID = plan.instrumentID
+        hasLongName = plan.longName == nil ? 0 : 1
+        longName = plan.longName ?? ""
+        hasShortName = plan.shortName == nil ? 0 : 1
+        shortName = plan.shortName ?? ""
+        staves = plan.staves.map(StaffPlanWire.init(from:))
+        transposeDiatonic = Int32(plan.transposeDiatonic)
+        transposeChromatic = Int32(plan.transposeChromatic)
+        gmProgram = Int32(plan.gmProgram)
+        isDrums = plan.isDrums ? 1 : 0
+    }
+
+    public func decoded() -> BlankScoreTemplate.PartPlan {
+        BlankScoreTemplate.PartPlan(
+            instrumentID: instrumentID,
+            longName: hasLongName != 0 ? longName : nil,
+            shortName: hasShortName != 0 ? shortName : nil,
+            staves: staves.map { $0.decoded() },
+            transposeDiatonic: Int(transposeDiatonic),
+            transposeChromatic: Int(transposeChromatic),
+            gmProgram: Int(gmProgram),
+            isDrums: isDrums != 0,
+        )
+    }
+}
+
+/// `addPart`'s payload.
+@WireFormat
+public struct AddPartIntentWire {
+    public var plan: PartPlanWire
+    public var partIndex: Int32
+
+    public init(plan: BlankScoreTemplate.PartPlan, partIndex: Int) {
+        self.plan = PartPlanWire(from: plan)
+        self.partIndex = Int32(partIndex)
+    }
+
+    public func decoded() -> (plan: BlankScoreTemplate.PartPlan, partIndex: Int) {
+        (plan: plan.decoded(), partIndex: Int(partIndex))
+    }
+}
+
+/// `removePart`'s payload. Byte-identical to `MeasureIndexIntentWire`, and deliberately not shared with it: the two
+/// index different things, and a codec whose field names lie about what they address is a decode away from a bug
+/// nothing catches.
+@WireFormat
+public struct PartIndexIntentWire {
+    public var partIndex: Int32
+
+    public init(partIndex: Int) {
+        self.partIndex = Int32(partIndex)
+    }
+
+    public func decoded() -> Int {
+        Int(partIndex)
+    }
+}
+
+/// `movePart`'s payload.
+@WireFormat
+public struct MovePartIntentWire {
+    public var fromIndex: Int32
+    public var toIndex: Int32
+
+    public init(fromIndex: Int, toIndex: Int) {
+        self.fromIndex = Int32(fromIndex)
+        self.toIndex = Int32(toIndex)
+    }
+
+    public func decoded() -> (fromIndex: Int, toIndex: Int) {
+        (fromIndex: Int(fromIndex), toIndex: Int(toIndex))
+    }
+}
+
+/// `setKeySignature`'s payload — which bar declares the key, and which key it declares.
+@WireFormat
+public struct SetKeySignatureIntentWire {
+    public var measureIndex: Int32
+    /// `KeySignature.concertKey`: -7 (C♭) … +7 (C♯), sharps positive. Zig-zag varint, so the flat keys cost the
+    /// same one byte the sharp ones do.
+    public var concertKey: Int32
+
+    public init(measureIndex: Int, concertKey: Int) {
+        self.measureIndex = Int32(measureIndex)
+        self.concertKey = Int32(concertKey)
+    }
+
+    public func decoded() -> (measureIndex: Int, concertKey: Int) {
+        (measureIndex: Int(measureIndex), concertKey: Int(concertKey))
+    }
+}
+
+/// `removeKeySignature`'s payload. Byte-identical to `MeasureIndexIntentWire` and deliberately its own struct: the
+/// three measure-index intents that share that one are all structural (insert / delete a whole column), while this
+/// one addresses what a bar *declares*, and the two families are free to diverge — a courtesy or a scope flag would
+/// land here and nowhere near `insertMeasure`.
+@WireFormat
+public struct RemoveKeySignatureIntentWire {
+    public var measureIndex: Int32
+
+    public init(measureIndex: Int) {
+        self.measureIndex = Int32(measureIndex)
+    }
+
+    public func decoded() -> Int {
+        Int(measureIndex)
+    }
+}
+
+/// `setTimeSignature`'s payload — which bar declares the meter, and which meter it declares.
+///
+/// The two halves travel as separate fields rather than as one packed number: a host picks them independently,
+/// and the range each is valid over (`1…63` over `1, 2, 4, 8, 16, 32`) is stated by `SetTimeSignature.apply`,
+/// which both images reach from these same scalars.
+@WireFormat
+public struct SetTimeSignatureIntentWire {
+    public var measureIndex: Int32
+    public var numerator: Int32
+    public var denominator: Int32
+
+    public init(measureIndex: Int, numerator: Int, denominator: Int) {
+        self.measureIndex = Int32(measureIndex)
+        self.numerator = Int32(numerator)
+        self.denominator = Int32(denominator)
+    }
+
+    public func decoded() -> (measureIndex: Int, numerator: Int, denominator: Int) {
+        (measureIndex: Int(measureIndex), numerator: Int(numerator), denominator: Int(denominator))
+    }
+}
+
+/// `removeTimeSignature`'s payload. Byte-identical to `RemoveKeySignatureIntentWire` and deliberately its own
+/// struct, for the reason that one is separate from `MeasureIndexIntentWire`: the two removals address different
+/// declarations and are free to diverge.
+@WireFormat
+public struct RemoveTimeSignatureIntentWire {
+    public var measureIndex: Int32
+
+    public init(measureIndex: Int) {
+        self.measureIndex = Int32(measureIndex)
+    }
+
+    public func decoded() -> Int {
+        Int(measureIndex)
+    }
+}
+
+/// `setRehearsalMark`'s payload — which bar carries the mark, and what it reads.
+///
+/// `text` is the only string an edit intent has ever carried besides `PartPlanWire`'s names, and it is free-form on
+/// purpose: a mark is "A", "1サビ", "Coda" — whatever the composer wrote. The engine trims it and refuses an empty
+/// result, so no length or character rule is stated here.
+@WireFormat
+public struct SetRehearsalMarkIntentWire {
+    public var measureIndex: Int32
+    public var text: String
+
+    public init(measureIndex: Int, text: String) {
+        self.measureIndex = Int32(measureIndex)
+        self.text = text
+    }
+
+    public func decoded() -> (measureIndex: Int, text: String) {
+        (measureIndex: Int(measureIndex), text: text)
+    }
+}
+
+/// `removeRehearsalMark`'s payload. Byte-identical to `RemoveTimeSignatureIntentWire` and deliberately its own
+/// struct, for the reason that one is separate from `RemoveKeySignatureIntentWire`: the removals address different
+/// things and are free to diverge.
+@WireFormat
+public struct RemoveRehearsalMarkIntentWire {
+    public var measureIndex: Int32
+
+    public init(measureIndex: Int) {
+        self.measureIndex = Int32(measureIndex)
+    }
+
+    public func decoded() -> Int {
+        Int(measureIndex)
+    }
+}
+
+/// `createVoice`'s payload — which measure of which staff grows a voice, and which index it takes.
+@WireFormat
+public struct CreateVoiceIntentWire {
+    public var staff: StaffAddressWire
+    public var measureIndex: Int32
+    public var voiceIndex: Int32
+
+    public init(staff: StaffAddress, measureIndex: Int, voiceIndex: Int) {
+        self.staff = StaffAddressWire(from: staff)
+        self.measureIndex = Int32(measureIndex)
+        self.voiceIndex = Int32(voiceIndex)
+    }
+
+    public func decoded() -> (staff: StaffAddress, measureIndex: Int, voiceIndex: Int) {
+        (staff: staff.decoded(), measureIndex: Int(measureIndex), voiceIndex: Int(voiceIndex))
+    }
+}
+
+/// `splitRest`'s payload — the rest, and how far into it the new slot boundary falls.
+@WireFormat
+public struct SplitRestIntentWire {
+    public var location: VoiceElementIDWire
+    public var tickOffset: Int32
+
+    public init(location: VoiceElementID, tickOffset: Int) {
+        self.location = VoiceElementIDWire(from: location)
+        self.tickOffset = Int32(tickOffset)
+    }
+
+    public func decoded() -> (location: VoiceElementID, tickOffset: Int) {
+        (location: location.decoded(), tickOffset: Int(tickOffset))
+    }
+}
+
+/// `setNoteHead`'s payload — the note, and the notehead override to write onto it.
+///
+/// The head is spelled as a presence flag plus a string rather than as an `Optional<String>` for the reason
+/// `InputNoteIntentWire` spells its optional duration that way: the macro emits `unknownTag` for any missing
+/// non-optional field, and "clear the override" has to be distinguishable from "write an empty head".
+@WireFormat
+public struct SetNoteHeadIntentWire {
+    public var location: NoteIDWire
+    public var hasHead: UInt8
+    public var head: String
+
+    public init(location: NoteID, headType: String?) {
+        self.location = NoteIDWire(from: location)
+        hasHead = headType == nil ? 0 : 1
+        head = headType ?? ""
+    }
+
+    public func decoded() -> (location: NoteID, headType: String?) {
+        (location: location.decoded(), headType: hasHead == 0 ? nil : head)
+    }
+}
+
+/// `setDrumsetEntry`'s payload — which part's kit, which pitch, and the row to write there.
+///
+/// `DrumsetEntry`'s fields are inlined rather than nested: they are five scalars and an optional string, and a
+/// nested wire struct only this intent would ever use buys nothing but a second length prefix.
+@WireFormat
+public struct SetDrumsetEntryIntentWire {
+    public var partIndex: Int32
+    public var pitch: Int32
+    public var hasEntry: UInt8
+    public var name: String
+    public var head: String
+    public var line: Int32
+    public var voiceIndex: Int32
+    public var stem: Int32
+    public var hasShortcut: UInt8
+    public var shortcut: String
+
+    public init(partIndex: Int, pitch: Int, entry: DrumsetEntry?) {
+        self.partIndex = Int32(partIndex)
+        self.pitch = Int32(pitch)
+        hasEntry = entry == nil ? 0 : 1
+        name = entry?.name ?? ""
+        head = entry?.head ?? ""
+        line = Int32(entry?.line ?? 0)
+        voiceIndex = Int32(entry?.voiceIndex ?? 0)
+        stem = Int32(entry?.stem ?? 1)
+        hasShortcut = entry?.shortcut == nil ? 0 : 1
+        shortcut = entry?.shortcut ?? ""
+    }
+
+    public func decoded() -> (partIndex: Int, pitch: Int, entry: DrumsetEntry?) {
+        guard hasEntry != 0 else {
+            return (partIndex: Int(partIndex), pitch: Int(pitch), entry: nil)
+        }
+        return (
+            partIndex: Int(partIndex),
+            pitch: Int(pitch),
+            entry: DrumsetEntry(
+                name: name,
+                head: head,
+                line: Int(line),
+                voiceIndex: Int(voiceIndex),
+                stem: Int(stem),
+                shortcut: hasShortcut == 0 ? nil : shortcut,
+            ),
+        )
     }
 }

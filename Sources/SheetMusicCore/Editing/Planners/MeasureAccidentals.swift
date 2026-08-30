@@ -43,6 +43,46 @@ public enum MeasureAccidentals {
         return (pitch, natural.tpc + 7 * alteration)
     }
 
+    /// `plannedPitch`, resolved in the WRITTEN space of the target staff: `letter` means the note the user SEES on
+    /// that staff, and the returned `(pitch, tpc)` are the CONCERT values to store. Falls through to `plannedPitch`
+    /// unchanged wherever `writtenPitchView()` would leave the staff alone (concert-pitch part, drumset,
+    /// percussion).
+    ///
+    /// This is not a nicety on a transposing staff, it is the whole meaning of the key: a B♭ clarinet in concert C
+    /// major reads D major, so the letter C means the C♯ that key signature already spells — concert B♮. Planning
+    /// the same letter against the concert score writes a concert C, which that staff engraves as a D.
+    ///
+    /// `nearestTo` stays CONCERT at the call site (it comes from the previous note in the stored score); the
+    /// conversion for the octave search happens here.
+    ///
+    /// `nil` also for a letter whose written pitch is fine but whose CONCERT pitch would fall outside MIDI's
+    /// `0…127` — the guard `plannedPitch` applies to the pitch it returns says nothing about the pitch this
+    /// stores, and on a transposing staff those are two different numbers.
+    ///
+    /// **Cost:** one `writtenPitchView()` — a full-score value copy — per call, i.e. per keystroke. Accepted
+    /// rather than transformed in place because the octave search and the bar's accidental state both have to
+    /// read the written key AND the written spelling of every earlier note in the measure, and only the view
+    /// produces those consistently. The editor already re-lays-out the whole score on every keystroke, so this
+    /// rides underneath work an order of magnitude larger; revisit it only if that stops being true.
+    public static func plannedConcertPitch(
+        forWrittenLetter letter: Character,
+        nearestTo concertReference: Int?,
+        at location: VoiceElementID,
+        in score: Score,
+    ) -> (pitch: Int, tpc: Int)? {
+        let crossing = score.writtenSpaceCrossing(staff: location.staff, measureIndex: location.measureIndex)
+        guard !crossing.isIdentity else {
+            return plannedPitch(forLetter: letter, nearestTo: concertReference, at: location, in: score)
+        }
+        guard let planned = plannedPitch(
+            forLetter: letter,
+            nearestTo: concertReference.map(crossing.writtenPitch),
+            at: location,
+            in: score.writtenPitchView(),
+        ) else { return nil }
+        return crossing.concert(planned)
+    }
+
     // MARK: - Keeping the written glyphs true
 
     /// The glyph repairs `current` needs after an edit turned `previous` into it: every measure whose music changed,
@@ -69,6 +109,44 @@ public enum MeasureAccidentals {
                         measureIndex: measureIndex,
                         keySig: current.activeKey(staff: address, measureIndex: measureIndex),
                         division: current.division,
+                        measureDuration: durations[measureIndex],
+                    ))
+                }
+            }
+        }
+        return commands
+    }
+
+    /// The glyph repairs every measure in `measureRange` needs against the key in force **in `score` as given** —
+    /// i.e. call this on a score that ALREADY carries the new signature, and it plans the notes that signature
+    /// leaves mis-spelled.
+    ///
+    /// This is the signature-change counterpart to `renotationCommands(in:changedFrom:)`. That one diffs measures,
+    /// so it can only reach bars whose bytes moved — and a key change moves exactly one bar (the one the new
+    /// `KeySignature` element is written into) while silently re-reading every bar after it up to the next key
+    /// change. Those bars are byte-identical and yet every accidental in them is now judged against a different
+    /// signature, so the caller names the span instead of letting a diff find it.
+    ///
+    /// Percussion is skipped — unpitched staves have no key to be in or out of, and rewriting a drum note's glyph
+    /// on tpc evidence would be meaningless. Same spelling as `AddPart.signatureReference(in:)`: a `useDrumset`
+    /// part, or a staff whose `group` is `"percussion"`.
+    ///
+    /// The range is clamped per staff, so a span running past a short staff's last bar is a no-op there rather
+    /// than a trap. Voices that come out identical produce no command, so an already-correct span returns empty.
+    public static func renotationCommands(in score: Score, measureRange: Range<Int>) -> [any EditCommand] {
+        var commands: [any EditCommand] = []
+        for (partIndex, part) in score.parts.enumerated() where !part.instrument.useDrumset {
+            for (staffIndex, staff) in part.staves.enumerated() where staff.group != "percussion" {
+                let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
+                let durations = score.effectiveMeasureDurations(partIndex: partIndex, staffIndex: staffIndex)
+                for measureIndex in measureRange.clamped(to: staff.measures.indices) {
+                    guard durations.indices.contains(measureIndex) else { continue }
+                    commands.append(contentsOf: renotate(
+                        staff.measures[measureIndex],
+                        at: address,
+                        measureIndex: measureIndex,
+                        keySig: score.activeKey(staff: address, measureIndex: measureIndex),
+                        division: score.division,
                         measureDuration: durations[measureIndex],
                     ))
                 }

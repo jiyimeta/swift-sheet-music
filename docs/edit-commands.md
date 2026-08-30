@@ -53,6 +53,7 @@ own substantive logic.
 
 | Command | Trigger in macOS example | Sugar? |
 | --- | --- | --- |
+| `InputNote` | note-input letter keys (writes a note into a rest) | — |
 | `SetNotePitch` | ↑ / ↓ (±1 semitone) | — |
 | `SetAccidental` | toolbar (♭♭ ♭ ♮ ♯ 𝄪 + clear) | sugar |
 | `AddNoteToChord` | Shift+letter | sugar |
@@ -66,6 +67,24 @@ own substantive logic.
 | `ReplaceVoiceElements` | primitive | primitive |
 | `PasteVoiceElement` | ⌘V (single, cross-measure spill) | — |
 | `PasteVoiceElements` | ⌘V (range, multi-element, cross-measure spill, tuplet-aware) | — |
+| `InsertMeasure` | menu command (structural) | — |
+| `DeleteMeasure` | menu command (structural) | — |
+| `CreateTuplet` | ⌘+digit on a non-tuplet element | — |
+| `RemoveTuplet` | ⌘+digit on an existing tuplet member | — |
+| `AddPart` | not in the example — driven by a host app's instruments sheet | — |
+| `RemovePart` | not in the example — driven by a host app's instruments sheet | — |
+| `MovePart` | not in the example — driven by a host app's instruments sheet | — |
+| `SetKeySignature` | not in the example — driven by a host app's signature sheet | — |
+| `RemoveKeySignature` | not in the example — driven by a host app's signature sheet | — |
+| `SetTimeSignature` | not in the example — driven by a host app's signature sheet | — |
+| `RemoveTimeSignature` | not in the example — driven by a host app's signature sheet | — |
+| `SetStaffDefaultClef` | not in the example — driven by a host app's clef picker | — |
+| `SetRehearsalMark` | menu command (system lane) — set / rename a bar's mark | — |
+| `RemoveRehearsalMark` | menu command (system lane) — clear a bar's mark | — |
+| `CreateVoice` | not in the example — the drum pad, writing into a voice the bar lacks | — |
+| `SplitRest` | not in the example — the drum pad's column caret, landing inside a rest | — |
+| `SetNoteHead` | not in the example — the drum pad, writing a cross-head hi-hat | sugar |
+| `SetDrumsetEntry` | not in the example — the drum pad, repairing a kit that never named this drum | — |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -83,15 +102,33 @@ section above).
 
 ### Structural
 
-- [ ] **`CreateTuplet`** — convert a range of consecutive timed
+- [x] **`CreateTuplet`** — convert a range of consecutive timed
   elements into a tuplet (Ctrl+3 = triplet, Ctrl+5 = quintuplet, …).
   Modifies `Voice.tuplets` + rebuilds element durations.
-- [ ] **`RemoveTuplet`** — drop a tuplet wrapper and restore its
-  constituents to ordinary durations.
+  Implemented; see "A. Implemented" above.
+- [x] **`RemoveTuplet`** — drop a tuplet wrapper and restore its
+  constituents to ordinary durations. Implemented; see
+  "A. Implemented" above.
 - [ ] **`MoveToVoice`** — move a chord or rest from one voice to
   another within the same measure.
-- [ ] **`InsertMeasure`** / **`DeleteMeasure`** — measure-level
-  structural ops.
+- [x] **`CreateVoice`** — append a voice to one measure, filled with a
+  full-measure rest. `ReplaceVoiceElements` refuses a voice that does
+  not exist, so this is what a write into a bar's second voice goes
+  through first. Implemented; see "A. Implemented" above.
+- [x] **`SplitRest`** — split one rest into two beat-aligned runs at a
+  tick offset, so a caret that landed inside a rest has a slot to
+  write into. Implemented; see "A. Implemented" above.
+- [x] **`SetDrumsetEntry`** — write (or remove) one pitch's row in a
+  part's drum kit. Without a row the layout engine falls back to the
+  pitched diatonic formula and draws the drum on a wrong line, so a pad
+  that can write an instrument the chart never used has to be able to
+  repair it. Implemented; see "A. Implemented" above.
+- [x] **`InsertMeasure`** / **`DeleteMeasure`** — measure-level
+  structural ops. Implemented; see "A. Implemented" above.
+- [x] **`AddPart`** / **`RemovePart`** / **`MovePart`** — part-level
+  structural ops: add an instrument, drop one (re-anchoring the
+  brackets and system elements that outlive it), reorder the score.
+  Implemented; see "A. Implemented" above.
 - [ ] **`SetBarLineSubtype`** *(sugar)* — change a barline
   (regular / double / repeat / end).
 - [ ] **`SetMeasureRepeat`** — replace a measure's content with a
@@ -101,14 +138,18 @@ section above).
 
 - [ ] **`SetClef`** at a position — including mid-measure clef
   changes.
-- [ ] **`SetKeySignature`** at a position.
-- [ ] **`SetTimeSignature`** at a measure start — with downstream
-  tick-budget recompute.
+- [x] **`SetKeySignature`** / **`RemoveKeySignature`** at a position.
+  Implemented; see "A. Implemented" above.
+- [x] **`SetTimeSignature`** / **`RemoveTimeSignature`** at a measure
+  start — with downstream tick-budget recompute. Implemented; see
+  "A. Implemented" above.
 - [ ] **`SetTempo`** *(sugar)* — insert / edit / remove a tempo
   marking.
 - [ ] **`SetDynamic`** *(sugar)* — pp / p / mf / f / ff / etc.
 - [ ] **`SetStaffText`** *(sugar)* — arbitrary text label.
-- [ ] **`SetRehearsalMark`** *(sugar)* — A / B / C boxed labels.
+- [x] **`SetRehearsalMark`** / **`RemoveRehearsalMark`** — set /
+  rename / remove the mark on one bar. Implemented; see
+  "A. Implemented" above.
 - [ ] **`SetFermata`** *(sugar)* — toggle fermata after / over an
   element.
 
@@ -116,8 +157,8 @@ section above).
 
 - [ ] **`SetArpeggio`** *(sugar)* — `Chord.arpeggio`.
 - [ ] **`SetGlissando`** *(sugar)* — `Note.glissando`.
-- [ ] **`SetNoteHeadType`** *(sugar)* — `Note.headType` (cross /
-  diamond / triangle / …).
+- [x] **`SetNoteHead`** *(sugar)* — `Note.headType` (cross / diamond /
+  triangle / …). Implemented; see "A. Implemented" above.
 - [ ] **`SetDots`** *(sugar)* — augmentation dot (`.fraction(...)`);
   thin wrapper over `SetChordDuration`.
 
@@ -178,16 +219,20 @@ sense.
 Roughly ordered by impact. A reasonable sweep:
 
 1. `CreateTuplet` / `RemoveTuplet` — rhythm editing core.
+   (Landed — see "A. Implemented" above.)
 2. `SetDots` — cheap, but unlocks dotted durations from the
    keyboard.
 3. `InsertMeasure` / `DeleteMeasure` — structural foundation.
+   (Landed — see "A. Implemented" above.)
 4. Range commands (`TransposeRange` / `DeleteRange` /
    `SetAccidentalsInRange` / …) — pure sugar, ergonomic wins for
    the editor UX.
 5. Text-mark commands together (`SetTempo` /`SetDynamic` /
-   `SetStaffText` / `SetRehearsalMark`) — shared shape, easy to
-   batch.
-6. Chord/note property commands (`SetArpeggio` / `SetGlissando` /
-   `SetNoteHeadType`) — small, isolated.
+   `SetStaffText`) — shared shape, easy to batch.
+   (`SetRehearsalMark` / `RemoveRehearsalMark` have landed already —
+   see "A. Implemented" above.)
+6. Chord/note property commands (`SetArpeggio` / `SetGlissando`) —
+   small, isolated. (`SetNoteHead` has landed already — see
+   "A. Implemented" above.)
 7. `MoveToVoice` — voice editing.
 8. Spanner commands once `Spanner` subtypes are confirmed.

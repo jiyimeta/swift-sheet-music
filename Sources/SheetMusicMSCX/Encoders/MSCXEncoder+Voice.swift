@@ -80,7 +80,9 @@ extension Voice {
     /// signature at the staff head — emitting `<KeySig><concertKey>0
     /// </concertKey></KeySig>` causes Studio to display a redundant
     /// "natural" sign at the start of the system on file open. We
-    /// mirror that omission here.
+    /// mirror that omission here — for the key as *written*, which on a
+    /// transposing part (`options.writtenFifthsOffset != 0`) is not the
+    /// concert one.
     ///
     /// `systemElements` (typically only non-empty for voice 0) are
     /// interleaved into the chord/rest stream at their natural cursor
@@ -112,6 +114,7 @@ extension Voice {
             isStaffHead: isStaffHead,
             effectiveDuration: effectiveDuration,
             nextMeasureFirstChordNotes: nextMeasureFirstChordNotes,
+            writtenFifthsOffset: options.writtenFifthsOffset,
         )
         var state = EncodeState(carryIn: carryIn)
         let sortedSys = Self.sortedSystemElements(systemElements)
@@ -159,6 +162,7 @@ extension Voice {
         isStaffHead: Bool,
         effectiveDuration: Fraction,
         nextMeasureFirstChordNotes: ChordNotes?,
+        writtenFifthsOffset: Int,
     ) -> IterationPlan {
         // At a given startIndex, push outer tuplets (longer range)
         // before inner ones so the close-side LIFO pops innermost first.
@@ -190,11 +194,13 @@ extension Voice {
             effectiveDuration: effectiveDuration,
             // Staff-head suppression of an implicit C-major KeySig: drop
             // the very first VoiceElement when this voice sits at the
-            // staff head and that element is `keySignature` with
-            // concertKey == 0. Tuplets do not span key signatures, so
-            // the open/close tuplet bookkeeping at index 0 is unaffected.
+            // staff head and that element is a `keySignature` whose
+            // WRITTEN key is C major. Tuplets do not span key signatures,
+            // so the open/close tuplet bookkeeping at index 0 is
+            // unaffected.
             dropInitialZeroKeySig: shouldDropInitialZeroKeySig(
                 isStaffHead: isStaffHead,
+                writtenFifthsOffset: writtenFifthsOffset,
             ),
             forwardTiePartnerNotes: Self.forwardTiePartnerNotes(
                 in: elements,
@@ -261,9 +267,30 @@ extension Voice {
         }
     }
 
-    private func shouldDropInitialZeroKeySig(isStaffHead: Bool) -> Bool {
+    /// The staff-head `<KeySig>` may only be dropped when BOTH halves of the signature are C major
+    /// — the concert key and the written one — because the omission has to be lossless in both
+    /// directions and nothing recreates the element on the way back in.
+    ///
+    /// - The written key must be 0 because the omission mirrors MuseScore's own: it stands for the
+    ///   signature Studio *displays* by default. On a transposing part the written key of concert
+    ///   C is not C (a B♭ clarinet writes D major), so dropping it there renders the part a whole
+    ///   tone out.
+    /// - The concert key must be 0 for the mirror case: a B♭ part in concert B♭ major
+    ///   (`concertKey -2`, offset `+2`) has a written key of exactly 0. Dropping it loses the −2,
+    ///   the decoder brings the part back at concert C, and the next save writes written D — two
+    ///   fifths of drift per round trip. MuseScore's compat repair only runs for
+    ///   `mscVersion < 420`, so our v4 output would never be repaired.
+    ///
+    /// With a non-transposing part the two conditions coincide and this is the original
+    /// `concertKey == 0` test.
+    private func shouldDropInitialZeroKeySig(
+        isStaffHead: Bool, writtenFifthsOffset: Int,
+    ) -> Bool {
         guard isStaffHead, let first = elements.first else { return false }
-        if case let .keySignature(key) = first, key.concertKey == 0 {
+        if case let .keySignature(key) = first,
+           key.concertKey == 0,
+           Score.respelledKey(key.concertKey + writtenFifthsOffset) == 0
+        {
             return true
         }
         return false

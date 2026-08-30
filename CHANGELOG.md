@@ -7,19 +7,71 @@ and this project adheres to
 
 ## [Unreleased]
 
-### Fixed
+### Added
 
-- Note auditions on Android no longer go missing while notes are entered
-  quickly, and no longer click. A new audition now supersedes the one it
-  replaces and invalidates its pending end — without which the old note's
-  end fired on its own schedule and silenced the new one, audible only when
-  the two shared a channel and pitch, so it presented as intermittent. The
-  output stream is also held open past the note-off for the note's release,
-  which used to be cut off mid-decay on every audition sounded from an idle
-  reader. The Apple engine has carried both behaviours for a long time.
+- `GMDrumset` publishes the General MIDI drum kit as one table — line, notehead, voice, stem and name per
+  pitch — absorbing the three private functions the MSCX encoder held them in, and `GMPercussion.drumLineMap`
+  becomes its lines-only projection.
+- `Instrument.drumset`: a score's own drum kit, decoded whole from `<Drum>` instead of for its `<line>` alone,
+  so an imported chart keeps the notehead, voice, stem, name and shortcut it was written with and re-encodes
+  to them. `Instrument.drumLineMap` is unchanged as the lines-only view, readable and writable as before.
+- `CreateVoice` / `SplitRest` / `SetNoteHead` / `SetDrumsetEntry` edit commands, with
+  `EditIntent.createVoice(staff:measureIndex:voiceIndex:)` / `.splitRest(at:tickOffset:)` /
+  `.setNoteHead(at:headType:)` / `.setDrumsetEntry(partIndex:pitch:entry:)` and `EditIntentCodec` wire support
+  (indices 25…28) — what drum note entry needs to route a key to its own voice, write at a caret's tick, give a
+  note a cross notehead, and repair a kit that never named the drum being written. `.createVoice` and
+  `.setDrumsetEntry` both plan to nothing when the score already says what they would write.
+- `Score.blank(_:)` + `BlankScoreTemplate`: build an empty score in code — any number of parts, each with
+  its own staves, instrument names, GM program, transposition pair and optional drum kit, plus `.normal`
+  bracket groups over part ranges (SATB, string quartet). `Part.init(blankPlan:id:measures:)` is the
+  per-part half, reusable by a command that appends a part to an existing score.
+- `GMPercussion.drumLineMap`: the GM drum pitch → staff-line table, promoted out of the MIDI importer so an
+  imported kit and an authored one place the same drum on the same line.
+- `InsertMeasure` / `DeleteMeasure`: structural edit commands that insert or remove a full measure column
+  (every staff plus the parallel `SystemMeasure`), each other's inverse. Inserting or deleting bar 0
+  re-homes the score-start key/time/clef signatures onto the new first bar, mirroring MuseScore, and both
+  commands fix up any `Spanner.nextMeasuresOffset` that spans the edit point. `DeleteMeasure` refuses to
+  remove a score's last measure (`EditRefusal.Reason.cannotDeleteOnlyMeasure`).
+- `EditIntent.insertMeasure(at:)` / `.deleteMeasure(at:)`: the host-facing intents `ScoreEditSession` plans
+  into `InsertMeasure` / `DeleteMeasure`, with `EditIntentCodec` wire support (indices 14…15).
+- `AddPart` / `RemovePart`: structural edit commands that add or drop a whole part, each other's inverse. A
+  new part is built through the same `Part.init(blankPlan:id:measures:)` a blank score uses, and its bars are
+  measure rests carrying the score's signature skeleton — the key / time signature each existing bar declares,
+  so a mid-score signature change stays consistent across staves. Clefs are not copied; the part declares its
+  own. Brackets follow the global staff order in both directions: one whose span crosses the insertion point
+  grows by the inserted staff count, and a removal shrinks it or re-anchors it onto the first staff it still
+  covers (`Score.filtered(hidingStaves:)`'s pass, now shared). A system element anchored into a removed part
+  re-anchors on the score's first staff rather than being dropped, so a tempo survives its instrument, and
+  `RemovePart` refuses to remove a score's last part.
+- `EditIntent.addPart(plan:at:)`: the host-facing intent `ScoreEditSession` plans into `AddPart`, carrying a
+  `BlankScoreTemplate.PartPlan` — the recipe, not a built part, so both images construct the same one — with
+  `EditIntentCodec` wire support (index 16).
+- `MovePart`: reorders the parts — a removal followed by an insertion of the same `Part` value, so
+  `MovePart(from: 0, to: 1)` over `[A, B, C]` gives `[B, A, C]`. Its own inverse in shape
+  (`MovePart(from: to, to: from)`), carrying the pre-image of every bracket and system-element anchor so the undo
+  is byte-exact. `originalStaff` addresses are re-stamped through the permutation, and each bracket follows its
+  anchor staff carrying its declared span — spans are not rewritten, matching MuseScore's `Score::sortStaves`;
+  capping a span at the system's end stays a draw-time concern of `LayoutEngine.buildBrackets`.
+- `EditIntent.removePart(at:)` / `.movePart(from:to:)`: the host-facing intents `ScoreEditSession` plans into
+  `RemovePart` / `MovePart`, with `EditIntentCodec` wire support (indices 17…18). `.movePart(from: n, to: n)`
+  resolves to nothing to apply rather than pushing an undo entry that restores the score to itself.
+- `EditRefusal.Reason.cannotRemoveLastPart` (`edit.cannotRemoveLastPart`): what `RemovePart` refuses a last-part
+  removal with. It used to borrow `.cannotDeleteOnlyMeasure`; a host switching over the reason can now tell the
+  two structural minimums apart.
+- `ScoreEditSession.partIndexMapping` / `consumePartIndexMapping()` / `isPartMappingIdentity`: where every part
+  that existed at the last consume point (or at `init`) is now, `nil` for one that was removed. A host keys
+  per-part state — mixer strips, per-staff flags — by index, and add / remove / move renumber underneath it; this
+  is the map to migrate that state through. Derived by diffing `Part.id` snapshots, so undo and redo need no
+  special handling, and cumulative rather than per-edit, so a host reads it once when it is ready to write.
+  Duplicate ids in the baseline (a malformed file) yield the identity mapping rather than a guess.
 
 ### Changed
 
+- A `.composite` intent's members are now planned one after another, each against the score the members before it
+  left — not all against the score the composite started from. Every planner that reads the score (the cross-bar
+  planners, the `.measure` promotion, the full-measure collapse) is asking about the state its own command will
+  meet, and a write into a voice an earlier member creates used to ask that question of a voice that was not there
+  yet.
 - `NotePreviewPolicy` in `SheetMusicAudioCore` now owns those decisions for
   both platforms: which audition supersedes which, how long a drum rings
   against a melodic note, and how long the audio graph has to keep rendering
@@ -34,6 +86,24 @@ and this project adheres to
   arithmetic kept in step by golden assertions on each side. Goldens catch a
   change made twice and made differently; they say nothing about a change
   made once.
+
+### Fixed
+
+- Re-anchoring brackets no longer leaves a hole in the bracket gutter. `column` is a horizontal coordinate —
+  a bracket's spine sits at `staffOriginX - 0.5 sp - column * sp` and the gutter is sized `maxColumn + 1` — so a
+  group bracket left at column 1 after the brace at column 0 went away with its part drew one `sp` further left
+  than anything needed and reserved a column nothing occupied. `Score.reanchoredBrackets` now renumbers the
+  columns still occupied onto `0 ..< n`, which fixes `RemovePart` (whose result is saved to the file) and
+  `filtered(hidingStaves:)` (whose result is only displayed) in one place. The renumbering is global rather than
+  per anchor staff, so brackets that share a column keep sharing one.
+- Note auditions on Android no longer go missing while notes are entered
+  quickly, and no longer click. A new audition now supersedes the one it
+  replaces and invalidates its pending end — without which the old note's
+  end fired on its own schedule and silenced the new one, audible only when
+  the two shared a channel and pitch, so it presented as intermittent. The
+  output stream is also held open past the note-off for the note's release,
+  which used to be cut off mid-decay on every audition sounded from an idle
+  reader. The Apple engine has carried both behaviours for a long time.
 
 ## [2.1.0] - 2026-08-29
 

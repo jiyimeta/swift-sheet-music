@@ -43,9 +43,7 @@ public struct SetAccidental: EditCommand {
         guard case var .chord(chord) = score[veID] else {
             throw Self.refused(.wrongElementKind(at: veID, expected: .chord))
         }
-        let respelled = PitchSpelling.respelled(
-            from: oldNote, with: accidental,
-        )
+        let respelled = Self.respelled(oldNote, with: accidental, at: location, in: score)
         var note = chord.notes[location.noteIndexInChord]
         note.pitch = respelled.pitch
         note.tpc = respelled.tpc
@@ -58,5 +56,34 @@ public struct SetAccidental: EditCommand {
             tpc: oldNote.tpc,
             accidental: oldNote.accidental,
         )
+    }
+
+    /// `PitchSpelling.respelled(from:with:)` performed on the note as the STAFF reads it, handed back in concert
+    /// values. Identical to calling it directly on a staff that does not transpose.
+    ///
+    /// The distinction is the letter the respelling preserves, and on a transposing staff the two letters are
+    /// different ones. ♯ means "sharpen the note on the page": concert B♭ on a B♭ clarinet is a written C, so ♯
+    /// has to produce a written C♯ (concert B♮). Preserving the CONCERT letter instead produces a B♯, which that
+    /// staff engraves as C𝄪 — a double sharp a whole tone above what the user tapped ♯ on.
+    ///
+    /// `accidental: nil` still leaves pitch and tpc alone (the caller only wants the glyph cleared), so the
+    /// detour is a no-op there too.
+    ///
+    /// When the crossing back cannot be stored — a written respelling that is inside MIDI's `0…127` sitting over
+    /// a concert pitch that is not — the note keeps the pitch and spelling it had, the same thing
+    /// `Score.writtenPitchView()` does at that extreme rather than writing a pitch outside the range. The glyph
+    /// still lands, which is the command's contract; the respell half is unguarded on the concert path too, and
+    /// making the accidental keys refuse outright is a public-refusal question, not one to settle here.
+    private static func respelled(
+        _ note: Note, with accidental: Accidental?, at location: NoteID, in score: Score,
+    ) -> (pitch: Int, tpc: Int) {
+        let crossing = score.writtenSpaceCrossing(staff: location.staff, measureIndex: location.measureIndex)
+        guard !crossing.isIdentity else {
+            return PitchSpelling.respelled(from: note, with: accidental)
+        }
+        var asRead = note
+        (asRead.pitch, asRead.tpc) = crossing.written((note.pitch, note.tpc))
+        let written = PitchSpelling.respelled(from: asRead, with: accidental)
+        return crossing.concert(written) ?? (note.pitch, note.tpc)
     }
 }
