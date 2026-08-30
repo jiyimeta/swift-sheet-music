@@ -157,29 +157,23 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// gets swallowed by AUMIDISynth (the next drum tap would be silent), and a
     /// drum re-hit overlapping its own decay is natural anyway. Main-actor
     /// isolated.
-    private var activePreview: (channel: UInt8, pitch: UInt8)?
-    /// The held sustained preview (bar press-hold), distinct from `activePreview`
-    /// (the fixed-duration tap preview). Main-actor isolated.
+    /// Which fixed-duration tap preview is sounding, which of them supersedes which, and how long each one
+    /// rings and then occupies the graph.
+    ///
+    /// Shared with the Android engine, which runs the same `NotePreviewPolicy` over JNI. It used to be a pair of
+    /// fields here and a hand-written copy of them there; the copy reproduced neither the supersede nor the
+    /// release tail, and both omissions were audible. The MIDI each engine sends stays its own — this decides
+    /// *what* happens, not how it is said.
+    ///
+    /// A generation rather than a `DispatchWorkItem`: a `DispatchWorkItem`'s Swift block inherits this
+    /// `@MainActor` class's isolation and trips the actor-executor assertion (EXC_BREAKPOINT) when run on
+    /// `previewQueue`; the `@convention(block)` trailing closure of `asyncAfter(deadline:)` does not.
+    private var previewPolicy = NotePreviewPolicy()
+    /// The held sustained preview (bar press-hold), distinct from the policy's tap preview. Main-actor isolated.
+    ///
+    /// Deliberately not in the shared policy: a sustained hold has no duration to plan, it ends when the finger
+    /// lifts, and Android has no bar press-hold to mirror. The two do interact — see `previewNoteOff`.
     private var activeSustainedPreview: (staff: Int, channel: UInt8, pitch: UInt8)?
-    /// Bumped on every new preview (and on teardown). The delayed end-of-preview
-    /// action captures the value current when it was scheduled and bails if it no
-    /// longer matches — so a superseded preview's note-off / drain never fires.
-    /// Replaces a `DispatchWorkItem`: a `DispatchWorkItem`'s Swift block inherits
-    /// this `@MainActor` class's isolation and trips the actor-executor assertion
-    /// (EXC_BREAKPOINT) when run on `previewQueue`; the `@convention(block)`
-    /// trailing closure of `asyncAfter(deadline:)` does not.
-    private var previewGeneration = 0
-    /// How long a drum-staff preview rings before it is ended and the graph
-    /// drained. Melodic previews use the caller's `duration` (0.5 s); drums ring
-    /// longer because a cymbal's musical value is its decay. By-ear tunable.
-    private let drumPreviewTail: TimeInterval = 2.0
-    /// After a tap-preview's note-off, how long to keep the graph running so the
-    /// note's release tail renders out before the engine is parked. Parking the
-    /// engine mid-release freezes the software synth's render thread, which both
-    /// cuts the tail with a click and leaves a frozen tail that resumes audibly on
-    /// the next preview's engine restart (SwiftySynth backend only — the AU
-    /// instrument path released cleanly through an engine pause). By-ear tunable.
-    private let previewReleaseTail: TimeInterval = 0.8
     /// True when a preview resumed an audio graph the host had paused.
     /// Tells the drain to restore that paused state once previews drain
     /// — preserving the host's "graph parked until play" behavior.
@@ -1004,9 +998,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// channel, and clear tracking. Called on teardown so a ringing preview
     /// can't outlive the synth it played on.
     private func cancelActivePreview() {
-        previewGeneration &+= 1
+        // `silence()` both reports the note to cut and invalidates the end action already scheduled for it.
         // No note-on follows, so All Sound Off (`nextChannel: nil`) is safe.
-        cutActivePreviewNote(nextChannel: nil)
+        cutPreviewNote(previewPolicy.silence(), nextChannel: nil)
         // Also force-stop a held sustained preview so it can't outlive the
         // synth on teardown / reload.
         if let sustained = activeSustainedPreview {
@@ -1016,35 +1010,30 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         previewShouldRepauseEngineOnDrain = false
     }
 
-    /// Silence the currently-tracked fixed-duration tap preview
-    /// (`activePreview`), if any, and clear it. Shared by
-    /// `cancelActivePreview()` (full teardown, `nextChannel: nil`) and
-    /// `previewNoteOn(...)` (a still-pending tap preview must not survive
-    /// into a sustained hold). Uses backend `stopNote` when delegated.
-    /// Otherwise: when `nextChannel` matches the active preview's channel,
-    /// a plain note-off is used instead of All Sound Off — CC 120
-    /// immediately before a same-channel note-on is swallowed by
-    /// AUMIDISynth, exactly the pitfall `playPreview`'s same-channel branch
-    /// avoids. A different (or `nil`) `nextChannel` uses CC 120 on every
-    /// attached AU unit, since we don't know here which unit the preview
-    /// sounded on.
-    private func cutActivePreviewNote(nextChannel: UInt8?) {
-        guard let active = activePreview else { return }
+    /// Silence `voice` — the fixed-duration tap preview the policy just gave up, if there was one.
+    ///
+    /// Shared by `cancelActivePreview()` (full teardown, `nextChannel: nil`) and `previewNoteOn(...)` (a
+    /// still-pending tap preview must not survive into a sustained hold). Uses backend `stopNote` when
+    /// delegated. Otherwise: when `nextChannel` matches the preview's channel, a plain note-off is used instead
+    /// of All Sound Off — CC 120 immediately before a same-channel note-on is swallowed by AUMIDISynth, exactly
+    /// the pitfall `playPreview`'s same-channel branch avoids. A different (or `nil`) `nextChannel` uses CC 120
+    /// on every attached AU unit, since we don't know here which unit the preview sounded on.
+    private func cutPreviewNote(_ voice: PreviewVoice?, nextChannel: UInt8?) {
+        guard let voice else { return }
         if let backend {
-            backend.stopNote(channel: active.channel, pitch: active.pitch)
-        } else if active.channel == nextChannel {
+            backend.stopNote(channel: voice.channel, pitch: voice.pitch)
+        } else if voice.channel == nextChannel {
             for unit in attachedSynths {
-                unit.stopNote(active.pitch, onChannel: active.channel)
+                unit.stopNote(voice.pitch, onChannel: voice.channel)
             }
         } else {
             for unit in attachedSynths {
                 MIDISynthBuilder.sendControlChange(
                     into: unit, controller: 120, value: 0,
-                    onChannel: active.channel,
+                    onChannel: voice.channel,
                 )
             }
         }
-        activePreview = nil
     }
 
     /// Stop a held sustained-preview note on whichever synth path is active.
@@ -1065,24 +1054,24 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         duration: TimeInterval, velocity: UInt8,
     ) {
         guard let backend else { return }
-        previewGeneration &+= 1
-        if let previous = activePreview {
+        let plan = previewPolicy.begin(
+            voice: PreviewVoice(channel: channel, pitch: pitch),
+            velocity: velocity,
+            isDrum: isDrum,
+            ringMilliseconds: Int(duration * 1000),
+        )
+        if let previous = plan.supersedes {
             backend.stopNote(channel: previous.channel, pitch: previous.pitch)
         }
-        activePreview = nil
         if !engine.isRunning {
             try? engine.start()
             if state != .playing { previewShouldRepauseEngineOnDrain = true }
         }
         backend.startNote(channel: channel, pitch: pitch, velocity: velocity)
-        activePreview = (channel, pitch)
-        let tail = isDrum ? drumPreviewTail : duration
-        let generation = previewGeneration
-        previewQueue.asyncAfter(deadline: .now() + tail) { [weak self] in
+        previewQueue.asyncAfter(deadline: .now() + plan.ringSeconds) { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self, previewGeneration == generation else { return }
-                self.backend?.stopNote(channel: channel, pitch: pitch)
-                activePreview = nil
+                guard let self, let ending = previewPolicy.end(generation: plan.generation) else { return }
+                self.backend?.stopNote(channel: ending.channel, pitch: ending.pitch)
                 // A sustained hold started after this tap owns the repause
                 // obligation now (see `previewNoteOff`) — leave the flag set
                 // and don't pause out from under the still-ringing hold.
@@ -1090,12 +1079,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 // Defer the park until the note-off release has rendered out. Parking
                 // the engine right after `stopNote` freezes the software synth's render
                 // thread mid-release, clicking off the tail and leaving it frozen to
-                // resume on the next preview's `engine.start()`. A newer preview bumps
-                // `previewGeneration`, cancelling this park and keeping the graph
+                // resume on the next preview's `engine.start()`. A newer preview makes
+                // this generation stale, cancelling this park and keeping the graph
                 // running for the next note.
-                previewQueue.asyncAfter(deadline: .now() + previewReleaseTail) { [weak self] in
+                previewQueue.asyncAfter(deadline: .now() + plan.releaseTailSeconds) { [weak self] in
                     Task { @MainActor [weak self] in
-                        guard let self, previewGeneration == generation else { return }
+                        guard let self, previewPolicy.isCurrent(generation: plan.generation) else { return }
                         guard previewShouldRepauseEngineOnDrain, activeSustainedPreview == nil else { return }
                         previewShouldRepauseEngineOnDrain = false
                         if state != .playing, engine.isRunning { engine.pause() }
@@ -1149,8 +1138,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // right before a note-on on the same channel is swallowed by AUMIDISynth
         // (the next drum tap would be silent), and a drum re-hit overlapping its
         // own decay is natural.
-        previewGeneration &+= 1
-        if let previous = activePreview {
+        let isDrum = isDrumStaff(flatIdx)
+        let plan = previewPolicy.begin(
+            voice: PreviewVoice(channel: midiChannel, pitch: pitch),
+            velocity: velocity,
+            isDrum: isDrum,
+            ringMilliseconds: Int(duration * 1000),
+        )
+        if let previous = plan.supersedes {
             if previous.channel == midiChannel {
                 instrument.stopNote(previous.pitch, onChannel: previous.channel)
             } else {
@@ -1160,7 +1155,6 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 )
             }
         }
-        activePreview = nil
 
         // A paused `AVAudioEngine` renders nothing, so resume the graph for the
         // preview; the drain below restores the host-parked state once the
@@ -1175,20 +1169,19 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         instrument.startNote(
             pitch, withVelocity: velocity, onChannel: midiChannel,
         )
-        activePreview = (midiChannel, pitch)
 
-        // Drums ring for `drumPreviewTail` (the decay is the point); melodic
-        // notes ring for the caller's `duration`. End melodic with a note-off
-        // and drums with CC 120 (note-off won't stop a one-shot's decay). The
-        // timer fires a plain `@convention(block)` closure (no actor-executor
-        // assertion off the main queue); the actual end + drain run on the main
-        // actor and bail if a newer tap has bumped `previewGeneration`.
-        let isDrum = isDrumStaff(flatIdx)
-        let tail = isDrum ? drumPreviewTail : duration
-        let generation = previewGeneration
-        previewQueue.asyncAfter(deadline: .now() + tail) { [weak self] in
+        // The policy sets how long it rings — a drum for its decay (the decay is the point), a melodic note for
+        // the caller's `duration`. End melodic with a note-off and drums with CC 120 (note-off won't stop a
+        // one-shot's decay). The timer fires a plain `@convention(block)` closure (no actor-executor assertion
+        // off the main queue); the actual end + drain run on the main actor, and answer `nil` if a newer tap has
+        // superseded this one.
+        //
+        // No `releaseTailSeconds` deferral on this path, unlike the backend's: an AU instrument released cleanly
+        // through an engine pause. The plan still carries the number — whether parking the graph would cut a
+        // release is a property of the graph, and that is each engine's own to know.
+        previewQueue.asyncAfter(deadline: .now() + plan.ringSeconds) { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self, previewGeneration == generation else { return }
+                guard let self, previewPolicy.end(generation: plan.generation) != nil else { return }
                 let endInstrument = synth(forStaff: flatIdx)
                 if let endInstrument {
                     if isDrum {
@@ -1200,7 +1193,6 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                         endInstrument.stopNote(pitch, onChannel: midiChannel)
                     }
                 }
-                activePreview = nil
                 // A sustained hold started after this tap owns the repause
                 // obligation now (see `previewNoteOff`) — leave the flag set
                 // and don't pause out from under the still-ringing hold.
@@ -1244,8 +1236,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // 120 immediately before a same-channel note-on is swallowed by
         // AUMIDISynth. The repause obligation (previewShouldRepauseEngineOnDrain)
         // transfers to our own previewNoteOff below.
-        previewGeneration &+= 1
-        cutActivePreviewNote(nextChannel: midiChannel)
+        cutPreviewNote(previewPolicy.silence(), nextChannel: midiChannel)
 
         // Cut any prior sustained note first — only one sustained preview is
         // active at a time.
@@ -1281,7 +1272,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // isn't now driving it, AND no tap preview is still pending — a
         // pending tap's own drain owns the repause obligation until it fires
         // (see the `playPreview` / `backendPlayPreview` drains).
-        if previewShouldRepauseEngineOnDrain, activePreview == nil, state != .playing, engine.isRunning {
+        if previewShouldRepauseEngineOnDrain, previewPolicy.sounding == nil, state != .playing, engine.isRunning {
             previewShouldRepauseEngineOnDrain = false
             engine.pause()
         }

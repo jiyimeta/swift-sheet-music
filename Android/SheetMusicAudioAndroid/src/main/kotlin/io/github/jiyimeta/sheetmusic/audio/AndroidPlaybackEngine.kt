@@ -24,7 +24,9 @@ import io.github.jiyimeta.wirelet.BinaryWriter
 import io.github.jiyimeta.sheetmusic.audio.serialization.FrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.InstrumentParamsCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.MetronomeBeatCodec
+import io.github.jiyimeta.sheetmusic.audio.serialization.MidiControlChangeCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
+import io.github.jiyimeta.sheetmusic.audio.serialization.PreviewPlanCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.StaffParamsCodec
@@ -186,6 +188,50 @@ class AndroidPlaybackEngine internal constructor(
 
         /** Builds a click SF2 from two WAV blobs; empty array on failure. */
         fun buildClickSoundFont(strongWav: ByteArray, weakWav: ByteArray): ByteArray
+
+        // ── Note auditions ───────────────────────────────────────────
+        //
+        // Which audition supersedes which, how long a drum rings against a melodic note, and how long the
+        // audio graph has to stay alive for a release are decided by shared Swift (`NotePreviewPolicy`) that
+        // the Apple engine runs too. This engine asks and then executes, in FluidSynth's own messages. It
+        // used to decide as well, in a hand-written copy of Apple's state machine that had neither the
+        // supersede nor the release tail — both audible, and both already fixed on the other platform.
+
+        /** Creates an audition policy. The caller owns the handle and must [previewPolicyRelease] it. */
+        fun previewPolicyCreate(): Long
+
+        /** Releases a handle from [previewPolicyCreate]. Unknown handles are ignored. */
+        fun previewPolicyRelease(policyHandle: Long)
+
+        /**
+         * Plans one audition, superseding whatever was sounding. Returns an encoded [PreviewPlan], or an
+         * empty array for an unknown handle — for which the only sane response is to sound nothing, there
+         * being no generation to end the note by.
+         */
+        fun previewPolicyBegin(
+            policyHandle: Long,
+            channel: Int,
+            pitch: Int,
+            velocity: Int,
+            isDrum: Boolean,
+            ringMilliseconds: Int,
+        ): ByteArray
+
+        /**
+         * The note to silence now that [generation]'s ring time is up, packed as `channel shl 8 or pitch`,
+         * or -1 when a newer audition superseded it and silencing anything would silence THAT note.
+         */
+        fun previewPolicyEnd(policyHandle: Long, generation: Long): Long
+
+        /** Abandons any audition in progress, answering the note to silence, packed as above, or -1. */
+        fun previewPolicySilence(policyHandle: Long): Long
+
+        /**
+         * The MIDI Master Tuning RPN messages retuning one channel by [cents] off A4=440, as consecutive
+         * `(controller, value)` byte pairs. Shared with the Apple engine, which reads the same split into
+         * its AudioUnit tuning params — see `MasterTuning` in SheetMusicAudioCore.
+         */
+        fun masterTuningControlChanges(cents: Double): ByteArray
     }
 
     companion object {
@@ -220,6 +266,25 @@ class AndroidPlaybackEngine internal constructor(
                 SheetMusicAudioJNI.nativeResolveExportTickRange(h, bytes)
             override fun buildClickSoundFont(strongWav: ByteArray, weakWav: ByteArray) =
                 SheetMusicAudioJNI.nativeBuildClickSoundFont(strongWav, weakWav)
+            override fun previewPolicyCreate() = SheetMusicAudioJNI.nativePreviewPolicyCreate()
+            override fun previewPolicyRelease(policyHandle: Long) =
+                SheetMusicAudioJNI.nativePreviewPolicyRelease(policyHandle)
+            override fun previewPolicyBegin(
+                policyHandle: Long,
+                channel: Int,
+                pitch: Int,
+                velocity: Int,
+                isDrum: Boolean,
+                ringMilliseconds: Int,
+            ) = SheetMusicAudioJNI.nativePreviewPolicyBegin(
+                policyHandle, channel, pitch, velocity, isDrum, ringMilliseconds,
+            )
+            override fun previewPolicyEnd(policyHandle: Long, generation: Long) =
+                SheetMusicAudioJNI.nativePreviewPolicyEnd(policyHandle, generation)
+            override fun previewPolicySilence(policyHandle: Long) =
+                SheetMusicAudioJNI.nativePreviewPolicySilence(policyHandle)
+            override fun masterTuningControlChanges(cents: Double) =
+                SheetMusicAudioJNI.nativeMasterTuningControlChanges(cents)
         }
     }
 
@@ -345,6 +410,23 @@ class AndroidPlaybackEngine internal constructor(
      * empty otherwise. Not staff-index-identity (see [MixerChannel]).
      */
     private var staffLiveChannel: IntArray = IntArray(0)
+
+    /**
+     * Whether each flat staff plays on the percussion bank. Populated in [prepare] alongside
+     * [staffLiveChannel]; empty otherwise.
+     *
+     * Read only by [playPreview], because a drum audition is not over when a melodic one would be — a
+     * cymbal's musical value is its decay. How much longer is the shared policy's answer, not this file's.
+     */
+    private var staffIsDrums: BooleanArray = BooleanArray(0)
+
+    /**
+     * Handle to this engine's audition policy in shared Swift, or 0 before [prepare] / after [teardown].
+     *
+     * Created in [prepare] rather than at construction so the first native call still happens where every
+     * other one does — an engine can be constructed in contexts that never load the library.
+     */
+    @Volatile private var previewPolicyHandle: Long = 0L
     private var fluidSynthEngine: FluidSynthEngine? = null
     private var playerDriver: PlayerDriver? = null
     private var oboeStream: OboeStream? = null
@@ -468,6 +550,11 @@ class AndroidPlaybackEngine internal constructor(
                     staves[i].staffIndex
                 }
             }
+            this@AndroidPlaybackEngine.staffIsDrums = BooleanArray(staves.size) { staves[it].isDrums }
+            if (previewPolicyHandle == 0L) previewPolicyHandle = jniBridge.previewPolicyCreate()
+            // A re-prepare lands on a different score and a fresh synth; an audition planned against the
+            // previous one must not be ended against this one.
+            jniBridge.previewPolicySilence(previewPolicyHandle)
 
             val metronomeSmfBytes = jniBridge.renderMetronomeMidi(scoreHandle)
 
@@ -484,7 +571,12 @@ class AndroidPlaybackEngine internal constructor(
             // as a generic (channel, bank, program, isDrums) load spec —
             // `FluidSynthEngine` never interprets the "staffIndex" field as
             // anything but a raw MIDI channel number.
-            val engine = FluidSynthEngine(synthFactory)
+            val engine = FluidSynthEngine(
+                synthFactory,
+                masterTuningControlChanges = {
+                    MidiControlChangeCodec.decode(jniBridge.masterTuningControlChanges(it))
+                },
+            )
             val channelLoadParams = strips.map { s ->
                 StaffParams(
                     staffIndex = s.liveChannel,
@@ -1052,6 +1144,20 @@ class AndroidPlaybackEngine internal constructor(
         // score has a drum part, a grand staff, or a mid-score instrument
         // change (see `staffLiveChannel`, populated in `prepare`).
         val liveChannel = staffLiveChannel.getOrElse(staffIndex) { staffIndex }
+
+        // What this audition does — whether it supersedes one already sounding, how long it rings, how long
+        // the graph has to stay alive after it — is decided by the shared policy. See `JniBridge`.
+        val planBytes = jniBridge.previewPolicyBegin(
+            policyHandle = previewPolicyHandle,
+            channel = liveChannel,
+            pitch = pitch,
+            velocity = velocity,
+            isDrum = staffIsDrums.getOrElse(staffIndex) { false },
+            ringMilliseconds = durationMillis.toInt(),
+        )
+        if (planBytes.isEmpty()) return
+        val plan = PreviewPlanCodec.decode(planBytes)
+
         // The Oboe output driver pulls samples only while it's running — it is
         // started in play() and stopped in pause() / stop(). When we're idle or
         // paused the stream is open but not running, so previewNoteOn() would
@@ -1064,18 +1170,65 @@ class AndroidPlaybackEngine internal constructor(
             previewStreamHolders.incrementAndGet()
             oboeStream?.play()
         }
-        engine.previewNoteOn(liveChannel, pitch, velocity)
+
+        // Silencing the superseded note by its own (channel, pitch) rather than Apple's CC 120 on a foreign
+        // channel is a deliberate difference in the MESSAGE, not in the behaviour the policy describes. Apple's
+        // branch works around AUMIDISynth swallowing a CC 120 sent immediately before a note-on on the same
+        // channel; FluidSynth needs no such workaround, and a plain note-off is both more precise — it silences
+        // exactly the note this engine started — and gentler, since it lets the release envelope run.
+        if (plan.supersedesChannel >= 0) {
+            engine.previewNoteOff(plan.supersedesChannel, plan.supersedesPitch)
+        }
+        previewSilentAtNanos = System.nanoTime() +
+            (plan.ringMilliseconds + plan.releaseTailMilliseconds).toLong() * 1_000_000L
+
+        engine.previewNoteOn(plan.channel, plan.pitch, plan.velocity)
         previewScope.launch {
-            delay(durationMillis)
-            engine.previewNoteOff(liveChannel, pitch)
-            if (startedStreamForPreview &&
-                previewStreamHolders.decrementAndGet() == 0 &&
-                _state.value != PlaybackState.PLAYING
-            ) {
+            delay(plan.ringMilliseconds.toLong())
+            // -1 means a newer audition has taken this one's place and already silenced it; ending it again
+            // would silence the NEWER note instead. The stream hold is still released below, because this
+            // call took one out.
+            val ending = jniBridge.previewPolicyEnd(previewPolicyHandle, plan.generation)
+            if (ending >= 0) {
+                engine.previewNoteOff((ending shr 8).toInt(), (ending and 0xFF).toInt())
+            }
+            if (!startedStreamForPreview) return@launch
+            // Keep the output stream open for the note's release before parking it again. That stream is what
+            // RENDERS the release: stopping it the instant the note-off is sent truncates the tail into a click,
+            // which is what a single audition in an idle Reader sounded like. The span is the policy's
+            // `releaseTailMilliseconds`, and the Apple engine defers its own graph park across the same one.
+            //
+            // The hold is released only after that wait, so one hold covers a note AND its tail. A preview
+            // arriving during the tail therefore takes its own hold, which both keeps the stream running and
+            // hands the park obligation to the newer note — no generation check is needed here to get that.
+            delay(plan.releaseTailMilliseconds.toLong())
+            if (previewStreamHolders.decrementAndGet() == 0 && _state.value != PlaybackState.PLAYING) {
                 oboeStream?.stop()
             }
         }
     }
+
+    /**
+     * How much longer a preview will be audible in milliseconds — its remaining ring time plus the release
+     * tail — or `0` when none is sounding.
+     *
+     * For a host that has to STOP this engine to do something else: Folino re-prepares it to adopt an edited
+     * score, and stopping it silences whatever preview the edit itself just started. Acting the instant the
+     * edit lands therefore cut the user's own audition off a frame in. The answer belongs here rather than in
+     * the caller's copy of the preview duration, because the tail is this engine's business and the caller
+     * has no way to know it.
+     */
+    fun millisUntilPreviewSilent(): Long =
+        ((previewSilentAtNanos - System.nanoTime()) / 1_000_000L).coerceAtLeast(0L)
+
+    /**
+     * `System.nanoTime()` at which the preview started by the last [playPreview] falls silent.
+     *
+     * A monotonic reading rather than a wall clock, and deliberately not the test scheduler's virtual time:
+     * its one reader is a host deciding how long to wait in real time.
+     */
+    @Volatile
+    private var previewSilentAtNanos: Long = 0L
 
     /** Clears the current score cursor without affecting playback state. */
     fun clearCursor() { _currentCursor.value = null }
@@ -1293,6 +1446,9 @@ class AndroidPlaybackEngine internal constructor(
             context = context,
             synthFactory = synthFactory,
             playerFactory = playerFactory,
+            masterTuningControlChanges = {
+                MidiControlChangeCodec.decode(jniBridge.masterTuningControlChanges(it))
+            },
         )
     }
 
@@ -1416,6 +1572,11 @@ class AndroidPlaybackEngine internal constructor(
         metronomeMixer?.close()
         metronomeMixer = null
         staffLiveChannel = IntArray(0)
+        staffIsDrums = BooleanArray(0)
+        if (previewPolicyHandle != 0L) {
+            jniBridge.previewPolicyRelease(previewPolicyHandle)
+            previewPolicyHandle = 0L
+        }
         _state.value = PlaybackState.STOPPED
     }
 

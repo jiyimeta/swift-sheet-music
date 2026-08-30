@@ -5,6 +5,7 @@ import android.net.Uri
 import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import io.github.jiyimeta.sheetmusic.audio.export.fakes.FakeAudioFileEncoder
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakePlayerDriver
+import io.github.jiyimeta.sheetmusic.audio.fakes.MarkerMasterTuning
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
@@ -97,6 +98,7 @@ class AudioExporterTest {
             synthFactory = { _: Int -> drivers.synth as SynthDriver },
             playerFactory = { _: Long -> drivers.player },
             encoderFactory = { _, _, _ -> encoder },
+            masterTuningControlChanges = MarkerMasterTuning::invoke,
         )
 
     // ── Tests ───────────────────────────────────────────────────────────
