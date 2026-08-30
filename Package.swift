@@ -143,6 +143,9 @@ var targets: [Target] = [
             "Import/PDFImporter+ContentStream.swift",
             "Import/PDFImporter+ContentStream+Operators.swift",
             "Import/PDFImporter+AppleEntry.swift",
+            // The raster fallback hangs off the Apple entry point and is
+            // driven by PDFKit + the CoreGraphics rasterizer below.
+            "Import/PDFImporter+RasterFallback.swift",
             "Import/FontCascade/PDFFontProgram.swift",
             "Import/FontCascade/GlyphBitmap.swift",
             "Import/FontCascade/ShapeDescriptor.swift",

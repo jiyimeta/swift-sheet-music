@@ -33,10 +33,22 @@ extension PDFImporter {
             musicFontGateFraction: options.musicFontGateFraction,
             shapeAcceptanceThreshold: options.shapeAcceptanceThreshold,
         )
+        var content = walk.content
+        var pageSizes = walk.pageSizes
+        // `nil` means today's behavior LITERALLY: with no classifier and no
+        // injected detector nothing below runs — no rasterization, no page
+        // analysis, not even a second pass over the pages. That is what makes
+        // the byte-identical vector corpus gate meaningful.
+        if let detector = try rasterDetector(for: options) {
+            try applyRasterFallback(
+                to: &content, pageSizes: &pageSizes,
+                document: document, detector: detector, options: options,
+            )
+        }
         return try buildScore(
             pageCount: document.pageCount,
-            walked: walk.content,
-            pageSizes: walk.pageSizes,
+            walked: content,
+            pageSizes: pageSizes,
             documentAttributes: walk.attributes,
             options: options,
         )
@@ -47,6 +59,7 @@ extension PDFImporter {
         pdfData: Data,
         options: PDFImportOptions = .init(),
     ) throws -> (score: Score, geometry: PDFScoreGeometry) {
+        warnEntryPointDoesNotRasterize("parseWithGeometry", options: options)
         let document = try openDocument(pdfData)
         let collector = PDFGeometryCollector()
         let walk = try walkDocument(

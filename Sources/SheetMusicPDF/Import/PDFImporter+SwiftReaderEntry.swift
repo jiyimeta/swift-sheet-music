@@ -36,6 +36,7 @@ extension PDFImporter {
         pdfData: Data,
         options: PDFImportOptions = .init(),
     ) throws -> Score {
+        warnEntryPointDoesNotRasterize("parseUsingSwiftReader", options: options)
         let walk = try walkOrThrow(pdfData: pdfData)
         return try buildScore(
             pageCount: walk.pageCount,
@@ -52,6 +53,7 @@ extension PDFImporter {
         pdfData: Data,
         options: PDFImportOptions = .init(),
     ) throws -> (score: Score, geometry: PDFScoreGeometry) {
+        warnEntryPointDoesNotRasterize("parseWithGeometryUsingSwiftReader", options: options)
         let walk = try walkOrThrow(pdfData: pdfData)
         let collector = PDFGeometryCollector()
         let score = try buildScore(

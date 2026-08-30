@@ -43,7 +43,22 @@ public enum PDFImporter {
         // display flips; only consumed on the geometry-capture path.
         geometry?.setPageSizes(pageSizes)
         guard !walked.glyphs.isEmpty || !walked.texts.isEmpty || !walked.paths.isEmpty else {
-            throw malformedPDF(code: "pdf.content.empty", message: "PDFImporter: no glyphs/paths found")
+            // §9: a document the importer cannot read has to say why and name
+            // the knob that might fix it. Deliberately NOT a new pass over the
+            // pages asking "is this a scan?" — that would make the default
+            // options do work they do not do today, which is exactly what the
+            // byte-identical vector corpus gate exists to detect. This fires
+            // only where the importer was already about to throw.
+            let configured = options.omrTileClassifier != nil || options.omrDetector != nil
+            let hint = configured
+                ? "PDFImporter: no glyphs/paths found, and PDFImportOptions.omrTileClassifier "
+                + "read nothing from these pages either."
+                : "PDFImporter: no glyphs/paths found. If this is a scanned PDF, set "
+                + "PDFImportOptions.omrTileClassifier to read its pages as images."
+            options.diagnostics?(PDFImportDiagnostic(
+                severity: .warning, location: "document", message: hint,
+            ))
+            throw malformedPDF(code: "pdf.content.empty", message: hint)
         }
         let classified = walked.glyphs
         emitUnknownGlyphDiagnostics(classified, options: options)
@@ -179,6 +194,24 @@ public enum PDFImporter {
                 ))
             }
         }
+    }
+
+    /// The `info` diagnostic owed to a caller who set `omrTileClassifier` on
+    /// an entry point that does not rasterize. A knob that silently does
+    /// nothing is this repository's own silent-drop smell; only
+    /// `parse(pdfData:options:)` / `parse(pdfURL:options:)` act on it.
+    ///
+    /// Lives here rather than beside the fallback because
+    /// `parseUsingSwiftReader` is compiled on Android too, where the whole
+    /// raster path is excluded.
+    static func warnEntryPointDoesNotRasterize(_ entryPoint: String, options: PDFImportOptions) {
+        guard options.omrTileClassifier != nil || options.omrDetector != nil else { return }
+        options.diagnostics?(PDFImportDiagnostic(
+            severity: .info, location: "document",
+            message: "PDFImporter.\(entryPoint) does not rasterize: "
+                + "PDFImportOptions.omrTileClassifier is ignored here. Use "
+                + "PDFImporter.parse(pdfData:options:) to read scanned pages.",
+        ))
     }
 
     private static func malformedPDF(code: String, message: String) -> SheetMusicError {

@@ -108,5 +108,29 @@ public struct PDFImportOptions {
     var shapeAcceptanceThreshold = 0.15
     public var diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?
 
+    /// A tile classifier for pages the vector path cannot read. `nil` — the
+    /// default — means the importer behaves exactly as it always has: no
+    /// rasterization, no detection, no new pass over the pages.
+    ///
+    /// Takes the tile classifier rather than a glyph detector because the
+    /// detector's seam mentions importer internals; the importer builds
+    /// `OMRGlyphDetector(classifier:)` from this.
+    ///
+    /// Only `PDFImporter.parse(pdfData:)` / `parse(pdfURL:)` act on it.
+    /// `parseWithGeometry` and `parseUsingSwiftReader` emit an `info`
+    /// diagnostic saying so rather than ignoring it silently.
+    public var omrTileClassifier: (any OMRTileClassifier)?
+
+    /// Resolution at which a page with no vector content is rasterized. The
+    /// training corpus's DPI grid is 200/300/400, so 300 sits mid-distribution.
+    public var omrRenderDPI: Double = 300
+
+    /// TESTING ONLY, INTERNAL. Substitutes the whole glyph-detection stage so the
+    /// harness can replay labels or precomputed detections through the product
+    /// path. Takes precedence over `omrTileClassifier`. Not `public` for the same
+    /// reason as `disableSMuFLCodepointTier`: a knob whose purpose is to bypass
+    /// the real detector cannot be withdrawn once it is API.
+    var omrDetector: (any OMRGlyphDetecting)?
+
     public init() {}
 }
