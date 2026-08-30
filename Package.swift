@@ -21,6 +21,33 @@ let isAndroid = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_ANDROID"]
 /// a flag so the shipping package shape carries no extra product.
 let isWasm = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_WASM"] == "1"
 
+/// Linker flags every WebAssembly target here carries. Empty off the wasm path, so the Apple and Android builds —
+/// and any consumer resolving this package by version — never see `.unsafeFlags`.
+///
+/// wasm-ld gives the shadow stack 128 KiB by default and the Swift wasm SDK's toolset adds nothing, which is two
+/// orders of magnitude below what Apple and Android hand a thread. Worse, the default layout is
+/// `[data][stack][heap]` with the stack growing *down* into `.bss`, so an overflow does not trap: it overwrites
+/// whatever static memory sits below — including the allocator's own state — and the run dies much later inside
+/// an unrelated `malloc`, with an out-of-bounds trap that names none of the code responsible. The recursive
+/// edit-intent decoder found this the hard way; see `NestedEditIntentWire`.
+///
+/// - `-z stack-size=1048576` — 8x the default. Still a rounding error against a wasm heap that grows into the
+///   hundreds of MiB, and it buys real margin for recursive decoders and for the layout engine's fattest frames
+///   (38 KiB in one closure alone).
+/// - `--stack-first` — puts the stack below all data, so the next overflow runs off address 0 and traps at the
+///   function responsible instead of corrupting memory silently. wasm-ld requires `--global-base` to be at least
+///   the stack size alongside it.
+///
+/// These live on the targets, not on `swift package -Xlinker`: a global `-Xlinker` also reaches the macOS host
+/// plugin tools (SwiftSyntax / BridgeJS / Wirelet macros), whose `ld` rejects wasm-ld options outright.
+let wasmStackLinkerSettings: [LinkerSetting] = isWasm ? [
+    .unsafeFlags([
+        "-Xlinker", "-z", "-Xlinker", "stack-size=1048576",
+        "-Xlinker", "--stack-first",
+        "-Xlinker", "--global-base=1048576",
+    ]),
+] : []
+
 var products: [Product] = [
     .library(name: "SheetMusic", targets: ["SheetMusic"]),
     .library(name: "SheetMusicCore", targets: ["SheetMusicCore"]),
@@ -245,6 +272,7 @@ if isWasm {
                 "SheetMusicMSCX",
             ],
             path: "Tests/SheetMusicWasmBridgeTests",
+            linkerSettings: wasmStackLinkerSettings,
         ),
         .testTarget(
             name: "SheetMusicTests",
@@ -267,6 +295,7 @@ if isWasm {
                 .process("Resources"),
             ],
             swiftSettings: sheetMusicTestsSwiftSettings,
+            linkerSettings: wasmStackLinkerSettings,
         ),
     ]
 } else {
@@ -560,6 +589,9 @@ if isWasm {
             name: "SheetMusicWasmEntry",
             dependencies: ["SheetMusicWasmBridge"],
             path: "Sources/SheetMusicWasmEntry",
+            // The shipping artifact needs this more than the tests do: `applyEditIntentBytes` decodes bytes the
+            // browser hands it, on this same shadow stack.
+            linkerSettings: wasmStackLinkerSettings,
         ),
         .executableTarget(
             name: "WasmSizeProbe",
@@ -573,6 +605,8 @@ if isWasm {
                 "SheetMusicWasmBridge",
             ],
             path: "Sources/WasmSizeProbe",
+            // Same flags as the shipping entry point, so what the size gate measures is what ships.
+            linkerSettings: wasmStackLinkerSettings,
         ),
         // Run natively and under a wasm host to compare the parse of the
         // same file; see Sources/WasmParityProbe/main.swift.
@@ -584,6 +618,7 @@ if isWasm {
                 "SheetMusicMSCX",
             ],
             path: "Sources/WasmParityProbe",
+            linkerSettings: wasmStackLinkerSettings,
         ),
     ]
 }
