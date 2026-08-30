@@ -150,6 +150,9 @@ var targets: [Target] = [
             "Import/FontCascade/GlyphClassifier.swift",
             "Import/FontCascade/GlyphClassifier+MusicFontGate.swift",
             "Import/FontCascade/GlyphClassifier+GlyphIDResolve.swift",
+            // CoreGraphics rasterization (a PDF page → pixels) has no Android
+            // shape yet; the Android front-end has no source of a `GrayBitmap`.
+            "OMR/PDFPageRasterizer.swift",
             // NOTE: SimpleFontEncoding / SimpleFontTextDecoder / AdobeGlyphList
             // are Foundation-only and stay in the Android build — the shared
             // `PDFPageState` holds the decoder registry, and the Android
