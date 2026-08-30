@@ -501,6 +501,15 @@
         }
 
         /// Every page's raster analysis, one bitmap live at a time.
+        ///
+        /// `keepDeskewed: true` — the detector needs the deskewed bitmap
+        /// (`OMRGlyphDetector.glyphs` returns `[]` without it, silently:
+        /// no diagnostic reaches this harness since `compose` is called
+        /// with `diagnostics: nil`), same reasoning and the same fix as
+        /// `OMRDetectorEvalSweep.analyses`. Unconditional rather than
+        /// gated on `mode == .detectorGlyphs`: simpler, and every other
+        /// mode already tolerated the larger per-page footprint before
+        /// this harness existed in its current form.
         static func analyses(
             dir: String, pages: [OMRPageLabels],
         ) -> [Int: RasterPageAnalysis] {
@@ -510,9 +519,58 @@
                 guard FileManager.default.fileExists(atPath: url.path) else { continue }
                 out[page.page.index] = try? OMRPageBitmapLoader.withPageBitmap(
                     url: url, dpi: Double(page.image.dpi),
-                ) { RasterPage.analyze($0, pageIndex: page.page.index) }
+                ) { RasterPage.analyze($0, pageIndex: page.page.index, keepDeskewed: true) }
             }
             return out
+        }
+    }
+
+    /// A fast, always-on guard against the exact regression Task 7 shipped:
+    /// `OMRHybridEvalHarness.analyses(dir:pages:)` used to call
+    /// `RasterPage.analyze` without `keepDeskewed: true`, so
+    /// `OMRGlyphDetector.glyphs` silently returned `[]` for every page —
+    /// no diagnostic reaches this harness, since `compose` is called with
+    /// `diagnostics: nil` — and a 32-render sweep "passed" in 6.5 seconds
+    /// with `notesB=0` everywhere.
+    ///
+    /// Deliberately NOT inside `OMRHybridEvalHarness` (`@Suite(.enabled(if:
+    /// OMR_HYBRID_EVAL == "1"))`): that suite is off by default, and a
+    /// guard against a silent, empty-looking success must run every time,
+    /// not only when someone remembers to set the env var for the real
+    /// sweep. `analyses` is a plain static function, callable here
+    /// regardless of the other suite's enablement trait.
+    ///
+    /// Verified by deletion: reverting `analyses` to omit `keepDeskewed:
+    /// true` makes this fail with `deskewed == nil`.
+    struct OMRHybridEvalAnalysesTests {
+        @Test func analysesKeepTheDeskewedBitmapTheDetectorNeeds() throws {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("omr-hybrid-analyses-\(UUID().uuidString)").path
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(atPath: dir) }
+
+            let bitmap = RasterTestBitmaps.staff(
+                widthPx: 900, heightPx: 500, dpi: 300, topY: 200, spacingPx: 16,
+            )
+            try OMRPrepPNG.write(bitmap, to: URL(fileURLWithPath: "\(dir)/page_0.png"))
+            let size = RasterPage.analyze(bitmap, pageIndex: 0).pageSizePt
+            let page = OMRPageLabels(
+                schema: 1,
+                page: .init(index: 0, widthPt: size.width, heightPt: size.height),
+                image: .init(
+                    file: "page_0.png", dpi: 300,
+                    labelTransform: [1, 0, 0, 0, 1, 0, 0, 0, 1], sourceSizePx: nil,
+                ),
+                glyphs: [], paths: [], beams: [], curves: [], texts: [],
+                census: .init(glyphsByClass: [:], texts: 0),
+            )
+
+            let analyses = OMRHybridEvalHarness.analyses(dir: dir, pages: [page])
+            let analysis = try #require(analyses[0])
+            #expect(
+                analysis.deskewed != nil,
+                "OMRGlyphDetector.glyphs returns [] with no diagnostic without this",
+            )
         }
     }
 #endif

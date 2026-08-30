@@ -83,10 +83,10 @@ enum OMRDetectorDecode {
                         // become candidates whether or not they are
                         // peaks, and on a trained heatmap almost
                         // every one of the 62 x 96 x 96 cells is one.
-                        // Exact because `threshold >= 0` (enforced by
+                        // Exact because `threshold > 0` (enforced by
                         // `OMRModelManifest.validate`) — a
                         // suppressed cell scores 0, which is never
-                        // above a non-negative threshold.
+                        // above a positive threshold.
                         guard Double(value) > threshold else { continue }
                         let x0 = max(0, ix - 1), x1 = min(width - 1, ix + 1)
                         var isPeak = true
