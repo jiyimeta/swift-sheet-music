@@ -531,12 +531,25 @@ extension LayoutEngine {
             effectiveMelismaTicks: context.effectiveMelismaTicks,
             melismaContinuationsForRange: melismaForRange,
             drumLineMaps: drumLineMaps,
+            partLabels: partLabels(of: context.score, isFirstSystem: isFirstSystem),
             totalMeasures: staves.first?.measures.count ?? 0,
             options: context.options,
             overlappingSpannerAnchors: overlappingAnchors,
             ottavaNumbersOnly: context.score.style.ottavaNumbersOnly,
             trailingCourtesy: trailingCourtesy,
         )
+    }
+
+    /// The part label each part contributes to a system — the same resolution
+    /// `buildSystem` performs to draw it and `labelWidth` performs to reserve
+    /// the opening indent, spelled once here so the cache key cannot disagree
+    /// with either of them.
+    static func partLabels(of score: Score, isFirstSystem: Bool) -> [String] {
+        score.parts.map { part in
+            isFirstSystem
+                ? (part.instrument.longName ?? part.trackName ?? "")
+                : (part.instrument.shortName ?? "")
+        }
     }
 
     static func stretchWidths(

@@ -85,6 +85,18 @@ public enum EditIntent: Sendable, Equatable {
     /// an undo entry that restores the score to itself.
     case movePart(from: Int, to: Int)
 
+    /// Rename the part at `index`: the long name engraved at the left of the first system, and the abbreviation
+    /// engraved there on every system after it.
+    ///
+    /// Both names travel together because a host editing both wants one undo step, not two that can be taken back
+    /// separately into a half-renamed score. A host editing one passes the other's current value.
+    ///
+    /// `nil` clears rather than leaving the name alone — a part carrying no abbreviation engraves no label from
+    /// the second system on, which is a thing a score can want to say. Resolves to nothing to apply when both
+    /// names already read that way, the same rule `.movePart` applies to a move onto its own index. An
+    /// out-of-range `index` is refused as `.targetNotFound` by `SetPartNames.apply`, so one place states the range.
+    case setPartNames(at: Int, longName: String?, shortName: String?)
+
     /// Set the concert key in force from `measureIndex` to the next explicit key change (or the end of the
     /// score): writes/replaces the `.keySignature` on every non-percussion staff at that measure and
     /// re-spells accidental glyphs over the affected span, as one undo step.
