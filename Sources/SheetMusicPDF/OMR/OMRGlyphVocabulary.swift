@@ -1,37 +1,45 @@
 import Foundation
 import SheetMusicCore
 
-/// Stable string names for `SMuFLSemantic` cases — the label-format class
-/// vocabulary (spec §7.1) and the detector's frozen class table.
+/// Stable string names for `SMuFLSemantic` cases — the label-format
+/// class vocabulary (spec §7.1). The DETECTOR vocabulary is the 64
+/// concrete classes below; `stem` / `staff5Lines` / `unknownXXXX` are
+/// also representable but excluded from the detector vocabulary.
 ///
-/// `className(for:)` (`Tests/SheetMusicTests/Helpers/OMRLabelClassNames.swift`,
-/// reached back into this table via `@testable import SheetMusicPDF`) is
-/// TOTAL: every `SMuFLSemantic` value maps to a name. `semantic(forClassName:)`
-/// round-trips every name `className(for:)` can produce, with exactly one
-/// deliberate exception: `restOther`, the shared fallback for
-/// `.rest(.fraction)` and `.rest(.measure)`. That name discards the
-/// duration's parameters, so the reverse direction cannot reconstruct which
-/// rest it was and `semantic(forClassName: "restOther")` returns `nil` on
+/// `className(for:)` is TOTAL: every `SMuFLSemantic` value maps to a
+/// name. `semantic(forClassName:)` round-trips every name that
+/// `className(for:)` can produce, with exactly one deliberate
+/// exception: `restOther`, the shared fallback for `.rest(.fraction)`
+/// and `.rest(.measure)`. That name discards the duration's
+/// parameters, so the reverse direction cannot reconstruct which rest
+/// it was and `semantic(forClassName: "restOther")` returns `nil` on
 /// purpose — do not turn this into a fabricated duration. Gate P0-G1
-/// (Task 6) needs the oracle replay to compare `Score` values exactly; a
-/// silent wrong-but-plausible duration would corrupt that gate, while `nil`
-/// fails loudly as intended.
+/// (Task 6) needs the oracle replay to compare `Score` values
+/// exactly; a silent wrong-but-plausible duration would corrupt that
+/// gate, while `nil` fails loudly as intended.
 ///
-/// ORDER IS FROZEN: `Training/generate/vocabulary.py` mirrors `detectorTable`
-/// 1:1 and COCO category ids are positions in it. Append-only.
+/// ORDER IS FROZEN: `Training/generate/vocabulary.py` mirrors this
+/// list 1:1 and COCO category ids are positions in it. Append-only.
 ///
-/// Two rows in `detectorTable` are marked `// UNREACHABLE`, and the marker
-/// is load-bearing — `Training/tests/test_vocabulary.py` parses it and
-/// asserts it against `vocabulary.UNREACHABLE`. `fine` and `toCoda` have no
-/// SMuFL glyph at all (the specification has only `coda` U+E048 and
-/// `codaSquare` U+E049); MuseScore engraves both markers as WORDS, so they
-/// arrive in the text stream, and `TextGlyph` carries no ink box by design.
-/// Nothing can ever emit a detector box for them. They stay in the list
-/// because it is append-only, and gate P3c-G3 subtracts them from its
-/// denominator rather than reporting a shortfall no run can ever fix.
-/// `PDFImporter+Structure` does recover both markers — from that text
-/// stream — so the score-level path has them and only the seam-level path
-/// cannot.
+/// Two rows are marked `// UNREACHABLE`, and the marker is load-
+/// bearing — `Training/tests/test_vocabulary.py` parses it and
+/// asserts it against `vocabulary.UNREACHABLE`. `fine` and `toCoda`
+/// have no SMuFL glyph at all (the specification has only `coda`
+/// U+E048 and `codaSquare` U+E049); MuseScore engraves both markers
+/// as WORDS, so they arrive in the text stream, and `TextGlyph`
+/// carries no ink box by design. Nothing can ever emit a detector
+/// box for them. They stay in the list because it is append-only,
+/// and gate P3c-G3 subtracts them from its denominator rather than
+/// reporting a shortfall no run can ever fix. `PDFImporter+Structure`
+/// does recover both markers — from that text stream — so the
+/// score-level path has them and only the seam-level path cannot.
+///
+/// --- Task 3 additions below, not part of the original comment above ---
+///
+/// This type is the Task 3 home for that table (moved from
+/// `Tests/SheetMusicTests/Helpers/OMRLabelClassNames.swift`).
+/// `className(for:)` itself stays in that Tests file, reaching this
+/// table via `@testable import SheetMusicPDF`.
 ///
 /// FROZEN. `classes` in an exported `model.json` must equal `trainable`
 /// exactly, in order — a model whose class 7 means something other than
@@ -112,11 +120,14 @@ enum OMRGlyphVocabulary {
     private static let semanticByName: [String: SMuFLSemantic] =
         Dictionary(uniqueKeysWithValues: detectorTable.map { ($0.className, $0.semantic) })
 
-    /// The 62 trainable classes, in frozen table order. The model's class
-    /// index IS this array's index — `detectorVocabulary` minus the two
-    /// UNREACHABLE rows (`fine`, `toCoda`) and the reserved/non-detector
-    /// names (`stem`, `staff5Lines`, `restOther`, `unknown*`), none of
-    /// which appear in `detectorVocabulary` to begin with.
+    /// The 62 trainable classes, in frozen table order. The model's
+    /// class index IS this array's index.
+    ///
+    /// (Task 3 note, not in the original comment): concretely this is
+    /// `detectorVocabulary` minus the two UNREACHABLE rows (`fine`,
+    /// `toCoda`) and the reserved/non-detector names (`stem`,
+    /// `staff5Lines`, `restOther`, `unknown*`), none of which appear in
+    /// `detectorVocabulary` to begin with.
     static let trainable: [String] = [
         "brace",
         "noteheadDoubleWhole",
