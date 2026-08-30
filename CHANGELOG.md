@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-08-31
+
 ### Added
 
 - `SetPartNames` renames a part: the long name engraved at the left of the first system, and the abbreviation
