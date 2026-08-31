@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-08-31
+
 ### Fixed
 
 - `GMDrumset` engraves every drum where MuseScore Studio engraves it. The table's lines came from nowhere
