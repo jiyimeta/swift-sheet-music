@@ -46,6 +46,13 @@
             try AdHocRender.run()
             return true
         }
+        // Ad-hoc single-PDF import (SM_PDF=… swift run render-previews),
+        // used to exercise `PDFImporter.parse(pdfURL:)` against a chosen
+        // file and see every diagnostic it emits.
+        if AdHocPDFImport.isRequested {
+            try AdHocPDFImport.run()
+            return true
+        }
         // Corpus batch render (SM_RENDER_DIR=… swift run render-previews),
         // the BEFORE/AFTER pixel gate for layout refactors.
         if CorpusRender.isRequested {
