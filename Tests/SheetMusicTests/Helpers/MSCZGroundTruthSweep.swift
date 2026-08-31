@@ -273,7 +273,9 @@
             let vector = try PDFImporter.walkDocument(
                 PDFImporter.openDocument(Data(contentsOf: item.pdf)),
             )
-            report(item, mode: "vector", walked: vector.content, pageCount: vector.pageSizes.count)
+            let vectorAccidentals = report(
+                item, mode: "vector", walked: vector.content, pageCount: vector.pageSizes.count,
+            )
             guard let detector = try PDFImporter.rasterDetector(for: options) else { return }
             let scan = try PDFImporter.openDocument(
                 MSCZScanSimulator.imageOnlyPDF(of: item.pdf, dpi: scanDPI),
@@ -290,7 +292,14 @@
                     raster.paths += one.paths
                 }
             }
-            report(item, mode: "raster", walked: raster, pageCount: scan.pageCount)
+            let rasterAccidentals = report(
+                item, mode: "raster", walked: raster, pageCount: scan.pageCount,
+            )
+            compareAccidentals(item, vector: vectorAccidentals, raster: rasterAccidentals)
+        }
+
+        private static func isAccidental(_ glyph: ClassifiedGlyph) -> Bool {
+            OMRLabelClassNames.className(for: glyph.semantic).hasPrefix("accidental")
         }
 
         /// The structure pass, in `buildScore`'s own order — canonicalize,
@@ -299,9 +308,12 @@
         /// size is a document-wide input to every page's system clustering,
         /// so a per-page shortcut here would measure a pipeline the importer
         /// never runs.
+        /// Returns each staff's accidental count, in traversal order, so the
+        /// caller can hold the two front-ends' lists side by side.
+        @discardableResult
         private static func report(
             _ item: Case, mode: String, walked incoming: WalkedContent, pageCount: Int,
-        ) {
+        ) -> [Int] {
             let walked = incoming.canonicalized()
             var stavesByPage: [[SheetMusicPDF.Staff]] = []
             for page in 0 ..< pageCount {
@@ -317,6 +329,7 @@
             var inMeasures = 0
             var behindNotehead = 0
             var inForce: [String: Int] = [:]
+            var accidentalsPerStaff: [Int] = []
             for page in 0 ..< pageCount {
                 for system in PDFImporter.layoutSystems(
                     staves: stavesByPage[page], paths: walked.paths,
@@ -334,6 +347,9 @@
                             inMeasures += clefs
                             if clefs > 0 { stavesWithClef += 1 }
                             inForce[firstClefClass(staff) ?? "(none)", default: 0] += 1
+                            accidentalsPerStaff.append(staff.measures.reduce(0) { total, measure in
+                                total + measure.glyphs.count(where: isAccidental)
+                            })
                         }
                     }
                 }
@@ -345,6 +361,53 @@
             for name in inForce.keys.sorted() {
                 print("[mscz-inforce][\(mode)][\(item.name)] clef=\(name) staves=\(inForce[name] ?? 0)")
             }
+            return accidentalsPerStaff
+        }
+
+        /// Does an accidental leave one staff and arrive on its neighbour?
+        ///
+        /// That is the shape a capture-band bug takes, and it is the last
+        /// standing explanation for a key block whose positions match the F
+        /// ladder on a staff the reader holds under a G clef: the accidentals
+        /// belong to the staff below and were captured by the one above.
+        ///
+        /// A TRANSFER and a plain miscount look the same in a total, so the
+        /// two are separated here: a staff that loses `n` while an ADJACENT
+        /// staff gains `n` is a transfer; a staff that loses with no
+        /// neighbouring gain is a detection difference. Index-wise, because
+        /// both front-ends walk page → system → part → staff in the same
+        /// order — and refused outright when the staff counts differ, since
+        /// then position `i` is not the same staff on both sides and every
+        /// number below would be fiction.
+        private static func compareAccidentals(
+            _ item: Case, vector: [Int], raster: [Int],
+        ) {
+            let tag = "[mscz-accshift][\(item.name)]"
+            guard vector.count == raster.count else {
+                print("\(tag) staffCount vector=\(vector.count) raster=\(raster.count)"
+                    + " — not comparable staff by staff")
+                return
+            }
+            var transferred = 0
+            var unpaired = 0
+            var lines: [String] = []
+            for (index, (v, r)) in zip(vector, raster).enumerated() where v != r {
+                let delta = r - v
+                let neighbours = [index - 1, index + 1].filter { vector.indices.contains($0) }
+                let paired = neighbours.contains { raster[$0] - vector[$0] == -delta }
+                if paired { transferred += 1 } else { unpaired += 1 }
+                if lines.count < 12 {
+                    lines.append("\(tag) staff=\(index) vector=\(v) raster=\(r) "
+                        + "delta=\(delta > 0 ? "+" : "")\(delta) "
+                        + "neighbourOffsets=\(neighbours.map { raster[$0] - vector[$0] }) "
+                        + "\(paired ? "TRANSFER" : "unpaired")")
+                }
+            }
+            for line in lines {
+                print(line)
+            }
+            print("\(tag) staves=\(vector.count) differing=\(transferred + unpaired) "
+                + "transfer=\(transferred) unpaired=\(unpaired)")
         }
 
         /// The clef class `readClef` would put in force for this staff: the
