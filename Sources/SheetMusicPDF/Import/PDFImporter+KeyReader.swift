@@ -100,12 +100,12 @@ extension PDFImporter {
         )
         reportRefusedBlock(
             sharpAccs.map { (sa: $0.sa, x: $0.x) }, matched: sharpN, kind: "sharp",
-            ladder: trebleSharpLadder.map { $0 + shift }, anchor: anchor,
+            ladder: trebleSharpLadder.map { $0 + shift }, anchor: anchor, clef: clef,
             diagnostics: diagnostics, location: location,
         )
         reportRefusedBlock(
             flatAccs.map { (sa: $0.sa, x: $0.x) }, matched: flatN, kind: "flat",
-            ladder: trebleFlatLadder.map { $0 + shift }, anchor: anchor,
+            ladder: trebleFlatLadder.map { $0 + shift }, anchor: anchor, clef: clef,
             diagnostics: diagnostics, location: location,
         )
         // No new sharp/flat block: the only remaining key event is a
@@ -246,9 +246,16 @@ extension PDFImporter {
     /// notion of a block: a lone leading accidental is a local accidental far
     /// more often than a one-accidental key (`pairsWithFollowingNotehead`
     /// guards exactly that), and reporting it would fire on ordinary music.
+    /// The clef is named because the ladder is anchored to it: `shift` is
+    /// `2 - bottomStep`, which is 0 for the G family and −2 for the F family,
+    /// so a staff whose clef went unread is compared against a ladder a whole
+    /// line spacing away from where its accidentals actually sit. That shows
+    /// up here as every position off by the same 2 steps — a signature no
+    /// other cause produces, and one that says the bug is in the CLEF, not in
+    /// the accidentals this message is about.
     private static func reportRefusedBlock(
         _ accs: [(sa: Int, x: CGFloat)], matched: Int, kind: String,
-        ladder: [Int], anchor: StaffAnchor,
+        ladder: [Int], anchor: StaffAnchor, clef: Clef,
         diagnostics: ((PDFImportDiagnostic) -> Void)?, location: String,
     ) {
         guard let diagnostics else { return }
@@ -265,7 +272,8 @@ extension PDFImporter {
         diagnostics(PDFImportDiagnostic(
             severity: .warning, location: location,
             message: "read \(matched) of \(run) leading \(kind)s as a key signature: "
-                + "the rest sit off the canonical ladder for this clef",
+                + "the rest sit off the canonical ladder for the \(clef.concertClefType) clef "
+                + "in force here",
             context: "steps above the bottom staff line — seen [\(seen)], "
                 + "ladder [\(expected)]",
         ))

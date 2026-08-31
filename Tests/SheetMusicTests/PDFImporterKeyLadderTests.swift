@@ -131,6 +131,38 @@
             #expect(Self.diagnostics(Self.flatBlock(3)).isEmpty)
         }
 
+        /// The key ladder is anchored to the clef in force, and `runningClef`
+        /// starts at G. So a staff whose clef never reaches the reader — the
+        /// glyph detected but landing outside every measure's x range, which
+        /// is what a raster front-end does — is silently read as treble, and
+        /// its whole key block then sits two steps off the ladder it is
+        /// compared with. Measured on this corpus: a bass staff's flats came
+        /// out at `seen [2,5]` against `ladder [4,7]`, which is EXACTLY the F
+        /// ladder, while the census showed all 26 of that document's bass
+        /// clefs detected. Nothing said so.
+        @Test func aStaffWhoseClefNeverArrivesSaysSoRatherThanAssumingTreble() {
+            let events = Self.diagnostics([
+                Self.glyph(.noteheadBlack, x: 80, sa: 4),
+            ])
+            #expect(events.count == 1)
+            #expect(events.first?.message.contains("no clef") == true)
+        }
+
+        /// The control: a staff that declares its clef says nothing.
+        @Test func aStaffThatDeclaresAClefIsSilent() {
+            let events = Self.diagnostics([
+                Self.glyph(.clefG, x: 60, sa: 4),
+                Self.glyph(.noteheadBlack, x: 80, sa: 4),
+            ])
+            #expect(events.isEmpty)
+        }
+
+        /// An empty staff has nothing to misread, so it is not worth a line
+        /// in a diagnostics log that a whole corpus flows through.
+        @Test func aStaffWithNoContentAtAllIsSilent() {
+            #expect(Self.diagnostics([]).isEmpty)
+        }
+
         /// A lone leading accidental is a local accidental on the first note
         /// far more often than a one-flat key, and the reader already has a
         /// guard for that case. Reporting it would fire on ordinary music.
