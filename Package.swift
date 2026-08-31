@@ -437,6 +437,7 @@ if !isAndroid {
                 "SheetMusicLayout",
                 "SheetMusicLayoutApple",
                 "SheetMusicUI",
+                "SheetMusicPDF",
             ],
         ),
     ]

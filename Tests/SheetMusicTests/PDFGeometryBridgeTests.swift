@@ -12,14 +12,9 @@
     ///
     /// - The `fixtureData()`-based tests (handle lifecycle, page sizes) parse a real PDF produced by the
     ///   production exporter and cover the parse → handle → release path end to end.
-    /// - The cursor-rect and hit-test tests build a `PDFScoreGeometry` by hand instead of parsing one.
-    ///   `PDFSwiftReaderEntryTests.fixtureData()`'s notation never populates `itemRects` / `noteRects`:
-    ///   `emitShow` only decodes 2-byte CID glyph codes, and the fixture's CoreText-drawn text uses a
-    ///   1-byte simple font, so no glyph geometry is ever recorded for it (a pre-existing, out-of-scope
-    ///   gap — see that file's `fixtureData()` doc comment). Without any `itemRects`, neither a `.item`
-    ///   cursor nor a `.beat` cursor (which anchors on decoded note columns) can resolve against that
-    ///   fixture, so a hand-built geometry is the only way to exercise the flip / lookup / encode logic
-    ///   this task actually owns.
+    /// - The cursor-rect and hit-test tests build a `PDFScoreGeometry` by hand instead of parsing one, so
+    ///   the flip / lookup / encode logic they own is pinned against exact rects rather than against
+    ///   whatever a fixture happens to decode to.
     @MainActor struct PDFGeometryBridgeTests {
         @Test func loadReturnsTwoLiveHandles() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
@@ -34,10 +29,14 @@
             #expect(nativeLoadScoreWithGeometryFromPDF(bytes: Data("nope".utf8)).isEmpty)
         }
 
-        /// A structurally-valid-but-empty parse must be distinguishable from a real one. The fixture decodes
-        /// no notes (its 1-byte simple font is the pre-existing `emitShow` gap), which is exactly the shape a
+        /// A structurally-valid-but-empty parse must be distinguishable from a real one — the shape a
         /// Chrome "print to PDF" produces: staff lines and measure cells, zero elements. A host that only
         /// checks "did the parse throw" would offer the user a silent transport.
+        ///
+        /// The fixture is four quarter-note chords, and the count is theirs. It read 0 until the show path
+        /// stopped inferring its code width from the presence of a `/ToUnicode` CMap: `PDFExporter` draws
+        /// through a SIMPLE (1-byte-code) font that carries a CMap, so every code was read as half of a
+        /// 2-byte CID and dropped.
         @Test func parseResultReportsHowManyElementsWereReconstructed() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let result = try PdfParseResultWire(decoding: nativeLoadScoreWithGeometryFromPDF(bytes: Self.fixtureData()))
@@ -45,7 +44,25 @@
                 nativeReleasePdfGeometry(handle: result.geometryHandle)
                 nativeReleaseScore(handle: result.scoreHandle)
             }
-            #expect(result.playableElementCount == 0)
+            #expect(result.playableElementCount == 4)
+            // The count alone would also be reached by four chords of the wrong
+            // duration in the wrong bars, so pin it against the fixture's known
+            // ground truth: ONE measure of four QUARTER chords.
+            let score = try #require(scoreTable.value(for: result.scoreHandle))
+            let chords = score.allStaves.flatMap { _, staff in
+                staff.measures.flatMap { measure in
+                    measure.voices.flatMap { voice in
+                        voice.elements.compactMap { element -> Chord? in
+                            guard case let .chord(chord) = element,
+                                  !chord.notes.isEmpty else { return nil }
+                            return chord
+                        }
+                    }
+                }
+            }
+            #expect(chords.count == 4)
+            #expect(chords.allSatisfy { $0.duration == .quarter })
+            #expect(score.allStaves.allSatisfy { $0.1.measures.count == 1 })
         }
 
         /// The counter's floor: a score with no staves reports nothing rather than trapping.

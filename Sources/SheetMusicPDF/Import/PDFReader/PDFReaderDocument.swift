@@ -85,28 +85,40 @@ struct PDFReaderDocument {
         return out
     }
 
-    /// For every font in the page's `/Resources` → `/Font` dict that carries a
-    /// `/ToUnicode` stream: the Font dict KEY (e.g. `"F10"`) → inflated CMap
-    /// bytes.
-    func fontToUnicodeStreams(page: Int) -> [String: Data] {
+    /// What the show path needs from a page's `/Resources` → `/Font` dict:
+    /// every font's inflated `/ToUnicode` CMap bytes, keyed by the Font dict
+    /// KEY (e.g. `"F10"`), and the keys whose `/Subtype` is `/Type0`.
+    ///
+    /// The subtype comes back with the CMaps because it — not whether a font
+    /// has a CMap — decides how many bytes one shown code is; see
+    /// `PDFPageState.type0FontNames`.
+    struct PageFonts {
+        var toUnicode: [String: Data] = [:]
+        var type0Names: Set<String> = []
+    }
+
+    func pageFonts(page: Int) -> PageFonts {
         guard pages.indices.contains(page) else {
-            return [:]
+            return PageFonts()
         }
         guard case let .dictionary(resources)? = resolve(pages[page].resources) else {
-            return [:]
+            return PageFonts()
         }
         guard case let .dictionary(fonts)? = resolve(resources["Font"]) else {
-            return [:]
+            return PageFonts()
         }
-        var result = [String: Data]()
+        var result = PageFonts()
         for (name, fontRef) in fonts {
             guard case let .dictionary(fontDict)? = resolve(fontRef) else {
                 continue
             }
+            if case let .name(subtype)? = resolve(fontDict["Subtype"]), subtype == "Type0" {
+                result.type0Names.insert(name)
+            }
             guard case let .stream(dict, raw)? = resolve(fontDict["ToUnicode"]) else {
                 continue
             }
-            result[name] = decodeStream(dict: dict, raw: raw)
+            result.toUnicode[name] = decodeStream(dict: dict, raw: raw)
         }
         return result
     }

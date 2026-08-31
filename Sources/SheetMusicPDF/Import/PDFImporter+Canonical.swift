@@ -73,6 +73,9 @@ extension WalkedContent {
             texts: texts.sorted(by: PDFImporterCanonicalOrder.precedes),
             paths: paths.sorted(by: PDFImporterCanonicalOrder.precedes),
             curves: curves.sorted(by: PDFImporterCanonicalOrder.precedes),
+            // Not a content stream: a diagnostic tally no pass reads, already
+            // in page order because the front-ends walk pages in order.
+            undecodedCodes: undecodedCodes,
         )
     }
 }

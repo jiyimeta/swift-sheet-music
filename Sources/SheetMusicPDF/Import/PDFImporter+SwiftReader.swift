@@ -32,11 +32,14 @@ extension PDFImporter {
         var texts: [TextGlyph] = []
         var paths: [PathSegment] = []
         var curves: [CurveArc] = []
+        var undecoded: [UndecodedCodeTally] = []
         var pageSizes: [Int: CGSize] = [:]
         for page in 0 ..< doc.pageCount {
             if let size = doc.mediaBox(page: page) { pageSizes[page] = size }
             let state = PDFPageState(pageIndex: page)
-            state.fontCMaps = decodeFontCMaps(doc.fontToUnicodeStreams(page: page))
+            let fonts = doc.pageFonts(page: page)
+            state.fontCMaps = decodeFontCMaps(fonts.toUnicode)
+            state.type0FontNames = fonts.type0Names
             let bytes = [UInt8](doc.contentBytes(page: page))
             for op in PDFContentTokenizer.tokenize(bytes) {
                 applyContentOp(op, to: state)
@@ -45,8 +48,12 @@ extension PDFImporter {
             texts.append(contentsOf: state.texts)
             paths.append(contentsOf: state.paths)
             curves.append(contentsOf: state.curveArcs)
+            undecoded.append(contentsOf: state.undecodedCodes)
         }
-        let content = WalkedContent(glyphs: glyphs, texts: texts, paths: paths, curves: curves)
+        let content = WalkedContent(
+            glyphs: glyphs, texts: texts, paths: paths, curves: curves,
+            undecodedCodes: undecoded,
+        )
         return (content, doc.pageCount, pageSizes, doc.documentAttributes)
     }
 

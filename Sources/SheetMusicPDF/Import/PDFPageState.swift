@@ -29,6 +29,19 @@ final class PDFPageState {
     /// The CMap selected by the most recent `Tf` (nil for fonts without a
     /// usable `/ToUnicode`, e.g. the ASCII test fixtures).
     var activeCMap: PDFImporter.ToUnicodeCMap?
+    /// Font RESOURCE NAMES whose `/Subtype` is `/Type0`, filled by the
+    /// front-end alongside `fontCMaps`. A Type0 font shows 2-byte codes
+    /// (Identity-H); every other subtype is a SIMPLE font showing 1-byte
+    /// character codes.
+    ///
+    /// The show path needs this because a ToUnicode CMap says nothing about
+    /// code width: MuseScore 4 embeds Leland as Type 1C — single-byte codes
+    /// — with a `/ToUnicode` CMap of its own, and reading its codes in pairs
+    /// dropped every glyph in the document.
+    var type0FontNames: Set<String> = []
+    /// Whether the font selected by the most recent `Tf` is a Type0 font.
+    /// Resolved once per `Tf` from `type0FontNames`.
+    var activeFontIsType0 = false
     /// Whether the font selected by the most recent `Tf` has shown, in its
     /// own CMap, that it speaks standard SMuFL — the per-font gate on
     /// Tier 1b's optional-range notehead table. Cached here rather than
@@ -82,6 +95,13 @@ final class PDFPageState {
     var pendingPolyCTM: CGAffineTransform = .identity
     var pendingPolyHasCurve = false
     // Outputs.
+    /// Show-string codes this page dropped because the active `/ToUnicode`
+    /// CMap does not map them, tallied per font — one entry per font, never
+    /// one per glyph. Aggregated into `WalkedContent` by the front-end and
+    /// reported through `PDFImportOptions.diagnostics` in `buildScore`: a
+    /// decode that drops content has to say so, and this path's silence is
+    /// what let a whole document import as zero notes unnoticed.
+    var undecodedCodes: [UndecodedCodeTally] = []
     var glyphs: [ClassifiedGlyph] = []
     var texts: [TextGlyph] = []
     var paths: [PathSegment] = []
@@ -94,6 +114,37 @@ final class PDFPageState {
 
     var ctm: CGAffineTransform {
         ctmStack.last ?? .identity
+    }
+
+    /// Tally one show-string code the active CMap could not map, against the
+    /// current font.
+    func recordUndecodedCode(_ code: UInt32) {
+        bumpUndecodedTally(firstCode: code) { $0.unmappedCodes += 1 }
+    }
+
+    /// Tally the bytes left over when a show string ends part-way through a
+    /// multi-byte code, against the current font.
+    func recordTruncatedTrailingBytes(_ count: Int, firstByte: UInt32) {
+        bumpUndecodedTally(firstCode: firstByte) { $0.truncatedBytes += count }
+    }
+
+    /// One tally per font, found by linear search over the handful of fonts a
+    /// page uses. That keeps the tallies in first-encounter order — a
+    /// `Dictionary` would put them in an order the front-end determinism
+    /// contract forbids.
+    private func bumpUndecodedTally(
+        firstCode: UInt32, _ bump: (inout UndecodedCodeTally) -> Void,
+    ) {
+        if let i = undecodedCodes.firstIndex(where: { $0.fontName == fontName }) {
+            bump(&undecodedCodes[i])
+        } else {
+            var tally = UndecodedCodeTally(
+                pageIndex: pageIndex, fontName: fontName,
+                firstCode: firstCode, unmappedCodes: 0,
+            )
+            bump(&tally)
+            undecodedCodes.append(tally)
+        }
     }
 
     func setTopCTM(_ value: CGAffineTransform) {
