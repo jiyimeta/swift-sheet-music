@@ -13,18 +13,22 @@ enum PDFPageRasterizer {
     /// SINGLE PAGE (~18MB for A4 at 400dpi), so a caller that rasterizes one
     /// page at a time has a flat ceiling however long the document is.
     ///
-    /// CAVEAT: a page's `/Rotate` entry is NOT honored. This draws directly
-    /// via `drawPDFPage`, not through `CGPDFPageGetDrawingTransform`, so a
-    /// page carrying `/Rotate 90` (or 180/270) rasterizes unrotated —
-    /// sideways or upside-down relative to how a viewer would show it. This
-    /// matters more than usual here: scanned PDFs — this rasterizer's whole
-    /// reason to exist — are a common source of rotated pages.
+    /// A page's `/Rotate` entry IS honored — see `rotation` below. Scanned
+    /// PDFs, this rasterizer's whole reason to exist, are a common source of
+    /// rotated pages, and a page handed to the detector sideways reads as a
+    /// bad model rather than as a bad transform.
     static func bitmap(page: CGPDFPage, dpi: Double) throws -> GrayBitmap {
         try autoreleasepool {
             let box = page.getBoxRect(.mediaBox)
             let scale = dpi / 72.0
-            let width = max(1, Int((box.width * CGFloat(scale)).rounded()))
-            let height = max(1, Int((box.height * CGFloat(scale)).rounded()))
+            // Quarter turns swap the page's extent, and the raster has to
+            // follow: sizing it from the unturned mediaBox would crop the
+            // page's long side away rather than merely mis-place its ink.
+            let turned = rotation(of: page) % 180 != 0
+            let pointWidth = turned ? box.height : box.width
+            let pointHeight = turned ? box.width : box.height
+            let width = max(1, Int((pointWidth * CGFloat(scale)).rounded()))
+            let height = max(1, Int((pointHeight * CGFloat(scale)).rounded()))
             // Deliberately zeroed, matching what CGContext would start with if
             // it owned the allocation itself (data: nil): the white fill just
             // below is what turns this into a blank PAGE, and leaving this at
@@ -52,7 +56,14 @@ enum PDFPageRasterizer {
                 // translating the mediaBox origin to (0, 0); adding a
                 // second flip on top of that would cancel the one the
                 // context already gives us and mirror the page vertically.
+                // Below this line everything is in POINTS, and the three
+                // transforms compose right-to-left onto a page point: the
+                // mediaBox origin is subtracted first, then the page is
+                // turned, then the whole thing is scaled to pixels. The
+                // origin must go first — turning it too would slide the page
+                // off the raster by twice the origin.
                 context.scaleBy(x: CGFloat(scale), y: CGFloat(scale))
+                applyRotation(to: context, page: page, box: box)
                 context.translateBy(x: -box.origin.x, y: -box.origin.y)
                 context.drawPDFPage(page)
                 return true
@@ -63,6 +74,49 @@ enum PDFPageRasterizer {
                 ))
             }
             return GrayBitmap(pixels: pixels, width: width, height: height, dpi: dpi)
+        }
+    }
+
+    /// The page's `/Rotate`, normalized to one of 0 / 90 / 180 / 270.
+    ///
+    /// PDF 32000-1 §7.7.3.3 requires a multiple of 90 but NOT a value in
+    /// [0, 360): `/Rotate -90` and `/Rotate 450` are both legal spellings of
+    /// a quarter turn, and a writer that accumulates rotations emits them.
+    /// Swift's `%` keeps the sign of the dividend, hence the second fold.
+    static func rotation(of page: CGPDFPage) -> Int {
+        let raw = Int(page.rotationAngle) % 360
+        return raw < 0 ? raw + 360 : raw
+    }
+
+    /// Turn the context so the page draws the way a viewer would show it.
+    ///
+    /// Stated as where the page's own lower-left corner ends up, in a y-up
+    /// space whose extent is the TURNED page (`w`/`h` are the unturned
+    /// page's, so a quarter turn's extent is `h` x `w`):
+    ///
+    ///   - 90  clockwise: (x, y) -> (y, w - x) — lower-left to the top-left
+    ///   - 180:           (x, y) -> (w - x, h - y) — to the top-right
+    ///   - 270:           (x, y) -> (h - y, x) — to the bottom-right
+    ///
+    /// Done by hand rather than through `CGPDFPageGetDrawingTransform`
+    /// because that API fits the page into a rect the caller supplies, and a
+    /// fit introduces its own rounding and centering. Here the raster is
+    /// sized FROM the page, so there is nothing to fit and every pixel is
+    /// accounted for.
+    private static func applyRotation(to context: CGContext, page: CGPDFPage, box: CGRect) {
+        let (w, h) = (box.width, box.height)
+        switch rotation(of: page) {
+        case 90:
+            context.translateBy(x: 0, y: w)
+            context.rotate(by: -.pi / 2)
+        case 180:
+            context.translateBy(x: w, y: h)
+            context.rotate(by: .pi)
+        case 270:
+            context.translateBy(x: h, y: 0)
+            context.rotate(by: .pi / 2)
+        default:
+            break
         }
     }
 }
