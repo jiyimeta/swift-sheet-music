@@ -50,6 +50,7 @@
             }
             print("[mscz] pairs=\(cases.count)")
             let scanDPI = Self.doubleEnv("OMR_MSCZ_SCAN_DPI", default: 300)
+            Self.proveTheRasterPathIsLoadBearing(cases[0], scanDPI: scanDPI)
 
             var vectorOptions = PDFImportOptions()
             vectorOptions.diagnostics = nil
@@ -66,6 +67,32 @@
                 cases: cases, mode: .raster, scanDPI: scanDPI, options: rasterOptions,
             )
             print(MSCZGroundTruthSweep.summaryLine(mode: .raster, totals: raster))
+        }
+
+        /// The counterfactual, run on a REAL corpus document before either
+        /// sweep: the same file, the same simulation, and NO classifier must
+        /// fail outright.
+        ///
+        /// The wiring suite proves the simulation strips vector content from
+        /// a synthetic rectangle. It cannot prove it for a MuseScore export,
+        /// and that is the document whose numbers get quoted. Without this
+        /// step a simulation that quietly left the page readable would
+        /// publish the VECTOR front-end's score under the raster mode's name
+        /// — the highest-value failure this harness could have, and one that
+        /// looks like unusually good OMR rather than like a bug.
+        @MainActor
+        static func proveTheRasterPathIsLoadBearing(
+            _ item: MSCZGroundTruthSweep.Case, scanDPI: Double,
+        ) {
+            var options = PDFImportOptions()
+            options.diagnostics = nil
+            let totals = MSCZGroundTruthSweep.sweep(
+                cases: [item], mode: .raster, scanDPI: scanDPI, options: options,
+            )
+            print("[mscz-control] noClassifier scored=\(totals.scored) failed=\(totals.failed)")
+            let complaint = "the simulated scan of \(item.name) was readable WITHOUT a "
+                + "classifier, so the raster sweep's numbers are the vector front-end's"
+            #expect(totals.scored == 0 && totals.failed == 1, Comment(rawValue: complaint))
         }
     }
 
