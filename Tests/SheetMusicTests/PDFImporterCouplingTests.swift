@@ -5,7 +5,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFImporterCouplingTests {
+    struct PDFImporterCouplingTests {
         /// Staff with five ascending line y-coordinates, 10pt apart.
         private func staff(bottomY: CGFloat) -> SheetMusicPDF.Staff {
             SheetMusicPDF.Staff(

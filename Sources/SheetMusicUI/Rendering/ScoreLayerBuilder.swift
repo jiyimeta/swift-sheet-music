@@ -26,9 +26,11 @@ import SheetMusicLayout
 /// no flip is applied.
 @available(macOS 15.0, *)
 public enum ScoreLayerBuilder {
-    /// Ink color for all strokes / fills.  Matches the prior
+    /// Default ink color for strokes / fills of elements without an
+    /// author color.  Matches the prior
     /// `.environment(\.colorScheme, .light)` + `.color(.primary)`
-    /// combination — always black on white.
+    /// combination — black on white.  Author `<color>` overrides are
+    /// applied per element via `scoreColorToCGColor` below.
     static let inkColor: CGColor = .init(gray: 0, alpha: 1)
 
     /// Convert MuseScore's RGBA score color into a `CGColor`. Used
@@ -74,9 +76,11 @@ public enum ScoreLayerBuilder {
     /// selectable `ScoreItemID` to the CAShapeLayers that must be
     /// re-tinted when the selection changes.
     ///
-    /// The tree is always drawn in `inkColor` — selection coloring
-    /// is applied afterwards via `applySelection(...)` so that a
-    /// selection change does not force a full layer rebuild.
+    /// The tree is drawn in `inkColor` by default; elements carrying
+    /// an author `<color>` override are tinted individually.
+    /// Selection coloring is applied afterwards via
+    /// `applySelection(...)` so that a selection change does not
+    /// force a full layer rebuild.
     static func buildSystemWithItems(
         _ system: LayoutSystem,
         metrics: StaffMetrics,

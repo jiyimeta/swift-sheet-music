@@ -62,6 +62,12 @@ extension LayoutEngine {
                     metrics.sp * (CGFloat(abs(keys[idx])) + 1.5),
                 )
             }
+            let carriedKey: Int = {
+                guard let keys = activeKeys, idx < keys.count else {
+                    return 0
+                }
+                return keys[idx]
+            }()
             let leading = measure.voices.first?.elements ?? []
             for el in leading {
                 var stop = false
@@ -69,9 +75,18 @@ extension LayoutEngine {
                 case .clef:
                     clefWidth = max(clefWidth, metrics.sp * 2)
                 case let .keySignature(k):
+                    // A change that lands on C draws no signature of its
+                    // own but a full row of cancellation naturals over
+                    // the outgoing key's positions, so the column is as
+                    // wide as that key was. `activeKeys` is what makes
+                    // this visible; callers that don't pass it (the
+                    // measure-width pass) get the naturals' advance from
+                    // `cancellationNaturalWidths` instead.
+                    let glyphs = k.concertKey != 0
+                        ? abs(k.concertKey) : abs(carriedKey)
                     keySigWidth = max(
                         keySigWidth,
-                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1.5),
+                        metrics.sp * (CGFloat(glyphs) + 1.5),
                     )
                 case .timeSignature:
                     timeSigWidth = max(timeSigWidth, metrics.sp * 3)
@@ -119,6 +134,12 @@ extension LayoutEngine {
         }
         var total: CGFloat = partLabelWidth
         let durations = effectiveMeasureDurationsAcrossStaves(staves: staves)
+        // Same out-of-band addition `packSystems` makes: a change to C
+        // reserves the outgoing key's row for its cancellation naturals,
+        // which a per-measure schedule cannot see.
+        let cancellations = cancellationNaturalWidths(
+            staves: staves, metrics: metrics,
+        )
         for i in 0 ..< measureCount {
             let baseHeader = computeHeaderSchedule(
                 measureIdx: i,
@@ -135,7 +156,7 @@ extension LayoutEngine {
                 division: score.division,
                 measureDuration: measureDuration(durations, at: i),
             )
-            total += w
+            total += w + (i < cancellations.count ? cancellations[i] : 0)
         }
         return total
     }
@@ -606,6 +627,8 @@ extension LayoutEngine {
         for (staffIdx, staff) in staves.enumerated() {
             guard measureIdx < staff.measures.count else { continue }
             let measure = staff.measures[measureIdx]
+            let activeKey = staffIdx < activeKeys.count
+                ? activeKeys[staffIdx] : 0
             var hasExplicitClef = false
             var explicitKeyWidth: CGFloat = 0
             scan: for el in measure.voices.first?.elements ?? [] {
@@ -613,9 +636,15 @@ extension LayoutEngine {
                 case .clef:
                     hasExplicitClef = true
                 case let .keySignature(k):
+                    // Same substitution `computeHeaderSchedule` makes: a
+                    // change to C occupies the outgoing key's row with
+                    // cancellation naturals, so it is not a narrow
+                    // zero-glyph signature the synth has to widen past.
+                    let glyphs = k.concertKey != 0
+                        ? abs(k.concertKey) : abs(activeKey)
                     explicitKeyWidth = max(
                         explicitKeyWidth,
-                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1),
+                        metrics.sp * (CGFloat(glyphs) + 1),
                     )
                 case .chord:
                     break scan
@@ -626,8 +655,6 @@ extension LayoutEngine {
             if !hasExplicitClef {
                 clefBoost = max(clefBoost, metrics.sp * 2)
             }
-            let activeKey = staffIdx < activeKeys.count
-                ? activeKeys[staffIdx] : 0
             if activeKey != 0 {
                 let synthKeyW = metrics.sp
                     * (CGFloat(abs(activeKey)) + 1.5)
@@ -638,6 +665,54 @@ extension LayoutEngine {
             }
         }
         return clefBoost + keyBoost
+    }
+
+    /// Extra width each measure needs for the cancellation naturals a
+    /// key change landing on C draws — one entry per measure index.
+    ///
+    /// The per-measure width pass is deliberately blind to what precedes
+    /// a measure (`LayoutCache.Entry`'s predicate is that measure's own
+    /// content), but naturals depend on the key that was in force
+    /// BEFORE the change. So the advance is computed here, from a single
+    /// forward walk of the score, and added on top of the cached widths
+    /// — the same shape `synthHeaderOverhead` uses for the system head.
+    ///
+    /// The delta is `|outgoing key| * sp`: `computeHeaderSchedule`
+    /// reserves `sp * (glyphs + 1.5)` once it can see the carried key,
+    /// against the `sp * 1.5` the width pass assumed for a
+    /// zero-accidental signature. Counting every explicit signature in
+    /// the voice — not just the leading run — covers the mid-measure
+    /// `timedX` path too.
+    static func cancellationNaturalWidths(
+        staves: [Staff],
+        metrics: StaffMetrics,
+    ) -> [CGFloat] {
+        let measureCount = staves.map(\.measures.count).max() ?? 0
+        guard measureCount > 0 else { return [] }
+        // Key in force per staff, carried forward measure by measure —
+        // mirroring `placeMeasureElements`' `activeKey`.
+        var keys = [Int](repeating: 0, count: staves.count)
+        var widths = [CGFloat](repeating: 0, count: measureCount)
+        for measureIdx in 0 ..< measureCount {
+            var widest: CGFloat = 0
+            for (staffIdx, staff) in staves.enumerated() {
+                guard measureIdx < staff.measures.count else { continue }
+                var staffWidth: CGFloat = 0
+                for el in staff.measures[measureIdx].voices.first?
+                    .elements ?? []
+                {
+                    guard case let .keySignature(k) = el else { continue }
+                    if k.concertKey == 0, keys[staffIdx] != 0 {
+                        staffWidth += metrics.sp
+                            * CGFloat(abs(keys[staffIdx]))
+                    }
+                    keys[staffIdx] = k.concertKey
+                }
+                widest = max(widest, staffWidth)
+            }
+            widths[measureIdx] = widest
+        }
+        return widths
     }
 
     static func minimumMeasureWidth(

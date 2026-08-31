@@ -381,4 +381,75 @@
             #expect(abs(system.partLabels[0].origin.x - (staffOriginX - sp)) < 0.001)
         }
     }
+
+    /// `Score.filtered(hidingStaves:)` routes its re-anchored brackets through `canonicalizedColumns`, and the
+    /// model-level tests pin the `BracketItem` that comes back. This is the same compaction seen from the LAYOUT
+    /// side — the side the user actually reads — because that is where getting it wrong is visible: a group
+    /// bracket left at column 1 draws its spine one `sp` further left than anything needs
+    /// (`StaffRenderer.bracketSpineX` = `staffOriginX - 0.5 sp - column * sp`) and `bracketGutterInfo` reserves a
+    /// second gutter column nothing occupies, so the whole system indents for a bracket that isn't there.
+    @Suite("Hiding staves compacts the bracket gutter")
+    struct HiddenStaffBracketColumnLayoutTests {
+        private let _installApple = TestSupport.installApple
+
+        /// A grand-staff part heading a group: the piano's brace takes column 0 on its top staff, so
+        /// `applyBracketGroups` pushes the group bracket out to column 1 — the bracket set `{0, 1}` this test
+        /// needs. Same shape as `PartCommandTests.grandStaffHeadedTrio`.
+        private static func grandStaffHeadedTrio() -> Score {
+            Score.blank(BlankScoreTemplate(
+                title: "t",
+                parts: [
+                    .init(instrumentID: "piano", staves: [.init(clefType: "G"), .init(clefType: "F")]),
+                    .init(instrumentID: "b", staves: [.init(clefType: "G")]),
+                    .init(instrumentID: "c", staves: [.init(clefType: "F")]),
+                ],
+                bracketGroups: [0 ..< 3],
+                measureCount: 2,
+            ))
+        }
+
+        /// Both piano staves hidden: the brace's whole window goes away with them, and the group bracket
+        /// re-anchors on the first surviving staff. Column 0 is now a gap, so the survivor must draw at 0.
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test("the surviving group bracket draws at column 0 in a one-column gutter")
+        func hidingTheBraceStavesPullsTheGroupBracketToColumnZero() {
+            let score = Self.grandStaffHeadedTrio()
+            // Precondition: the unfiltered score really does occupy columns {0, 1}.
+            #expect(score.parts[0].staves[0].brackets.map(\.column).sorted() == [0, 1])
+            #expect(LayoutEngine.bracketGutterInfo(score: score).columnCount == 2)
+
+            let filtered = score.filtered(hidingStaves: [
+                StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                StaffAddress(partIndex: 0, staffIndexInPart: 1),
+            ])
+
+            // The gutter sizing pass agrees: maxColumn is 0, so the gutter is one column wide, not two.
+            #expect(LayoutEngine.bracketGutterInfo(score: filtered).columnCount == 1)
+
+            let doc = LayoutEngine.layout(score: filtered, options: .init(), availableWidth: 800)
+            let brackets = doc.systems[0].brackets
+            // Only the group bracket is left — the brace covered nothing that survived.
+            #expect(brackets.count == 1)
+            #expect(brackets.first?.type == .normal)
+            #expect(brackets.first?.column == 0)
+        }
+
+        /// The compaction closes gaps, it does not flatten nesting. Hiding only the piano's LOWER staff leaves
+        /// the brace on column 0, so column 0 is not a gap and the group bracket has to stay at column 1 —
+        /// otherwise the two spines would be drawn on top of each other.
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test("a column a surviving brace still occupies keeps the group bracket at column 1")
+        func hidingOneStaffOfTheBraceLeavesTheColumnsAlone() {
+            let filtered = Self.grandStaffHeadedTrio().filtered(hidingStaves: [
+                StaffAddress(partIndex: 0, staffIndexInPart: 1),
+            ])
+            #expect(LayoutEngine.bracketGutterInfo(score: filtered).columnCount == 2)
+
+            let brackets = LayoutEngine
+                .layout(score: filtered, options: .init(), availableWidth: 800)
+                .systems[0].brackets
+            #expect(brackets.first { $0.type == .brace }?.column == 0)
+            #expect(brackets.first { $0.type == .normal }?.column == 1)
+        }
+    }
 #endif

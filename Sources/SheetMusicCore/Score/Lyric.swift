@@ -49,7 +49,7 @@ public struct Lyric: Sendable, Equatable {
     /// `lyricsOdd` / `lyricsEven` (both Edwin 10 pt by default).
     public var properties: TextProperties
     /// Base element properties shared with every engravable element.
-    /// Currently carries only `<visible>`; see `ElementProperties`.
+    /// Carries `<visible>` and `<color>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
     /// MuseScore `<visible>0</visible>` flag. Sugar over
     /// `elementProperties.visible`. Playback / MIDI is unaffected.

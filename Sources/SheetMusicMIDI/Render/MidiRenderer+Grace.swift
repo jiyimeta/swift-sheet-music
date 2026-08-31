@@ -1,4 +1,6 @@
 import SheetMusicCore
+
+// swiftlint:disable file_length
 import SheetMusicFoundation
 
 extension MidiRenderer {
@@ -84,6 +86,8 @@ extension MidiRenderer {
         tempoBps: Double,
         division: Int,
         glissandoEndPitch: Int?,
+        bendChainSlots: BendChainChordSlots? = nil,
+        legacyBendSpans: [Int: Int] = [:],
         currentKey: Int,
         events: inout [TimedMidiEvent],
         playedTicksOverride: Int? = nil,
@@ -98,6 +102,21 @@ extension MidiRenderer {
         let shiftedGlissandoEnd = glissandoEndPitch.map {
             min(127, max(0, $0 + pitchShift))
         }
+        // The chain's sounding key rides the ottava like every other pitch.
+        let shiftedBendSlots = bendChainSlots.map { shifted($0, by: pitchShift) }
+        // …and so does the key of the legacy-bend span map, which the note
+        // loop looks up with a TRANSPOSED pitch. Without this the lookup
+        // misses under any ottava and the curve is lost with no diagnostic.
+        // The 0…127 clamp can fold two source pitches onto one key at the
+        // extremes; the source pitches are walked in ascending order so the
+        // lower one wins deterministically (a Dictionary's own iteration
+        // order is not stable across runs).
+        let shiftedLegacySpans = pitchShift == 0 ? legacyBendSpans : Dictionary(
+            legacyBendSpans.keys.sorted().map {
+                (min(127, max(0, $0 + pitchShift)), legacyBendSpans[$0] ?? 0)
+            },
+            uniquingKeysWith: { first, _ in first },
+        )
         // `playedTicksOverride` is set by the swing pass to express
         // a chord whose audible length differs from its written
         // duration (off-beat shift / down-beat extension). The grace
@@ -145,7 +164,7 @@ extension MidiRenderer {
         //   headCursor walks the [tick, tick + stealFromHead)  slot
         var prevCursor = max(0, tick - stealFromPrev)
         var headCursor = tick
-        for g in chord.graceNotesBefore {
+        for (graceIndex, g) in chord.graceNotesBefore.enumerated() {
             let dur = playbackTicks(
                 for: g, mainTicks: mainTicks, division: division,
             )
@@ -157,22 +176,11 @@ extension MidiRenderer {
                 onset = headCursor
                 headCursor += dur
             }
-            for note in g.notes where note.play {
-                events.append(TimedMidiEvent(
-                    tick: max(0, onset),
-                    event: .noteOn(
-                        channel: channel,
-                        pitch: note.pitch,
-                        velocity: note.customizedVelocity(velocity),
-                    ),
-                ))
-                events.append(TimedMidiEvent(
-                    tick: max(0, onset + dur - 1),
-                    event: .noteOff(
-                        channel: channel, pitch: note.pitch, velocity: 0,
-                    ),
-                ))
-            }
+            emitGraceChord(
+                g, slot: shiftedBendSlots?.before[graceIndex],
+                onset: max(0, onset), durationTicks: dur,
+                velocity: velocity, channel: channel, events: &events,
+            )
         }
 
         // 3. Main chord — onset shifted by stealFromHead, length
@@ -210,13 +218,42 @@ extension MidiRenderer {
                 )
             }
         } else {
+            // Only the bend-carrying note of the chord drives the chain; the
+            // rest emit normally and are dragged along by the channel-wide
+            // wheel (see `guitarBendChains`' chord-level simplification).
+            let parentSlot = shiftedBendSlots?.parent
+            let chainPitch = parentSlot == nil
+                ? nil
+                : bendChainNote(in: chord.notes)?.pitch
             for note in chord.notes {
-                if let glissando = note.glissando, let endPitch = shiftedGlissandoEnd {
+                if let slot = parentSlot, note.pitch == chainPitch {
+                    renderBendChainNote(
+                        note: note, slot: slot,
+                        startTick: mainOnset, durationTicks: playedTicks,
+                        velocity: mainVelocity, channel: channel,
+                        events: &events,
+                    )
+                } else if let glissando = note.glissando, let endPitch = shiftedGlissandoEnd {
                     renderGlissandoNote(
                         note: note, glissando: glissando, endPitch: endPitch,
                         startTick: mainOnset, durationTicks: playedTicks,
                         velocity: mainVelocity, channel: channel,
                         currentKey: currentKey, events: &events,
+                    )
+                } else if let legacyBend = note.legacyBend,
+                          let totalTicks = shiftedLegacySpans[note.pitch]
+                {
+                    // Last of the three: the MS4 spanner is the newer
+                    // encoding of the same gesture (`Note.legacyBend`), and
+                    // glissando keeps the priority it had before bends
+                    // existed. `legacyBendSpans` has already refused every
+                    // shape that must play plain, so nothing is re-guarded.
+                    renderLegacyBendNote(
+                        note: note, bend: legacyBend,
+                        startTick: mainOnset, durationTicks: gatedTicks,
+                        totalTicks: totalTicks,
+                        velocity: mainVelocity, channel: channel,
+                        events: &events,
                     )
                 } else {
                     emitNoteEventsForGrace(
@@ -229,26 +266,81 @@ extension MidiRenderer {
 
         // 4. After-graces — share the tail slot the main gave up.
         var afterCursor = mainOnset + playedTicks
-        for g in chord.graceNotesAfter {
+        for (graceIndex, g) in chord.graceNotesAfter.enumerated() {
             let dur = playbackTicks(
                 for: g, mainTicks: mainTicks, division: division,
             )
-            for note in g.notes where note.play {
-                events.append(TimedMidiEvent(
-                    tick: afterCursor,
-                    event: .noteOn(
-                        channel: channel, pitch: note.pitch,
-                        velocity: note.customizedVelocity(velocity),
-                    ),
-                ))
-                events.append(TimedMidiEvent(
-                    tick: afterCursor + dur - 1,
-                    event: .noteOff(
-                        channel: channel, pitch: note.pitch, velocity: 0,
-                    ),
-                ))
-            }
+            emitGraceChord(
+                g, slot: shiftedBendSlots?.after[graceIndex],
+                onset: afterCursor, durationTicks: dur,
+                velocity: velocity, channel: channel, events: &events,
+            )
             afterCursor += dur
+        }
+    }
+
+    /// Every slot of `slots` with its sounding key transposed — the chain
+    /// rides an ottava like any other pitch.
+    private static func shifted(
+        _ slots: BendChainChordSlots, by semitones: Int,
+    ) -> BendChainChordSlots {
+        guard semitones != 0 else { return slots }
+        func shift(_ slot: BendChainSlot) -> BendChainSlot {
+            var copy = slot
+            copy.basePitch = min(127, max(0, slot.basePitch + semitones))
+            return copy
+        }
+        var copy = slots
+        copy.parent = slots.parent.map(shift)
+        copy.before = slots.before.mapValues(shift)
+        copy.after = slots.after.mapValues(shift)
+        return copy
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    /// Emit one grace chord's note events.
+    ///
+    /// A grace note is an ordinary member of a bend chain — MuseScore's
+    /// `collectGuitarBend` follows `bendFor()` links without caring whether
+    /// the note it lands on is a grace, and starts the wheel segment at the
+    /// GRACE's onset for a `GRACE_NOTE_BEND`
+    /// (`curPitchBendSegmentStart -= graceOffset`). So the chain member here
+    /// goes through `renderBendChainNote`, which strikes the key only at the
+    /// chain's head and releases it only at its end; every other grace note
+    /// keeps its own plain on/off pair.
+    private static func emitGraceChord(
+        _ grace: GraceChord,
+        slot: BendChainSlot?,
+        onset: Int,
+        durationTicks: Int,
+        velocity: Int,
+        channel: Int,
+        events: inout [TimedMidiEvent],
+    ) {
+        let chainPitch = slot == nil ? nil : bendChainNote(in: grace.notes)?.pitch
+        for note in grace.notes where note.play {
+            if let slot, note.pitch == chainPitch {
+                renderBendChainNote(
+                    note: note, slot: slot,
+                    startTick: onset, durationTicks: durationTicks,
+                    velocity: velocity, channel: channel, events: &events,
+                )
+                continue
+            }
+            events.append(TimedMidiEvent(
+                tick: onset,
+                event: .noteOn(
+                    channel: channel,
+                    pitch: note.pitch,
+                    velocity: note.customizedVelocity(velocity),
+                ),
+            ))
+            events.append(TimedMidiEvent(
+                tick: max(0, onset + durationTicks - 1),
+                event: .noteOff(
+                    channel: channel, pitch: note.pitch, velocity: 0,
+                ),
+            ))
         }
     }
 

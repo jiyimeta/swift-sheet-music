@@ -34,9 +34,10 @@ extension ScoreLayerBuilder {
             if let layer, let anchor {
                 context.attach(layer, to: .clef(anchor))
             }
-        case let .keySignature(s, f, clef, p):
+        case let .keySignature(s, f, clef, naturals, p):
             drawKeySignature(
-                sharps: s, flats: f, clef: clef, origin: shift(p),
+                sharps: s, flats: f, clef: clef, naturals: naturals,
+                origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
         case let .timeSignature(n, d, p):
@@ -249,6 +250,19 @@ extension ScoreLayerBuilder {
             drawGlissando(
                 from: shift(from), to: shift(to), wavy: wavy,
                 text: text,
+                metrics: metrics, height: height, into: parent,
+            )
+        case let .guitarBend(from, vertex, to, slight):
+            drawGuitarBend(
+                from: shift(from), vertex: shift(vertex), to: shift(to),
+                slight: slight,
+                metrics: metrics, height: height, into: parent,
+            )
+        case let .legacyBend(shape):
+            // The shape carries absolute coords, so the whole thing
+            // shifts at once instead of point by point.
+            drawLegacyBend(
+                shape: shape.translated(by: base),
                 metrics: metrics, height: height, into: parent,
             )
         case let .chordLine(shape, origin, thickness):

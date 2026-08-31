@@ -24,7 +24,7 @@
     /// Every real barline in that score appeared on BOTH staves; only the two
     /// strays were single-staff. So two staves DO form a quorum: require
     /// both.
-    @MainActor struct PDFImporterBarlineConsensusTests {
+    struct PDFImporterBarlineConsensusTests {
         private func staff(
             yLines: [CGFloat], barlineXs: [CGFloat],
         ) -> SheetMusicPDF.Staff {

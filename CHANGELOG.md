@@ -7,9 +7,75 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-08-31
+
+### Fixed
+
+- `GMDrumset` engraves every drum where MuseScore Studio engraves it. The table's lines came from nowhere
+  anyone could name and agreed with MuseScore on five of twenty-seven pitches: the kick sat a line above the
+  space it belongs in, every tom was two lines off, and the low floor tom was written stems-down in the feet
+  voice although it is played by hand. Seven heads were wrong too — most visibly the open hi-hat, which wore
+  the closed hi-hat's plain cross and so could not be told apart from it. All of it is now transcribed from
+  `share/instruments/instruments.xml`'s `<Instrument id="drumset">`, the block MuseScore itself builds a
+  Drumset part from, with `smDrumset` covering the four pitches that block omits.
+- Nothing migrates: a score written before this carries its own `<Drum>` lines and keeps them, because its
+  notes are already engraved where the file says. The new values reach newly authored kits — `Score.blank`'s
+  drum part, a MIDI import's invented kit, and a host writing drums through `SetDrumsetEntry`.
+
+## [2.3.0] - 2026-08-31
+
 ### Added
 
-- `Score.blank(_:)` + `BlankScoreTemplate`: build an empty solo/grand-staff score in code.
+- `SetPartNames` renames a part: the long name engraved at the left of the first system, and the abbreviation
+  engraved there on every system after it. Both names travel in one command, so a host editing both gets one
+  undo step rather than two that can be taken back into a half-renamed score, and `nil` clears rather than
+  leaving a name alone — a part with no abbreviation engraves no label from the second system on, which is a
+  thing a score can want to say. Reachable as `EditIntent.setPartNames`, which resolves to nothing to apply
+  when both names already read that way, and over the wire as case 29.
+- `Part.trackName` and `Instrument.id` are deliberately untouched by the rename, so a part called "なおき" keeps
+  playing the piano it is: the sound, the transposition and the drum kit all key off the id, and `trackName` is
+  where a host reads the instrument's own name back from.
+
+### Fixed
+
+- A part rename now invalidates the systems that draw its label. `LayoutCache.SystemInputs` carried no part
+  name, and a rename touches no measure and no system-lane element — so every other input stayed bit-identical,
+  the cached system was served, and the staff kept its old name on screen. The label the system actually draws
+  is part of the key now (the long name on the first system, the abbreviation on the others), which also
+  re-wraps the system when a longer name widens its opening indent.
+- `EditIntentCodec.decode` bounds nesting while it parses, not after. The depth limit only ever ran on the
+  finished tree, so a deeply nested `composite` payload overflowed the stack building that tree and never
+  reached the guard. On WebAssembly the overflow did not even crash there: the shadow stack is 128 KiB and
+  wasm-ld's default layout puts `.bss` directly beneath it, so the recursion overwrote the allocator's own
+  state and the process died later inside an unrelated `malloc`. Both bridges feed this decoder bytes from
+  the host — the browser's from JavaScript — behind a `try?` that cannot catch a stack overflow. Encoded
+  bytes are unchanged, and the accepted nesting depth (8) is unchanged.
+- WebAssembly artifacts link with a 1 MiB shadow stack (`-z stack-size`) and `--stack-first`, so an overflow
+  traps at the function responsible instead of silently corrupting static memory. This restored the
+  WebAssembly CI job, which 2.2.0 shipped red.
+
+## [2.2.0] - 2026-08-30
+
+### Added
+
+- `GMDrumset` publishes the General MIDI drum kit as one table — line, notehead, voice, stem and name per
+  pitch — absorbing the three private functions the MSCX encoder held them in, and `GMPercussion.drumLineMap`
+  becomes its lines-only projection.
+- `Instrument.drumset`: a score's own drum kit, decoded whole from `<Drum>` instead of for its `<line>` alone,
+  so an imported chart keeps the notehead, voice, stem, name and shortcut it was written with and re-encodes
+  to them. `Instrument.drumLineMap` is unchanged as the lines-only view, readable and writable as before.
+- `CreateVoice` / `SplitRest` / `SetNoteHead` / `SetDrumsetEntry` edit commands, with
+  `EditIntent.createVoice(staff:measureIndex:voiceIndex:)` / `.splitRest(at:tickOffset:)` /
+  `.setNoteHead(at:headType:)` / `.setDrumsetEntry(partIndex:pitch:entry:)` and `EditIntentCodec` wire support
+  (indices 25…28) — what drum note entry needs to route a key to its own voice, write at a caret's tick, give a
+  note a cross notehead, and repair a kit that never named the drum being written. `.createVoice` and
+  `.setDrumsetEntry` both plan to nothing when the score already says what they would write.
+- `Score.blank(_:)` + `BlankScoreTemplate`: build an empty score in code — any number of parts, each with
+  its own staves, instrument names, GM program, transposition pair and optional drum kit, plus `.normal`
+  bracket groups over part ranges (SATB, string quartet). `Part.init(blankPlan:id:measures:)` is the
+  per-part half, reusable by a command that appends a part to an existing score.
+- `GMPercussion.drumLineMap`: the GM drum pitch → staff-line table, promoted out of the MIDI importer so an
+  imported kit and an authored one place the same drum on the same line.
 - `InsertMeasure` / `DeleteMeasure`: structural edit commands that insert or remove a full measure column
   (every staff plus the parallel `SystemMeasure`), each other's inverse. Inserting or deleting bar 0
   re-homes the score-start key/time/clef signatures onto the new first bar, mirroring MuseScore, and both
@@ -17,6 +83,187 @@ and this project adheres to
   remove a score's last measure (`EditRefusal.Reason.cannotDeleteOnlyMeasure`).
 - `EditIntent.insertMeasure(at:)` / `.deleteMeasure(at:)`: the host-facing intents `ScoreEditSession` plans
   into `InsertMeasure` / `DeleteMeasure`, with `EditIntentCodec` wire support (indices 14…15).
+- `AddPart` / `RemovePart`: structural edit commands that add or drop a whole part, each other's inverse. A
+  new part is built through the same `Part.init(blankPlan:id:measures:)` a blank score uses, and its bars are
+  measure rests carrying the score's signature skeleton — the key / time signature each existing bar declares,
+  so a mid-score signature change stays consistent across staves. Clefs are not copied; the part declares its
+  own. Brackets follow the global staff order in both directions: one whose span crosses the insertion point
+  grows by the inserted staff count, and a removal shrinks it or re-anchors it onto the first staff it still
+  covers (`Score.filtered(hidingStaves:)`'s pass, now shared). A system element anchored into a removed part
+  re-anchors on the score's first staff rather than being dropped, so a tempo survives its instrument, and
+  `RemovePart` refuses to remove a score's last part.
+- `EditIntent.addPart(plan:at:)`: the host-facing intent `ScoreEditSession` plans into `AddPart`, carrying a
+  `BlankScoreTemplate.PartPlan` — the recipe, not a built part, so both images construct the same one — with
+  `EditIntentCodec` wire support (index 16).
+- `MovePart`: reorders the parts — a removal followed by an insertion of the same `Part` value, so
+  `MovePart(from: 0, to: 1)` over `[A, B, C]` gives `[B, A, C]`. Its own inverse in shape
+  (`MovePart(from: to, to: from)`), carrying the pre-image of every bracket and system-element anchor so the undo
+  is byte-exact. `originalStaff` addresses are re-stamped through the permutation, and each bracket follows its
+  anchor staff carrying its declared span — spans are not rewritten, matching MuseScore's `Score::sortStaves`;
+  capping a span at the system's end stays a draw-time concern of `LayoutEngine.buildBrackets`.
+- `EditIntent.removePart(at:)` / `.movePart(from:to:)`: the host-facing intents `ScoreEditSession` plans into
+  `RemovePart` / `MovePart`, with `EditIntentCodec` wire support (indices 17…18). `.movePart(from: n, to: n)`
+  resolves to nothing to apply rather than pushing an undo entry that restores the score to itself.
+- `EditRefusal.Reason.cannotRemoveLastPart` (`edit.cannotRemoveLastPart`): what `RemovePart` refuses a last-part
+  removal with. It used to borrow `.cannotDeleteOnlyMeasure`; a host switching over the reason can now tell the
+  two structural minimums apart.
+- `ScoreEditSession.partIndexMapping` / `consumePartIndexMapping()` / `isPartMappingIdentity`: where every part
+  that existed at the last consume point (or at `init`) is now, `nil` for one that was removed. A host keys
+  per-part state — mixer strips, per-staff flags — by index, and add / remove / move renumber underneath it; this
+  is the map to migrate that state through. Derived by diffing `Part.id` snapshots, so undo and redo need no
+  special handling, and cumulative rather than per-edit, so a host reads it once when it is ready to write.
+  Duplicate ids in the baseline (a malformed file) yield the identity mapping rather than a guess.
+
+### Changed
+
+- A `.composite` intent's members are now planned one after another, each against the score the members before it
+  left — not all against the score the composite started from. Every planner that reads the score (the cross-bar
+  planners, the `.measure` promotion, the full-measure collapse) is asking about the state its own command will
+  meet, and a write into a voice an earlier member creates used to ask that question of a voice that was not there
+  yet.
+- `NotePreviewPolicy` in `SheetMusicAudioCore` now owns those decisions for
+  both platforms: which audition supersedes which, how long a drum rings
+  against a melodic note, and how long the audio graph has to keep rendering
+  after a note-off. `AndroidPlaybackEngine` reaches it over JNI
+  (`nativePreviewPolicy*`) and executes the plan it answers with; the MIDI
+  messages each engine sends are still its own, because FluidSynth and
+  AUMIDISynth genuinely differ there. Android previously held a hand-written
+  copy of the Apple engine's state machine, which is how it came to be
+  missing both of the behaviours above.
+- Android's master-tuning RPN comes from the shared `MasterTuning`
+  (`nativeMasterTuningControlChanges`) rather than a Kotlin port of the same
+  arithmetic kept in step by golden assertions on each side. Goldens catch a
+  change made twice and made differently; they say nothing about a change
+  made once.
+
+### Fixed
+
+- Re-anchoring brackets no longer leaves a hole in the bracket gutter. `column` is a horizontal coordinate —
+  a bracket's spine sits at `staffOriginX - 0.5 sp - column * sp` and the gutter is sized `maxColumn + 1` — so a
+  group bracket left at column 1 after the brace at column 0 went away with its part drew one `sp` further left
+  than anything needed and reserved a column nothing occupied. `Score.reanchoredBrackets` now renumbers the
+  columns still occupied onto `0 ..< n`, which fixes `RemovePart` (whose result is saved to the file) and
+  `filtered(hidingStaves:)` (whose result is only displayed) in one place. The renumbering is global rather than
+  per anchor staff, so brackets that share a column keep sharing one.
+- Note auditions on Android no longer go missing while notes are entered
+  quickly, and no longer click. A new audition now supersedes the one it
+  replaces and invalidates its pending end — without which the old note's
+  end fired on its own schedule and silenced the new one, audible only when
+  the two shared a channel and pitch, so it presented as intermittent. The
+  output stream is also held open past the note-off for the note's release,
+  which used to be cut off mid-decay on every audition sounded from an idle
+  reader. The Apple engine has carried both behaviours for a long time.
+
+## [2.1.0] - 2026-08-29
+
+### Added
+
+- Guitar bends. MuseScore 4 `<GuitarBend>` spanners decode into the note
+  model (with `<fret>` / `<string>`), encode back with real endpoint
+  `<location>` markers, lay out as angular or slight bend geometry, draw
+  in both the Canvas and CALayer renderers, and play: a bend chain sounds
+  as one note whose pitch-wheel curve follows the written shape, grace-note
+  bends and tied chains included.
+- Legacy MuseScore 3 bends. The older `<Bend>` element — a curve of
+  `<point>` pairs rather than a spanner — decodes into a `LegacyBend`
+  model, lays out and draws through the same renderers, plays through the
+  pitch wheel, and is written back into MuseScore 4's writer slot.
+- Slurs between chords. Chord-anchored slur spanners decode and encode
+  (with computed end markers, and hidden slurs staying hidden), and arc
+  through the tie attach pass rather than being dropped.
+- `SM_VELOCITY_DIR=… swift run render-previews` writes a note-on velocity
+  digest for every score under a directory: count, a fingerprint over
+  every `(tick, pitch, velocity)` triple, and min / mean / max. Playback
+  work had no before/after gate — a dynamics change can move every note
+  in a corpus without moving a pixel, so the PNG diff sees nothing.
+
+### Changed
+
+- Hairpins play the dynamics written along them. A wedge climbs to each
+  mark, arriving on the beat it is written on, and carries on from there:
+  every level played is either a mark the score states or an interpolation
+  between two of them. A mark that contradicts the wedge — a crescendo
+  running into a quieter mark — is not climbed to; that stretch stays
+  flat and the mark still sounds at its own tick.
+- A hairpin with nothing to aim at no longer invents a level. Previously
+  a wedge with no bracketing dynamic ramped by ±10; that number is in no
+  score, and it compounds — 31 of the 72 hairpin-bearing scores in the
+  test corpus carry hairpins and not one dynamic. MuseScore 3.6 leaves
+  such a wedge silent (`Hairpin::veloChange` defaults to 0), and both
+  MuseScore generations export it flat. Scores that relied on the old
+  behavior now need the dynamic written in.
+- The level a hairpin reaches holds until the next dynamic, and a second
+  wedge starts from it, as in both MuseScore generations. A crescendo is
+  no longer undone by its own last note.
+
+### Fixed
+
+- A hairpin's end is measured from the hairpin, not from the bar line.
+  MuseScore's `<location>` is relative to the spanner's own tick, so a
+  wedge written from beat 4 to the next downbeat carries
+  `<measures>1</measures><fractions>-7/8</fractions>`; measuring that
+  from the bar line put the end *before* the start and collapsed the ramp
+  to a single tick, which played as no crescendo at all. 27 of 667 corpus
+  scores change. `OttavaRanges` and the layout's `endAnchor` already
+  resolved it correctly — this was the third copy of the rule.
+- A tremolo under a hairpin swells across its own strokes. The velocity
+  was sampled once at the chord onset, flattening exactly the notes meant
+  to carry the swell — a drum roll under a crescendo is the case this is
+  written for.
+- A crowded hairpin no longer draws backwards. The wedge is built with
+  its apex at its start and its mouth at its end, so a span whose ends
+  cross comes out mirrored, and a crescendo reads on the page as a
+  diminuendo. Wedges now keep MuseScore's one-spatium minimum.
+- A closed `FluidSynthDriver` is inert rather than fatal on Android.
+- Opening a MuseScore 1 file says so, instead of reporting a MusicXML
+  root element that was never going to be there. MuseScore 1 keeps the
+  score's children directly under `<museScore>`, so the reader failed on
+  a missing `<Score>` and the `.mscz` path then replaced even that with
+  the MusicXML fallback's complaint. A `.mscz` whose container yielded a
+  `<museScore>` document now reports the MuseScore reader's verdict.
+- A slur starting on a rest arcs below without the parity branch, and a
+  grace-note slur drop is diagnosed rather than silent.
+- `<location>` is written measures-first in every target version. The v4
+  writer emitted fractions-first, which MuseScore reads either way but
+  no MuseScore-written file spells.
+- Dropped `<Bend>` / `<GuitarBend>` properties and unread `<location>`
+  fields on a chord-anchored slur are reported as diagnostics rather
+  than skipped silently.
+
+### Notes
+
+- `LayoutElement` gains `.guitarBend` and `.legacyBend`, and
+  `TextStyleType` gains `.bend`. Both are public non-frozen enums, so a
+  host switching over them exhaustively needs a `default` clause. No
+  public symbol was removed and no signature changed.
+- Known, unchanged in this release: `.mscz` containers written with ZIP
+  data descriptors (bit 3) cannot be opened; one corpus score is unstable
+  across a second encoder pass (a trailing `<Tempo>` `<location>` moves
+  from `1/4` to `5/8`); tremolo stroke counts are a fixed count per
+  subtype rather than MuseScore's duration ÷ stroke length.
+
+## [2.0.1] - 2026-08-26
+
+### Fixed
+
+- The Android audio writer is joined before its `AudioTrack` is released.
+  `OboeStream.close()` released the track straight after `stop()`, and `stop()`
+  only *asked* the writer to end: it spends most of its life inside
+  `AudioTrack.write(..., WRITE_BLOCKING)`, a blocking native call rather than a
+  suspension point, so `cancel()` could not reach it. Freeing the track under a
+  thread still writing to it crashed natively inside
+  `BpBinder::onLastStrongRef` — intermittently, and with a backtrace naming
+  teardown rather than whatever triggered it. The same window let the writer
+  call back into its `Producer` after `close()` returned, while
+  `AndroidPlaybackEngine.teardown` was already tearing down the synth and the
+  metronome mixer, so one missing join exposed three objects. `pause()` /
+  `flush()` now precede the cancel, since they are what actually returns a
+  parked write, and the join is bounded so a writer stuck beyond this class's
+  reach cannot hang the caller. Reached far more often by a host that
+  re-prepares playback per edit than by one that only tears down on leaving.
+- A 64th flag anchors back along the stem, so its Y gets its own bound in the
+  PDF importer.
+- The PDF importer reads 5, 7 and 9 tuplet digits, not only 3 and 6.
 
 ## [2.0.0] - 2026-08-25
 
@@ -1929,7 +2176,9 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.0...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/2.1.0...HEAD
+[2.1.0]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.1...2.1.0
+[2.0.1]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.15.0...2.0.0
 [1.13.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.13.0...1.13.1
 [1.13.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.12.0...1.13.0

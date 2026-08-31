@@ -5,15 +5,15 @@ import Foundation
 import SheetMusicCore
 
 extension PDFImporter {
-    /// Assign rhythm elements to voices based on temporal overlap and
-    /// stem direction / y-position. Single-voice when no two elements'
-    /// time intervals overlap; otherwise split into voice 1 / voice 2
-    /// with stem direction (or rest y-position) deciding placement.
+    /// Assign rhythm elements to voices based on coincident x-onsets and
+    /// stem direction / y-position. Single-voice when no two elements
+    /// begin at (near) the same x position; otherwise split into voice 1 /
+    /// voice 2 with stem direction (or rest y-position) deciding placement.
     /// Voice 3+ collisions collapse into voice 1 with a warning
     /// diagnostic at this measure's location.
     ///
-    /// Beam grouping is deferred: until beam-path detection lands,
-    /// every `RhythmElement` is treated as its own rhythmic unit.
+    /// Voicing does not consult beam groups: every `RhythmElement`
+    /// is treated as its own rhythmic unit.
     static func assignVoices(
         elements: [RhythmElement],
         measureXRange: ClosedRange<CGFloat>,
@@ -29,8 +29,8 @@ extension PDFImporter {
         // line never stacks two onsets at the same x.
         //
         // The previous trigger — temporal-interval overlap from estimated
-        // durations — fired spuriously: with beam-based durations not yet
-        // decoded, every beamed run reads as `.quarter`, inflating each
+        // durations — fired spuriously: beam-based durations were not yet
+        // decoded then, so every beamed run read as `.quarter`, inflating each
         // note's estimated width so x-adjacent notes "overlapped" and a
         // single melodic line scattered across two voices (observed: 116
         // phantom two-voice measures and 245 measures with an empty voice 0

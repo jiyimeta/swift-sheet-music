@@ -28,17 +28,24 @@ public enum VoiceElement: Sendable, Equatable {
     case breath(Breath)
     case harmony(Harmony)
     /// MuseScore `<location><fractions>N/D</fractions></location>`
-    /// at voice level — a cursor move that places the next attached
-    /// non-temporal element (dynamic, …) at a tick offset from the
-    /// natural cursor. The delta is fraction-of-a-whole-note
-    /// (resolved against the score's PPQ at consumption time);
-    /// negative values jog backwards. C++:
-    /// `mu::engraving::Location` for a segment.
+    /// at voice level — a move of the voice's ONE cursor, not a
+    /// one-shot offset for the element that follows. Every walker
+    /// applies the delta to its running tick and keeps it there, so a
+    /// jog stays in force for the rest of the voice unless a later
+    /// shift cancels it, matching `ReadContext::setLocation` (a
+    /// relative `Location` is resolved against the current tick and
+    /// stored). The delta is fraction-of-a-whole-note (resolved
+    /// against the score's PPQ at consumption time); negative values
+    /// jog backwards. C++: `mu::engraving::Location` for a segment.
     ///
     /// System-level elements (tempo, rehearsal mark, system text,
     /// swing) used to ride on this cursor too; they now live on
     /// `Score.systemMeasures[i].elements` with explicit
-    /// `MeasurePosition`s and are routed there by the decoder.
+    /// `MeasurePosition`s and are routed there by the decoder. Because
+    /// they carry an absolute position, the decoder does not consume
+    /// the jog that reached them — a balanced back-then-forward pair
+    /// around an off-beat mark therefore nets to zero and produces no
+    /// `.locationShift` at all.
     case locationShift(delta: Fraction)
 }
 

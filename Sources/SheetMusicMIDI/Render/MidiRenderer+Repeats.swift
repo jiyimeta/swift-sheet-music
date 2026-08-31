@@ -33,9 +33,9 @@ extension MidiRenderer {
     /// `effectiveMeasureDurations`); it is forwarded to
     /// `NoteDuration.resolved(in:)` so that any `.measure` rest is converted
     /// to the correct concrete fraction before the tick count is taken.
-    /// Callers that already hold the effective-duration array should pass the
-    /// appropriate element; callers without that context may accept the 4/4
-    /// default (safe until Task 5 lands the `.measure`-producing parsers).
+    /// Callers that may see non-4/4 measures must pass the effective
+    /// duration; the 4/4 default is only safe when the measure contains no
+    /// `.measure` rests.
     static func measureTicks(
         measure: Measure,
         division: Int,

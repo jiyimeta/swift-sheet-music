@@ -11,14 +11,42 @@ import Foundation
 import PackageDescription
 
 /// When SWIFT_SHEET_MUSIC_ANDROID=1 is exported, the manifest assembles a
-/// reduced targets/products array that excludes Apple-only sub-libraries
-/// (Layout / UI / PDF / Audio / RenderPreviews). See
+/// reduced targets/products array that excludes the Apple-only sub-libraries
+/// (LayoutApple / UI / Audio / AudioApple / AudioSwiftySynth / RenderPreviews);
+/// Layout and PDF (in its import-only Android shape) still ship. See
 /// docs/superpowers/specs/2026-05-18-android-toolchain-design.md.
 let isAndroid = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_ANDROID"] == "1"
 /// When SWIFT_SHEET_MUSIC_WASM=1 is exported, the manifest also offers the
 /// `WasmSizeProbe` executable that `Scripts/wasm-size.sh` measures. Kept behind
 /// a flag so the shipping package shape carries no extra product.
 let isWasm = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_WASM"] == "1"
+
+/// Linker flags every WebAssembly target here carries. Empty off the wasm path, so the Apple and Android builds —
+/// and any consumer resolving this package by version — never see `.unsafeFlags`.
+///
+/// wasm-ld gives the shadow stack 128 KiB by default and the Swift wasm SDK's toolset adds nothing, which is two
+/// orders of magnitude below what Apple and Android hand a thread. Worse, the default layout is
+/// `[data][stack][heap]` with the stack growing *down* into `.bss`, so an overflow does not trap: it overwrites
+/// whatever static memory sits below — including the allocator's own state — and the run dies much later inside
+/// an unrelated `malloc`, with an out-of-bounds trap that names none of the code responsible. The recursive
+/// edit-intent decoder found this the hard way; see `NestedEditIntentWire`.
+///
+/// - `-z stack-size=1048576` — 8x the default. Still a rounding error against a wasm heap that grows into the
+///   hundreds of MiB, and it buys real margin for recursive decoders and for the layout engine's fattest frames
+///   (38 KiB in one closure alone).
+/// - `--stack-first` — puts the stack below all data, so the next overflow runs off address 0 and traps at the
+///   function responsible instead of corrupting memory silently. wasm-ld requires `--global-base` to be at least
+///   the stack size alongside it.
+///
+/// These live on the targets, not on `swift package -Xlinker`: a global `-Xlinker` also reaches the macOS host
+/// plugin tools (SwiftSyntax / BridgeJS / Wirelet macros), whose `ld` rejects wasm-ld options outright.
+let wasmStackLinkerSettings: [LinkerSetting] = isWasm ? [
+    .unsafeFlags([
+        "-Xlinker", "-z", "-Xlinker", "stack-size=1048576",
+        "-Xlinker", "--stack-first",
+        "-Xlinker", "--global-base=1048576",
+    ]),
+] : []
 
 var products: [Product] = [
     .library(name: "SheetMusic", targets: ["SheetMusic"]),
@@ -199,7 +227,7 @@ var targets: [Target] = [
     // Deliberately depends on neither SheetMusicPDF nor SwiftJava: PDF has no wasm shape and is
     // still on the Foundation umbrella, and SwiftJava does not cross-compile to WASI. Keeping
     // both out is what makes this target buildable for wasm at all — see `Scripts/wasm-size.sh`
-    // and CLAUDE.md's "Size is the constraint". SheetMusicEditWire is fine by contrast: it has
+    // and docs/development/webassembly.md's "Size gates". SheetMusicEditWire is fine by contrast: it has
     // built for wasm since Wirelet 0.4.1, and on Android it is already linked into this same
     // `.so` through SheetMusicAndroidJNI, so naming it here adds no second image.
     .target(
@@ -250,6 +278,7 @@ if isWasm {
                 "SheetMusicMSCX",
             ],
             path: "Tests/SheetMusicWasmBridgeTests",
+            linkerSettings: wasmStackLinkerSettings,
         ),
         .testTarget(
             name: "SheetMusicTests",
@@ -272,6 +301,7 @@ if isWasm {
                 .process("Resources"),
             ],
             swiftSettings: sheetMusicTestsSwiftSettings,
+            linkerSettings: wasmStackLinkerSettings,
         ),
     ]
 } else {
@@ -286,6 +316,19 @@ if isWasm {
             // The Android cross-build links SheetMusicAndroidJNI to compile portable
             // callers, but it does not execute the Swift JNI test files there.
             .define("SHEET_MUSIC_HAS_ANDROID_JNI_TEST_SUPPORT"),
+        ]
+    }
+
+    // The untracked PDF spike harnesses (Tests/SheetMusicTests/PDF*SpikeTests.swift,
+    // excluded via .git/info/exclude) wrap their bodies in `#if SM_PDF_SPIKE`. They
+    // read a private corpus from the local disk and are measurement probes, not
+    // gates — and because SwiftPM compiles every file under Tests/ regardless of
+    // git, an API drift in an un-updated spike file used to break `swift test` for
+    // everyone. Opt in explicitly when running them:
+    //   SWIFT_SHEET_MUSIC_PDF_SPIKE=1 swift test --filter PDFCorpus
+    if ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_PDF_SPIKE"] == "1" {
+        sheetMusicTestsSwiftSettings += [
+            .define("SM_PDF_SPIKE"),
         ]
     }
 
@@ -570,6 +613,9 @@ if isWasm {
             name: "SheetMusicWasmEntry",
             dependencies: ["SheetMusicWasmBridge"],
             path: "Sources/SheetMusicWasmEntry",
+            // The shipping artifact needs this more than the tests do: `applyEditIntentBytes` decodes bytes the
+            // browser hands it, on this same shadow stack.
+            linkerSettings: wasmStackLinkerSettings,
         ),
         .executableTarget(
             name: "WasmSizeProbe",
@@ -583,6 +629,8 @@ if isWasm {
                 "SheetMusicWasmBridge",
             ],
             path: "Sources/WasmSizeProbe",
+            // Same flags as the shipping entry point, so what the size gate measures is what ships.
+            linkerSettings: wasmStackLinkerSettings,
         ),
         // Run natively and under a wasm host to compare the parse of the
         // same file; see Sources/WasmParityProbe/main.swift.
@@ -594,6 +642,7 @@ if isWasm {
                 "SheetMusicMSCX",
             ],
             path: "Sources/WasmParityProbe",
+            linkerSettings: wasmStackLinkerSettings,
         ),
     ]
 }
@@ -610,7 +659,7 @@ let packageDependencies: [Package.Dependency] = [
     // 0.4.1 imports FoundationEssentials where it exists. Before it, the
     // umbrella arrived through this package and cost ~10 MB brotli in any
     // WebAssembly graph containing SheetMusicAudioCore or
-    // SheetMusicEditWire — see CLAUDE.md "WebAssembly build".
+    // SheetMusicEditWire — see docs/development/webassembly.md ("Size gates").
     .package(
         url: "https://github.com/jiyimeta/swift-wirelet.git",
         exact: "0.5.0",

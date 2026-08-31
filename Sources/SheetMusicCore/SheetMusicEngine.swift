@@ -22,7 +22,7 @@ public enum SheetMusicEngine {
     /// the gate above would be blind to exactly the case it was added for. Keep that split for the
     /// next topic build: suffix the work-in-progress stamp, and bump to the plain release string in
     /// a release-only commit that is never published locally.
-    public static let version = "2.0.0"
+    public static let version = "2.0.1"
 
     /// `version` as a fixed 64-bit number — FNV-1a, so both images agree without a seed.
     public static var versionStamp: Int64 {

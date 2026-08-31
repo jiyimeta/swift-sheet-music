@@ -2,6 +2,7 @@ package io.github.jiyimeta.sheetmusic.audio.synth
 
 import android.content.Context
 import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
+import io.github.jiyimeta.sheetmusic.audio.model.MidiControlChange
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 
 /**
@@ -29,6 +30,16 @@ internal class FluidSynthEngine(
     private val synthFactory: (sampleRate: Int) -> SynthDriver = { sr ->
         FluidSynthDriver.create(sr)
     },
+    /**
+     * The RPN messages that retune one channel by a cents offset off A4=440.
+     *
+     * Injected rather than computed here: the split into coarse semitones and fine cents is `MasterTuning` in
+     * SheetMusicAudioCore, which the Apple engine reads too — it feeds the same numbers into the AUMIDISynth's
+     * global tuning params instead of into an RPN. Kotlin held a hand-port of that arithmetic kept honest by
+     * golden assertions on both sides; goldens catch a change made twice and made differently, and say nothing
+     * about a change made once.
+     */
+    private val masterTuningControlChanges: (cents: Double) -> List<MidiControlChange>,
 ) {
 
     /**
@@ -255,7 +266,7 @@ internal class FluidSynthEngine(
      */
     fun setMasterTuning(cents: Double) {
         val s = synth ?: return
-        val rpn = MasterTuning.rpnControlChanges(cents)
+        val rpn = masterTuningControlChanges(cents)
         // Iterate CONFIGURED channels, not `0 until channelCountValue` — with
         // live-channel-keyed setup the configured channel numbers may be
         // sparse (e.g. a drum strip on channel 9 while only 2 strips exist).

@@ -18,7 +18,11 @@ extension TimeSignature {
                 location: "TimeSig",
             ))
         }
-        var timeSig = TimeSignature(numerator: n, denominator: d)
+        // `<showCourtesySig>` is written only when off, so an absent tag means the courtesy is drawn.
+        var timeSig = TimeSignature(
+            numerator: n, denominator: d,
+            showCourtesy: (node.first("showCourtesySig")?.text ?? "1") != "0",
+        )
         timeSig.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return timeSig
     }

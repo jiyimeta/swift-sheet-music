@@ -81,22 +81,44 @@ struct EditIntentCodecTests {
         }
     }
 
-    /// `CompositeIntentWire.members` recurses with no depth bound of its own; a malformed payload nesting far past
-    /// what a real composite ever does (production nests at most 2 deep) must be refused, not overflow the stack
-    /// unwinding the decode. 20 levels is nowhere near a real stack limit to *build* — this is checking the
-    /// decoder's own policy limit fires well before that, not working around a crash that already happened.
-    @Test("a composite nested past the depth limit throws instead of overflowing the stack")
-    func deeplyNestedCompositeThrows() {
+    private static func nestedComposite(levels: Int) -> EditIntent {
         var intent = EditIntent.delete(at: Self.slot)
-        for _ in 0 ..< 20 {
+        for _ in 0 ..< levels {
             intent = .composite([intent])
         }
-        let bytes = EditIntentCodec.encode(intent)
+        return intent
+    }
+
+    /// A malformed payload nesting far past what a real composite ever does (production nests at most 2 deep) must
+    /// be refused *before* the parse recurses into it, not after.
+    ///
+    /// The 20 levels here are not a safe margin: on WebAssembly the shadow stack is 128 KiB and one level of this
+    /// parse costs 8-10 KiB, so the tree used to run out of stack around level 13. Because wasm-ld puts `.bss`
+    /// directly below the stack, that did not trap — it silently overwrote the allocator's state, and the run died
+    /// hundreds of tests later inside an unrelated `malloc`. So this test is exactly the crash that already
+    /// happened, and it only passes while the bound sits on the parse.
+    @Test("a composite nested past the depth limit throws instead of overflowing the stack")
+    func deeplyNestedCompositeThrows() {
+        let bytes = EditIntentCodec.encode(Self.nestedComposite(levels: 20))
         #expect(throws: (any Error).self) {
             try EditIntentCodec.decode(bytes)
         }
     }
 
+    /// Pins the limit itself. Without this, moving the bound onto the parse could quietly refuse one level too
+    /// early and no other test would notice — every composite the app actually writes is one level deep.
+    @Test("the depth limit admits exactly eight levels and refuses the ninth")
+    func compositeDepthBoundaryIsEightLevels() throws {
+        let atLimit = Self.nestedComposite(levels: 8)
+        #expect(try EditIntentCodec.decode(EditIntentCodec.encode(atLimit)) == atLimit)
+
+        let pastLimit = EditIntentCodec.encode(Self.nestedComposite(levels: 9))
+        #expect(throws: (any Error).self) {
+            try EditIntentCodec.decode(pastLimit)
+        }
+    }
+
+    // swiftlint:disable:next function_body_length
     @Test func `every new intent round-trips`() throws {
         let staff = StaffAddress(partIndex: 1, staffIndexInPart: 1)
         let note = NoteID(staff: staff, measureIndex: 2, voiceIndex: 1, elementIndex: 3, noteIndexInChord: 1)
@@ -123,6 +145,76 @@ struct EditIntentCodecTests {
             // Appended for M1 solo scratch creation — indices 14…15.
             .insertMeasure(at: 3),
             .deleteMeasure(at: 0),
+            // Appended for M2 ensemble creation — index 16. Three shapes, because `PartPlanWire` is the first
+            // payload in this file carrying strings, an array and two present-flagged optionals: both names set
+            // on a transposing single-staff part, both names absent, and a multi-staff drum plan.
+            .addPart(
+                plan: .init(
+                    instrumentID: "clarinet-bb", longName: "Clarinet in B♭", shortName: "Cl.",
+                    staves: [.init(clefType: "G")],
+                    transposeDiatonic: -1, transposeChromatic: -2, gmProgram: 71,
+                ),
+                at: 2,
+            ),
+            .addPart(plan: .init(instrumentID: "x", staves: [.init(clefType: "G")]), at: 0),
+            .addPart(
+                plan: .init(
+                    instrumentID: "drumset", longName: "Drum Kit",
+                    staves: [.init(clefType: "PERC", isPercussion: true), .init(clefType: "F")],
+                    isDrums: true,
+                ),
+                at: 1,
+            ),
+            // Appended for M2 ensemble creation — indices 17…18. `.movePart`'s two fields are distinct so the
+            // round trip can catch a `from`/`to` transposition, which would silently move the part the wrong way.
+            .removePart(at: 2),
+            .movePart(from: 0, to: 3),
+            // Appended for M3 signature changes — indices 19…20. A flat key and a sharp one, because `concertKey`
+            // is the first field in this codec whose real range is signed: a plain (non-zig-zag) varint would
+            // encode -3 as ten bytes and still round-trip, so the pair is here to keep the layout doc honest
+            // rather than to catch a decode.
+            .setKeySignature(measureIndex: 2, concertKey: -3),
+            .setKeySignature(measureIndex: 0, concertKey: 7),
+            .removeKeySignature(measureIndex: 5),
+            // Indices 21…22. The numerator and denominator are deliberately unequal to each other and to the
+            // measure index, so a field written into the wrong tag cannot survive the round trip looking right.
+            .setTimeSignature(measureIndex: 3, numerator: 7, denominator: 8),
+            .removeTimeSignature(measureIndex: 4),
+            // Appended for M4 rehearsal marks — indices 23…24. The mark's text is deliberately non-ASCII: it is
+            // the only free-form string an intent carries, and a UTF-8 regression that truncated to the character
+            // count (or dropped a continuation byte) would still round-trip an ASCII mark looking correct.
+            .setRehearsalMark(measureIndex: 3, text: "1サビ"),
+            .removeRehearsalMark(measureIndex: 4),
+            // Appended for M6 drum note entry — indices 25…27. The three field values of `.createVoice` are
+            // distinct so a field written into the wrong tag cannot survive looking right, the same reason
+            // `.setTimeSignature`'s are. `.setNoteHead` is here twice: the present flag is the only thing telling
+            // "write this head" from "clear the override", and a regression that dropped it would still round-trip
+            // the non-nil case correctly.
+            .createVoice(staff: staff, measureIndex: 7, voiceIndex: 1),
+            .splitRest(at: slot, tickOffset: 240),
+            .setNoteHead(at: note, headType: "cross"),
+            .setNoteHead(at: note, headType: nil),
+            // Index 28. Three shapes, because the payload carries the only optional-within-optional this codec has:
+            // a full row with a shortcut, one without, and the removal that is an add's own inverse.
+            .setDrumsetEntry(
+                partIndex: 1, pitch: 42,
+                entry: DrumsetEntry(
+                    name: "Closed Hi-Hat", head: "cross", line: -1, voiceIndex: 0, stem: 1, shortcut: "H",
+                ),
+            ),
+            .setDrumsetEntry(
+                partIndex: 0, pitch: 36,
+                entry: DrumsetEntry(name: "Bass Drum 1", head: "normal", line: 6, voiceIndex: 1, stem: 2),
+            ),
+            .setDrumsetEntry(partIndex: 0, pitch: 36, entry: nil),
+            // Index 29. Four shapes, because each name carries its own present flag and a cleared name is not an
+            // empty one: dropping either flag would still round-trip the both-present case correctly.
+            .setPartNames(at: 1, longName: "なおき", shortName: "な"),
+            .setPartNames(at: 1, longName: "なおき", shortName: nil),
+            .setPartNames(at: 1, longName: nil, shortName: "な"),
+            .setPartNames(at: 1, longName: nil, shortName: nil),
+            // An empty name is a name the score declares, and must not come back as a cleared one.
+            .setPartNames(at: 1, longName: "", shortName: ""),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -154,6 +246,94 @@ struct EditIntentCodecTests {
         // Appended for M1 solo scratch creation.
         #expect(EditIntentCodec.encode(.insertMeasure(at: 0))[1] == 14)
         #expect(EditIntentCodec.encode(.deleteMeasure(at: 0))[1] == 15)
+        // Appended for M2 ensemble creation. `addPart` is the first case whose payload is variable-length enough
+        // that the frame's own length prefix could exceed one byte — a plan with long names would push it past
+        // 127 — so the index is read from a deliberately small plan, keeping the `bytes[1]` framing assumption
+        // this whole test rests on true.
+        #expect(EditIntentCodec.encode(
+            .addPart(plan: .init(instrumentID: "x", staves: [.init(clefType: "G")]), at: 0),
+        )[1] == 16)
+        #expect(EditIntentCodec.encode(.removePart(at: 0))[1] == 17)
+        #expect(EditIntentCodec.encode(.movePart(from: 0, to: 1))[1] == 18)
+        // Appended for M3 signature changes. `.removeKeySignature`'s payload is byte-identical to
+        // `.insertMeasure`'s, so — exactly as with `.writeRest` above — the discriminator is the only thing
+        // standing between "drop this key change" and "insert a bar here".
+        #expect(EditIntentCodec.encode(.setKeySignature(measureIndex: 0, concertKey: 0))[1] == 19)
+        #expect(EditIntentCodec.encode(.removeKeySignature(measureIndex: 0))[1] == 20)
+        // `.removeTimeSignature`'s payload is byte-identical to `.removeKeySignature`'s, and confusing the two
+        // would drop the wrong declaration and re-bar (or re-spell) a span nobody asked about.
+        #expect(EditIntentCodec.encode(
+            .setTimeSignature(measureIndex: 0, numerator: 3, denominator: 4),
+        )[1] == 21)
+        #expect(EditIntentCodec.encode(.removeTimeSignature(measureIndex: 0))[1] == 22)
+        // Appended for M4 rehearsal marks. `.removeRehearsalMark`'s payload is byte-identical to
+        // `.removeTimeSignature`'s in turn, so the discriminator is again the only thing standing between dropping
+        // a mark and re-barring the span after it. `setRehearsalMark` is read from a one-character mark: it is the
+        // second variable-length payload in this file, and a long mark would push the frame's length prefix past
+        // 127 and break the `bytes[1]` framing assumption this whole test rests on, exactly as `addPart` above.
+        #expect(EditIntentCodec.encode(.setRehearsalMark(measureIndex: 0, text: "A"))[1] == 23)
+        #expect(EditIntentCodec.encode(.removeRehearsalMark(measureIndex: 0))[1] == 24)
+        // Appended for M6 drum note entry. `.setNoteHead` is read with its head cleared, which keeps its payload
+        // short for the same `bytes[1]` framing reason `setRehearsalMark` above uses a one-character mark — a long
+        // head name would push the frame's length prefix past 127.
+        #expect(EditIntentCodec.encode(
+            .createVoice(staff: staff, measureIndex: 0, voiceIndex: 1),
+        )[1] == 25)
+        #expect(EditIntentCodec.encode(.splitRest(at: slot, tickOffset: 240))[1] == 26)
+        #expect(EditIntentCodec.encode(
+            .setNoteHead(
+                at: NoteID(
+                    staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 0, noteIndexInChord: 0,
+                ),
+                headType: nil,
+            ),
+        )[1] == 27)
+        // Read with the entry removed, which keeps the payload short for the same `bytes[1]` framing reason.
+        #expect(EditIntentCodec.encode(.setDrumsetEntry(partIndex: 0, pitch: 42, entry: nil))[1] == 28)
+        // Appended for part renaming.
+        #expect(EditIntentCodec.encode(.setPartNames(at: 0, longName: nil, shortName: nil))[1] == 29)
+    }
+
+    /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field
+    /// by field rather than trusting `EditIntent`'s synthesized `==` alone — a plan whose `staves` array or
+    /// present-flagged optional names decoded wrong would still compare equal to itself if the flags were dropped
+    /// on BOTH sides of the trip.
+    @Test func `a part plan's every field survives the wire`() throws {
+        let plan = BlankScoreTemplate.PartPlan(
+            instrumentID: "clarinet-bb", longName: "Clarinet in B♭", shortName: "Cl.",
+            staves: [.init(clefType: "G"), .init(clefType: "PERC", isPercussion: true)],
+            transposeDiatonic: -1, transposeChromatic: -2, gmProgram: 71, isDrums: true,
+        )
+        let bytes = EditIntentCodec.encode(.addPart(plan: plan, at: 3))
+        guard case let .addPart(decoded, index) = try EditIntentCodec.decode(bytes) else {
+            Issue.record("expected .addPart"); return
+        }
+        #expect(index == 3)
+        #expect(decoded.instrumentID == "clarinet-bb")
+        #expect(decoded.longName == "Clarinet in B♭")
+        #expect(decoded.shortName == "Cl.")
+        #expect(decoded.staves.count == 2)
+        #expect(decoded.staves[0].clefType == "G")
+        #expect(decoded.staves[0].isPercussion == false)
+        #expect(decoded.staves[1].clefType == "PERC")
+        #expect(decoded.staves[1].isPercussion)
+        #expect(decoded.transposeDiatonic == -1)
+        #expect(decoded.transposeChromatic == -2)
+        #expect(decoded.gmProgram == 71)
+        #expect(decoded.isDrums)
+    }
+
+    /// An absent name has to come back absent, not as `""` — the two are different instruments as far as the mscx
+    /// encoder is concerned (`<longName>` written empty versus omitted).
+    @Test func `an absent part-plan name decodes as nil, not empty string`() throws {
+        let plan = BlankScoreTemplate.PartPlan(instrumentID: "x", staves: [.init(clefType: "G")])
+        guard case let .addPart(decoded, _) = try EditIntentCodec
+            .decode(EditIntentCodec.encode(.addPart(plan: plan, at: 0)))
+        else {
+            Issue.record("expected .addPart"); return
+        }
+        #expect(decoded.longName == nil)
+        #expect(decoded.shortName == nil)
     }
 
     /// An accidental spelling this build does not know must fail the decode, not decode as "no accidental" —

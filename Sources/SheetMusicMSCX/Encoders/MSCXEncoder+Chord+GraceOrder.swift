@@ -54,6 +54,17 @@ extension Chord {
         graceNotesBefore + graceNotesAfter.reversed()
     }
 
+    /// `mscxFileOrderedGraces` paired with each grace's index in the list it
+    /// came from — `graceNotesBefore` or `graceNotesAfter`, both in *sounding*
+    /// order. A guitar bend chains from one grace of a run to the next, so the
+    /// encoder needs that index to name a grace's neighbour; file order alone
+    /// runs an after-grace run backwards. See
+    /// `GraceChord.guitarBendForwardEndpoint`.
+    var mscxFileOrderedGracesWithListIndex: [(grace: GraceChord, listIndex: Int)] {
+        graceNotesBefore.enumerated().map { ($0.element, $0.offset) }
+            + graceNotesAfter.enumerated().reversed().map { ($0.element, $0.offset) }
+    }
+
     /// The `<grace>N</grace>` ordinal of `graceNotesBefore[index]` —
     /// MuseScore's `Location::graceIndex` (`dom/location.cpp:199-208`),
     /// which is `Chord::graceIndex()`, assigned by the reader from the

@@ -183,7 +183,7 @@
                 var index: [UInt32: OutlineRef] = [:]
                 if let document, let cgPage = document.page(at: pageIndex)?.pageRef {
                     index = OMRLabelExport.buildIndex(
-                        cmaps: PDFImporter.extractFontCMaps(cgPage: cgPage),
+                        cmaps: PDFImporter.extractFontCMaps(cgPage: cgPage).cmaps,
                         fonts: PDFImporter.extractEmbeddedFonts(cgPage: cgPage),
                     )
                 }

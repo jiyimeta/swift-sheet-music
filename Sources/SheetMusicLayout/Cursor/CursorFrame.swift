@@ -329,8 +329,8 @@ extension LayoutDocument {
             switch el {
             case let .clef(_, origin, _):
                 rightEdge = max(rightEdge, origin.x + sp * 2)
-            case let .keySignature(sharps, flats, _, origin):
-                let glyphs = CGFloat(max(sharps, flats))
+            case let .keySignature(sharps, flats, _, naturals, origin):
+                let glyphs = CGFloat(max(sharps, flats, naturals.count))
                 rightEdge = max(rightEdge, origin.x + sp * (glyphs + 1.5))
             case let .timeSignature(_, _, origin):
                 rightEdge = max(rightEdge, origin.x + sp * 3.5)

@@ -44,6 +44,41 @@ enum MeasureStructure {
         }
     }
 
+    /// Removes every element `shouldRemove` accepts from `voice`, remapping each tuplet endpoint past the
+    /// removals that preceded it so tuplet ranges keep pointing at the same elements. `shiftTuplets(in:by:)`
+    /// is the special case where the removals form a uniform prefix; this is the general one, for removals
+    /// that can fall anywhere in the list (a mid-bar key change, say).
+    ///
+    /// Endpoints are assumed to name surviving elements — a tuplet always spans chords/rests, never a
+    /// signature — so a removed endpoint is not a case that needs a policy here.
+    static func removeElements(
+        in voice: inout Voice, where shouldRemove: (VoiceElement) -> Bool,
+    ) {
+        // `removedBefore[i]` = removals strictly before old index `i`, so a survivor at `i` lands on
+        // `i - removedBefore[i]`. Sized `count + 1` so an inclusive end index one past the last element
+        // (an empty voice's degenerate tuplet) still resolves.
+        var removedBefore: [Int] = []
+        removedBefore.reserveCapacity(voice.elements.count + 1)
+        var removed = 0
+        for element in voice.elements {
+            removedBefore.append(removed)
+            if shouldRemove(element) { removed += 1 }
+        }
+        removedBefore.append(removed)
+        guard removed > 0 else { return }
+        voice.elements.removeAll(where: shouldRemove)
+        for index in voice.tuplets.indices {
+            let start = voice.tuplets[index].startIndex
+            let end = voice.tuplets[index].endIndex
+            if removedBefore.indices.contains(start) {
+                voice.tuplets[index].startIndex = start - removedBefore[start]
+            }
+            if removedBefore.indices.contains(end) {
+                voice.tuplets[index].endIndex = end - removedBefore[end]
+            }
+        }
+    }
+
     static func measureCount(of score: Score) -> Int {
         score.parts.first?.staves.first?.measures.count ?? 0
     }

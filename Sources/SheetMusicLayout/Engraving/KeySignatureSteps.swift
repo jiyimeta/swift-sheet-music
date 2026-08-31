@@ -47,12 +47,79 @@ public enum KeySignatureSteps {
         return Array(table.prefix(count))
     }
 
+    /// Steps for the naturals that cancel `priorKey` — the positions of
+    /// the OUTGOING key's own accidentals, in that key's own engraving
+    /// order, so D→C draws naturals at F♯ and C♯. A key with no
+    /// accidentals has nothing to cancel and yields an empty array.
+    ///
+    /// This is deliberately the outgoing key's table and not the
+    /// incoming one: a natural belongs where the accidental it retires
+    /// used to sit. MuseScore does the same in `KeySig::layout`, which
+    /// walks the old key's `KeySigEvent` when building the naturals it
+    /// draws ahead of the new signature.
+    public static func naturalSteps(
+        cancelling priorKey: Int, clef: NotatedClef,
+    ) -> [Int] {
+        steps(
+            sharps: max(0, priorKey), flats: max(0, -priorKey), clef: clef,
+        )
+    }
+
+    /// The naturals an explicit key change from `priorKey` to `newKey`
+    /// draws, under the engraving rule this package implements: only a
+    /// change that lands on C (zero accidentals) cancels, and it cancels
+    /// the whole outgoing key. Every other change draws its new
+    /// signature alone.
+    ///
+    /// Cancelling on every reduction (G→F showing a natural for F♯) is a
+    /// possible future style option; MuseScore's default — and Behind
+    /// Bars — is the zero-accidental rule.
+    public static func cancellationNaturals(
+        priorKey: Int, newKey: Int, clef: NotatedClef,
+    ) -> [Int] {
+        guard newKey == 0, priorKey != 0 else { return [] }
+        return naturalSteps(cancelling: priorKey, clef: clef)
+    }
+
     /// Horizontal advance between consecutive accidentals. 1 sp causes
     /// visible overlap at 5+-accidental keys (sharp glyphs are ~1 sp
     /// wide but the optical side-bearing needs more breathing room);
     /// 1.4 sp matches MuseScore's defaults.
     public static func advance(sp: CGFloat) -> CGFloat {
         sp * 1.4
+    }
+
+    /// Ink width of one accidental glyph — the WIDEST of the three a key
+    /// signature can draw, so a reservation made from this can never be
+    /// too small for the glyph that actually lands there.
+    ///
+    /// Bravura's `glyphBBoxes` (`fonts/bravura/bravura_metadata.json`),
+    /// in staff spaces because SMuFL puts one em at 4 sp and
+    /// `StaffMetrics.glyphFontSize` is exactly `sp * 4`:
+    /// `accidentalSharp` 0.996, `accidentalFlat` 0.904,
+    /// `accidentalNatural` 0.672.
+    ///
+    /// Note this EXCEEDS nothing on its own — it is `advance` that sets
+    /// the stride — but it is what makes the last glyph in a row stick
+    /// out past the last stride, which is the part a column has to
+    /// contain.
+    static func glyphWidth(sp: CGFloat) -> CGFloat {
+        sp * 0.996
+    }
+
+    /// Horizontal ink a row of `glyphCount` accidentals occupies.
+    ///
+    /// Renderers stride by `advance` and draw each glyph CENTERED on its
+    /// stride (`KeySignatureRenderer.draw`), so the row spans
+    /// `(glyphCount - 1)` strides plus one whole glyph. Sizing a column
+    /// as `glyphCount * advance` — or, as the header schedule does, as
+    /// `sp * (glyphCount + 1.5)` — under-reserves from five accidentals
+    /// up, because the stride is narrower than the glyph plus its share
+    /// of the margin.
+    static func inkWidth(glyphCount: Int, sp: CGFloat) -> CGFloat {
+        guard glyphCount > 0 else { return 0 }
+        return CGFloat(glyphCount - 1) * advance(sp: sp)
+            + glyphWidth(sp: sp)
     }
 
     /// Convert a step value to a Y offset relative to the staff-middle

@@ -4,7 +4,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFImporterLayoutTests {
+    struct PDFImporterLayoutTests {
         private func staff(
             yMid: CGFloat,
             xRange: ClosedRange<CGFloat>,

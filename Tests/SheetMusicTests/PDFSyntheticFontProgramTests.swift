@@ -21,7 +21,7 @@
     /// Leland (CFF) only, whereas this one carries BOTH program kinds — a
     /// CFF music face and a TrueType text face — so a regression in either
     /// `/FontFile2` or `/FontFile3` handling is caught.
-    @MainActor struct PDFSyntheticFontProgramTests {
+    struct PDFSyntheticFontProgramTests {
         private static var bravuraAvailable: Bool {
             guard #available(macOS 15.0, *) else { return false }
             return BravuraFont.register

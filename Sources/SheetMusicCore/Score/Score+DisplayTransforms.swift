@@ -3,7 +3,7 @@ extension Score {
     /// (adding / removing 12 accidentals spells the same pitch set the other way). Brings a fifths-shifted key back to
     /// a notatable signature; e.g. `+8` (8 sharps, unwritable) → `-4` (A♭ major). Values already in range — including
     /// `±7` (C♯ / C♭ major) — are returned unchanged, so a deliberately sharp/flat context keeps its spelling.
-    static func respelledKey(_ key: Int) -> Int {
+    package static func respelledKey(_ key: Int) -> Int {
         var k = key
         while k > 7 {
             k -= 12
@@ -51,42 +51,98 @@ extension Score {
                 )
                 let measures = copy.parts[partIndex].staves[staffIndex].measures
                 for measureIndex in measures.indices {
+                    // Resolved against `self`, the ORIGINAL score: `copy`'s keys are rewritten as this loop
+                    // walks, so a measure inheriting its key from an earlier bar would be shifted twice.
                     let oldKey = activeKey(staff: address, measureIndex: measureIndex)
                     let newKey = Self.respelledKey(oldKey + phi)
-                    let fifthsDelta = newKey - oldKey
-                    let voices = copy.parts[partIndex].staves[staffIndex]
-                        .measures[measureIndex].voices
-                    for voiceIndex in voices.indices {
-                        let elements = copy.parts[partIndex].staves[staffIndex]
-                            .measures[measureIndex].voices[voiceIndex].elements
-                        for elementIndex in elements.indices {
-                            switch elements[elementIndex] {
-                            case var .keySignature(k):
-                                k.concertKey = Self.respelledKey(k.concertKey + phi)
-                                copy.parts[partIndex].staves[staffIndex]
-                                    .measures[measureIndex].voices[voiceIndex]
-                                    .elements[elementIndex] = .keySignature(k)
-                            case let .chord(c):
-                                copy.parts[partIndex].staves[staffIndex]
-                                    .measures[measureIndex].voices[voiceIndex]
-                                    .elements[elementIndex] = .chord(Self.transposedChord(
-                                        c, semitones: delta, fifthsDelta: fifthsDelta, key: newKey,
-                                    ))
-                            case let .harmony(h):
-                                copy.parts[partIndex].staves[staffIndex]
-                                    .measures[measureIndex].voices[voiceIndex]
-                                    .elements[elementIndex] = .harmony(
-                                        Self.transposedHarmony(h, fifthsDelta: fifthsDelta),
-                                    )
-                            default:
-                                break
-                            }
-                        }
-                    }
+                    copy.parts[partIndex].staves[staffIndex].measures[measureIndex] =
+                        Self.rewriteMeasure(
+                            measures[measureIndex],
+                            semitones: delta, keyShift: phi,
+                            fifthsDelta: newKey - oldKey, key: newKey,
+                        )
                 }
             }
         }
         return copy
+    }
+
+    /// Returns a copy of the score with every transposing part's notation shifted to WRITTEN pitch: notes, key
+    /// signatures and chord symbols move by the part's own interval, exactly — the (diatonic, chromatic) pair
+    /// fixes the fifths shift, no histogram, unlike `transposed(bySemitones:)` which picks one offset for the
+    /// whole score. Concert-pitch parts, `useDrumset` parts and `"percussion"` staves pass through untouched.
+    ///
+    /// Display-only, and for RENDERING only: tick structure, IDs and element ordering are unchanged, but the
+    /// result must never reach playback, MIDI export or the MSCX encoder. The latter two apply the part's own
+    /// offset themselves (`MSCXEncoder+Score.swift` seeds `MSCXEncoderOptions.writtenFifthsOffset` per part), so
+    /// encoding a written-pitch view shifts every key and tpc a second time — silently, compounding per save.
+    ///
+    /// A note whose written pitch would leave the MIDI range `0…127` keeps its concert pitch and spelling under
+    /// a key signature that DID move, so it reads wrong on the page — inherited from the shared note transform,
+    /// only reachable at the extremes of the range, and no part is rejected for it.
+    public func writtenPitchView() -> Score {
+        guard parts.contains(where: { $0.instrument.isTransposing && !$0.instrument.useDrumset }) else {
+            return self
+        }
+        var copy = self
+        for partIndex in copy.parts.indices {
+            let instrument = parts[partIndex].instrument
+            guard instrument.isTransposing, !instrument.useDrumset else { continue }
+            let semitones = instrument.writtenPitchOffset
+            let fifths = instrument.writtenFifthsOffset
+            for staffIndex in copy.parts[partIndex].staves.indices
+                where copy.parts[partIndex].staves[staffIndex].group != "percussion"
+            {
+                let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
+                let measures = copy.parts[partIndex].staves[staffIndex].measures
+                for measureIndex in measures.indices {
+                    // Same rule as `transposed(bySemitones:)`: `activeKey` reads `self`, never `copy`.
+                    let oldKey = activeKey(staff: address, measureIndex: measureIndex)
+                    let newKey = Self.respelledKey(oldKey + fifths)
+                    copy.parts[partIndex].staves[staffIndex].measures[measureIndex] =
+                        Self.rewriteMeasure(
+                            measures[measureIndex],
+                            semitones: semitones, keyShift: fifths,
+                            fifthsDelta: newKey - oldKey, key: newKey,
+                        )
+                }
+            }
+        }
+        return copy
+    }
+
+    /// The per-measure rewrite both display transforms share: key signatures move by `keyShift` fifths (and are
+    /// respelled back into the writable range), notes move by `semitones` semitones / `fifthsDelta` fifths and are
+    /// re-spelled against `key`, and chord symbols move by `fifthsDelta`. Everything else passes through.
+    ///
+    /// `keyShift` and `fifthsDelta` are deliberately separate: `keyShift` is the caller's whole shift (global
+    /// offset for `transposed(bySemitones:)`, the part's own interval for `writtenPitchView()`) while
+    /// `fifthsDelta` is `key − oldKey`, which differs whenever the destination key had to be respelled — notes
+    /// follow the key that actually got written, not the unclamped one.
+    private static func rewriteMeasure(
+        _ measure: Measure, semitones: Int, keyShift: Int, fifthsDelta: Int, key: Int,
+    ) -> Measure {
+        var m = measure
+        for voiceIndex in m.voices.indices {
+            for elementIndex in m.voices[voiceIndex].elements.indices {
+                switch m.voices[voiceIndex].elements[elementIndex] {
+                case var .keySignature(k):
+                    k.concertKey = Self.respelledKey(k.concertKey + keyShift)
+                    m.voices[voiceIndex].elements[elementIndex] = .keySignature(k)
+                case let .chord(c):
+                    m.voices[voiceIndex].elements[elementIndex] = .chord(transposedChord(
+                        c, semitones: semitones, fifthsDelta: fifthsDelta, key: key,
+                    ))
+                case let .harmony(h):
+                    m.voices[voiceIndex].elements[elementIndex] = .harmony(
+                        transposedHarmony(h, fifthsDelta: fifthsDelta),
+                    )
+                default:
+                    break
+                }
+            }
+        }
+        return m
     }
 
     /// Choose the single fifths offset (`≡ 7·delta mod 12`) added to every key signature. Among the ≤3 candidate
@@ -233,19 +289,6 @@ extension Score {
     public func filtered(hidingStaves addresses: Set<StaffAddress>) -> Score {
         guard !addresses.isEmpty else { return self }
 
-        // Brackets span the GLOBAL staff order (`parts.flatMap(\.staves)`), not
-        // a single part — MuseScore routinely groups several single-staff parts
-        // under one bracket. So both survival and span must be computed over the
-        // flattened sequence; a per-part span calculation collapses such
-        // cross-part brackets down to just their anchor staff.
-        var originalAddresses: [StaffAddress] = []
-        for (partIndex, part) in parts.enumerated() {
-            for staffIndex in part.staves.indices {
-                originalAddresses.append(StaffAddress(
-                    partIndex: partIndex, staffIndexInPart: staffIndex,
-                ))
-            }
-        }
         func isKept(_ address: StaffAddress) -> Bool {
             !addresses.contains(address)
         }
@@ -273,29 +316,11 @@ extension Score {
             newParts.append(newPart)
         }
 
-        // Re-anchor / re-span each bracket over the surviving global staves. A
-        // bracket at global index `g` with span `s` covers g … g+s-1; it
-        // re-anchors on the first surviving staff in that window (which may live
-        // in a different part than the original anchor) and its span becomes the
-        // number of survivors in the window. A window with no survivor drops the
-        // bracket entirely.
-        for (globalIndex, address) in originalAddresses.enumerated() {
-            let staff = parts[address.partIndex].staves[address.staffIndexInPart]
-            for bracket in staff.brackets {
-                let endIndex = min(
-                    globalIndex + bracket.span - 1,
-                    originalAddresses.count - 1,
-                )
-                let surviving = (globalIndex ... endIndex)
-                    .filter { isKept(originalAddresses[$0]) }
-                guard let anchorGlobal = surviving.first,
-                      let location = newLocation[originalAddresses[anchorGlobal]]
-                else { continue }
-                var rebased = bracket
-                rebased.span = surviving.count
-                newParts[location.part].staves[location.staff]
-                    .brackets.append(rebased)
-            }
+        // Re-anchor / re-span each bracket over the surviving global staves — the
+        // same pass `RemovePart` runs when a whole part goes away, which is why it
+        // lives in `Score+Brackets.swift` rather than here.
+        for entry in Self.reanchoredBrackets(in: parts, survivorLocations: newLocation) {
+            newParts[entry.part].staves[entry.staff].brackets.append(entry.bracket)
         }
 
         var copy = self

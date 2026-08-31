@@ -10,7 +10,7 @@
     /// repeated parse of identical input must be bit-stable — and any
     /// order-dependent pass shows up as instability across shuffled input
     /// that is geometrically identical.
-    @MainActor struct PDFImporterDeterminismTests {
+    struct PDFImporterDeterminismTests {
         private func glyph(
             x: CGFloat, y: CGFloat, _ semantic: SMuFLSemantic,
         ) -> ClassifiedGlyph {

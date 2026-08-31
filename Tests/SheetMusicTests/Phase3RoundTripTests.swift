@@ -9,6 +9,11 @@ import Testing
 /// the XML, and asserts the flag survives both directions of the round-trip.
 /// Tests also confirm the default (visible) omits the tag entirely, matching
 /// MuseScore's own serialization behavior.
+///
+/// Also covers `<visible>` on `Arpeggio` (Task 3.2): model default and decode
+/// from an inline `<Arpeggio>` node inside a `<Chord>`. Encode and full
+/// round-trip are explicitly out-of-scope for Arpeggio (the Chord encoder does
+/// not yet serialize `<Arpeggio>`).
 struct Phase3RoundTripTests {
     // MARK: - Fermata
 
@@ -105,5 +110,49 @@ struct Phase3RoundTripTests {
     @Test func lyricVisibleTrueOmitsTag() {
         let encoded = Lyric(text: "la").encode()
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
+    }
+
+    // MARK: - Arpeggio (decode only)
+
+    @Test func arpeggioDefaultsVisible() {
+        let arp = Arpeggio(subtype: 0)
+        #expect(arp.visible == true)
+    }
+
+    @Test func arpeggioDecodesVisibleFalse() throws {
+        let chordNode = XMLTreeNode(
+            name: "Chord",
+            children: [
+                XMLTreeNode(name: "durationType", text: "quarter"),
+                XMLTreeNode(name: "Arpeggio", children: [
+                    XMLTreeNode(name: "subtype", text: "0"),
+                    XMLTreeNode(name: "visible", text: "0"),
+                ]),
+                XMLTreeNode(name: "Note", children: [
+                    XMLTreeNode(name: "pitch", text: "60"),
+                    XMLTreeNode(name: "tpc", text: "14"),
+                ]),
+            ],
+        )
+        let chord = try Chord.decode(chordNode)
+        #expect(chord.arpeggio?.visible == false)
+    }
+
+    @Test func arpeggioDecodesVisibleTrueWhenTagAbsent() throws {
+        let chordNode = XMLTreeNode(
+            name: "Chord",
+            children: [
+                XMLTreeNode(name: "durationType", text: "quarter"),
+                XMLTreeNode(name: "Arpeggio", children: [
+                    XMLTreeNode(name: "subtype", text: "1"),
+                ]),
+                XMLTreeNode(name: "Note", children: [
+                    XMLTreeNode(name: "pitch", text: "60"),
+                    XMLTreeNode(name: "tpc", text: "14"),
+                ]),
+            ],
+        )
+        let chord = try Chord.decode(chordNode)
+        #expect(chord.arpeggio?.visible == true)
     }
 }

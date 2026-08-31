@@ -5,7 +5,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFFontProgramTests {
+    struct PDFFontProgramTests {
         /// The corpus anchor is a MuseScore 3.6.2 export embedding Leland.
         /// Skipped when the corpus is absent so CI (which has no corpus)
         /// still passes.

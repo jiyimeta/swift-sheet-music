@@ -66,7 +66,18 @@ extension LayoutEngine {
             }
             return baseline
         }
-        let minWidths: [CGFloat] = (0 ..< measureCount).map { i in // swiftlint:disable:this closure_body_length
+        // The collapsed-run override is a PROJECTION of the cached width,
+        // never the cached width itself. `Entry.minWidth` means "this
+        // measure's natural width"; the override means "what it is drawn at
+        // under the CURRENT multi-measure-rest plan", which is an output.
+        // Storing the output and then feeding it back in as the next call's
+        // baseline destroys the natural width for good: the plan is
+        // deliberately not part of the entry's predicate, so a measure that
+        // has once been a run interior would keep width 0 on every later hit
+        // — including after the run splits or the policy is switched off.
+        // So the entry always stores the PRE-override width, and the override
+        // is applied only to the value this closure RETURNS.
+        let cachedMinWidths: [CGFloat] = (0 ..< measureCount).map { i in
             let measuresAt = staves.map { staff in
                 i < staff.measures.count ? staff.measures[i] : nil
             }
@@ -77,27 +88,12 @@ extension LayoutEngine {
                prior.measures == measuresAt,
                prior.measureDuration == durationAt
             {
-                // Cache hit: copy the prior entry forward, then apply
-                // the collapsed-run override so subsequent reads see
-                // the correct width directly from the cache.
-                let overridden = collapsedOverride(for: i, baseline: prior.minWidth)
-                if overridden != prior.minWidth {
-                    // Rebuild entry with the overridden width so
-                    // subsequent cache reads see the collapsed value.
-                    context.cache?.entries[i] = LayoutCache.Entry(
-                        measures: prior.measures,
-                        sp: prior.sp,
-                        division: prior.division,
-                        measureDuration: prior.measureDuration,
-                        minWidth: overridden,
-                        tickAggregate: prior.tickAggregate,
-                        placements: prior.placements,
-                    )
-                } else {
-                    context.cache?.entries[i] = prior
-                }
+                // Cache hit: copy the prior entry forward verbatim. Its
+                // `minWidth` is the natural width, so it stays valid under
+                // any plan — only the returned value is overridden.
+                context.cache?.entries[i] = prior
                 context.cache?.widthHits += 1
-                return overridden
+                return collapsedOverride(for: i, baseline: prior.minWidth)
             }
             context.cache?.widthMisses += 1
             let baseHeader = computeHeaderSchedule(
@@ -115,18 +111,43 @@ extension LayoutEngine {
                 division: division,
                 measureDuration: durationAt,
             )
-            let overridden = collapsedOverride(for: i, baseline: result.width)
             context.cache?.entries[i] = LayoutCache.Entry(
                 measures: measuresAt,
                 sp: sp,
                 division: division,
                 measureDuration: durationAt,
-                minWidth: overridden,
+                minWidth: result.width,
                 tickAggregate: result.aggregate,
                 placements: [:],
             )
-            return overridden
+            return collapsedOverride(for: i, baseline: result.width)
         }
+
+        // Cancellation naturals widen a measure that the per-measure
+        // width cache cannot see them in — the naturals come from the
+        // PRECEDING key, which is deliberately not part of that cache's
+        // predicate. Add their advance outside the cache, exactly as
+        // `synthHeaderOverhead` is added outside it for a system head.
+        // Collapsed multi-measure-rest bars keep their override width
+        // (a run never contains a key change).
+        let cancellationWidths = cancellationNaturalWidths(
+            staves: staves, metrics: context.metrics,
+        )
+        let minWidths: [CGFloat] = cachedMinWidths.indices.map { i in
+            guard plan.runLength(startingAt: i) == nil,
+                  !plan.isInteriorOfRun(i),
+                  i < cancellationWidths.count
+            else { return cachedMinWidths[i] }
+            return cachedMinWidths[i] + cancellationWidths[i]
+        }
+
+        // What each possible system boundary would announce at its
+        // trailing edge, and how much room that takes. Indexed by the
+        // measure a system would END at, so the entry a break consults is
+        // driven by the measure that would OPEN the next system.
+        let courtesies = trailingCourtesies(
+            staves: staves, metrics: context.metrics,
+        )
 
         // Clef state persists ACROSS systems: engraving convention
         // redraws the currently active clef at the start of every
@@ -297,9 +318,52 @@ extension LayoutEngine {
                     break
                 }
             }
+            // The system's trailing edge announces the next system's
+            // opening signature change. The inner loop above filled the
+            // system without knowing that, so give the announcement back
+            // its room here: drop trailing measures until it fits.
+            // Bounded by the one-measure floor — a lone measure keeps its
+            // system even when the announcement overflows, exactly as the
+            // hard ceiling lets a single over-wide measure through.
+            if context.options.wrapToViewWidth {
+                while cursor - systemStart > 1,
+                      let courtesy = courtesies[cursor - 1],
+                      widthSoFar + courtesy.width > contentAvail
+                {
+                    // Step back one DRAWN measure: past a whole
+                    // multi-measure-rest run rather than into the middle
+                    // of one, whose interiors carry no width and emit
+                    // nothing without their run-start.
+                    var candidate = cursor - 1
+                    while candidate > systemStart,
+                          plan.isInteriorOfRun(candidate)
+                    {
+                        candidate -= 1
+                    }
+                    guard candidate > systemStart else { break }
+                    for idx in candidate ..< cursor {
+                        widthSoFar -= minWidths[idx]
+                    }
+                    cursor = candidate
+                }
+            }
+            // `courtesies` is nil at the score's last measure, so a
+            // system that runs to the end announces nothing.
+            let trailingCourtesy = courtesies[cursor - 1]
             var widthsSlice = Array(minWidths[systemStart ..< cursor])
             if !widthsSlice.isEmpty {
                 widthsSlice[0] += firstHeaderBoost
+            }
+            // Reserve the announcement on the last measure that actually
+            // draws — a multi-measure-rest run's interior indices carry
+            // width 0 and emit nothing, so the reservation belongs on the
+            // run's start instead.
+            if let courtesy = trailingCourtesy,
+               let last = widthsSlice.indices.last(where: {
+                   !plan.isInteriorOfRun(systemStart + $0)
+               })
+            {
+                widthsSlice[last] += courtesy.width
             }
             let stretched: [CGFloat]
             if context.options.wrapToViewWidth {
@@ -330,6 +394,7 @@ extension LayoutEngine {
                 isFirstSystem: isFirstSystem,
                 activeClefsIn: activeClefsIn,
                 activeKeysIn: activeKeysIn,
+                trailingCourtesy: trailingCourtesy,
                 context: context,
             )
             let system: LayoutSystem
@@ -351,6 +416,7 @@ extension LayoutEngine {
                     widths: stretched,
                     systemOriginY: 0,
                     isFirstSystem: isFirstSystem,
+                    trailingCourtesy: trailingCourtesy,
                     activeClefs: &activeClefs,
                     activeKeys: &activeKeys,
                     context: context,
@@ -406,6 +472,7 @@ extension LayoutEngine {
         isFirstSystem: Bool,
         activeClefsIn: [NotatedClef],
         activeKeysIn: [Int],
+        trailingCourtesy: TrailingCourtesy?,
         context: RenderContext,
     ) -> LayoutCache.SystemInputs {
         let allStaves = context.score.allStaves
@@ -417,6 +484,16 @@ extension LayoutEngine {
                     ? staff.measures[abs] : nil
             }
         }
+        // The lane can be shorter than the measure count (a score that
+        // carries no system elements leaves it empty), so index it
+        // defensively rather than assuming it parallels the measures —
+        // the same guard `buildSystem` uses when it reads the lane.
+        let systemMeasuresForRange: [SystemMeasure] = (0 ..< measureCount)
+            .map { local in
+                let abs = measureStart + local
+                return abs < context.score.systemMeasures.count
+                    ? context.score.systemMeasures[abs] : SystemMeasure()
+            }
         let melismaForRange: [[[MelismaContinuation]]]
         melismaForRange = (0 ..< staves.count).map { staffIdx in
             (0 ..< measureCount).map { local in
@@ -450,14 +527,29 @@ extension LayoutEngine {
             availableWidth: context.availableWidth,
             division: context.score.division,
             measuresPerStaff: measuresPerStaff,
+            systemMeasuresForRange: systemMeasuresForRange,
             effectiveMelismaTicks: context.effectiveMelismaTicks,
             melismaContinuationsForRange: melismaForRange,
             drumLineMaps: drumLineMaps,
+            partLabels: partLabels(of: context.score, isFirstSystem: isFirstSystem),
             totalMeasures: staves.first?.measures.count ?? 0,
             options: context.options,
             overlappingSpannerAnchors: overlappingAnchors,
             ottavaNumbersOnly: context.score.style.ottavaNumbersOnly,
+            trailingCourtesy: trailingCourtesy,
         )
+    }
+
+    /// The part label each part contributes to a system — the same resolution
+    /// `buildSystem` performs to draw it and `labelWidth` performs to reserve
+    /// the opening indent, spelled once here so the cache key cannot disagree
+    /// with either of them.
+    static func partLabels(of score: Score, isFirstSystem: Bool) -> [String] {
+        score.parts.map { part in
+            isFirstSystem
+                ? (part.instrument.longName ?? part.trackName ?? "")
+                : (part.instrument.shortName ?? "")
+        }
     }
 
     static func stretchWidths(

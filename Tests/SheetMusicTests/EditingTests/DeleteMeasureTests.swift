@@ -5,8 +5,11 @@ import Testing
 struct DeleteMeasureTests {
     private func threeBarScore() -> Score {
         Score.blank(BlankScoreTemplate(
-            title: "t", instrumentID: "piano",
-            staves: [.init(clefType: "G"), .init(clefType: "F")],
+            title: "t",
+            parts: [.init(
+                instrumentID: "piano",
+                staves: [.init(clefType: "G"), .init(clefType: "F")],
+            )],
             concertKey: -2, timeNumerator: 6, timeDenominator: 8,
             tempoBPM: 120, measureCount: 3,
         ))
@@ -126,7 +129,8 @@ struct DeleteMeasureTests {
     @Test("deleting the only measure refuses")
     func lastMeasure() {
         var score = Score.blank(BlankScoreTemplate(
-            title: "t", instrumentID: "piano", staves: [.init(clefType: "G")], measureCount: 1,
+            title: "t", parts: [.init(instrumentID: "piano", staves: [.init(clefType: "G")])],
+            measureCount: 1,
         ))
         #expect(throws: SheetMusicError.self) {
             try DeleteMeasure(measureIndex: 0).apply(to: &score)

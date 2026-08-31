@@ -5,7 +5,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFImporterDiagnosticsTests {
+    struct PDFImporterDiagnosticsTests {
         /// `PDFImportOptions.diagnostics` is `@Sendable`, so a captured
         /// `var` array can't be mutated from inside the closure under
         /// strict concurrency. A reference-typed sink sidesteps that —

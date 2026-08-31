@@ -43,25 +43,11 @@ public enum PDFImporter {
         // display flips; only consumed on the geometry-capture path.
         geometry?.setPageSizes(pageSizes)
         guard !walked.glyphs.isEmpty || !walked.texts.isEmpty || !walked.paths.isEmpty else {
-            // §9: a document the importer cannot read has to say why and name
-            // the knob that might fix it. Deliberately NOT a new pass over the
-            // pages asking "is this a scan?" — that would make the default
-            // options do work they do not do today, which is exactly what the
-            // byte-identical vector corpus gate exists to detect. This fires
-            // only where the importer was already about to throw.
-            let configured = options.omrTileClassifier != nil || options.omrDetector != nil
-            let hint = configured
-                ? "PDFImporter: no glyphs/paths found, and PDFImportOptions.omrTileClassifier "
-                + "read nothing from these pages either."
-                : "PDFImporter: no glyphs/paths found. If this is a scanned PDF, set "
-                + "PDFImportOptions.omrTileClassifier to read its pages as images."
-            options.diagnostics?(PDFImportDiagnostic(
-                severity: .warning, location: "document", message: hint,
-            ))
-            throw malformedPDF(code: "pdf.content.empty", message: hint)
+            throw refuseEmptyContent(options: options)
         }
         let classified = walked.glyphs
         emitUnknownGlyphDiagnostics(classified, options: options)
+        emitUndecodedCodeDiagnostics(walked.undecodedCodes, options: options)
 
         // Detect every page's staves first so the system clusterer can use a
         // DOCUMENT-WIDE ensemble size (staves per system). MuseScore stacks
@@ -196,6 +182,25 @@ public enum PDFImporter {
         }
     }
 
+    /// §9: a document the importer cannot read has to say why and name the
+    /// knob that might fix it. Deliberately NOT a new pass over the pages
+    /// asking "is this a scan?" — that would make the default options do work
+    /// they do not do today, which is exactly what the byte-identical vector
+    /// corpus gate exists to detect. This fires only where the importer was
+    /// already about to throw.
+    static func refuseEmptyContent(options: PDFImportOptions) -> SheetMusicError {
+        let configured = options.omrTileClassifier != nil || options.omrDetector != nil
+        let hint = configured
+            ? "PDFImporter: no glyphs/paths found, and PDFImportOptions.omrTileClassifier "
+            + "read nothing from these pages either."
+            : "PDFImporter: no glyphs/paths found. If this is a scanned PDF, set "
+            + "PDFImportOptions.omrTileClassifier to read its pages as images."
+        options.diagnostics?(PDFImportDiagnostic(
+            severity: .warning, location: "document", message: hint,
+        ))
+        return malformedPDF(code: "pdf.content.empty", message: hint)
+    }
+
     /// The `info` diagnostic owed to a caller who set `omrTileClassifier` on
     /// an entry point that does not rasterize. A knob that silently does
     /// nothing is this repository's own silent-drop smell; only
@@ -212,6 +217,39 @@ public enum PDFImporter {
                 + "PDFImportOptions.omrTileClassifier is ignored here. Use "
                 + "PDFImporter.parse(pdfData:options:) to read scanned pages.",
         ))
+    }
+
+    /// Report every show-string code the front-end had to drop — one
+    /// `.warning` per page and font, never one per glyph.
+    ///
+    /// A drop here is content leaving the decode: the glyph is not merely
+    /// unclassified, it is gone, taking its position with it. That used to
+    /// happen in silence, which is how a whole score could import as 91
+    /// measures with zero notes and zero diagnostics.
+    static func emitUndecodedCodeDiagnostics(
+        _ tallies: [UndecodedCodeTally],
+        options: PDFImportOptions,
+    ) {
+        guard let cb = options.diagnostics else { return }
+        for t in tallies {
+            var dropped: [String] = []
+            if t.unmappedCodes > 0 {
+                dropped.append("\(t.unmappedCodes) show-string code(s) the "
+                    + "font's /ToUnicode CMap does not map")
+            }
+            if t.truncatedBytes > 0 {
+                dropped.append("\(t.truncatedBytes) trailing byte(s) left by a "
+                    + "show string that ended part-way through a code")
+            }
+            guard !dropped.isEmpty else { continue }
+            cb(PDFImportDiagnostic(
+                severity: .warning,
+                location: "page \(t.pageIndex), font \(t.fontName)",
+                message: "Dropped " + dropped.joined(separator: " and "),
+                context: "first dropped code 0x"
+                    + String(t.firstCode, radix: 16, uppercase: true),
+            ))
+        }
     }
 
     private static func malformedPDF(code: String, message: String) -> SheetMusicError {

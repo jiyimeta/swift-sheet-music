@@ -81,6 +81,13 @@ public enum ScoreLoader {
             // genuine `.mscz` never pays for the second attempt.
             do {
                 return try MSCZReader.parse(bytes)
+            } catch let error as SheetMusicError where error.isMuseScoreDocumentFault {
+                // The container did yield a `<museScore>` document and the
+                // MuseScore reader is the one that has an opinion about it.
+                // Trying MXL anyway replaces that opinion with "no
+                // <score-partwise>", which sends the caller looking for a
+                // MusicXML problem in a MuseScore file.
+                throw error
             } catch {
                 return try MusicXMLParser.parse(mxlData: bytes)
             }
@@ -107,5 +114,20 @@ public enum ScoreLoader {
             bytes: Data(contentsOf: url),
             sourceFilename: url.deletingPathExtension().lastPathComponent,
         )
+    }
+}
+
+extension SheetMusicError {
+    /// Whether this error says something about a MuseScore document
+    /// rather than about the container it arrived in.
+    ///
+    /// A `mscx.*` fault is only ever raised once the reader is looking
+    /// at a parsed `<museScore>` tree, so it positively identifies the
+    /// payload; a `.mxl` reaching the same code path fails on the
+    /// container or the missing main entry instead, with a `zip.*` or
+    /// `mscz.*` fault, and still deserves the MusicXML attempt.
+    fileprivate var isMuseScoreDocumentFault: Bool {
+        guard case let .malformedScore(fault) = self else { return false }
+        return fault.code.hasPrefix("mscx.")
     }
 }

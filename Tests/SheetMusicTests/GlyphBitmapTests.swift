@@ -6,7 +6,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct GlyphBitmapTests {
+    struct GlyphBitmapTests {
         @Test func normalizesAPathToACenteredCoverageBitmap() {
             // A filled square occupying the left half of its own bbox must
             // normalize to a full-coverage bitmap (normalization scales the

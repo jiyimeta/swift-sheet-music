@@ -5,8 +5,11 @@ import SheetMusicXMLTools
 extension Note {
     /// Build a `<Note>` element. Emits pitch / tpc / optional
     /// accidental / optional headType, plus `<Spanner type="Tie">`
-    /// markers for `tieForward` / `tieBack` and a
-    /// `<Spanner type="Glissando">` block when `glissando` is set.
+    /// markers for `tieForward` / `tieBack`, a
+    /// `<Spanner type="Glissando">` block when `glissando` is set, and a
+    /// `<Spanner type="GuitarBend">` pair for `guitarBend` /
+    /// `guitarBendBack` — see `guitarBendSpanners` — and a `<Bend>` for
+    /// the pre-4.2 `legacyBend`.
     /// `chordLines` are the owning chord's `ChordLine`s whose
     /// `noteIndex` points at *this* note. MuseScore nests those inside
     /// the `<Note>` (`TWrite::write(const Note*, …)` walks
@@ -15,30 +18,21 @@ extension Note {
     func encode(
         tieForwardEndpoint: TieEndpoint? = nil,
         tieBackEndpoint: TieEndpoint? = nil,
+        guitarBendForwardEndpoint: TieEndpoint? = nil,
+        guitarBendBackEndpoint: TieEndpoint? = nil,
         options: MSCXEncoderOptions = .init(),
         drumDefaultHead: String? = nil,
         chordLines: [ChordLine] = [],
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        if let accidental {
-            var accChildren: [XMLTreeNode] = [
-                XMLTreeNode(name: "subtype", text: accidental.mscxSubtype),
-            ]
-            if accidentalBracket != .none {
-                accChildren.append(XMLTreeNode(
-                    name: "bracket",
-                    text: String(accidentalBracket.rawValue),
-                ))
-            }
-            // MuseScore writes `<role>` only for USER accidentals; AUTO
-            // is the default and omitted, so existing output is unchanged.
-            if accidentalRole == .user {
-                accChildren.append(XMLTreeNode(
-                    name: "role",
-                    text: String(accidentalRole.rawValue),
-                ))
-            }
-            children.append(XMLTreeNode(name: "Accidental", children: accChildren))
+        appendAccidental(into: &children)
+        // The legacy `<Bend>` is an `el()` item, which MuseScore writes
+        // immediately after `<Accidental>` and before the tie spanners —
+        // `TWrite::write(const Note*, …)` (`rw/write/twrite.cpp:2328-2336`)
+        // walks `item->el()` right there. Both generations agree, so this
+        // is not branched on `options.targetVersion`.
+        if let legacyBend {
+            children.append(legacyBend.encode())
         }
         if tieForward != nil {
             children.append(tieSpanner(
@@ -56,6 +50,16 @@ extension Note {
         appendParentheses(into: &children, targetVersion: options.targetVersion)
         children.append(XMLTreeNode(name: "pitch", text: String(pitch)))
         children.append(XMLTreeNode(name: "tpc", text: String(tpc)))
+        // `<tpc>` is the concert (sounding) tonal pitch class; `<tpc2>` is the written one, which
+        // MuseScore writes only when the two differ — i.e. on a transposing part. The decoder
+        // recomputes it from the instrument, so this is write-only; it exists so MuseScore Studio
+        // shows the part at written pitch instead of respelling it from scratch.
+        // C++: `TWrite::write(const Note*, …)`, `Pid::TPC2`.
+        if options.writtenFifthsOffset != 0 {
+            children.append(XMLTreeNode(
+                name: "tpc2", text: String(tpc + options.writtenFifthsOffset),
+            ))
+        }
         if let headType {
             children.append(XMLTreeNode(name: "head", text: headType))
         } else if let drumDefaultHead {
@@ -68,12 +72,54 @@ extension Note {
         if !play {
             children.append(XMLTreeNode(name: "play", text: "0"))
         }
+        // Tablature position, immediately after `<play>`: MuseScore's
+        // property order is `… USER_VELOCITY, PLAY, TUNING, FRET, STRING,
+        // …, HEAD_TYPE, …` (`TWrite::write(const Note*, …)`,
+        // `rw/write/twrite.cpp:2378-2380`). `<veloType>` is appended below
+        // rather than here because both generations write it far later —
+        // MuseScore 3 after `HEAD_TYPE`, MuseScore 4 not at all.
+        if let fret {
+            children.append(XMLTreeNode(name: "fret", text: String(fret)))
+        }
+        if let string {
+            children.append(XMLTreeNode(name: "string", text: String(string)))
+        }
         appendVelocityType(into: &children, targetVersion: options.targetVersion)
         for chordLine in chordLines {
             children.append(chordLine.encode(options: options))
         }
+        children.append(contentsOf: guitarBendSpanners(
+            forwardEndpoint: guitarBendForwardEndpoint,
+            backEndpoint: guitarBendBackEndpoint,
+        ))
         children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Note", children: children)
+    }
+
+    /// Append the `<Accidental>` block, the first thing MuseScore writes
+    /// inside a `<Note>`. Split out of `encode` verbatim — same elements,
+    /// same order, same elisions — to keep that function within the
+    /// package's body-length budget.
+    private func appendAccidental(into children: inout [XMLTreeNode]) {
+        guard let accidental else { return }
+        var accChildren: [XMLTreeNode] = [
+            XMLTreeNode(name: "subtype", text: accidental.mscxSubtype),
+        ]
+        if accidentalBracket != .none {
+            accChildren.append(XMLTreeNode(
+                name: "bracket",
+                text: String(accidentalBracket.rawValue),
+            ))
+        }
+        // MuseScore writes `<role>` only for USER accidentals; AUTO
+        // is the default and omitted, so existing output is unchanged.
+        if accidentalRole == .user {
+            accChildren.append(XMLTreeNode(
+                name: "role",
+                text: String(accidentalRole.rawValue),
+            ))
+        }
+        children.append(XMLTreeNode(name: "Accidental", children: accChildren))
     }
 
     /// Append `<velocity>`, skipped at the default of 0.
@@ -132,13 +178,20 @@ extension Note {
         )
     }
 
-    private func locationElement(from endpoint: TieEndpoint) -> XMLTreeNode {
+    /// Serialize one endpoint's `<location>`. Shared by ties and guitar
+    /// bends — MuseScore has a single `Location` reader/writer pair serving
+    /// every connector type, neither of which branches on the spanner.
+    func locationElement(from endpoint: TieEndpoint) -> XMLTreeNode {
         // Element order matches MuseScore Studio's own writer:
         // `<measures>` precedes `<fractions>`, which precede `<grace>`,
-        // which precedes `<notes>` (`TWrite::write(const Location*, …)`,
-        // `rw/write/twrite.cpp:2229-2243`). MuseScore's parser appears
-        // tolerant of any order, but matching upstream keeps diffs
-        // against MuseScore-saved files clean.
+        // which precedes `<notes>` — version-independent, because MuseScore
+        // has a single `Location` writer serving every connector type and it
+        // is unchanged between 3.6.2 (`Location::write`,
+        // `libmscore/location.cpp:52-63`) and master
+        // (`TWrite::write(const Location*, …)`, `rw/write/twrite.cpp:2229-2243`).
+        // `Spanner.relativeLocationChildren` (`MSCXEncoder+Spanner.swift`)
+        // writes the same order for the same reason; the two stay separate
+        // only because this one also emits `<grace>` / `<notes>`.
         var children: [XMLTreeNode] = []
         switch endpoint.location {
         case let .sameMeasure(fractions):
@@ -182,6 +235,19 @@ extension Note {
             // type, GuitarBend and Tie alike; neither branches on which
             // spanner it's serializing.
             children.append(XMLTreeNode(name: "grace", text: String(index)))
+        case let .graceOfDistantChord(measures, fractions, graceIndex):
+            // Same field order and same default elision as the two cases
+            // above — `<measures>` then `<fractions>` then `<grace>` — only
+            // with all three present at once.
+            if let measures {
+                children.append(XMLTreeNode(
+                    name: "measures", text: String(measures),
+                ))
+            }
+            if let fractions, fractions.numerator != 0 {
+                children.append(fractionsNode(fractions))
+            }
+            children.append(XMLTreeNode(name: "grace", text: String(graceIndex)))
         }
         // `<notes>` elides at its `0` default, so a tie between two
         // notes that share a pitch rank — every tie whose endpoints are
@@ -196,7 +262,7 @@ extension Note {
         return XMLTreeNode(name: "location", children: children)
     }
 
-    private func fractionsNode(_ f: Fraction) -> XMLTreeNode {
+    func fractionsNode(_ f: Fraction) -> XMLTreeNode {
         XMLTreeNode(
             name: "fractions",
             text: "\(f.numerator)/\(f.denominator)",
@@ -251,39 +317,54 @@ extension Note {
     }
 }
 
-extension Glissando {
-    /// Build the `<Glissando>` payload child of a
-    /// `<Spanner type="Glissando">`. Mirrors MuseScore 4's
-    /// `TWrite::write(const Glissando*, …)` — uppercase style token,
-    /// `easeInSpin` / `easeOutSpin` integers, `subtype` 0/1 for
-    /// straight/wavy, optional `<text>`.
+extension LegacyBend {
+    /// Build the `<Bend>` element. Field order mirrors both writers —
+    /// points, then the styled properties, then `<play>`, which is written
+    /// only when it is false because `writeProperty(Pid::PLAY)` elides the
+    /// default. The four styled properties are likewise absent unless the
+    /// user overrode them, so an untouched bend writes back as nothing but
+    /// its curve.
+    /// C++: `TWrite::write(const Bend*, …)` (`rw/write/twrite.cpp:825`),
+    /// 3.6.2 `Bend::write` (`libmscore/bend.cpp:285`). The two are
+    /// identical, so no target-version branch exists here.
+    ///
+    /// The point attributes go in as a dictionary, the same way every other
+    /// attribute-carrying encoder in this module writes one (see the
+    /// `<color r= g= b= a=>` writers): `XMLTreeSerializer` emits attributes
+    /// in sorted key order, so the rendered element reads
+    /// `<point pitch= time= vibrato=/>` rather than MuseScore's
+    /// `time`/`pitch`/`vibrato`. Attribute order carries no meaning in XML
+    /// and MuseScore's reader looks each one up by name; byte parity with
+    /// Studio's own writer is a stated non-goal of the serializer.
     func encode() -> XMLTreeNode {
-        var children: [XMLTreeNode] = [
-            XMLTreeNode(
-                name: "subtype",
-                text: visualType == .wavy ? "1" : "0",
-            ),
-            XMLTreeNode(name: "glissandoStyle", text: style.mscxToken),
-            XMLTreeNode(name: "easeInSpin", text: String(easeIn)),
-            XMLTreeNode(name: "easeOutSpin", text: String(easeOut)),
-        ]
-        if let text, !text.isEmpty {
-            children.append(XMLTreeNode(name: "text", text: text))
+        var children: [XMLTreeNode] = points.map { point in
+            XMLTreeNode(name: "point", attributes: [
+                "time": String(point.time),
+                "pitch": String(point.pitch),
+                "vibrato": String(point.vibrato),
+            ])
         }
-        return XMLTreeNode(name: "Glissando", children: children)
-    }
-}
-
-extension Glissando.Style {
-    /// MuseScore writes these as ALL-CAPS tokens; the decoder accepts
-    /// any case but we mirror the writer's output.
-    var mscxToken: String {
-        switch self {
-        case .chromatic: "CHROMATIC"
-        case .diatonic: "DIATONIC"
-        case .whiteKeys: "WHITE_KEYS"
-        case .blackKeys: "BLACK_KEYS"
-        case .portamento: "PORTAMENTO"
+        if let lineWidth {
+            children.append(XMLTreeNode(
+                name: "lineWidth", text: formatDouble(lineWidth),
+            ))
         }
+        if let fontFace {
+            children.append(XMLTreeNode(name: "fontFace", text: fontFace))
+        }
+        if let fontSize {
+            children.append(XMLTreeNode(
+                name: "fontSize", text: formatDouble(fontSize),
+            ))
+        }
+        if let fontStyle {
+            children.append(XMLTreeNode(
+                name: "fontStyle", text: String(fontStyle),
+            ))
+        }
+        if !play {
+            children.append(XMLTreeNode(name: "play", text: "0"))
+        }
+        return XMLTreeNode(name: "Bend", children: children)
     }
 }

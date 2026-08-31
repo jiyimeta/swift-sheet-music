@@ -141,9 +141,15 @@ public struct ZipReader {
         if (gpFlags & 0x0001) != 0 {
             throw ZipError.unsupportedFeature("encrypted entry")
         }
-        if (gpFlags & 0x0008) != 0 {
-            throw ZipError.unsupportedFeature("data descriptor (bit 3)")
-        }
+        // General-purpose bit 3 (data descriptor) needs no special
+        // handling here. Streaming writers that set it — MuseScore's
+        // Qt-based `MQZipWriter` among them — zero the CRC and the two
+        // sizes in the *local* header and repeat them in a descriptor
+        // after the payload, but the central directory record this
+        // method reads is always written last and always carries the
+        // real values. `locatePayload` takes only the variable-length
+        // field widths from the local header, so the deferred fields
+        // are never consulted.
         if compSize == 0xFFFF_FFFF || uncompSize == 0xFFFF_FFFF
             || localHeaderOffset == 0xFFFF_FFFF
         {

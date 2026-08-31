@@ -248,4 +248,35 @@ struct ScoreFingerprintTests {
         score[slot] = .chord(chord)
         #expect(score.stableFingerprint != before)
     }
+
+    // MARK: - Measure irregularity and the system lane (M3)
+
+    @Test("a measure's actualLength is in the hash")
+    func actualLengthMovesFingerprint() {
+        let nominal = EditingFixtures.fourQuarterRests()
+        var pickup = EditingFixtures.fourQuarterRests()
+        pickup.parts[0].staves[0].measures[0].actualLength = Fraction(numerator: 1, denominator: 4)
+        #expect(nominal.stableFingerprint != pickup.stableFingerprint)
+    }
+
+    @Test("a measure's irregular flag is in the hash")
+    func irregularMovesFingerprint() {
+        let counted = EditingFixtures.fourQuarterRests()
+        var uncounted = EditingFixtures.fourQuarterRests()
+        uncounted.parts[0].staves[0].measures[0].irregular = true
+        #expect(counted.stableFingerprint != uncounted.stableFingerprint)
+    }
+
+    @Test("a system-lane element is in the hash")
+    func systemMeasureElementMovesFingerprint() {
+        var markedA = EditingFixtures.fourQuarterRests()
+        var markedB = EditingFixtures.fourQuarterRests()
+        markedA.systemMeasures = [SystemMeasure(elements: [
+            PositionedSystemElement(position: .start, element: .rehearsalMark(RehearsalMark(text: "A"))),
+        ])]
+        markedB.systemMeasures = [SystemMeasure(elements: [
+            PositionedSystemElement(position: .start, element: .rehearsalMark(RehearsalMark(text: "B"))),
+        ])]
+        #expect(markedA.stableFingerprint != markedB.stableFingerprint)
+    }
 }

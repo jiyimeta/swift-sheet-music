@@ -1,10 +1,10 @@
 import SheetMusicFoundation
 import Wirelet
 
-/// Score metadata payload returned across JNI. The wire format is
-/// `i32 titleByteLen + UTF-8 + i32 composerByteLen + UTF-8` per
-/// `@WireFormat`'s synthesized encoding (legacy positional shape;
-/// switches to TLV in Task 3).
+/// Score metadata payload returned across JNI. The bytes are wirelet
+/// TLV per `@WireFormat`'s synthesized encoding: for each field, a tag
+/// varint (`tag << 3 | wireType`) followed by a varint byte length and
+/// the UTF-8 payload.
 @WireFormat
 package struct ScoreMetadataWire {
     package var title: String

@@ -36,7 +36,7 @@
     /// so every score parsed from a real MuseScore file already has ascending
     /// chords. `parserAgreesThatChordNotesAscend` below pins that against the
     /// repository's own fixtures. The importer was the outlier.
-    @MainActor struct PDFImporterChordNoteOrderTests {
+    struct PDFImporterChordNoteOrderTests {
         private nonisolated static var bravuraAvailable: Bool {
             guard #available(macOS 15.0, *) else { return false }
             return BravuraFont.register
