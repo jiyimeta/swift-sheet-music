@@ -56,7 +56,11 @@
             let dump = Self.env("OMR_MSCZ_DIVERGENCE") == "1"
 
             var vectorOptions = PDFImportOptions()
-            vectorOptions.diagnostics = nil
+            // Attached to BOTH modes, deliberately. A diagnostic the importer
+            // emits is emitted for every caller, so a new one has to be shown
+            // NOT to fire on ordinary vector documents before it ships — and
+            // this corpus is the only place that can be measured.
+            vectorOptions.diagnostics = Self.diagnosticSink(mode: "vector")
             let vector = MSCZGroundTruthSweep.sweep(
                 cases: cases, mode: .vector, scanDPI: scanDPI, options: vectorOptions,
                 dumpDivergence: dump,
@@ -64,14 +68,31 @@
             print(MSCZGroundTruthSweep.summaryLine(mode: .vector, totals: vector))
 
             var rasterOptions = PDFImportOptions()
-            rasterOptions.diagnostics = nil
+            rasterOptions.diagnostics = Self.diagnosticSink(mode: "raster")
             rasterOptions.omrTileClassifier = try await CoreMLTileClassifier()
             rasterOptions.omrRenderDPI = Self.doubleEnv("OMR_MSCZ_RENDER_DPI", default: 300)
+            if Self.env("OMR_MSCZ_CENSUS") == "1" {
+                for item in cases {
+                    try MSCZGroundTruthSweep.glyphCensus(
+                        item, scanDPI: scanDPI, options: rasterOptions,
+                    )
+                }
+            }
             let raster = MSCZGroundTruthSweep.sweep(
                 cases: cases, mode: .raster, scanDPI: scanDPI, options: rasterOptions,
                 dumpDivergence: dump,
             )
             print(MSCZGroundTruthSweep.summaryLine(mode: .raster, totals: raster))
+        }
+
+        /// `nil` unless asked for: the sweep's own rows are the output, and a
+        /// 657-score corpus emits enough diagnostics to bury them.
+        static func diagnosticSink(mode: String) -> (@Sendable (PDFImportDiagnostic) -> Void)? {
+            guard env("OMR_MSCZ_DIAGNOSTICS") == "1" else { return nil }
+            return { diagnostic in
+                print("[mscz-diag][\(mode)] \(diagnostic.location): \(diagnostic.message)"
+                    + " | \(diagnostic.context ?? "")")
+            }
         }
 
         /// The counterfactual, run on a REAL corpus document before either

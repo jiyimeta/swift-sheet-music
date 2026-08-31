@@ -57,6 +57,8 @@ extension PDFImporter {
     static func readKey(
         sorted: [ClassifiedGlyph], clef: Clef, yLines: [CGFloat],
         runningKey: KeySignature,
+        diagnostics: ((PDFImportDiagnostic) -> Void)? = nil,
+        location: String = "",
     ) -> KeySignature? {
         guard let anchor = staffAnchor(clef: clef, yLines: yLines),
               anchor.lineSpacing > 0
@@ -95,6 +97,16 @@ extension PDFImporter {
             flatAccs.map { (sa: $0.sa, x: $0.x) },
             ladder: trebleFlatLadder.map { $0 + shift },
             lineSpacing: anchor.lineSpacing,
+        )
+        reportRefusedBlock(
+            sharpAccs.map { (sa: $0.sa, x: $0.x) }, matched: sharpN, kind: "sharp",
+            ladder: trebleSharpLadder.map { $0 + shift }, anchor: anchor,
+            diagnostics: diagnostics, location: location,
+        )
+        reportRefusedBlock(
+            flatAccs.map { (sa: $0.sa, x: $0.x) }, matched: flatN, kind: "flat",
+            ladder: trebleFlatLadder.map { $0 + shift }, anchor: anchor,
+            diagnostics: diagnostics, location: location,
         )
         // No new sharp/flat block: the only remaining key event is a
         // naturals-only cancellation of the running key to C major.
@@ -217,6 +229,48 @@ extension PDFImporter {
     /// accidentals pack ~one space apart). Stops at the first position failing
     /// either test, so a trailing local accidental beyond the block (wider x
     /// gap, or off the ladder) is never absorbed.
+    /// Say when a run that LOOKS like a key signature was turned down on
+    /// position — wholly, or truncated part-way.
+    ///
+    /// `ladderPrefixCount` compares the rounded step index with `==`, so an
+    /// accidental half a line spacing off its canonical position does not
+    /// weaken the match, it ends it. From a vector PDF that never happens: a
+    /// glyph's origin is the font's own. From a raster front-end the origin
+    /// carries error, and the outcome is a score whose key is absent or short
+    /// with NOTHING recorded — the reader cannot tell "there was no key
+    /// signature" from "there was one and its accidentals missed the ladder",
+    /// which are opposite bugs. Naming both the positions seen and the ones
+    /// expected turns that into a two-second reading.
+    ///
+    /// Scoped to a COHESIVE RUN OF AT LEAST TWO, matching the reader's own
+    /// notion of a block: a lone leading accidental is a local accidental far
+    /// more often than a one-accidental key (`pairsWithFollowingNotehead`
+    /// guards exactly that), and reporting it would fire on ordinary music.
+    private static func reportRefusedBlock(
+        _ accs: [(sa: Int, x: CGFloat)], matched: Int, kind: String,
+        ladder: [Int], anchor: StaffAnchor,
+        diagnostics: ((PDFImportDiagnostic) -> Void)?, location: String,
+    ) {
+        guard let diagnostics else { return }
+        var run = 0
+        var prevX: CGFloat?
+        for acc in accs {
+            if let prevX, acc.x - prevX > anchor.lineSpacing * 1.6 { break }
+            run += 1
+            prevX = acc.x
+        }
+        guard run >= 2, run > matched else { return }
+        let seen = accs.prefix(run).map { String($0.sa) }.joined(separator: ",")
+        let expected = ladder.prefix(run).map(String.init).joined(separator: ",")
+        diagnostics(PDFImportDiagnostic(
+            severity: .warning, location: location,
+            message: "read \(matched) of \(run) leading \(kind)s as a key signature: "
+                + "the rest sit off the canonical ladder for this clef",
+            context: "steps above the bottom staff line — seen [\(seen)], "
+                + "ladder [\(expected)]",
+        ))
+    }
+
     private static func ladderPrefixCount(
         _ accs: [(sa: Int, x: CGFloat)], ladder: [Int], lineSpacing: CGFloat,
     ) -> Int {

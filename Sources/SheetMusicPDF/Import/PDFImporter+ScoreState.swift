@@ -40,6 +40,7 @@ extension PDFImporter {
             if let key = readKey(
                 sorted: sorted, clef: runningClef, yLines: measure.staffYLines,
                 runningKey: runningKey,
+                diagnostics: diagnostics, location: "\(location), measure \(i)",
             ) {
                 runningKey = key
                 events.append(.keySignature(key, atMeasureIndex: i))

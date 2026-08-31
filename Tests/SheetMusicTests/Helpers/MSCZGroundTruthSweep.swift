@@ -204,6 +204,61 @@
             }
         }
 
+        /// How many glyphs of each class each front-end saw on the same
+        /// document — the step BEFORE asking why a score came out wrong.
+        ///
+        /// A missing clef in the built score has two possible causes needing
+        /// fixes in unrelated places: the detector never saw the glyph, or it
+        /// saw it and something downstream refused it. Counting classes tells
+        /// them apart, and does it WITHOUT reconciling the two front-ends'
+        /// coordinate frames — the raster analysis frame and the PDF's page
+        /// space differ on a resampled page, so any position-based comparison
+        /// would need reframing first and would confound a frame bug with a
+        /// detection one. Counts need no frame at all.
+        ///
+        /// The vector walk is a legitimate truth here for exactly the reason
+        /// the sweep runs both modes: it reads the same document, and its
+        /// score against the `.mscz` is 0.99.
+        static func glyphCensus(_ item: Case, scanDPI: Double, options: PDFImportOptions) throws {
+            let vector = try PDFImporter.walkDocument(
+                PDFImporter.openDocument(Data(contentsOf: item.pdf)),
+            ).content.glyphs
+            var raster: [ClassifiedGlyph] = []
+            if let detector = try PDFImporter.rasterDetector(for: options) {
+                let scan = try PDFImporter.openDocument(
+                    MSCZScanSimulator.imageOnlyPDF(of: item.pdf, dpi: scanDPI),
+                )
+                for index in 0 ..< scan.pageCount {
+                    guard let page = scan.page(at: index)?.pageRef else { continue }
+                    try autoreleasepool {
+                        let bitmap = try PDFPageRasterizer.bitmap(page: page, dpi: scanDPI)
+                        raster += try RasterFrontEnd.page(
+                            bitmap: bitmap, pageIndex: index, detector: detector,
+                            diagnostics: nil,
+                        ).walked.glyphs
+                    }
+                }
+            }
+            printCensus(item, vector: vector, raster: raster)
+        }
+
+        private static func printCensus(
+            _ item: Case, vector: [ClassifiedGlyph], raster: [ClassifiedGlyph],
+        ) {
+            func histogram(_ glyphs: [ClassifiedGlyph]) -> [String: Int] {
+                var out: [String: Int] = [:]
+                for glyph in glyphs {
+                    out[OMRLabelClassNames.className(for: glyph.semantic), default: 0] += 1
+                }
+                return out
+            }
+            let (v, r) = (histogram(vector), histogram(raster))
+            let tag = "[mscz-census][\(item.name)]"
+            for name in Set(v.keys).union(r.keys).sorted() {
+                print("\(tag) class=\(name) vector=\(v[name] ?? 0) raster=\(r[name] ?? 0)")
+            }
+        }
+
         /// `n/a` rather than `0.0000` over an empty population, for the
         /// reason `OMRDetectorEvalHarness.printScoreSummary` gives: a zero
         /// that means "nothing was scored" reads as a real, terrible score.
