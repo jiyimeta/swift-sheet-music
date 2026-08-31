@@ -28,6 +28,9 @@
         private func pageState(fontSize: CGFloat = 30) -> PDFPageState {
             let state = PDFPageState(pageIndex: 0)
             state.fontSize = fontSize
+            // Identity-H's 2-byte codes are a property of the font's
+            // /Subtype, not of its CMap — see `PDFPageState.type0FontNames`.
+            state.activeFontIsType0 = true
             state.activeCMap = PDFImporter.ToUnicodeCMap(table: [
                 1: ["3"],
                 2: ["6"],

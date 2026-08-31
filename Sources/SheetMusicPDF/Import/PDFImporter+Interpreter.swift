@@ -28,6 +28,26 @@ struct WalkedContent {
     var texts: [TextGlyph]
     var paths: [PathSegment]
     var curves: [CurveArc] = []
+    /// What the front-end could NOT decode, so `buildScore` can report it —
+    /// see `UndecodedCodeTally`. Not part of the four content streams and
+    /// never read by a decode pass; it exists so a drop is never silent.
+    var undecodedCodes: [UndecodedCodeTally] = []
+}
+
+/// One page-and-font tally of show-string codes a front-end dropped because
+/// the font's `/ToUnicode` CMap does not map them.
+///
+/// Summarized per font rather than per glyph: a document whose font is read
+/// at the wrong code width misses on EVERY code, and one diagnostic per
+/// glyph would bury the caller in tens of thousands of lines.
+struct UndecodedCodeTally {
+    let pageIndex: Int
+    /// The `Tf` resource name (e.g. "F10") the codes were shown in.
+    let fontName: String
+    /// The first code that missed — enough to tell a wrong-width read
+    /// (a plausible-looking 2-byte value) from a genuine subset gap.
+    let firstCode: UInt32
+    var count: Int
 }
 
 // Content-stream interpreter core — the per-operator effect on `PageState`,
@@ -85,6 +105,9 @@ extension PDFPageState {
             // nil when the font has no usable /ToUnicode (e.g. ASCII Helvetica
             // fixtures), which keeps the legacy UTF-8/Latin-1 decode active.
             activeCMap = fontCMaps[name]
+            // The code width the show path reads is the font's SUBTYPE, not
+            // the presence of a CMap — see `type0FontNames`.
+            activeFontIsType0 = type0FontNames.contains(name)
             // Recomputed per `Tf`, not per glyph — see the property.
             activeCMapHasStandardSMuFLEvidence =
                 activeCMap?.mapsRecognizedStandardSMuFLCodepoints ?? false

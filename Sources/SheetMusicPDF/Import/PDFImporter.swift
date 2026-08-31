@@ -47,6 +47,7 @@ public enum PDFImporter {
         }
         let classified = walked.glyphs
         emitUnknownGlyphDiagnostics(classified, options: options)
+        emitUndecodedCodeDiagnostics(walked.undecodedCodes, options: options)
 
         // Detect every page's staves first so the system clusterer can use a
         // DOCUMENT-WIDE ensemble size (staves per system). MuseScore stacks
@@ -178,6 +179,30 @@ public enum PDFImporter {
                     message: "Unknown SMuFL codepoint U+\(String(cp, radix: 16, uppercase: true))",
                 ))
             }
+        }
+    }
+
+    /// Report every show-string code the front-end had to drop — one
+    /// `.warning` per page and font, never one per glyph.
+    ///
+    /// A drop here is content leaving the decode: the glyph is not merely
+    /// unclassified, it is gone, taking its position with it. That used to
+    /// happen in silence, which is how a whole score could import as 91
+    /// measures with zero notes and zero diagnostics.
+    static func emitUndecodedCodeDiagnostics(
+        _ tallies: [UndecodedCodeTally],
+        options: PDFImportOptions,
+    ) {
+        guard let cb = options.diagnostics else { return }
+        for t in tallies {
+            cb(PDFImportDiagnostic(
+                severity: .warning,
+                location: "page \(t.pageIndex), font \(t.fontName)",
+                message: "Dropped \(t.count) show-string code(s) the font's "
+                    + "/ToUnicode CMap does not map",
+                context: "first unmapped code 0x"
+                    + String(t.firstCode, radix: 16, uppercase: true),
+            ))
         }
     }
 
