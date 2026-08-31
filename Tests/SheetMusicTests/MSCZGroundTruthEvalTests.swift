@@ -42,7 +42,7 @@
             let cases = MSCZGroundTruthSweep.cases(
                 msczRoot: URL(fileURLWithPath: msczRoot, isDirectory: true),
                 pdfRoot: URL(fileURLWithPath: pdfRoot, isDirectory: true),
-                limit: Self.limit(),
+                limit: Self.limit(), matching: Self.env("OMR_MSCZ_ONLY"),
             )
             guard !cases.isEmpty else {
                 Issue.record("no .mscz/.pdf pairs under \(msczRoot) + \(pdfRoot) — run the prep script")
@@ -51,11 +51,15 @@
             print("[mscz] pairs=\(cases.count)")
             let scanDPI = Self.doubleEnv("OMR_MSCZ_SCAN_DPI", default: 300)
             Self.proveTheRasterPathIsLoadBearing(cases[0], scanDPI: scanDPI)
+            // Off by default: one dump is several lines per file, which over
+            // a 657-file sweep buries the rows the sweep exists to produce.
+            let dump = Self.env("OMR_MSCZ_DIVERGENCE") == "1"
 
             var vectorOptions = PDFImportOptions()
             vectorOptions.diagnostics = nil
             let vector = MSCZGroundTruthSweep.sweep(
                 cases: cases, mode: .vector, scanDPI: scanDPI, options: vectorOptions,
+                dumpDivergence: dump,
             )
             print(MSCZGroundTruthSweep.summaryLine(mode: .vector, totals: vector))
 
@@ -65,6 +69,7 @@
             rasterOptions.omrRenderDPI = Self.doubleEnv("OMR_MSCZ_RENDER_DPI", default: 300)
             let raster = MSCZGroundTruthSweep.sweep(
                 cases: cases, mode: .raster, scanDPI: scanDPI, options: rasterOptions,
+                dumpDivergence: dump,
             )
             print(MSCZGroundTruthSweep.summaryLine(mode: .raster, totals: raster))
         }
