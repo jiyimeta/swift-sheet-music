@@ -78,6 +78,13 @@
                     )
                 }
             }
+            if Self.env("OMR_MSCZ_CLEF_CAPTURE") == "1" {
+                for item in cases {
+                    try MSCZGroundTruthSweep.clefCapture(
+                        item, scanDPI: scanDPI, options: rasterOptions,
+                    )
+                }
+            }
             let raster = MSCZGroundTruthSweep.sweep(
                 cases: cases, mode: .raster, scanDPI: scanDPI, options: rasterOptions,
                 dumpDivergence: dump,

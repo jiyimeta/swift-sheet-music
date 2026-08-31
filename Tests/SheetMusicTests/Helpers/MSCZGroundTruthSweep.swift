@@ -242,6 +242,157 @@
             printCensus(item, vector: vector, raster: raster)
         }
 
+        /// Where a detected clef goes: onto the staff that needs it, onto
+        /// another one, or nowhere.
+        ///
+        /// `scoreStateEvents` reads a clef out of a MEASURE's glyph list, and
+        /// a staff whose clef never lands there is read as treble. The census
+        /// above proves the clef was detected on the page; this counts how
+        /// many of those survive into a measure, which splits the remaining
+        /// question in two — and the two halves want fixes in unrelated
+        /// places:
+        ///
+        ///   `inMeasures < onPage`   the clef is captured by NO staff, so the
+        ///                           question is `filterGlyphs`' band or the
+        ///                           staff's x range;
+        ///   `inMeasures == onPage`  it is captured by the WRONG staff, so the
+        ///                           question is the origin the detector
+        ///                           reports for a tall glyph.
+        ///
+        /// A third mechanism hides behind the second and gets its own count:
+        /// `readClef` scans a measure only up to its first NOTEHEAD, so a clef
+        /// sitting in the right measure but ordered after one is never read.
+        /// Without `behindNotehead` that case is indistinguishable from
+        /// wrong-staff capture, and it wants a third fix again.
+        ///
+        /// Both counts are taken for both front-ends, because the number that
+        /// matters is the DIFFERENCE: the vector walk runs the same structure
+        /// pass over the same document, so whatever it does is what "working"
+        /// looks like here.
+        static func clefCapture(_ item: Case, scanDPI: Double, options: PDFImportOptions) throws {
+            let vector = try PDFImporter.walkDocument(
+                PDFImporter.openDocument(Data(contentsOf: item.pdf)),
+            )
+            report(item, mode: "vector", walked: vector.content, pageCount: vector.pageSizes.count)
+            guard let detector = try PDFImporter.rasterDetector(for: options) else { return }
+            let scan = try PDFImporter.openDocument(
+                MSCZScanSimulator.imageOnlyPDF(of: item.pdf, dpi: scanDPI),
+            )
+            var raster = WalkedContent(glyphs: [], texts: [], paths: [], curves: [])
+            for index in 0 ..< scan.pageCount {
+                guard let page = scan.page(at: index)?.pageRef else { continue }
+                try autoreleasepool {
+                    let bitmap = try PDFPageRasterizer.bitmap(page: page, dpi: scanDPI)
+                    let one = try RasterFrontEnd.page(
+                        bitmap: bitmap, pageIndex: index, detector: detector, diagnostics: nil,
+                    ).walked
+                    raster.glyphs += one.glyphs
+                    raster.paths += one.paths
+                }
+            }
+            report(item, mode: "raster", walked: raster, pageCount: scan.pageCount)
+        }
+
+        /// The structure pass, in `buildScore`'s own order — canonicalize,
+        /// detect staves per page, derive ONE document-wide ensemble size,
+        /// then lay out systems. Reproducing the order matters: the ensemble
+        /// size is a document-wide input to every page's system clustering,
+        /// so a per-page shortcut here would measure a pipeline the importer
+        /// never runs.
+        private static func report(
+            _ item: Case, mode: String, walked incoming: WalkedContent, pageCount: Int,
+        ) {
+            let walked = incoming.canonicalized()
+            var stavesByPage: [[SheetMusicPDF.Staff]] = []
+            for page in 0 ..< pageCount {
+                stavesByPage.append(PDFImporter.detectStaves(
+                    paths: walked.paths.filter { $0.pageIndex == page },
+                    classified: walked.glyphs.filter { $0.geometry.pageIndex == page },
+                    pageIndex: page,
+                ))
+            }
+            let ensembleSize = PDFImporter.ensembleStaffCount(stavesByPage)
+            var staves = 0
+            var stavesWithClef = 0
+            var inMeasures = 0
+            var behindNotehead = 0
+            var inForce: [String: Int] = [:]
+            for page in 0 ..< pageCount {
+                for system in PDFImporter.layoutSystems(
+                    staves: stavesByPage[page], paths: walked.paths,
+                    classified: walked.glyphs, pageIndex: page, ensembleSize: ensembleSize,
+                ) {
+                    for part in system.parts {
+                        for staff in part.staves {
+                            staves += 1
+                            var clefs = 0
+                            for measure in staff.measures {
+                                let counts = clefCounts(measure)
+                                clefs += counts.total
+                                behindNotehead += counts.behindNotehead
+                            }
+                            inMeasures += clefs
+                            if clefs > 0 { stavesWithClef += 1 }
+                            inForce[firstClefClass(staff) ?? "(none)", default: 0] += 1
+                        }
+                    }
+                }
+            }
+            let onPage = walked.glyphs.count(where: isClef)
+            print("[mscz-clefcap][\(mode)][\(item.name)] onPage=\(onPage) "
+                + "inMeasures=\(inMeasures) behindNotehead=\(behindNotehead) "
+                + "staves=\(staves) stavesWithClef=\(stavesWithClef)")
+            for name in inForce.keys.sorted() {
+                print("[mscz-inforce][\(mode)][\(item.name)] clef=\(name) staves=\(inForce[name] ?? 0)")
+            }
+        }
+
+        /// The clef class `readClef` would put in force for this staff: the
+        /// first one it meets scanning each measure in x-order, stopping at
+        /// the measure's first notehead — its own rule, mirrored.
+        ///
+        /// Counting the clef that is IN FORCE, rather than the clefs present,
+        /// is the distinction the earlier counts could not make: a staff can
+        /// hold its correct clef and still be read under a different one, if a
+        /// spurious detection precedes it.
+        private static func firstClefClass(_ staff: ImportStaff) -> String? {
+            for measure in staff.measures {
+                let sorted = measure.glyphs.sorted { $0.geometry.origin.x < $1.geometry.origin.x }
+                for glyph in sorted {
+                    if isClef(glyph) {
+                        return OMRLabelClassNames.className(for: glyph.semantic)
+                    }
+                    if PDFImporter.isNotehead(glyph.semantic) { break }
+                }
+            }
+            return nil
+        }
+
+        /// Classified test-side rather than through the importer's own
+        /// `clef(for:)`, which is private — the same vocabulary the census
+        /// uses, so the two numbers are comparable.
+        private static func isClef(_ glyph: ClassifiedGlyph) -> Bool {
+            OMRLabelClassNames.className(for: glyph.semantic).hasPrefix("clef")
+        }
+
+        /// A measure's clefs, and how many of them `readClef` can never see
+        /// because a notehead precedes them in x-order.
+        private static func clefCounts(_ measure: ImportMeasure) -> (total: Int, behindNotehead: Int) {
+            let sorted = measure.glyphs.sorted { $0.geometry.origin.x < $1.geometry.origin.x }
+            var total = 0
+            var behind = 0
+            var sawNotehead = false
+            for glyph in sorted {
+                if isClef(glyph) {
+                    total += 1
+                    if sawNotehead { behind += 1 }
+                } else if PDFImporter.isNotehead(glyph.semantic) {
+                    sawNotehead = true
+                }
+            }
+            return (total, behind)
+        }
+
         private static func printCensus(
             _ item: Case, vector: [ClassifiedGlyph], raster: [ClassifiedGlyph],
         ) {
