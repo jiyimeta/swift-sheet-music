@@ -7,6 +7,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- `GMDrumset` engraves every drum where MuseScore Studio engraves it. The table's lines came from nowhere
+  anyone could name and agreed with MuseScore on five of twenty-seven pitches: the kick sat a line above the
+  space it belongs in, every tom was two lines off, and the low floor tom was written stems-down in the feet
+  voice although it is played by hand. Seven heads were wrong too — most visibly the open hi-hat, which wore
+  the closed hi-hat's plain cross and so could not be told apart from it. All of it is now transcribed from
+  `share/instruments/instruments.xml`'s `<Instrument id="drumset">`, the block MuseScore itself builds a
+  Drumset part from, with `smDrumset` covering the four pitches that block omits.
+- Nothing migrates: a score written before this carries its own `<Drum>` lines and keeps them, because its
+  notes are already engraved where the file says. The new values reach newly authored kits — `Score.blank`'s
+  drum part, a MIDI import's invented kit, and a host writing drums through `SetDrumsetEntry`.
+
 ## [2.3.0] - 2026-08-31
 
 ### Added

@@ -3,13 +3,45 @@ import Testing
 
 @Suite("GMDrumset")
 struct GMDrumsetTests {
-    /// The line map as it stood when it was the only half of the table that was public. Written out literally
-    /// rather than read from `GMPercussion`, so this test still fails if both sides are edited together — a drum
-    /// that moves line silently re-engraves every existing drum score.
-    private static let historicalLineMap: [Int: Int] = [
-        35: 6, 36: 6, 37: 2, 38: 2, 39: 2, 40: 2, 41: 8, 42: -1, 43: 7, 44: 9,
-        45: 5, 46: -1, 47: 4, 48: 3, 49: -1, 50: 2, 51: 0, 52: -1, 53: 0, 54: 0,
-        55: -1, 56: 0, 57: -1, 58: 1, 59: 0, 60: 1, 61: 2,
+    /// MuseScore Studio's stock drumset, transcribed by hand from `share/instruments/instruments.xml`'s
+    /// `<Instrument id="drumset">` — the block a Drumset part is actually built from — plus `smDrumset`
+    /// (`src/engraving/dom/drumset.cpp`) for the four pitches that block omits: 39, 58, 60 and 61.
+    ///
+    /// Written out literally rather than read back from `GMDrumset`, so editing both sides together still fails.
+    /// The claim under test is that a drum score authored here and one authored in MuseScore put the same
+    /// instrument on the same line, and nothing derived from the table itself can check that.
+    ///
+    /// 52 is the one entry that is not a literal transcription: `instruments.xml` gives it a normal head plus a
+    /// per-duration `<noteheads>` override to `noteheadHeavyXHat`, which a single head token cannot express, so
+    /// the equivalent `heavy-cross-hat` group stands in for it.
+    private static let museScoreDrumset: [Int: (head: String, line: Int, voice: Int, stem: Int)] = [
+        35: ("normal", 8, 1, 2),
+        36: ("normal", 7, 1, 2),
+        37: ("slashed1", 3, 0, 1),
+        38: ("normal", 3, 0, 1),
+        39: ("plus", -2, 0, 1),
+        40: ("slash", 3, 0, 1),
+        41: ("normal", 6, 0, 1),
+        42: ("cross", -1, 0, 1),
+        43: ("normal", 5, 0, 1),
+        44: ("cross", 9, 1, 2),
+        45: ("normal", 4, 0, 1),
+        46: ("xcircle", -1, 0, 1),
+        47: ("normal", 2, 0, 1),
+        48: ("normal", 1, 0, 1),
+        49: ("cross", -2, 0, 1),
+        50: ("normal", 0, 0, 1),
+        51: ("cross", 0, 0, 1),
+        52: ("heavy-cross-hat", -3, 0, 1),
+        53: ("diamond", 0, 0, 1),
+        54: ("diamond", 1, 0, 1),
+        55: ("cross", -4, 0, 1),
+        56: ("triangle-down", 1, 0, 1),
+        57: ("cross", -3, 0, 1),
+        58: ("ti", 0, 0, 1),
+        59: ("cross", 2, 0, 1),
+        60: ("normal", -1, 0, 1),
+        61: ("normal", 0, 0, 1),
     ]
 
     @Test("the table covers exactly the pitches the old private tables did")
@@ -17,29 +49,31 @@ struct GMDrumsetTests {
         #expect(Set(GMDrumset.entries.keys) == Set(35 ... 61))
     }
 
-    @Test("GMPercussion.drumLineMap is the table's lines, unchanged")
-    func lineMapUnchanged() {
-        #expect(GMPercussion.drumLineMap == Self.historicalLineMap)
-        #expect(GMDrumset.entries.mapValues(\.line) == Self.historicalLineMap)
-    }
-
-    @Test("cymbals and hi-hats carry the cross head, the side stick and electric snare their own")
-    func heads() {
-        let cross: Set = [42, 44, 46, 49, 51, 52, 53, 54, 55, 57, 59]
-        for (pitch, entry) in GMDrumset.entries {
-            switch pitch {
-            case 37: #expect(entry.head == "slashed1")
-            case 40: #expect(entry.head == "slash")
-            case _ where cross.contains(pitch): #expect(entry.head == "cross")
-            default: #expect(entry.head == "normal")
+    @Test("every drum is engraved where MuseScore engraves it")
+    func matchesMuseScore() {
+        for (pitch, expected) in Self.museScoreDrumset {
+            guard let entry = GMDrumset.entries[pitch] else {
+                Issue.record("pitch \(pitch) is missing from the table"); continue
             }
+            #expect(entry.line == expected.line, "line for pitch \(pitch)")
+            #expect(entry.head == expected.head, "head for pitch \(pitch)")
+            #expect(entry.voiceIndex == expected.voice, "voice for pitch \(pitch)")
+            #expect(entry.stem == expected.stem, "stem for pitch \(pitch)")
         }
     }
 
-    @Test("the feet voice is bass drum, pedal hi-hat and low floor tom, stems down")
+    @Test("GMPercussion.drumLineMap is the table's lines, unchanged")
+    func lineMapIsTheTablesLines() {
+        #expect(GMPercussion.drumLineMap == GMDrumset.entries.mapValues(\.line))
+        #expect(GMPercussion.drumLineMap == Self.museScoreDrumset.mapValues(\.line))
+    }
+
+    /// The two bass drums and the pedal hi-hat, and nothing else. The low floor tom is played by hand and is
+    /// voice 0 in MuseScore — a stems-down floor tom was this table's own invention.
+    @Test("the feet voice is the bass drums and the pedal hi-hat, stems down")
     func voicesAndStems() {
         for (pitch, entry) in GMDrumset.entries {
-            let isFeet = [35, 36, 41, 44].contains(pitch)
+            let isFeet = [35, 36, 44].contains(pitch)
             #expect(entry.voiceIndex == (isFeet ? 1 : 0))
             #expect(entry.stem == (isFeet ? 2 : 1))
         }
@@ -47,6 +81,8 @@ struct GMDrumsetTests {
 
     @Test("every entry is named — MuseScore drops a nameless <Drum>")
     func names() {
+        #expect(GMDrumset.entries[35]?.name == "Bass Drum 2")
+        #expect(GMDrumset.entries[36]?.name == "Bass Drum 1")
         #expect(GMDrumset.entries[38]?.name == "Acoustic Snare")
         #expect(GMDrumset.entries[42]?.name == "Closed Hi-Hat")
         for entry in GMDrumset.entries.values {
