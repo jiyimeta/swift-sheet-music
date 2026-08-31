@@ -95,8 +95,11 @@ struct MSCXDrumsetRoundTripTests {
     }
 
     // The §6a gate: a kit this package AUTHORS — `Score.blank`'s drum part, whose entries come entirely from
-    // `GMDrumset` — must still encode to the exact bytes it did before the drumset was a real type. The golden
-    // was recorded from the pre-change encoder; a diff here means a GM default moved.
+    // `GMDrumset` — must encode to exactly the recorded bytes. A diff here means a GM default moved.
+    //
+    // Re-recorded once, for 2.3.1, when the table was brought to MuseScore's own values — twenty-four of the
+    // twenty-seven drums changed line, head or voice. Re-record it again only for a change of that kind, and say
+    // in the commit which drums moved and why; a golden that is refreshed to make a test pass gates nothing.
     //
     // Apple-only, because it reads the golden out of the CHECKOUT through `#filePath`: a WASI test host has no
     // preopened directory beyond the SwiftPM test bundle, so the read fails there by nature rather than by
