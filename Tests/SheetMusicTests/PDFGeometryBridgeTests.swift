@@ -45,6 +45,24 @@
                 nativeReleaseScore(handle: result.scoreHandle)
             }
             #expect(result.playableElementCount == 4)
+            // The count alone would also be reached by four chords of the wrong
+            // duration in the wrong bars, so pin it against the fixture's known
+            // ground truth: ONE measure of four QUARTER chords.
+            let score = try #require(scoreTable.value(for: result.scoreHandle))
+            let chords = score.allStaves.flatMap { _, staff in
+                staff.measures.flatMap { measure in
+                    measure.voices.flatMap { voice in
+                        voice.elements.compactMap { element -> Chord? in
+                            guard case let .chord(chord) = element,
+                                  !chord.notes.isEmpty else { return nil }
+                            return chord
+                        }
+                    }
+                }
+            }
+            #expect(chords.count == 4)
+            #expect(chords.allSatisfy { $0.duration == .quarter })
+            #expect(score.allStaves.allSatisfy { $0.1.measures.count == 1 })
         }
 
         /// The counter's floor: a score with no staves reports nothing rather than trapping.

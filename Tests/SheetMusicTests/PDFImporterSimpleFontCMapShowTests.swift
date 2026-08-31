@@ -77,7 +77,7 @@
             #expect(state.undecodedCodes.count == 1)
             #expect(state.undecodedCodes.first?.fontName == "F1")
             #expect(state.undecodedCodes.first?.firstCode == 0x7F)
-            #expect(state.undecodedCodes.first?.count == 1)
+            #expect(state.undecodedCodes.first?.unmappedCodes == 1)
         }
 
         /// Tallied per font, not per glyph: a document read at the wrong code
@@ -87,7 +87,27 @@
             let state = pageState()
             emitShow([0x7F, 0x7E, 0x7D], state: state)
             #expect(state.undecodedCodes.count == 1)
-            #expect(state.undecodedCodes.first?.count == 3)
+            #expect(state.undecodedCodes.first?.unmappedCodes == 3)
+        }
+
+        /// The OTHER width's leftover. A Type0 font shown an odd-length
+        /// string ends part-way through a 2-byte code; that byte is dropped
+        /// too, and dropping it silently would be the same rule violation
+        /// the unmapped-code tally exists to close.
+        @Test func aTrailingByteOfAnIncompleteCodeIsTalliedToo() {
+            let state = PDFPageState(pageIndex: 0)
+            state.fontSize = 30
+            state.fontCMaps = ["F1": PDFImporter.ToUnicodeCMap(table: [
+                0x0020: [Self.noteheadPUA],
+            ])]
+            state.type0FontNames = ["F1"]
+            state.opSetFont(name: "F1", size: 30)
+            emitShow([0x00, 0x20, 0x00], state: state)
+            #expect(state.glyphs.count == 1)
+            #expect(state.undecodedCodes.count == 1)
+            #expect(state.undecodedCodes.first?.truncatedBytes == 1)
+            // The complete code decoded, so nothing is charged to the CMap.
+            #expect(state.undecodedCodes.first?.unmappedCodes == 0)
         }
 
         /// And the tally reaches the caller's diagnostics callback.
@@ -97,11 +117,19 @@
             options.diagnostics = { box.append($0) }
             PDFImporter.emitUndecodedCodeDiagnostics([
                 UndecodedCodeTally(
-                    pageIndex: 2, fontName: "F7", firstCode: 0x2021, count: 91,
+                    pageIndex: 2, fontName: "F7", firstCode: 0x2021,
+                    unmappedCodes: 91,
+                ),
+                UndecodedCodeTally(
+                    pageIndex: 3, fontName: "F8", firstCode: 0x00,
+                    unmappedCodes: 0, truncatedBytes: 2,
                 ),
             ], options: options)
-            #expect(box.messages.count == 1)
+            #expect(box.messages.count == 2)
             #expect(box.messages.first?.contains("91") == true)
+            // A tally that only holds leftovers still reports, and says so.
+            #expect(box.messages.last?.contains("2 trailing byte(s)") == true)
+            #expect(box.messages.last?.contains("CMap does not map") == false)
         }
 
         /// `PDFImportOptions.diagnostics` is `@Sendable`, so the collector it

@@ -94,7 +94,13 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
             advanceTextMatrix(state: state, glyphCount: 1)
         }
     }
-    // Odd trailing byte (shouldn't happen for Identity-H) — ignore.
+    // An odd trailing byte shouldn't happen for Identity-H, but a byte the
+    // decode threw away is content leaving the pipeline whether or not the
+    // producer was well formed — so it is tallied, not ignored. Same rule,
+    // same reason, as the unmapped-code drop above.
+    if i < length {
+        state.recordTruncatedTrailingBytes(length - i, firstByte: UInt32(bytes[i]))
+    }
     flushPendingRun(&pending, state: state)
 }
 

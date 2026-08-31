@@ -67,9 +67,9 @@
         }
 
         /// `parseWithGeometry` must return the SAME score `parse` returns — the collector is a side-car,
-        /// never an input to the decode. Asserts on `measureRects`/`systemRects`, not `itemRects`: this
-        /// fixture's notes don't decode (see `fixtureData`'s note), but the staff/measure geometry the
-        /// document's ruled lines produce is real and exercises the same collector plumbing.
+        /// never an input to the decode. What this owns is the collector plumbing: every rect family the
+        /// side-car carries is populated, including the note-level `itemRects` this fixture's four chords
+        /// produce now that a simple font's codes decode.
         @Test func geometryPathDoesNotPerturbTheScore() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let data = try Self.fixtureData()
@@ -79,6 +79,7 @@
             #expect(!geometry.measureRects.isEmpty)
             #expect(!geometry.systemRects.isEmpty)
             #expect(!geometry.pageSizes.isEmpty)
+            #expect(!geometry.itemRects.isEmpty)
         }
 
         @Test func geometryRectsCarryAPageIndexWithinTheDocument() throws {

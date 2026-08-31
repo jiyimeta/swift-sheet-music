@@ -195,12 +195,21 @@ public enum PDFImporter {
     ) {
         guard let cb = options.diagnostics else { return }
         for t in tallies {
+            var dropped: [String] = []
+            if t.unmappedCodes > 0 {
+                dropped.append("\(t.unmappedCodes) show-string code(s) the "
+                    + "font's /ToUnicode CMap does not map")
+            }
+            if t.truncatedBytes > 0 {
+                dropped.append("\(t.truncatedBytes) trailing byte(s) left by a "
+                    + "show string that ended part-way through a code")
+            }
+            guard !dropped.isEmpty else { continue }
             cb(PDFImportDiagnostic(
                 severity: .warning,
                 location: "page \(t.pageIndex), font \(t.fontName)",
-                message: "Dropped \(t.count) show-string code(s) the font's "
-                    + "/ToUnicode CMap does not map",
-                context: "first unmapped code 0x"
+                message: "Dropped " + dropped.joined(separator: " and "),
+                context: "first dropped code 0x"
                     + String(t.firstCode, radix: 16, uppercase: true),
             ))
         }

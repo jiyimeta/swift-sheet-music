@@ -47,7 +47,15 @@ struct UndecodedCodeTally {
     /// The first code that missed — enough to tell a wrong-width read
     /// (a plausible-looking 2-byte value) from a genuine subset gap.
     let firstCode: UInt32
-    var count: Int
+    /// How many codes the font's CMap does not map. NOT named `count`:
+    /// SwiftLint's `empty_count` rule reads `t.count == 0` on any type as a
+    /// collection emptiness test and auto-corrects it to `t.isEmpty`, which
+    /// does not compile for an `Int` field.
+    var unmappedCodes: Int
+    /// Bytes left over where a show string ended part-way through a
+    /// multi-byte code. Counted apart from `unmappedCodes` because the reason
+    /// differs: the code never completed, so the CMap was never asked.
+    var truncatedBytes = 0
 }
 
 // Content-stream interpreter core — the per-operator effect on `PageState`,

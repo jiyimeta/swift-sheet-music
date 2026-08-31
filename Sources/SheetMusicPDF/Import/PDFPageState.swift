@@ -117,17 +117,33 @@ final class PDFPageState {
     }
 
     /// Tally one show-string code the active CMap could not map, against the
-    /// current font. Linear search over a handful of fonts per page, which
-    /// keeps the tallies in first-encounter order — a `Dictionary` would put
-    /// them in an order the front-end determinism contract forbids.
+    /// current font.
     func recordUndecodedCode(_ code: UInt32) {
+        bumpUndecodedTally(firstCode: code) { $0.unmappedCodes += 1 }
+    }
+
+    /// Tally the bytes left over when a show string ends part-way through a
+    /// multi-byte code, against the current font.
+    func recordTruncatedTrailingBytes(_ count: Int, firstByte: UInt32) {
+        bumpUndecodedTally(firstCode: firstByte) { $0.truncatedBytes += count }
+    }
+
+    /// One tally per font, found by linear search over the handful of fonts a
+    /// page uses. That keeps the tallies in first-encounter order — a
+    /// `Dictionary` would put them in an order the front-end determinism
+    /// contract forbids.
+    private func bumpUndecodedTally(
+        firstCode: UInt32, _ bump: (inout UndecodedCodeTally) -> Void,
+    ) {
         if let i = undecodedCodes.firstIndex(where: { $0.fontName == fontName }) {
-            undecodedCodes[i].count += 1
+            bump(&undecodedCodes[i])
         } else {
-            undecodedCodes.append(UndecodedCodeTally(
+            var tally = UndecodedCodeTally(
                 pageIndex: pageIndex, fontName: fontName,
-                firstCode: code, count: 1,
-            ))
+                firstCode: firstCode, unmappedCodes: 0,
+            )
+            bump(&tally)
+            undecodedCodes.append(tally)
         }
     }
 
