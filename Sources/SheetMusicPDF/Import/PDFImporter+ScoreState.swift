@@ -268,6 +268,22 @@ extension PDFImporter {
     /// True when this staff's first-read clef is the ambiguous E065 (F8va).
     /// Used by the assembler's pre-pass to know which slots need the
     /// whole-part F8va-vs-plain-F content decision.
+    /// The clef this staff-in-system is ENGRAVED WITH at its left edge, or
+    /// nil if none was read there.
+    ///
+    /// Measure 0 only, and deliberately not the same walk as
+    /// `staffInitialClefIsF8va`: `readClef` returns a measure's LEADING clef,
+    /// so a clef found in measure 3 is a mid-score clef CHANGE, not this
+    /// system's opening clef. Treating one as the other would corrupt the
+    /// per-slot sequence `consensusInitialClefs` reasons over — a change is
+    /// exactly what it must preserve.
+    static func staffInitialClef(_ staff: ImportStaff) -> Clef? {
+        guard let first = staff.measures.first else { return nil }
+        return readClef(from: first.glyphs.sorted {
+            $0.geometry.origin.x < $1.geometry.origin.x
+        })
+    }
+
     static func staffInitialClefIsF8va(_ staff: ImportStaff) -> Bool {
         for measure in staff.measures {
             let sorted = measure.glyphs.sorted { $0.geometry.origin.x < $1.geometry.origin.x }
