@@ -44,6 +44,9 @@ extension PDFImporter {
             pageSizes: walk.pageSizes,
             documentAttributes: walk.attributes,
             options: options,
+            // This entry point never rasterizes (see the warning above), so
+            // no page is detector-read and the clef consensus stays out.
+            rasterPages: [],
         )
     }
 
@@ -63,6 +66,9 @@ extension PDFImporter {
             documentAttributes: walk.attributes,
             options: options,
             geometry: collector,
+            // This entry point never rasterizes (see the warning above), so
+            // no page is detector-read and the clef consensus stays out.
+            rasterPages: [],
         )
         return (score, collector.finalize())
     }

@@ -66,6 +66,29 @@
                 == ["G", "G", "G", nil, "F", "F"])
         }
 
+        @Test func keepsAOneSystemClefChangeToADifferentLetter() {
+            // A clef change lasting exactly one system is shaped like an
+            // outlier, so only the OCTAVE-sibling confusion the detector
+            // actually has may be overruled. A G staff that turns to F for
+            // one system and back is music, not a misread.
+            let readings: [Clef?] = [
+                clef("G"), clef("G"), clef("F"), clef("G"), clef("G"),
+            ]
+            let resolved = PDFImporter.consensusInitialClefs(perSystem: readings)
+            #expect(resolved.map { $0?.concertClefType }
+                == ["G", "G", "F", "G", "G"])
+        }
+
+        @Test func octaveSiblingsAreRecognizedAcrossTheFamily() {
+            #expect(PDFImporter.areOctaveSiblings(clef("F"), clef("F8va")))
+            #expect(PDFImporter.areOctaveSiblings(clef("G8vb"), clef("G15ma")))
+            #expect(!PDFImporter.areOctaveSiblings(clef("G"), clef("F")))
+            #expect(!PDFImporter.areOctaveSiblings(clef("C"), clef("C")))
+            #expect(!PDFImporter.areOctaveSiblings(
+                clef("PERCUSSION"), clef("G"),
+            ))
+        }
+
         @Test func singleSystemScoreIsUntouched() {
             // A one-system document (a wide single-page export) has no second
             // opinion to offer, so consensus must not manufacture one.

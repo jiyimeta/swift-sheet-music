@@ -27,6 +27,7 @@ public enum PDFImporter {
         documentAttributes: [String: Any]?,
         options: PDFImportOptions,
         geometry: PDFGeometryCollector? = nil,
+        rasterPages: Set<Int>? = nil,
     ) throws -> Score {
         // THE FIRST THING THAT HAPPENS. Every pass below reads an
         // order-preserving `filter` of these four streams, so imposing one
@@ -117,6 +118,7 @@ public enum PDFImporter {
             graceSizeThreshold: graceSizeThreshold,
             options: options,
             geometry: geometry,
+            rasterPages: rasterPages,
         )
     }
 

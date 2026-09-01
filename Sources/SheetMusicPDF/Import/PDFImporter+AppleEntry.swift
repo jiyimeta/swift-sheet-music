@@ -39,8 +39,13 @@ extension PDFImporter {
         // injected detector nothing below runs — no rasterization, no page
         // analysis, not even a second pass over the pages. That is what makes
         // the byte-identical vector corpus gate meaningful.
+        // Which pages the detector read, so the clef consensus can be
+        // confined to them: it repairs DETECTOR uncertainty, and a
+        // vector-read page has none to repair. Empty for a vector document,
+        // which is what keeps the byte-identical vector corpus gate green.
+        var rasterPages: Set<Int> = []
         if let detector = try rasterDetector(for: options) {
-            applyRasterFallback(
+            rasterPages = applyRasterFallback(
                 to: &content, pageSizes: &pageSizes,
                 document: document, detector: detector, options: options,
             )
@@ -51,6 +56,7 @@ extension PDFImporter {
             pageSizes: pageSizes,
             documentAttributes: walk.attributes,
             options: options,
+            rasterPages: rasterPages,
         )
     }
 
@@ -78,6 +84,9 @@ extension PDFImporter {
             documentAttributes: walk.attributes,
             options: options,
             geometry: collector,
+            // This entry point never rasterizes (see the warning above), so
+            // no page is detector-read and the clef consensus stays out.
+            rasterPages: [],
         )
         return (score, collector.finalize())
     }

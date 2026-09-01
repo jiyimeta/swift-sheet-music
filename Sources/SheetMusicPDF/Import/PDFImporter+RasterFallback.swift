@@ -61,13 +61,15 @@ extension PDFImporter {
     /// Propagating one page's rasterization or detection failure would turn
     /// setting `omrTileClassifier` on a 200-page mixed document into a total
     /// parse failure over one page the vector path never read anyway.
+    @discardableResult
     static func applyRasterFallback(
         to walked: inout WalkedContent,
         pageSizes: inout [Int: CGSize],
         document: PDFDocument,
         detector: any OMRGlyphDetecting,
         options: PDFImportOptions,
-    ) {
+    ) -> Set<Int> {
+        var rasterPages: Set<Int> = []
         let dpi = renderDPI(for: options)
         for index in 0 ..< document.pageCount {
             // Music, specifically: `texts` are deliberately NOT consulted.
@@ -110,11 +112,13 @@ extension PDFImporter {
                 // `RasterFrontEnd`/`OMRGlyphDetector` have already said why.
                 continue
             }
+            rasterPages.insert(index)
             walked.glyphs += result.walked.glyphs
             walked.paths += result.walked.paths
             // The analysis's own frame, never the mediaBox: on a resampled page
             // they differ, and mixing them shifts paths relative to glyphs.
             pageSizes[index] = result.pageSize
         }
+        return rasterPages
     }
 }

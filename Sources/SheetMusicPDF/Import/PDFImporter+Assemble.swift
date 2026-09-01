@@ -25,6 +25,7 @@ extension PDFImporter {
         graceSizeThreshold: CGFloat = 0,
         options: PDFImportOptions,
         geometry: PDFGeometryCollector? = nil,
+        rasterPages: Set<Int>? = nil,
     ) -> Score {
         guard !systems.isEmpty else {
             return Score(division: 480, source: .pdf)
@@ -64,7 +65,9 @@ extension PDFImporter {
         // system, but the raster detector reads each independently, so a clef
         // it is merely unsure about costs that system an octave. Empty when
         // every slot is already self-consistent. See `consensusInitialClefs`.
-        let clefConsensus = resolveInitialClefConsensus(systems: systems, shape: shape)
+        let clefConsensus = resolveInitialClefConsensus(
+            systems: systems, shape: shape, rasterPages: rasterPages,
+        )
 
         for (sysIndex, system) in systems.enumerated() {
             appendSystem(
