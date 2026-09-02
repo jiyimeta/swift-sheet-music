@@ -43,16 +43,16 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
         minimumDistinctFingerprints: 10,
     )
 
-    /// The edit-command parity project's chain: nineteen steps over `EditingFixtures.parityFixture()` covering
-    /// intents 30…40 — the structural group in steps 1…10 and the range group in steps 11…19 — which the standard
-    /// chain predates and therefore never encodes.
+    /// The edit-command parity project's chain: forty steps over `EditingFixtures.parityFixture()` covering
+    /// intents 30…49 — the structural group in steps 1…10, the range group in steps 11…19 and the mark group in
+    /// steps 20…40 — which the standard chain predates and therefore never encodes.
     static let parity = ReplayChain(
         name: "parity",
         androidAssetDir: "editReplay-parity",
         webFixtureStem: "edit-replay-parity",
         fixture: { EditingFixtures.parityFixture() },
         steps: { EditReplayScript.parity(staff: $0) },
-        minimumDistinctFingerprints: 12,
+        minimumDistinctFingerprints: 24,
     )
 
     static let all: [ReplayChain] = [.standard, .parity]

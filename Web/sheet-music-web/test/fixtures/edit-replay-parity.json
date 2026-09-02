@@ -19,7 +19,28 @@
     "-5096833445711081933",
     "6317257103641034598",
     "-5096833445711081933",
-    "6317257103641034598"
+    "6317257103641034598",
+    "6592704794777320866",
+    "8446247088212031809",
+    "6317257103641034598",
+    "5538836773064361632",
+    "4625893948010097893",
+    "-6334824661983432279",
+    "4625893948010097893",
+    "-2741280669243810968",
+    "-186337647727005598",
+    "-979941814978143286",
+    "692028914027743337",
+    "-1904373724778352939",
+    "692028914027743337",
+    "-979941814978143286",
+    "-2741280669243810968",
+    "804177785227587482",
+    "1997643059543218252",
+    "804177785227587482",
+    "1997643059543218252",
+    "-5786173062307942582",
+    "3014722022092336787"
   ],
   "steps" : [
     {
@@ -94,6 +115,89 @@
     },
     {
       "base64" : "ISUKHgocCgwKBAgAEAAQABgAIAQSDAoECAAQABAAGAAgBA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FCkKEQoMCgQIABAAEAQYACAAEgFG",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FSkKEgoMCgQIABAAEAQYACACEgJDMw==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "ESoKDgoMCgQIABAAEAQYACAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "JisKIwoMCgQIABAAEAIYACAAEAEZAAAAAAAABEAiBggDEAAYACgA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "JisKIwoMCgQIABAAEAIYACAAEAEZAAAAAAAAAEAiBggDEAAYACgC",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "HCwKGQoMCgQIABAAEAIYACACEAEaBXBpenouIAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FywKFAoMCgQIABAAEAIYACACEAAaACAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "GywKGAoMCgQIABAAEAYYACAAEAEaBHJpdC4gAQ==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Fi0KEwoMCgQIABAAEAQYACAAEAEaAWY=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Fy0KFAoMCgQIABAAEAQYACACEAEaAnBw",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Ki4KJwoMCgQIABAAEAQYACAEEAEaDGZlcm1hdGFBYm92ZSEAAAAAAAAAQA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "IC8KHQoMCgQIABAAEAQYACAGEAEYASAAKQAAAAAAAOA\/",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "IC8KHQoMCgQIABAAEAQYACAGEAAYACAAKQAAAAAAAAAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Hi4KGwoMCgQIABAAEAQYACAGEAAaACEAAAAAAAAAAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FS0KEgoMCgQIABAAEAQYACACEAAaAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "KTAKJgoCCAYSIB8KBXN0YXJ0EgRmaW5lGgAgACoMRC5DLiBhbCBGaW5l",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "HDEKGQoCCAISExIKBGZpbmUSBGZpbmUaBEZpbmU=",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "HDEKGQoCCAISExIKBGZpbmUSBGZpbmUaBEZpbmU=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "CTAKBgoCCAYSAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "JisKIwoMCgQIABAAEAIYACAAEAAZAAAAAAAAAAAiBggDEAAYACgA",
       "op" : "intentBytes"
     }
   ]
