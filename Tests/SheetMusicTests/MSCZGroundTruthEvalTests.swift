@@ -54,6 +54,11 @@
             // Off by default: one dump is several lines per file, which over
             // a 657-file sweep buries the rows the sweep exists to produce.
             let dump = Self.env("OMR_MSCZ_DIVERGENCE") == "1"
+            // `OMR_MSCZ_PROBES_ONLY=1` runs the census / clef probes and
+            // skips both score-level sweeps. The probes are what a decode
+            // sweep at τ=0.02 is run FOR — the score-level rows at that τ
+            // are junk and cost the same 15 minutes per 200 files.
+            let probesOnly = Self.env("OMR_MSCZ_PROBES_ONLY") == "1"
 
             var vectorOptions = PDFImportOptions()
             // Attached to BOTH modes, deliberately. A diagnostic the importer
@@ -61,11 +66,13 @@
             // NOT to fire on ordinary vector documents before it ships — and
             // this corpus is the only place that can be measured.
             vectorOptions.diagnostics = Self.diagnosticSink(mode: "vector")
-            let vector = MSCZGroundTruthSweep.sweep(
-                cases: cases, mode: .vector, scanDPI: scanDPI, options: vectorOptions,
-                dumpDivergence: dump,
-            )
-            print(MSCZGroundTruthSweep.summaryLine(mode: .vector, totals: vector))
+            if !probesOnly {
+                let vector = MSCZGroundTruthSweep.sweep(
+                    cases: cases, mode: .vector, scanDPI: scanDPI, options: vectorOptions,
+                    dumpDivergence: dump,
+                )
+                print(MSCZGroundTruthSweep.summaryLine(mode: .vector, totals: vector))
+            }
 
             var rasterOptions = PDFImportOptions()
             rasterOptions.diagnostics = Self.diagnosticSink(mode: "raster")
@@ -91,6 +98,10 @@
                         item, scanDPI: scanDPI, options: rasterOptions,
                     )
                 }
+            }
+            if probesOnly {
+                print("[mscz] probes only — score-level sweeps skipped (OMR_MSCZ_PROBES_ONLY=1)")
+                return
             }
             let raster = MSCZGroundTruthSweep.sweep(
                 cases: cases, mode: .raster, scanDPI: scanDPI, options: rasterOptions,

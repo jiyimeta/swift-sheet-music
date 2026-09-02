@@ -10,14 +10,31 @@ import SheetMusicCore
 /// normalize → tile → `OMRTileClassifier.run` → decode → merge → map back
 /// through the normalization scale and the deskew transform into page points.
 struct OMRGlyphDetector: OMRGlyphDetecting {
+    /// One classified glyph together with the heatmap score that produced
+    /// it — the one number `ClassifiedGlyph` itself does not carry.
+    struct ScoredGlyph {
+        let glyph: ClassifiedGlyph
+        let score: Double
+    }
+
     private let classifier: any OMRTileClassifier
+    /// Sees every page's glyphs WITH their scores, after decode + merge and
+    /// before they enter `WalkedContent`. A measurement tap only: the
+    /// product path passes `nil` and the harness reads a class's confidence
+    /// where the importer sees only "present at τ or not". It cannot change
+    /// what the detector returns.
+    private let observer: (@Sendable (_ pageIndex: Int, _ glyphs: [ScoredGlyph]) -> Void)?
     private var manifest: OMRModelManifest {
         classifier.manifest
     }
 
-    init(classifier: any OMRTileClassifier) throws {
+    init(
+        classifier: any OMRTileClassifier,
+        observer: (@Sendable (_ pageIndex: Int, _ glyphs: [ScoredGlyph]) -> Void)? = nil,
+    ) throws {
         try classifier.manifest.validate()
         self.classifier = classifier
+        self.observer = observer
     }
 
     func glyphs(
@@ -51,9 +68,13 @@ struct OMRGlyphDetector: OMRGlyphDetecting {
                 message: "OMR: the detector found no symbols at threshold \(manifest.threshold)",
             ))
         }
-        return try detections.map {
+        let glyphs = try detections.map {
             try classify($0, pageIndex: pageIndex, analysis: analysis, scale: normalized.scale)
         }
+        if let observer {
+            observer(pageIndex, zip(glyphs, detections).map { ScoredGlyph(glyph: $0, score: $1.score) })
+        }
+        return glyphs
     }
 
     /// Runs every tile of `bitmap` through the classifier and merges the

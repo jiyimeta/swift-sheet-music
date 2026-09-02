@@ -276,7 +276,15 @@
             let vectorAccidentals = report(
                 item, mode: "vector", walked: vector.content, pageCount: vector.pageSizes.count,
             )
-            guard let detector = try PDFImporter.rasterDetector(for: options) else { return }
+            guard let classifier = options.omrTileClassifier else { return }
+            // The product detector, with its measurement tap attached: the
+            // clef probe below wants each candidate's SCORE, which
+            // `ClassifiedGlyph` does not carry, and the tap is the only way
+            // to read one without changing what the detector returns.
+            let scored = ScoredGlyphSink()
+            let detector = try OMRGlyphDetector(classifier: classifier) { _, glyphs in
+                scored.append(glyphs)
+            }
             let scan = try PDFImporter.openDocument(
                 MSCZScanSimulator.imageOnlyPDF(of: item.pdf, dpi: scanDPI),
             )
@@ -296,7 +304,24 @@
                 item, mode: "raster", walked: raster, pageCount: scan.pageCount,
             )
             compareAccidentals(item, vector: vectorAccidentals, raster: rasterAccidentals)
-            clefProbe(item, vector: vector.content, raster: raster)
+            clefProbe(item, vector: vector.content, raster: raster, scored: scored.snapshot)
+        }
+
+        /// The observer closure is `@Sendable`; this is the lock around the
+        /// array it appends to.
+        private final class ScoredGlyphSink: @unchecked Sendable {
+            private let lock = NSLock()
+            private var items: [OMRGlyphDetector.ScoredGlyph] = []
+
+            func append(_ glyphs: [OMRGlyphDetector.ScoredGlyph]) {
+                lock.lock(); defer { lock.unlock() }
+                items += glyphs
+            }
+
+            var snapshot: [OMRGlyphDetector.ScoredGlyph] {
+                lock.lock(); defer { lock.unlock() }
+                return items
+            }
         }
 
         /// What the raster front-end put where the vector one read a clef.
@@ -309,10 +334,20 @@
         /// front-ends' glyph lists side by side at the SAME page coordinate
         /// and prints the raster neighborhood of every vector clef.
         ///
-        /// Gated on `OMR_MSCZ_CLEF_PROBE=1` — one line per clef in the
-        /// document, which is 138 lines for a 23-system sextet.
+        /// Gated on `OMR_MSCZ_CLEF_PROBE=1` — two lines per clef in the
+        /// document, which is 276 lines for a 23-system sextet.
+        ///
+        /// The second line, `[mscz-clefcand]`, is the same neighborhood with
+        /// each candidate's heatmap SCORE (`class@score@distance`). Run under
+        /// `OMR_DECODE_THRESHOLD=0.02` it lists what the heatmap holds below
+        /// the shipped τ as well, so one sweep answers, offline and for any
+        /// decode rule, what τ=0.30 keeps, what a sibling-aware rule would
+        /// pick, and how a split between a clef and its octave variant is
+        /// distributed across the corpus — the question the training round
+        /// after the consensus pass is built around.
         private static func clefProbe(
             _ item: Case, vector: WalkedContent, raster: WalkedContent,
+            scored: [OMRGlyphDetector.ScoredGlyph],
         ) {
             guard ProcessInfo.processInfo.environment["OMR_MSCZ_CLEF_PROBE"] == "1" else { return }
             // A clef is ~4 staff spaces tall, so a neighborhood of 12pt at
@@ -328,10 +363,20 @@
                     .filter { $0.1 <= radius }
                     .sorted { $0.1 < $1.1 }
                     .map { "\(OMRLabelClassNames.className(for: $0.0.semantic))@\(round($0.1 * 10) / 10)" }
-                print("[mscz-clefprobe][\(item.name)] page=\(page) "
+                let head = "[\(item.name)] page=\(page) "
                     + "vector=\(OMRLabelClassNames.className(for: clef.semantic)) "
                     + "at=(\(round(at.x * 10) / 10),\(round(at.y * 10) / 10)) "
-                    + "raster=[\(near.joined(separator: " "))]")
+                print("[mscz-clefprobe]\(head)raster=[\(near.joined(separator: " "))]")
+                let candidates = scored
+                    .filter { $0.glyph.geometry.pageIndex == page }
+                    .map { ($0, hypot($0.glyph.geometry.origin.x - at.x, $0.glyph.geometry.origin.y - at.y)) }
+                    .filter { $0.1 <= radius }
+                    .sorted { $0.0.score > $1.0.score }
+                    .map {
+                        "\(OMRLabelClassNames.className(for: $0.0.glyph.semantic))"
+                            + "@\(round($0.0.score * 1000) / 1000)@\(round($0.1 * 10) / 10)"
+                    }
+                print("[mscz-clefcand]\(head)candidates=[\(candidates.joined(separator: " "))]")
             }
         }
 
