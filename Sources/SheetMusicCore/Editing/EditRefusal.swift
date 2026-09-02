@@ -77,6 +77,9 @@ public struct EditRefusal: Sendable, Hashable {
         /// reason `.cannotRemoveLastPart` is: the voice IS there, and a host saying otherwise would be telling
         /// the user something untrue — the caller should be writing into it rather than creating it.
         case voiceAlreadyExists(staff: StaffAddress, measureIndex: Int, voiceIndex: Int)
+        /// A repeat that plays fewer than twice is not a repeat; `SetRepeatBarLines` refuses an `endRepeatCount`
+        /// below 2 rather than write a barline the layout would engrave but that means nothing.
+        case invalidRepeatCount(Int)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -135,6 +138,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.emptyRehearsalMarkText"
         case .voiceAlreadyExists:
             "edit.voiceAlreadyExists"
+        case .invalidRepeatCount:
+            "edit.invalidRepeatCount"
         case .unexpected:
             "edit.unexpected"
         }
@@ -195,6 +200,8 @@ public struct EditRefusal: Sendable, Hashable {
             "rehearsal mark text is empty"
         case let .voiceAlreadyExists(staff, measureIndex, voiceIndex):
             "measure \(measureIndex) of \(staff) already has voice \(voiceIndex)"
+        case let .invalidRepeatCount(count):
+            "a repeat must play at least twice (got \(count))"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
