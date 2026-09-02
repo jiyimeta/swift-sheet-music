@@ -14,14 +14,14 @@
 
         /// G3a: with a classifier set, an image-only PDF reaches `buildScore`.
         /// Without one, it does not — which is what makes the knob meaningful.
-        @Test func anImageOnlyPageIsReadOnlyWhenAClassifierIsSet() async throws {
+        @Test func anImageOnlyPageIsReadOnlyWhenAClassifierIsSet() throws {
             let data = try Self.imageOnlyPDF(Self.staffBitmap())
             #expect(throws: (any Error).self) {
                 try PDFImporter.parse(pdfData: data, options: PDFImportOptions())
             }
 
             var options = PDFImportOptions()
-            options.omrTileClassifier = try await CoreMLTileClassifier()
+            options.omrTileClassifier = try CoreMLTileClassifier()
             options.omrRenderDPI = Self.renderDPI
             let score = try PDFImporter.parse(pdfData: data, options: options)
             #expect(!score.parts.isEmpty)
@@ -101,9 +101,9 @@
         /// alone — `buildScore` derives ONE document-wide ensemble staff count
         /// as a GCD over every page, so a raster page that miscounts can drop
         /// every page, vector ones included, onto the per-page heuristic.
-        @Test func aMixedDocumentLeavesTheVectorPageUnchanged() async throws {
+        @Test func aMixedDocumentLeavesTheVectorPageUnchanged() throws {
             var options = PDFImportOptions()
-            options.omrTileClassifier = try await CoreMLTileClassifier()
+            options.omrTileClassifier = try CoreMLTileClassifier()
             options.omrRenderDPI = Self.renderDPI
             let mixed = try PDFImporter.parse(pdfData: Self.mixedPDF(), options: options)
             let vectorAlone = try PDFImporter.parse(
@@ -234,10 +234,10 @@
         /// the analysis frame, not the displayed page's, and a cursor that is
         /// silently a few points off is worse than none. So the page
         /// contributes NO rects, and the importer says so.
-        @Test func theGeometryEntryPointReadsAnImageOnlyPageWithoutGeometry() async throws {
+        @Test func theGeometryEntryPointReadsAnImageOnlyPageWithoutGeometry() throws {
             let log = DiagnosticLog()
             var options = PDFImportOptions()
-            options.omrTileClassifier = try await CoreMLTileClassifier()
+            options.omrTileClassifier = try CoreMLTileClassifier()
             options.omrRenderDPI = Self.renderDPI
             options.diagnostics = { log.messages.append($0.message) }
             let result = try PDFImporter.parseWithGeometry(
@@ -256,9 +256,9 @@
         /// has when parsed alone, and the raster page adds none — so the
         /// exclusion is per page, not a document-wide switch that would take
         /// the cursor off the typeset pages around one scan.
-        @Test func aMixedDocumentKeepsOnlyTheVectorPagesGeometry() async throws {
+        @Test func aMixedDocumentKeepsOnlyTheVectorPagesGeometry() throws {
             var options = PDFImportOptions()
-            options.omrTileClassifier = try await CoreMLTileClassifier()
+            options.omrTileClassifier = try CoreMLTileClassifier()
             options.omrRenderDPI = Self.renderDPI
             let mixed = try PDFImporter.parseWithGeometry(pdfData: Self.mixedPDF(), options: options)
             let alone = try PDFImporter.parseWithGeometry(
@@ -277,10 +277,10 @@
         /// The pure-Swift reader takes the same options and does nothing with
         /// this one. A knob that silently does nothing is this repository's
         /// own silent-drop smell, so that entry point says so.
-        @Test func theSwiftReaderEntryPointSaysItDoesNotRasterize() async throws {
+        @Test func theSwiftReaderEntryPointSaysItDoesNotRasterize() throws {
             let log = DiagnosticLog()
             var options = PDFImportOptions()
-            options.omrTileClassifier = try await CoreMLTileClassifier()
+            options.omrTileClassifier = try CoreMLTileClassifier()
             options.diagnostics = { log.messages.append($0.message) }
             _ = try? PDFImporter.parseUsingSwiftReader(
                 pdfData: Self.imageOnlyPDF(Self.staffBitmap()), options: options,

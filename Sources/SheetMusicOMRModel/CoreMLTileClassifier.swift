@@ -13,7 +13,12 @@ public struct CoreMLTileClassifier: OMRTileClassifier, @unchecked Sendable {
     private let model: MLModel
 
     /// The model bundled with this target. No environment, no paths.
-    public init() async throws {
+    ///
+    /// Synchronous: the bundled artifact is already compiled, so loading it
+    /// is one `MLModel(contentsOf:)` with nothing to await. Only the
+    /// external-root initializer below compiles at run time and is `async`.
+    /// Still worth calling off the main actor — the load takes a moment.
+    public init() throws {
         guard let compiled = Bundle.module.url(forResource: "model", withExtension: "mlmodelc"),
               let manifestURL = Bundle.module.url(forResource: "model", withExtension: "json")
         else {

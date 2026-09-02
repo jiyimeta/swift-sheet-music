@@ -38,7 +38,7 @@
             let base: any OMRTileClassifier = if let modelRoot {
                 try await CoreMLTileClassifier(modelRoot: modelRoot)
             } else {
-                try await CoreMLTileClassifier()
+                try CoreMLTileClassifier()
             }
             manifest = Self.applyDecodeOverrides(to: base.manifest)
             detector = try OMRGlyphDetector(

@@ -52,7 +52,7 @@
                 print(line)
             }
             if env["SM_PDF_OMR"] == "1" {
-                options.omrTileClassifier = try await CoreMLTileClassifier()
+                options.omrTileClassifier = try CoreMLTileClassifier()
             }
 
             print("parsing \(url.path)")

@@ -530,17 +530,15 @@
         }
 
         /// `parseWithGeometry` with the bundled OMR model attached. Detached
-        /// because the parse is synchronous and CPU-bound; `PDFImportOptions`
-        /// is not `Sendable`, so it is built inside the task rather than
-        /// carried across.
+        /// because the parse — and the model load before it — is synchronous
+        /// and CPU-bound.
         private nonisolated static func parseMusicPDF(
             _ data: Data,
         ) async throws -> (score: Score, geometry: PDFScoreGeometry, diagnostics: [PDFImportDiagnostic]) {
-            let classifier = try await CoreMLTileClassifier()
-            return try await Task.detached(priority: .userInitiated) {
+            try await Task.detached(priority: .userInitiated) {
                 let log = ImportDiagnosticLog()
                 var options = PDFImportOptions()
-                options.omrTileClassifier = classifier
+                options.omrTileClassifier = try CoreMLTileClassifier()
                 options.diagnostics = { log.items.append($0) }
                 let result = try PDFImporter.parseWithGeometry(pdfData: data, options: options)
                 return (result.score, result.geometry, log.items)

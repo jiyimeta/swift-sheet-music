@@ -262,15 +262,17 @@ import SheetMusicOMRModel
 import SheetMusicPDF
 
 var options = PDFImportOptions()
-options.omrTileClassifier = try await CoreMLTileClassifier()
+options.omrTileClassifier = try CoreMLTileClassifier()
 let score = try PDFImporter.parse(pdfURL: url, options: options)
 ```
 
 The decision is made per page: a page the vector walker finds music on
-is read exactly as before, and only a page with no vector music is
-rasterized (300 dpi by default — `omrRenderDPI`) and run through the
-detector. With `omrTileClassifier` left `nil`, the default, nothing
-changes: no rasterization, no model load, no new code path.
+is read exactly as before, and every other page — a scan, but also a
+text-only cover page — is rasterized (300 dpi by default —
+`omrRenderDPI`) and run through the detector, which costs roughly a
+second and a half per page in a Release build and far more in Debug.
+With `omrTileClassifier` left `nil`, the default, nothing changes: no
+rasterization, no model load, no new code path.
 `parseWithGeometry` takes the same fallback; its geometry side-car
 carries no rects for the pages read this way, and says so in an `info`
 diagnostic.

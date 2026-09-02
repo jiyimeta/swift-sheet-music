@@ -23,7 +23,10 @@ public struct PDFImportDiagnostic: Sendable {
     }
 }
 
-public struct PDFImportOptions {
+/// `Sendable` so a host can build the options once and hand them to the
+/// parse wherever it runs it: every stored value is a plain value, a
+/// `@Sendable` closure, or a `Sendable` protocol existential.
+public struct PDFImportOptions: Sendable {
     public var preserveBreaks = true
     public var useMetadataAsFallback = true
     /// Expand a collapsed "N-bar" multi-measure rest (the H-bar captioned

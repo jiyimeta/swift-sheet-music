@@ -7,8 +7,8 @@
     struct CoreMLTileClassifierTests {
         /// The bundled model must load with NO environment variable and no
         /// caller-supplied path — that is the whole point of shipping it.
-        @Test func theBundledModelLoadsWithNoConfiguration() async throws {
-            let classifier = try await CoreMLTileClassifier()
+        @Test func theBundledModelLoadsWithNoConfiguration() throws {
+            let classifier = try CoreMLTileClassifier()
             #expect(classifier.manifest.classes.count == 62)
             #expect(classifier.manifest.staffSpacePx == 12)
             // Task 11 flips this; until then the bundled constants are the
@@ -19,8 +19,8 @@
 
         /// The heads must come back at the shape OMRGlyphDetector's channel
         /// check expects, or every page throws.
-        @Test func aBlankTileReturnsCorrectlyShapedHeads() async throws {
-            let classifier = try await CoreMLTileClassifier()
+        @Test func aBlankTileReturnsCorrectlyShapedHeads() throws {
+            let classifier = try CoreMLTileClassifier()
             let manifest = classifier.manifest
             let heads = try classifier.run(
                 tile: [Float](repeating: 0, count: manifest.tile * manifest.tile),

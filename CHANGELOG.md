@@ -13,8 +13,9 @@ and this project adheres to
   vector walker finds no music on and read it through an optical music recognition detector — when, and only
   when, `PDFImportOptions.omrTileClassifier` is set. Left `nil`, the importer does exactly what it did before:
   no rasterization, no model load, no new code path. The decision is per page, so a typeset title page followed
-  by scanned music needs no choice from the caller. `omrRenderDPI` (default 300) sets the resolution and is
-  clamped, with a warning, below 72. A page that cannot be rasterized or read costs a warning and its own
+  by scanned music needs no choice from the caller — though a page with no vector music on it, that cover
+  included, does pay one detector pass (about 1.5 s per page in a Release build; many times that in Debug).
+  `omrRenderDPI` (default 300) sets the resolution and is clamped, with a warning, below 72. A page that cannot be rasterized or read costs a warning and its own
   content, never the document. Nothing textual comes off a scanned page — there is no OCR.
 - `SheetMusicOMRModel`, a new Apple-only product bundling the trained detector as a compiled Core ML model
   (~1.1 MB) behind `CoreMLTileClassifier`. Separately linkable, so a consumer that never reads scans carries
@@ -23,7 +24,10 @@ and this project adheres to
   detected glyphs with the classical-CV staff lines, stems and beams into the importer's own content model —
   lives in `SheetMusicPDF` behind the public `OMRTileClassifier` protocol, which is the whole platform seam an
   ONNX or other backend has to implement.
-- `PDFImportDiagnostic` is `Sendable`, so a host parsing off the main actor can carry the diagnostics back.
+- `PDFImportOptions` and `PDFImportDiagnostic` are `Sendable`, so a host can build the options on one actor,
+  parse on another, and carry the diagnostics back. `CoreMLTileClassifier()` is a synchronous `throws`
+  initializer — the bundled model is precompiled and nothing in its load awaits; only `init(modelRoot:)`,
+  which compiles at run time, stays `async`.
 - `SM_PDF_OMR=1` on `swift run render-previews` reads the `SM_PDF` file with the bundled model.
 - `Training/`: the Python pipeline that generates the synthetic dataset, trains the detector and exports the
   bundled model, with its own tests; `Scripts/mscz-corpus-prep.sh` / `mscz-corpus-eval.sh` score the raster
