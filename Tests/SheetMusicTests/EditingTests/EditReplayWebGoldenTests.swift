@@ -214,7 +214,9 @@
                  .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry,
                  .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice,
                  .transposeRange, .addIntervalToSelection, .deleteRange, .setAccidentalsInRange,
-                 .setDurationInRange, .respellRange:
+                 .setDurationInRange, .respellRange,
+                 .setClef, .removeClef, .setTempo, .setStaffText, .setDynamic, .setFermata, .setBreath,
+                 .setJumps, .setMarkers:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }

@@ -132,6 +132,9 @@ extension ScoreEditSession {
         case .transposeRange, .addIntervalToSelection, .deleteRange, .setAccidentalsInRange, .setDurationInRange,
              .respellRange:
             return rangeCommand(for: intent, in: score)
+        case .setClef, .removeClef, .setTempo, .setStaffText, .setDynamic, .setFermata, .setBreath, .setJumps,
+             .setMarkers:
+            return markCommand(for: intent, in: score)
         }
     }
 

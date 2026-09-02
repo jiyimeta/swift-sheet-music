@@ -236,4 +236,46 @@ public enum EditIntent: Sendable, Equatable {
     /// Re-spell every note in `over` enharmonically per `mode`, pitches unchanged. Resolves to nothing to apply
     /// when every note is already spelled that way.
     case respellRange(over: VoiceElementRange, mode: RespellMode)
+
+    // Appended for the edit-command parity project's mark group (spec 2026-09-02) — indices 41…49. Every mark
+    // that can be present or absent is one intent whose payload is optional: the value writes or replaces, `nil`
+    // removes ("nil clears", §3.1). System-lane marks (tempo, staff text) are addressed by the chord or rest they
+    // sit on (§2.3); adjacent marks by the chord they attach to.
+
+    /// Write `clef` before the chord or rest at `before`, replacing a clef already there. Resolves to nothing to
+    /// apply when that clef already reads `clef`; refused as `.wrongElementKind` on a non-timed target.
+    case setClef(before: VoiceElementID, clef: NotatedClef)
+
+    /// Remove the explicit clef element at `at`. Refused as `.wrongElementKind` when it is not a clef.
+    case removeClef(at: VoiceElementID)
+
+    /// Write `marking` as the tempo at the beat of the chord or rest at `anchor`, or remove the tempo there with
+    /// `nil`. Resolves to nothing to apply when the beat already carries exactly this marking, or when `nil` is
+    /// asked of a beat with no tempo.
+    case setTempo(anchor: VoiceElementID, marking: SetTempo.Marking?)
+
+    /// Write `text` as the staff text (or, with `isSystemText`, the system text) at the beat of the chord or rest
+    /// at `anchor`, or remove it with `nil`. Trimmed engine-side; empty after trimming is refused as
+    /// `.emptyStaffText`. Resolves to nothing to apply when the text already reads this way.
+    case setStaffText(anchor: VoiceElementID, text: String?, isSystemText: Bool)
+
+    /// Write `subtype` as the dynamic on the chord at `at` (velocity from `Dynamic.defaultVelocity(for:)`), or
+    /// remove it with `nil`. Resolves to nothing to apply when the chord already carries that subtype.
+    case setDynamic(at: VoiceElementID, subtype: String?)
+
+    /// Write a fermata of `subtype` with `timeStretch` over the chord or rest at `at`, or remove it with `nil`.
+    /// Resolves to nothing to apply when both fields already match.
+    case setFermata(at: VoiceElementID, subtype: String?, timeStretch: Double)
+
+    /// Write a breath of `kind` with `pause` seconds after the chord at `after`, or remove it with `nil`.
+    /// Resolves to nothing to apply when both fields already match.
+    case setBreath(after: VoiceElementID, kind: Breath.Kind?, pause: Double)
+
+    /// Replace the jumps of the measure column at `at` (on the canonical staff). Resolves to nothing to apply
+    /// when the list is already equal.
+    case setJumps(at: MeasureRef, jumps: [Jump])
+
+    /// Replace the markers of the measure column at `at` (on the canonical staff). Resolves to nothing to apply
+    /// when the list is already equal.
+    case setMarkers(at: MeasureRef, markers: [Marker])
 }
