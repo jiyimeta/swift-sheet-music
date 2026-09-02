@@ -75,9 +75,10 @@ extension Score {
     }
 
     /// Anchor every `.fermata` in one voice to a chord and measure the resulting hold. Forward
-    /// search first — MusicXML writes the fermata before its target — then a backward fallback for
-    /// the MSCX shape, where it is a sibling AFTER the chord. A fermata with no chord in either
-    /// direction is dropped.
+    /// search first — both MusicXML and MuseScore 4's MSCX write the fermata BEFORE the chord it
+    /// holds, as one of that segment's annotations (`AdjacentElementSlot`), and `SetFermata` writes
+    /// it there — then a backward fallback, which still catches a producer that trailed it after the
+    /// chord. A fermata with no chord in either direction is dropped.
     private static func holds(
         in voice: Voice, measureIndex: Int, measureDuration: Fraction, division: Int,
     ) -> [FermataHold] {
