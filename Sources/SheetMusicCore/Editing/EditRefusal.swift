@@ -77,6 +77,32 @@ public struct EditRefusal: Sendable, Hashable {
         /// reason `.cannotRemoveLastPart` is: the voice IS there, and a host saying otherwise would be telling
         /// the user something untrue — the caller should be writing into it rather than creating it.
         case voiceAlreadyExists(staff: StaffAddress, measureIndex: Int, voiceIndex: Int)
+        /// A repeat that plays fewer than twice is not a repeat; `SetRepeatBarLines` refuses an `endRepeatCount`
+        /// below 2 rather than write a barline the layout would engrave but that means nothing.
+        case invalidRepeatCount(Int)
+        /// `SetMeasureRepeat` was asked for a span that is not a measure repeat MuseScore can write: a length
+        /// other than 1, 2 or 4 bars, or one of those lengths running off the end of the score. Distinct from
+        /// `.targetNotFound` because the measure the caller named DOES exist — it is the group that does not fit.
+        case invalidMeasureRepeatSpan(numMeasures: Int)
+        /// A member of the span `SetMeasureRepeat` was asked to turn into a measure repeat is not an empty bar —
+        /// it carries notes, a second voice, or already belongs to a repeat group. The sign replaces the bar's
+        /// contents, so writing over one would silently destroy music; `measureIndex` names the offending bar.
+        case measureRepeatSpanNotEmpty(measureIndex: Int)
+        /// `MoveToVoice` was given a destination that is not another voice of the SAME bar of the same staff —
+        /// a different measure, a different staff, or the voice the element is already in. Moving to a voice is
+        /// a vertical move at a fixed tick; anything else is a different edit (a paste, or a staff change).
+        case voiceMismatch(from: VoiceRef, to: VoiceRef)
+        /// The destination voice has no free span for `MoveToVoice` to drop the chord into: something in the
+        /// span is not a rest it may split and overwrite — a sounding note, or a rest inside a tuplet whose
+        /// length is the tuplet's to decide — or the voice simply ENDS before the span, a legal shape a partly
+        /// filled voice has. Refused rather than overwritten, since the span's contents would otherwise be
+        /// destroyed to make room, and rather than written short, which would drop the moved chord entirely.
+        case destinationNotFree(VoiceElementID)
+        /// A tuplet sits entirely before the slot an edit was asked to work at, so the tick the slot falls on
+        /// cannot be read off the voice's written durations — a tuplet's members sound at the tuplet's ratio,
+        /// not at their written length. Commands that walk ticks by summing written durations refuse rather
+        /// than act at a tick they computed wrong; a ratio-aware walk is separate work.
+        case tupletPrecedesSlot(at: VoiceElementID)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -135,6 +161,18 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.emptyRehearsalMarkText"
         case .voiceAlreadyExists:
             "edit.voiceAlreadyExists"
+        case .invalidRepeatCount:
+            "edit.invalidRepeatCount"
+        case .invalidMeasureRepeatSpan:
+            "edit.invalidMeasureRepeatSpan"
+        case .measureRepeatSpanNotEmpty:
+            "edit.measureRepeatSpanNotEmpty"
+        case .voiceMismatch:
+            "edit.voiceMismatch"
+        case .destinationNotFree:
+            "edit.destinationNotFree"
+        case .tupletPrecedesSlot:
+            "edit.tupletPrecedesSlot"
         case .unexpected:
             "edit.unexpected"
         }
@@ -195,6 +233,18 @@ public struct EditRefusal: Sendable, Hashable {
             "rehearsal mark text is empty"
         case let .voiceAlreadyExists(staff, measureIndex, voiceIndex):
             "measure \(measureIndex) of \(staff) already has voice \(voiceIndex)"
+        case let .invalidRepeatCount(count):
+            "a repeat must play at least twice (got \(count))"
+        case let .invalidMeasureRepeatSpan(numMeasures):
+            "a measure repeat spans 1, 2 or 4 bars that exist (got \(numMeasures))"
+        case let .measureRepeatSpanNotEmpty(measureIndex):
+            "measure \(measureIndex) is not an empty single-voice bar"
+        case let .voiceMismatch(from, to):
+            "cannot move from \(from) to \(to): the destination must be another voice of the same bar"
+        case let .destinationNotFree(location):
+            "element at \(location) is in the way of the moved chord"
+        case let .tupletPrecedesSlot(location):
+            "a tuplet before \(location) makes its tick ambiguous"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }

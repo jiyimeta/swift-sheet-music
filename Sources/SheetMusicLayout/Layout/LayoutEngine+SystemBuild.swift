@@ -218,6 +218,13 @@ extension LayoutEngine {
                 headerSchedule: schedule,
                 width: w,
             )
+            // `<endRepeat>` is a flag on the canonical staff's measure,
+            // not a `<BarLine>` element, and it applies to the whole
+            // system — so it is read once here rather than per staff.
+            let endsRepeat = staves.first.map {
+                measureIdx < $0.measures.count
+                    && $0.measures[measureIdx].endRepeatCount != nil
+            } ?? false
             var perStaff: [Int: [LayoutElement]] = [:]
             var perStaffInvisible: [Int: [LayoutElement]] = [:]
             for (staffIdx, staff) in staves.enumerated() {
@@ -270,6 +277,7 @@ extension LayoutEngine {
                     division: context.score.division,
                     drumLineMap: drumMap,
                     isLastMeasure: lastMeasure,
+                    endsRepeat: endsRepeat,
                     isFirstSystem: isFirstSystem,
                     incomingMelismas: incomingMelismas,
                     effectiveMelismaTicks: context.effectiveMelismaTicks,
@@ -311,6 +319,7 @@ extension LayoutEngine {
                         measureDuration: measDuration,
                         drumLineMap: drumMap,
                         isLastMeasure: lastMeasure,
+                        endsRepeat: endsRepeat,
                         isFirstSystem: isFirstSystem,
                         incomingMelismas: incomingMelismas,
                         effectiveMelismaTicks: context.effectiveMelismaTicks,
@@ -826,10 +835,12 @@ extension LayoutEngine {
                 let totalMeasures = staves.first?.measures.count ?? 0
                 let isLastMeasureOfScore = lastMeasureIdx == totalMeasures - 1
                 var barSubtype: String?
+                var runEndsRepeat = false
                 if let firstStaff = staves.first,
                    lastMeasureIdx < firstStaff.measures.count
                 {
                     let lastMeasure = firstStaff.measures[lastMeasureIdx]
+                    runEndsRepeat = lastMeasure.endRepeatCount != nil
                     for voice in lastMeasure.voices {
                         for el in voice.elements {
                             if case let .barLine(b) = el {
@@ -837,6 +848,12 @@ extension LayoutEngine {
                             }
                         }
                     }
+                }
+                // Same precedence the per-measure path uses: an explicit
+                // `<BarLine>` wins, then the `<endRepeat>` flag, then the
+                // score-final "end".
+                if barSubtype == nil, runEndsRepeat {
+                    barSubtype = "end-repeat"
                 }
                 if barSubtype == nil, isLastMeasureOfScore {
                     barSubtype = "end"

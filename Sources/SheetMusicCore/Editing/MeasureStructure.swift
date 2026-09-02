@@ -44,6 +44,25 @@ enum MeasureStructure {
         }
     }
 
+    /// Remaps `tuplets` across a splice that replaced the elements up to and including old index `spliceEnd`
+    /// with a run of a different length: every tuplet that starts strictly AFTER `spliceEnd` moves by `delta`,
+    /// and every tuplet that starts before it is left alone. The mid-list counterpart of
+    /// `shiftTuplets(in:by:)`, which shifts the whole list because its splice is always a prefix.
+    ///
+    /// A tuplet that OVERLAPS the splice is not a case this can answer — its members' lengths are the tuplet's
+    /// to decide, so a command must refuse such a splice rather than re-spell it. Both callers do:
+    /// `SplitRest` through `ensureNotInsideTuplet`, `MoveToVoice` through `.destinationNotFree`.
+    static func shiftTuplets(_ tuplets: [Tuplet], by delta: Int, after spliceEnd: Int) -> [Tuplet] {
+        guard delta != 0 else { return tuplets }
+        return tuplets.map { tuplet in
+            guard tuplet.startIndex > spliceEnd else { return tuplet }
+            var shifted = tuplet
+            shifted.startIndex += delta
+            shifted.endIndex += delta
+            return shifted
+        }
+    }
+
     /// Removes every element `shouldRemove` accepts from `voice`, remapping each tuplet endpoint past the
     /// removals that preceded it so tuplet ranges keep pointing at the same elements. `shiftTuplets(in:by:)`
     /// is the special case where the removals form a uniform prefix; this is the general one, for removals

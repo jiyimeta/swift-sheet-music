@@ -54,6 +54,10 @@ public struct AddPart: EditCommand {
     /// `[measureIndex][elementIndex]`. Captured for the same reason as `restoredBrackets`: an element anchored
     /// INTO the removed part is re-anchored onto the first staff, which loses the address it had.
     let restoredOriginalStaves: [[StaffAddress?]]?
+    /// Also inverse-only: the flags the staff that became canonical after the removal carried BEFORE the hoist —
+    /// what `MeasureFlagsHoist` overwrote there. `nil` unless the removal actually re-anchored the canonical staff
+    /// (`partIndex == 0` with a survivor). Restored onto the demoted staff, part 1 once this part is back at 0.
+    let restoredCanonicalFlags: [Measure.Flags]?
 
     public init(plan: BlankScoreTemplate.PartPlan, at partIndex: Int) {
         self.partIndex = partIndex
@@ -61,6 +65,7 @@ public struct AddPart: EditCommand {
         restoredPart = nil
         restoredBrackets = nil
         restoredOriginalStaves = nil
+        restoredCanonicalFlags = nil
     }
 
     init(
@@ -68,12 +73,14 @@ public struct AddPart: EditCommand {
         at partIndex: Int,
         brackets: [[[BracketItem]]],
         originalStaves: [[StaffAddress?]],
+        canonicalFlags: [Measure.Flags]? = nil,
     ) {
         self.partIndex = partIndex
         plan = nil
         restoredPart = part
         restoredBrackets = brackets
         restoredOriginalStaves = originalStaves
+        restoredCanonicalFlags = canonicalFlags
     }
 
     public var affectedLocation: VoiceElementID {
@@ -128,6 +135,11 @@ public struct AddPart: EditCommand {
                 score.systemMeasures[measureIndex].elements[elementIndex].originalStaff =
                     restoredOriginalStaves[measureIndex][elementIndex]
             }
+        }
+        if let restoredCanonicalFlags, partIndex == 0 {
+            MeasureFlagsHoist.write(
+                restoredCanonicalFlags, to: StaffAddress(partIndex: 1, staffIndexInPart: 0), in: &score,
+            )
         }
     }
 

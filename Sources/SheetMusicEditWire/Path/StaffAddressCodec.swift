@@ -9,6 +9,7 @@ import Wirelet
 /// ```
 /// tag 1: partIndex          i32, zig-zag varint
 /// tag 2: staffIndexInPart   i32, zig-zag varint
+/// tag 3: reserved for SP0's optional stable identity; do not assign it
 /// ```
 public enum StaffAddressCodec {
     public static func encode(_ value: StaffAddress) -> Data {

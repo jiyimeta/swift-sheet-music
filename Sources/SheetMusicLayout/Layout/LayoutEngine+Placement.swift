@@ -59,6 +59,7 @@ extension LayoutEngine {
         measureDuration: Fraction,
         drumLineMap: [Int: Int]? = nil,
         isLastMeasure: Bool = false,
+        endsRepeat: Bool = false,
         isFirstSystem: Bool = false,
         incomingMelismas: [MelismaContinuation] = [],
         effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
@@ -1898,12 +1899,31 @@ extension LayoutEngine {
         // is routed to `invisibleOut`, so we must check BOTH lists —
         // otherwise we'd synth an implicit (visible) bar on top of
         // the hidden one, defeating the visibility toggle.
+        //
+        // The start-repeat is synthesized from the measure flag (see
+        // `computeHeaderSchedule`), which already reserved the room it
+        // takes ahead of `contentStartX`. It never satisfies the
+        // trailing-bar requirement, so it is excluded from the check
+        // below.
+        if let startRepeatX = headerSchedule.startRepeatX {
+            out.append(.barLine(
+                subtype: "start-repeat",
+                origin: CGPoint(x: startRepeatX, y: barLineMidY),
+                halfHeight: barLineHalfHeight,
+            ))
+        }
         let hasExplicitBar = (out + invisibleOut).contains {
-            if case .barLine = $0 { true } else { false }
+            if case let .barLine(subtype, _, _) = $0 {
+                subtype != "start-repeat"
+            } else {
+                false
+            }
         }
         if !hasExplicitBar {
             out.append(.barLine(
-                subtype: isLastMeasure ? "end" : nil,
+                subtype: endsRepeat
+                    ? "end-repeat"
+                    : (isLastMeasure ? "end" : nil),
                 origin: CGPoint(
                     x: width - metrics.sp / 2,
                     y: barLineMidY,

@@ -30,7 +30,8 @@ import Wirelet
 ///
 /// `EditIntentWire` top-level bytes: `varint(payloadLength)` + payload, where payload is `varint(caseIndex)`
 /// followed — for every case here, since none is payload-less — by `tag(1, lengthDelimited) +
-/// associatedValue.encode()`. Case indices, matching `EditIntent`'s declaration order exactly:
+/// associatedValue.encode()`. Case indices below are the committed order; `EditIntent`'s declaration order follows
+/// it but is not the authority:
 /// ```
 /// 0 = inputNote(InputNoteIntentWire)
 /// 1 = setRestDuration(SlotDurationIntentWire)
@@ -62,11 +63,17 @@ import Wirelet
 /// 27 = setNoteHead(SetNoteHeadIntentWire)
 /// 28 = setDrumsetEntry(SetDrumsetEntryIntentWire)
 /// 29 = setPartNames(SetPartNamesIntentWire)
+/// 30 = setLayoutBreak(SetLayoutBreakIntentWire)
+/// 31 = setBarLine(SetBarLineIntentWire)
+/// 32 = setRepeatBarLines(SetRepeatBarLinesIntentWire)
+/// 33 = setMeasureRepeat(SetMeasureRepeatIntentWire)
+/// 34 = moveToVoice(MoveToVoiceIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
 /// creation, 19…22 for M3 signature changes, 23…24 for M4 rehearsal marks, 25…28 for M6 drum note entry and 29
-/// for part renaming; 0…4 predate them all and must keep their indices and byte layout.
+/// for part renaming; 0…4 predate them all and must keep their indices and byte layout. Cases 30…34 were appended
+/// for the edit-command parity project's structural group (spec 2026-09-02).
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -337,6 +344,41 @@ import Wirelet
 /// tag 9: hasShortcut  u8, varint
 /// tag 10: shortcut    string — UTF-8; "" when hasShortcut == 0
 /// ```
+///
+/// `SetLayoutBreakIntentWire` (`setLayoutBreak`'s payload):
+/// ```
+/// tag 1: measure  MeasureRefWire, see ReferenceCodecs.swift
+/// tag 2: kind     u8, varint — 1=line 2=page 3=section, else throws
+/// tag 3: enabled  u8, varint — 0 / 1
+/// ```
+///
+/// `SetBarLineIntentWire` (`setBarLine`'s payload):
+/// ```
+/// tag 1: measure  MeasureRefWire, see ReferenceCodecs.swift
+/// tag 2: style    string — BarLineStyle raw value; unknown throws
+/// ```
+///
+/// `SetRepeatBarLinesIntentWire` (`setRepeatBarLines`'s payload):
+/// ```
+/// tag 1: measure         MeasureRefWire, see ReferenceCodecs.swift
+/// tag 2: startRepeat     u8, varint — 0 / 1
+/// tag 3: hasEndRepeat    u8, varint — 0 = no end repeat, 1 = endRepeatCount holds it
+/// tag 4: endRepeatCount  i32, zig-zag varint — 0 when hasEndRepeat == 0
+/// ```
+///
+/// `SetMeasureRepeatIntentWire` (`setMeasureRepeat`'s payload):
+/// ```
+/// tag 1: measure      MeasureRefWire, see ReferenceCodecs.swift
+/// tag 2: staff        StaffAddressWire, see StaffAddressCodec.swift
+/// tag 3: hasCount     u8, varint — 0 = clear the group, 1 = numMeasures holds it
+/// tag 4: numMeasures  i32, zig-zag varint — 0 when hasCount == 0
+/// ```
+///
+/// `MoveToVoiceIntentWire` (`moveToVoice`'s payload):
+/// ```
+/// tag 1: location     VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: destination  VoiceRefWire, see ReferenceCodecs.swift
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -495,6 +537,21 @@ public enum EditIntentWire {
     case setDrumsetEntry(SetDrumsetEntryIntentWire)
     /// Appended for part renaming — index 29. Never renumber anything above it.
     case setPartNames(SetPartNamesIntentWire)
+    /// Appended for the edit-command parity project's structural group (spec 2026-09-02) — index 30. Never
+    /// renumber anything above it.
+    case setLayoutBreak(SetLayoutBreakIntentWire)
+    /// Appended for the edit-command parity project's structural group (spec 2026-09-02) — index 31. Never
+    /// renumber anything above it.
+    case setBarLine(SetBarLineIntentWire)
+    /// Appended for the edit-command parity project's structural group (spec 2026-09-02) — index 32. Never
+    /// renumber anything above it.
+    case setRepeatBarLines(SetRepeatBarLinesIntentWire)
+    /// Appended for the edit-command parity project's structural group (spec 2026-09-02) — index 33. Never
+    /// renumber anything above it.
+    case setMeasureRepeat(SetMeasureRepeatIntentWire)
+    /// Appended for the edit-command parity project's structural group (spec 2026-09-02) — index 34. Never
+    /// renumber anything above it.
+    case moveToVoice(MoveToVoiceIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -582,6 +639,20 @@ public enum EditIntentWire {
             self = .setPartNames(SetPartNamesIntentWire(
                 partIndex: partIndex, longName: longName, shortName: shortName,
             ))
+        case let .setLayoutBreak(measure, kind, enabled):
+            self = .setLayoutBreak(SetLayoutBreakIntentWire(measure: measure, kind: kind, enabled: enabled))
+        case let .setBarLine(measure, style):
+            self = .setBarLine(SetBarLineIntentWire(measure: measure, style: style))
+        case let .setRepeatBarLines(measure, startRepeat, endRepeatCount):
+            self = .setRepeatBarLines(SetRepeatBarLinesIntentWire(
+                measure: measure, startRepeat: startRepeat, endRepeatCount: endRepeatCount,
+            ))
+        case let .setMeasureRepeat(measure, staff, numMeasures):
+            self = .setMeasureRepeat(SetMeasureRepeatIntentWire(
+                measure: measure, staff: staff, numMeasures: numMeasures,
+            ))
+        case let .moveToVoice(location, destination):
+            self = .moveToVoice(MoveToVoiceIntentWire(location: location, destination: destination))
         }
     }
 
@@ -692,6 +763,23 @@ public enum EditIntentWire {
             return .setPartNames(
                 at: decoded.partIndex, longName: decoded.longName, shortName: decoded.shortName,
             )
+        case let .setLayoutBreak(wire):
+            let decoded = try wire.decoded()
+            return .setLayoutBreak(at: decoded.measure, kind: decoded.kind, enabled: decoded.enabled)
+        case let .setBarLine(wire):
+            let decoded = try wire.decoded()
+            return .setBarLine(at: decoded.measure, style: decoded.style)
+        case let .setRepeatBarLines(wire):
+            let decoded = wire.decoded()
+            return .setRepeatBarLines(
+                at: decoded.measure, startRepeat: decoded.startRepeat, endRepeatCount: decoded.endRepeatCount,
+            )
+        case let .setMeasureRepeat(wire):
+            let decoded = wire.decoded()
+            return .setMeasureRepeat(at: decoded.measure, staff: decoded.staff, numMeasures: decoded.numMeasures)
+        case let .moveToVoice(wire):
+            let decoded = wire.decoded()
+            return .moveToVoice(at: decoded.location, to: decoded.destination)
         }
     }
 }

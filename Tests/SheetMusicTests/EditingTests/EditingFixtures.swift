@@ -221,4 +221,45 @@ enum EditingFixtures {
             noteIndexInChord: noteIndex,
         )
     }
+
+    /// Two single-staff parts, four bars of 4/4, for the parity replay chain (spec 2026-09-02 §5). Staff (0,0):
+    /// bar 0 = meter, C4, D4, two rests; bar 1 = four rests plus a second voice holding one measure rest; bar 2 =
+    /// two tied half notes on E4; bar 3 = a measure rest. Staff (1,0) is measure rests throughout.
+    static func parityFixture() -> Score {
+        func chord(_ pitch: Int, _ tpc: Int, _ duration: NoteDuration, tieForward: Int? = nil, tieBack: Int? = nil)
+            -> VoiceElement
+        {
+            var note = Note(pitch: pitch, tpc: tpc)
+            note.tieForward = tieForward
+            note.tieBack = tieBack
+            return .chord(Chord(duration: duration, notes: [note]))
+        }
+        let flute = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                chord(60, 14, .quarter), chord(62, 16, .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+            ])]),
+            Measure(voices: [
+                Voice(elements: [
+                    .rest(duration: .quarter), .rest(duration: .quarter),
+                    .rest(duration: .quarter), .rest(duration: .quarter),
+                ]),
+                Voice(elements: [.rest(duration: .measure)]),
+            ]),
+            Measure(voices: [Voice(elements: [chord(64, 18, .half, tieForward: 1), chord(64, 18, .half, tieBack: 1)])]),
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+        ])
+        let cello = Staff(defaultClefType: "F", measures: [
+            Measure(voices: [Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)), .rest(duration: .measure),
+            ])]),
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+        ])
+        return Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [flute]),
+            Part(id: "2", trackName: "Cello", instrument: Instrument(id: "cello"), staves: [cello]),
+        ])
+    }
 }

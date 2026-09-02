@@ -215,6 +215,14 @@ struct EditIntentCodecTests {
             .setPartNames(at: 1, longName: nil, shortName: nil),
             // An empty name is a name the score declares, and must not come back as a cleared one.
             .setPartNames(at: 1, longName: "", shortName: ""),
+            // Appended for the edit-command parity project (spec 2026-09-02), group 1 — indices 30…34.
+            .setLayoutBreak(at: MeasureRef(measureIndex: 3), kind: .page, enabled: true),
+            .setBarLine(at: MeasureRef(measureIndex: 3), style: .doubleHeavy),
+            .setRepeatBarLines(at: MeasureRef(measureIndex: 3), startRepeat: true, endRepeatCount: 3),
+            .setRepeatBarLines(at: MeasureRef(measureIndex: 3), startRepeat: false, endRepeatCount: nil),
+            .setMeasureRepeat(at: MeasureRef(measureIndex: 3), staff: staff, numMeasures: 2),
+            .setMeasureRepeat(at: MeasureRef(measureIndex: 3), staff: staff, numMeasures: nil),
+            .moveToVoice(at: slot, to: VoiceRef(staff: staff, measureIndex: 3, voiceIndex: 1)),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -292,6 +300,20 @@ struct EditIntentCodecTests {
         #expect(EditIntentCodec.encode(.setDrumsetEntry(partIndex: 0, pitch: 42, entry: nil))[1] == 28)
         // Appended for part renaming.
         #expect(EditIntentCodec.encode(.setPartNames(at: 0, longName: nil, shortName: nil))[1] == 29)
+        // Appended for the edit-command parity project (spec 2026-09-02), group 1.
+        #expect(EditIntentCodec.encode(
+            .setLayoutBreak(at: MeasureRef(measureIndex: 0), kind: .line, enabled: true),
+        )[1] == 30)
+        #expect(EditIntentCodec.encode(.setBarLine(at: MeasureRef(measureIndex: 0), style: .end))[1] == 31)
+        #expect(EditIntentCodec.encode(
+            .setRepeatBarLines(at: MeasureRef(measureIndex: 0), startRepeat: false, endRepeatCount: nil),
+        )[1] == 32)
+        #expect(EditIntentCodec.encode(
+            .setMeasureRepeat(at: MeasureRef(measureIndex: 0), staff: staff, numMeasures: nil),
+        )[1] == 33)
+        #expect(EditIntentCodec.encode(
+            .moveToVoice(at: slot, to: VoiceRef(staff: staff, measureIndex: 0, voiceIndex: 1)),
+        )[1] == 34)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field
@@ -365,5 +387,28 @@ struct EditIntentCodecTests {
         let index = try #require(bytes.indices.last.map { max(bytes.startIndex, $0 - 1) })
         bytes[index] ^= 0x01
         #expect(throws: WireFormatError.unknownChoiceDiscriminator(0)) { try EditIntentCodec.decode(bytes) }
+    }
+
+    /// A `kind` outside `LayoutBreakKind`'s cases (1…3) must not decode as one of them — a newer writer's break
+    /// kind must not silently become a different break on an older reader. `0` is deliberately unassigned by
+    /// `LayoutBreakKind` for exactly this hand-mutated test.
+    @Test func `a layout break kind outside the known cases is refused`() {
+        var wire = SetLayoutBreakIntentWire(measure: MeasureRef(measureIndex: 0), kind: .line, enabled: true)
+        wire.kind = 0
+        let bytes = EditIntentWire.setLayoutBreak(wire).encodeToData()
+        #expect(throws: (any Error).self) {
+            try EditIntentCodec.decode(bytes)
+        }
+    }
+
+    /// A barline style spelling this build does not know must fail the decode, not decode as `.normal` — the same
+    /// forward-compatibility rule `AccidentalWire.decoded()` enforces on its own raw-string payload.
+    @Test func `an unknown barline style spelling is refused`() {
+        var wire = SetBarLineIntentWire(measure: MeasureRef(measureIndex: 0), style: .end)
+        wire.style = "zigzag"
+        let bytes = EditIntentWire.setBarLine(wire).encodeToData()
+        #expect(throws: (any Error).self) {
+            try EditIntentCodec.decode(bytes)
+        }
     }
 }

@@ -64,14 +64,18 @@ interface GeometryProbe {
   readonly caret: unknown;
 }
 
-const replayFixture = JSON.parse(
-  readFileSync(fixturePath("edit-replay.json"), "utf8"),
-) as ReplayFixture;
+// One entry per `ReplayChain` on the Swift side: "edit-replay" is the standard note- and slot-level chain,
+// "edit-replay-parity" the structural one covering EditIntent cases 30-34. Both pairs are recorded by
+// EditReplayWebGoldenTests.swift, so a chain added there is picked up here by adding its stem to this list.
+const replayChains = (["edit-replay", "edit-replay-parity"] as const).map((stem) => ({
+  stem,
+  fixture: JSON.parse(readFileSync(fixturePath(`${stem}.json`), "utf8")) as ReplayFixture,
+  bytes: new Uint8Array(readFileSync(fixturePath(`${stem}.mscx`))),
+}));
+
 const editExpectations = JSON.parse(
   readFileSync(fixturePath("sample-edit-expectations.json"), "utf8"),
 ) as SampleEditExpectations;
-
-const replayBytes = new Uint8Array(readFileSync(fixturePath("edit-replay.mscx")));
 const sampleBytes = new Uint8Array(readFileSync(fixturePath("sample.mscz")));
 
 function duration(duration: ReplayDuration | undefined): NoteDurationSpec | undefined {
@@ -264,31 +268,34 @@ describe("editing facade", () => {
     expect(sheetMusic.installSMuFLMetrics(metricsBytes)).toBe(true);
   });
 
-  it("replays the Apple editing script through the JavaScript facade", () => {
-    const score = sheetMusic.loadScore(replayBytes);
-    try {
-      score.beginEditing();
-      expect(score.fingerprint).toBe(replayFixture.fingerprints[0]);
+  it.each(replayChains)(
+    "replays the $stem editing script through the JavaScript facade",
+    ({ stem, fixture: replayFixture, bytes: replayBytes }) => {
+      const score = sheetMusic.loadScore(replayBytes);
+      try {
+        score.beginEditing();
+        expect(score.fingerprint).toBe(replayFixture.fingerprints[0]);
 
-      replayFixture.steps.forEach((step, index) => {
-        const outcome =
-          step.op === "intentBytes"
-            ? score.applyEditIntentBytes(bytes(requireString(step.base64, "base64")))
-            : step.op === "undo"
-              ? score.undo()
-              : step.op === "redo"
-                ? score.redo()
-                : score.applyEdit(intent(step));
+        replayFixture.steps.forEach((step, index) => {
+          const outcome =
+            step.op === "intentBytes"
+              ? score.applyEditIntentBytes(bytes(requireString(step.base64, "base64")))
+              : step.op === "undo"
+                ? score.undo()
+                : step.op === "redo"
+                  ? score.redo()
+                  : score.applyEdit(intent(step));
 
-        expect(outcome.accepted, `step ${index} ${step.op}`).toBe(true);
-        expect(score.fingerprint, `fingerprint after step ${index}`).toBe(
-          replayFixture.fingerprints[index + 1],
-        );
-      });
-    } finally {
-      score.release();
-    }
-  });
+          expect(outcome.accepted, `${stem} step ${index} ${step.op}`).toBe(true);
+          expect(score.fingerprint, `${stem} fingerprint after step ${index}`).toBe(
+            replayFixture.fingerprints[index + 1],
+          );
+        });
+      } finally {
+        score.release();
+      }
+    },
+  );
 
   it("matches sample edit hit-test and caret geometry expectations", () => {
     const score = sheetMusic.loadScore(sampleBytes);

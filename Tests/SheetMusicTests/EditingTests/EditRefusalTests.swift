@@ -79,6 +79,12 @@ struct EditRefusalTests {
             .invalidTimeSignatureValue(numerator: 0, denominator: 3),
             .emptyRehearsalMarkText,
             .voiceAlreadyExists(staff: staff, measureIndex: 0, voiceIndex: 1),
+            .invalidRepeatCount(1),
+            .invalidMeasureRepeatSpan(numMeasures: 3),
+            .measureRepeatSpanNotEmpty(measureIndex: 1),
+            .voiceMismatch(from: VoiceRef(voiceID), to: VoiceRef(staff: staff, measureIndex: 1, voiceIndex: 0)),
+            .destinationNotFree(voiceID),
+            .tupletPrecedesSlot(at: voiceID),
             .unexpected(description: "boom"),
         ]
     }

@@ -48,6 +48,14 @@ public struct RemovePart: EditCommand {
         let brackets = score.parts.map { $0.staves.map(\.brackets) }
         let originalStaves = score.systemMeasures.map { $0.elements.map(\.originalStaff) }
 
+        // The part being removed may be the canonical one. Capture what the staff that will become canonical
+        // carries now, then move the flags onto it AFTER the removal (its address is (0, 0) only then).
+        let becomesCanonical = partIndex == 0 && score.parts.count > 1
+        let canonicalFlagsBefore = becomesCanonical
+            ? MeasureFlagsHoist.column(of: StaffAddress(partIndex: 1, staffIndexInPart: 0), in: score)
+            : nil
+        let removedFlags = becomesCanonical ? MeasureFlagsHoist.column(of: Score.canonicalStaff, in: score) : nil
+
         // Computed against the PRE-removal parts — the re-anchor pass reads the original global staff order and
         // reports where each surviving bracket lands in the post-removal one.
         var survivorLocations: [StaffAddress: (part: Int, staff: Int)] = [:]
@@ -70,9 +78,12 @@ public struct RemovePart: EditCommand {
         }
         reanchorSystemElements(in: &score)
 
+        if let removedFlags {
+            MeasureFlagsHoist.write(removedFlags, to: Score.canonicalStaff, in: &score)
+        }
         return AddPart(
             restoring: removed, at: partIndex,
-            brackets: brackets, originalStaves: originalStaves,
+            brackets: brackets, originalStaves: originalStaves, canonicalFlags: canonicalFlagsBefore,
         )
     }
 

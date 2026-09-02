@@ -1,0 +1,56 @@
+{
+  "fingerprints" : [
+    "7849725953743034330",
+    "7109485844881611823",
+    "4831404523853634253",
+    "4321092512542193854",
+    "4809469474184942864",
+    "4321092512542193854",
+    "-2040087635889819436",
+    "4321092512542193854",
+    "-2040087635889819436",
+    "90846441078278182",
+    "2195009515464154291"
+  ],
+  "steps" : [
+    {
+      "base64" : "Cx4KCAoCCAIQARgB",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Dx8KDAoCCAISBmRvdWJsZQ==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "DSAKCgoCCAIQARgBIAQ=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "ESEKDgoCCAQSBAgCEAAYASAE",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "ESEKDgoCCAQSBAgCEAAYACAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "HSIKGgoMCgQIABAAEAAYACACEgoKBAgAEAAQABgC",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "HSIKGgoMCgQIABAAEAAYACACEgoKBAgAEAAQABgC",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Dx8KDAoCCAISBm5vcm1hbA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Cx4KCAoCCAIQARgA",
+      "op" : "intentBytes"
+    }
+  ]
+}

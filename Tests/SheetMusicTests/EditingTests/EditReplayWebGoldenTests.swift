@@ -26,24 +26,30 @@
             packageRoot.appendingPathComponent("Web/sheet-music-web/test/fixtures")
         }
 
-        private var androidGoldensPath: URL {
-            packageRoot.appendingPathComponent(
-                "Android/SheetMusicAndroid/src/androidTest/assets/editReplay/goldens.txt",
-            )
+        /// The Android goldens the chain's web fingerprints are cross-checked against — that chain's own, so a
+        /// second chain cannot silently be verified against the first one's numbers.
+        private func androidGoldensPath(for chain: ReplayChain) -> URL {
+            packageRoot
+                .appendingPathComponent("Android/SheetMusicAndroid/src/androidTest/assets")
+                .appendingPathComponent(chain.androidAssetDir)
+                .appendingPathComponent("goldens.txt")
         }
 
-        @Test("record or verify web replay fixture against the Android fingerprint chain")
-        func replayFixtureMatchesLiveScriptAndAndroidGoldens() throws {
-            let liveFixtureData = try MSCXEncoder.encode(EditingFixtures.replayFixture())
-            let steps = EditReplayScript.standard(staff: Self.staff)
+        @Test(
+            "record or verify web replay fixture against the Android fingerprint chain",
+            arguments: ReplayChain.all,
+        )
+        func replayFixtureMatchesLiveScriptAndAndroidGoldens(chain: ReplayChain) throws {
+            let liveFixtureData = try MSCXEncoder.encode(chain.fixture())
+            let steps = chain.steps(Self.staff)
             let replay = try makeReplayFixture(steps: steps, fixtureData: liveFixtureData)
 
             let isRecording = ProcessInfo.processInfo.environment["SM_EDIT_REPLAY_RECORD"] == "1"
             if isRecording {
-                try record(fixtureData: liveFixtureData, replay: replay)
+                try record(chain: chain, fixtureData: liveFixtureData, replay: replay)
             }
 
-            try verify(fixtureData: liveFixtureData, replay: replay)
+            try verify(chain: chain, fixtureData: liveFixtureData, replay: replay)
         }
 
         private func makeReplayFixture(steps: [EditReplayStep], fixtureData: Data) throws -> ReplayFixture {
@@ -75,31 +81,38 @@
             return ReplayFixture(fingerprints: fingerprints, steps: encodedSteps)
         }
 
-        private func record(fixtureData: Data, replay: ReplayFixture) throws {
-            try FileManager.default.createDirectory(at: webFixturesDir, withIntermediateDirectories: true)
-            try fixtureData.write(to: webFixturesDir.appendingPathComponent("edit-replay.mscx"))
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(replay).write(to: webFixturesDir.appendingPathComponent("edit-replay.json"))
+        private func fixtureURL(for chain: ReplayChain, extension pathExtension: String) -> URL {
+            webFixturesDir.appendingPathComponent("\(chain.webFixtureStem).\(pathExtension)")
         }
 
-        private func verify(fixtureData: Data, replay: ReplayFixture) throws {
-            let committedFixture = try Data(contentsOf: webFixturesDir.appendingPathComponent("edit-replay.mscx"))
-            #expect(committedFixture == fixtureData, "edit-replay.mscx drifted from the live replay fixture")
+        private func record(chain: ReplayChain, fixtureData: Data, replay: ReplayFixture) throws {
+            try FileManager.default.createDirectory(at: webFixturesDir, withIntermediateDirectories: true)
+            try fixtureData.write(to: fixtureURL(for: chain, extension: "mscx"))
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(replay).write(to: fixtureURL(for: chain, extension: "json"))
+        }
+
+        private func verify(chain: ReplayChain, fixtureData: Data, replay: ReplayFixture) throws {
+            let committedFixture = try Data(contentsOf: fixtureURL(for: chain, extension: "mscx"))
+            #expect(
+                committedFixture == fixtureData,
+                "\(chain.webFixtureStem).mscx drifted from the live replay fixture",
+            )
 
             let decoder = JSONDecoder()
             let committedReplay = try decoder.decode(
                 ReplayFixture.self,
-                from: Data(contentsOf: webFixturesDir.appendingPathComponent("edit-replay.json")),
+                from: Data(contentsOf: fixtureURL(for: chain, extension: "json")),
             )
-            #expect(committedReplay == replay, "edit-replay.json drifted from the live replay script")
+            #expect(committedReplay == replay, "\(chain.webFixtureStem).json drifted from the live replay script")
 
-            let androidFingerprints = try String(contentsOf: androidGoldensPath, encoding: .utf8)
+            let androidFingerprints = try String(contentsOf: androidGoldensPath(for: chain), encoding: .utf8)
                 .split(separator: "\n", omittingEmptySubsequences: true)
                 .map(String.init)
             #expect(
                 androidFingerprints == replay.fingerprints,
-                "web edit replay fingerprints drifted from Android editReplay/goldens.txt",
+                "web edit replay fingerprints drifted from Android \(chain.androidAssetDir)/goldens.txt",
             )
         }
     }
@@ -198,7 +211,8 @@
             case .composite, .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart, .setPartNames,
                  .setKeySignature, .removeKeySignature, .setTimeSignature, .removeTimeSignature,
                  .setRehearsalMark, .removeRehearsalMark,
-                 .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry:
+                 .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry,
+                 .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }
