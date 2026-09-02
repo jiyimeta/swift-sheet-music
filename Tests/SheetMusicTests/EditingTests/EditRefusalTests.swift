@@ -86,6 +86,7 @@ struct EditRefusalTests {
             .destinationNotFree(voiceID),
             .invalidTransposition(semitones: 25),
             .invalidInterval(steps: 0),
+            .emptyStaffText,
             .unexpected(description: "boom"),
         ]
     }

@@ -105,6 +105,10 @@ public struct EditRefusal: Sendable, Hashable {
         /// `AddIntervalToSelection` was asked for an interval MuseScore's Alt+1…9 does not name: `|steps|` must be
         /// 1 (unison) … 9 (ninth).
         case invalidInterval(steps: Int)
+        /// A staff or system text whose text is empty (or whitespace only) is not a mark — it would engrave as
+        /// nothing. `SetStaffText` refuses rather than write one, the rule `.emptyRehearsalMarkText` states for
+        /// a rehearsal mark, under its own name so a host's copy can say which field was empty.
+        case emptyStaffText
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -177,6 +181,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.invalidTransposition"
         case .invalidInterval:
             "edit.invalidInterval"
+        case .emptyStaffText:
+            "edit.emptyStaffText"
         case .unexpected:
             "edit.unexpected"
         }
@@ -251,6 +257,8 @@ public struct EditRefusal: Sendable, Hashable {
             "a transposition spans at most two octaves (got \(semitones))"
         case let .invalidInterval(steps):
             "an interval is ±1 (unison) … ±9 (ninth) (got \(steps))"
+        case .emptyStaffText:
+            "staff text is empty"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
