@@ -76,6 +76,20 @@ struct SetMeasureRepeatTests {
         #expect(Self.reason(of: oddLength) == .invalidMeasureRepeatSpan(numMeasures: 3))
     }
 
+    @Test("clearing a group whose continuation bar has no voice at all is refused, not trapped")
+    func refusesVoicelessContinuationBar() throws {
+        var score = EditingFixtures.parityFixture()
+        let target = MeasureRef(measureIndex: 1)
+        _ = try SetMeasureRepeat(at: target, staff: Self.cello, numMeasures: 2).apply(to: &score)
+        // A bar with no voices at all is constructible, and the clear path used to index `voices[0]` blind.
+        score.parts[1].staves[0].measures[2].voices = []
+        let voiceless = #expect(throws: SheetMusicError.self) {
+            _ = try SetMeasureRepeat(at: target, staff: Self.cello, numMeasures: nil).apply(to: &score)
+        }
+        #expect(Self.reason(of: voiceless) == .measureRepeatSpanNotEmpty(measureIndex: 2))
+        #expect(score.parts[1].staves[0].measures[1].measureRepeatCount == 1, "refused before mutating")
+    }
+
     private static func reason(of error: SheetMusicError?) -> EditRefusal.Reason? {
         guard case let .invalidEdit(refusal)? = error else { return nil }
         return refusal.reason

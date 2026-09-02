@@ -78,6 +78,10 @@ public struct SetMeasureRepeat: EditCommand {
               let sign = first.voices.first.flatMap(Self.measureRepeatSign)
         else { throw Self.refused(.targetNotFound(affectedLocation)) }
         let previous = try group(of: sign.numMeasures, in: score)
+        // A continuation bar with no voice at all is constructible; refuse it rather than index into nothing.
+        if let offset = previous.firstIndex(where: { $0.voices.isEmpty }) {
+            throw Self.refused(.measureRepeatSpanNotEmpty(measureIndex: measure.measureIndex + offset))
+        }
         let cleared = previous.map { bar -> Measure in
             var next = bar
             let prefix = MeasureStructure.leadingSignaturePrefix(of: bar.voices[0])

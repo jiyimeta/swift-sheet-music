@@ -58,6 +58,58 @@ struct MoveToVoiceTests {
         #expect(moved.notes[0].pitch == 65)
     }
 
+    private static let tripletMember = VoiceElement.chord(
+        Chord(duration: .quarter, notes: [Note(pitch: 67, tpc: 15)]),
+    )
+
+    /// Measure 1 of the flute, rebuilt so the move collapses MORE than one destination rest: voice 0 opens with a
+    /// half note, and voice 1 is two quarter rests on beats 1–2 followed by a quarter-note triplet on beats 3–4.
+    /// The tuplet's endpoints index elements 2...4 and must survive the collapse of elements 0 and 1 into one.
+    private static func tripletDestinationScore() -> Score {
+        var score = EditingFixtures.parityFixture()
+        score.parts[0].staves[0].measures[1].voices[0] = Voice(elements: [
+            .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+        ])
+        score.parts[0].staves[0].measures[1].voices[1] = Voice(
+            elements: [
+                .rest(duration: .quarter), .rest(duration: .quarter),
+                tripletMember, tripletMember, tripletMember,
+            ],
+            tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)],
+        )
+        return score
+    }
+
+    @Test("a tuplet later in the destination voice keeps its members")
+    func shiftsTupletAfterTheCollapsedRun() throws {
+        var score = Self.tripletDestinationScore()
+
+        // The half note covers [0, 960), which is two quarter rests — they collapse into one element.
+        _ = try MoveToVoice(at: Self.slot(1, 0), to: Self.voiceOne(1)).apply(to: &score)
+
+        let measure = score.parts[0].staves[0].measures[1]
+        #expect(measure.voices[0].elements[0] == .rest(duration: .half))
+        let v1 = measure.voices[1]
+        #expect(v1.elements == [
+            .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
+            Self.tripletMember, Self.tripletMember, Self.tripletMember,
+        ])
+        #expect(v1.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
+    }
+
+    @Test("undo restores the destination voice's tuplet endpoints")
+    func undoRestoresTupletEndpoints() throws {
+        var score = Self.tripletDestinationScore()
+        let before = score
+
+        let inverse = try MoveToVoice(at: Self.slot(1, 0), to: Self.voiceOne(1)).apply(to: &score)
+        _ = try inverse.apply(to: &score)
+
+        #expect(score == before)
+    }
+
     @Test("a destination whose span holds a note, another measure, or the same voice is refused")
     func refusals() throws {
         var score = EditingFixtures.parityFixture()

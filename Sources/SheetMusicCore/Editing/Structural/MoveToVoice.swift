@@ -113,6 +113,9 @@ public struct MoveToVoice: EditCommand {
     }
 
     /// The run of rests covering exactly `[start, start + length)` collapsed into `chord`.
+    ///
+    /// The run can be several elements — `SplitRest` spells a gap as the aligned rests that tile it — so
+    /// collapsing it shortens the element list, and every tuplet after the run has to move left by as much.
     private static func replaceSlot(
         start: Int, length: Int, with chord: Chord, in scratch: Score,
         destination: VoiceRef, measureDuration: Fraction,
@@ -120,26 +123,29 @@ public struct MoveToVoice: EditCommand {
         guard let voice = scratch[voice: destination] else { throw refused(.targetNotFound(slot(destination))) }
         var tick = 0
         var elements: [VoiceElement] = []
-        var inserted = false
-        for element in voice.elements {
+        var collapsed = 0
+        var lastCollapsedIndex = 0
+        for (index, element) in voice.elements.enumerated() {
             guard case let .chord(rest) = element else {
                 elements.append(element)
                 continue
             }
             let ticks = rest.duration.resolved(in: measureDuration).ticks(division: scratch.division)
             if tick >= start, tick + ticks <= start + length {
-                if !inserted {
-                    elements.append(.chord(chord))
-                    inserted = true
-                }
+                if collapsed == 0 { elements.append(.chord(chord)) }
+                collapsed += 1
+                lastCollapsedIndex = index
             } else {
                 elements.append(element)
             }
             tick += ticks
         }
+        let tuplets = MeasureStructure.shiftTuplets(
+            voice.tuplets, by: collapsed > 0 ? -(collapsed - 1) : 0, after: lastCollapsedIndex,
+        )
         return ReplaceVoiceElements(
             staff: destination.staff, measureIndex: destination.measureIndex, voiceIndex: destination.voiceIndex,
-            elements: elements, tuplets: voice.tuplets,
+            elements: elements, tuplets: tuplets,
         )
     }
 
