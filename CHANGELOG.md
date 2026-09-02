@@ -56,6 +56,26 @@ and this project adheres to
   step produced, so an onset a lengthening already swallowed is skipped (`[q q q q]` to half is `[h h]`, as in
   MuseScore) — and any refusal rolls the whole range back, leaving nothing written. A tie chain is one sounding
   note: pitch edits move it whole, with the accidental on its head alone.
+- Nine mark edit commands, the third group of the same project: `SetClef` writes a clef change before a chord or
+  rest (replacing one already there, or landing at index 0 as the bar's header clef when nothing timed precedes
+  the target) and `RemoveClef` takes an explicit clef out; `SetTempo` writes, replaces or removes the tempo at a
+  beat, taking a `SetTempo.Marking(beatsPerSecond:beatNote:beatDots:)` — the metronome mark alone, since `Tempo`
+  has no text field, so a marking's words ("Allegro") are neither written nor kept; `SetStaffText` writes,
+  renames or removes
+  the staff text — or, with `isSystemText`, the system text — at a beat; `SetDynamic` writes a dynamic on a chord
+  with MuseScore's default velocity for the subtype; `SetFermata` writes a fermata over a chord or rest with a
+  `timeStretch`; `SetBreath` writes a breath mark or caesura after a chord; `SetJumps` and `SetMarkers` replace a
+  bar's navigation jumps / markers on the canonical staff. Reachable as `EditIntent.setClef` / `.removeClef` /
+  `.setTempo` / `.setStaffText` / `.setDynamic` / `.setFermata` / `.setBreath` / `.setJumps` / `.setMarkers`, wire
+  cases 41–49. Every mark that can be present or absent is ONE intent whose payload is optional: a value writes or
+  replaces, `nil` removes; an empty list clears for the two plural ones. Lane marks (tempo, staff text) are
+  addressed by the chord or rest they sit on rather than by a raw tick, so a file-authored lane mark at a tick no
+  chord starts is not reachable in this version. An intent that restates what the score already says plans to
+  nothing and is refused rather than recorded as an empty undo step.
+- `Dynamic.defaultVelocity(for:)` exposes MuseScore's dynamics table (the numbers the MSCX decoder already filled
+  in for a `<Dynamic>` with no `<velocity>`) on `Dynamic` itself, where a host writing a dynamic can reach it.
+- `EditRefusal.ExpectedKind.clef` (`RemoveClef` aimed at something that is not a clef) and
+  `EditRefusal.Reason.emptyStaffText` (`SetStaffText` given text that is empty once trimmed).
 - `RespellMode` (`.simplest` / `.preferSharps` / `.preferFlats`) and `PitchSpelling.tpc(forPitch:keySig:mode:)`,
   which returns the one tpc for a pitch inside the twelve-wide line-of-fifths window that mode places around the
   key — the seam `RespellRange` and `TransposeRange(respellInKey:)` both spell through.
@@ -67,7 +87,7 @@ and this project adheres to
   without moving a byte.
 - `Measure.Flags` groups the seven measure-level fields MuseScore writes on the first staff only — layout breaks,
   markers, jumps, `startRepeat` / `endRepeatCount` — so they move, hash and hoist as one unit.
-- A second parity replay chain (`editReplay-parity/`) exercises the eleven new commands, in nineteen steps,
+- A second parity replay chain (`editReplay-parity/`) exercises the twenty new commands, in forty steps,
   through the same cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain, byte-pinned
   like it.
 
@@ -94,6 +114,16 @@ and this project adheres to
 
 ### Fixed
 
+- A tempo saved through this package is no longer invisible in MuseScore 4. `MSCXEncoder` wrote a `<Tempo>` with
+  its `<tempo>` alone, and MuseScore 4 draws a tempo marking only through its text, so every tempo this package
+  wrote re-opened as an empty marking on the page. The encoder now derives the printed marking from the beat,
+  dots and BPM and writes it as the `<sym>` markup MuseScore's own palette uses, with `<followText>1</followText>`
+  beside it — which is also what lets the decoder recover the beat from the printed number, so encode → parse →
+  encode is a fixed point. A file whose printed marking disagreed with its `<tempo>` re-emerges with the marking
+  its `<tempo>` means.
+- `Score+FermataHolds`' comment on where a fermata sits was backwards: MuseScore 4's MSCX writes it BEFORE the
+  chord it holds, like MusicXML, not after. Only the comment was wrong — the resolver already searched forward
+  first, and its backward fallback stays for producers that trail the fermata after the chord.
 - Repeat barlines now render. Nothing in `SheetMusicLayout` turned `Measure.startRepeat` / `endRepeatCount` into
   barline geometry — only `MultiMeasureRestPlanner` read the flags — so every MuseScore-authored score with
   repeats rendered without repeat dots. `LayoutEngine+SystemBuild` now synthesizes start-/end-repeat barlines from

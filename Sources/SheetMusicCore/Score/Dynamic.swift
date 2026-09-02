@@ -29,4 +29,24 @@ public struct Dynamic: Sendable, Equatable {
         self.properties = properties
         elementProperties = ElementProperties(visible: visible)
     }
+
+    /// MuseScore's default velocity for a symbolic dynamic (`dynList`, `dynamic.cpp:54-71`): what a `<Dynamic>`
+    /// without `<velocity>` plays at, and what `SetDynamic` writes for a subtype it is handed. Unknown
+    /// subtypes — `sfz`, `rfz`, a typo — are `mf`.
+    public static func defaultVelocity(for subtype: String) -> Int {
+        switch subtype {
+        case "ppppp": 5
+        case "pppp": 10
+        case "ppp": 16
+        case "pp": 33
+        case "p": 49
+        case "mp": 64
+        case "mf": 80
+        case "f": 96
+        case "ff": 112
+        case "fff": 126
+        case "ffff", "fffff": 127
+        default: 80
+        }
+    }
 }

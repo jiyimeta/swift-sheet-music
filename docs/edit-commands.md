@@ -96,6 +96,15 @@ own substantive logic.
 | `SetAccidentalsInRange` | not in the example — host command registry | sugar |
 | `SetDurationInRange` | not in the example — host command registry | sugar |
 | `RespellRange` | not in the example — host command registry | sugar |
+| `SetClef` | not in the example — host command registry | sugar |
+| `RemoveClef` | not in the example — host command registry | sugar |
+| `SetTempo` | not in the example — host command registry | — |
+| `SetStaffText` | not in the example — host command registry | — |
+| `SetDynamic` | not in the example — host command registry | sugar |
+| `SetFermata` | not in the example — host command registry | sugar |
+| `SetBreath` | not in the example — host command registry | sugar |
+| `SetJumps` | not in the example — host command registry | — |
+| `SetMarkers` | not in the example — host command registry | — |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -154,22 +163,29 @@ section above).
 
 ### Score symbols (already present as `VoiceElement` cases)
 
-- [ ] **`SetClef`** at a position — including mid-measure clef
-  changes.
+- [x] **`SetClef`** and **`RemoveClef`** at a position — including
+  mid-measure clef changes. Implemented; see "A. Implemented" above.
 - [x] **`SetKeySignature`** / **`RemoveKeySignature`** at a position.
   Implemented; see "A. Implemented" above.
 - [x] **`SetTimeSignature`** / **`RemoveTimeSignature`** at a measure
   start — with downstream tick-budget recompute. Implemented; see
   "A. Implemented" above.
-- [ ] **`SetTempo`** *(sugar)* — insert / edit / remove a tempo
-  marking.
-- [ ] **`SetDynamic`** *(sugar)* — pp / p / mf / f / ff / etc.
-- [ ] **`SetStaffText`** *(sugar)* — arbitrary text label.
+- [x] **`SetTempo`** — insert / edit / remove a tempo marking.
+  Implemented; see "A. Implemented" above.
+- [x] **`SetDynamic`** *(sugar)* — pp / p / mf / f / ff / etc.
+  Implemented; see "A. Implemented" above.
+- [x] **`SetStaffText`** — arbitrary text label, staff or system.
+  Implemented; see "A. Implemented" above.
 - [x] **`SetRehearsalMark`** / **`RemoveRehearsalMark`** — set /
   rename / remove the mark on one bar. Implemented; see
   "A. Implemented" above.
-- [ ] **`SetFermata`** *(sugar)* — toggle fermata after / over an
-  element.
+- [x] **`SetFermata`** *(sugar)* — toggle fermata over an element
+  (the fermata sits before it in the voice stream). Implemented; see
+  "A. Implemented" above.
+- [x] **`SetBreath`** *(sugar)* — breath mark / caesura after a
+  chord. Implemented; see "A. Implemented" above.
+- [x] **`SetJumps`** / **`SetMarkers`** — replace a bar's navigation
+  jumps / markers. Implemented; see "A. Implemented" above.
 
 ### Note / Chord properties (fields already exist on the model)
 
@@ -258,8 +274,8 @@ Roughly ordered by impact. A reasonable sweep:
    the editor UX. (Landed — see "A. Implemented" above.)
 5. Text-mark commands together (`SetTempo` /`SetDynamic` /
    `SetStaffText`) — shared shape, easy to batch.
-   (`SetRehearsalMark` / `RemoveRehearsalMark` have landed already —
-   see "A. Implemented" above.)
+   (Landed — see "A. Implemented" above; `SetRehearsalMark` /
+   `RemoveRehearsalMark` had landed before them.)
 6. Chord/note property commands (`SetArpeggio` / `SetGlissando`) —
    small, isolated. (`SetNoteHead` has landed already — see
    "A. Implemented" above.)

@@ -21,7 +21,10 @@ extension Score {
                 for (voiceIndex, voice) in staff.measures[measureIndex].voices.enumerated() {
                     var tick = 0
                     for (elementIndex, element) in voice.elements.enumerated() {
-                        guard case let .chord(chord) = element else { continue }
+                        // The cursor walks EVERY element, so a `.locationShift` jogs it exactly as `onset(of:)`
+                        // — the two must agree or a shifted voice's chords fall outside their own range.
+                        defer { tick += element.cursorAdvance(division: division, in: durations[measureIndex]) }
+                        guard case .chord = element else { continue }
                         let position = ScoreTickPosition(measure: measureIndex, tick: tick)
                         if position >= posLo, position < posHi {
                             result.append(VoiceElementID(
@@ -29,7 +32,6 @@ extension Score {
                                 voiceIndex: voiceIndex, elementIndex: elementIndex,
                             ))
                         }
-                        tick += chord.duration.resolved(in: durations[measureIndex]).ticks(division: division)
                     }
                 }
             }

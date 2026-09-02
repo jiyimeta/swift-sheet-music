@@ -47,6 +47,8 @@ extension Score {
                 for (vIdx, voice) in measures[mIdx].voices.enumerated() {
                     var tick = 0
                     for (eIdx, el) in voice.elements.enumerated() {
+                        // Same cursor `onset(of:)` walks, `.locationShift` jogs included.
+                        defer { tick += el.cursorAdvance(division: division, in: measureDuration) }
                         let pos = ScoreTickPosition(measure: mIdx, tick: tick)
                         // posHi is exclusive (it's the END tick of
                         // the later endpoint, i.e. the start of
@@ -66,9 +68,7 @@ extension Score {
                                     )))
                                 }
                             }
-                            tick += chord.duration.resolved(in: measureDuration)
-                                .ticks(division: division)
-                        case let .chord(rest):
+                        case .chord:
                             // Empty chord — selectable as a rest.
                             if inRange {
                                 result.append(.rest(RestID(
@@ -78,8 +78,6 @@ extension Score {
                                     elementIndex: eIdx,
                                 )))
                             }
-                            tick += rest.duration.resolved(in: measureDuration)
-                                .ticks(division: division)
                         default:
                             break
                         }

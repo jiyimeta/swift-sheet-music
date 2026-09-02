@@ -74,13 +74,22 @@ import Wirelet
 /// 38 = setAccidentalsInRange(SetAccidentalsInRangeIntentWire)
 /// 39 = setDurationInRange(SetDurationInRangeIntentWire)
 /// 40 = respellRange(RespellRangeIntentWire)
+/// 41 = setClef(SetClefIntentWire)
+/// 42 = removeClef(RemoveClefIntentWire)
+/// 43 = setTempo(SetTempoIntentWire)
+/// 44 = setStaffText(SetStaffTextIntentWire)
+/// 45 = setDynamic(SetDynamicIntentWire)
+/// 46 = setFermata(SetFermataIntentWire)
+/// 47 = setBreath(SetBreathIntentWire)
+/// 48 = setJumps(SetJumpsIntentWire)
+/// 49 = setMarkers(SetMarkersIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
 /// creation, 19…22 for M3 signature changes, 23…24 for M4 rehearsal marks, 25…28 for M6 drum note entry and 29
 /// for part renaming; 0…4 predate them all and must keep their indices and byte layout. Cases 30…34 were appended
 /// for the edit-command parity project's structural group (spec 2026-09-02). Cases 35…40 were appended for its
-/// range group.
+/// range group. Cases 41…49 were appended for its mark group.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -422,6 +431,90 @@ import Wirelet
 /// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
 /// tag 2: mode   u8, varint — 0 simplest / 1 prefer sharps / 2 prefer flats, else throws
 /// ```
+///
+/// `SetClefIntentWire` (`setClef`'s payload):
+/// ```
+/// tag 1: target    VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: clefType  string — `NotatedClef.rawType` ("G", "F", "C3", …); a spelling `NotatedClef` does not emit
+///                  throws, rather than collapsing to treble the way `NotatedClef(rawType:)` would
+/// ```
+///
+/// `RemoveClefIntentWire` (`removeClef`'s payload):
+/// ```
+/// tag 1: location  VoiceElementIDWire, see PathIDCodecs.swift
+/// ```
+///
+/// `SetTempoIntentWire` (`setTempo`'s payload):
+/// ```
+/// tag 1: anchor          VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: hasTempo        u8, varint — 0 = remove the tempo at the beat, 1 = write `marking`
+/// tag 3: beatsPerSecond  f64, fixed-64 little-endian IEEE 754 — 0 when hasTempo == 0
+/// tag 4: beatNote        NoteDurationWire, see layout above — the encoder writes the `kind = 3` (quarter)
+///                        placeholder when hasTempo == 0, so a byte-for-byte parity check should expect it
+/// tag 5: beatDots        i32, zig-zag varint — 0 when hasTempo == 0
+/// ```
+///
+/// `SetStaffTextIntentWire` (`setStaffText`'s payload):
+/// ```
+/// tag 1: anchor        VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: hasText       u8, varint — 0 = remove the text at the beat, 1 = write `text`
+/// tag 3: text          string — "" when hasText == 0
+/// tag 4: isSystemText  u8, varint — 0 staff text / 1 system text
+/// ```
+///
+/// `SetDynamicIntentWire` (`setDynamic`'s payload):
+/// ```
+/// tag 1: location    VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: hasDynamic  u8, varint — 0 = remove, 1 = write `subtype`
+/// tag 3: subtype     string — the MSCX token ("pp", "mf", "sfz", …); "" when hasDynamic == 0
+/// ```
+///
+/// `SetFermataIntentWire` (`setFermata`'s payload):
+/// ```
+/// tag 1: location     VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: hasFermata   u8, varint — 0 = remove, 1 = write
+/// tag 3: subtype      string — the SMuFL name ("fermataAbove", …); "" when hasFermata == 0
+/// tag 4: timeStretch  f64, fixed-64 little-endian IEEE 754 — 0 when hasFermata == 0
+/// ```
+///
+/// `SetBreathIntentWire` (`setBreath`'s payload):
+/// ```
+/// tag 1: location   VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: hasBreath  u8, varint — 0 = remove, 1 = write
+/// tag 3: kind       u8, varint — 0 breath mark / 1 caesura, else throws
+/// tag 4: style      u8, varint — breath mark: 0 comma 1 tick 2 upbow 3 salzedo;
+///                   caesura: 0 normal 1 short 2 thick 3 curved; else throws
+/// tag 5: pause      f64, fixed-64 little-endian IEEE 754 — 0 when hasBreath == 0
+/// ```
+///
+/// `JumpWire` (one element of `SetJumpsIntentWire.jumps`):
+/// ```
+/// tag 1: jumpTo       string — MuseScore's own token ("start", "segno", …), uninterpreted here
+/// tag 2: playUntil    string
+/// tag 3: continueAt   string
+/// tag 4: playRepeats  u8, varint
+/// tag 5: text         string
+/// ```
+///
+/// `MarkerWire` (one element of `SetMarkersIntentWire.markers`):
+/// ```
+/// tag 1: kind   string — `Marker.Kind.rawValue`; an unknown kind throws
+/// tag 2: label  string
+/// tag 3: text   string
+/// ```
+///
+/// `SetJumpsIntentWire` (`setJumps`'s payload):
+/// ```
+/// tag 1: measure  MeasureRefWire, see ReferenceCodecs.swift
+/// tag 2: jumps    [JumpWire] — length-delimited array, each element itself length-delimited; an empty list is
+///                 the tag with a zero length
+/// ```
+///
+/// `SetMarkersIntentWire` (`setMarkers`'s payload):
+/// ```
+/// tag 1: measure  MeasureRefWire, see ReferenceCodecs.swift
+/// tag 2: markers  [MarkerWire] — the `SetJumpsIntentWire.jumps` framing
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -613,6 +706,33 @@ public enum EditIntentWire {
     /// Appended for the edit-command parity project's range group (spec 2026-09-02) — index 40. Never renumber
     /// anything above it.
     case respellRange(RespellRangeIntentWire)
+    /// Appended for the edit-command parity project's mark group (spec 2026-09-02) — index 41. Never renumber
+    /// anything above it.
+    case setClef(SetClefIntentWire)
+    /// Appended for the edit-command parity project's mark group (spec 2026-09-02) — index 42. Never renumber
+    /// anything above it.
+    case removeClef(RemoveClefIntentWire)
+    /// Appended for the edit-command parity project's mark group (spec 2026-09-02) — index 43. Never renumber
+    /// anything above it.
+    case setTempo(SetTempoIntentWire)
+    /// Appended for the edit-command parity project's mark group (spec 2026-09-02) — index 44. Never renumber
+    /// anything above it.
+    case setStaffText(SetStaffTextIntentWire)
+    /// Appended for the edit-command parity project's mark group (spec 2026-09-02) — index 45. Never renumber
+    /// anything above it.
+    case setDynamic(SetDynamicIntentWire)
+    /// Appended for the edit-command parity project's mark group (spec 2026-09-02) — index 46. Never renumber
+    /// anything above it.
+    case setFermata(SetFermataIntentWire)
+    /// Appended for the edit-command parity project's mark group (spec 2026-09-02) — index 47. Never renumber
+    /// anything above it.
+    case setBreath(SetBreathIntentWire)
+    /// Appended for the edit-command parity project's mark group (spec 2026-09-02) — index 48. Never renumber
+    /// anything above it.
+    case setJumps(SetJumpsIntentWire)
+    /// Appended for the edit-command parity project's mark group (spec 2026-09-02) — index 49. Never renumber
+    /// anything above it.
+    case setMarkers(SetMarkersIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -728,6 +848,24 @@ public enum EditIntentWire {
             self = .setDurationInRange(SetDurationInRangeIntentWire(range: range, duration: duration))
         case let .respellRange(range, mode):
             self = .respellRange(RespellRangeIntentWire(range: range, mode: mode))
+        case let .setClef(target, clef):
+            self = .setClef(SetClefIntentWire(target: target, clef: clef))
+        case let .removeClef(location):
+            self = .removeClef(RemoveClefIntentWire(location: location))
+        case let .setTempo(anchor, marking):
+            self = .setTempo(SetTempoIntentWire(anchor: anchor, marking: marking))
+        case let .setStaffText(anchor, text, isSystemText):
+            self = .setStaffText(SetStaffTextIntentWire(anchor: anchor, text: text, isSystemText: isSystemText))
+        case let .setDynamic(location, subtype):
+            self = .setDynamic(SetDynamicIntentWire(location: location, subtype: subtype))
+        case let .setFermata(location, subtype, timeStretch):
+            self = .setFermata(SetFermataIntentWire(location: location, subtype: subtype, timeStretch: timeStretch))
+        case let .setBreath(location, kind, pause):
+            self = .setBreath(SetBreathIntentWire(location: location, kind: kind, pause: pause))
+        case let .setJumps(measure, jumps):
+            self = .setJumps(SetJumpsIntentWire(measure: measure, jumps: jumps))
+        case let .setMarkers(measure, markers):
+            self = .setMarkers(SetMarkersIntentWire(measure: measure, markers: markers))
         }
     }
 
@@ -874,6 +1012,32 @@ public enum EditIntentWire {
         case let .respellRange(wire):
             let decoded = try wire.decoded()
             return .respellRange(over: decoded.range, mode: decoded.mode)
+        case let .setClef(wire):
+            let decoded = try wire.decoded()
+            return .setClef(before: decoded.target, clef: decoded.clef)
+        case let .removeClef(wire):
+            return .removeClef(at: wire.decoded())
+        case let .setTempo(wire):
+            let decoded = try wire.decoded()
+            return .setTempo(anchor: decoded.anchor, marking: decoded.marking)
+        case let .setStaffText(wire):
+            let decoded = wire.decoded()
+            return .setStaffText(anchor: decoded.anchor, text: decoded.text, isSystemText: decoded.isSystemText)
+        case let .setDynamic(wire):
+            let decoded = wire.decoded()
+            return .setDynamic(at: decoded.location, subtype: decoded.subtype)
+        case let .setFermata(wire):
+            let decoded = wire.decoded()
+            return .setFermata(at: decoded.location, subtype: decoded.subtype, timeStretch: decoded.timeStretch)
+        case let .setBreath(wire):
+            let decoded = try wire.decoded()
+            return .setBreath(after: decoded.location, kind: decoded.kind, pause: decoded.pause)
+        case let .setJumps(wire):
+            let decoded = wire.decoded()
+            return .setJumps(at: decoded.measure, jumps: decoded.jumps)
+        case let .setMarkers(wire):
+            let decoded = try wire.decoded()
+            return .setMarkers(at: decoded.measure, markers: decoded.markers)
         }
     }
 }

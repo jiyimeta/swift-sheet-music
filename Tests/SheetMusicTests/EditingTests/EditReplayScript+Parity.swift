@@ -1,11 +1,13 @@
 @testable import SheetMusicCore
 
 extension EditReplayScript {
-    /// Nineteen steps over `EditingFixtures.parityFixture()`, covering every intent the edit-command parity project
+    /// Forty steps over `EditingFixtures.parityFixture()`, covering every intent the edit-command parity project
     /// appended: its structural group (30…34: `setLayoutBreak`, `setBarLine`, `setRepeatBarLines`,
-    /// `setMeasureRepeat`, `moveToVoice`) in steps 1…10 and its range group (35…40: `transposeRange`,
+    /// `setMeasureRepeat`, `moveToVoice`) in steps 1…10, its range group (35…40: `transposeRange`,
     /// `addIntervalToSelection`, `deleteRange`, `setAccidentalsInRange`, `setDurationInRange`, `respellRange`) in
-    /// steps 11…19 — none of which the standard chain, which predates them, encodes at all.
+    /// steps 11…19 and its mark group (41…49: `setClef`, `removeClef`, `setTempo`, `setStaffText`, `setDynamic`,
+    /// `setFermata`, `setBreath`, `setJumps`, `setMarkers`) in steps 20…40 — none of which the standard chain,
+    /// which predates them, encodes at all.
     ///
     /// Each of the five structural intents appears at least twice, in both directions where it has one, so the chain
     /// pins the wire bytes of the removal as well as the write: `setLayoutBreak` on then off (steps 1 / 10),
@@ -20,6 +22,12 @@ extension EditReplayScript {
     /// applied, undone and re-applied (17 / 18 / 19). The other four write once each, because each already carries
     /// its whole payload in one step: an accidental (14), a spelling mode (15), a duration (16) and an interval
     /// (13) have no "off" to encode, only a different value.
+    ///
+    /// The mark group is spelled write-then-clear for every intent with a `nil` (23 / 40, 25 / 26, 28 / 34,
+    /// 30 / 33, 31 / 32, 35 / 39), plus the replace path where one exists (21, 24, 29) and one undo / re-apply
+    /// pair (36 / 37 / 38). `setStaffText` is written twice over — once as staff text stamped with the flute
+    /// (25 / 26) and once as system text with no staff (27) — because `isSystemText` picks a different lane
+    /// identity, not just a different flag byte.
     ///
     /// ## Index stability
     ///
@@ -73,6 +81,29 @@ extension EditReplayScript {
     ///   same intent: step 18 undoes it, putting the 5 elements back, and step 19 re-applies the identical bytes.
     ///   Voice 1's rest at tick 480 is inside the band and left alone (a delete of a rest is nothing to do), and
     ///   voice 1 still holds the C4 step 6/8 moved there, so it does not collapse.
+    /// - **Measure 2 of the FLUTE (steps 20, 21, 22, 28, 29, 30, 31, 32, 33, 34)** is where the mark group does its
+    ///   index arithmetic, and every one of these steps names the index the step BEFORE it left, never the one the
+    ///   fixture had. Measure 2 reads `[E4 h tied →, E4 h]` when step 20 arrives (steps 11 / 12 changed pitch, not
+    ///   count, and step 12 put the reading back). Then: 20 inserts a bass clef at index 0 (the run before the head
+    ///   is empty and reaches the head of the voice, so this is the bar's header clef) and the head becomes element
+    ///   1; 21 names element 1 and finds that clef in its run, replacing it in place, so nothing shifts; 22 removes
+    ///   the clef at element 0 and the head is element 0 again. 28 inserts `f` before the head at element 0, so the
+    ///   head is element 1 and the tail element 2; 29 names element 1 and replaces that dynamic in place; 30 inserts
+    ///   a fermata before the tail at element 2, so the tail is element 3; 31 puts a caesura AFTER element 3, which
+    ///   appends past every index in use; 32 removes it again, naming the same element 3; 33 removes the fermata by
+    ///   naming the tail (still element 3) — the removal is of the fermata its run holds, so the tail is element 2
+    ///   afterwards; 34 removes the dynamic by naming the head (element 1), leaving `[E4, E4]`. Steps 35…40 address
+    ///   no element of measure 2, so the final shrink is unobservable downstream.
+    /// - **The system lane (steps 23, 24, 25, 26, 27, 40)** is not the element list at all: a lane write moves no
+    ///   `VoiceElementID` in any voice, and the lane is addressed BY one — `SystemLaneSlot.position` turns the
+    ///   anchor's onset into a `MeasurePosition`. Step 23 is the first write the fixture's EMPTY lane ever sees, so
+    ///   it pads the lane to one `SystemMeasure` per measure on the way in (`RehearsalMarkLane.pad`), which is why
+    ///   every later lane step can index `systemMeasures[measureIndex]` directly. The anchors: measure 1's two half
+    ///   rests (elements 0 and 1 after step 16, at ticks 0 and 960) for 23 / 24 / 25 / 26 / 40, and measure 3's
+    ///   untouched measure rest (element 0, which no earlier step addresses on any staff) for 27.
+    /// - **Steps 35, 36, 38, 39** write `Measure.jumps` / `Measure.markers` on the canonical staff by COLUMN, like
+    ///   steps 1 / 3 / 9 / 10 before them, so they move nothing; step 37 is the undo of 36 and step 38 re-applies
+    ///   its identical intent, the same undo-then-reapply convention steps 6 / 7 / 8 and 17 / 18 / 19 use.
     ///
     /// ## Fingerprints that repeat
     ///
@@ -83,16 +114,25 @@ extension EditReplayScript {
     /// re-spelled to the same reading, and so lands back on step 10's; step 18 undoes step 17 and lands back on
     /// step 16's; step 19 re-applies step 17 and lands back on step 17's. Steps 9 and 10, which clear what steps 2
     /// and 1 wrote, do NOT land back on an earlier value — the repeat flags step 3 set and the voice step 6/8
-    /// created are still standing — so the chain never returns to its opening fingerprint. Fourteen of the twenty
-    /// recorded values are therefore distinct, against a floor of twelve in `ReplayChain.parity`.
+    /// created are still standing — so the chain never returns to its opening fingerprint.
+    ///
+    /// The mark group adds seven more repeats, each one a clear landing exactly on what the write it undid started
+    /// from: step 22 removes the clef steps 20 / 21 wrote and lands back on step 19's value; step 26 clears the
+    /// staff text step 25 wrote and lands back on step 24's; step 32 removes the breath step 31 wrote and lands
+    /// back on step 30's; step 33 removes the fermata step 30 wrote and lands back on step 29's; step 34 removes
+    /// the dynamic steps 28 / 29 wrote and lands back on step 27's; step 37 undoes step 36 and lands back on step
+    /// 35's; step 38 re-applies step 36 and lands back on step 36's. Steps 39 and 40, which clear what steps 35 and
+    /// 23 wrote, do NOT land back on an earlier value — measure 1's `Fine` marker and measure 3's system text are
+    /// still standing. Twenty-eight of the forty-one recorded values are therefore distinct, against a floor of
+    /// twenty-four in `ReplayChain.parity`.
     ///
     /// As in the standard chain, an equal fingerprint would not by itself prove a step was inert, nor a different
     /// one prove it did what it was added for. What proves each step ran is `EditSessionReplayParityTest.kt`
     /// asserting every `nativeApplyEditIntent` returned `true`, and `EditReplayWebGoldenTests` asserting the same
     /// of `ScoreEditSession.apply` — those catch a step that starts being refused, which a `nil`-planning intent
-    /// (see `ScoreEditSession.structuralParityCommand` and `ScoreEditSession.rangeCommand(for:in:)`, where
-    /// restating what the score already says plans to nothing) would be if a future change made one of these steps
-    /// a no-op.
+    /// (see `ScoreEditSession.structuralParityCommand`, `ScoreEditSession.rangeCommand(for:in:)` and
+    /// `ScoreEditSession.markCommand(for:in:)`, where restating what the score already says plans to nothing)
+    /// would be if a future change made one of these steps a no-op.
     static func parity(staff: StaffAddress) -> [EditReplayStep] { // swiftlint:disable:this function_body_length
         let cello = StaffAddress(partIndex: 1, staffIndexInPart: 0)
         let measure1 = MeasureRef(measureIndex: 1)
@@ -114,6 +154,17 @@ extension EditReplayScript {
         let deleteSecondBeat = EditReplayStep.intent(
             .deleteRange(over: VoiceElementRange(start: secondBeat, end: secondBeat)),
         )
+        let measure3 = MeasureRef(measureIndex: 3)
+        let firstRestOfBar1 = VoiceElementID(staff: staff, measureIndex: 1, voiceIndex: 0, elementIndex: 0)
+        let secondRestOfBar1 = VoiceElementID(staff: staff, measureIndex: 1, voiceIndex: 0, elementIndex: 1)
+        let bar3Rest = VoiceElementID(staff: staff, measureIndex: 3, voiceIndex: 0, elementIndex: 0)
+        func bar2(_ element: Int) -> VoiceElementID {
+            VoiceElementID(staff: staff, measureIndex: 2, voiceIndex: 0, elementIndex: element)
+        }
+        // Steps 36 and 38 apply the identical intent — bound once for the reason `move` is.
+        let fineMarker = EditReplayStep.intent(.setMarkers(
+            at: measure1, markers: [Marker(kind: .fine, label: "fine", text: "Fine")],
+        ))
 
         return [
             // Step 1: ask measure 1 for a system break. The fixture declares none, so this is a real flag write.
@@ -166,6 +217,59 @@ extension EditReplayScript {
             // Step 18 / step 19: undo the delete, then re-apply the identical intent — the chain's second redo.
             .undo,
             deleteSecondBeat,
+            // Step 20: a bass clef before the tied E4 head — the bar's first timed element, so the clef becomes
+            // the bar's header clef at index 0 and every later index in measure 2 shifts by one.
+            .intent(.setClef(before: bar2(0), clef: .bass)),
+            // Step 21: an alto clef before the same head, now element 1 — the clef at 0 is in its run and is
+            // replaced in place, which is the wire's second `setClef` shape.
+            .intent(.setClef(before: bar2(1), clef: .alto)),
+            // Step 22: and remove it — measure 2 is `[E4, E4]` again, so this lands back on step 19's fingerprint.
+            .intent(.removeClef(at: bar2(0))),
+            // Step 23: ♩ = 150 at the head of measure 1 — the first write into the EMPTY system lane, which pads it
+            // to one entry per measure on the way in (hashing like an absent lane, so only the tempo moves the
+            // fingerprint).
+            .intent(.setTempo(anchor: firstRestOfBar1, marking: SetTempo.Marking(beatsPerSecond: 2.5))),
+            // Step 24: ♩. = 80 at the same beat — the replace path, and the only step encoding a dotted beat.
+            .intent(.setTempo(
+                anchor: firstRestOfBar1, marking: SetTempo.Marking(beatsPerSecond: 2, beatNote: .quarter, beatDots: 1),
+            )),
+            // Step 25: staff text at beat 3 of measure 1, stamped with the flute.
+            .intent(.setStaffText(anchor: secondRestOfBar1, text: "pizz.", isSystemText: false)),
+            // Step 26: and cleared — lands back on step 24's fingerprint.
+            .intent(.setStaffText(anchor: secondRestOfBar1, text: nil, isSystemText: false)),
+            // Step 27: system text at the head of measure 3 — `isSystemText` set, no staff.
+            .intent(.setStaffText(anchor: bar3Rest, text: "rit.", isSystemText: true)),
+            // Step 28: `f` before the tied head — inserted at index 0, shifting measure 2 by one again.
+            .intent(.setDynamic(at: bar2(0), subtype: "f")),
+            // Step 29: `pp` on the same head, now element 1 — replaced in place.
+            .intent(.setDynamic(at: bar2(1), subtype: "pp")),
+            // Step 30: a fermata over the tail (element 2 since step 28) — inserted before it; the tail is 3 now.
+            .intent(.setFermata(at: bar2(2), subtype: "fermataAbove", timeStretch: 2)),
+            // Step 31: a caesura after the tail (element 3 since step 30) — inserted after it.
+            .intent(.setBreath(after: bar2(3), kind: .caesura(.normal), pause: 0.5)),
+            // Step 32: and removed — lands back on step 30's fingerprint.
+            .intent(.setBreath(after: bar2(3), kind: nil, pause: 0)),
+            // Step 33: the fermata removed (the tail is still element 3) — lands back on step 29's.
+            // `timeStretch` is 0 on a removal: the wire zeroes it when `hasFermata == 0`, so any other value here
+            // would describe bytes the codec cannot produce.
+            .intent(.setFermata(at: bar2(3), subtype: nil, timeStretch: 0)),
+            // Step 34: the dynamic removed (the head is element 1) — measure 2 is `[E4, E4]` again, and the score
+            // as a whole is exactly what step 27 left: this lands back on step 27's fingerprint.
+            .intent(.setDynamic(at: bar2(1), subtype: nil)),
+            // Step 35: a D.C. al Fine on the last bar.
+            .intent(.setJumps(
+                at: measure3, jumps: [Jump(jumpTo: "start", playUntil: "fine", text: "D.C. al Fine")],
+            )),
+            // Step 36: and the Fine it jumps to, on measure 1.
+            fineMarker,
+            // Step 37 / step 38: undo the marker, then re-apply the identical intent — the chain's third redo.
+            .undo,
+            fineMarker,
+            // Step 39: clear the jumps — the empty-list wire shape.
+            .intent(.setJumps(at: measure3, jumps: [])),
+            // Step 40: and remove the tempo — the tempo removal's wire shape. Measure 1's marker and the system
+            // text in measure 3 still stand, so the chain ends on a new fingerprint, as `scriptIsNotInert` needs.
+            .intent(.setTempo(anchor: firstRestOfBar1, marking: nil)),
         ]
     }
 }
