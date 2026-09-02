@@ -205,4 +205,35 @@ public enum EditIntent: Sendable, Equatable {
 
     /// Move the chord or rest at `at` to `to` — another voice of the same bar, at the same tick.
     case moveToVoice(at: VoiceElementID, to: VoiceRef)
+
+    // Appended for the edit-command parity project's range group (spec 2026-09-02) — indices 35…40. Every range
+    // intent expands to one `CompositeEditCommand` over `Score.voiceElements(in:)`, applied in ascending onset order
+    // and re-resolved by tick (`RangeEditPlanner`); refusal on any element rolls back all of it.
+
+    /// Move every note in `over` by `semitones` (−24…24); tie chains move whole. `respellInKey` re-spells each
+    /// result to the simplest reading in the key in force. Resolves to nothing to apply for zero semitones or a
+    /// range with no pitched note; refused as `.invalidTransposition` past two octaves.
+    case transposeRange(over: VoiceElementRange, semitones: Int, respellInKey: Bool)
+
+    /// Add a note `|steps|` diatonic degrees (1 unison … 9 ninth) above (positive) each chord's top note or below
+    /// (negative) its bottom note. A pitch the chord already holds is skipped. Resolves to nothing to apply when no
+    /// chord gains a note; refused as `.invalidInterval` outside ±1…±9.
+    case addIntervalToSelection(over: VoiceElementRange, steps: Int)
+
+    /// Turn every chord in `over` into a rest, collapsing each bar-voice left all-rests into one measure rest.
+    /// Resolves to nothing to apply when the range holds no chord.
+    case deleteRange(over: VoiceElementRange)
+
+    /// Apply `accidental` to every note in `over` (letter kept, pitch moved), or clear the glyph with `nil`.
+    /// Resolves to nothing to apply when every note already reads that way.
+    case setAccidentalsInRange(over: VoiceElementRange, accidental: Accidental?)
+
+    /// Set `duration` on every chord and rest in `over`, in ascending onset order, skipping onsets an earlier
+    /// lengthening consumed. Refused whole as `.insideTuplet` when any element is inside a tuplet; resolves to
+    /// nothing to apply when every element already has that length.
+    case setDurationInRange(over: VoiceElementRange, duration: NoteDuration)
+
+    /// Re-spell every note in `over` enharmonically per `mode`, pitches unchanged. Resolves to nothing to apply
+    /// when every note is already spelled that way.
+    case respellRange(over: VoiceElementRange, mode: RespellMode)
 }
