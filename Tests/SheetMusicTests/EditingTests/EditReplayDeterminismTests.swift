@@ -6,26 +6,28 @@ import Testing
 struct EditReplayDeterminismTests {
     private static let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-    @Test("two sessions fed the same steps agree at every step")
-    func twoSessionsAgree() {
-        let steps = EditReplayScript.standard(staff: Self.staff)
-        let a = EditReplayScript.fingerprints(of: steps, startingFrom: EditingFixtures.replayFixture())
-        let b = EditReplayScript.fingerprints(of: steps, startingFrom: EditingFixtures.replayFixture())
+    @Test("two sessions fed the same steps agree at every step", arguments: ReplayChain.all)
+    func twoSessionsAgree(chain: ReplayChain) {
+        let steps = chain.steps(Self.staff)
+        let a = EditReplayScript.fingerprints(of: steps, startingFrom: chain.fixture())
+        let b = EditReplayScript.fingerprints(of: steps, startingFrom: chain.fixture())
         #expect(a == b)
         #expect(a.count == steps.count + 1)
     }
 
-    @Test("the script actually edits something")
-    func scriptIsNotInert() {
-        let prints = EditReplayScript.fingerprints(
-            of: EditReplayScript.standard(staff: Self.staff), startingFrom: EditingFixtures.replayFixture(),
-        )
+    @Test("the script actually edits something", arguments: ReplayChain.all)
+    func scriptIsNotInert(chain: ReplayChain) {
+        let prints = EditReplayScript.fingerprints(of: chain.steps(Self.staff), startingFrom: chain.fixture())
         #expect(prints.last != prints.first)
         // A script every step of which got refused would produce a flat, single-valued fingerprint sequence and
         // "prove" determinism trivially — this rules that out by requiring real spread across the run.
-        #expect(Set(prints).count >= 10)
+        #expect(Set(prints).count >= chain.minimumDistinctFingerprints)
     }
 
+    /// Standard chain only — deliberately not parameterized over `ReplayChain.all`, unlike the two tests above.
+    /// The claim below is about one specific step of one specific script; the parity chain has no meter change to
+    /// make it of, and a version that skipped when it found none would be a test that passes by doing nothing.
+    ///
     /// The M3 meter step exists to exercise a RE-BAR, not a restated glyph, and the sharpest evidence of one is a
     /// note the new barlines CUT. Pinned here rather than left to the fingerprint chain: a fingerprint only ever
     /// proves the two images agree, never that a step did the thing it was added for. If a future planner change

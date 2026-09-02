@@ -6,58 +6,60 @@
     @testable import SheetMusicMSCX
     import Testing
 
-    /// The host half of SP0/SP1's acceptance test: `EditReplayScript.standard`'s twenty steps, run through the
-    /// same JNI entry points a device calls, with the resulting wire bytes and fingerprints committed as
-    /// instrumented-test assets under `Android/SheetMusicAndroid/src/androidTest/assets/editReplay/`.
-    /// `EditSessionReplayTest.kt` reads those assets back and replays them on-device via `nativeApplyEditIntent` /
-    /// `nativeEditUndo`, asserting the same twenty-one fingerprints this test computes. Its `EXPECTED_STEP_COUNT`
-    /// tracks `EditReplayScript.standard(staff:).count` by hand — a step added here has to move that constant too.
+    /// The host half of SP0/SP1's acceptance test: every `ReplayChain`'s steps, run through the same JNI entry
+    /// points a device calls, with the resulting wire bytes and fingerprints committed as instrumented-test assets
+    /// under `Android/SheetMusicAndroid/src/androidTest/assets/<chain.androidAssetDir>/`. One Kotlin test per chain
+    /// (`EditSessionReplayTest.kt` for `standard`, `EditSessionReplayParityTest.kt` for `parity`) reads those
+    /// assets back and replays them on-device via `nativeApplyEditIntent` / `nativeEditUndo`, asserting the same
+    /// fingerprints this test computes. Each one's `EXPECTED_STEP_COUNT` tracks its chain's step count by hand — a
+    /// step added to a chain has to move that constant too.
     ///
     /// Kotlin never builds an intent here, because it never does in production either: the host's Swift core is
     /// always the one that applies an intent to its authoritative score and encodes it, and Kotlin's job is only to
     /// relay the resulting bytes to the mirror session behind the JNI boundary. A Kotlin-authored intent would
     /// exercise a data path that doesn't exist.
     ///
-    /// The fixture is `EditingFixtures.replayFixture()` — see its doc comment for its shape — encoded to MSCX and
-    /// committed as `editReplay/fixture.mscx`, so both the host and a device parse the exact same bytes. The host
-    /// loads its score from that COMMITTED FILE (not straight from the in-memory builder): an encoder change that
-    /// silently altered the bytes would otherwise never surface, since the host would just re-derive fresh bytes
-    /// that happen to match itself. `EditReplayScript.standard` — the array of steps applied below — is shared with
-    /// `EditReplayDeterminismTests`, so this test and that one exercise literally the same edits.
+    /// The fixture is the chain's own — see `ReplayChain` — encoded to MSCX and committed as that chain's
+    /// `fixture.mscx`, so both the host and a device parse the exact same bytes. The host loads its score from that
+    /// COMMITTED FILE (not straight from the in-memory builder): an encoder change that silently altered the bytes
+    /// would otherwise never surface, since the host would just re-derive fresh bytes that happen to match itself.
+    /// The chain's step array is shared with `EditReplayDeterminismTests` and `EditReplayWebGoldenTests`, so all
+    /// three exercise literally the same edits.
     ///
     /// ## Record vs. verify
     ///
     /// Default (no environment override): **verify**. This test recomputes the wire bytes and fingerprints from the
     /// live `EditIntentCodec` and JNI bridge and compares them against the assets already committed under
-    /// `editReplay/` — an inadvertent wire-format or engine-behavior change fails this test on the host, before it
-    /// ever reaches a device. This is a regression guard, not just a generator: a generator that silently overwrites
-    /// its own expectations every run can never fail.
+    /// the chain's asset directory — an inadvertent wire-format or engine-behavior change fails this test on the
+    /// host, before it ever reaches a device. This is a regression guard, not just a generator: a generator that
+    /// silently overwrites its own expectations every run can never fail.
     ///
     /// Set `SM_EDIT_REPLAY_RECORD=1` to **record**: the freshly computed bytes / fingerprints / fixture encoding
     /// overwrite the committed assets first, and the same comparison then trivially passes. Re-run without the
     /// environment variable afterward to confirm the newly recorded assets are what's about to be committed, and
-    /// `git diff` the `editReplay/` directory to review exactly what changed before committing it.
+    /// `git diff` the chain's asset directory to review exactly what changed before committing it.
     @Suite("Edit replay goldens")
     struct EditReplayGoldenTests {
         private static let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-        /// `Android/SheetMusicAndroid/src/androidTest/assets/editReplay/`, resolved via `#filePath` so it is
-        /// correct regardless of the process's current directory — unlike a path relative to wherever `swift test`
-        /// happens to have been invoked from.
-        private var assetsDir: URL {
+        /// `Android/SheetMusicAndroid/src/androidTest/assets/<chain.androidAssetDir>/`, resolved via `#filePath` so
+        /// it is correct regardless of the process's current directory — unlike a path relative to wherever
+        /// `swift test` happens to have been invoked from.
+        private func assetsDir(for chain: ReplayChain) -> URL {
             URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent() // AndroidJNI
                 .deletingLastPathComponent() // SheetMusicTests
                 .deletingLastPathComponent() // Tests
                 .deletingLastPathComponent() // package root
-                .appendingPathComponent("Android/SheetMusicAndroid/src/androidTest/assets/editReplay")
+                .appendingPathComponent("Android/SheetMusicAndroid/src/androidTest/assets")
+                .appendingPathComponent(chain.androidAssetDir)
         }
 
-        @Test("replay EditReplayScript.standard and verify (or record) the committed assets")
-        func replayMatchesCommittedAssets() throws {
-            let dir = assetsDir
+        @Test("replay the chain and verify (or record) the committed assets", arguments: ReplayChain.all)
+        func replayMatchesCommittedAssets(chain: ReplayChain) throws {
+            let dir = assetsDir(for: chain)
             let fixturePath = dir.appendingPathComponent("fixture.mscx")
-            let liveFixtureData = try MSCXEncoder.encode(EditingFixtures.replayFixture())
+            let liveFixtureData = try MSCXEncoder.encode(chain.fixture())
 
             let isRecording = ProcessInfo.processInfo.environment["SM_EDIT_REPLAY_RECORD"] == "1"
             if isRecording {
@@ -72,7 +74,7 @@
             #expect(handle != 0)
             #expect(nativeBeginEditSession(scoreHandle: handle))
 
-            let steps = EditReplayScript.standard(staff: Self.staff)
+            let steps = chain.steps(Self.staff)
             var fingerprints = [nativeScoreFingerprint(scoreHandle: handle)]
             var stepBytes: [Data?] = []
             for step in steps {
@@ -85,7 +87,7 @@
                     stepBytes.append(nil)
                     #expect(nativeEditUndo(scoreHandle: handle))
                 case .redo:
-                    // Defensive only — unreachable from the current script. `EditReplayScript.standard` never emits
+                    // Defensive only — unreachable from the current script. No `ReplayChain` script emits
                     // this case; see its doc comment on why "redo" is represented as undo-then-reapply instead. The
                     // real `nativeEditRedo` bridge function is covered separately, on the host, by
                     // `EditSessionBridgeTests`. Recorded as a failure rather than silently treated as either an
@@ -95,22 +97,22 @@
                 fingerprints.append(nativeScoreFingerprint(scoreHandle: handle))
             }
             nativeEndEditSession(scoreHandle: handle)
-            print("fingerprints: " + fingerprints.map(String.init).joined(separator: ", "))
+            print("\(chain.name) fingerprints: " + fingerprints.map(String.init).joined(separator: ", "))
 
             #expect(fingerprints.count == steps.count + 1)
-            #expect(Set(fingerprints).count >= 10)
+            #expect(Set(fingerprints).count >= chain.minimumDistinctFingerprints)
 
             if isRecording {
-                try record(stepBytes: stepBytes, fingerprints: fingerprints)
+                try record(chain: chain, stepBytes: stepBytes, fingerprints: fingerprints)
             }
-            try verify(stepBytes: stepBytes, fingerprints: fingerprints, liveFixtureData: liveFixtureData)
+            try verify(chain: chain, stepBytes: stepBytes, fingerprints: fingerprints, liveFixtureData: liveFixtureData)
         }
 
         /// Overwrites the committed step / golden assets with what this run computed. `fixture.mscx` is already
         /// written by the caller before the score is even loaded — see `replayMatchesCommittedAssets`. Only reached
         /// under `SM_EDIT_REPLAY_RECORD=1` — see the type's doc comment.
-        private func record(stepBytes: [Data?], fingerprints: [Int64]) throws {
-            let dir = assetsDir
+        private func record(chain: ReplayChain, stepBytes: [Data?], fingerprints: [Int64]) throws {
+            let dir = assetsDir(for: chain)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             for (index, bytes) in stepBytes.enumerated() {
                 let path = dir.appendingPathComponent("step-\(index).bin")
@@ -140,11 +142,13 @@
             print("recorded \(stepBytes.count) step file(s), goldens.txt, and fixture.mscx under \(dir.path)")
         }
 
-        /// Compares this run's output against whatever is currently on disk under `assetsDir` — the committed
-        /// assets on a normal run, or what `record` (plus the caller's own `fixture.mscx` write) just wrote when
-        /// `SM_EDIT_REPLAY_RECORD=1`.
-        private func verify(stepBytes: [Data?], fingerprints: [Int64], liveFixtureData: Data) throws {
-            let dir = assetsDir
+        /// Compares this run's output against whatever is currently on disk under the chain's `assetsDir` — the
+        /// committed assets on a normal run, or what `record` (plus the caller's own `fixture.mscx` write) just
+        /// wrote when `SM_EDIT_REPLAY_RECORD=1`.
+        private func verify(
+            chain: ReplayChain, stepBytes: [Data?], fingerprints: [Int64], liveFixtureData: Data,
+        ) throws {
+            let dir = assetsDir(for: chain)
             for (index, bytes) in stepBytes.enumerated() {
                 let path = dir.appendingPathComponent("step-\(index).bin")
                 if let bytes {
@@ -165,7 +169,7 @@
             let committedFixture = try Data(contentsOf: dir.appendingPathComponent("fixture.mscx"))
             #expect(
                 committedFixture == liveFixtureData,
-                "editReplay/fixture.mscx drifted from MSCXEncoder.encode(EditingFixtures.replayFixture())",
+                "\(chain.androidAssetDir)/fixture.mscx drifted from the live encoding of the chain's fixture",
             )
         }
     }

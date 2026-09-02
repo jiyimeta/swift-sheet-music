@@ -8,14 +8,17 @@ enum EditReplayStep {
     case redo
 }
 
-/// The fixed, hand-rolled sequence of edits that both `EditReplayGoldenTests` (host + device, wire bytes and
-/// fingerprints) and `EditReplayDeterminismTests` (two independent host sessions) replay over
-/// `EditingFixtures.replayFixture()`. One script, two consumers, so "the replay is deterministic" and "the wire
-/// bytes are what a device would receive" are proven against the exact same edits rather than two scripts that
-/// could quietly drift apart.
+/// The fixed, hand-rolled sequences of edits that `EditReplayGoldenTests` (host + device, wire bytes and
+/// fingerprints), `EditReplayWebGoldenTests` (the web facade's fixture) and `EditReplayDeterminismTests` (two
+/// independent host sessions) all replay. One script per chain, three consumers each, so "the replay is
+/// deterministic" and "the wire bytes are what a device would receive" are proven against the exact same edits
+/// rather than separate scripts that could quietly drift apart. `ReplayChain` pairs each script with its fixture
+/// and the assets it is recorded into.
 ///
 /// Everything here is derived from the step index — no randomness, no clock. A determinism test that is itself
 /// nondeterministic proves nothing, and the same script has to be reproducible on a device months later.
+///
+/// The sections below are about `standard`; `parity`'s own doc comment carries the equivalent argument for it.
 ///
 /// ## Index stability
 ///
@@ -222,6 +225,102 @@ enum EditReplayScript {
         return [
             step1, step2, step3, step4, step5a, step5b, step6, step7, step7b, step8a, step8b, step9, step10Undo,
             step10Redo, step11a, step11b, step12a, step12b, step13a, step13b, step14a, step14b, step14c,
+        ]
+    }
+
+    /// Ten steps over `EditingFixtures.parityFixture()`, covering every intent the parity project's structural
+    /// group appended (30…34: `setLayoutBreak`, `setBarLine`, `setRepeatBarLines`, `setMeasureRepeat`,
+    /// `moveToVoice`) — none of which the standard chain, which predates them, encodes at all.
+    ///
+    /// Each of the five intents appears at least twice, in both directions where it has one, so the chain pins the
+    /// wire bytes of the removal as well as the write: `setLayoutBreak` on then off (steps 1 / 10), `setBarLine`
+    /// `.double` then `.normal` (2 / 9), `setMeasureRepeat` grouped then dissolved (4 / 5), and `moveToVoice`
+    /// applied, undone and re-applied (6 / 7 / 8). `setRepeatBarLines` (3) is the exception: it writes both flags
+    /// at once, so one step already carries its whole payload, and it is left standing at the end deliberately —
+    /// the final fingerprint then differs from the initial one by something no later step took back, which is what
+    /// `EditReplayDeterminismTests.scriptIsNotInert` reads.
+    ///
+    /// ## Index stability
+    ///
+    /// Almost every step here names a MEASURE COLUMN (`MeasureRef`) or a whole voice (`VoiceRef`), never a slot by
+    /// fixed position, so the hazard this type's doc comment is largely about — an earlier step shifting an element
+    /// index a later step addresses — barely applies. What could still move under a later step is spelled out per
+    /// target:
+    ///
+    /// - **Measure 1 (steps 1, 2, 3, 9, 10)** is only ever addressed as a column. Steps 2 and 9 do change its
+    ///   element count on every staff (`SetBarLine` appends a trailing `.barLine`, then `.normal` removes it
+    ///   again), but nothing in this chain addresses an element of measure 1 at all, on any staff, so that
+    ///   growth and shrink is unobservable to the steps around it. Steps 1/10 and 3 touch `Measure` flags
+    ///   (`lineBreak`, `startRepeat` / `endRepeatCount`) rather than the element list, so they move nothing.
+    /// - **Measure 2 of the CELLO (steps 4, 5)** is the one place a step rewrites bars wholesale: step 4 turns
+    ///   cello measures 2 and 3 into a measure-repeat group (a `%` sign plus a continuation rest, replacing each
+    ///   bar's single measure rest) and step 5 dissolves it back. Both name the group's first bar by column and
+    ///   the staff by address, and no step in this chain addresses a cello element by index, so the rewrite is
+    ///   self-contained. The cello is chosen precisely because `SetMeasureRepeat` demands empty bars: measures 2
+    ///   and 3 of the flute hold tied halves and a measure rest the chain must leave alone.
+    /// - **Measure 0 of the FLUTE (steps 6, 8)** is the only element-level target. Element 1 is the first C4
+    ///   quarter — element 0 is the time signature, which carries no ticks — and `MoveToVoice` replaces the
+    ///   source slot one-for-one with a rest of the same length, so voice 0's element count does not change and
+    ///   step 8 finds exactly what step 6 did. The move's destination, voice 1 of measure 0, does not exist yet;
+    ///   `MoveToVoice` creates it, splits its fresh measure rest at the 480-tick boundary and drops the chord into
+    ///   the first half. Measure 0 is chosen over measure 1 — whose voice 1 the fixture already provides — so that
+    ///   the create-the-voice path is the one under test; the ready-made voice 1 in measure 1 covers the other
+    ///   path in `MoveToVoice`'s own unit tests.
+    /// - **Step 7 is the undo of step 6, and step 8 re-applies step 6's identical intent.** This is the
+    ///   undo-then-reapply convention this type's "Undo / redo" section explains: `EditReplayStep.redo` has no
+    ///   wire representation the device harness can commit, so a genuine redo is spelled as an undo followed by an
+    ///   ordinary apply of the same bytes. Steps 9 and 10 address measure 1 only, so whatever the undo did to
+    ///   measure 0's voice count cannot reach them.
+    ///
+    /// ## Fingerprints that repeat
+    ///
+    /// Every step here moves the fingerprint, but three of the recorded values REPEAT an earlier one rather than
+    /// being new, and all three are correct rather than a sign of a step that did nothing: step 5 dissolves the
+    /// group step 4 wrote and so lands back on step 3's value; step 7 undoes step 6 and lands back on step 5's;
+    /// step 8 re-applies step 6 and lands back on step 6's. Steps 9 and 10, which clear what steps 2 and 1 wrote,
+    /// do NOT land back on an earlier value — the repeat flags step 3 set and the voice step 6/8 created are still
+    /// standing — so the chain ends on a fingerprint it has never shown before.
+    ///
+    /// As in the standard chain, an equal fingerprint would not by itself prove a step was inert, nor a different
+    /// one prove it did what it was added for. What proves each step ran is `EditSessionReplayParityTest.kt`
+    /// asserting every `nativeApplyEditIntent` returned `true`, and `EditReplayWebGoldenTests` asserting the same
+    /// of `ScoreEditSession.apply` — those catch a step that starts being refused, which a `nil`-planning intent
+    /// (see `ScoreEditSession.structuralParityCommand`, where restating what the score already says plans to
+    /// nothing) would be if a future change made one of these steps a no-op.
+    static func parity(staff: StaffAddress) -> [EditReplayStep] {
+        let cello = StaffAddress(partIndex: 1, staffIndexInPart: 0)
+        let measure1 = MeasureRef(measureIndex: 1)
+        let measure2 = MeasureRef(measureIndex: 2)
+        // Steps 6 and 8 apply the identical intent — see "Index stability" above on why one value is bound once
+        // and used twice rather than spelled out again, which would let the two drift apart.
+        let move = EditReplayStep.intent(.moveToVoice(
+            at: VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1),
+            to: VoiceRef(staff: staff, measureIndex: 0, voiceIndex: 1),
+        ))
+
+        return [
+            // Step 1: ask measure 1 for a system break. The fixture declares none, so this is a real flag write.
+            .intent(.setLayoutBreak(at: measure1, kind: .line, enabled: true)),
+            // Step 2: a double barline at the end of measure 1 — appended, since that bar carries none.
+            .intent(.setBarLine(at: measure1, style: .double)),
+            // Step 3: make measure 1 both open a repeat and end one played twice. Written on the canonical staff's
+            // `Measure` flags, not as elements, so it neither sees nor disturbs step 2's barline.
+            .intent(.setRepeatBarLines(at: measure1, startRepeat: true, endRepeatCount: 2)),
+            // Step 4: group cello measures 2-3 under a `%`. Both are single-voice measure rests, which is what
+            // `SetMeasureRepeat` requires; the flute's measures 2-3 are not, hence the cello.
+            .intent(.setMeasureRepeat(at: measure2, staff: cello, numMeasures: 2)),
+            // Step 5: dissolve that group again — `SetMeasureRepeat`'s clear path and its own wire bytes, which a
+            // chain that only ever wrote a group would never encode.
+            .intent(.setMeasureRepeat(at: measure2, staff: cello, numMeasures: nil)),
+            // Step 6: move the flute's first quarter into a voice 1 that does not exist yet.
+            move,
+            // Step 7 / step 8: undo the move, then re-apply the identical intent — this chain's redo.
+            .undo,
+            move,
+            // Step 9: clear measure 1's barline back to normal — the removal branch of `SetBarLine`.
+            .intent(.setBarLine(at: measure1, style: .normal)),
+            // Step 10: and clear the system break, the removal branch of `SetLayoutBreak`.
+            .intent(.setLayoutBreak(at: measure1, kind: .line, enabled: false)),
         ]
     }
 
