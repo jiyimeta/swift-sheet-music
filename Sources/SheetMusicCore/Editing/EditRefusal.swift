@@ -88,6 +88,14 @@ public struct EditRefusal: Sendable, Hashable {
         /// it carries notes, a second voice, or already belongs to a repeat group. The sign replaces the bar's
         /// contents, so writing over one would silently destroy music; `measureIndex` names the offending bar.
         case measureRepeatSpanNotEmpty(measureIndex: Int)
+        /// `MoveToVoice` was given a destination that is not another voice of the SAME bar of the same staff —
+        /// a different measure, a different staff, or the voice the element is already in. Moving to a voice is
+        /// a vertical move at a fixed tick; anything else is a different edit (a paste, or a staff change).
+        case voiceMismatch(from: VoiceRef, to: VoiceRef)
+        /// Something in the destination voice's span is not a rest `MoveToVoice` may split and overwrite — a
+        /// sounding note, or a rest inside a tuplet whose length is the tuplet's to decide. Refused rather than
+        /// overwritten, since the span's contents would otherwise be destroyed to make room.
+        case destinationNotFree(VoiceElementID)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -152,6 +160,10 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.invalidMeasureRepeatSpan"
         case .measureRepeatSpanNotEmpty:
             "edit.measureRepeatSpanNotEmpty"
+        case .voiceMismatch:
+            "edit.voiceMismatch"
+        case .destinationNotFree:
+            "edit.destinationNotFree"
         case .unexpected:
             "edit.unexpected"
         }
@@ -218,6 +230,10 @@ public struct EditRefusal: Sendable, Hashable {
             "a measure repeat spans 1, 2 or 4 bars that exist (got \(numMeasures))"
         case let .measureRepeatSpanNotEmpty(measureIndex):
             "measure \(measureIndex) is not an empty single-voice bar"
+        case let .voiceMismatch(from, to):
+            "cannot move from \(from) to \(to): the destination must be another voice of the same bar"
+        case let .destinationNotFree(location):
+            "element at \(location) is in the way of the moved chord"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
