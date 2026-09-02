@@ -167,7 +167,11 @@ struct OMRGlyphDetectorTests {
         #expect(calls.first?.page == 3)
         let scored = calls.first?.glyphs ?? []
         #expect(scored.count == 2, "both siblings clear τ=0.1 and NMS is per class")
-        #expect(scored.map(\.glyph) == glyphs, "the tap sees exactly what the detector returns")
+        // A position holds one clef: the detector hands the importer only
+        // the higher-scoring sibling, while the tap keeps both. Without this
+        // `readClef` would take whichever the glyph order put first.
+        #expect(glyphs.count == 1)
+        #expect(glyphs.first?.semantic == .clefF8va, "the 0.25 sibling wins over the 0.2 one")
         let byClass = Dictionary(
             uniqueKeysWithValues: scored.map {
                 (OMRLabelClassNames.className(for: $0.glyph.semantic), $0.score)

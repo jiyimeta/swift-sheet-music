@@ -127,10 +127,14 @@ def main() -> int:
             m = LINE.search(line)
             if not m:
                 continue
+            # Clef candidates only: the importer reads a measure's clef from
+            # its clef glyphs, so an accidental or a brace next to the clef
+            # (there is usually one within 12pt) is not a competitor here —
+            # counting it as one turned every key signature into "other".
             cands = [
                 (c.group("cls"), float(c.group("score")), float(c.group("dist")))
                 for c in CAND.finditer(m.group("cands"))
-                if float(c.group("dist")) <= args.radius
+                if float(c.group("dist")) <= args.radius and c.group("cls").startswith("clef")
             ]
             rows.append((m.group("file"), m.group("vector"), cands))
     if not rows:
@@ -144,22 +148,26 @@ def main() -> int:
     for name, rule in RULES.items():
         table: dict[str, Counter] = defaultdict(Counter)
         sibling_to: dict[str, Counter] = defaultdict(Counter)
+        other_to: dict[str, Counter] = defaultdict(Counter)
         for _, vector, cands in rows:
             predicted = rule(cands, args.tau)
             o = outcome(vector, predicted)
             table[vector][o] += 1
             if o == "sibling":
                 sibling_to[vector][predicted] += 1
+            elif o == "other":
+                other_to[vector][predicted] += 1
         print(f"\n== rule {name} ==")
-        print(f"{'vector':18s} {'n':>5s} {'exact':>6s} {'sibling':>8s} {'other':>6s} {'none':>5s}  sibling->")
+        print(f"{'vector':18s} {'n':>5s} {'exact':>6s} {'sibling':>8s} {'other':>6s} {'none':>5s}  sibling-> | other->")
         total = Counter()
         for vector in sorted(table, key=lambda v: -sum(table[v].values())):
             c = table[vector]
             n = sum(c.values())
             total.update(c)
             sib = " ".join(f"{k}:{v}" for k, v in sibling_to[vector].most_common())
+            oth = " ".join(f"{k}:{v}" for k, v in other_to[vector].most_common(4))
             print(f"{vector:18s} {n:5d} {c['exact']:6d} {c['sibling']:8d} "
-                  f"{c['other']:6d} {c['none']:5d}  {sib}")
+                  f"{c['other']:6d} {c['none']:5d}  {sib} | {oth}")
         n = sum(total.values())
         print(f"{'ALL':18s} {n:5d} {total['exact']:6d} {total['sibling']:8d} "
               f"{total['other']:6d} {total['none']:5d}")
@@ -197,15 +205,17 @@ def main() -> int:
               f"{sum(exact_scores) / n:10.3f} {sum(base_scores) / n:9.3f}")
 
     if args.per_file:
-        print("\n== per file, octave-clef truths (shipped rule) ==")
+        print("\n== per file, every clef truth (shipped rule): vector->predicted counts ==")
         per_file: dict[str, Counter] = defaultdict(Counter)
         for file, vector, cands in rows:
-            if family(vector) == vector:
-                continue
-            per_file[file][outcome(vector, rule_shipped(cands, args.tau))] += 1
+            predicted = rule_shipped(cands, args.tau) or "none"
+            per_file[file][(vector, predicted)] += 1
         for file in sorted(per_file):
             c = per_file[file]
-            print(f"{file}: " + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
+            wrong = {k: v for k, v in c.items() if k[0] != k[1]}
+            right = sum(v for k, v in c.items() if k[0] == k[1])
+            print(f"{file}: exact={right} "
+                  + " ".join(f"{k[0]}->{k[1]}={v}" for k, v in sorted(wrong.items())))
     return 0
 
 

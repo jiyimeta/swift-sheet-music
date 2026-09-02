@@ -68,13 +68,46 @@ struct OMRGlyphDetector: OMRGlyphDetecting {
                 message: "OMR: the detector found no symbols at threshold \(manifest.threshold)",
             ))
         }
-        let glyphs = try detections.map {
-            try classify($0, pageIndex: pageIndex, analysis: analysis, scale: normalized.scale)
+        let scored = try detections.map {
+            try ScoredGlyph(
+                glyph: classify($0, pageIndex: pageIndex, analysis: analysis, scale: normalized.scale),
+                score: $0.score,
+            )
         }
-        if let observer {
-            observer(pageIndex, zip(glyphs, detections).map { ScoredGlyph(glyph: $0, score: $1.score) })
+        // The tap sees everything the decode produced, siblings included:
+        // that is the measurement. What leaves is one clef per position.
+        observer?(pageIndex, scored)
+        return Self.oneClefPerPosition(
+            scored, detections: detections,
+            isClef: detections.map { manifest.classes[$0.classIndex].hasPrefix("clef") },
+            radiusPx: manifest.nmsRadiusSp * manifest.staffSpacePx,
+        ).map(\.glyph)
+    }
+
+    /// A position holds one clef. The decode's NMS is per class, so a clef
+    /// and its octave sibling — `clefF` and `clefF8va` on the same cell,
+    /// which is how a real render's split confidence comes out — both
+    /// survive it when both clear τ, and the importer's `readClef` then
+    /// takes whichever the glyph order puts first. It has no score to
+    /// prefer one by; this pass does. Highest score first, a clef within
+    /// `radiusPx` (the merge's own dedupe radius, in normalized pixels) of
+    /// a kept clef is dropped. Non-clef classes pass through untouched, in
+    /// their original order.
+    static func oneClefPerPosition(
+        _ scored: [ScoredGlyph], detections: [OMRDetectorDecode.Detection], isClef: [Bool],
+        radiusPx: Double,
+    ) -> [ScoredGlyph] {
+        precondition(scored.count == detections.count && isClef.count == detections.count)
+        var kept: [Int] = [] // indices of clefs kept, highest score first
+        var dropped = Set<Int>()
+        for i in scored.indices.filter({ isClef[$0] }).sorted(by: { scored[$0].score > scored[$1].score }) {
+            let center = detections[i].centerPx
+            let shadowed = kept.contains { j in
+                hypot(detections[j].centerPx.x - center.x, detections[j].centerPx.y - center.y) <= radiusPx
+            }
+            if shadowed { dropped.insert(i) } else { kept.append(i) }
         }
-        return glyphs
+        return scored.indices.filter { !dropped.contains($0) }.map { scored[$0] }
     }
 
     /// Runs every tile of `bitmap` through the classifier and merges the
