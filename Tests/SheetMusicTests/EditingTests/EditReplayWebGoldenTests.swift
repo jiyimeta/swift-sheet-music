@@ -212,7 +212,9 @@
                  .setKeySignature, .removeKeySignature, .setTimeSignature, .removeTimeSignature,
                  .setRehearsalMark, .removeRehearsalMark,
                  .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry,
-                 .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice:
+                 .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice,
+                 .transposeRange, .addIntervalToSelection, .deleteRange, .setAccidentalsInRange,
+                 .setDurationInRange, .respellRange:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }

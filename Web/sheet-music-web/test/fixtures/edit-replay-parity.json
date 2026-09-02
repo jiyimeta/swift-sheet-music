@@ -10,7 +10,16 @@
     "4321092512542193854",
     "-2040087635889819436",
     "90846441078278182",
-    "2195009515464154291"
+    "2195009515464154291",
+    "591693781637055523",
+    "2195009515464154291",
+    "5139323204138068580",
+    "-6162216047842402066",
+    "-6355990928303204108",
+    "-5096833445711081933",
+    "6317257103641034598",
+    "-5096833445711081933",
+    "6317257103641034598"
   ],
   "steps" : [
     {
@@ -50,6 +59,41 @@
     },
     {
       "base64" : "Cx4KCAoCCAIQARgA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "JSMKIgocCgwKBAgAEAAQBBgAIAASDAoECAAQABAEGAAgABACGAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "JSMKIgocCgwKBAgAEAAQBBgAIAASDAoECAAQABAEGAAgAhABGAE=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "IyQKIAocCgwKBAgAEAAQABgAIAQSDAoECAAQABAAGAAgBBAG",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "NiYKMwocCgwKBAgAEAAQABgAIAQSDAoECAAQABAAGAAgBBITCAESD2FjY2lkZW50YWxTaGFycA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "IygKIAocCgwKBAgAEAAQABgAIAQSDAoECAAQABAAGAAgBBAC",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "KScKJgocCgwKBAgAEAAQAhgAIAASDAoECAAQABACGAAgBhIGCAIQABgA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "ISUKHgocCgwKBAgAEAAQABgAIAQSDAoECAAQABAAGAAgBA==",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "ISUKHgocCgwKBAgAEAAQABgAIAQSDAoECAAQABAAGAAgBA==",
       "op" : "intentBytes"
     }
   ]

@@ -98,11 +98,12 @@ public struct EditRefusal: Sendable, Hashable {
         /// filled voice has. Refused rather than overwritten, since the span's contents would otherwise be
         /// destroyed to make room, and rather than written short, which would drop the moved chord entirely.
         case destinationNotFree(VoiceElementID)
-        /// A tuplet sits entirely before the slot an edit was asked to work at, so the tick the slot falls on
-        /// cannot be read off the voice's written durations — a tuplet's members sound at the tuplet's ratio,
-        /// not at their written length. Commands that walk ticks by summing written durations refuse rather
-        /// than act at a tick they computed wrong; a ratio-aware walk is separate work.
-        case tupletPrecedesSlot(at: VoiceElementID)
+        /// `TransposeRange` was asked for more than two octaves in one step. MuseScore's transpose dialog stops
+        /// there too; anything wider is two edits, and a relayed payload is data this must bound.
+        case invalidTransposition(semitones: Int)
+        /// `AddIntervalToSelection` was asked for an interval MuseScore's Alt+1…9 does not name: `|steps|` must be
+        /// 1 (unison) … 9 (ninth).
+        case invalidInterval(steps: Int)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -171,8 +172,10 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.voiceMismatch"
         case .destinationNotFree:
             "edit.destinationNotFree"
-        case .tupletPrecedesSlot:
-            "edit.tupletPrecedesSlot"
+        case .invalidTransposition:
+            "edit.invalidTransposition"
+        case .invalidInterval:
+            "edit.invalidInterval"
         case .unexpected:
             "edit.unexpected"
         }
@@ -243,8 +246,10 @@ public struct EditRefusal: Sendable, Hashable {
             "cannot move from \(from) to \(to): the destination must be another voice of the same bar"
         case let .destinationNotFree(location):
             "element at \(location) is in the way of the moved chord"
-        case let .tupletPrecedesSlot(location):
-            "a tuplet before \(location) makes its tick ambiguous"
+        case let .invalidTransposition(semitones):
+            "a transposition spans at most two octaves (got \(semitones))"
+        case let .invalidInterval(steps):
+            "an interval is ±1 (unison) … ±9 (ninth) (got \(steps))"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }

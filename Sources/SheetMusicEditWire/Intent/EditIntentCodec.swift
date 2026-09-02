@@ -68,12 +68,19 @@ import Wirelet
 /// 32 = setRepeatBarLines(SetRepeatBarLinesIntentWire)
 /// 33 = setMeasureRepeat(SetMeasureRepeatIntentWire)
 /// 34 = moveToVoice(MoveToVoiceIntentWire)
+/// 35 = transposeRange(TransposeRangeIntentWire)
+/// 36 = addIntervalToSelection(AddIntervalToSelectionIntentWire)
+/// 37 = deleteRange(DeleteRangeIntentWire)
+/// 38 = setAccidentalsInRange(SetAccidentalsInRangeIntentWire)
+/// 39 = setDurationInRange(SetDurationInRangeIntentWire)
+/// 40 = respellRange(RespellRangeIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
 /// creation, 19…22 for M3 signature changes, 23…24 for M4 rehearsal marks, 25…28 for M6 drum note entry and 29
 /// for part renaming; 0…4 predate them all and must keep their indices and byte layout. Cases 30…34 were appended
-/// for the edit-command parity project's structural group (spec 2026-09-02).
+/// for the edit-command parity project's structural group (spec 2026-09-02). Cases 35…40 were appended for its
+/// range group.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -379,6 +386,42 @@ import Wirelet
 /// tag 1: location     VoiceElementIDWire, see PathIDCodecs.swift
 /// tag 2: destination  VoiceRefWire, see ReferenceCodecs.swift
 /// ```
+///
+/// `TransposeRangeIntentWire` (`transposeRange`'s payload):
+/// ```
+/// tag 1: range         VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: semitones     i32, zig-zag varint — −24…24
+/// tag 3: respellInKey  u8, varint — 0 / 1
+/// ```
+///
+/// `AddIntervalToSelectionIntentWire` (`addIntervalToSelection`'s payload):
+/// ```
+/// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: steps  i32, zig-zag varint — ±1…±9, the interval number
+/// ```
+///
+/// `DeleteRangeIntentWire` (`deleteRange`'s payload):
+/// ```
+/// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
+/// ```
+///
+/// `SetAccidentalsInRangeIntentWire` (`setAccidentalsInRange`'s payload):
+/// ```
+/// tag 1: range       VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: accidental  AccidentalWire, see layout above
+/// ```
+///
+/// `SetDurationInRangeIntentWire` (`setDurationInRange`'s payload):
+/// ```
+/// tag 1: range     VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: duration  NoteDurationWire, see layout above
+/// ```
+///
+/// `RespellRangeIntentWire` (`respellRange`'s payload):
+/// ```
+/// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: mode   u8, varint — 0 simplest / 1 prefer sharps / 2 prefer flats, else throws
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -552,6 +595,24 @@ public enum EditIntentWire {
     /// Appended for the edit-command parity project's structural group (spec 2026-09-02) — index 34. Never
     /// renumber anything above it.
     case moveToVoice(MoveToVoiceIntentWire)
+    /// Appended for the edit-command parity project's range group (spec 2026-09-02) — index 35. Never renumber
+    /// anything above it.
+    case transposeRange(TransposeRangeIntentWire)
+    /// Appended for the edit-command parity project's range group (spec 2026-09-02) — index 36. Never renumber
+    /// anything above it.
+    case addIntervalToSelection(AddIntervalToSelectionIntentWire)
+    /// Appended for the edit-command parity project's range group (spec 2026-09-02) — index 37. Never renumber
+    /// anything above it.
+    case deleteRange(DeleteRangeIntentWire)
+    /// Appended for the edit-command parity project's range group (spec 2026-09-02) — index 38. Never renumber
+    /// anything above it.
+    case setAccidentalsInRange(SetAccidentalsInRangeIntentWire)
+    /// Appended for the edit-command parity project's range group (spec 2026-09-02) — index 39. Never renumber
+    /// anything above it.
+    case setDurationInRange(SetDurationInRangeIntentWire)
+    /// Appended for the edit-command parity project's range group (spec 2026-09-02) — index 40. Never renumber
+    /// anything above it.
+    case respellRange(RespellRangeIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -653,6 +714,20 @@ public enum EditIntentWire {
             ))
         case let .moveToVoice(location, destination):
             self = .moveToVoice(MoveToVoiceIntentWire(location: location, destination: destination))
+        case let .transposeRange(range, semitones, respellInKey):
+            self = .transposeRange(TransposeRangeIntentWire(
+                range: range, semitones: semitones, respellInKey: respellInKey,
+            ))
+        case let .addIntervalToSelection(range, steps):
+            self = .addIntervalToSelection(AddIntervalToSelectionIntentWire(range: range, steps: steps))
+        case let .deleteRange(range):
+            self = .deleteRange(DeleteRangeIntentWire(range: range))
+        case let .setAccidentalsInRange(range, accidental):
+            self = .setAccidentalsInRange(SetAccidentalsInRangeIntentWire(range: range, accidental: accidental))
+        case let .setDurationInRange(range, duration):
+            self = .setDurationInRange(SetDurationInRangeIntentWire(range: range, duration: duration))
+        case let .respellRange(range, mode):
+            self = .respellRange(RespellRangeIntentWire(range: range, mode: mode))
         }
     }
 
@@ -780,6 +855,25 @@ public enum EditIntentWire {
         case let .moveToVoice(wire):
             let decoded = wire.decoded()
             return .moveToVoice(at: decoded.location, to: decoded.destination)
+        case let .transposeRange(wire):
+            let decoded = wire.decoded()
+            return .transposeRange(
+                over: decoded.range, semitones: decoded.semitones, respellInKey: decoded.respellInKey,
+            )
+        case let .addIntervalToSelection(wire):
+            let decoded = wire.decoded()
+            return .addIntervalToSelection(over: decoded.range, steps: decoded.steps)
+        case let .deleteRange(wire):
+            return .deleteRange(over: wire.decoded())
+        case let .setAccidentalsInRange(wire):
+            let decoded = try wire.decoded()
+            return .setAccidentalsInRange(over: decoded.range, accidental: decoded.accidental)
+        case let .setDurationInRange(wire):
+            let decoded = try wire.decoded()
+            return .setDurationInRange(over: decoded.range, duration: decoded.duration)
+        case let .respellRange(wire):
+            let decoded = try wire.decoded()
+            return .respellRange(over: decoded.range, mode: decoded.mode)
         }
     }
 }

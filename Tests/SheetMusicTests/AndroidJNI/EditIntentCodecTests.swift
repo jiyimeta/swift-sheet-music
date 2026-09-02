@@ -127,6 +127,10 @@ struct EditIntentCodecTests {
         // sides would pass just as well with the two tags swapped.
         let otherNote = NoteID(staff: staff, measureIndex: 2, voiceIndex: 1, elementIndex: 4, noteIndexInChord: 0)
         let slot = VoiceElementID(staff: staff, measureIndex: 2, voiceIndex: 1, elementIndex: 3)
+        // Two distinct bounds, so a `start` / `end` transposition in `VoiceElementRangeWire` cannot round-trip.
+        let range = VoiceElementRange(
+            start: slot, end: VoiceElementID(staff: staff, measureIndex: 3, voiceIndex: 0, elementIndex: 1),
+        )
         let intents: [EditIntent] = [
             .setNotePitch(at: note, pitch: 61, tpc: 21, accidental: .sharp),
             .setAccidental(at: note, accidental: nil),
@@ -223,6 +227,17 @@ struct EditIntentCodecTests {
             .setMeasureRepeat(at: MeasureRef(measureIndex: 3), staff: staff, numMeasures: 2),
             .setMeasureRepeat(at: MeasureRef(measureIndex: 3), staff: staff, numMeasures: nil),
             .moveToVoice(at: slot, to: VoiceRef(staff: staff, measureIndex: 3, voiceIndex: 1)),
+            // Appended for the edit-command parity project (spec 2026-09-02), group 2 — indices 35…40. Both flag
+            // values of `transposeRange`, a negative interval, both accidental shapes and a fraction duration, so
+            // a dropped flag, a lost sign or a mis-tagged nested range cannot survive looking right.
+            .transposeRange(over: range, semitones: -3, respellInKey: true),
+            .transposeRange(over: range, semitones: 12, respellInKey: false),
+            .addIntervalToSelection(over: range, steps: -8),
+            .deleteRange(over: range),
+            .setAccidentalsInRange(over: range, accidental: .flat),
+            .setAccidentalsInRange(over: range, accidental: nil),
+            .setDurationInRange(over: range, duration: .fraction(Fraction(numerator: 3, denominator: 8))),
+            .respellRange(over: range, mode: .preferFlats),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -314,6 +329,16 @@ struct EditIntentCodecTests {
         #expect(EditIntentCodec.encode(
             .moveToVoice(at: slot, to: VoiceRef(staff: staff, measureIndex: 0, voiceIndex: 1)),
         )[1] == 34)
+        // Appended for the edit-command parity project (spec 2026-09-02), group 2. A range is two nested
+        // `VoiceElementIDWire`s — about 30 bytes at these small indices — so the frame's length prefix stays one
+        // byte and the `bytes[1]` framing assumption holds.
+        let range = VoiceElementRange(start: slot, end: slot)
+        #expect(EditIntentCodec.encode(.transposeRange(over: range, semitones: 1, respellInKey: false))[1] == 35)
+        #expect(EditIntentCodec.encode(.addIntervalToSelection(over: range, steps: 3))[1] == 36)
+        #expect(EditIntentCodec.encode(.deleteRange(over: range))[1] == 37)
+        #expect(EditIntentCodec.encode(.setAccidentalsInRange(over: range, accidental: nil))[1] == 38)
+        #expect(EditIntentCodec.encode(.setDurationInRange(over: range, duration: .half))[1] == 39)
+        #expect(EditIntentCodec.encode(.respellRange(over: range, mode: .simplest))[1] == 40)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field
