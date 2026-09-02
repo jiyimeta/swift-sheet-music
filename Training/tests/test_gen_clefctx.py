@@ -29,12 +29,18 @@ def test_every_octave_clef_appears_as_a_system_start_clef():
     """The whole point: each octave variant must occur as a staff's
     `<defaultClef>` (full size, system start), not only as a mid-bar
     change. Over a batch the uniform draw reaches every token."""
-    joined = "\n".join(t for _, t in gen_clefctx.clefctx_sources(seed=7, count=40))
+    joined = "\n".join(t for _, t in gen_clefctx.clefctx_sources(seed=7, count=80))
     seen = Counter()
     for token in gen_clefctx.CLEF_BASES:
         seen[token] = joined.count(f"<defaultClef>{token}</defaultClef>")
     for token in ("G8va", "G8vb", "G15ma", "G15mb", "F8va", "F8vb", "F15ma", "F15mb", "C3", "F"):
         assert seen[token] > 0, f"{token} never drawn as a default clef: {seen}"
+    # The prior is the point (see `_draw_clef`): the octave clefs real
+    # scores carry outnumber the two-octave ones, and a uniform draw is
+    # the bug this pins against — run5 learned G15mb as often as G8vb.
+    common = sum(seen[t] for t in gen_clefctx._COMMON)
+    rare = sum(seen[t] for t in gen_clefctx._RARE)
+    assert common > 2 * rare, (common, rare)
     # `G` is MuseScore's default and is written by omission (see
     # `mscx_builder._part_staff_block`), so it is absent from the count on
     # purpose — every staff without a `<defaultClef>` is a G staff.

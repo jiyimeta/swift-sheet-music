@@ -57,22 +57,32 @@ _PART_NAMES = ["Flute", "Oboe", "Clarinet", "Horn", "Trumpet", "Trombone",
 _PARTS_MIN, _PARTS_MAX = 2, 8
 
 
-#: Half of all staves are plain `G` / `F`, the other half draw uniformly
-#: from the nine remaining tokens. The real failure is an octave clef
-#: sitting AMONG plain ones (a bass-8va staff in a score whose other
-#: staves are ordinary), so the plain clefs stay the majority neighbour
-#: rather than one token in eleven; each octave variant still lands on
-#: about one staff in eighteen, which sizes a root of ~80 sources at
-#: roughly 2k system-start glyphs per variant.
+#: Half of all staves are plain `G` / `F`; the real failure is an octave
+#: clef sitting AMONG plain ones (a bass-8va staff in a score whose other
+#: staves are ordinary), so the plain clefs stay the majority neighbour.
+#:
+#: The other half is split 4:1 between the octave / C clefs real scores
+#: carry (`G8vb` tenor and guitar, `F8va` / `F8vb`, `G8va`, `C3`) and the
+#: two-octave ones (`15ma` / `15mb`), which real scores almost never do.
+#: The first root of this kind (v3-clefctx, 2026-09-02) drew all nine
+#: uniformly and TAUGHT a confusion the corpus did not have: `G15mb`
+#: became as plausible as `G8vb`, and run5 read 155 of 7556 real `G8vb`
+#: clefs as `G15mb` — the same sibling split, one octave further out.
+#: A supplement's class prior is a claim about the world, and uniform
+#: was the wrong claim.
 _PLAIN_SHARE = 0.5
 _PLAIN = ["G", "F"]
-_OTHERS = sorted(c for c in CLEF_BASES if c not in _PLAIN)
+_COMMON = ["G8vb", "F8va", "F8vb", "G8va", "C3"]
+_RARE = ["G15ma", "G15mb", "F15ma", "F15mb"]
+_COMMON_SHARE_OF_REST = 0.8
 
 
 def _draw_clef(rng) -> str:
     if rng.random() < _PLAIN_SHARE:
         return str(rng.choice(_PLAIN))
-    return str(rng.choice(_OTHERS))
+    if rng.random() < _COMMON_SHARE_OF_REST:
+        return str(rng.choice(_COMMON))
+    return str(rng.choice(_RARE))
 
 
 def _staff_measures(rng, clef: str, n_measures: int) -> list[str]:
