@@ -7,6 +7,7 @@
     // SwiftySynth playback backend (pure-Swift, MIT): eliminates AUMIDISynth's
     // voice stealing with lightweight SoundFonts, on iOS and macOS alike.
     import SheetMusicAudioSwiftySynth
+    import SheetMusicOMRModel
     import SheetMusicPDF
     import SheetMusicUI
     import SwiftUI
@@ -495,22 +496,73 @@
         /// Import a music PDF: reconstruct the `Score` + geometry side-car,
         /// adopt the score (so playback prepares against it), keep the
         /// original PDF document for display, and switch to `.originalPDF`.
+        ///
+        /// Scanned (image-only) pages are read too, through the bundled OMR
+        /// model. That is seconds per page in a Debug build, so the parse
+        /// runs off the main actor and the sidebar shows what it read.
         func importOriginalPDF(from url: URL) {
-            do {
-                let data = try Data(contentsOf: url)
-                let result = try PDFImporter.parseWithGeometry(pdfData: data)
-                guard let document = PDFDocument(data: data) else {
-                    errorMessage = "Could not open PDF: \(url.lastPathComponent)"
-                    return
+            errorMessage = "Importing \(url.lastPathComponent)…"
+            Task {
+                do {
+                    let data = try Data(contentsOf: url)
+                    let result = try await Self.parseMusicPDF(data)
+                    guard let document = PDFDocument(data: data) else {
+                        errorMessage = "Could not open PDF: \(url.lastPathComponent)"
+                        return
+                    }
+                    adoptLoadedScore(result.score, sourceName: url.lastPathComponent)
+                    originalPDF = document
+                    originalPDFGeometry = result.geometry
+                    layoutMode = .originalPDF
+                    errorMessage = Self.describeImport(result.diagnostics)
+                } catch {
+                    errorMessage =
+                        "PDF import failed: " + exampleErrorDescription(error)
                 }
-                adoptLoadedScore(result.score, sourceName: url.lastPathComponent)
-                originalPDF = document
-                originalPDFGeometry = result.geometry
-                layoutMode = .originalPDF
-            } catch {
-                errorMessage =
-                    "PDF import failed: " + exampleErrorDescription(error)
             }
+        }
+
+        /// Collects the importer's diagnostics from its `@Sendable` callback.
+        /// The callback runs synchronously inside the parse, on the detached
+        /// task's thread, and nothing reads `items` until the parse returns.
+        private final class ImportDiagnosticLog: @unchecked Sendable {
+            var items: [PDFImportDiagnostic] = []
+        }
+
+        /// `parseWithGeometry` with the bundled OMR model attached. Detached
+        /// because the parse is synchronous and CPU-bound; `PDFImportOptions`
+        /// is not `Sendable`, so it is built inside the task rather than
+        /// carried across.
+        private nonisolated static func parseMusicPDF(
+            _ data: Data,
+        ) async throws -> (score: Score, geometry: PDFScoreGeometry, diagnostics: [PDFImportDiagnostic]) {
+            let classifier = try await CoreMLTileClassifier()
+            return try await Task.detached(priority: .userInitiated) {
+                let log = ImportDiagnosticLog()
+                var options = PDFImportOptions()
+                options.omrTileClassifier = classifier
+                options.diagnostics = { log.items.append($0) }
+                let result = try PDFImporter.parseWithGeometry(pdfData: data, options: options)
+                return (result.score, result.geometry, log.items)
+            }.value
+        }
+
+        /// One sidebar line for the import; every diagnostic also goes to the
+        /// console, where a warning's page and reason are readable in full.
+        private static func describeImport(_ diagnostics: [PDFImportDiagnostic]) -> String? {
+            for diagnostic in diagnostics {
+                print("[pdf-import] \(diagnostic.severity) \(diagnostic.location): \(diagnostic.message)")
+            }
+            let rasterNote = diagnostics.first { $0.message.hasPrefix("OMR: no geometry") }
+            let warnings = diagnostics.filter { $0.severity == .warning }.count
+            var parts: [String] = []
+            if rasterNote != nil {
+                parts.append("Read scanned page(s) with OMR — no playback cursor on those pages")
+            }
+            if warnings > 0 {
+                parts.append("\(warnings) import warning(s); see the console")
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: ". ")
         }
 
         private func showPDFImportPanel() {
