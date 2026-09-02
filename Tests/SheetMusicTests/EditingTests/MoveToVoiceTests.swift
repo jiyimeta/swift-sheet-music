@@ -110,6 +110,44 @@ struct MoveToVoiceTests {
         #expect(score == before)
     }
 
+    @Test("a destination voice that stops before the span is refused, not silently emptied")
+    func refusesDestinationShorterThanTheSpan() throws {
+        var score = EditingFixtures.parityFixture()
+        // A legal partial voice: voice 1 of bar 1 holds one quarter rest on beat 1 and stops there.
+        score.parts[0].staves[0].measures[1].voices[1] = Voice(elements: [.rest(duration: .quarter)])
+        score[Self.slot(1, 2)] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 65, tpc: 13)]))
+        let before = score
+
+        let short = #expect(throws: SheetMusicError.self) {
+            _ = try MoveToVoice(at: Self.slot(1, 2), to: Self.voiceOne(1)).apply(to: &score)
+        }
+
+        let destinationStart = VoiceElementID(staff: Self.flute, measureIndex: 1, voiceIndex: 1, elementIndex: 0)
+        #expect(Self.reason(of: short) == .destinationNotFree(destinationStart))
+        #expect(score == before, "a refused move leaves the score untouched — the chord is not dropped")
+    }
+
+    @Test("a tuplet before the moved chord is refused rather than moved to a mistimed slot")
+    func refusesTupletBeforeTheSlot() throws {
+        var score = EditingFixtures.parityFixture()
+        score.parts[0].staves[0].measures[0].voices[0] = Voice(
+            elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                Self.tripletMember, Self.tripletMember, Self.tripletMember,
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            ],
+            tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)],
+        )
+        let before = score
+
+        let mistimed = #expect(throws: SheetMusicError.self) {
+            _ = try MoveToVoice(at: Self.slot(0, 4), to: Self.voiceOne(0)).apply(to: &score)
+        }
+
+        #expect(Self.reason(of: mistimed) == .tupletPrecedesSlot(at: Self.slot(0, 4)))
+        #expect(score == before)
+    }
+
     @Test("a destination whose span holds a note, another measure, or the same voice is refused")
     func refusals() throws {
         var score = EditingFixtures.parityFixture()

@@ -4,8 +4,12 @@ import SheetMusicFoundation
 ///
 /// The destination span must be rests: this creates the voice if it is the next free index, splits the rest
 /// around the span, drops the chord into the slot and leaves a same-length rest behind. Anything else in the span
-/// (a note, a tuplet member) is refused rather than overwritten. Grace notes, articulations, lyrics and
-/// chord-anchored slurs travel with the chord because the chord value travels whole.
+/// (a note, a tuplet member) is refused rather than overwritten, as is a destination voice that ends before the
+/// span. Grace notes, articulations, lyrics and chord-anchored slurs travel with the chord because the chord value
+/// travels whole.
+///
+/// Ticks here are running sums of written durations, so a tuplet BEFORE the slot — in either voice — is refused
+/// (`.tupletPrecedesSlot`) rather than acted on at a tick this cannot compute; see `ensureNoTupletPrecedes`.
 ///
 /// > Note: This command is sugar over `CreateVoice` + `SplitRest` (× ≤ 2) + `ReplaceVoiceElements` +
 /// > `ReplaceVoiceElement`, bundled in a `CompositeEditCommand` so one undo step reverts the whole move.
@@ -34,6 +38,7 @@ public struct MoveToVoice: EditCommand {
         try DurationChangeAlgorithm.ensureNotInsideTuplet(
             voice: sourceVoice, at: location, operation: String(describing: Self.self),
         )
+        try Self.ensureNoTupletPrecedes(location.elementIndex, in: sourceVoice, at: location)
 
         let measureDuration = score.effectiveMeasureDuration(
             at: location.staff, measureIndex: location.measureIndex,
@@ -56,6 +61,13 @@ public struct MoveToVoice: EditCommand {
             _ = try create.apply(to: &scratch)
             steps.append(create)
         }
+        guard let destinationVoice = scratch[voice: destination] else {
+            throw Self.refused(.targetNotFound(Self.slot(destination)))
+        }
+        try Self.ensureSpanStartUnambiguous(
+            start: start, in: destinationVoice, destination: destination,
+            measureDuration: measureDuration, division: division,
+        )
         try Self.carveSlot(
             start: start, length: length, in: &scratch, destination: destination,
             steps: &steps, measureDuration: measureDuration,
@@ -66,6 +78,40 @@ public struct MoveToVoice: EditCommand {
         ))
         steps.append(ReplaceVoiceElement(at: location, with: .rest(duration: chord.duration)))
         return try CompositeEditCommand(commands: steps, location: location).apply(to: &score)
+    }
+
+    /// Refuses when a tuplet lies entirely before element `index` of `voice`.
+    ///
+    /// Every tick this command computes is a running sum of WRITTEN durations, which is the sounding tick only
+    /// while no tuplet has gone past: a tuplet's members sound at the tuplet's ratio, so a triplet before the
+    /// slot puts every later tick out by a third of its length. Refused rather than moved to a slot computed
+    /// wrong — a ratio-aware tick walk is a separate piece of work, and this command must not guess at it.
+    private static func ensureNoTupletPrecedes(_ index: Int, in voice: Voice, at slot: VoiceElementID) throws {
+        guard !voice.tuplets.contains(where: { $0.endIndex < index }) else {
+            throw refused(.tupletPrecedesSlot(at: slot))
+        }
+    }
+
+    /// The destination-side half of `ensureNoTupletPrecedes`: finds the first element the span reaches by the
+    /// same written-duration walk, then refuses if any tuplet ends before it.
+    ///
+    /// The two answers are consistent by construction — the walk is only consulted up to the element it names,
+    /// and a tuplet anywhere in that stretch refuses, so the tick it was found at was tuplet-free and correct.
+    private static func ensureSpanStartUnambiguous(
+        start: Int, in voice: Voice, destination: VoiceRef, measureDuration: Fraction, division: Int,
+    ) throws {
+        var tick = 0
+        for (index, element) in voice.elements.enumerated() {
+            guard case let .chord(timed) = element else { continue }
+            let ticks = timed.duration.resolved(in: measureDuration).ticks(division: division)
+            if tick + ticks > start {
+                try ensureNoTupletPrecedes(index, in: voice, at: slot(destination, elementIndex: index))
+                return
+            }
+            tick += ticks
+        }
+        // The voice ends before the span starts; `replaceSlot` reports that, and no tuplet can follow the end.
+        try ensureNoTupletPrecedes(voice.elements.count, in: voice, at: slot(destination))
     }
 
     /// Splits the destination voice's rests so that `[start, start + length)` is covered by whole rests only.
@@ -124,6 +170,7 @@ public struct MoveToVoice: EditCommand {
         var tick = 0
         var elements: [VoiceElement] = []
         var collapsed = 0
+        var collapsedTicks = 0
         var lastCollapsedIndex = 0
         for (index, element) in voice.elements.enumerated() {
             guard case let .chord(rest) = element else {
@@ -134,14 +181,19 @@ public struct MoveToVoice: EditCommand {
             if tick >= start, tick + ticks <= start + length {
                 if collapsed == 0 { elements.append(.chord(chord)) }
                 collapsed += 1
+                collapsedTicks += ticks
                 lastCollapsedIndex = index
             } else {
                 elements.append(element)
             }
             tick += ticks
         }
+        // The run must tile the span exactly. A destination voice that simply ENDS before the span leaves the run
+        // short (or empty) — and writing that would drop the chord entirely, since voice 0's copy has already
+        // become a rest by then. Refused instead: the destination has no slot at this tick.
+        guard collapsed > 0, collapsedTicks == length else { throw refused(.destinationNotFree(slot(destination))) }
         let tuplets = MeasureStructure.shiftTuplets(
-            voice.tuplets, by: collapsed > 0 ? -(collapsed - 1) : 0, after: lastCollapsedIndex,
+            voice.tuplets, by: -(collapsed - 1), after: lastCollapsedIndex,
         )
         return ReplaceVoiceElements(
             staff: destination.staff, measureIndex: destination.measureIndex, voiceIndex: destination.voiceIndex,

@@ -38,7 +38,7 @@ public struct VoiceElementID: Hashable, Sendable {
 
     /// The voice element an item lives in — a tuplet resolves to its first member, a staff-default clef to
     /// element 0 of bar 0, the positional approximation `ScoreItemID.elementIndex` documents.
-    public init(_ id: ScoreItemID) {
+    init(_ id: ScoreItemID) {
         self.init(
             staff: id.staff, measureIndex: id.measureIndex, voiceIndex: id.voiceIndex, elementIndex: id.elementIndex,
         )

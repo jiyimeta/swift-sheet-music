@@ -51,6 +51,53 @@ struct SetMeasureRepeatTests {
         #expect(m0.voices[0].elements[1] == .rest(duration: .measure))
     }
 
+    @Test("a trailing barline survives the sign, undo, and the clear")
+    func keepsTrailingBarLine() throws {
+        var score = EditingFixtures.parityFixture()
+        let target = MeasureRef(measureIndex: 1)
+        _ = try SetBarLine(at: target, style: .double).apply(to: &score)
+        let withBarLine = score
+        let double = VoiceElement.barLine(BarLine(subtype: "double"))
+
+        let inverse = try SetMeasureRepeat(at: target, staff: Self.cello, numMeasures: 1).apply(to: &score)
+        #expect(score.parts[1].staves[0].measures[1].voices[0].elements.count == 2)
+        guard case .measureRepeat = score.parts[1].staves[0].measures[1].voices[0].elements[0] else {
+            Issue.record("no sign")
+            return
+        }
+        #expect(score.parts[1].staves[0].measures[1].voices[0].elements[1] == double)
+
+        _ = try inverse.apply(to: &score)
+        #expect(score == withBarLine, "undo is byte-exact")
+
+        _ = try SetMeasureRepeat(at: target, staff: Self.cello, numMeasures: 1).apply(to: &score)
+        _ = try SetMeasureRepeat(at: target, staff: Self.cello, numMeasures: nil).apply(to: &score)
+        #expect(score.parts[1].staves[0].measures[1].voices[0].elements == [.rest(duration: .measure), double])
+    }
+
+    @Test("a MuseScore group whose sign sits in the second bar still dissolves")
+    func clearsGroupWhoseSignSitsInTheSecondBar() throws {
+        var score = EditingFixtures.parityFixture()
+        // MuseScore anchors a 4-bar group's `%` in bar 2 of the group; bar 1 stays a measure rest.
+        for offset in 0 ..< 4 {
+            score.parts[1].staves[0].measures[offset].measureRepeatCount = offset + 1
+        }
+        score.parts[1].staves[0].measures[1].voices = [Voice(elements: [
+            .measureRepeat(MeasureRepeat(numMeasures: 4, duration: .measure)),
+        ])]
+
+        let command = SetMeasureRepeat(at: MeasureRef(measureIndex: 0), staff: Self.cello, numMeasures: nil)
+        _ = try command.apply(to: &score)
+
+        let bars = score.parts[1].staves[0].measures
+        #expect(bars.allSatisfy { $0.measureRepeatCount == nil })
+        // Bar 0 keeps its leading time signature; the other three are bare measure rests.
+        #expect(bars[0].voices[0].elements.count == 2)
+        #expect(bars[1].voices[0].elements == [.rest(duration: .measure)])
+        #expect(bars[2].voices[0].elements == [.rest(duration: .measure)])
+        #expect(bars[3].voices[0].elements == [.rest(duration: .measure)])
+    }
+
     @Test("a bar with notes, a second voice, or a bad span is refused")
     func refusals() {
         var score = EditingFixtures.parityFixture()

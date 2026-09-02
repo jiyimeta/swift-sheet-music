@@ -12,7 +12,7 @@ and this project adheres to
 - Five structural edit commands, the first group of the edit-command parity project
   (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`): `SetLayoutBreak` sets or clears a line /
   page / section break on a measure; `SetBarLine` writes a measure's visible end-barline style (regular / double /
-  dashed / dotted / heavy / double-heavy); `SetRepeatBarLines` writes a measure's `startRepeat` /
+  end / dashed / dotted / heavy / double-heavy); `SetRepeatBarLines` writes a measure's `startRepeat` /
   `endRepeatCount`; `SetMeasureRepeat` turns 1, 2 or 4 empty bars into a measure-repeat group (`%` sign) or
   dissolves one back into measure rests; `MoveToVoice` moves a chord or rest to another voice at the same tick,
   splitting rests around it as needed. Reachable as `EditIntent.setLayoutBreak` / `.setBarLine` /

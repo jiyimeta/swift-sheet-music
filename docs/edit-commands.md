@@ -228,7 +228,7 @@ any edit command can make sense of it:
 | Slash notation | dedicated voice element. |
 | Figured bass | dedicated annotation type. |
 | Pedal line style | `Spanner` has no pedal-style payload — `SetPedal` (queued, #64) writes only `rawType = "Pedal"`. |
-| Chord-symbol transposition | `Harmony` has no `rootTpc` / `bassTpc` fields — `SetChordSymbol` (queued, #73) writes `name` only. |
+| Chord-symbol transposition | `SetChordSymbol` (queued, #73) writes `Harmony.name` only and leaves `rootTpc` / `bassTpc` nil, so a written chord symbol carries no transposable root — transposing chord symbols is out of scope until it does. |
 
 ---
 
