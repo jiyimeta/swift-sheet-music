@@ -14,6 +14,7 @@ import Wirelet
 ///   tag 2: measureIndex  i32, zig-zag varint
 ///   tag 3: voiceIndex    i32, zig-zag varint
 ///   tag 4: elementIndex  i32, zig-zag varint
+///   tag 5: reserved for SP0's optional stable identity; do not assign it
 ///
 /// NoteIDWire
 ///   tag 1: staff             StaffAddressWire, see StaffAddressCodec.swift
@@ -21,18 +22,21 @@ import Wirelet
 ///   tag 3: voiceIndex        i32, zig-zag varint
 ///   tag 4: elementIndex      i32, zig-zag varint
 ///   tag 5: noteIndexInChord  i32, zig-zag varint
+///   tag 6: reserved for SP0's optional stable identity; do not assign it
 ///
 /// RestIDWire
 ///   tag 1: staff         StaffAddressWire, see StaffAddressCodec.swift
 ///   tag 2: measureIndex  i32, zig-zag varint
 ///   tag 3: voiceIndex    i32, zig-zag varint
 ///   tag 4: elementIndex  i32, zig-zag varint
+///   tag 5: reserved for SP0's optional stable identity; do not assign it
 ///
 /// TupletIDWire
 ///   tag 1: staff              StaffAddressWire, see StaffAddressCodec.swift
 ///   tag 2: measureIndex       i32, zig-zag varint
 ///   tag 3: voiceIndex         i32, zig-zag varint
 ///   tag 4: startElementIndex  i32, zig-zag varint
+///   tag 5: reserved for SP0's optional stable identity; do not assign it
 /// ```
 ///
 /// Top-level `NoteID` blob: `varint(payloadLength)` + `NoteIDWire` payload.
