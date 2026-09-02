@@ -80,6 +80,8 @@ struct EditRefusalTests {
             .emptyRehearsalMarkText,
             .voiceAlreadyExists(staff: staff, measureIndex: 0, voiceIndex: 1),
             .invalidRepeatCount(1),
+            .invalidMeasureRepeatSpan(numMeasures: 3),
+            .measureRepeatSpanNotEmpty(measureIndex: 1),
             .unexpected(description: "boom"),
         ]
     }

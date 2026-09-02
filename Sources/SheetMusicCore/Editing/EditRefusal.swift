@@ -80,6 +80,14 @@ public struct EditRefusal: Sendable, Hashable {
         /// A repeat that plays fewer than twice is not a repeat; `SetRepeatBarLines` refuses an `endRepeatCount`
         /// below 2 rather than write a barline the layout would engrave but that means nothing.
         case invalidRepeatCount(Int)
+        /// `SetMeasureRepeat` was asked for a span that is not a measure repeat MuseScore can write: a length
+        /// other than 1, 2 or 4 bars, or one of those lengths running off the end of the score. Distinct from
+        /// `.targetNotFound` because the measure the caller named DOES exist — it is the group that does not fit.
+        case invalidMeasureRepeatSpan(numMeasures: Int)
+        /// A member of the span `SetMeasureRepeat` was asked to turn into a measure repeat is not an empty bar —
+        /// it carries notes, a second voice, or already belongs to a repeat group. The sign replaces the bar's
+        /// contents, so writing over one would silently destroy music; `measureIndex` names the offending bar.
+        case measureRepeatSpanNotEmpty(measureIndex: Int)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -140,6 +148,10 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.voiceAlreadyExists"
         case .invalidRepeatCount:
             "edit.invalidRepeatCount"
+        case .invalidMeasureRepeatSpan:
+            "edit.invalidMeasureRepeatSpan"
+        case .measureRepeatSpanNotEmpty:
+            "edit.measureRepeatSpanNotEmpty"
         case .unexpected:
             "edit.unexpected"
         }
@@ -202,6 +214,10 @@ public struct EditRefusal: Sendable, Hashable {
             "measure \(measureIndex) of \(staff) already has voice \(voiceIndex)"
         case let .invalidRepeatCount(count):
             "a repeat must play at least twice (got \(count))"
+        case let .invalidMeasureRepeatSpan(numMeasures):
+            "a measure repeat spans 1, 2 or 4 bars that exist (got \(numMeasures))"
+        case let .measureRepeatSpanNotEmpty(measureIndex):
+            "measure \(measureIndex) is not an empty single-voice bar"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
