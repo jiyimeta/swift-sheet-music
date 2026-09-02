@@ -45,7 +45,38 @@ function copyDirectory(source, target) {
     }
 }
 
+/// Reports the process's wasm-backed memory as it grows, for diagnosing the out-of-bounds `dlmalloc` trap the
+/// full suite hits.
+///
+/// Opt-in through `SHEET_MUSIC_WASM_MEMORY_TRACE=1`, so an ordinary run — CI's included — is unchanged.
+///
+/// Sampled from inside `fd_write` rather than from a timer: the wasm test run is one long synchronous call
+/// (Swift Testing drives a cooperative executor that spins without yielding), so a `setInterval` never fires
+/// until the run is already over. `fd_write` is what carries the test output, so it ticks with progress, and the
+/// marker lands in the log between the tests that moved the number.
+function traceMemoryGrowth(options) {
+    if (process.env.SHEET_MUSIC_WASM_MEMORY_TRACE !== "1") {
+        return;
+    }
+    const step = 16 * 1024 * 1024;
+    let peakBytes = 0;
+    const original = options.wasi.wasiImport.fd_write;
+    options.wasi.wasiImport.fd_write = function (...args) {
+        const result = original.apply(this, args);
+        const usage = process.memoryUsage();
+        // `arrayBuffers` is where a `WebAssembly.Memory`'s backing store is counted; `external` covers the rest
+        // of what the shim holds on the wasm module's behalf.
+        const bytes = usage.arrayBuffers + usage.external;
+        if (bytes > peakBytes + step) {
+            peakBytes = bytes;
+            process.stderr.write(`[mem] ${(bytes / (1024 * 1024)).toFixed(0)} MiB\n`);
+        }
+        return result;
+    };
+}
+
 export async function setupOptions(options) {
+    traceMemoryGrowth(options);
     const root = options.wasi.fds[3].dir;
 
     installPath(root, "/tmp", new Directory(new Map()));

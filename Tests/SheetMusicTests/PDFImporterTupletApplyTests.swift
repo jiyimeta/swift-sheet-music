@@ -104,6 +104,58 @@
             #expect(out.allSatisfy { $0.inTuplet == true })
         }
 
+        /// THE REGRESSION GUARD for `PDFImporter.beamMemberSpan`. A beam's
+        /// drawn x-range ends flush with its outermost stems only in a
+        /// VECTOR PDF; a raster-fitted slab stops INSIDE them, because the
+        /// columns where its own end stems stand carry merged beam + stem
+        /// ink and land on no ladder rung. `beamWindow` used to read that
+        /// range raw and hand it here as the member window — where the
+        /// UPPER bound gets no slack at all, on the explicit assumption
+        /// that the rightmost member sits at or inside the mark's right
+        /// edge.
+        ///
+        /// Losing one member does not truncate the tuplet, it DELETES it:
+        /// the surviving two sixteenths sum to 1/8, ×2/3 = 1/12, which
+        /// `cleanScale` refuses, so the mark is discarded and the bar falls
+        /// through to rhythm reconciliation. That is why the corpus effect
+        /// (v2-eval durP50 85.5 → 88.0, durMean 74.5 → 76.4, ten renders up
+        /// and none down) is so much larger than the 807 stem inclusions
+        /// the raw range loses — and why it closed the beam oracle's whole
+        /// remaining gap (`truthBeams` 88.0 / 76.6).
+        ///
+        /// STEM-DOWN members on purpose: that is the one direction
+        /// `windowIndices` grants no slack on either side, so this test
+        /// depends on the pad and on nothing else. The fixture's beams are
+        /// raster-marked, which is the only provenance the pad applies to —
+        /// on vector beams it moved a real corpus score, see
+        /// `PDFImporterBeamMemberSpanTests`.
+        @Test func aBeamTruncatedInsideItsOwnEndStemsKeepsTheOuterMembers() {
+            let marks = PDFImporter.detectTupletMarks(
+                texts: [PDFImporterTupletMarkTests.digit("3", x: 461.16, y: 126.1)],
+                paths: PDFImporterTupletMarkTests.truncatedDrumBeams,
+                staffYLines: PDFImporterTupletMarkTests.drumYLines,
+                xRange: PDFImporterTupletMarkTests.drumCellX,
+                pageIndex: 0,
+            )
+            #expect(marks.count == 1)
+            guard let mark = marks.first else { return }
+            let elements = [457.3, 462.6, 467.9].map {
+                Self.note(.sixteenth, x: CGFloat($0), stemDirection: .down)
+            }
+            let out = PDFImporter.applyTupletMarks(
+                elements: elements, marks: [mark], spatium: 2.83,
+            )
+            let twentyFourth = NoteDuration.fraction(
+                Fraction(numerator: 1, denominator: 24),
+            )
+            #expect(out.allSatisfy { $0.chord.duration == twentyFourth })
+            // `== true` rather than a bare `\.inTuplet` keypath: SwiftFormat
+            // rewrites the closure to the keypath, and `#expect`'s macro then
+            // cannot prove the call is non-throwing. Same shape as
+            // `bracketedTripletQuarterPlusEighthScales` above.
+            #expect(out.allSatisfy { $0.inTuplet == true })
+        }
+
         /// Now_is_the_time p4 m91: the beam window holds five sixteenths
         /// but only the first three are the triplet. Runs of two (1/12) and
         /// four (1/6) fail the clean-sum gate; the three-note run wins.

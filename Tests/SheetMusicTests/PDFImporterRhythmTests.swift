@@ -5,7 +5,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFImporterRhythmTests {
+    struct PDFImporterRhythmTests {
         // MARK: - Fixtures
 
         private func notehead(

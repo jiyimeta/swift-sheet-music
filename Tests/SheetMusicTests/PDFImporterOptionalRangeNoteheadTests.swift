@@ -127,6 +127,9 @@
             state.fontSize = 30
             state.disableSMuFLCodepointTier = disableTier1
             state.fontCMaps = ["F1": PDFImporter.ToUnicodeCMap(table: table)]
+            // The fixture is an Identity-H (2-byte code) font, which the show
+            // path learns from the /Subtype — see `type0FontNames`.
+            state.type0FontNames = ["F1"]
             state.opSetFont(name: "F1", size: 30)
             return state
         }

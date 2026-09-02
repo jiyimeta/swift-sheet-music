@@ -40,11 +40,12 @@ extension Voice {
             previousChordDuration: state.previousChordDuration,
             prevVoiceTotal: carryIn.prevVoiceTotal,
         )
-        for grace in chord.mscxFileOrderedGraces {
+        for (grace, listIndex) in chord.mscxFileOrderedGracesWithListIndex {
             state.children.append(grace.encode(
                 parentChord: chord,
                 parentForwardTieLocation: forwardDelta,
                 parentBackwardTieLocation: backwardDelta,
+                listIndex: listIndex,
                 options: options,
             ))
         }
@@ -109,6 +110,14 @@ extension Voice {
                 options: options,
             )
         }
+        // The chord's own position within the measure, read before the
+        // cursor advances past it: both halves of the chord-anchored slur
+        // bookkeeping — the end markers landing here and the begin sides
+        // registering their targets — are measured from it.
+        let chordPosition = state.voiceTotal
+        let slurEndMarkers = state.claimSlurEndMarkers(
+            forChordRest: element, at: chordPosition,
+        )
         try state.children.append(encode(
             element: element,
             activeTuplets: state.stack,
@@ -121,25 +130,63 @@ extension Voice {
             injectedTremolo: injectedTremolo,
             previousChordNotes: state.previousChordNotes,
             forwardTiePartnerNotes: plan.forwardTiePartnerNotes[index],
+            previousChordTrailingBendGrace: state.previousChordTrailingBendGrace,
+            slurEndMarkers: slurEndMarkers,
             options: options,
             staffGroup: staffGroup,
             voiceIndex: voiceIndex,
         ))
-        if case let .chord(chord) = element {
-            // Resolve `.measure` so `asFraction` cannot trap when
-            // accumulating the voice total / previous-chord duration
-            // for cross-measure tie offsets.
-            let chordFrac = chord.duration
-                .resolved(in: effectiveDuration)
-                .asFraction
-            state.previousChordDuration = chordFrac
-            state.previousChordNotes = chord.notes
-            state.seenChordInVoice = true
-            // Fraction defines `+` but no `+=`; rewriting as
-            // shorthand would not compile.
+        advanceWriteCursor(
+            past: element,
+            chordPosition: chordPosition,
+            effectiveDuration: effectiveDuration,
+            state: &state,
+        )
+    }
+
+    /// Move the write cursor past the element just emitted, and record
+    /// the per-chord bookkeeping the cross-measure tie offsets need.
+    ///
+    /// Chords and rests advance it by their resolved duration;
+    /// `.locationShift` advances it by the jog's delta. That second
+    /// case is not optional bookkeeping: the reader keeps ONE tick and
+    /// a `<location>` moves it (`ReadContext::setLocation`), so a
+    /// `voiceTotal` that only summed durations would describe a tick
+    /// the file is not positioned at, and the system-element
+    /// interleave — plus `flushRemainingSystemElements`' deltas —
+    /// would measure a lifted mark's `<location>` from the wrong
+    /// place.
+    private func advanceWriteCursor(
+        past element: VoiceElement,
+        chordPosition: Fraction,
+        effectiveDuration: Fraction,
+        state: inout EncodeState,
+    ) {
+        // Fraction defines `+` but no `+=`; rewriting the accumulations
+        // below as shorthand would not compile.
+        if case let .locationShift(delta) = element {
             // swiftlint:disable:next shorthand_operator
-            state.voiceTotal = state.voiceTotal + chordFrac
+            state.voiceTotal = state.voiceTotal + delta
+            return
         }
+        guard case let .chord(chord) = element else { return }
+        // Register the end targets of the begin sides this chord/rest
+        // carries, so a later chord in this voice can claim them.
+        state.pendingSlurEnds.append(
+            contentsOf: chord.pendingSlurEnds(at: chordPosition),
+        )
+        // Resolve `.measure` so `asFraction` cannot trap when
+        // accumulating the voice total / previous-chord duration
+        // for cross-measure tie offsets.
+        let chordFrac = chord.duration
+            .resolved(in: effectiveDuration)
+            .asFraction
+        state.previousChordDuration = chordFrac
+        state.previousChordNotes = chord.notes
+        state.previousChordTrailingBendGrace = chord.mscxTrailingAfterGraceBendIndex
+        state.seenChordInVoice = true
+        // swiftlint:disable:next shorthand_operator
+        state.voiceTotal = state.voiceTotal + chordFrac
     }
 
     private func encode(
@@ -154,6 +201,8 @@ extension Voice {
         injectedTremolo: Tremolo? = nil,
         previousChordNotes: ChordNotes? = nil,
         forwardTiePartnerNotes: ChordNotes? = nil,
+        previousChordTrailingBendGrace: Int? = nil,
+        slurEndMarkers: [XMLTreeNode] = [],
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
@@ -172,6 +221,8 @@ extension Voice {
                 injectedTremolo: injectedTremolo,
                 previousChordNotes: previousChordNotes,
                 forwardTiePartnerNotes: forwardTiePartnerNotes,
+                previousChordTrailingBendGrace: previousChordTrailingBendGrace,
+                slurEndMarkers: slurEndMarkers,
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,

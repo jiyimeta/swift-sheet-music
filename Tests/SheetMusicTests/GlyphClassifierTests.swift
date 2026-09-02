@@ -7,7 +7,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct GlyphClassifierTests {
+    struct GlyphClassifierTests {
         @Test func tier1SMuFLCodepointWinsWhenPresent() {
             let c = GlyphClassifier(font: nil)
             #expect(c.classify(codepoint: 0xE0A4, characterCode: 0xE0A4, glyphID: nil) == .noteheadBlack)

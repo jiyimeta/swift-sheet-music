@@ -11,13 +11,43 @@ import io.github.jiyimeta.sheetmusic.audio.native.FluidSynthNative
  *
  * Use [FluidSynthDriver.create] to construct; constructor is private
  * to guarantee the handle is valid.
+ *
+ * **Every native call is taken under [lock], and a closed driver is inert rather than fatal.** `close()` used to
+ * `fluid_delete_synth` the handle and set a `closed` flag that nothing else read, so the handle stayed in the field
+ * and every other method went on passing a freed `fluid_synth_t*` into C. That is not a "stale synth plays nothing"
+ * bug — it is a write through freed memory, and the damage lands wherever the allocator has since handed that
+ * address out, not here.
+ *
+ * The flag alone cannot fix it, because the caller that loses is not the one that misordered its calls: teardown
+ * runs from a `prepare` coroutine while `AndroidPlaybackEngine.stop` reaches `allNotesOff` from the main thread,
+ * so a check-then-call would still be closed in the window between the two. The lock is what makes "closed" mean
+ * anything, and it also serializes `close` against a call already in flight.
+ *
+ * A host that only tears playback down on leaving the score barely touches this window. One that re-prepares per
+ * edit — which is what note editing does — walks through it on every keystroke. Same lifetime hole `OboeStream.stop`
+ * had (2.0.1), one object over.
+ *
+ * **Found while chasing a heap corruption that turned out to be something else** (a stale SwiftPM build on the host
+ * side, producing a mixed `.so`), and fixing this did not change that crash's reproduction rate. It is a real defect
+ * on its own terms; do not read it as the explanation for any particular crash report.
  */
 internal class FluidSynthDriver private constructor(
     private val handle: Long,
 ) : SynthDriver {
 
     override val nativeHandle: Long get() = handle
+    private val lock = Any()
     private var closed = false
+
+    /**
+     * Runs [body] with the live handle, or answers [fallback] once the driver is closed.
+     *
+     * Held for the duration of the native call on purpose — see the class doc: releasing before the call is what
+     * leaves the use-after-free window open.
+     */
+    private inline fun <T> withHandle(fallback: T, body: (Long) -> T): T = synchronized(lock) {
+        if (closed) fallback else body(handle)
+    }
 
     companion object {
         fun create(sampleRate: Int): FluidSynthDriver {
@@ -32,56 +62,62 @@ internal class FluidSynthDriver private constructor(
     override fun loadSoundFont(uri: Uri?, context: Context?): Int {
         if (uri == null || context == null) return -1
         val path = materializeUriToCache(uri, context) ?: return -1
-        return FluidSynthNative.sfload(handle, path, resetPresets = true)
+        return withHandle(-1) { FluidSynthNative.sfload(it, path, resetPresets = true) }
     }
 
     override fun programSelect(sfid: Int, channel: Int, bank: Int, program: Int) {
-        FluidSynthNative.programSelect(handle, channel, sfid, bank, program)
+        withHandle(Unit) { FluidSynthNative.programSelect(it, channel, sfid, bank, program) }
     }
 
-    override fun setGain(value: Float) = FluidSynthNative.setGain(handle, value)
+    override fun setGain(value: Float) = withHandle(Unit) { FluidSynthNative.setGain(it, value) }
 
     override fun cc(channel: Int, controller: Int, value: Int) {
-        FluidSynthNative.cc(handle, channel, controller, value)
+        withHandle(Unit) { FluidSynthNative.cc(it, channel, controller, value) }
     }
 
     override fun getCC(channel: Int, controller: Int): Int =
-        FluidSynthNative.getCC(handle, channel, controller)
+        withHandle(0) { FluidSynthNative.getCC(it, channel, controller) }
 
     override fun setChannelType(channel: Int, isDrum: Boolean) {
-        FluidSynthNative.setChannelType(handle, channel, if (isDrum) 1 else 0)
+        withHandle(Unit) { FluidSynthNative.setChannelType(it, channel, if (isDrum) 1 else 0) }
     }
 
     override fun noteOn(channel: Int, pitch: Int, velocity: Int) {
-        FluidSynthNative.noteOn(handle, channel, pitch, velocity)
+        withHandle(Unit) { FluidSynthNative.noteOn(it, channel, pitch, velocity) }
     }
 
     override fun noteOff(channel: Int, pitch: Int) {
-        FluidSynthNative.noteOff(handle, channel, pitch)
+        withHandle(Unit) { FluidSynthNative.noteOff(it, channel, pitch) }
     }
 
     override fun allNotesOff(channel: Int) {
-        FluidSynthNative.allNotesOff(handle, channel)
+        withHandle(Unit) { FluidSynthNative.allNotesOff(it, channel) }
     }
 
     override fun handleMidiEvent(rawEvent: Long) {
-        // The MIDI event reaches us packed; unpack the conventional
-        // 4-byte SMF-style word and re-dispatch via fluid_synth note/cc/etc.
-        // For now we route the most common shapes — noteOn/noteOff/cc.
-        // The packing format is defined by AndroidPlaybackEngine's
-        // PlayerDriver callback (Phase 9 Task 34); for now this
-        // method is a stub that subclasses can override or that the
-        // Phase 10 wiring fills in. Defer the real implementation
-        // until the player callback shape is concrete.
+        // Intentionally inert. Production playback never routes events
+        // through here: the SMF player is attached directly to the single
+        // synth handle, so FluidSynth dispatches player events natively.
+        // Nothing calls this method outside test fakes; it exists only to
+        // satisfy the [SynthDriver] interface.
     }
 
+    /**
+     * Renders into [left] / [right], or leaves them untouched and reports 0 frames once closed.
+     *
+     * This one runs on the audio callback, so the lock here is the one worth justifying: it is uncontended in the
+     * steady state (only `close` ever takes it against a render), and the alternative it replaces was rendering
+     * from a freed synth.
+     */
     override fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int =
-        FluidSynthNative.writeFloat(handle, frameCount, left, right)
+        withHandle(0) { FluidSynthNative.writeFloat(it, frameCount, left, right) }
 
-    override fun close() {
-        if (closed) return
-        FluidSynthNative.deleteSynth(handle)
+    override fun close() = synchronized(lock) {
+        if (closed) return@synchronized
+        // Order matters even under the lock: mark first, so nothing that later reads the flag can observe a handle
+        // that has already been deleted.
         closed = true
+        FluidSynthNative.deleteSynth(handle)
     }
 
     private fun materializeUriToCache(uri: Uri, context: Context): String? {

@@ -19,7 +19,6 @@ import Testing
 /// installed through `TestSupport.installFontMetrics`) so the geometry the
 /// hit-tester walks is the production layout, not a fake.
 @Suite("nearestEngineCursor")
-@MainActor
 struct NearestEngineCursorTests {
     private let _installFontMetrics = TestSupport.installFontMetrics
 

@@ -11,14 +11,11 @@
         /// mechanism `PDFImporterRoundTripTests` uses, since `PDFImporterFacadeTests`'s own
         /// `PDFFixtureBuilder`-drawn staff lines carry no notes at all.
         ///
-        /// NOTE: like `PDFImporterRoundTripTests` documents, the note GLYPHS in `PDFExporter`'s output don't
-        /// currently decode: CoreText draws them through a simple (1-byte-code) font, but `emitShow`
-        /// (`PDFImporter+ContentStream+TextShow.swift`) only decodes CIDs when a `/ToUnicode` CMap is
-        /// present, unconditionally assuming 2-byte codes — so the show operator is silently dropped. Only
-        /// real MuseScore-exported PDFs (not committed here — copyright) use genuine 2-byte Identity-H CID
-        /// fonts and decode notes correctly. That pre-existing, shared-interpreter gap is out of scope for
-        /// this task (constraint: must not touch the Apple decode path), so the STAFF/measure geometry this
-        /// fixture's ruled lines produce is exercised below; note-level `itemRects` are not.
+        /// NOTE: the note GLYPHS in `PDFExporter`'s output used not to decode at all. CoreText draws them
+        /// through a SIMPLE (1-byte-code) font that also carries a `/ToUnicode` CMap, and `emitShow`
+        /// (`PDFImporter+ContentStream+TextShow.swift`) inferred a 2-byte Identity-H code width from the
+        /// mere presence of that CMap — so every code was read as half a CID and silently dropped. The show
+        /// path now takes its code width from the font's `/Subtype`, and this fixture's notes decode.
         @available(macOS 15.0, iOS 16.0, *)
         static func fixtureData() throws -> Data {
             let chord = Chord(
@@ -70,9 +67,9 @@
         }
 
         /// `parseWithGeometry` must return the SAME score `parse` returns — the collector is a side-car,
-        /// never an input to the decode. Asserts on `measureRects`/`systemRects`, not `itemRects`: this
-        /// fixture's notes don't decode (see `fixtureData`'s note), but the staff/measure geometry the
-        /// document's ruled lines produce is real and exercises the same collector plumbing.
+        /// never an input to the decode. What this owns is the collector plumbing: every rect family the
+        /// side-car carries is populated, including the note-level `itemRects` this fixture's four chords
+        /// produce now that a simple font's codes decode.
         @Test func geometryPathDoesNotPerturbTheScore() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let data = try Self.fixtureData()
@@ -82,6 +79,7 @@
             #expect(!geometry.measureRects.isEmpty)
             #expect(!geometry.systemRects.isEmpty)
             #expect(!geometry.pageSizes.isEmpty)
+            #expect(!geometry.itemRects.isEmpty)
         }
 
         @Test func geometryRectsCarryAPageIndexWithinTheDocument() throws {

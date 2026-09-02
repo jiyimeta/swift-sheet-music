@@ -31,15 +31,20 @@ extension PDFImporter {
         // key it cancels, so `readKey` / `readTrailingKey` need the key in
         // force (see PDFImporter+KeyReader). Starts at C major (0).
         var runningKey = KeySignature(concertKey: 0)
+        var sawClef = false
+        var sawContent = false
         for (i, measure) in staff.measures.enumerated() {
             let sorted = measure.glyphs.sorted { $0.geometry.origin.x < $1.geometry.origin.x }
+            sawContent = sawContent || sorted.contains { isLeadingRegionTerminator($0.semantic) }
             if let clef = readClef(from: sorted) {
+                sawClef = true
                 runningClef = clef
                 events.append(.clefChange(clef, atMeasureIndex: i))
             }
             if let key = readKey(
                 sorted: sorted, clef: runningClef, yLines: measure.staffYLines,
                 runningKey: runningKey,
+                diagnostics: diagnostics, location: "\(location), measure \(i)",
             ) {
                 runningKey = key
                 events.append(.keySignature(key, atMeasureIndex: i))
@@ -93,6 +98,28 @@ extension PDFImporter {
                 runningKey = trailingKey
                 events.append(.keySignature(trailingKey, atMeasureIndex: i + 1))
             }
+        }
+        // A staff that carries music but never declared a clef is read as
+        // treble, because that is what `runningClef` starts as. That default
+        // is silent, and it is wrong in two ways at once: every pitch on the
+        // staff moves, and — less obviously — the key-signature ladder is
+        // anchored to the clef, so the staff's key block lands two steps off
+        // the ladder it is compared against and is refused whole.
+        //
+        // From a vector PDF this does not happen: the clef is in the content
+        // stream, in the first measure's x range. From a raster front-end the
+        // clef is DETECTED and can still miss the measure it belongs to (this
+        // corpus: all 26 bass clefs of one document found by the detector, and
+        // its bass staves' flats nonetheless compared against the treble
+        // ladder). Guarded on `sawContent` so an empty staff — of which a
+        // multi-page score has many — stays silent.
+        if !sawClef, sawContent {
+            diagnostics?(PDFImportDiagnostic(
+                severity: .warning, location: location,
+                message: "no clef was read for this staff; reading it as treble",
+                context: "pitches and the key-signature ladder both anchor to the clef, "
+                    + "so a staff read under the wrong one is wrong twice over",
+            ))
         }
         // Tempo is a system-level marking → recovered separately into
         // `Score.systemMeasures`; see PDFImporter+Tempo.
@@ -241,6 +268,22 @@ extension PDFImporter {
     /// True when this staff's first-read clef is the ambiguous E065 (F8va).
     /// Used by the assembler's pre-pass to know which slots need the
     /// whole-part F8va-vs-plain-F content decision.
+    /// The clef this staff-in-system is ENGRAVED WITH at its left edge, or
+    /// nil if none was read there.
+    ///
+    /// Measure 0 only, and deliberately not the same walk as
+    /// `staffInitialClefIsF8va`: `readClef` returns a measure's LEADING clef,
+    /// so a clef found in measure 3 is a mid-score clef CHANGE, not this
+    /// system's opening clef. Treating one as the other would corrupt the
+    /// per-slot sequence `consensusInitialClefs` reasons over — a change is
+    /// exactly what it must preserve.
+    static func staffInitialClef(_ staff: ImportStaff) -> Clef? {
+        guard let first = staff.measures.first else { return nil }
+        return readClef(from: first.glyphs.sorted {
+            $0.geometry.origin.x < $1.geometry.origin.x
+        })
+    }
+
     static func staffInitialClefIsF8va(_ staff: ImportStaff) -> Bool {
         for measure in staff.measures {
             let sorted = measure.glyphs.sorted { $0.geometry.origin.x < $1.geometry.origin.x }

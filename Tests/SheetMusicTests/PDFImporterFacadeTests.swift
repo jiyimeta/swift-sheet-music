@@ -29,7 +29,6 @@
         /// horizontal paths is enough to exercise the assembled pipeline
         /// end-to-end. We don't assert on the score's musical contents —
         /// just that a non-empty Score is produced without throwing.
-        @MainActor
         @Test func parsesNonEmptyScoreFromSyntheticPDF() throws {
             let lineYs: [CGFloat] = [400, 410, 420, 430, 440]
             let paths = lineYs.map {

@@ -28,7 +28,7 @@
     ///     stem end is a chord-height farther away, which is why the corpus
     ///     shows legitimate notehead-to-flag distances spread over 1.1 … 4.5
     ///     sp with a tail past 5 sp instead of one tight cluster.
-    @MainActor struct PDFImporterFlagAttachTests {
+    struct PDFImporterFlagAttachTests {
         private nonisolated static var bravuraAvailable: Bool {
             guard #available(macOS 15.0, *) else { return false }
             return BravuraFont.register
@@ -135,6 +135,112 @@
             #expect(
                 Self.durations(score).contains(.eighth),
                 "extraHeads \(extraHeads): \(Self.durations(score))",
+            )
+        }
+
+        /// One bar with a single flagged note whose FLAG GLYPH is anchored
+        /// `flagOffsetInSpaces` back along the stem from its bare end, which
+        /// is what a multi-hook flag really does — the glyph has to reach
+        /// down the stem to hang its hooks.
+        private static func offsetFlagFixture(
+            flagScalar: Unicode.Scalar,
+            flagOffsetInSpaces: CGFloat,
+            flagXOffsetInSpaces: CGFloat = 0,
+            lineGap: CGFloat = 5,
+        ) -> Data {
+            let staffTop: CGFloat = 700
+            let midLine = staffTop - 2 * lineGap
+            let lines = (0 ..< 5).map {
+                PDFFixtureBuilder.PathPlacement(
+                    origin: CGPoint(x: 60, y: staffTop - CGFloat($0) * lineGap),
+                    kind: .horizontal(width: 260),
+                )
+            }
+            let clef = PDFFixtureBuilder.GlyphPlacement(
+                unicodeScalar: "\u{E050}", fontName: bravuraFontName,
+                fontSize: 4 * lineGap,
+                origin: CGPoint(x: 66, y: staffTop - 3 * lineGap),
+            )
+            let head = PDFFixtureBuilder.GlyphPlacement(
+                unicodeScalar: "\u{E0A4}", fontName: bravuraFontName,
+                fontSize: 4 * lineGap, origin: CGPoint(x: noteX, y: midLine),
+            )
+            let stemX = noteX + 1.245 * lineGap
+            let stemTop = midLine + stemLengthInSpaces * lineGap
+            let stem = PDFFixtureBuilder.PathPlacement(
+                origin: CGPoint(x: stemX, y: midLine),
+                kind: .vertical(height: stemTop - midLine), lineWidth: 0.8,
+            )
+            let flag = PDFFixtureBuilder.GlyphPlacement(
+                unicodeScalar: flagScalar,
+                fontName: bravuraFontName, fontSize: 4 * lineGap,
+                origin: CGPoint(
+                    x: stemX + flagXOffsetInSpaces * lineGap,
+                    y: stemTop - flagOffsetInSpaces * lineGap,
+                ),
+            )
+            return PDFFixtureBuilder.build(
+                glyphs: [clef, head, flag], paths: lines + [stem],
+                dropToUnicodeCMaps: true,
+            )
+        }
+
+        /// A 64th flag's glyph origin sits about a staff space back along
+        /// the stem, not at its bare end — measured at 0.94–1.17 sp on
+        /// `cov_flags` and `extz_Now_is_the_time` (16ths reach 0.47).
+        /// Against the old single 0.5 sp tolerance EVERY 64th flag was
+        /// rejected and its note fell back to a bare QUARTER: 192 of that
+        /// fixture's 352 notes, with the other 160 (32nds, offset 0.20)
+        /// correct — a duration score of 45% whose cause was a gate, not a
+        /// recognition failure.
+        @Test(
+            .enabled(if: bravuraAvailable),
+            arguments: [0.0, 0.5, 1.0, 1.2] as [CGFloat],
+        )
+        func aFlagAnchoredBackAlongTheStemStillReachesItsNote(
+            offsetInSpaces: CGFloat,
+        ) throws {
+            let score = try PDFImporter.parse(pdfData: Self.offsetFlagFixture(
+                flagScalar: "\u{E246}", // flag64thUp
+                flagOffsetInSpaces: offsetInSpaces,
+            ))
+            #expect(
+                Self.durations(score).contains(.sixtyFourth),
+                "offset \(offsetInSpaces) sp: \(Self.durations(score))",
+            )
+        }
+
+        /// The Y bound is not "however far away": beyond it lies the next
+        /// population, another note's flag in the same column, measured at
+        /// 3.1 sp. A gate that admitted that would trade dropped flags for
+        /// stolen ones.
+        @Test(.enabled(if: bravuraAvailable))
+        func aFlagFarBeyondTheStemEndIsNotThisNotesFlag() throws {
+            let score = try PDFImporter.parse(pdfData: Self.offsetFlagFixture(
+                flagScalar: "\u{E246}",
+                flagOffsetInSpaces: 3.1,
+            ))
+            #expect(
+                !Self.durations(score).contains(.sixtyFourth),
+                "a flag 3.1 sp off the stem end was claimed: \(Self.durations(score))",
+            )
+        }
+
+        /// And X keeps the TIGHTER bound, which is the whole reason the two
+        /// are separate constants. In x a note's own flag sits within 0.1 sp
+        /// and the nearest neighbour's is 1.1 sp away, so widening x the way
+        /// y was widened would re-introduce the flag theft the x-gate exists
+        /// to stop.
+        @Test(.enabled(if: bravuraAvailable))
+        func aFlagInTheNextNotesColumnIsNotClaimed() throws {
+            let score = try PDFImporter.parse(pdfData: Self.offsetFlagFixture(
+                flagScalar: "\u{E246}",
+                flagOffsetInSpaces: 1.0,
+                flagXOffsetInSpaces: 1.1,
+            ))
+            #expect(
+                !Self.durations(score).contains(.sixtyFourth),
+                "a flag 1.1 sp away in x was claimed: \(Self.durations(score))",
             )
         }
     }

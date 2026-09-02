@@ -8,11 +8,20 @@ import SheetMusicFoundation
 /// byte-identical while only the layout is recomputed.
 ///
 /// Not `@MainActor` and not `Sendable` — hold one per isolation domain. See `ScoreEditor` for why.
+///
+/// The `EditIntent` → `EditCommand` translation itself lives in `ScoreEditSession+Planning.swift`: it is entirely
+/// `static` and reads only the score it is handed, so it splits off this file cleanly. What stays here is the
+/// stateful surface — `apply`, `undo` / `redo`, `lastRefusal`.
 public final class ScoreEditSession {
     private let editor: ScoreEditor
 
+    /// The part ids the current `partIndexMapping` is measured from — the score's ids at `init`, re-taken by
+    /// `consumePartIndexMapping()`.
+    private var partIDBaseline: [String]
+
     public init(score: Score) {
         editor = ScoreEditor(score: score)
+        partIDBaseline = score.parts.map(\.id)
     }
 
     public var score: Score {
@@ -106,289 +115,47 @@ public final class ScoreEditSession {
         return true
     }
 
-    /// Real composites bundle at most two atomic edits (a range op wrapping two sub-commands). This is a bound on
-    /// how deep a nested `.composite` may recurse before `command(for:in:depth:)` refuses it outright, so a
-    /// malformed or pathological intent tree can't be planned into a stack overflow instead of a clean refusal —
-    /// the same limit `CompositeIntentWire.decoded` enforces on the wire side of this same recursion.
-    private static let maxCompositeIntentDepth = 8
+    // MARK: - Part-index mapping
 
-    /// Plans an intent against `score`. `nil` when the intent has nothing to do — an empty composite, or a composite
-    /// whose members all planned to nothing. Throws when a nested `.composite` exceeds `maxCompositeIntentDepth`.
-    private static func command(for intent: EditIntent, in score: Score, depth: Int) throws -> (any EditCommand)? {
-        switch intent {
-        case let .inputNote(location, pitch, tpc, duration):
-            return inputNoteCommand(at: location, pitch: pitch, tpc: tpc, duration: duration, in: score)
-        case let .setRestDuration(location, duration):
-            // The rest key has the same cross-bar hole the note key does — mirrors Folino's
-            // `EditorViewModel+Input.swift`'s `writeRest(over:in:)`, which asks the same planner before falling back
-            // to a plain retime.
-            if let plan = CrossBarInputPlanner.plan(.rest, duration: duration, at: location, in: score) {
-                return CompositeEditCommand(commands: plan.commands, location: plan.head)
-            }
-            // A rest that fills its bar from beat one is spelled `.measure`, not the literal length — the same
-            // promotion Folino's `restDuration(_:at:)` applies before this same fallback. `SetRestDuration` writes
-            // whatever it's handed without judging that, so the fallback has to do the judging itself.
-            return SetRestDuration(
-                at: location, duration: RestDurationPromotion.promoted(duration, at: location, in: score),
-            )
-        case let .setChordDuration(location, duration):
-            // The same cross-bar hole `.setRestDuration` has just above: the engine refuses any single-slot
-            // lengthening that would cross a barline, so without this a host's length key reads as dead at every
-            // barline — the very thing `CrossBarInputPlanner` was written to fix on the input side. Mirrors Folino's
-            // `EditorViewModel+Input.swift`'s `retimeCrossingBarline`, which asks the same planner first.
-            //
-            // Planned from the chord ALREADY in the slot, not from a fresh one: `CrossBarInputPlanner.piece` clones
-            // the content it is handed into every link, so passing anything else would drop the chord's other notes
-            // (and its articulations, grace notes and ties) on the far side of the barline.
-            //
-            // No `.measure` promotion, unlike the rest case: `.measure` is a rest-only spelling — `MSCXEncoder` traps
-            // rather than emit one on a chord (see `InputNote`'s doc comment).
-            if case let .chord(current)? = score[location], !current.notes.isEmpty,
-               let plan = CrossBarInputPlanner.plan(.chord(current), duration: duration, at: location, in: score)
-            {
-                return CompositeEditCommand(commands: plan.commands, location: plan.head)
-            }
-            return SetChordDuration(at: location, duration: duration)
-        case let .delete(location):
-            // A delete that empties its bar leaves ONE measure rest, not a hole — the same rule the write side
-            // spells as `.measure` rather than `.whole`. `ReplaceVoiceElements.affectedLocation` always reports
-            // element 0 (usually the clef or time signature the rest lands after, not the rest itself), so the
-            // collapse's own `restElementIndex` is threaded through explicitly rather than trusted to the command's
-            // own report — otherwise `lastAffectedLocation` would name the wrong element after every bar-emptying
-            // delete, exactly as `FullMeasureRestCollapse.Plan.restElementIndex`'s doc comment warns.
-            if let plan = FullMeasureRestCollapse.plan(deleting: location, in: score) {
-                return CompositeEditCommand(
-                    commands: [plan.command],
-                    location: VoiceElementID(
-                        staff: location.staff,
-                        measureIndex: location.measureIndex,
-                        voiceIndex: location.voiceIndex,
-                        elementIndex: plan.restElementIndex,
-                    ),
-                )
-            }
-            return DeleteVoiceElement(at: location)
-        case let .composite(intents):
-            guard depth < maxCompositeIntentDepth else {
-                throw SheetMusicError.invalidEdit(EditRefusal(
-                    operation: "composite",
-                    reason: .compositeTooDeep(limit: maxCompositeIntentDepth),
-                ))
-            }
-            let commands = try intents.compactMap { try command(for: $0, in: score, depth: depth + 1) }
-            guard let first = commands.first else { return nil }
-            guard commands.count > 1 else { return first }
-            return CompositeEditCommand(commands: commands, location: first.affectedLocation)
-        case let .writeNote(location, pitch, tpc, duration):
-            return try writeNoteCommand(at: location, pitch: pitch, tpc: tpc, duration: duration, in: score)
-        case let .writeRest(location, duration):
-            return writeRestCommand(at: location, duration: duration, in: score)
-        case let .setNotePitch(location, pitch, tpc, accidental):
-            return retuneCommand(at: location, pitch: pitch, tpc: tpc, accidental: accidental, in: score)
-        case .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet, .removeTuplet:
-            // These six note-editing intents each map straight onto their `EditCommand`, with no cross-bar or
-            // collapse planning involved — unlike `.inputNote` / `.setRestDuration` / `.delete` above, which route
-            // through planners. Factored into `directNoteEditCommand` to keep this switch under SwiftLint's line
-            // budget, not because they belong to a different subsystem.
-            return try directNoteEditCommand(for: intent)
-        }
-    }
-
-    /// `.inputNote`: write a note into a rest slot, re-timing the slot to `duration` in the same undo step.
+    /// Where every part that existed at the last consume point (or at `init`) is NOW: `nil` means it was removed.
     ///
-    /// Inside a tuplet the length change is refused by the engine, and a composite is all-or-nothing, so that
-    /// refusal would take the note write down with it — the second and later notes of a triplet would simply never
-    /// appear. There the note is written at whatever length the slot already has.
+    /// A host keys per-part state — a mixer strip's volume, a staff's collapsed flag, a per-instrument SoundFont —
+    /// by part INDEX, and an add / remove / move renumbers underneath it. This is the map to migrate that state
+    /// through, taken cumulatively over every intent applied since the baseline rather than per edit, so a host can
+    /// read it once when it is ready to write rather than following along with each step.
     ///
-    /// The cross-bar planner is asked FIRST, before the composite is built: `SetRestDuration` refuses for four
-    /// reasons besides tuplets, and every one of those refusals would otherwise take the note write with it.
-    private static func inputNoteCommand(
-        at location: RestID, pitch: Int, tpc: Int, duration: NoteDuration?, in score: Score,
-    ) -> any EditCommand {
-        let write = InputNote(at: location, pitch: pitch, tpc: tpc)
-        guard let duration else { return write }
-        let slot = VoiceElementID(location)
-        guard !isInTuplet(slot, in: score) else { return write }
-        if let plan = CrossBarInputPlanner.plan(
-            .chord(Chord(duration: duration, notes: [Note(pitch: pitch, tpc: tpc)])),
-            duration: duration, at: slot, in: score,
-        ) {
-            return CompositeEditCommand(commands: plan.commands, location: plan.head)
+    /// Derived by diffing `Part.id` snapshots, which is what makes undo and redo free: an undone removal puts the
+    /// same id back, and the diff says so without anything having to track the inverse.
+    ///
+    /// **Duplicate ids in the baseline yield the identity mapping.** A malformed file can carry two parts sharing
+    /// an id, and `firstIndex(of:)` cannot tell them apart — the answer would be a plausible-looking lie that moves
+    /// one part's preferences onto another. Reporting identity makes the host skip the migration instead, which
+    /// leaves its state pointing where it already pointed. Losing a migration is recoverable; corrupting the
+    /// preferences it was migrating is not.
+    public var partIndexMapping: [Int: Int?] {
+        let baseline = partIDBaseline
+        guard Set(baseline).count == baseline.count else {
+            return Dictionary(uniqueKeysWithValues: baseline.indices.map { ($0, Optional($0)) })
         }
-        return CompositeEditCommand(
-            commands: [SetRestDuration(at: slot, duration: duration), write],
-            location: slot,
+        let current = editor.score.parts.map(\.id)
+        return Dictionary(
+            uniqueKeysWithValues: baseline.enumerated().map { ($0.offset, current.firstIndex(of: $0.element)) },
         )
     }
 
-    /// `.writeRest`: make the slot a rest of `duration`, whatever is in it now.
+    /// Whether `partIndexMapping` says nothing moved and nothing went away — the case a host can skip entirely.
     ///
-    /// Three shapes:
-    ///
-    /// 1. The length outruns the bar — a run of rests across the barline, spelled by the same planner a note uses
-    ///    (minus the ties, which rests don't take). The plan REPLACES the slot's contents, so it subsumes the
-    ///    delete: issuing a separate one would re-splice what the plan just laid down.
-    /// 2. The slot already holds a rest — the re-time alone, which is exactly `.setRestDuration`.
-    /// 3. The slot holds a note — the delete paired with the re-time, as one composite so it is one undo step.
-    ///
-    /// That delete is the PLAIN one. Routing it through `FullMeasureRestCollapse` — what `.delete` does — would
-    /// collapse a bar this empties into a single measure rest, throwing away both the length the caller just stated
-    /// and the bar's remaining subdivision. `.delete` keeps the collapse because ⌫ means "empty this"; this intent
-    /// means "make it this long", and the two want opposite spellings.
-    ///
-    /// A bar-filling length still lands as `.measure`, via `RestDurationPromotion` — the same rule reached from the
-    /// other direction. The promotion is computed against the pre-delete score, which gives the same answer: it asks
-    /// whether any chord PRECEDES the slot, and the slot itself is not among those.
-    ///
-    /// `nil` when the slot holds no timed element at all — a clef or a time signature is not something to rest over.
-    private static func writeRestCommand(
-        at location: VoiceElementID, duration: NoteDuration, in score: Score,
-    ) -> (any EditCommand)? {
-        guard case let .chord(current)? = score[location] else { return nil }
-        if let plan = CrossBarInputPlanner.plan(.rest, duration: duration, at: location, in: score) {
-            return CompositeEditCommand(commands: plan.commands, location: plan.head)
-        }
-        let retime = SetRestDuration(
-            at: location, duration: RestDurationPromotion.promoted(duration, at: location, in: score),
-        )
-        guard !current.notes.isEmpty else { return retime }
-        return CompositeEditCommand(
-            commands: [DeleteVoiceElement(at: location), retime], location: location,
-        )
+    /// A part APPENDED past the end leaves this true: it renumbers none of the parts the baseline knew about, so
+    /// there is nothing to migrate.
+    public var isPartMappingIdentity: Bool {
+        partIndexMapping.allSatisfy { $0.value == $0.key }
     }
 
-    /// `.setNotePitch`: write the pitch onto `location` AND onto every note it is tied to, as one command.
+    /// Re-baselines the mapping to the current parts, so the next `partIndexMapping` is measured from here.
     ///
-    /// A tie chain is one sounding note written across several slots — that is what the curve tells a player, and what
-    /// `MidiRenderer` already assumes when it carries the head's pitch through the chain. Retuning only the notehead
-    /// the host named therefore produces something unplayable: two different pitches joined by a tie, sounding as the
-    /// original pitch held. So the intent addresses the chain, however long it is and whichever member is named.
-    ///
-    /// The chain walk belongs HERE rather than in the host: an Android host would otherwise have to re-derive it in
-    /// Kotlin against a score it only mirrors, which is the divergent second implementation this whole relay exists
-    /// to avoid.
-    ///
-    /// The accidental goes on the chain's head alone. MuseScore prints none on the far side of a tie, and
-    /// `MeasureAccidentals` deliberately skips tied-back notes when it renotates a measure — so a glyph written on one
-    /// here would be nobody's left to remove.
-    ///
-    /// An untied note is a chain of one and comes back as a bare `SetNotePitch`, not a one-member composite, so the
-    /// overwhelmingly common case is unchanged down to the command it produces.
-    private static func retuneCommand(
-        at location: NoteID, pitch: Int, tpc: Int, accidental: Accidental?, in score: Score,
-    ) -> (any EditCommand)? {
-        let chain = TiePlanner.tieChain(containing: location, in: score)
-        // Empty means there is no note at `location` at all. Returning `nil` rather than a doomed command lets
-        // `apply` report the refusal the same way it reports every other "nothing to do".
-        guard !chain.isEmpty else { return nil }
-        let commands: [any EditCommand] = chain.map { member in
-            SetNotePitch(
-                at: member, pitch: pitch, tpc: tpc,
-                accidental: score[member]?.tieBack == nil ? accidental : nil,
-            )
-        }
-        guard commands.count > 1 else { return commands[0] }
-        return CompositeEditCommand(commands: commands, location: VoiceElementID(location))
-    }
-
-    /// The six intents that map directly onto an `EditCommand` with no planning step. Reached only via
-    /// `command(for:in:depth:)`'s combined case above, so the `if case` chain below never needs to handle the six
-    /// intents that function keeps for itself — an exhaustive `switch` here would have to fake-handle those too.
-    private static func directNoteEditCommand(for intent: EditIntent) throws -> (any EditCommand)? {
-        if case let .setAccidental(location, accidental) = intent {
-            return SetAccidental(at: location, accidental: accidental)
-        }
-        if case let .addNoteToChord(location, pitch, tpc, accidental) = intent {
-            return AddNoteToChord(at: location, pitch: pitch, tpc: tpc, accidental: accidental)
-        }
-        if case let .removeNoteFromChord(location) = intent {
-            return RemoveNoteFromChord(at: location)
-        }
-        if case let .setTie(source, target, sourceTieForward, targetTieBack) = intent {
-            return SetTie(
-                from: source, to: target,
-                sourceTieForward: sourceTieForward, targetTieBack: targetTieBack,
-            )
-        }
-        if case let .createTuplet(location, actualNotes, normalNotes) = intent {
-            // `CreateTuplet.init` enforces these with preconditions — traps, not throws. A relayed intent is
-            // attacker-shaped data as far as this function is concerned, so the check has to happen here, before
-            // construction, rather than letting the trap take the whole process down.
-            guard actualNotes > 1, normalNotes > 0 else {
-                throw SheetMusicError.invalidEdit(EditRefusal(
-                    operation: "createTuplet",
-                    reason: .invalidTupletRatio(
-                        actualNotes: actualNotes,
-                        normalNotes: normalNotes,
-                    ),
-                ))
-            }
-            return CreateTuplet(at: location, actualNotes: actualNotes, normalNotes: normalNotes)
-        }
-        if case let .removeTuplet(location) = intent {
-            return RemoveTuplet(at: location)
-        }
-        return nil
-    }
-
-    /// `.writeNote`: re-pitch the chord already in `location`, and re-time it to `duration` in the same undo step.
-    ///
-    /// Three shapes, in the order they are ruled out:
-    ///
-    /// 1. Nothing to re-time — no length asked for, the slot is already that length, or the slot is inside a tuplet,
-    ///    where the member lengths are the tuplet's to decide and the engine refuses the change outright. A composite
-    ///    is all-or-nothing, so that refusal would take the pitch write down with it; write the pitch alone.
-    /// 2. The length outruns the bar — spell the note as a beat-aligned tied chain. The chain is planned from a FRESH
-    ///    chord carrying the new pitch, not from the one in the slot: `CrossBarInputPlanner.piece` clones what it is
-    ///    handed into every link, and that is precisely what a `.setChordDuration` + `.setNotePitch` pair cannot
-    ///    reproduce — it would retune the head and leave the tail tied to it at the old pitch.
-    /// 3. Otherwise — re-time and re-pitch as one composite.
-    ///
-    /// Throws when the slot holds a rest rather than a chord. That is `.inputNote`'s case, and re-routing quietly
-    /// would make a relayed intent do something its name does not say.
-    private static func writeNoteCommand(
-        at location: VoiceElementID, pitch: Int, tpc: Int, duration: NoteDuration?, in score: Score,
-    ) throws -> any EditCommand {
-        guard case let .chord(current)? = score[location], !current.notes.isEmpty else {
-            throw SheetMusicError.invalidEdit(EditRefusal(
-                operation: "writeNote",
-                reason: .wrongElementKind(at: location, expected: .chord),
-            ))
-        }
-        let repitch = SetNotePitch(
-            at: NoteID(
-                staff: location.staff,
-                measureIndex: location.measureIndex,
-                voiceIndex: location.voiceIndex,
-                elementIndex: location.elementIndex,
-                noteIndexInChord: 0,
-            ),
-            pitch: pitch, tpc: tpc,
-        )
-        guard let duration, current.duration != duration, !isInTuplet(location, in: score) else {
-            return repitch
-        }
-        if let plan = CrossBarInputPlanner.plan(
-            .chord(Chord(duration: duration, notes: [Note(pitch: pitch, tpc: tpc)])),
-            duration: duration, at: location, in: score,
-        ) {
-            return CompositeEditCommand(commands: plan.commands, location: plan.head)
-        }
-        return CompositeEditCommand(
-            commands: [SetChordDuration(at: location, duration: duration), repitch],
-            location: location,
-        )
-    }
-
-    /// Whether `slot` sits inside a tuplet in `score`.
-    private static func isInTuplet(_ slot: VoiceElementID, in score: Score) -> Bool {
-        guard let staff = score[slot.staff],
-              staff.measures.indices.contains(slot.measureIndex)
-        else { return false }
-        let voices = staff.measures[slot.measureIndex].voices
-        guard voices.indices.contains(slot.voiceIndex) else { return false }
-        return voices[slot.voiceIndex].tuplets.contains {
-            slot.elementIndex >= $0.startIndex && slot.elementIndex <= $0.endIndex
-        }
+    /// Call it after acting on a mapping. Until it is called the mapping keeps accumulating, which is deliberate:
+    /// a host that reads it three edits later still gets one map from the state it last wrote.
+    public func consumePartIndexMapping() {
+        partIDBaseline = editor.score.parts.map(\.id)
     }
 }

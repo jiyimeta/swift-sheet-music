@@ -13,7 +13,6 @@ import Testing
 /// today's CMap stub can't translate font CIDs back to PUA
 /// codepoints, so the importer typically can't recover noteheads
 /// or pitches from real exporter output.
-@MainActor
 enum PDFRoundTripComparison {
     /// Loose musical-equivalence assertion for PDF roundtrip.
     /// Strict comparisons are TODO pending real ToUnicode CMap

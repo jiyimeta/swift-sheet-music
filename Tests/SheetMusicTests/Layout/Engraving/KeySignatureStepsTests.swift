@@ -157,14 +157,14 @@ struct KeySignatureClefPlacementTests {
     }
 
     @Test func layoutTagsKeySignatureWithTheClefInForce() {
-        guard case let .keySignature(_, _, bassClef, _) =
+        guard case let .keySignature(_, _, bassClef, _, _) =
             keySignatureElements(clefType: "F").first
         else {
             Issue.record("no key signature laid out for the F clef staff")
             return
         }
         #expect(bassClef == .bass)
-        guard case let .keySignature(_, _, trebleClef, _) =
+        guard case let .keySignature(_, _, trebleClef, _, _) =
             keySignatureElements(clefType: "G").first
         else {
             Issue.record("no key signature laid out for the G clef staff")

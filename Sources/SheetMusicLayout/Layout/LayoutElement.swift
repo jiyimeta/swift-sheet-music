@@ -45,8 +45,17 @@ public enum LayoutElement: Sendable, Equatable {
     /// thing off the preceding clef segment in `TLayout::layoutKeySig`
     /// — so a bass staff's sharps land on F3 / C3 / … instead of the
     /// treble positions. See `KeySignatureSteps`.
+    ///
+    /// `naturals` carries the staff steps of the cancellation naturals
+    /// drawn AHEAD of the signature itself, already resolved against
+    /// `clef` (unlike `sharps` / `flats`, which are counts the renderer
+    /// resolves). It is non-empty only for an explicit change that lands
+    /// on C while a non-zero key was in force — see
+    /// `KeySignatureSteps.cancellationNaturals`. In that case `sharps`
+    /// and `flats` are both 0 and the naturals are the only glyphs.
     case keySignature(
-        sharps: Int, flats: Int, clef: NotatedClef, origin: CGPoint,
+        sharps: Int, flats: Int, clef: NotatedClef,
+        naturals: [Int] = [], origin: CGPoint,
     )
     case timeSignature(numerator: Int, denominator: Int, origin: CGPoint)
     /// `origin.y` is the vertical center of the barline's stroke — for
@@ -212,8 +221,7 @@ public enum LayoutElement: Sendable, Equatable {
     /// the `count` consecutive rest measures starting at this layout
     /// measure's `measureIndex`. Origin is the SMuFL anchor at the
     /// horizontal center of the measure, vertically centered on the
-    /// middle staff line. The width payload is added in Task 11
-    /// once the renderer requirements are clearer.
+    /// middle staff line.
     case multiMeasureRest(
         count: Int,
         origin: CGPoint,
@@ -270,6 +278,35 @@ public enum LayoutElement: Sendable, Equatable {
         wavy: Bool,
         text: String?,
     )
+    /// A guitar bend, in one of the two shapes MuseScore's
+    /// `GuitarBendLayout::layoutStandardStaff`
+    /// (`rendering/score/guitarbendlayout.cpp:82`) dispatches between:
+    ///
+    /// * `slight == false` — an **angular** bend (`bend`, `preBend`,
+    ///   `graceNoteBend`): a two-segment polyline
+    ///   `fromOrigin → vertex → toOrigin`, where `vertex` is the peak
+    ///   `GuitarBendGeometry.vertex(from:to:sp:up:)` computed.
+    /// * `slight == true` — a **slight** bend: a short fixed cubic hook
+    ///   off one notehead, where `vertex` is the cubic's single control
+    ///   point rather than a corner, and `toOrigin` is
+    ///   `fromOrigin + GuitarBendGeometry.slightBendEnd(sp:)`.
+    ///
+    /// All three points are in the same (measure- or system-local)
+    /// frame, so the translate pass shifts them together.
+    case guitarBend(
+        fromOrigin: CGPoint,
+        vertex: CGPoint,
+        toOrigin: CGPoint,
+        slight: Bool,
+    )
+    /// A legacy MuseScore 3 bend (`<Bend>` pitch curve): pre-computed
+    /// draw pieces in system-local coords. See `LegacyBendGeometry`.
+    /// C++: `TLayout::layoutBend` / `TDraw::draw(const Bend*)`.
+    ///
+    /// Unlike `.guitarBend` this carries no anchors of its own — the
+    /// curve has as many legs as the bend has points, so the geometry is
+    /// resolved once at layout time and the pieces travel together.
+    case legacyBend(shape: LegacyBendShape)
     case arpeggioWiggle(
         top: CGPoint,
         bottom: CGPoint,

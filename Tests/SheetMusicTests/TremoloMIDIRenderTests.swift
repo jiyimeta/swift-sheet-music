@@ -124,4 +124,116 @@ struct TremoloVoiceRenderTests {
         }
         #expect(pitchOns == [60, 64, 60, 64])
     }
+
+    /// The engraved shape this exists for: a roll starting on a `ppp`
+    /// partway through a measure, under a crescendo that lands on the
+    /// `f` at the next downbeat. Every stroke between them has to climb.
+    ///
+    /// The wedge starts on beat 4 and is spelled the way MuseScore
+    /// writes that span — one measure on from beat 4, less the 3/4 that
+    /// takes it back to the barline.
+    @Test func aRollFromPppToFClimbsAcrossItsStrokes() throws {
+        let note = Note(pitch: 60, tpc: 14)
+        let measure1 = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: [note])),
+            .chord(Chord(duration: .quarter, notes: [note])),
+            .chord(Chord(duration: .quarter, notes: [note])),
+            .dynamic(Dynamic(subtype: "ppp", velocity: 16)),
+            .spanner(Spanner(
+                kind: .hairpin, rawType: "HairPin",
+                nextMeasuresOffset: 1,
+                nextFractionsOffset: Fraction(numerator: -3, denominator: 4),
+                hairpin: .init(subtype: .crescendo),
+            )),
+            .chord(Chord(
+                duration: .quarter, notes: [note],
+                tremolo: Tremolo(subtype: .r16),
+            )),
+        ])])
+        let measure2 = Measure(voices: [Voice(elements: [
+            .dynamic(Dynamic(subtype: "f", velocity: 96)),
+            .chord(Chord(duration: .whole, notes: [note])),
+        ])])
+        let staff = Staff(measures: [measure1, measure2])
+        let (events, _, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0,
+            staff: staff,
+            part: Self.makePart(staff: staff),
+            route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
+            division: 480,
+            plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
+        )
+        let strokes = events
+            .filter { $0.tick >= 1440 && $0.tick < 1920 }
+            .compactMap { e -> Int? in
+                if case let .noteOn(_, _, v) = e.event { return v }
+                return nil
+            }
+        #expect(strokes.count == 4)
+        #expect(strokes.first == 16)
+        #expect(strokes.last ?? 0 > 60, "the last stroke should be approaching the f")
+        for i in 1 ..< strokes.count {
+            #expect(strokes[i] > strokes[i - 1], "stroke \(i) must be louder")
+        }
+    }
+
+    /// A tremolo under a hairpin swells across its own strokes. Each
+    /// stroke is a separate attack, so each reads the ramp at its own
+    /// tick — MuseScore does this explicitly, and says why:
+    ///
+    ///     // Get the velocity used for this note from the staff
+    ///     // This allows correct playback of tremolos even without SND enabled.
+    ///     int velo = staff->velocities().val(nonUnwoundTick);
+    ///
+    /// (`CompatMidiRender::collectNote`, where `nonUnwoundTick` is the
+    /// *NoteEvent's* onset, not the chord's.) Sampling the ramp once at
+    /// the chord onset instead flattens a rolled crescendo — exactly
+    /// the case a drum roll under a wedge is written for.
+    @Test func tremoloStrokesRampAcrossTheHairpin() throws {
+        let chord = Chord(
+            duration: .whole,
+            notes: [Note(pitch: 60, tpc: 14)],
+            tremolo: Tremolo(subtype: .r16),
+        )
+        let measure = Measure(voices: [Voice(elements: [
+            .dynamic(Dynamic(subtype: "mp", velocity: 64)),
+            .spanner(Spanner(
+                kind: .hairpin, rawType: "HairPin",
+                nextMeasuresOffset: 1,
+                hairpin: .init(subtype: .crescendo, veloChange: 40),
+            )),
+            .chord(chord),
+        ])])
+        let staff = Staff(measures: [
+            measure,
+            Measure(voices: [Voice(elements: [.chord(Chord(
+                duration: .whole, notes: [Note(pitch: 60, tpc: 14)],
+            ))])]),
+        ])
+        let (events, _, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0,
+            staff: staff,
+            part: Self.makePart(staff: staff),
+            route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
+            division: 480,
+            plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
+        )
+        let strokeVelocities = events
+            .filter { $0.tick < 1920 }
+            .compactMap { e -> Int? in
+                if case let .noteOn(_, _, v) = e.event { return v }
+                return nil
+            }
+        // `1 << subtype.rawValue` strokes, spread over the whole note.
+        #expect(strokeVelocities.count == 4)
+        #expect(strokeVelocities.first == 64)
+        #expect(strokeVelocities.last ?? 0 > 64)
+        for i in 1 ..< strokeVelocities.count {
+            #expect(
+                strokeVelocities[i] >= strokeVelocities[i - 1],
+                "stroke \(i) must not fall back below its predecessor",
+            )
+        }
+        #expect(Set(strokeVelocities).count > 1, "the roll must actually swell")
+    }
 }

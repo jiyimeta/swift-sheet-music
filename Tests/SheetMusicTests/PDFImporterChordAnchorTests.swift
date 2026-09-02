@@ -38,7 +38,7 @@
     /// document a defect, they documented a false model of one, and the next
     /// reader would have been steered into a fourth attempt. The real defect
     /// in this area is the last test below.
-    @MainActor struct PDFImporterChordAnchorTests {
+    struct PDFImporterChordAnchorTests {
         private func notehead(
             x: CGFloat, y: CGFloat, midi: Int,
         ) -> (ClassifiedGlyph, PDFImporter.DecodedPitch) {

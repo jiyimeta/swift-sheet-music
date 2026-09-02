@@ -130,10 +130,35 @@ extension PDFImporter {
     }
 
     /// The ratio a tuplet digit names, or nil for digits we do not handle.
+    ///
+    /// `normal` is the largest power of two at or below the digit — the
+    /// convention MuseScore writes when only a number is engraved, and the
+    /// one the two original entries (3 -> 2, 6 -> 4) already followed.
+    ///
+    /// 5, 7 and 9 were missing, and a digit that returns nil is not a
+    /// partial read — the whole mark is dropped and every note under it is
+    /// composed at its plain value. Measured on the eval corpus before this
+    /// was added: 165 quintuplet sixteenths (`1/20`) short against 190
+    /// sixteenths over-produced, and 252 septuplet sixteenths (`1/28`)
+    /// short against 227 thirty-seconds over — 428 notes across 18 renders,
+    /// while triplets were short by 11. The arithmetic confirms the ratios
+    /// rather than assuming them: 5 in the time of 4 sixteenths is
+    /// (4/5)x(1/16) = 1/20, and 7 in the time of 4 sixteenths is
+    /// (4/7)x(1/16) = 1/28, which is exactly what the authored scores hold.
+    ///
+    /// 2 and 4 are deliberately absent. A duplet or quadruplet borrows from
+    /// COMPOUND time and inverts the ratio (2 in the time of 3), so it
+    /// cannot be read from the digit alone — it needs the prevailing time
+    /// signature, which this function does not see. Guessing (2, 3) for a
+    /// "2" would also put the importer one mis-detected digit away from
+    /// re-timing a bar around a time signature's numeral.
     static func tupletRatio(forDigit text: String) -> (normal: Int, actual: Int)? {
         switch text.trimmingCharacters(in: .whitespacesAndNewlines) {
         case "3": (2, 3)
+        case "5": (4, 5)
         case "6": (4, 6)
+        case "7": (4, 7)
+        case "9": (8, 9)
         default: nil
         }
     }
@@ -250,6 +275,10 @@ extension PDFImporter {
     /// would let `applyTupletMarks` choose a three-note run straddling the
     /// tuplet's edge. The window is only a bound — the run inside it is
     /// chosen by the clean-sum gate plus the digit's own centre.
+    ///
+    /// The range is read through `beamMemberSpan`, i.e. with the same
+    /// `beamEndpointPad` every other consumer of a beam's x-range applies —
+    /// see that function for why reading it raw was wrong.
     private static func beamWindow(
         digit: TextGlyph, paths: [PathSegment],
         spatium: CGFloat, pageIndex: Int,
@@ -258,14 +287,65 @@ extension PDFImporter {
         let digitY = digit.origin.y
         let candidates = paths.filter { p in
             guard p.kind == .beam, p.pageIndex == pageIndex else { return false }
-            let span = p.quad?.xRange ?? (p.rect.minX ... p.rect.maxX)
-            guard span.contains(digitX) else { return false }
+            guard beamMemberSpan(p).contains(digitX) else { return false }
             return abs(p.rect.midY - digitY)
                 <= tupletBeamDigitYTolSpatia * spatium
         }
         return candidates
-            .map { $0.quad?.xRange ?? ($0.rect.minX ... $0.rect.maxX) }
+            .map(beamMemberSpan)
             .min { ($0.upperBound - $0.lowerBound) < ($1.upperBound - $1.lowerBound) }
+    }
+
+    /// A beam's x-range as a MEMBERSHIP window — padded by
+    /// `beamEndpointPad`, exactly as `fullBeamSpans` pads it.
+    ///
+    /// `beamEndpointPad` exists because a beam's drawn endpoints coincide
+    /// with its outermost stems only in a VECTOR PDF. `beamWindow` used to
+    /// be the one place that read the same range RAW, and it hands its
+    /// result straight to `applyTupletMarks` as the member-run window —
+    /// where the upper bound gets no slack at all, precisely on the
+    /// assumption that "the rightmost true member's stem sits at or inside
+    /// the mark's right edge already". A raster beam breaks that
+    /// assumption: a fitted slab cannot include the columns where its own
+    /// outermost stems stand (beam + stem ink merges there and lands on no
+    /// ladder rung), so its range stops INSIDE them even after
+    /// `RasterPage.extendedSpan` walks it back out.
+    ///
+    /// The consequence was not a truncated run but usually no tuplet at
+    /// all: drop one end note of a triplet and the remaining two sum to
+    /// 1/8 × 2/3 = 1/12, which `cleanScale` refuses, so the mark is
+    /// discarded and the whole bar is left to rhythm reconciliation.
+    ///
+    /// MEASURED, v2-eval, 32 renders (2026-08-27). The beam oracle's whole
+    /// remaining advantage was this one range:
+    ///
+    ///     mode                      durP50  durMean
+    ///     detected, raw range         85.5     74.5
+    ///     detected, padded (this)     88.0     76.4
+    ///     truthBeams (oracle)         88.0     76.6
+    ///
+    /// with 10 renders improved and none regressed. The three components
+    /// of the oracle's beams were priced separately
+    /// (`OMRHybridFrontEnd.Mode`): its x-ranges are worth +2.5 durP50, its
+    /// 574 fewer false positives −0.1 durMean, and its 31 extra beams
+    /// exactly zero. The ledger agrees — over the 11 renders the oracle
+    /// improved, its beams differ by 5 lost and 4 gained LEVELS in total,
+    /// against 370 stem inclusions lost to the unpadded range
+    /// (`[beamdiag] windowDrop`), and only 14 of 5042 matched beam ends
+    /// stop more than the pad short.
+    ///
+    /// GATED ON PROVENANCE. A vector beam's drawn endpoints already
+    /// coincide with its outermost stems, and padding those too was not
+    /// free: the real-PDF corpus gate (141 scores, 2026-09-02) moved one
+    /// score — `bacon_epi`, duration 95 % → 94 % — with the pad applied to
+    /// vector beams, and was byte-identical with it confined to raster
+    /// ones. So the vector path reads the range raw, as it always did, and
+    /// only a beam recovered from pixels gets the slack its fitter needs.
+    static func beamMemberSpan(_ beam: PathSegment) -> ClosedRange<CGFloat> {
+        let raw = beam.quad?.xRange ?? (beam.rect.minX ... beam.rect.maxX)
+        guard beam.detectedFromRaster else { return raw }
+        return (raw.lowerBound - beamEndpointPad)
+            ... (raw.upperBound + beamEndpointPad)
     }
 
     /// Whether a short vertical hook stands at `x` next to the arm's y.

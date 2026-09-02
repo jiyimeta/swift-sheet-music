@@ -22,7 +22,11 @@ extension KeySignature {
                 location: "KeySig",
             ))
         }
-        var key = KeySignature(concertKey: concertKey)
+        // `<showCourtesySig>` is written only when off, so an absent tag means the courtesy is drawn.
+        var key = KeySignature(
+            concertKey: concertKey,
+            showCourtesy: (node.first("showCourtesySig")?.text ?? "1") != "0",
+        )
         key.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return key
     }

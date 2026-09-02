@@ -20,7 +20,7 @@
     /// runs everywhere the bundled Bravura face is available, and keeps the
     /// corpus-backed tests as the higher-fidelity local check rather than
     /// replacing them.
-    @MainActor struct PDFSyntheticShapeMatchingGateTests {
+    struct PDFSyntheticShapeMatchingGateTests {
         /// Tier 4 can only answer where the bundled Bravura exemplars built,
         /// and those reach the face through `BravuraFont`, which needs macOS
         /// 15 while this package deploys to macOS 14. The same fixture also

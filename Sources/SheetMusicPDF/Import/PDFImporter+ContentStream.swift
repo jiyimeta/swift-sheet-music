@@ -45,6 +45,7 @@ extension PDFImporter {
             var texts: [TextGlyph] = []
             var paths: [PathSegment] = []
             var curves: [CurveArc] = []
+            var undecoded: [UndecodedCodeTally] = []
             for pageIndex in 0 ..< document.pageCount {
                 guard let page = document.page(at: pageIndex),
                       let cgPage = page.pageRef
@@ -57,8 +58,12 @@ extension PDFImporter {
                 texts.append(contentsOf: state.texts)
                 paths.append(contentsOf: state.paths)
                 curves.append(contentsOf: state.curveArcs)
+                undecoded.append(contentsOf: state.undecodedCodes)
             }
-            return WalkedContent(glyphs: glyphs, texts: texts, paths: paths, curves: curves)
+            return WalkedContent(
+                glyphs: glyphs, texts: texts, paths: paths, curves: curves,
+                undecodedCodes: undecoded,
+            )
         }
 
         private func walkPage(cgPage: CGPDFPage, state: PDFPageState) {
@@ -66,7 +71,9 @@ extension PDFImporter {
             // callbacks are capture-free). Extract every font's /ToUnicode
             // CMap now and stash it on PageState keyed by resource name so
             // op_Tf can select the active CMap.
-            state.fontCMaps = PDFImporter.extractFontCMaps(cgPage: cgPage)
+            let fontCMaps = PDFImporter.extractFontCMaps(cgPage: cgPage)
+            state.fontCMaps = fontCMaps.cmaps
+            state.type0FontNames = fontCMaps.type0Names
             let embedded = PDFImporter.extractEmbeddedFonts(cgPage: cgPage)
             state.simpleFontDecoders = embedded.compactMapValues {
                 SimpleFontTextDecoder(
@@ -96,23 +103,32 @@ extension PDFImporter {
     }
 
     /// Walk `cgPage`'s Resources → Font dictionary and build a
-    /// `[resourceName: ToUnicodeCMap]` registry. The /ToUnicode stream
-    /// lives on the top-level Type0 font dict; `CGPDFStreamCopyData`
+    /// `[resourceName: ToUnicodeCMap]` registry, plus the set of resource
+    /// names whose `/Subtype` is `/Type0`. `CGPDFStreamCopyData`
     /// auto-inflates FlateDecode and yields plaintext CMap bytes.
-    static func extractFontCMaps(cgPage: CGPDFPage) -> [String: ToUnicodeCMap] {
-        guard let pageDict = cgPage.dictionary else { return [:] }
+    ///
+    /// The subtype travels with the CMap because it — not the CMap's
+    /// presence — decides the show path's code width. A simple font may
+    /// carry a `/ToUnicode` too; see `PDFPageState.type0FontNames`.
+    static func extractFontCMaps(
+        cgPage: CGPDFPage,
+    ) -> (cmaps: [String: ToUnicodeCMap], type0Names: Set<String>) {
+        guard let pageDict = cgPage.dictionary else { return ([:], []) }
         var resources: CGPDFDictionaryRef?
         guard CGPDFDictionaryGetDictionary(pageDict, "Resources", &resources),
               let resources
-        else { return [:] }
+        else { return ([:], []) }
         var fonts: CGPDFDictionaryRef?
         guard CGPDFDictionaryGetDictionary(resources, "Font", &fonts),
               let fonts
-        else { return [:] }
+        else { return ([:], []) }
 
         // CGPDFDictionaryApplyFunction's @convention(c) closure can't
         // capture; route entries through a heap box via the opaque info ptr.
-        final class Sink { var map: [String: ToUnicodeCMap] = [:] }
+        final class Sink {
+            var map: [String: ToUnicodeCMap] = [:]
+            var type0: Set<String> = []
+        }
         let sink = Sink()
         let info = Unmanaged.passUnretained(sink).toOpaque()
         CGPDFDictionaryApplyFunction(fonts, { key, value, info in
@@ -123,6 +139,12 @@ extension PDFImporter {
             guard CGPDFObjectGetValue(value, .dictionary, &fontDict),
                   let fontDict
             else { return }
+            var subtype: UnsafePointer<CChar>?
+            if CGPDFDictionaryGetName(fontDict, "Subtype", &subtype),
+               let subtype, String(cString: subtype) == "Type0"
+            {
+                sink.type0.insert(resName)
+            }
             var stream: CGPDFStreamRef?
             guard CGPDFDictionaryGetStream(fontDict, "ToUnicode", &stream),
                   let stream
@@ -132,6 +154,6 @@ extension PDFImporter {
             let cmap = ToUnicodeCMap.parse(data: data as Data)
             if !cmap.isEmpty { sink.map[resName] = cmap }
         }, info)
-        return sink.map
+        return (sink.map, sink.type0)
     }
 }

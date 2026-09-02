@@ -38,18 +38,15 @@ extension MidiImporter {
             // align). Key signature applies to all non-drum staves;
             // percussion staves render without a key sig.
             // Drum tracks render on MuseScore's 5-line percussion
-            // staff — `perc5Line` is the StaffType name MuseScore
-            // matches against its built-in template. Using
-            // `stdNormal` for a percussion-grouped staff confuses
-            // MuseScore's loader: it treats the staff as a pitched
-            // one and ignores the per-pitch `<Drum>` line positions,
-            // collapsing every drum onto the same line visually.
+            // staff — `GMPercussion.staffTypeName` is the StaffType
+            // name MuseScore matches against its built-in template,
+            // and carries the note on why `stdNormal` is wrong here.
             let defaultClef: NotatedClef = track.isDrums
                 ? .percussion
                 : inferClef(events: track.events, candidates: options.clefCandidates)
             var staff = Staff(
-                staffType: track.isDrums ? "perc5Line" : "stdNormal",
-                group: track.isDrums ? "percussion" : "pitched",
+                staffType: track.isDrums ? GMPercussion.staffTypeName : "stdNormal",
+                group: track.isDrums ? GMPercussion.staffGroup : "pitched",
                 defaultClefType: defaultClef.rawType,
                 measures: scoreMeasures,
             )

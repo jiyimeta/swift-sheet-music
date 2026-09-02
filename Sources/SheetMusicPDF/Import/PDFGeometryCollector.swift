@@ -32,9 +32,20 @@ final class PDFGeometryCollector {
     private var systems: [PDFElementRect] = []
     private var pageSizes: [Int: CGSize] = [:]
     private var slotToStaff: [Int: StaffAddress] = [:]
+    private var excludedPages: Set<Int> = []
 
     func setPageSizes(_ sizes: [Int: CGSize]) {
         pageSizes = sizes
+    }
+
+    /// Pages whose records are dropped at `finalize`. Set for the pages the
+    /// raster fallback read: their glyph origins are in the analysis frame
+    /// (resampled, deskewed), not in the displayed page's user space, so a
+    /// rect recorded from them would sit a few points off the ink it names —
+    /// silently. No rect is the honest side-car for such a page until a
+    /// producer maps the analysis frame back; see `PDFImporter.parseWithGeometry`.
+    func excludePages(_ pages: Set<Int>) {
+        excludedPages = pages
     }
 
     /// The slot → `StaffAddress` mapping, known only once `assembleScore`
@@ -78,7 +89,7 @@ final class PDFGeometryCollector {
         var noteRects: [NoteID: PDFElementRect] = [:]
         var measureRects: [PDFScoreGeometry.MeasureCellKey: PDFElementRect] = [:]
 
-        for rec in items {
+        for rec in items where !excludedPages.contains(rec.onsetRect.pageIndex) {
             guard let staff = slotToStaff[rec.slot] else { continue }
             if rec.isRest {
                 let rid = RestID(
@@ -103,7 +114,7 @@ final class PDFGeometryCollector {
                 itemRects[.note(lead)] = rec.onsetRect
             }
         }
-        for cell in measureCells {
+        for cell in measureCells where !excludedPages.contains(cell.rect.pageIndex) {
             guard let staff = slotToStaff[cell.slot] else { continue }
             measureRects[.init(staff: staff, measureIndex: cell.measureIndex)] = cell.rect
         }
@@ -112,8 +123,8 @@ final class PDFGeometryCollector {
             itemRects: itemRects,
             noteRects: noteRects,
             measureRects: measureRects,
-            systemRects: systems,
-            pageSizes: pageSizes,
+            systemRects: systems.filter { !excludedPages.contains($0.pageIndex) },
+            pageSizes: pageSizes.filter { !excludedPages.contains($0.key) },
         )
     }
 }

@@ -8,8 +8,12 @@ fixtures taken from the upstream MuseScore repository:
       src/importexport/musicxml/tests/data/
   - repeat52.mscx, repeat53.mscx:
       src/engraving/tests/repeat_data/
-  - grace_after.mscx:
+  - grace_after.mscx and slur_ms4_glissando_legato.mscx (upstream
+    simple_glissando_legato.mscx):
       src/engraving/tests/midi/midirenderer_data/
+  - guitarbend_{simple,prebend,slightbend,tied,gracebend}.mscx and
+    guitarbend_release_twice.mscx (upstream bend_release_twice.mscx):
+      src/engraving/tests/midi/midirenderer_bend_data/
   - single_note_multi_appoggiatura_post.mscx:
       src/engraving/tests/playback/playbackeventsrenderer_data/
       single_note_multi_appoggiatura_post/
@@ -46,17 +50,61 @@ the default MuseScore main-file name.
 
 ---
 
+MuseScore 3 fixtures (GPL-2.0)
+------------------------------
+
+Some fixtures are copies of MuseScore 3 test data, not MuseScore 4, and
+are taken at tag v3.6.2 (https://github.com/musescore/MuseScore/tree/v3.6.2):
+
+  - legacybend_ms3_canonical.mscx:
+      mtest/libmscore/midi/testBends1.mscx
+  - legacybend_ms3_play_and_beams.mscx:
+      mtest/libmscore/midi/testBends2.mscx
+  - slur_ms3_exchangevoices.mscx:
+      mtest/libmscore/exchangevoices/exchangevoices-slurs.mscx
+
+The first two pin how MuseScore 3 serializes the legacy `<Bend>`
+element, which no MuseScore 4 fixture carries; the third pins how it
+serializes chord-anchored slurs, including the cross-voice and
+cross-barline `<location>` forms.
+
+MuseScore 3 is licensed under the GNU General Public License version 2,
+not version 3, so the GPL-3.0 statement above does not cover these
+files. Per LICENSE.GPL at that tag:
+
+  Copyright (C) 1999-2020 MuseScore BVBA and others
+  Licensed under GPL-2.0-only.
+
+The full GPL-2.0 licence text is available at:
+  https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
+  https://github.com/musescore/MuseScore/blob/v3.6.2/LICENSE.GPL
+
+---
+
 MIT-licensed fixtures
 ---------------------
 
-The following files are NOT derived from MuseScore's GPL fixtures. They
+The following files are not copies of MuseScore's GPL fixtures. They
 were hand-authored specifically for the swift-sheet-music test suite:
 
   multiPartMixedStaves.mscx
   harmony-basic.mscx
   staff-line-count.mscx
+  legacybend_ms4_resave.mscx — hand-authored, but not from scratch: it
+    was edited down from guitarbend_simple.mscx above (GuitarBend
+    spanners removed, a legacy `<Bend>` inserted), so the GPL-3.0 terms
+    also cover the MuseScore-authored skeleton it retains.
+  slur_ms4_resave.mscx — hand-authored the same way, from
+    legacybend_ms4_resave.mscx's skeleton (the `<Bend>` and its ties
+    replaced by two chord-anchored slurs: one same-measure, one crossing
+    the bar line), so the same GPL-3.0 remark applies transitively. It
+    is written in this package's own writer dialect so it can serve as a
+    byte-parity fixed point — the vendored slur_ms4_glissando_legato.mscx
+    cannot, because it carries `<linkedMain/>` / `<linked>` part-linking
+    tags, a tablature `<StaffType>` body and other MuseScore-4.2 fields
+    this model does not hold.
 
-This file is contributed under the same MIT license that applies to
+These files are contributed under the same MIT license that applies to
 `Sources/` in this repository. The full MIT license text is in the
 `LICENSE` file at the repository root.
 

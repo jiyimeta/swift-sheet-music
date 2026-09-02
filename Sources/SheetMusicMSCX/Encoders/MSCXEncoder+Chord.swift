@@ -15,11 +15,25 @@ extension Chord {
     /// this chord's own graces overrides the corresponding argument
     /// per-note — see `graceBeforeTieBackEndpoints()` and
     /// `graceAfterTieForwardEndpoints()`.
+    ///
+    /// `bendNeighbourForward` / `bendNeighbourBackward` are the same two
+    /// neighbour-chord deltas *unguarded* by any tie: a guitar bend needs them
+    /// on chords that carry no tie at all. `previousChordTrailingBendGrace`
+    /// completes the backward one when the previous chord's last after-grace
+    /// is what a bend ends from — see `Chord.guitarBendBackEndpoint`.
+    ///
+    /// `slurEndMarkers` are the `<prev>` sides of chord-anchored spanners
+    /// that *end* here; the voice walker computes them when it passes the
+    /// begin chord (see `MSCXPendingSlurEnd`).
     func encodeAsChord(
         tieForwardLocation: TieLocation? = nil,
         tieBackLocation: TieLocation? = nil,
         tieForwardPartnerNotes: ChordNotes? = nil,
         tieBackPartnerNotes: ChordNotes? = nil,
+        bendNeighbourForward: TieLocation? = nil,
+        bendNeighbourBackward: TieLocation? = nil,
+        previousChordTrailingBendGrace: Int? = nil,
+        slurEndMarkers: [XMLTreeNode] = [],
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
@@ -39,6 +53,7 @@ extension Chord {
             ))
         }
         duration.appendDurationXML(to: &children)
+        children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         // Articulations sit between durationType and the first
         // <Lyrics>/<Note>: matches MuseScore's Chord::write ordering
         // and is accepted by both MS3 (3.6.2+) and MS4 readers. C++:
@@ -109,6 +124,14 @@ extension Chord {
                             forPitch: note.pitch, partner: tieBackPartnerNotes,
                         ))
                     },
+                guitarBendForwardEndpoint: guitarBendForwardEndpoint(
+                    for: note, neighbourChord: bendNeighbourForward,
+                ),
+                guitarBendBackEndpoint: guitarBendBackEndpoint(
+                    for: note,
+                    neighbourChord: bendNeighbourBackward,
+                    previousChordTrailingBendGrace: previousChordTrailingBendGrace,
+                ),
                 options: options,
                 drumDefaultHead: isPercussionV3 ? "normal" : nil,
                 chordLines: chordLines.filter { $0.noteIndex == noteIndex },
@@ -116,6 +139,34 @@ extension Chord {
         }
         children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Chord", children: children)
+    }
+
+    /// The chord-anchored `<Spanner>` pair sides that belong on this
+    /// chord/rest, in MuseScore's slot: immediately after the duration block,
+    /// ahead of everything `TWrite::write(const Chord*, …)` adds. Its
+    /// `writeProperties(const ChordRest*, …)` writes `<dots>` /
+    /// `<durationType>` / `<duration>` and then, at its tail, the slur
+    /// spanner loop (`rw/write/twrite.cpp:1093`, loop at `:1135`);
+    /// articulations, `<Stem>` and the `<Note>`s all follow it. Both vendored
+    /// fixtures show the pair right behind `<durationType>`.
+    ///
+    /// One deliberate divergence: MuseScore writes `<Lyrics>` *before* the
+    /// spanner loop, where this encoder writes it after `<Stem>` — the
+    /// package's own ordering, which predates slur support and which the
+    /// existing byte-parity fixtures pin. A chord that carries both lyrics
+    /// and a slur therefore differs from Studio's own byte order (both
+    /// readers are order-tolerant here).
+    ///
+    /// End markers precede begin markers: MuseScore walks
+    /// `spannerMap().findOverlapping(…)`, whose interval tree is visited in
+    /// start-tick order (`thirdparty/intervaltree/IntervalTree.h`,
+    /// `visit_overlapping`), and a slur ending on this chord necessarily
+    /// starts earlier than one beginning on it.
+    private func chordAnchoredSpanners(
+        ending endMarkers: [XMLTreeNode],
+        options: MSCXEncoderOptions,
+    ) -> [XMLTreeNode] {
+        endMarkers + slurBeginMarkers(options: options)
     }
 
     /// The `<notes>` half of an ordinary chord-to-chord tie's
@@ -139,9 +190,17 @@ extension Chord {
     /// callers that may carry `.measure` rests must use the
     /// `encodeAsRest(options:in:)` overload that supplies the
     /// effective measure duration.
-    func encodeAsRest(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    ///
+    /// A rest carries chord-anchored spanner markers exactly as a chord does:
+    /// MuseScore anchors slurs to any `ChordRest` and writes both sides
+    /// through the one `TWrite::writeProperties(const ChordRest*, …)`.
+    func encodeAsRest(
+        slurEndMarkers: [XMLTreeNode] = [],
+        options: MSCXEncoderOptions = .init(),
+    ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         duration.appendDurationXML(to: &children)
+        children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Rest", children: children)
     }
@@ -151,11 +210,13 @@ extension Chord {
     /// Non-`.measure` durations behave identically to the
     /// single-argument overload.
     func encodeAsRest(
+        slurEndMarkers: [XMLTreeNode] = [],
         options: MSCXEncoderOptions = .init(),
         in measureDuration: Fraction,
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         duration.appendDurationXML(to: &children, in: measureDuration)
+        children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Rest", children: children)
     }

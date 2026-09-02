@@ -36,6 +36,7 @@ extension PDFImporter {
         pdfData: Data,
         options: PDFImportOptions = .init(),
     ) throws -> Score {
+        warnEntryPointDoesNotRasterize("parseUsingSwiftReader", options: options)
         let walk = try walkOrThrow(pdfData: pdfData)
         return try buildScore(
             pageCount: walk.pageCount,
@@ -43,6 +44,9 @@ extension PDFImporter {
             pageSizes: walk.pageSizes,
             documentAttributes: walk.attributes,
             options: options,
+            // This entry point never rasterizes (see the warning above), so
+            // no page is detector-read and the clef consensus stays out.
+            rasterPages: [],
         )
     }
 
@@ -52,6 +56,7 @@ extension PDFImporter {
         pdfData: Data,
         options: PDFImportOptions = .init(),
     ) throws -> (score: Score, geometry: PDFScoreGeometry) {
+        warnEntryPointDoesNotRasterize("parseWithGeometryUsingSwiftReader", options: options)
         let walk = try walkOrThrow(pdfData: pdfData)
         let collector = PDFGeometryCollector()
         let score = try buildScore(
@@ -61,6 +66,9 @@ extension PDFImporter {
             documentAttributes: walk.attributes,
             options: options,
             geometry: collector,
+            // This entry point never rasterizes (see the warning above), so
+            // no page is detector-read and the clef consensus stays out.
+            rasterPages: [],
         )
         return (score, collector.finalize())
     }

@@ -18,11 +18,19 @@ private typealias State = TextShowState
 /// ordinary text → TextGlyph.
 private let smuflPUARange: ClosedRange<UInt32> = 0xE000 ... 0xF8FF
 
-/// Emit a show-string operand. When an active ToUnicode CMap is present
-/// (Type0 / Identity-H fonts), iterate the operand in 2-byte CID codes,
-/// map each through the CMap, and route the decoded scalar(s): PUA
-/// scalars become a `ClassifiedGlyph` at the current per-glyph origin;
-/// non-PUA scalars accumulate into a `TextGlyph` text run.
+/// Emit a show-string operand for a font with a usable ToUnicode CMap.
+/// Iterate the operand in codes, map each through the CMap, and route the
+/// decoded scalar(s): PUA scalars become a `ClassifiedGlyph` at the current
+/// per-glyph origin; non-PUA scalars accumulate into a `TextGlyph` text run.
+///
+/// THE CODE WIDTH COMES FROM THE FONT'S `/Subtype`, never from the presence
+/// of a CMap. A Type0 font shows 2-byte CIDs (Identity-H); every simple font
+/// shows 1-byte character codes, and MuseScore 4 emits its music fonts both
+/// ways — Leland as CID TrueType in one export and as Type 1C, WITH a
+/// `/ToUnicode` CMap, in another. Deciding on CMap presence read the simple
+/// font's codes in pairs, so every synthesized CID missed the CMap and a
+/// whole score decoded to zero notes. A simple font's CMap is not discarded
+/// here: it is exactly what maps Leland's codes to SMuFL PUA codepoints.
 ///
 /// MuseScore positions each music glyph with its own `Tm`/`cm` (observed
 /// in ギブス.pdf: one BT/ET block per glyph, `Td [0 0]`), so the
@@ -42,19 +50,25 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
     }
     let length = bytes.count
     guard length > 0 else { return }
+    let codeWidth = state.activeFontIsType0 ? 2 : 1
 
     var pending = PendingTextRun()
     var i = 0
-    // Identity-H: 2 bytes per CID.
-    while i + 1 < length {
-        let cid = (UInt32(bytes[i]) << 8) | UInt32(bytes[i + 1])
-        i += 2
+    while i + codeWidth <= length {
+        var cid: UInt32 = 0
+        for byte in bytes[i ..< (i + codeWidth)] {
+            cid = (cid << 8) | UInt32(byte)
+        }
+        i += codeWidth
         guard let scalars = cmap.scalars(cid: cid), let first = scalars.first
         else {
+            // NEVER a silent drop: tallied per font and reported through
+            // `PDFImportOptions.diagnostics` — see `UndecodedCodeTally`.
+            state.recordUndecodedCode(cid)
             advanceTextMatrix(state: state, glyphCount: 1)
             continue
         }
-        let semantic = classifyCID(cid, codepoint: first.value, state: state)
+        let semantic = classifyCode(cid, codepoint: first.value, state: state)
         if isMusicGlyph(semantic: semantic, codepoint: first.value, state: state) {
             flushPendingRun(&pending, state: state)
             let origin = currentOrigin(state: state)
@@ -80,29 +94,43 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
             advanceTextMatrix(state: state, glyphCount: 1)
         }
     }
-    // Odd trailing byte (shouldn't happen for Identity-H) — ignore.
+    // An odd trailing byte shouldn't happen for Identity-H, but a byte the
+    // decode threw away is content leaving the pipeline whether or not the
+    // producer was well formed — so it is tallied, not ignored. Same rule,
+    // same reason, as the unmapped-code drop above.
+    if i < length {
+        state.recordTruncatedTrailingBytes(length - i, firstByte: UInt32(bytes[i]))
+    }
     flushPendingRun(&pending, state: state)
 }
 
-/// Resolve one CMap-decoded CID to a semantic.
+/// Resolve one CMap-decoded code to a semantic.
 ///
 /// Tier 1 (SMuFL PUA codepoint) answers every glyph in every MuseScore /
 /// Dorico / Finale 27+ PDF. For a non-SMuFL-encoded producer (Finale
 /// Maestro, Sibelius Opus, …) `activeClassifier` widens this with Tier 2
 /// (glyph name) / Tier 4 (outline shape).
 ///
-/// `characterCode: nil` — a CID is not a character code in a simple font's
-/// own encoding, so `/Differences` (Tier 2's key space) must not be indexed
-/// with it.
-private func classifyCID(
-    _ cid: UInt32, codepoint: UInt32, state: State,
+/// The two lower tiers' keys depend on the font's kind. A Type0 CID is NOT
+/// a character code in a simple font's own encoding, so `/Differences`
+/// (Tier 2's key space) must not be indexed with it, and the CID doubles as
+/// Tier 4's glyph ID. A simple font's code IS that character code, and its
+/// glyph ID has to be resolved through the font's own encoding exactly as
+/// the CMap-less simple path does (`emitShowSimpleFont`).
+private func classifyCode(
+    _ code: UInt32, codepoint: UInt32, state: State,
 ) -> SMuFLSemantic {
     #if canImport(CoreGraphics)
-        let cascaded = state.activeClassifier.map {
-            $0.classify(
-                codepoint: codepoint, characterCode: nil,
-                glyphID: CGGlyph(truncatingIfNeeded: cid),
-            )
+        let cascaded = state.activeClassifier.map { classifier in
+            state.activeFontIsType0
+                ? classifier.classify(
+                    codepoint: codepoint, characterCode: nil,
+                    glyphID: CGGlyph(truncatingIfNeeded: code),
+                )
+                : classifier.classify(
+                    codepoint: codepoint, characterCode: code,
+                    glyphID: classifier.resolveGlyphID(code: code),
+                )
         } ?? PDFImporter.smuflSemantic(codepoint: codepoint)
     #else
         let cascaded = PDFImporter.smuflSemantic(codepoint: codepoint)

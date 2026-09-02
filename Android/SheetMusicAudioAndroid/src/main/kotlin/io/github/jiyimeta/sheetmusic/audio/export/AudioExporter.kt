@@ -6,8 +6,8 @@ import io.github.jiyimeta.sheetmusic.audio.AudioBackendException
 import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
+import io.github.jiyimeta.sheetmusic.audio.model.MidiControlChange
 import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthDriver
-import io.github.jiyimeta.sheetmusic.audio.synth.MasterTuning
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeMixer
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeSf2Loader
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
@@ -30,6 +30,16 @@ internal class AudioExporter(
     private val playerFactory: (Long) -> PlayerDriver = { PlayerDriver(it) },
     private val encoderFactory: (AudioFileFormat, Int, ParcelFileDescriptor?) -> AudioFileEncoder =
         { fmt, sr, fd -> AudioFileEncoder.create(fmt, sr, fd!!) },
+    /**
+     * The RPN messages that retune one channel by a cents offset off A4=440.
+     *
+     * Injected rather than computed here: the split into coarse semitones and fine cents is `MasterTuning` in
+     * SheetMusicAudioCore, which the Apple engine reads too — it feeds the same numbers into the AUMIDISynth's
+     * global tuning params instead of into an RPN. Kotlin held a hand-port of that arithmetic kept honest by
+     * golden assertions on both sides; goldens catch a change made twice and made differently, and say nothing
+     * about a change made once.
+     */
+    private val masterTuningControlChanges: (cents: Double) -> List<MidiControlChange>,
 ) {
     companion object {
         const val BUFFER_FRAMES = 4096
@@ -198,7 +208,7 @@ internal class AudioExporter(
         for (chan in snapshot.mixerChannels) {
             val cents = if (chan.isDrums) snapshot.masterTuningCents else melodicCents
             if (cents == 0.0) continue
-            for (cc in MasterTuning.rpnControlChanges(cents)) {
+            for (cc in masterTuningControlChanges(cents)) {
                 synth.cc(chan.liveChannel, cc.controller, cc.value)
             }
         }

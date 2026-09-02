@@ -58,7 +58,7 @@
     /// glyph). That is thin, but it is a REAL font's real cmap, and it is
     /// enough to pin both outcomes: the code that resolves, and the code
     /// that must not.
-    @MainActor struct GlyphIDResolveTests {
+    struct GlyphIDResolveTests {
         private static func bravuraData() -> Data? {
             // Touching `BravuraFont.register` is what actually loads the
             // `SheetMusicLayoutApple` resource bundle into this process; a

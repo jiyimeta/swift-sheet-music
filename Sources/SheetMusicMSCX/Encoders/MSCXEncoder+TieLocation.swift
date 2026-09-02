@@ -40,6 +40,43 @@ enum TieLocation {
     /// `Chord.graceBeforeTieBackLocations()`'s doc comment for how
     /// that ordinal is derived and its caveats.
     case graceIndexed(Int)
+    /// A partner that is a grace chord of some *other* chord: the positional
+    /// half names that chord and `<grace>` picks the grace out of its run, so
+    /// both halves are written — e.g. `<fractions>-1/4</fractions><grace>0
+    /// </grace>`. The two are independent fields of the same `Location`
+    /// (`dom/location.h:40-55`), and `Location::operator==` tests both, so
+    /// naming only the chord connects the spanner to the chord's own note
+    /// instead of to its grace.
+    ///
+    /// Ties never reach this case — the tie encoder documents a partner grace
+    /// of a *neighbouring* chord as out of scope (`GraceChord.encode`) — but a
+    /// guitar bend does: `guitarbend_release_twice.mscx:222-227` ends a bend
+    /// that started on a `<grace8after/>` of the previous chord. Both halves
+    /// are optional so any positional form can carry a grace ordinal; see
+    /// `addressingGrace(_:)`.
+    case graceOfDistantChord(measures: Int?, fractions: Fraction?, graceIndex: Int)
+
+    /// The same position, re-pointed at grace `index` of the chord it names.
+    /// `.graceIndexed` is already a zero-delta grace reference, so it just
+    /// takes the new ordinal.
+    func addressingGrace(_ index: Int) -> TieLocation {
+        switch self {
+        case let .sameMeasure(fractions):
+            .graceOfDistantChord(
+                measures: nil, fractions: fractions, graceIndex: index,
+            )
+        case let .crossMeasure(measures, fractions):
+            .graceOfDistantChord(
+                measures: measures, fractions: fractions, graceIndex: index,
+            )
+        case .graceIndexed:
+            .graceIndexed(index)
+        case let .graceOfDistantChord(measures, fractions, _):
+            .graceOfDistantChord(
+                measures: measures, fractions: fractions, graceIndex: index,
+            )
+        }
+    }
 
     /// The location for a grace note's own tie into/from a note of its
     /// parent chord — the single most common grace tie, e.g. a tied

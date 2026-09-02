@@ -407,9 +407,10 @@ extension LayoutEngine {
     ///    the rule close to the trailing barline (`measureWidth -
     ///    sp/2`) with ~0.5 sp clearance.
     ///
-    /// Cross-measure continuation (a secondary rule at the start of
-    /// the next measure) is not yet emitted — within a single
-    /// measure, the rule always stops at the barline.
+    /// Within a single measure, the rule always stops at the barline;
+    /// cross-measure continuation (a secondary rule at the start of
+    /// the next measure) is emitted separately by
+    /// `emitMelismaContinuation`.
     static func emitMelismaLine(
         chordX: CGFloat,
         lyricText: String,

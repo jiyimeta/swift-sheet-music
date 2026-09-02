@@ -41,7 +41,8 @@ extension LayoutElementShape {
         case let .note(_, _, _, _, p, _, _, _):
             return [noteheadRect(center: p, mag: 1, sp: sp)]
         case .articulation, .fermata, .breath, .tieArc, .tupletLabel,
-             .glissandoLine, .arpeggioWiggle, .chordLine, .tremoloBars:
+             .glissandoLine, .guitarBend, .legacyBend, .arpeggioWiggle,
+             .chordLine, .tremoloBars:
             return decorationRects(for: element, sp: sp)
         case .ledgerLine:
             // `LayoutElementShape.kind(of:)` already returns `nil` for
@@ -94,6 +95,29 @@ extension LayoutElementShape {
             return [spanRect(from, to, thickness: sp * 1.5)]
         case let .glissandoLine(from, to, _, _):
             return [spanRect(from, to, thickness: sp * 0.3)]
+        case let .guitarBend(from, vertex, to, _):
+            // Both legs of the polyline (both halves of the cubic for a
+            // slight bend), so the vertex's ink is covered rather than
+            // just the chord between the endpoints.
+            return [
+                spanRect(from, vertex, thickness: sp * 0.3),
+                spanRect(vertex, to, thickness: sp * 0.3),
+            ]
+        case let .legacyBend(shape):
+            // One rect per stroked leg, endpoints only — the same
+            // approximation `.guitarBend` makes for its cubic. Arrows sit
+            // on a leg's own tip and labels are covered by the vertical
+            // reservation in `LayoutEngine.elementYPoints`.
+            return shape.pieces.compactMap { piece in
+                switch piece {
+                case let .line(from, to):
+                    return spanRect(from, to, thickness: sp * 0.3)
+                case let .curve(from, _, _, to):
+                    return spanRect(from, to, thickness: sp * 0.3)
+                case .arrow, .label:
+                    return nil
+                }
+            }
         case let .arpeggioWiggle(top, bottom, _):
             return [spanRect(top, bottom, thickness: sp)]
         case let .chordLine(shape, origin, _):
@@ -279,7 +303,7 @@ extension LayoutElementShape {
         var barLineHalfHeight: CGFloat?
         switch element {
         case let .clef(_, origin, _),
-             let .keySignature(_, _, _, origin),
+             let .keySignature(_, _, _, _, origin),
              let .timeSignature(_, _, origin),
              let .measureRepeat(_, origin),
              let .multiMeasureRest(_, origin):

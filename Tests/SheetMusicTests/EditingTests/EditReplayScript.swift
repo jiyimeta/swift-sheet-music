@@ -42,6 +42,19 @@ enum EditReplayStep {
 ///   trailing rest after it, at element 2 — again unreferenced elsewhere) and then deleting that SAME element 1,
 ///   which collapses the whole bar to a single measure rest. The shrink doesn't move element 1 itself, so the
 ///   delete that follows still finds the chord it expects.
+/// - **The M3 signature steps (11a-12b) address a MEASURE, never an element**, so none of the above applies to
+///   them — but they move the ground under anything that would. Step 11a inserts a key signature at the head of
+///   measure 1, shifting every element index in that bar by one; steps 12a/12b re-bar measures 1 onward and change
+///   how many measures the score even has (three bars, then twelve, then four). They come after everything that
+///   addresses an ELEMENT for exactly that reason: nothing past them names a slot by fixed position.
+/// - **The M4 rehearsal-mark steps (13a/13b) address a measure too**, and are among the steps that run after the
+///   re-bar. Measure 1 is a safe target for them because 12b settles the score at four measures — one MORE than it
+///   started with, never fewer — so the bar they name exists whatever the re-bar did to the ones around it.
+/// - **The M6 drum steps (14a-14c) address measure 3 — the last bar 12b settles on — and voice 1, which 14a
+///   itself creates.** That is what makes them index-stable after a re-bar nobody can predict the element layout
+///   of: 14a names only a measure, and 14b/14c address element 0 of a voice one step older than they are, whose
+///   sole occupant was put there by this script. No earlier step touches voice 1 anywhere, and nothing runs after
+///   them.
 ///
 /// ## Identical fingerprints are not redundant steps
 ///
@@ -54,6 +67,11 @@ enum EditReplayStep {
 /// each `nativeApplyEditIntent` call returned `true` — drop that boolean assertion and a future edit here
 /// that starts refusing silently would still pass on fingerprints alone.
 ///
+/// Step 13b is the same situation reached from the other direction: rather than repeating its neighbor it lands
+/// back on step 12b's value, because the system lane is hashed by its occupants and the mark it removed is the only
+/// occupant either step ever put there. Same guard, same reason it is not droppable — it is the only step in this
+/// script that encodes `removeRehearsalMark`'s wire bytes at all.
+///
 /// ## Undo / redo
 ///
 /// The device-side harness (`EditSessionReplayTest.kt`) tells an edit step from an undo step by asset presence —
@@ -63,9 +81,15 @@ enum EditReplayStep {
 /// apply-or-undo step, so "redo" needs no new convention while still exercising an undo immediately followed by
 /// the state it undid coming back.
 enum EditReplayScript {
-    /// Fourteen steps over `EditingFixtures.replayFixture()`, covering every `EditIntent` case (see this type's doc
-    /// comment for the index-stability argument behind their ordering).
-    static func standard(staff: StaffAddress) -> [EditReplayStep] {
+    /// Twenty-three steps over `EditingFixtures.replayFixture()` (see this type's doc comment for the
+    /// index-stability argument behind their ordering).
+    ///
+    /// Covers every `EditIntent` case that names a slot or a bar: the SP0/SP1/SP2 note and slot intents, plus M3's
+    /// four signature intents, M4's two rehearsal-mark intents and M6's three drum note-entry intents. The M1/M2
+    /// structural intents (`insertMeasure`, `deleteMeasure`, `addPart`, `removePart`, `movePart`) are still not
+    /// scripted here — they have their own command-level tests, and adding them would renumber every measure and
+    /// staff index the steps below address.
+    static func standard(staff: StaffAddress) -> [EditReplayStep] { // swiftlint:disable:this function_body_length
         func rest(_ measure: Int, _ element: Int) -> RestID {
             RestID(staff: staff, measureIndex: measure, voiceIndex: 0, elementIndex: element)
         }
@@ -130,10 +154,74 @@ enum EditReplayScript {
         // changing and changing back again is safe.
         let step10Undo = EditReplayStep.undo
         let step10Redo = EditReplayStep.intent(.removeTuplet(at: slot(0, 4)))
+        // Step 11a: declare E-flat major at measure 1. The fixture is in D major, so this is a real change of key
+        // rather than a restatement: it inserts a key signature at the head of a bar that carried none, and the
+        // planner re-spells the span it governs (measures 1 onward) against the new key.
+        let step11a = EditReplayStep.intent(.setKeySignature(measureIndex: 1, concertKey: -3))
+        // Step 11b: take it away again, so the span falls back to the D major measure 0 still declares. Paired with
+        // 11a deliberately: `RemoveKeySignature` has a pre-image inverse of its own, and a script that only ever
+        // set a key would never encode the removal's wire bytes at all.
+        let step11b = EditReplayStep.intent(.removeKeySignature(measureIndex: 1))
+        // Step 12a: 3/16 at measure 1 — a real RE-BAR, not just a glyph swap. The region (measures 1...2, since no
+        // later bar declares its own meter) holds eight quarters, which re-partition into eleven bars of three
+        // sixteenths, and the A4 quarter at the head of measure 1 — four sixteenths long, in a bar only three wide —
+        // is CUT by the first new barline: it comes back as an eighth plus a sixteenth filling the new measure 1,
+        // tied on into a sixteenth opening measure 2. A meter whose bar is at least a quarter long would have left
+        // every note whole and exercised only the re-partition, so the denominator is 16 on purpose.
+        let step12a = EditReplayStep.intent(.setTimeSignature(measureIndex: 1, numerator: 3, denominator: 16))
+        // Step 12b: remove it, re-barring the same span back to the 4/4 measure 0 declares. NOT an arithmetic undo
+        // of 12a and deliberately so: 12a's last bar was padded to a full 3/16, so the span comes back one sixteenth
+        // longer than it went in and the score settles at four measures rather than the three it started with. This
+        // is the removal's own re-bar path, reached through its own wire bytes.
+        let step12b = EditReplayStep.intent(.removeTimeSignature(measureIndex: 1))
+        // Step 13a: name measure 1 "A". A rehearsal mark is the first SYSTEM-lane edit in this script — every step
+        // above it moves voice elements — so it is also the first one whose wire bytes carry a string, and the
+        // first whose fingerprint moves through `combineSystemLane` rather than through a staff's measures. Which
+        // lane it meets depends on how the fixture was spelled: the in-memory `EditingFixtures.replayFixture()`
+        // that `EditReplayDeterminismTests` starts from leaves `systemMeasures` empty, so the write pads the lane
+        // out to one entry per measure first, while the `fixture.mscx` `EditReplayGoldenTests` loads always decodes
+        // one (empty) `SystemMeasure` per bar, where that pad is a no-op. One script over both spellings covers
+        // both paths.
+        let step13a = EditReplayStep.intent(.setRehearsalMark(measureIndex: 1, text: "A"))
+        // Step 13b: take it away again. Paired with 13a deliberately, for the reason 11a/11b are paired:
+        // `RemoveRehearsalMark` has its own inverse and its own wire bytes, and a script that only ever set a mark
+        // would encode neither. It is NOT an arithmetic undo of 13a — the removal drops the mark WITHOUT
+        // un-padding the lane 13a may have grown — and yet the fingerprint lands back on 12b's exactly. That is
+        // correct, not a sign the step was inert: `combineSystemLane` feeds the lane by its OCCUPANTS and never by
+        // its length, precisely so a padded-but-empty lane and an absent one hash alike (see `ScoreFingerprint`).
+        // What proves this step ran is the same thing that proves steps 3 and 4 did — see "Identical fingerprints
+        // are not redundant steps" on this type.
+        let step13b = EditReplayStep.intent(.removeRehearsalMark(measureIndex: 1))
+        // Step 14a: grow a second voice on the LAST measure — the drum pad's "the feet voice isn't there yet" case,
+        // and the first step in this script to address a voice other than 0. It names a measure rather than an
+        // element, so it is index-stable whatever the re-bar left behind, the same property 13a/13b rely on.
+        let step14a = EditReplayStep.intent(.createVoice(staff: staff, measureIndex: 3, voiceIndex: 1))
+        // Step 14b: split that new voice's full-measure rest at the half bar — the column caret's "landed inside a
+        // rest" case. Element 0 is the whole of a voice this script itself just created one step earlier, so its
+        // index cannot have drifted, and `.measure` resolves against the 4/4 bar to 1920 ticks.
+        let step14b = EditReplayStep.intent(.splitRest(
+            at: VoiceElementID(staff: staff, measureIndex: 3, voiceIndex: 1, elementIndex: 0), tickOffset: 960,
+        ))
+        // Step 14c: write a cross-head closed hi-hat into the first half of it, as ONE composite — the exact shape
+        // a drum key issues, and the only step in this script that encodes `setNoteHead`'s wire bytes at all. The
+        // head intent addresses a note that does not exist when the composite is PLANNED; planning builds commands
+        // from scalars without reading the score, and the composite applies them in order.
+        let step14c = EditReplayStep.intent(.composite([
+            .inputNote(
+                at: RestID(staff: staff, measureIndex: 3, voiceIndex: 1, elementIndex: 0),
+                pitch: 42, tpc: 14, duration: nil,
+            ),
+            .setNoteHead(
+                at: NoteID(
+                    staff: staff, measureIndex: 3, voiceIndex: 1, elementIndex: 0, noteIndexInChord: 0,
+                ),
+                headType: "cross",
+            ),
+        ]))
 
         return [
             step1, step2, step3, step4, step5a, step5b, step6, step7, step7b, step8a, step8b, step9, step10Undo,
-            step10Redo,
+            step10Redo, step11a, step11b, step12a, step12b, step13a, step13b, step14a, step14b, step14c,
         ]
     }
 

@@ -4,7 +4,7 @@
     @testable import SheetMusicPDF
     import Testing
 
-    @MainActor struct PDFImporterStaffLinesTests {
+    struct PDFImporterStaffLinesTests {
         @Test func detectsFiveEvenlySpacedLinesAsStaff() {
             let paths = horizontals(at: [100, 110, 120, 130, 140], xRange: 50 ... 500)
             let staves = PDFImporter.detectStaves(paths: paths, classified: [], pageIndex: 0)

@@ -99,32 +99,54 @@
             #expect(marks.isEmpty)
         }
 
-        @Test func sixIsATupletDigitAndFiveIsNot() {
-            let six = PDFImporter.detectTupletMarks(
-                texts: [Self.digit("6", x: 190.8, y: 517.0)],
+        /// `normal` is the largest power of two at or below the digit.
+        ///
+        /// This test used to be `sixIsATupletDigitAndFiveIsNot` and asserted
+        /// that "5" produced NO mark — pinning a gap as though it were the
+        /// design. A digit the table does not know is not read partially:
+        /// the whole mark is dropped and every note under it composes at its
+        /// plain value, which cost 428 notes across 18 renders of the eval
+        /// corpus (165 quintuplet + 252 septuplet sixteenths).
+        @Test(arguments: [
+            ("3", 2, 3), ("5", 4, 5), ("6", 4, 6), ("7", 4, 7), ("9", 8, 9),
+        ] as [(String, Int, Int)])
+        func aTupletDigitNamesItsRatio(digit: String, normal: Int, actual: Int) {
+            let marks = PDFImporter.detectTupletMarks(
+                texts: [Self.digit(digit, x: 190.8, y: 517.0)],
                 paths: Self.bracketPaths,
                 staffYLines: Self.staffYLines,
                 xRange: Self.cellX,
                 pageIndex: 0,
             )
-            #expect(six.first?.normal == 4)
-            #expect(six.first?.actual == 6)
+            #expect(marks.first?.normal == normal, "digit \(digit)")
+            #expect(marks.first?.actual == actual, "digit \(digit)")
+        }
 
-            let five = PDFImporter.detectTupletMarks(
-                texts: [Self.digit("5", x: 190.8, y: 517.0)],
+        /// 2 and 4 stay unread ON PURPOSE. A duplet or quadruplet borrows
+        /// from COMPOUND time and inverts the ratio (2 in the time of 3), so
+        /// the digit alone does not determine it — and reading them would
+        /// put the importer one mis-detected digit away from re-timing a bar
+        /// around a time signature's numeral. 8 is not a tuplet digit at all.
+        @Test(arguments: ["2", "4", "8", "0", "x"])
+        func aDigitOutsideTheTableProducesNoMark(digit: String) {
+            let marks = PDFImporter.detectTupletMarks(
+                texts: [Self.digit(digit, x: 190.8, y: 517.0)],
                 paths: Self.bracketPaths,
                 staffYLines: Self.staffYLines,
                 xRange: Self.cellX,
                 pageIndex: 0,
             )
-            #expect(five.isEmpty)
+            #expect(marks.isEmpty, "digit \(digit)")
         }
 
         static let drumYLines: [CGFloat] = [107.9, 110.7, 113.5, 116.4, 119.2]
         static let drumCellX: ClosedRange<CGFloat> = 450.0 ... 552.8
 
+        /// `fromRaster` marks the beam as recovered from pixels — the one
+        /// provenance `beamMemberSpan` pads.
         static func beam(
             xLo: CGFloat, xHi: CGFloat, yLo: CGFloat, yHi: CGFloat,
+            fromRaster: Bool = false,
         ) -> PathSegment {
             PathSegment(
                 kind: .beam,
@@ -137,6 +159,7 @@
                     botSlope: 0, botIntercept: yLo,
                     pageIndex: 0,
                 ),
+                detectedFromRaster: fromRaster,
             )
         }
 
@@ -165,8 +188,45 @@
             #expect(marks.count == 1)
             #expect(marks.first?.anchor == .beam)
             let span = try? #require(marks.first?.xRange)
-            // The 457.3..467.9 secondary, not the 457.3..480.1 primary.
+            // The 457.3..467.9 secondary, not the 457.3..480.1 primary —
+            // and read RAW: these are vector beams, whose drawn endpoints
+            // are their stems, so `beamMemberSpan` adds no pad.
             #expect(abs((span?.upperBound ?? 0) - 467.9) < 0.01)
+            #expect(abs((span?.lowerBound ?? 0) - 457.3) < 0.01)
+        }
+
+        /// The same secondary beam TRUNCATED by 1.0pt at each end, which is
+        /// what a raster-fitted slab looks like. `beamMemberSpan` restores
+        /// it: the mark's span must still reach the stems the beam is
+        /// really drawn between (457.3 and 467.9). See
+        /// `PDFImporterTupletApplyTests`
+        /// `.aBeamTruncatedInsideItsOwnEndStemsKeepsTheOuterMembers` for
+        /// what that costs downstream when it does not.
+        @Test func aTruncatedBeamStillSpansTheStemsItIsDrawnBetween() {
+            let marks = PDFImporter.detectTupletMarks(
+                texts: [Self.digit("3", x: 461.16, y: 126.1)],
+                paths: Self.truncatedDrumBeams,
+                staffYLines: Self.drumYLines,
+                xRange: Self.drumCellX,
+                pageIndex: 0,
+            )
+            #expect(marks.count == 1)
+            let span = marks.first?.xRange
+            #expect((span?.lowerBound ?? .infinity) <= 457.3)
+            #expect((span?.upperBound ?? 0) >= 467.9)
+        }
+
+        /// `drumBeams` with the secondary slab pulled 1.0pt inside its own
+        /// end stems at both ends — well within `beamEndpointPad`. The
+        /// triplet's outer members stand at the UNTRUNCATED 457.3 / 467.9.
+        /// Raster-fitted, because that truncation is what a fitted slab
+        /// looks like and the only provenance the pad applies to.
+        static var truncatedDrumBeams: [PathSegment] {
+            drumStaffLines + [
+                beam(xLo: 457.3, xHi: 480.1, yLo: 124.2, yHi: 125.6, fromRaster: true),
+                beam(xLo: 458.3, xHi: 466.9, yLo: 122.1, yHi: 123.5, fromRaster: true),
+                beam(xLo: 472.8, xHi: 480.1, yLo: 122.1, yHi: 123.5, fromRaster: true),
+            ]
         }
 
         /// A measure number sits at the system's left edge with no beam or
@@ -268,6 +328,7 @@
             // width rather than from the empty bbox.
             let centre = try? #require(marks.first?.digitCenterX)
             #expect((centre ?? 0) > 461.16)
+            // The secondary's 467.9, raw — a vector beam gets no pad.
             #expect(abs((marks.first?.xRange.upperBound ?? 0) - 467.9) < 0.01)
         }
 

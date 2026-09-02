@@ -71,6 +71,18 @@ if [ -z "$wasm" ]; then
     echo "error: no .wasm found under $DEST" >&2
     exit 1
 fi
+# Stamp the binary with the sources it was built from. `dist/` is gitignored,
+# so nothing else in the tree records which revision of Sources/ this image
+# came from — and `engineVersionStamp()` cannot say, being a digest of the
+# hand-edited version string rather than of any content. The browser suite
+# recomputes this digest and refuses to run against a binary whose sources have
+# moved on; see Scripts/wasm-source-digest.sh and test/wasm-freshness.test.ts.
+# Written AFTER the copy, so the `rm -rf` above can never leave a stamp
+# describing a build that is no longer there.
+digest="$("$REPO_ROOT/Scripts/wasm-source-digest.sh" "$REPO_ROOT")"
+printf '{\n  "sourceDigest": "%s",\n  "builtAt": "%s"\n}\n' \
+    "$digest" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$DEST/build-stamp.json"
+
 raw=$(wc -c <"$wasm" | tr -d ' ')
 if command -v brotli >/dev/null 2>&1; then
     compressed=$(brotli -q 11 -c "$wasm" | wc -c | tr -d ' ')

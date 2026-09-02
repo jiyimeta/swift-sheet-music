@@ -4,6 +4,7 @@ import android.net.Uri
 import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import io.github.jiyimeta.sheetmusic.audio.export.fakes.FakeAudioFileEncoder
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakePlayerDriver
+import io.github.jiyimeta.sheetmusic.audio.fakes.MarkerMasterTuning
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
@@ -83,6 +84,7 @@ class AudioExporterMetronomeTest {
                 if (playersBuilt++ == 0) scorePlayer else PlayerDriver(0L, metronomeBindings)
             },
             encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
+            masterTuningControlChanges = MarkerMasterTuning::invoke,
         ).run(
             outputFd = null,
             smfBytes = ByteArray(16),

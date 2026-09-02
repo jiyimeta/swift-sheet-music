@@ -195,7 +195,10 @@
             case let .removeTuplet(at):
                 self.init(op: "removeTuplet")
                 self.at = ElementPath(at)
-            case .composite:
+            case .composite, .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart, .setPartNames,
+                 .setKeySignature, .removeKeySignature, .setTimeSignature, .removeTimeSignature,
+                 .setRehearsalMark, .removeRehearsalMark,
+                 .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }

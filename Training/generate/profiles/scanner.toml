@@ -1,0 +1,61 @@
+# Scanner acquisition profile (spec §6.5). Ordered stages; each entry's
+# table is that stage's parameter ranges. `degrade.load_profile` reads
+# this into an ordered list of (stage name, params) pairs and
+# `degrade.apply_chain` runs them in the order they appear here.
+#
+# A future phone profile is a SIBLING FILE (e.g. `phone.toml`) that lists
+# extra stages such as perspective_warp / device_jitter — never a change
+# to degrade.py's `load_profile` or `apply_chain`. See
+# `Training/tests/test_degrade.py::test_new_geometric_stage_composes_through_unmodified_machinery`
+# for a worked demonstration of that extension point.
+
+[[stage]]
+name = "resample"
+scale_lo = 0.92
+scale_hi = 1.08
+aniso_max = 0.02
+
+[[stage]]
+name = "rotate"
+max_deg = 2.0
+
+[[stage]]
+name = "erode_dilate"
+p_erode = 0.3
+p_dilate = 0.3
+elem_size = 2
+
+[[stage]]
+name = "gaussian_blur"
+sigma_lo = 0.3
+sigma_hi = 1.2
+
+[[stage]]
+name = "noise"
+gauss_sigma = 6.0
+salt_pepper = 0.002
+
+[[stage]]
+name = "illumination_gradient"
+max_drop = 0.15
+
+[[stage]]
+name = "bleed_through"
+alpha = 0.12
+p = 0.5
+
+[[stage]]
+name = "annotation_overlay"
+p = 0.5
+max_marks = 6
+
+[[stage]]
+name = "threshold"
+p = 0.3
+thresh_lo = 120
+thresh_hi = 200
+
+[[stage]]
+name = "jpeg_roundtrip"
+quality_lo = 55
+quality_hi = 90
