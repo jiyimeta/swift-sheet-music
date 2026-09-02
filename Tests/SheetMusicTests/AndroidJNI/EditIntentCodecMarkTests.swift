@@ -63,6 +63,23 @@ struct EditIntentCodecMarkTests {
         #expect(EditIntentCodec.encode(.setTempo(anchor: slot, marking: nil)).count < 128)
     }
 
+    /// `SetBreathIntentWire`'s two style tables are hand-written arrays of four, and its encoder maps a style the
+    /// table does not carry to index 0 (`?? 0`) — a new enum case would silently go out as `.comma` / `.normal`.
+    /// The counts pin the tables' size against `CaseIterable`; the round trip pins their contents, so adding a
+    /// case fails here rather than in a host's file.
+    @Test func `every breath style is carried by the wire tables`() throws {
+        #expect(Breath.BreathMarkStyle.allCases.count == 4)
+        #expect(Breath.CaesuraStyle.allCases.count == 4)
+        for style in Breath.BreathMarkStyle.allCases {
+            let intent = EditIntent.setBreath(after: Self.slot, kind: .breathMark(style), pause: 0.25)
+            #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
+        }
+        for style in Breath.CaesuraStyle.allCases {
+            let intent = EditIntent.setBreath(after: Self.slot, kind: .caesura(style), pause: 0.25)
+            #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
+        }
+    }
+
     /// A clef spelling `NotatedClef` does not emit must fail the decode, not collapse to treble the way
     /// `NotatedClef(rawType:)` does for a legacy alias.
     @Test func `an unknown clef spelling is refused`() {

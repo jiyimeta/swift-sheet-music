@@ -51,13 +51,18 @@ public struct SetTempo: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
-        guard let position = SystemLaneSlot.position(of: anchor, in: score) else {
-            throw Self.refused(.targetNotFound(anchor))
-        }
+        // The restore branch is decided BEFORE the anchor is resolved — `SetRehearsalMark.apply`'s shape. The
+        // pre-image lane is a whole-score value that needs no beat, and an inverse that refused because a later
+        // edit had moved the anchor's element would leave an undo stuck.
         let previous = score.systemMeasures
         if let restoredLane {
             score.systemMeasures = restoredLane
-        } else if let marking {
+            return SetTempo(restoringLane: previous, anchor: anchor)
+        }
+        guard let position = SystemLaneSlot.position(of: anchor, in: score) else {
+            throw Self.refused(.targetNotFound(anchor))
+        }
+        if let marking {
             RehearsalMarkLane.pad(&score)
             Self.write(marking, at: position, into: &score.systemMeasures[anchor.measureIndex])
         } else {

@@ -80,6 +80,19 @@ struct SetStaffTextTests {
         #expect(seeded.systemMeasures.count == 4)
     }
 
+    @Test("the inverse restores the lane verbatim even when the anchor no longer resolves")
+    func inverseNeverRefuses() throws {
+        var score = EditingFixtures.parityFixture()
+        let before = score
+        let anchor = Self.slot(Self.flute, 1, 3)
+        let inverse = try SetStaffText(anchor: anchor, text: "pizz.", isSystemText: false).apply(to: &score)
+        // A later edit shortened the bar, so the anchor's slot is gone: an undo must still put the lane back.
+        score.parts[0].staves[0].measures[1].voices[0].elements.removeLast(2)
+        #expect(SystemLaneSlot.position(of: anchor, in: score) == nil)
+        _ = try inverse.apply(to: &score)
+        #expect(score.systemMeasures == before.systemMeasures)
+    }
+
     @Test("empty text, a non-timed anchor, a missing anchor and a clear with nothing to clear are refused")
     func refusals() {
         var score = EditingFixtures.parityFixture()

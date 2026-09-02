@@ -12,6 +12,14 @@ import SheetMusicFoundation
 /// Writes `concertClefType` only; `transposingClefType` is left `nil`. `SetStaffDefaultClef` remains the command
 /// for a staff's opening clef.
 ///
+/// ## Voice 0 only
+///
+/// A clef belongs to the STAFF, not to one voice of it: layout keeps a single running clef per staff-measure and
+/// walks the voices in order to fill it (`LayoutEngine+Placement`, `LayoutEngine+Contexts` reads `voices.first`),
+/// and MuseScore itself never writes a `<Clef>` into voice 2. A clef parked in a higher voice would therefore
+/// either be ignored or leak into voice 0's reading depending on the walk. An anchor whose `voiceIndex` is not 0
+/// is refused with `.voiceMismatch`, naming voice 0 of the same staff-measure as the voice the host should aim at.
+///
 /// > Note: This command is sugar over `ReplaceVoiceElement` (replace) or `ReplaceVoiceElements` (insert). It
 /// > exists to give the operation a domain-meaningful name and to own the placement rule; callers can equally
 /// > construct the equivalent primitive directly. See `docs/edit-commands.md`.
@@ -32,6 +40,12 @@ public struct SetClef: EditCommand {
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let element = score[target] else { throw Self.refused(.targetNotFound(target)) }
         guard case .chord = element else { throw Self.refused(.wrongElementKind(at: target, expected: .timed)) }
+        guard target.voiceIndex == 0 else {
+            throw Self.refused(.voiceMismatch(
+                from: VoiceRef(target),
+                to: VoiceRef(staff: target.staff, measureIndex: target.measureIndex, voiceIndex: 0),
+            ))
+        }
         let ref = VoiceRef(target)
         guard let elements = score[voice: ref]?.elements else { throw Self.refused(.targetNotFound(target)) }
         let run = AdjacentElementSlot.run(.before, of: target.elementIndex, in: elements)

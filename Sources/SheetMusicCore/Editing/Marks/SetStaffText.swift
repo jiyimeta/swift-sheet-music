@@ -40,13 +40,17 @@ public struct SetStaffText: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
-        guard let position = SystemLaneSlot.position(of: anchor, in: score) else {
-            throw Self.refused(.targetNotFound(anchor))
-        }
+        // The restore branch is decided BEFORE the anchor is resolved, for `SetTempo`'s reason: the pre-image
+        // lane needs no beat, and an inverse must never refuse.
         let previous = score.systemMeasures
         if let restoredLane {
             score.systemMeasures = restoredLane
-        } else if let text {
+            return SetStaffText(restoringLane: previous, anchor: anchor, isSystemText: isSystemText)
+        }
+        guard let position = SystemLaneSlot.position(of: anchor, in: score) else {
+            throw Self.refused(.targetNotFound(anchor))
+        }
+        if let text {
             let trimmed = text.trimmingWhitespaceAndNewlines()
             guard !trimmed.isEmpty else { throw Self.refused(.emptyStaffText) }
             RehearsalMarkLane.pad(&score)

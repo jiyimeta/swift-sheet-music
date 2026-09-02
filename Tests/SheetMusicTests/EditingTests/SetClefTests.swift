@@ -125,6 +125,22 @@ struct SetClefTests {
         #expect(score == before)
     }
 
+    @Test("an anchor in voice 1 is refused — a clef belongs to the staff, and layout reads voice 0's")
+    func refusesNonZeroVoice() {
+        var score = EditingFixtures.parityFixture()
+        let before = score
+        // Measure 1 of the flute has a second voice whose only element is a measure rest.
+        let inVoiceOne = VoiceElementID(staff: Self.flute, measureIndex: 1, voiceIndex: 1, elementIndex: 0)
+        let refused = #expect(throws: SheetMusicError.self) {
+            _ = try SetClef(before: inVoiceOne, clef: .alto).apply(to: &score)
+        }
+        #expect(Self.reason(of: refused) == .voiceMismatch(
+            from: VoiceRef(inVoiceOne),
+            to: VoiceRef(staff: Self.flute, measureIndex: 1, voiceIndex: 0),
+        ))
+        #expect(score == before)
+    }
+
     private static func reason(of error: SheetMusicError?) -> EditRefusal.Reason? {
         guard case let .invalidEdit(refusal)? = error else { return nil }
         return refusal.reason

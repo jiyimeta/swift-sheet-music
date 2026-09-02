@@ -65,7 +65,7 @@ interface GeometryProbe {
 }
 
 // One entry per `ReplayChain` on the Swift side: "edit-replay" is the standard note- and slot-level chain,
-// "edit-replay-parity" the structural one covering EditIntent cases 30-40. Both pairs are recorded by
+// "edit-replay-parity" the structural one covering EditIntent cases 30-49. Both pairs are recorded by
 // EditReplayWebGoldenTests.swift, so a chain added there is picked up here by adding its stem to this list.
 const replayChains = (["edit-replay", "edit-replay-parity"] as const).map((stem) => ({
   stem,

@@ -59,7 +59,9 @@ and this project adheres to
 - Nine mark edit commands, the third group of the same project: `SetClef` writes a clef change before a chord or
   rest (replacing one already there, or landing at index 0 as the bar's header clef when nothing timed precedes
   the target) and `RemoveClef` takes an explicit clef out; `SetTempo` writes, replaces or removes the tempo at a
-  beat, taking a `SetTempo.Marking(beatsPerSecond:beatNote:beatDots:)`; `SetStaffText` writes, renames or removes
+  beat, taking a `SetTempo.Marking(beatsPerSecond:beatNote:beatDots:)` — the metronome mark alone, since `Tempo`
+  has no text field, so a marking's words ("Allegro") are neither written nor kept; `SetStaffText` writes,
+  renames or removes
   the staff text — or, with `isSystemText`, the system text — at a beat; `SetDynamic` writes a dynamic on a chord
   with MuseScore's default velocity for the subtype; `SetFermata` writes a fermata over a chord or rest with a
   `timeStretch`; `SetBreath` writes a breath mark or caesura after a chord; `SetJumps` and `SetMarkers` replace a

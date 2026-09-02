@@ -250,7 +250,9 @@ extension EditReplayScript {
             // Step 32: and removed — lands back on step 30's fingerprint.
             .intent(.setBreath(after: bar2(3), kind: nil, pause: 0)),
             // Step 33: the fermata removed (the tail is still element 3) — lands back on step 29's.
-            .intent(.setFermata(at: bar2(3), subtype: nil, timeStretch: 1)),
+            // `timeStretch` is 0 on a removal: the wire zeroes it when `hasFermata == 0`, so any other value here
+            // would describe bytes the codec cannot produce.
+            .intent(.setFermata(at: bar2(3), subtype: nil, timeStretch: 0)),
             // Step 34: the dynamic removed (the head is element 1) — measure 2 is `[E4, E4]` again, and the score
             // as a whole is exactly what step 27 left: this lands back on step 27's fingerprint.
             .intent(.setDynamic(at: bar2(1), subtype: nil)),
