@@ -85,6 +85,11 @@ own substantive logic.
 | `SplitRest` | not in the example — the drum pad's column caret, landing inside a rest | — |
 | `SetNoteHead` | not in the example — the drum pad, writing a cross-head hi-hat | sugar |
 | `SetDrumsetEntry` | not in the example — the drum pad, repairing a kit that never named this drum | — |
+| `SetLayoutBreak` | not in the example — host command registry | — |
+| `SetBarLine` | not in the example — host command registry | sugar |
+| `SetRepeatBarLines` | not in the example — host command registry | — |
+| `SetMeasureRepeat` | not in the example — host command registry | — |
+| `MoveToVoice` | not in the example — host command registry | sugar |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -109,8 +114,9 @@ section above).
 - [x] **`RemoveTuplet`** — drop a tuplet wrapper and restore its
   constituents to ordinary durations. Implemented; see
   "A. Implemented" above.
-- [ ] **`MoveToVoice`** — move a chord or rest from one voice to
-  another within the same measure.
+- [x] **`MoveToVoice`** — move a chord or rest from one voice to
+  another within the same measure. Implemented; see "A. Implemented"
+  above.
 - [x] **`CreateVoice`** — append a voice to one measure, filled with a
   full-measure rest. `ReplaceVoiceElements` refuses a voice that does
   not exist, so this is what a write into a bar's second voice goes
@@ -129,10 +135,16 @@ section above).
   structural ops: add an instrument, drop one (re-anchoring the
   brackets and system elements that outlive it), reorder the score.
   Implemented; see "A. Implemented" above.
-- [ ] **`SetBarLineSubtype`** *(sugar)* — change a barline
-  (regular / double / repeat / end).
-- [ ] **`SetMeasureRepeat`** — replace a measure's content with a
-  measure-repeat sign.
+- [x] **`SetBarLineSubtype`** *(sugar)* — change a barline
+  (regular / double / repeat / end). Split into two intents once the
+  model work made the distinction concrete: **`SetBarLine`**
+  *(sugar)* writes the visible end-barline style (regular / double /
+  dashed / dotted / heavy / double-heavy); **`SetRepeatBarLines`**
+  writes the repeat flags (`startRepeat` / `endRepeatCount`), which
+  MuseScore treats as measure-level state rather than a barline
+  subtype. Both implemented; see "A. Implemented" above.
+- [x] **`SetMeasureRepeat`** — replace a measure's content with a
+  measure-repeat sign. Implemented; see "A. Implemented" above.
 
 ### Score symbols (already present as `VoiceElement` cases)
 
@@ -195,22 +207,28 @@ intent.
 
 ## C. Out of scope for the current data model
 
-These need a `Score` model extension before any edit command makes
-sense.
+Everything else this checklist used to list here — articulations,
+grace notes, tremolo, note color / visibility, stem/beam mode,
+layout breaks, chord symbols, spanners — already exists in
+`Sources/SheetMusicCore/Score/` and renders; it only lacked an edit
+command. That gap is closed by the edit-command parity project
+(`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`):
+the structural group above landed first, and the remaining groups
+(Range, Marks, Note/chord, Visibility, Spanners, Harmony — intents
+35–73) are queued in that spec.
+
+What is left below genuinely needs a `Score` model extension before
+any edit command can make sense of it:
 
 | Feature | Required model addition |
 | --- | --- |
-| Articulations (staccato, accent, marcato, tenuto, …) | `articulations` array on `Note`/`Chord`. |
-| Grace notes (acciaccatura / appoggiatura) | grace-note flag + position on `Chord`. |
-| Tremolo | tremolo subtype on `Chord`. |
-| Ornaments (turn, mordent, trill) | per-note ornament annotation. |
+| Ornaments other than trill (turn, mordent, …) | per-note ornament annotation — the model has `TrillType` but no general ornament case. |
+| Manual stem direction | `Chord.stemDirection` (currently auto only). |
 | Cue note (small) | `Chord`/`Note` scale / cue flag. |
-| Note color / visibility | per-element color + visibility properties. |
-| Stem direction override | `Chord.stemDirection` (currently auto only). |
-| Beam mode override | `Chord.beamMode` (auto / break / continue). |
 | Slash notation | dedicated voice element. |
-| Figured bass / chord symbols | dedicated annotation type. |
-| System / page break | edit path through `LayoutBreak`. |
+| Figured bass | dedicated annotation type. |
+| Pedal line style | `Spanner` has no pedal-style payload — `SetPedal` (queued, #64) writes only `rawType = "Pedal"`. |
+| Chord-symbol transposition | `Harmony` has no `rootTpc` / `bassTpc` fields — `SetChordSymbol` (queued, #73) writes `name` only. |
 
 ---
 
@@ -234,5 +252,8 @@ Roughly ordered by impact. A reasonable sweep:
 6. Chord/note property commands (`SetArpeggio` / `SetGlissando`) —
    small, isolated. (`SetNoteHead` has landed already — see
    "A. Implemented" above.)
-7. `MoveToVoice` — voice editing.
-8. Spanner commands once `Spanner` subtypes are confirmed.
+7. `MoveToVoice` — voice editing. (Landed — see "A. Implemented"
+   above.)
+8. Spanner commands once `Spanner` subtypes are confirmed. Queued as
+   intents 62–72 in
+   `docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`.

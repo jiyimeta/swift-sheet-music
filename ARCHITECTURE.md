@@ -73,6 +73,24 @@ targets) are resolved inside rendering passes, not stored in the types.
   stable dotted `code` is the localization key and whose English `message` is
   log-only context. Editing failures carry an `EditRefusal`, whose typed
   `reason` lets hosts branch without string-matching prose.
+- **Reference family.** Every score location a new `EditCommand` carries —
+  a measure column, a part, a voice, a range — is a member of a closed
+  family under `Sources/SheetMusicCore/Score/References/` (`MeasureRef`,
+  `PartRef`, `VoiceRef`, `VoiceElementRange`, alongside the older
+  `VoiceElementID` / `NoteID` / `RestID` / `TupletID` / `StaffAddress`),
+  resolved only through the `Score` accessors in
+  `Score/References/Score+References.swift` (`Score.canonicalStaff` names
+  the staff — part 0, staff 0 — that measure-level flags such as layout
+  breaks and repeat barlines live on, per MuseScore's own
+  `writeSystemElements`). Each member's `SheetMusicEditWire` mirror is a
+  **nested** wire struct even when it holds a single integer, because
+  Wirelet can append an `Optional` field to a struct with zero byte
+  movement but can never turn a bare scalar into a struct compatibly; each
+  mirror reserves its next unassigned tag with a doc comment ("tag N is
+  reserved for SP0's optional stable identity; do not assign it") against
+  the day a stable identity needs to attach there. See
+  `docs/superpowers/specs/2026-09-02-edit-command-parity-design.md` §2 for
+  the full rationale.
 
 ## Parser policy (MSCX / MusicXML)
 

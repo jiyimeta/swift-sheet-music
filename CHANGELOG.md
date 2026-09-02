@@ -7,6 +7,42 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- Five structural edit commands, the first group of the edit-command parity project
+  (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`): `SetLayoutBreak` sets or clears a line /
+  page / section break on a measure; `SetBarLine` writes a measure's visible end-barline style (regular / double /
+  dashed / dotted / heavy / double-heavy); `SetRepeatBarLines` writes a measure's `startRepeat` /
+  `endRepeatCount`; `SetMeasureRepeat` turns 1, 2 or 4 empty bars into a measure-repeat group (`%` sign) or
+  dissolves one back into measure rests; `MoveToVoice` moves a chord or rest to another voice at the same tick,
+  splitting rests around it as needed. Reachable as `EditIntent.setLayoutBreak` / `.setBarLine` /
+  `.setRepeatBarLines` / `.setMeasureRepeat` / `.moveToVoice`, wire cases 30–34.
+- The reference family — `MeasureRef`, `PartRef`, `VoiceRef`, `VoiceElementRange`
+  (`Sources/SheetMusicCore/Score/References/`) — gives every new intent's score location a named, resolvable type
+  instead of a bare integer, with `Score.canonicalStaff` / `score.contains(_:)` / `score[part:]` / `score[voice:]`
+  / `score[measure:staff:]` / `score[system:]` / `score.voiceElements(in:)` as the sole resolution seam. Each
+  member's wire mirror is a nested struct with a reserved tag, so a future stable identity (SP0) can attach to it
+  without moving a byte.
+- `Measure.Flags` groups the seven measure-level fields MuseScore writes on the first staff only — layout breaks,
+  markers, jumps, `startRepeat` / `endRepeatCount` — so they move, hash and hoist as one unit.
+- A second parity replay chain (`editReplay-parity/`) exercises the five new commands through the same
+  cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain, byte-pinned like it.
+
+### Fixed
+
+- Repeat barlines now render. Nothing in `SheetMusicLayout` turned `Measure.startRepeat` / `endRepeatCount` into
+  barline geometry — only `MultiMeasureRestPlanner` read the flags — so every MuseScore-authored score with
+  repeats rendered without repeat dots. `LayoutEngine+SystemBuild` now synthesizes start-/end-repeat barlines from
+  the flags, without double-drawing where an explicit `.barLine` of the same subtype is already present.
+- Measure flags now survive `RemovePart` and `MovePart`. Both re-anchor brackets and system elements when the
+  canonical staff (part 0, staff 0) changes hands, but left layout breaks, markers, jumps and repeat flags on the
+  demoted staff — invisible to layout and export, which read them from the first staff only. A new
+  `MeasureFlagsHoist` pass moves the flag column onto the new canonical staff and clears the old one, with the
+  inverse carrying both staves' pre-image columns so undo stays byte-exact.
+- `SplitRest` remaps tuplet indices after a split. Splitting a rest inside a measure that also holds a tuplet
+  later in the voice shifted every subsequent element right by one without adjusting the tuplets' stored index
+  ranges, so a later `RemoveTuplet` or duration edit could target the wrong elements.
+
 ## [2.3.1] - 2026-08-31
 
 ### Fixed
