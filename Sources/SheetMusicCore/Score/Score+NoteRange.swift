@@ -18,10 +18,10 @@ extension Score {
         inRangeFrom anchor: ScoreItemID,
         to target: ScoreItemID,
     ) -> [ScoreItemID] {
-        guard let anchorStart = tickPosition(for: anchor),
-              let targetStart = tickPosition(for: target),
-              let anchorEnd = endTickPosition(for: anchor),
-              let targetEnd = endTickPosition(for: target)
+        guard let anchorStart = onset(of: VoiceElementID(anchor)),
+              let targetStart = onset(of: VoiceElementID(target)),
+              let anchorEnd = end(of: VoiceElementID(anchor)),
+              let targetEnd = end(of: VoiceElementID(target))
         else { return [] }
         let anchorAddr = anchor.staff
         let targetAddr = target.staff
@@ -47,7 +47,7 @@ extension Score {
                 for (vIdx, voice) in measures[mIdx].voices.enumerated() {
                     var tick = 0
                     for (eIdx, el) in voice.elements.enumerated() {
-                        let pos = TickPosition(measure: mIdx, tick: tick)
+                        let pos = ScoreTickPosition(measure: mIdx, tick: tick)
                         // posHi is exclusive (it's the END tick of
                         // the later endpoint, i.e. the start of
                         // whatever comes after). An element STARTING
@@ -88,80 +88,5 @@ extension Score {
             }
         }
         return result
-    }
-
-    /// Tick position one element-width past `id` — the upper bound
-    /// of the time region covered by selecting `id`. Combining the
-    /// two endpoints' END positions (rather than their starts) for
-    /// `posHi` is what lets a long note (e.g. a whole) extend the
-    /// selection rectangle across every shorter note that sits
-    /// inside its tick span.
-    private func endTickPosition(
-        for id: ScoreItemID,
-    ) -> TickPosition? {
-        guard let start = tickPosition(for: id),
-              let s = self[id.staff]
-        else { return nil }
-        let measures = s.measures
-        guard measures.indices.contains(id.measureIndex) else {
-            return nil
-        }
-        let voices = measures[id.measureIndex].voices
-        guard voices.indices.contains(id.voiceIndex) else {
-            return nil
-        }
-        let elements = voices[id.voiceIndex].elements
-        guard elements.indices.contains(id.elementIndex) else {
-            return nil
-        }
-        let measureDurations = measures.effectiveMeasureDurations()
-        let measureDuration = measureDurations[id.measureIndex]
-        let dur: Int
-        switch elements[id.elementIndex] {
-        case let .chord(c):
-            dur = c.duration.resolved(in: measureDuration).ticks(division: division)
-        default:
-            dur = 0
-        }
-        return TickPosition(
-            measure: start.measure, tick: start.tick + dur,
-        )
-    }
-
-    /// Tick position of the element referenced by `id` within its
-    /// measure. Returns `nil` if the path does not resolve.
-    private func tickPosition(for id: ScoreItemID) -> TickPosition? {
-        guard let s = self[id.staff] else { return nil }
-        let measures = s.measures
-        guard measures.indices.contains(id.measureIndex) else { return nil }
-        let voices = measures[id.measureIndex].voices
-        guard voices.indices.contains(id.voiceIndex) else { return nil }
-        let elements = voices[id.voiceIndex].elements
-        guard elements.indices.contains(id.elementIndex) else { return nil }
-
-        let measureDurations = measures.effectiveMeasureDurations()
-        let measureDuration = measureDurations[id.measureIndex]
-        var tick = 0
-        for i in 0 ..< id.elementIndex {
-            switch elements[i] {
-            case let .chord(c):
-                tick += c.duration.resolved(in: measureDuration).ticks(division: division)
-            default:
-                break
-            }
-        }
-        return TickPosition(measure: id.measureIndex, tick: tick)
-    }
-}
-
-/// Lexicographic (measure, tick) position used to order element
-/// onsets across a score.
-private struct TickPosition: Comparable {
-    let measure: Int
-    let tick: Int
-
-    static func < (lhs: TickPosition, rhs: TickPosition) -> Bool {
-        if lhs.measure != rhs.measure { return lhs.measure < rhs.measure }
-        return lhs.tick < rhs.tick
     }
 }
