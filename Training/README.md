@@ -1197,6 +1197,50 @@ reset per epoch (`persistent_workers=True` keeps worker processes alive, so a
 `set_epoch()` on the main-process dataset would be a silent no-op in the copies
 the workers hold). A run is reproducible for a fixed (seed, workers).
 
+#### Round 2 (2026-09-02) — sibling-class calibration on real renders
+
+The integration phase shipped `run3-mixed-last` with one detector defect
+disclosed: on a real MuseScore Studio 4.7.4 render the heatmap splits its
+confidence between `clefF` and `clefF8va` at the same cell and neither
+clears τ=0.30, while the synthetic held-out set reports `clefF8va` recall
+0.995. τ cannot fix it in either direction (200-file counterfactual at
+τ=0.20: pitch net −27pt) and the importer-side clef consensus cannot help a
+1-system PDF. Plan: `docs/superpowers/plans/2026-09-02-omr-training-round-2.md`.
+
+**Why the two eval populations disagree — the census.** Every octave-clef
+glyph in the clean prep root (`clefF8va`, `clefG8va`, `clefF15ma`, …: 1184
+each, 117 pages, 32 renders) comes from `cov_clef_<x>` (one staff, 8 bars)
+or `cov_clef_changes` (four cue-size mid-bar changes per bar). The realistic
+`tex_*` sources draw `G` / `F` / `PERC` plus `G8vb` on the "band" kind's
+Tenor part — and `clefG8vb` (6188 glyphs, 480 renders) is the one octave
+clef the real corpus reads correctly. The one variant that appears as a
+full-size system-start clef among ordinary staves is the one that works.
+
+**Instruments added this round.**
+
+- `OMRGlyphDetector(classifier:observer:)` — an optional measurement tap
+  that sees each page's glyphs WITH their heatmap scores. The product path
+  passes `nil`; `ClassifiedGlyph` itself still carries no score.
+- `[mscz-clefcand]` lines in `MSCZGroundTruthSweep.clefProbe`
+  (`OMR_MSCZ_CLEF_PROBE=1`): every raster candidate within 12pt of a vector
+  clef as `class@score@distance`. Run under `OMR_DECODE_THRESHOLD=0.02` and
+  `OMR_MSCZ_PROBES_ONLY=1` (skips both score-level sweeps) so one sweep
+  lists what the shipped τ discards.
+- `Training/probes/clef_table.py` — aggregates that dump into the per-class
+  {exact, sibling, other, none} table and prices decode rules offline
+  (shipped τ / family-sum / family-argmax) with no re-run per rule.
+- `gen_clefctx.py` + `build_dataset generate --clef-contexts N
+  [--no-coverage]` — `clx_NNNN` multi-part sources whose staves draw their
+  default clef from the full pitched vocabulary (plain `G`/`F` half the
+  time, the nine other tokens uniformly otherwise), melodic fabric reused
+  from `gen_texture`, notes pitched for the clef. Defaults (`0`, coverage
+  on) leave an existing root byte-identical. `--no-coverage` is for a
+  SUPPLEMENTARY root trained next to v2: the `cov_*` ids would otherwise
+  be exported twice and hash into the same split twice.
+
+Numbers land below as they are measured; the memory file
+`project_omr_training_round2` tracks the round between sessions.
+
 ### RESOLVED: P0-G1 failed at scale — `buildScore` was not order-invariant
 
 Measured 2026-08-11 on the 2208-render v2 dataset, the first time the

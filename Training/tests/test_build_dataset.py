@@ -390,6 +390,64 @@ def test_the_documented_undecodable_source_is_exempt_only_for_that_reason(
     assert "m2" in str(raised.value) and "UNDER" in str(raised.value)
 
 
+def test_clef_contexts_default_off_leaves_the_source_list_unchanged():
+    """`clefctx_count=0` / `coverage=True` are the defaults so an existing
+    dataset (v2) stays byte-identical under P3c-G1."""
+    before = build_dataset.collect_sources(seed=3, texture_count=2)
+    after = build_dataset.collect_sources(seed=3, texture_count=2,
+                                          clefctx_count=0, coverage=True)
+    assert [s["source_id"] for s in before] == [s["source_id"] for s in after]
+    assert not any(s["kind"] == "clefctx" for s in before)
+
+
+def test_clef_contexts_add_clx_sources_that_are_gated_like_generated_ones(
+        monkeypatch):
+    """`clx_*` sources join the plan sorted between `cov_*` and `tex_*`,
+    and are held to the measure-length gate like every source this repo
+    generates — a bad bar in one is fatal, not quarantined."""
+    sources = build_dataset.collect_sources(seed=3, texture_count=1,
+                                            clefctx_count=2)
+    ids = [s["source_id"] for s in sources]
+    assert "clx_0000" in ids and "clx_0001" in ids
+    assert ids == sorted(ids)
+    assert {s["kind"] for s in sources if s["source_id"].startswith("clx_")} == {"clefctx"}
+
+    overfull = gen_coverage.mscx_document([gen_coverage.PartSpec(
+        name="Bad", measures=["\n".join(
+            [gen_coverage.time_sig(4, 4)]
+            + [gen_coverage.chord(60, 14) for _ in range(6)])])])
+    monkeypatch.setattr(build_dataset.gen_clefctx, "clefctx_sources",
+                        lambda seed, count: [("clx_bad", overfull)])
+    with pytest.raises(build_dataset.InvalidGeneratedSource) as raised:
+        build_dataset.collect_sources(seed=3, texture_count=0, clefctx_count=1)
+    assert "clx_bad" in str(raised.value)
+
+
+def test_no_coverage_drops_the_coverage_family_and_the_plan_follows():
+    """A supplementary root must not re-export `cov_*` under the same ids
+    (they would hash into the same split twice). The plan is built from
+    the same source list, so it must agree."""
+    sources = build_dataset.collect_sources(seed=3, texture_count=1,
+                                            clefctx_count=2, coverage=False)
+    ids = [s["source_id"] for s in sources]
+    assert not any(i.startswith("cov_") for i in ids)
+    assert ids == ["clx_0000", "clx_0001", "tex_0000"]
+    plan = build_dataset.plan_renders(seed=3, engines=["ms4"], per_face=1,
+                                      texture_count=1, clefctx_count=2,
+                                      coverage=False)
+    assert sorted({r["source_id"] for r in plan}) == ids
+
+
+def test_generate_records_clef_contexts_and_coverage_in_the_plan_file(tmp_path):
+    _generate(tmp_path, clefctx_count=1, coverage=False)
+    plan = json.loads((tmp_path / "dataset_plan.json").read_text())
+    assert plan["clef_contexts"] == 1
+    assert plan["coverage"] is False
+    assert sorted(p.name for p in tmp_path.iterdir() if p.is_dir()) == [
+        r for r in sorted(p.name for p in tmp_path.iterdir() if p.is_dir())
+        if r.startswith("clx_0000_")]
+
+
 # --------------------------------------------------------------------
 # Finalize
 # --------------------------------------------------------------------
