@@ -61,11 +61,18 @@ extension PDFImporter {
     }
 
     /// Parse `pdfData` and also return the geometry side-car.
+    ///
+    /// Takes the same raster fallback as `parse(pdfData:options:)`: a host
+    /// that displays the source PDF is exactly the host holding a scan. The
+    /// side-car, though, carries NO rects for a page the fallback read — its
+    /// glyphs are positioned in the analysis frame, not the displayed page's
+    /// user space, and a cursor silently a few points off the ink is worse
+    /// than none. Such pages are named in an `info` diagnostic; their vector
+    /// neighbors keep their geometry untouched.
     public static func parseWithGeometry(
         pdfData: Data,
         options: PDFImportOptions = .init(),
     ) throws -> (score: Score, geometry: PDFScoreGeometry) {
-        warnEntryPointDoesNotRasterize("parseWithGeometry", options: options)
         let document = try openDocument(pdfData)
         let collector = PDFGeometryCollector()
         let walk = try walkDocument(
@@ -77,16 +84,32 @@ extension PDFImporter {
             musicFontGateFraction: options.musicFontGateFraction,
             shapeAcceptanceThreshold: options.shapeAcceptanceThreshold,
         )
+        var content = walk.content
+        var pageSizes = walk.pageSizes
+        var rasterPages: Set<Int> = []
+        if let detector = try rasterDetector(for: options) {
+            rasterPages = applyRasterFallback(
+                to: &content, pageSizes: &pageSizes,
+                document: document, detector: detector, options: options,
+            )
+        }
+        if !rasterPages.isEmpty {
+            collector.excludePages(rasterPages)
+            options.diagnostics?(PDFImportDiagnostic(
+                severity: .info, location: "document",
+                message: "OMR: no geometry is recorded for the pages read as images "
+                    + "(\(rasterPages.sorted().map(String.init).joined(separator: ", "))); "
+                    + "the side-car covers the vector pages only",
+            ))
+        }
         let score = try buildScore(
             pageCount: document.pageCount,
-            walked: walk.content,
-            pageSizes: walk.pageSizes,
+            walked: content,
+            pageSizes: pageSizes,
             documentAttributes: walk.attributes,
             options: options,
             geometry: collector,
-            // This entry point never rasterizes (see the warning above), so
-            // no page is detector-read and the clef consensus stays out.
-            rasterPages: [],
+            rasterPages: rasterPages,
         )
         return (score, collector.finalize())
     }

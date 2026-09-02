@@ -205,8 +205,9 @@ public enum PDFImporter {
 
     /// The `info` diagnostic owed to a caller who set `omrTileClassifier` on
     /// an entry point that does not rasterize. A knob that silently does
-    /// nothing is this repository's own silent-drop smell; only
-    /// `parse(pdfData:options:)` / `parse(pdfURL:options:)` act on it.
+    /// nothing is this repository's own silent-drop smell; only the PDFKit
+    /// entries — `parse(pdfData:options:)` / `parse(pdfURL:options:)` and
+    /// their `parseWithGeometry` twins — act on it.
     ///
     /// Lives here rather than beside the fallback because
     /// `parseUsingSwiftReader` is compiled on Android too, where the whole
@@ -217,7 +218,8 @@ public enum PDFImporter {
             severity: .info, location: "document",
             message: "PDFImporter.\(entryPoint) does not rasterize: "
                 + "PDFImportOptions.omrTileClassifier is ignored here. Use "
-                + "PDFImporter.parse(pdfData:options:) to read scanned pages.",
+                + "PDFImporter.parse(pdfData:options:) or parseWithGeometry(pdfData:options:) "
+                + "to read scanned pages.",
         ))
     }
 

@@ -10,182 +10,6 @@
     /// `PDFImporter.parse` into something that can read a scanned page, and
     /// the per-page gate that decides which pages it reads.
     struct PDFImporterRasterFallbackTests {
-        // MARK: - Fixtures
-
-        /// Every fixture page in this file is this size, so one `CGContext`
-        /// can emit a mixed document without per-page media boxes.
-        static let pageSize = CGSize(width: 300, height: 200)
-        static let renderDPI: Double = 300
-
-        /// TWO five-line staves per fixture page, not one, and that is
-        /// load-bearing: `ensembleStaffCount` discards any page whose staff
-        /// count is below 2 and reports `nil` for a GCD below 2, so a
-        /// one-staff-per-page fixture would leave `ensembleSize` at `nil` in
-        /// BOTH arms of the mixed-document test — there would be no ensemble
-        /// for a miscounting raster page to collapse, and the test would
-        /// exercise none of the coupling it exists for.
-        /// `bothFixturePagesCarryATwoStaffEnsemble` checks the fixture still
-        /// clears that gate rather than trusting these constants.
-        static let staffBandCount = 2
-
-        /// The image page's bitmap, sized so that rasterizing the PDF page it
-        /// is drawn into at `renderDPI` reproduces it 1:1.
-        ///
-        /// Line shape and thickness match the fixture `OMRRasterFrontEndTests`
-        /// already proves yields staff-line paths; only the scale and the band
-        /// count differ, so the staff spacing (29px ≈ 7pt) clears
-        /// `detectStaves`' `lineMergeTolerance` of 2pt and the lines clear its
-        /// 50pt width gate. The 350px gap between bands is far outside the
-        /// 29px line spacing, so the CV window cannot read the two bands as
-        /// one ten-line staff.
-        static func staffBitmap() -> GrayBitmap {
-            let widthPx = Int((pageSize.width * renderDPI / 72).rounded())
-            let heightPx = Int((pageSize.height * renderDPI / 72).rounded())
-            var bitmap = RasterTestBitmaps.blank(
-                widthPx: widthPx, heightPx: heightPx, dpi: renderDPI,
-            )
-            for band in 0 ..< staffBandCount {
-                for line in 0 ..< 5 {
-                    RasterTestBitmaps.hLine(
-                        &bitmap, y: 150 + band * 350 + line * 29,
-                        x0: widthPx / 20, x1: widthPx - widthPx / 20, thickness: 1,
-                    )
-                }
-            }
-            return bitmap
-        }
-
-        /// The five-line staves the vector walker reads, as stroked paths —
-        /// the shape `PDFImporterFaçadeTests` proves `buildScore` accepts,
-        /// twice, for the reason on `staffBandCount`.
-        static func drawVectorStaff(into context: CGContext) {
-            context.setLineWidth(0.5)
-            context.setStrokeColor(gray: 0, alpha: 1)
-            for band in 0 ..< staffBandCount {
-                for line in 0 ..< 5 {
-                    let y = CGFloat(30 + band * 100 + line * 10)
-                    context.beginPath()
-                    context.move(to: CGPoint(x: 25, y: y))
-                    context.addLine(to: CGPoint(x: 275, y: y))
-                    context.strokePath()
-                }
-            }
-        }
-
-        static func drawBitmap(_ bitmap: GrayBitmap, into context: CGContext) throws {
-            let bytes = Data(bitmap.pixels)
-            guard let provider = CGDataProvider(data: bytes as CFData),
-                  let image = CGImage(
-                      width: bitmap.width, height: bitmap.height,
-                      bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: bitmap.width,
-                      space: CGColorSpaceCreateDeviceGray(),
-                      bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
-                      provider: provider, decode: nil, shouldInterpolate: false,
-                      intent: .defaultIntent,
-                  )
-            else {
-                throw FixtureError.cannotBuildImage
-            }
-            context.interpolationQuality = .none
-            context.draw(image, in: CGRect(origin: .zero, size: pageSize))
-        }
-
-        enum FixtureError: Error {
-            case cannotBuildImage
-            case cannotBuildPDF
-            case detectorFailed(Int)
-        }
-
-        /// One in-memory PDF, one closure per page.
-        static func pdf(pages: [(CGContext) throws -> Void]) throws -> Data {
-            let data = NSMutableData()
-            var box = CGRect(origin: .zero, size: pageSize)
-            guard let consumer = CGDataConsumer(data: data),
-                  let context = CGContext(consumer: consumer, mediaBox: &box, nil)
-            else {
-                throw FixtureError.cannotBuildPDF
-            }
-            for page in pages {
-                context.beginPDFPage(nil)
-                try page(context)
-                context.endPDFPage()
-            }
-            context.closePDF()
-            return data as Data
-        }
-
-        /// Wraps a `GrayBitmap` as a one-page, image-only PDF — zero vector
-        /// content, which is what a scan looks like to the importer.
-        static func imageOnlyPDF(_ bitmap: GrayBitmap) throws -> Data {
-            try pdf(pages: [{ try drawBitmap(bitmap, into: $0) }])
-        }
-
-        static func vectorPDF() throws -> Data {
-            try pdf(pages: [{ drawVectorStaff(into: $0) }])
-        }
-
-        /// Page 0 vector, page 1 image-only.
-        static func mixedPDF() throws -> Data {
-            try pdf(pages: [
-                { drawVectorStaff(into: $0) },
-                { try drawBitmap(staffBitmap(), into: $0) },
-            ])
-        }
-
-        /// `PDFImporter`'s own internal `Staff`, not `SheetMusicCore.Staff`:
-        /// `ensembleStaffCount` only reads `count`, so the field values are
-        /// irrelevant and are left empty on purpose.
-        static func detectedStaves(_ count: Int) -> [SheetMusicPDF.Staff] {
-            (0 ..< count).map { _ in
-                SheetMusicPDF.Staff(
-                    pageIndex: 0, yLines: [], xRange: 0 ... 0, barlineCandidates: [],
-                )
-            }
-        }
-
-        /// Break flags are a property of what FOLLOWS a measure, not of how it
-        /// was read: the vector page's last measure necessarily gains a
-        /// line/page break once a second page exists behind it. Everything
-        /// else about the measure — its voices, repeats, markers, length — is
-        /// the reading, and that is what must not move.
-        static func ignoringBreaks(_ measures: [Measure]) -> [Measure] {
-            measures.map {
-                var m = $0
-                m.lineBreak = false
-                m.pageBreak = false
-                m.sectionBreak = false
-                return m
-            }
-        }
-
-        /// Records which pages the importer handed to a glyph detector.
-        final class Tripwire: OMRGlyphDetecting, @unchecked Sendable {
-            var pagesAsked: [Int] = []
-            func glyphs(
-                pageIndex: Int, analysis _: RasterPageAnalysis,
-                diagnostics _: (@Sendable (PDFImportDiagnostic) -> Void)?,
-            ) throws -> [ClassifiedGlyph] {
-                pagesAsked.append(pageIndex)
-                return []
-            }
-        }
-
-        /// Collects diagnostics from the `@Sendable` callback.
-        final class DiagnosticLog: @unchecked Sendable {
-            var messages: [String] = []
-        }
-
-        /// Stands in for every way one page's read can fail — a `CGContext`
-        /// the rasterizer cannot create, a model that throws mid-document.
-        struct FailingDetector: OMRGlyphDetecting {
-            func glyphs(
-                pageIndex: Int, analysis _: RasterPageAnalysis,
-                diagnostics _: (@Sendable (PDFImportDiagnostic) -> Void)?,
-            ) throws -> [ClassifiedGlyph] {
-                throw FixtureError.detectorFailed(pageIndex)
-            }
-        }
-
         // MARK: - Tests
 
         /// G3a: with a classifier set, an image-only PDF reaches `buildScore`.
@@ -403,21 +227,56 @@
             #expect(thrown?.contains("omrTileClassifier") == true)
         }
 
-        /// §7: `parseWithGeometry` and the pure-Swift reader take the same
-        /// options and do nothing with this one. A knob that silently does
-        /// nothing is this repository's own silent-drop smell, so those entry
-        /// points say so.
-        @Test func theGeometryEntryPointSaysItDoesNotRasterize() async throws {
+        /// `parseWithGeometry` reads an image-only page the way `parse` does —
+        /// a host that displays the source PDF (the one caller of this entry
+        /// point) is exactly the host holding a scan. The geometry side-car,
+        /// though, has no producer for a raster page: its rects would sit in
+        /// the analysis frame, not the displayed page's, and a cursor that is
+        /// silently a few points off is worse than none. So the page
+        /// contributes NO rects, and the importer says so.
+        @Test func theGeometryEntryPointReadsAnImageOnlyPageWithoutGeometry() async throws {
             let log = DiagnosticLog()
             var options = PDFImportOptions()
             options.omrTileClassifier = try await CoreMLTileClassifier()
+            options.omrRenderDPI = Self.renderDPI
             options.diagnostics = { log.messages.append($0.message) }
-            _ = try? PDFImporter.parseWithGeometry(
+            let result = try PDFImporter.parseWithGeometry(
                 pdfData: Self.imageOnlyPDF(Self.staffBitmap()), options: options,
             )
-            #expect(log.messages.contains { $0.contains("does not rasterize") })
+            #expect(!result.score.parts.isEmpty)
+            #expect(result.geometry.itemRects.isEmpty)
+            #expect(result.geometry.measureRects.isEmpty)
+            #expect(result.geometry.systemRects.isEmpty)
+            #expect(result.geometry.pageSizes.isEmpty)
+            #expect(log.messages.contains { $0.contains("no geometry") })
+            #expect(!log.messages.contains { $0.contains("does not rasterize") })
         }
 
+        /// The vector page of a mixed document keeps exactly the geometry it
+        /// has when parsed alone, and the raster page adds none — so the
+        /// exclusion is per page, not a document-wide switch that would take
+        /// the cursor off the typeset pages around one scan.
+        @Test func aMixedDocumentKeepsOnlyTheVectorPagesGeometry() async throws {
+            var options = PDFImportOptions()
+            options.omrTileClassifier = try await CoreMLTileClassifier()
+            options.omrRenderDPI = Self.renderDPI
+            let mixed = try PDFImporter.parseWithGeometry(pdfData: Self.mixedPDF(), options: options)
+            let alone = try PDFImporter.parseWithGeometry(
+                pdfData: Self.vectorPDF(), options: PDFImportOptions(),
+            )
+            #expect(!alone.geometry.measureRects.isEmpty, "the vector page must carry geometry, or this passes blind")
+            let pages = Set(mixed.geometry.systemRects.map(\.pageIndex))
+                .union(mixed.geometry.measureRects.values.map(\.pageIndex))
+                .union(mixed.geometry.itemRects.values.map(\.pageIndex))
+            #expect(pages == [0])
+            #expect(mixed.geometry.systemRects == alone.geometry.systemRects)
+            #expect(mixed.geometry.measureRects == alone.geometry.measureRects)
+            #expect(mixed.geometry.pageSizes == alone.geometry.pageSizes)
+        }
+
+        /// The pure-Swift reader takes the same options and does nothing with
+        /// this one. A knob that silently does nothing is this repository's
+        /// own silent-drop smell, so that entry point says so.
         @Test func theSwiftReaderEntryPointSaysItDoesNotRasterize() async throws {
             let log = DiagnosticLog()
             var options = PDFImportOptions()

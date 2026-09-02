@@ -1,8 +1,12 @@
 import Foundation
 
 /// Non-fatal recognition issues surfaced from `PDFImporter`.
-public struct PDFImportDiagnostic {
-    public enum Severity { case info, warning }
+///
+/// `Sendable` because the callback that delivers it already is: a host that
+/// parses off the main actor collects these on the parse's thread and reads
+/// them back on its own.
+public struct PDFImportDiagnostic: Sendable {
+    public enum Severity: Sendable { case info, warning }
     public let severity: Severity
     public let location: String // e.g. "page 3, system 2, measure 17"
     public let message: String
@@ -116,9 +120,11 @@ public struct PDFImportOptions {
     /// detector's seam mentions importer internals; the importer builds
     /// `OMRGlyphDetector(classifier:)` from this.
     ///
-    /// Only `PDFImporter.parse(pdfData:)` / `parse(pdfURL:)` act on it.
-    /// `parseWithGeometry` and `parseUsingSwiftReader` emit an `info`
-    /// diagnostic saying so rather than ignoring it silently.
+    /// The PDFKit entry points act on it: `PDFImporter.parse(pdfData:)` /
+    /// `parse(pdfURL:)` and their `parseWithGeometry` twins (whose side-car
+    /// carries no rects for the pages read this way). `parseUsingSwiftReader`
+    /// and the Android entry emit an `info` diagnostic saying they do not,
+    /// rather than ignoring it silently.
     public var omrTileClassifier: (any OMRTileClassifier)?
 
     /// Resolution at which a page with no vector content is rasterized. The
