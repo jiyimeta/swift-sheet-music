@@ -42,6 +42,7 @@ SheetMusicUI          SwiftUI notation viewer (Apple-only)
 SheetMusicAudioCore   Foundation-only audio value types (Android-compatible)
 SheetMusicAudioApple  AVAudioEngine playback + audio-file export (Apple-only)
 SheetMusicPDF         PDF import (pure Swift, cross-platform) + PDF export (Apple-only)
+SheetMusicOMRModel    bundled Core ML detector that lets PDF import read scanned pages (Apple-only, opt-in)
 ```
 
 `SheetMusic` re-exports Core + MSCX + MusicXML + MIDI with

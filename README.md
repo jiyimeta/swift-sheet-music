@@ -42,7 +42,8 @@ Swift Android SDK; the rest are Apple-only.
 | `SheetMusicAudio` |   | Apple-only audio umbrella. Re-exports `SheetMusicAudioCore` + `SheetMusicAudioApple`. |
 | `SheetMusicAudioApple` |   | AVAudioEngine-backed `PlaybackEngine` + audio-file export. Two multi-timbral AUMIDISynth units (melodic + percussion) behind an injectable `SynthBackend` seam, `SoundfontResolver` protocol, single-note preview, timeline-driven playback with chord-by-chord cursor via `PlaybackEngine.currentCursor`. |
 | `SheetMusicAudioSwiftySynth` |   | Pure-Swift SoundFont2 `SynthBackend` (via [SwiftySynth](https://github.com/jiyimeta/swiftysynth)) — the default stealing-free synth for `PlaybackEngine`. |
-| `SheetMusicPDF` | ✓ | PDF import via a pure-Swift reader (all platforms, including Android) + PDF export (Apple-only, iOS 17+ / macOS 14+). Export reuses `SheetMusicUI`'s layout + drawing pipeline through an `ImageRenderer` → `CGPDFContext` bridge, so glyphs stay vector. |
+| `SheetMusicPDF` | ✓ | PDF import via a pure-Swift reader (all platforms, including Android) + PDF export (Apple-only, iOS 17+ / macOS 14+). Import reads the PDF's vector content; add `SheetMusicOMRModel` for scanned pages. Export reuses `SheetMusicUI`'s layout + drawing pipeline through an `ImageRenderer` → `CGPDFContext` bridge, so glyphs stay vector. |
+| `SheetMusicOMRModel` |   | The bundled optical music recognition model (~1.1 MB, compiled Core ML) that lets `SheetMusicPDF` read **scanned** (image-only) PDFs. Opt-in: `SheetMusicPDF` never depends on it, so a consumer that reads only typeset PDFs carries none of it. See [Scanned PDFs](#scanned-pdfs-omr). |
 
 Android playback is delivered out-of-band as the
 `io.github.jiyimeta:sheet-music-audio-android` Kotlin Gradle module
@@ -133,7 +134,7 @@ repository URL. Requires Swift 6.2+ / Xcode 16+.
 | macOS | 14 | full |
 | tvOS | 17 | model, formats, MIDI, layout, SwiftUI, audio (no PDF) |
 | watchOS | 10 | model, formats, MIDI, layout (UI / audio / PDF are iOS / macOS / tvOS only) |
-| Android | API 28 | Foundation-only subset (Core / MSCX / MusicXML / MIDI / Loader / Layout / AudioCore / EditWire / PDF import) via the Swift Android SDK + Kotlin AAR — see [Android](#android) |
+| Android | API 28 | Foundation-only subset (Core / MSCX / MusicXML / MIDI / Loader / Layout / AudioCore / EditWire / PDF import of typeset PDFs; scanned-PDF reading is Apple-only) via the Swift Android SDK + Kotlin AAR — see [Android](#android) |
 
 ## Example
 
@@ -248,6 +249,58 @@ try pdf.write(to: someOutputPdfURL)
 The same drawing pipeline that paints `ScoreView` on screen paints
 the PDF — so the printed pages match the on-screen layout exactly,
 glyphs are vector, and a single set of options covers both surfaces.
+
+### Scanned PDFs (OMR)
+
+`PDFImporter` reads the *vector* content of a PDF — the glyphs and
+paths a notation program wrote. A scanned or photographed score has
+none: every page is one image. To read those, link `SheetMusicOMRModel`
+(iOS 17+ / macOS 14+) and hand its classifier to the importer:
+
+```swift
+import SheetMusicOMRModel
+import SheetMusicPDF
+
+var options = PDFImportOptions()
+options.omrTileClassifier = try await CoreMLTileClassifier()
+let score = try PDFImporter.parse(pdfURL: url, options: options)
+```
+
+The decision is made per page: a page the vector walker finds music on
+is read exactly as before, and only a page with no vector music is
+rasterized (300 dpi by default — `omrRenderDPI`) and run through the
+detector. With `omrTileClassifier` left `nil`, the default, nothing
+changes: no rasterization, no model load, no new code path.
+`parseWithGeometry` takes the same fallback; its geometry side-car
+carries no rects for the pages read this way, and says so in an `info`
+diagnostic.
+
+What comes through from a scanned page: notes, rests, chords, beams,
+clefs, key and time signatures, accidentals, ties, tuplets, barlines
+and the system structure. What does not, yet:
+
+- **Text.** There is no OCR — no title, lyrics, tempo text or
+  instrument names from a scanned page.
+- **Android.** The detector's Core ML half is Apple-only. The portable
+  half (tiling, decoding, and assembling detections with the
+  classical-CV staff lines, stems and beams) already ships in
+  `SheetMusicPDF` behind the `OMRTileClassifier` protocol; an ONNX
+  implementation of that one protocol is what Android needs.
+- **Real scans, measured.** Every accuracy number comes from synthetic
+  scans — MuseScore renders degraded with noise, blur, skew and uneven
+  illumination. Over 657 scores rendered, rasterized and read back,
+  the median score keeps 93.6 % of its pitches and 91.3 % of its
+  durations, against 99.2 % / 99.5 % for the same PDFs read as vectors.
+  Octave clefs (8va / 8vb) are the detector's known weak spot.
+
+Diagnostics (`PDFImportOptions.diagnostics`) name every page that was
+rasterized, every page that could not be read, and — on the entry
+points that never rasterize, `parseUsingSwiftReader` and the Android
+entry — that the classifier was ignored.
+
+The model is trained by the pipeline under `Training/` on
+procedurally generated and public-domain scores only; see
+`Training/README.md` for regenerating it.
 
 ## Android
 
@@ -424,6 +477,10 @@ design rationale lives in [ARCHITECTURE.md](ARCHITECTURE.md).
 ## Licensing
 
 - **Source code (`Sources/`)**: MIT — see [LICENSE](LICENSE).
+- **OMR model (`Sources/SheetMusicOMRModel/Resources/`) and its training
+  pipeline (`Training/`)**: MIT. The model is trained on synthetic renders
+  of procedurally generated and public-domain scores; no third-party
+  score data is bundled or was used.
 - **Test fixtures (`Tests/SheetMusicTests/Resources/`)**: GPL-3.0, copied
   from the upstream MuseScore repository — except the hand-authored
   fixtures listed as MIT in that directory's own notice, which is
