@@ -8,12 +8,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * [EditSessionReplayTest]'s twin for the edit-command parity project's structural chain (`ReplayChain.parity` on
- * the host): the ten `EditReplayScript.parity` steps — layout breaks, barlines, repeat barlines, measure repeats
- * and a move-to-voice, i.e. `EditIntent` cases 30…34, none of which the standard chain encodes — relayed from
- * Kotlin across the JNI boundary into a second, separately-linked image of the engine. Equal fingerprints at every
- * step is the claim the whole Android editing design rests on: relaying an intent's bytes keeps two copies of a
- * score identical.
+ * [EditSessionReplayTest]'s twin for the edit-command parity project's chain (`ReplayChain.parity` on the host):
+ * the nineteen `EditReplayScript.parity` steps — layout breaks, barlines, repeat barlines, measure repeats and a
+ * move-to-voice (`EditIntent` cases 30…34) in steps 1…10, then range transposes, an added interval, a range
+ * delete, range accidentals, a range duration and a respell (cases 35…40) in steps 11…19, none of which the
+ * standard chain encodes — relayed from Kotlin across the JNI boundary into a second, separately-linked image of
+ * the engine. Equal fingerprints at every step is the claim the whole Android editing design rests on: relaying an
+ * intent's bytes keeps two copies of a score identical.
  *
  * A separate class rather than a parameterized one because the two chains share nothing but this procedure, and a
  * failure that names the class says immediately which chain drifted.
@@ -26,16 +27,16 @@ import org.junit.runner.RunWith
  * result.
  *
  * Whether a step is an edit or an undo is derived from asset presence: index `i` has a `step-i.bin` when the host
- * applied an intent there, and has none when that step was an undo — index 6 in this chain, the undo of the
- * move-to-voice that step 7 then re-applies. That is a real, if implicit, coupling between the two sides; it is
- * not part of the wire format itself, just this harness's own convention for telling the two step kinds apart from
- * a directory listing.
+ * applied an intent there, and has none when that step was an undo — indices 6 and 17 in this chain, the undo of
+ * the move-to-voice that step 7 then re-applies and the undo of the range delete that step 18 then re-applies.
+ * That is a real, if implicit, coupling between the two sides; it is not part of the wire format itself, just this
+ * harness's own convention for telling the two step kinds apart from a directory listing.
  */
 @RunWith(AndroidJUnit4::class)
 class EditSessionReplayParityTest {
     companion object {
         /** Must track `EditReplayScript.parity(staff:).count` on the host exactly — see the assertion below. */
-        private const val EXPECTED_STEP_COUNT = 10
+        private const val EXPECTED_STEP_COUNT = 19
 
         private const val ASSET_DIR = "editReplay-parity"
     }
