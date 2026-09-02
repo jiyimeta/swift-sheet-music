@@ -190,3 +190,36 @@ extension Note {
         return current
     }
 }
+
+/// How `RespellRange` — and `TransposeRange` with `respellInKey` — picks among a pitch's enharmonic spellings.
+/// Raw values are the wire bytes (`RespellRangeIntentWire.mode`).
+public enum RespellMode: UInt8, Sendable, CaseIterable {
+    /// One accidental at most; flats on the flat side of the circle, sharps on the sharp side, relative to the key.
+    case simplest = 0
+    case preferSharps = 1
+    case preferFlats = 2
+
+    /// The bottom of the 12-wide line-of-fifths window this mode spells inside, at key C.
+    fileprivate var windowBase: Int {
+        switch self {
+        case .simplest: 11
+        case .preferSharps: 13
+        case .preferFlats: 8
+        }
+    }
+}
+
+extension PitchSpelling {
+    /// The tpc of `pitch`'s pitch class that lies in the 12-wide line-of-fifths window
+    /// `[keySig + base, keySig + base + 12)`, `base` per `mode`. Every pitch class has exactly one tpc in any
+    /// twelve consecutive fifths, so the answer is unique; the window's placement is what turns "the same pitch"
+    /// into E♭ in one mode and D♯ in another, and slides with the key so D major spells 63 as D♯.
+    ///
+    /// The residue: moving one tpc step (a fifth) moves the pitch class by 7, so pitch class `p` sits at
+    /// `7·p + 2 (mod 12)` fifths above the window's origin when that origin is C (tpc 14 ≡ 2).
+    public static func tpc(forPitch pitch: Int, keySig: Int, mode: RespellMode) -> Int {
+        let low = keySig + mode.windowBase
+        let residue = (((pitch * 7 + 2 - low) % 12) + 12) % 12
+        return low + residue
+    }
+}
