@@ -127,9 +127,8 @@ extension ScoreEditSession {
             // through planners. Factored into `directNoteEditCommand` to keep this switch under SwiftLint's line
             // budget, not because they belong to a different subsystem.
             return try directNoteEditCommand(for: intent)
-        // TODO(edit-parity task 17): dispatch to `structuralParityCommand(for:in:)`.
         case .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice:
-            return nil
+            return structuralParityCommand(for: intent, in: score)
         }
     }
 
