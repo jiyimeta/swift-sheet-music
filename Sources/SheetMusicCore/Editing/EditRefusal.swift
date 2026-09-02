@@ -98,6 +98,9 @@ public struct EditRefusal: Sendable, Hashable {
         /// filled voice has. Refused rather than overwritten, since the span's contents would otherwise be
         /// destroyed to make room, and rather than written short, which would drop the moved chord entirely.
         case destinationNotFree(VoiceElementID)
+        /// `TransposeRange` was asked for more than two octaves in one step. MuseScore's transpose dialog stops
+        /// there too; anything wider is two edits, and a relayed payload is data this must bound.
+        case invalidTransposition(semitones: Int)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -166,6 +169,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.voiceMismatch"
         case .destinationNotFree:
             "edit.destinationNotFree"
+        case .invalidTransposition:
+            "edit.invalidTransposition"
         case .unexpected:
             "edit.unexpected"
         }
@@ -236,6 +241,8 @@ public struct EditRefusal: Sendable, Hashable {
             "cannot move from \(from) to \(to): the destination must be another voice of the same bar"
         case let .destinationNotFree(location):
             "element at \(location) is in the way of the moved chord"
+        case let .invalidTransposition(semitones):
+            "a transposition spans at most two octaves (got \(semitones))"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }

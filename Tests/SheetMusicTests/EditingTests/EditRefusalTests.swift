@@ -84,6 +84,7 @@ struct EditRefusalTests {
             .measureRepeatSpanNotEmpty(measureIndex: 1),
             .voiceMismatch(from: VoiceRef(voiceID), to: VoiceRef(staff: staff, measureIndex: 1, voiceIndex: 0)),
             .destinationNotFree(voiceID),
+            .invalidTransposition(semitones: 25),
             .unexpected(description: "boom"),
         ]
     }
