@@ -1238,7 +1238,45 @@ full-size system-start clef among ordinary staves is the one that works.
   SUPPLEMENTARY root trained next to v2: the `cov_*` ids would otherwise
   be exported twice and hash into the same split twice.
 
-Numbers land below as they are measured; the memory file
+**Baseline — the real-render clef table** (`run3-mixed-last` as bundled,
+commit `43693fa9`, first 200 corpus files sorted, 23757 vector clefs, τ=0.30,
+neighbourhood 12pt; `~/omr-models/r2/clefcand-200-run3.log`):
+
+| vector clef | n | exact | sibling (→) | other | none |
+|---|---|---|---|---|---|
+| `clefG` | 9162 | 8904 | 54 (G8vb) | 164 | 40 |
+| `clefG8vb` | 7556 | 7188 | 201 (G 192, G15mb 9) | 157 | 10 |
+| `clefF` | 3687 | 3502 | 0 | 168 | 17 |
+| `clefPercussion` | 2855 | 2823 | 0 | 1 | 31 |
+| **`clefF8va`** | **475** | **236** | **103 (F 70, F15ma 33)** | 13 | **123** |
+| `clefF8vb` | 21 | 14 | 5 (F) | 0 | 2 |
+
+`clefF8va` is the defect, and it is population-wide: 30 of the 200 files
+carry `none`/`sibling` outcomes on it (ダイナマイト none=23, 餃子_full
+none=13/15, DESIRE2 none=12, POP none=14, 君は0から1になれ sibling=22 …).
+The two octave clefs' score distributions say what "learned" looks like:
+
+| best score in the neighbourhood | `clefF8va` exact / plain `clefF` | `clefG8vb` exact / plain `clefG` |
+|---|---|---|
+| ≥ 0.70 | **1** / 0 | **5403** / 140 |
+| 0.50–0.70 | 103 / 14 | 1651 / 235 |
+| 0.30–0.50 | 177 / 84 | 388 / 331 |
+| < 0.30 | 194 / 377 | 114 / 6850 |
+| mean | 0.336 / 0.197 | 0.762 / 0.099 |
+
+A learned octave clef (G8vb, 480 renders of realistic context in the prep
+root) peaks above 0.7 with its plain sibling near zero; F8va (32 coverage
+renders, no realistic context) never reaches 0.7 and its sibling sits at
+0.1–0.5 — the split. That is the histogram run5 has to move.
+
+**Decode alone, priced from the same dump (Task 3, bounded):** a
+family-sum rule (family total > τ, argmax within the family) lifts the
+all-class `exact` 22667 → 22820 and `none` 223 → 106, but on `clefF8va` it
+converts `none` mostly into `sibling` (103 → 147; exact 236 → 284). It
+rescues absence, not the split — the split is a training question. Not
+implemented; the table is the answer.
+
+More numbers land below as they are measured; the memory file
 `project_omr_training_round2` tracks the round between sessions.
 
 ### RESOLVED: P0-G1 failed at scale — `buildScore` was not order-invariant
