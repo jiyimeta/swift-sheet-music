@@ -127,24 +127,33 @@ struct MoveToVoiceTests {
         #expect(score == before, "a refused move leaves the score untouched — the chord is not dropped")
     }
 
-    @Test("a tuplet before the moved chord is refused rather than moved to a mistimed slot")
-    func refusesTupletBeforeTheSlot() throws {
+    @Test("a chord after a tuplet moves to its sounding tick, not one computed from written lengths")
+    func movesAfterATupletAtTheSoundingTick() throws {
         var score = EditingFixtures.parityFixture()
+        // A half-note triplet (three members of 1/6 = 320 ticks) fills beats 1-2; C4 sits at tick 960.
+        let member = VoiceElement.rest(duration: .fraction(Fraction(numerator: 1, denominator: 6)))
         score.parts[0].staves[0].measures[0].voices[0] = Voice(
             elements: [
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-                Self.tripletMember, Self.tripletMember, Self.tripletMember,
+                member, member, member,
                 .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+                .rest(duration: .quarter),
             ],
             tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)],
         )
         let before = score
 
-        let mistimed = #expect(throws: SheetMusicError.self) {
-            _ = try MoveToVoice(at: Self.slot(0, 4), to: Self.voiceOne(0)).apply(to: &score)
-        }
+        let inverse = try MoveToVoice(at: Self.slot(0, 4), to: Self.voiceOne(0)).apply(to: &score)
 
-        #expect(Self.reason(of: mistimed) == .tupletPrecedesSlot(at: Self.slot(0, 4)))
+        // The measure rest was cut at 960 (`[h] + [h]`) and again at 1440 (`[h] + [q, q]`); the chord took the
+        // quarter at 960.
+        #expect(score.parts[0].staves[0].measures[0].voices[1].elements == [
+            .rest(duration: .half),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .rest(duration: .quarter),
+        ])
+        #expect(score.parts[0].staves[0].measures[0].voices[0].elements[4] == .rest(duration: .quarter))
+        _ = try inverse.apply(to: &score)
         #expect(score == before)
     }
 

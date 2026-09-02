@@ -84,7 +84,6 @@ struct EditRefusalTests {
             .measureRepeatSpanNotEmpty(measureIndex: 1),
             .voiceMismatch(from: VoiceRef(voiceID), to: VoiceRef(staff: staff, measureIndex: 1, voiceIndex: 0)),
             .destinationNotFree(voiceID),
-            .tupletPrecedesSlot(at: voiceID),
             .unexpected(description: "boom"),
         ]
     }

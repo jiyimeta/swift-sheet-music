@@ -98,11 +98,6 @@ public struct EditRefusal: Sendable, Hashable {
         /// filled voice has. Refused rather than overwritten, since the span's contents would otherwise be
         /// destroyed to make room, and rather than written short, which would drop the moved chord entirely.
         case destinationNotFree(VoiceElementID)
-        /// A tuplet sits entirely before the slot an edit was asked to work at, so the tick the slot falls on
-        /// cannot be read off the voice's written durations — a tuplet's members sound at the tuplet's ratio,
-        /// not at their written length. Commands that walk ticks by summing written durations refuse rather
-        /// than act at a tick they computed wrong; a ratio-aware walk is separate work.
-        case tupletPrecedesSlot(at: VoiceElementID)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -171,8 +166,6 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.voiceMismatch"
         case .destinationNotFree:
             "edit.destinationNotFree"
-        case .tupletPrecedesSlot:
-            "edit.tupletPrecedesSlot"
         case .unexpected:
             "edit.unexpected"
         }
@@ -243,8 +236,6 @@ public struct EditRefusal: Sendable, Hashable {
             "cannot move from \(from) to \(to): the destination must be another voice of the same bar"
         case let .destinationNotFree(location):
             "element at \(location) is in the way of the moved chord"
-        case let .tupletPrecedesSlot(location):
-            "a tuplet before \(location) makes its tick ambiguous"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
