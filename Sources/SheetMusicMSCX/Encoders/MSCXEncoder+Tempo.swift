@@ -39,9 +39,13 @@ extension Tempo {
 
     /// The engraved marking, in the `<sym>` markup MuseScore's own palette writes (`tempotext.cpp:176-197`):
     /// the beat glyph, then for a dotted beat one `space` and one `metAugmentationDot` per dot, then the number.
-    /// The number rides in a `<b>` because `XMLTreeSerializer` writes a node's text before its children and
+    /// The number rides in a `<b>`, which is NOT what MuseScore 4's writer emits: MS4 writes the number as plain
+    /// character data trailing the `<sym>` (`<sym>metNoteQuarterUp</sym> = 135`), and `XMLTreeSerializer` cannot
+    /// represent that — it writes a node's text BEFORE its children, so a trailing run has to be an element.
+    /// `<b>` is the closest representable shape: it has MS3-era precedent in MuseScore's own writer
+    /// (`Tests/SheetMusicTests/Resources/testVoltaTemp.mscx:189`, `<b><font face="FreeSerif"/> = 180</b>`),
     /// MuseScore's reader keeps inline elements in order while dropping the whitespace between them
-    /// (`xmlreader.cpp:212-237`) — and tempo text is bold anyway.
+    /// (`xmlreader.cpp:212-237`) so it reads back as the same marking, and tempo text is bold anyway.
     ///
     /// Only what `Tempo.decode` can read back is printed: the six bases `matchBeat` snaps to, with 0…2 dots. Any
     /// other beat prints as a plain quarter at `bps × 60`, which is exactly what decoding it would fall back

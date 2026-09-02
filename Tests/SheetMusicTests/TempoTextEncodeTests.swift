@@ -74,8 +74,15 @@ struct TempoTextEncodeTests {
         #expect(first == second)
     }
 
-    @Test("the MuseScore-4 tempo fixtures are fixed points too", arguments: [
+    /// Every `Tests/SheetMusicTests/Resources/*.mscx` that carries a `<Tempo>` (the set `grep -l "<Tempo>"`
+    /// returns), so pass-2 stability is pinned on every local tempo shape: the MS4 `<sym>` marking with and
+    /// without an inline `<font>`, the MS3-era double-`<b>` wrapper (`repeat52`, `testArpeggio`, `testVoltaTemp`),
+    /// and a `<Tempo>` with a `<text>` but no `<followText>` (`guitarbend_release_twice`), whose beat the decoder
+    /// cannot read back and which therefore re-emerges as the quarter its `<tempo>` means.
+    @Test("the tempo fixtures are fixed points too", arguments: [
         "slur_ms4_glissando_legato", "grace_after", "guitarbend_tied", "guitarbend_prebend",
+        "guitarbend_simple", "guitarbend_slightbend", "guitarbend_gracebend", "guitarbend_release_twice",
+        "repeat52", "repeat53", "testArpeggio", "testVoltaTemp",
     ])
     func fixturesAreFixedPoints(name: String) throws {
         let first = try MSCXEncoder.encode(MSCXParser.parse(MSCXFixtureLoader.mscxData(name)))
