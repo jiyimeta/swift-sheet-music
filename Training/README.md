@@ -1296,6 +1296,77 @@ is 46/46 at every dpi.
 pitchP50 0.9244 / mean 0.8306 (199 scored, 1 failed). Paired A/B against
 another model: `Training/probes/corpus_ab.py <log-A> <log-B>`.
 
+**run5-clefctx — the data lever, measured** (v2 clean + frozen roots +
+`v3-clefctx` clean + frozen — 80 `clx_*` sources, 8 faces × 2, uniform draw
+over the nine non-plain clefs — photometric augmentation, seed 20260811,
+8 epochs, `--samples-per-epoch 110158`, `checkpoint_last.pt`; exported to
+`~/omr-models/run5-clefctx-last`). The real-render clef table, clef
+candidates only (an accidental within 12pt of a clef is not what `readClef`
+chooses between — the first cut of this table counted it as "other"), same
+200 files, τ=0.30, one binary (`2e5500c3`, with one-clef-per-position):
+
+| vector clef | n | run3 exact / sibling / none | **run5** exact / sibling / none |
+|---|---|---|---|
+| `clefG` | 9162 | 9066 / 56 / 40 | 9139 / 21 / 2 |
+| `clefG8vb` | 7556 | 7337 / 205 (→G 196) / 14 | 7189 / **348 (→G 193, →G15mb 155)** / 19 |
+| `clefF` | 3687 | 3670 / 0 / 17 | 3687 / 0 / 0 |
+| `clefPercussion` | 2855 | 2824 / 0 / 31 | 2831 / 0 / 24 |
+| **`clefF8va`** | 475 | 242 / 107 / 126 | **475 / 0 / 0** |
+| `clefF8vb` | 21 | 14 / 5 / 2 | 21 / 0 / 0 |
+| ALL | 23757 | 23153 / 374 / 230 | **23342 / 370 / 45** |
+
+`clefF8va`'s score histogram moved to the learned shape: 359 of 475 above
+0.70 (was 1), none below 0.30 (was 194), plain `clefF` below 0.20 on every
+one of them, mean 0.750 / 0.025 (was 0.336 / 0.197). **The context
+hypothesis counted** — the first of this program's hypotheses to survive
+its counterfactual (0 for 8 before it). ダイナマイト reads at pitch 98 (was 78).
+
+**And it taught one confusion the corpus did not have:** 155 real
+`clefG8vb` now read as `clefG15mb`, a class real scores almost never
+carry, drawn as often as the tenor clef by the uniform prior. The same
+sibling split, one octave further out. `gen_clefctx` now draws plain 50% /
+common octave + C 40% / 15ma-15mb 10% (`v3b-clefctx`), and run6 trains on
+it.
+
+**Attribution — augmentation alone does not do this.** `run4-augment-last`
+(clean root + photometric, no clef context) on the same binary: `clefF8va`
+213 / 146 / 116, `clefG8vb` 6982 / 392 / 182, ALL none 733; paired pitch
+against run3 better 40 / worse 76, net −32pt. The data did it.
+
+**Score level, same binary, paired per file** (`corpus_ab.py`, 199 files):
+
+| | run3 | run5 |
+|---|---|---|
+| raster pitchP50 / mean | 0.9249 / 0.8332 | 0.9255 / 0.8375 |
+| pitch better / worse / same | | 53 / 68 / 78, +341pt / −247pt, **net +94pt** |
+| dur better / worse / same | | 42 / 34 / 123, net +84pt |
+
+Winners are the octave-clef documents (Boogie_oogie_oogie +53, DANCE DANCE
+DANCE +26, ダイナマイト +20, 手紙 +19 …). Losers split two ways: the
+`G8vb → G15mb` documents (I_Want_You_Back −22, Automatic 6 −8, 君は0から1に
+なれ −8), and **one false clef each** — `[mscz-clefextra]`, the probe that
+lists raster clefs with no vector clef within 12pt — a `clefF` at 0.36–0.39
+inside a measure on Start over! (−21) and 366日 (−15), which changes the
+clef in force for every note after it. Extras above τ over the 200 files:
+run3 75 (52 percussion, 22 F, 1 G; 51 files), run5 88 (33 F, 18
+percussion, 10 C, 8 F8vb, 5 F15mb, 3 G8vb, 3 G15mb, 3 F15ma, 2 G, 2 F8va,
+1 G15ma; 56 files), run4 21. Most are harmless (they sit where `readClef`
+never looks); the two that hurt sat in the courtesy-clef position.
+
+**Held-out seam, same binary** (val 99 pages): run5 clean recall 0.9976 /
+precision 0.9937 / origin 0.0324, degraded 0.9940 / 0.9867 / 0.0376; run3
+clean 0.9974 / 0.9961 / 0.0331, degraded 0.9922 / 0.9885 / 0.0385. Recall
+and origin up, precision down 0.2pt — the octave-clef fp on synthetic
+pages (`clefG15mb` fp 103 clean) is the sibling-at-the-same-cell case the
+one-clef-per-position pass now resolves for the importer.
+
+**Also landed this round:** `OMRGlyphDetector` hands the importer one clef
+per position (the highest-scoring), because `readClef` takes the first
+clef glyph in a measure and has no score to prefer a sibling by; and the
+`.mscz` harness now honors `OMR_MODEL_ROOT` and prints `[mscz] model=…
+checkpoint=…` — its first run5 table was byte-identical to run3's because
+it had silently measured the bundled model.
+
 More numbers land below as they are measured; the memory file
 `project_omr_training_round2` tracks the round between sessions.
 
