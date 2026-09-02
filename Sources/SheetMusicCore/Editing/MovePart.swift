@@ -44,12 +44,17 @@ public struct MovePart: EditCommand {
     /// `[measureIndex][elementIndex]`. Captured for symmetry with `restoredBrackets`; the re-stamp alone would get
     /// there, and writing the pre-image over it is what makes that a guarantee rather than an argument.
     let restoredOriginalStaves: [[StaffAddress?]]?
+    /// Also inverse-only: the pre-image columns of the old and new canonical staves, captured in the PRE-forward-
+    /// move address space, keyed by that address. `nil` unless the move actually re-anchors the canonical staff
+    /// (`fromIndex == 0 || toIndex == 0`).
+    let restoredCanonicalFlags: [StaffAddress: [Measure.Flags]]?
 
     public init(from fromIndex: Int, to toIndex: Int) {
         self.fromIndex = fromIndex
         self.toIndex = toIndex
         restoredBrackets = nil
         restoredOriginalStaves = nil
+        restoredCanonicalFlags = nil
     }
 
     init(
@@ -57,11 +62,13 @@ public struct MovePart: EditCommand {
         to toIndex: Int,
         brackets: [[[BracketItem]]],
         originalStaves: [[StaffAddress?]],
+        canonicalFlags: [StaffAddress: [Measure.Flags]]? = nil,
     ) {
         self.fromIndex = fromIndex
         self.toIndex = toIndex
         restoredBrackets = brackets
         restoredOriginalStaves = originalStaves
+        restoredCanonicalFlags = canonicalFlags
     }
 
     /// Where the move lands, not where it started — a host scrolling to the affected slot wants the part's new
@@ -84,13 +91,43 @@ public struct MovePart: EditCommand {
         // Read off the PRE-move parts, so the entries name where each bracket lands in the permuted order.
         let rebased = movedBrackets(in: score)
 
+        let canonicalChanges = fromIndex == 0 || toIndex == 0
+        // The staff that will be canonical after the move, addressed in the PRE-move parts.
+        let incoming = fromIndex == 0
+            ? StaffAddress(partIndex: 1, staffIndexInPart: 0)
+            : StaffAddress(partIndex: fromIndex, staffIndexInPart: 0)
+        let canonicalFlags: [StaffAddress: [Measure.Flags]]? = canonicalChanges
+            ? [
+                Score.canonicalStaff: MeasureFlagsHoist.column(of: Score.canonicalStaff, in: score),
+                incoming: MeasureFlagsHoist.column(of: incoming, in: score),
+            ]
+            : nil
+        let outgoingFlags = canonicalChanges ? MeasureFlagsHoist.column(of: Score.canonicalStaff, in: score) : nil
+
         let part = score.parts.remove(at: fromIndex)
         score.parts.insert(part, at: toIndex)
         restampSystemElements(in: &score)
         Self.writeBack(rebased, to: &score)
         restore(&score)
 
-        return MovePart(from: toIndex, to: fromIndex, brackets: brackets, originalStaves: originalStaves)
+        if let outgoingFlags {
+            // The old canonical staff is now at `permuted(0)`; the new one is (0, 0).
+            MeasureFlagsHoist.write(
+                outgoingFlags.map { _ in .none },
+                to: StaffAddress(partIndex: permuted(0), staffIndexInPart: 0),
+                in: &score,
+            )
+            MeasureFlagsHoist.write(outgoingFlags, to: Score.canonicalStaff, in: &score)
+        }
+        restoreCanonicalFlags(&score)
+
+        return MovePart(
+            from: toIndex,
+            to: fromIndex,
+            brackets: brackets,
+            originalStaves: originalStaves,
+            canonicalFlags: canonicalFlags,
+        )
     }
 
     /// Where each part index lands after the move. `fromIndex` goes to `toIndex`; everything strictly between them
@@ -187,6 +224,15 @@ public struct MovePart: EditCommand {
                 score.systemMeasures[measureIndex].elements[elementIndex].originalStaff =
                     restoredOriginalStaves[measureIndex][elementIndex]
             }
+        }
+    }
+
+    /// Inverse path only: the two pre-image columns were captured in the PRE-forward-move address space, which is
+    /// exactly the order this inverse has just restored, so they are written back at those same addresses.
+    private func restoreCanonicalFlags(_ score: inout Score) {
+        guard let restoredCanonicalFlags else { return }
+        for (address, column) in restoredCanonicalFlags {
+            MeasureFlagsHoist.write(column, to: address, in: &score)
         }
     }
 }
