@@ -101,6 +101,9 @@ public struct EditRefusal: Sendable, Hashable {
         /// `TransposeRange` was asked for more than two octaves in one step. MuseScore's transpose dialog stops
         /// there too; anything wider is two edits, and a relayed payload is data this must bound.
         case invalidTransposition(semitones: Int)
+        /// `AddIntervalToSelection` was asked for an interval MuseScore's Alt+1…9 does not name: `|steps|` must be
+        /// 1 (unison) … 9 (ninth).
+        case invalidInterval(steps: Int)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -171,6 +174,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.destinationNotFree"
         case .invalidTransposition:
             "edit.invalidTransposition"
+        case .invalidInterval:
+            "edit.invalidInterval"
         case .unexpected:
             "edit.unexpected"
         }
@@ -243,6 +248,8 @@ public struct EditRefusal: Sendable, Hashable {
             "element at \(location) is in the way of the moved chord"
         case let .invalidTransposition(semitones):
             "a transposition spans at most two octaves (got \(semitones))"
+        case let .invalidInterval(steps):
+            "an interval is ±1 (unison) … ±9 (ninth) (got \(steps))"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
