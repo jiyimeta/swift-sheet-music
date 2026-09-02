@@ -23,6 +23,7 @@ public struct EditRefusal: Sendable, Hashable {
         case chordOrRest
         case timed
         case tuplet
+        case clef
     }
 
     public enum Reason: Sendable, Hashable {
@@ -269,6 +270,8 @@ extension EditRefusal.ExpectedKind {
             "a timed element"
         case .tuplet:
             "a tuplet"
+        case .clef:
+            "a clef"
         }
     }
 }
