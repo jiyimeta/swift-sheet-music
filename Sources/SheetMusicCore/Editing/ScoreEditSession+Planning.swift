@@ -129,6 +129,9 @@ extension ScoreEditSession {
             return try directNoteEditCommand(for: intent)
         case .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice:
             return structuralParityCommand(for: intent, in: score)
+        case .transposeRange, .addIntervalToSelection, .deleteRange, .setAccidentalsInRange, .setDurationInRange,
+             .respellRange:
+            return rangeCommand(for: intent, in: score)
         }
     }
 
