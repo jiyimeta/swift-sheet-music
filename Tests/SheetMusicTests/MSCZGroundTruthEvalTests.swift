@@ -69,7 +69,14 @@
 
             var rasterOptions = PDFImportOptions()
             rasterOptions.diagnostics = Self.diagnosticSink(mode: "raster")
-            rasterOptions.omrTileClassifier = try await CoreMLTileClassifier()
+            // The `OMR_DECODE_*` sweep reaches this corpus the same way it
+            // reaches the synthetic eval: by rewriting the manifest the
+            // classifier reports, not the weights. Without it the corpus
+            // cannot answer "is the glyph missing, or merely under τ?", which
+            // is a different fix each way.
+            rasterOptions.omrTileClassifier = try await OMRDecodeOverriddenClassifier(
+                base: CoreMLTileClassifier(),
+            )
             rasterOptions.omrRenderDPI = Self.doubleEnv("OMR_MSCZ_RENDER_DPI", default: 300)
             if Self.env("OMR_MSCZ_CENSUS") == "1" {
                 for item in cases {

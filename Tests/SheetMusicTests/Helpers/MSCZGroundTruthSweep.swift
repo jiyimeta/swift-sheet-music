@@ -296,6 +296,43 @@
                 item, mode: "raster", walked: raster, pageCount: scan.pageCount,
             )
             compareAccidentals(item, vector: vectorAccidentals, raster: rasterAccidentals)
+            clefProbe(item, vector: vector.content, raster: raster)
+        }
+
+        /// What the raster front-end put where the vector one read a clef.
+        ///
+        /// `stavesWithClef` says a staff HAS no clef; it cannot say whether
+        /// the detector proposed the wrong class there, proposed nothing, or
+        /// put the right glyph somewhere the capture band could not reach.
+        /// Those three want fixes in three different places (training data,
+        /// decode threshold, capture geometry), so the probe holds the two
+        /// front-ends' glyph lists side by side at the SAME page coordinate
+        /// and prints the raster neighborhood of every vector clef.
+        ///
+        /// Gated on `OMR_MSCZ_CLEF_PROBE=1` — one line per clef in the
+        /// document, which is 138 lines for a 23-system sextet.
+        private static func clefProbe(
+            _ item: Case, vector: WalkedContent, raster: WalkedContent,
+        ) {
+            guard ProcessInfo.processInfo.environment["OMR_MSCZ_CLEF_PROBE"] == "1" else { return }
+            // A clef is ~4 staff spaces tall, so a neighborhood of 12pt at
+            // MuseScore's default staff size covers the glyph and a little
+            // around it without reaching the next staff.
+            let radius: CGFloat = 12
+            for clef in vector.glyphs where isClef(clef) {
+                let page = clef.geometry.pageIndex
+                let at = clef.geometry.origin
+                let near = raster.glyphs
+                    .filter { $0.geometry.pageIndex == page }
+                    .map { ($0, hypot($0.geometry.origin.x - at.x, $0.geometry.origin.y - at.y)) }
+                    .filter { $0.1 <= radius }
+                    .sorted { $0.1 < $1.1 }
+                    .map { "\(OMRLabelClassNames.className(for: $0.0.semantic))@\(round($0.1 * 10) / 10)" }
+                print("[mscz-clefprobe][\(item.name)] page=\(page) "
+                    + "vector=\(OMRLabelClassNames.className(for: clef.semantic)) "
+                    + "at=(\(round(at.x * 10) / 10),\(round(at.y * 10) / 10)) "
+                    + "raster=[\(near.joined(separator: " "))]")
+            }
         }
 
         private static func isAccidental(_ glyph: ClassifiedGlyph) -> Bool {
