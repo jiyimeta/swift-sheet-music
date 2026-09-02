@@ -39,7 +39,26 @@ and this project adheres to
   `endRepeatCount`; `SetMeasureRepeat` turns 1, 2 or 4 empty bars into a measure-repeat group (`%` sign) or
   dissolves one back into measure rests; `MoveToVoice` moves a chord or rest to another voice at the same tick,
   splitting rests around it as needed. Reachable as `EditIntent.setLayoutBreak` / `.setBarLine` /
-  `.setRepeatBarLines` / `.setMeasureRepeat` / `.moveToVoice`, wire cases 30–34.
+  `.setRepeatBarLines` / `.setMeasureRepeat` / `.moveToVoice`, wire cases 30–34. `MoveToVoice` no longer refuses a
+  slot that follows a tuplet in its bar: a tuplet member stores its sounding length, so every tick walker was
+  already ratio-aware and the refusal guarded nothing. `EditRefusal.Reason.tupletPrecedesSlot` is gone with it;
+  the enum gained `invalidTransposition(semitones:)` and `invalidInterval(steps:)` for the range group below.
+- Six range edit commands, the second group of the same project: `TransposeRange` moves every note in a range by
+  ±1…24 semitones, optionally re-spelling the result in the key; `AddIntervalToSelection` adds a diatonic
+  interval (Alt+1…9 above, Shift+Alt+1…9 below) to every chord; `DeleteRange` replaces each chord with a rest and
+  collapses any bar-voice the deletes emptied; `SetAccidentalsInRange` applies one accidental — or clears the
+  glyph — across a range; `SetDurationInRange` re-times every chord and rest to one duration; `RespellRange`
+  re-spells a range enharmonically. Reachable as `EditIntent.transposeRange` / `.addIntervalToSelection` /
+  `.deleteRange` / `.setAccidentalsInRange` / `.setDurationInRange` / `.respellRange`, wire cases 35–40. Each
+  takes a `VoiceElementRange` whose bounds may be given in either order and whose band is every voice of the
+  staves between them. All six are one `CompositeEditCommand` and therefore one undo step, built by a shared
+  `RangeEditPlanner`: targets run in ascending onset order, each re-found by its tick in the score the previous
+  step produced, so an onset a lengthening already swallowed is skipped (`[q q q q]` to half is `[h h]`, as in
+  MuseScore) — and any refusal rolls the whole range back, leaving nothing written. A tie chain is one sounding
+  note: pitch edits move it whole, with the accidental on its head alone.
+- `RespellMode` (`.simplest` / `.preferSharps` / `.preferFlats`) and `PitchSpelling.tpc(forPitch:keySig:mode:)`,
+  which returns the one tpc for a pitch inside the twelve-wide line-of-fifths window that mode places around the
+  key — the seam `RespellRange` and `TransposeRange(respellInKey:)` both spell through.
 - The reference family — `MeasureRef`, `PartRef`, `VoiceRef`, `VoiceElementRange`
   (`Sources/SheetMusicCore/Score/References/`) — gives every new intent's score location a named, resolvable type
   instead of a bare integer, with `Score.canonicalStaff` / `score.contains(_:)` / `score[part:]` / `score[voice:]`
@@ -48,8 +67,9 @@ and this project adheres to
   without moving a byte.
 - `Measure.Flags` groups the seven measure-level fields MuseScore writes on the first staff only — layout breaks,
   markers, jumps, `startRepeat` / `endRepeatCount` — so they move, hash and hoist as one unit.
-- A second parity replay chain (`editReplay-parity/`) exercises the five new commands through the same
-  cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain, byte-pinned like it.
+- A second parity replay chain (`editReplay-parity/`) exercises the eleven new commands, in nineteen steps,
+  through the same cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain, byte-pinned
+  like it.
 
 ### Changed
 

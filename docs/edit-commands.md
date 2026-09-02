@@ -90,6 +90,12 @@ own substantive logic.
 | `SetRepeatBarLines` | not in the example — host command registry | — |
 | `SetMeasureRepeat` | not in the example — host command registry | — |
 | `MoveToVoice` | not in the example — host command registry | sugar |
+| `TransposeRange` | not in the example — host command registry | sugar |
+| `AddIntervalToSelection` | not in the example — host command registry | sugar |
+| `DeleteRange` | not in the example — host command registry | sugar |
+| `SetAccidentalsInRange` | not in the example — host command registry | sugar |
+| `SetDurationInRange` | not in the example — host command registry | sugar |
+| `RespellRange` | not in the example — host command registry | sugar |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -181,19 +187,23 @@ These iterate an existing per-element command across a `.range`
 selection. Sugar all the way down — but worth a named API for
 intent.
 
-- [ ] **`TransposeRange`** *(sugar)* — by ±N semitones / octaves;
-  loops `SetNotePitch`.
-- [ ] **`AddIntervalToSelection`** *(sugar)* — third / fifth above
-  or below; loops `AddNoteToChord` with computed pitches.
-- [ ] **`DeleteRange`** *(sugar)* — replace each timed element in
-  the range with rests; loops `DeleteVoiceElement`.
-- [ ] **`SetAccidentalsInRange`** *(sugar)* — apply one accidental
-  to every selected note; loops `SetAccidental`.
-- [ ] **`SetDurationInRange`** *(sugar)* — set the same duration
+- [x] **`TransposeRange`** *(sugar)* — by ±N semitones / octaves;
+  loops `SetNotePitch`. Implemented; see "A. Implemented" above.
+- [x] **`AddIntervalToSelection`** *(sugar)* — Alt+1…9 above /
+  Shift+Alt+1…9 below; loops `AddNoteToChord` with computed
+  pitches. Implemented; see "A. Implemented" above.
+- [x] **`DeleteRange`** *(sugar)* — replace each timed element in
+  the range with rests; loops `DeleteVoiceElement`. Implemented;
+  see "A. Implemented" above.
+- [x] **`SetAccidentalsInRange`** *(sugar)* — apply one accidental
+  to every selected note; loops `SetAccidental`. Implemented; see
+  "A. Implemented" above.
+- [x] **`SetDurationInRange`** *(sugar)* — set the same duration
   on every selected timed element; loops
-  `SetChord/RestDuration`.
-- [ ] **`RespellRange`** *(sugar)* — re-spell a range as natural
-  / sharp / flat; loops `SetAccidental`.
+  `SetChord/RestDuration`. Implemented; see "A. Implemented" above.
+- [x] **`RespellRange`** *(sugar)* — re-spell a range as natural
+  / sharp / flat; loops `SetAccidental`. Implemented; see
+  "A. Implemented" above.
 
 ### Spanners (depends on `Spanner` subtype coverage)
 
@@ -213,9 +223,10 @@ layout breaks, chord symbols, spanners — already exists in
 `Sources/SheetMusicCore/Score/` and renders; it only lacked an edit
 command. That gap is closed by the edit-command parity project
 (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`):
-the structural group above landed first, and the remaining groups
-(Range, Marks, Note/chord, Visibility, Spanners, Harmony — intents
-35–73) are queued in that spec.
+the structural group above landed first and the Range group
+(intents 35–40) second, and the remaining groups (Marks,
+Note/chord, Visibility, Spanners, Harmony — intents 41–73) are
+queued in that spec.
 
 What is left below genuinely needs a `Score` model extension before
 any edit command can make sense of it:
@@ -244,7 +255,7 @@ Roughly ordered by impact. A reasonable sweep:
    (Landed — see "A. Implemented" above.)
 4. Range commands (`TransposeRange` / `DeleteRange` /
    `SetAccidentalsInRange` / …) — pure sugar, ergonomic wins for
-   the editor UX.
+   the editor UX. (Landed — see "A. Implemented" above.)
 5. Text-mark commands together (`SetTempo` /`SetDynamic` /
    `SetStaffText`) — shared shape, easy to batch.
    (`SetRehearsalMark` / `RemoveRehearsalMark` have landed already —
