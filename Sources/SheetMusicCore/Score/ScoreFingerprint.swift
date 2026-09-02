@@ -11,20 +11,21 @@ import SheetMusicFoundation
 /// spelled out here so the next person adding an intent knows exactly what this walk is blind to, rather than
 /// discovering it by omission:
 ///
-/// - Not covered on `Chord`: `elementProperties` (both `visible` and `color`) — display-only, and no edit command
-///   in this package sets either half of it.
-/// - Not covered on `Note`: `elementProperties.color` — the other half, `visible`, is covered via `Note.visible`
-///   below; `color` is author-supplied paint no edit command in this package sets. Also `fret` and `string` (the
-///   tablature position, a rendering of the pitch this walk already covers) and `guitarBend` / `guitarBendBack`
-///   (import-only notation, set by no edit command).
+/// - `Chord.elementProperties` IS covered, by occupants: `visible == false` and a set `color` each feed a
+///   unique tag; a default (visible, uncolored) chord feeds nothing. See `ScoreFingerprintHasher+Parity.swift`.
+/// - `Note.elementProperties.color` IS covered the same way — `visible` was already fed unconditionally via
+///   `Note.visible`. Still not covered: `fret` and `string` (the tablature position, a rendering of the pitch
+///   this walk already covers) and `guitarBend` / `guitarBendBack` (import-only notation, set by no edit
+///   command).
 /// - Not covered within the nested types the walk now recurses into: `Arpeggio.elementProperties`,
 ///   `Lyric.elementProperties`, and `ChordLine.elementProperties` (visibility/color on those attachments, same
 ///   reasoning as the two bullets above), plus `Lyric.properties` (text positioning/formatting) and
 ///   `ChordLine.path` (hand-drawn Bezier control points) — all display-only, none of it set by any edit command
 ///   in this package today.
-/// - Not covered on `Measure`: `startRepeat`, `endRepeatCount`, `measureRepeatCount`, `markers`, `jumps`,
-///   `lineBreak`, `pageBreak`, `sectionBreak`. `actualLength` and `irregular` ARE covered — M3's re-barring writes
-///   both — and so is `Staff.measures.count`; `Staff.defaultClefType` is not.
+/// - `Measure`'s `startRepeat`, `endRepeatCount`, `measureRepeatCount`, `markers`, `jumps`, `lineBreak`,
+///   `pageBreak`, `sectionBreak` ARE covered, by occupants — see `ScoreFingerprintHasher+Parity.swift`'s
+///   `combineFlags(_:)`. `actualLength` and `irregular` were already covered — M3's re-barring writes both — and
+///   so is `Staff.measures.count`; `Staff.defaultClefType` is not.
 /// - Not covered on the system lane: `Score.systemMeasures`'s ELEMENTS are covered (measure index, position and the
 ///   fields that give each one its musical identity), but the lane's LENGTH is not — an empty `SystemMeasure` and an
 ///   absent one are indistinguishable to this walk, deliberately, so that a score built in memory and the same score
@@ -48,6 +49,7 @@ extension Score {
                 for measure in staff.measures {
                     hash.combine(measure.actualLength)
                     hash.combine(measure.irregular)
+                    hash.combineFlags(measure) // by occupants — feeds nothing for a default measure
                     hash.combine(measure.voices.count)
                     for voice in measure.voices {
                         hash.combine(voice.elements.count)

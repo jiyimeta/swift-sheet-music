@@ -152,6 +152,13 @@ struct FNV1a {
         combine(note.isSmall)
         combine(note.play)
         combine(note.visible)
+        if let color = note.elementProperties.color {
+            combine(31)
+            combine(color.red)
+            combine(color.green)
+            combine(color.blue)
+            combine(color.alpha)
+        }
     }
 
     /// `Arpeggio.subtype` is a plain `Int` (not an enum), so — unlike `combine(_ accidental:)`'s raw-value string
@@ -279,6 +286,7 @@ struct FNV1a {
         }
         combine(chord.stemVisible)
         combine(chord.beamVisible)
+        combineOccupied(chord.elementProperties, visibleTag: 29, colorTag: 30)
     }
 
     /// Every case that carries *timing* — i.e. anything that changes how much tick budget an element occupies, or
@@ -295,9 +303,11 @@ struct FNV1a {
     /// `SetKeySignature` does not preserve them.
     ///
     /// The remaining cases occupy no tick budget of their own — they are markers attached at the current cursor
-    /// position — so a discriminant tag is enough; their own field content (e.g. a clef's type, a dynamic's marking)
-    /// is display/notation-only and none of it is mutated by any edit command in this package today. Should that
-    /// change, the new field belongs in this walk, not folded into the tag.
+    /// position — but they now feed their own identity rather than a bare discriminant tag, per the edit-command
+    /// parity project (spec 2026-09-02 §2.5): see `ScoreFingerprintHasher+Parity.swift` for the
+    /// `combine(_ clef:)` / `combine(_ barLine:)` / `combine(_ dynamic:)` / `combine(_ fermata:)` /
+    /// `combine(_ breath:)` / `combine(_ harmony:)` / `combine(_ spanner:)` / `combine(_ repeat:)` overloads this
+    /// switch calls into.
     mutating func combine(_ element: VoiceElement) {
         switch element {
         case let .chord(chord):
@@ -314,14 +324,30 @@ struct FNV1a {
             combine(time.denominator)
             combine(time.showCourtesy)
             combine(time.visible)
-        case .clef: combine(3)
-        case .barLine: combine(4)
-        case .dynamic: combine(5)
-        case .spanner: combine(6)
-        case .measureRepeat: combine(7)
-        case .fermata: combine(8)
-        case .breath: combine(9)
-        case .harmony: combine(10)
+        case let .clef(clef):
+            combine(3)
+            combine(clef)
+        case let .barLine(barLine):
+            combine(4)
+            combine(barLine)
+        case let .dynamic(dynamic):
+            combine(5)
+            combine(dynamic)
+        case let .spanner(spanner):
+            combine(6)
+            combine(spanner)
+        case let .measureRepeat(`repeat`):
+            combine(7)
+            combine(`repeat`)
+        case let .fermata(fermata):
+            combine(8)
+            combine(fermata)
+        case let .breath(breath):
+            combine(9)
+            combine(breath)
+        case let .harmony(harmony):
+            combine(10)
+            combine(harmony)
         case let .locationShift(delta):
             combine(11)
             combine(delta)
