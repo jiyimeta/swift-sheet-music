@@ -35,6 +35,59 @@ struct DeleteRangeTests {
         ])
     }
 
+    /// The mirror of `partialDeleteKeepsRhythm`: the survivor sits at tick 0 rather than after the deleted slot.
+    /// The collapse used to be planned against whatever element started at tick 0 — which here is the C4 nobody
+    /// deleted — and `FullMeasureRestCollapse` exempts the slot it is named with from its all-rests check, so the
+    /// bar collapsed and took the C4 with it.
+    @Test("a survivor on beat 1 is kept when a later beat is deleted")
+    func survivorOnBeatOneIsKept() throws {
+        var score = EditingFixtures.parityFixture() // m0: [ts, C4 q, D4 q, r, r]
+        _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(0, 2), end: Self.slot(0, 2))).apply(to: &score)
+        #expect(Self.voice(score, 0).elements == [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+        ])
+    }
+
+    @Test("deleting beats 2-4 of a full bar keeps beat 1 and its rhythm")
+    func deletingTailKeepsBeatOne() throws {
+        var score = Self.fourChordBar()
+        _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(0, 2), end: Self.slot(0, 4))).apply(to: &score)
+        #expect(Self.voice(score, 0).elements == [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+        ])
+    }
+
+    @Test("deleting all four beats still collapses to one measure rest")
+    func deletingEveryBeatCollapses() throws {
+        var score = Self.fourChordBar()
+        _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 4))).apply(to: &score)
+        #expect(Self.voice(score, 0).elements == [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)), .rest(duration: .measure),
+        ])
+    }
+
+    @Test("a one-slot DeleteRange and a click-delete of the same slot agree")
+    func agreesWithClickDelete() throws {
+        var ranged = EditingFixtures.parityFixture()
+        _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(0, 2), end: Self.slot(0, 2))).apply(to: &ranged)
+        let session = ScoreEditSession(score: EditingFixtures.parityFixture())
+        #expect(session.apply(.delete(at: Self.slot(0, 2))))
+        #expect(ranged.stableFingerprint == session.score.stableFingerprint)
+    }
+
+    /// `parityFixture`'s bar 0 with its two trailing rests overwritten as E4 and F4 quarters — a bar of four
+    /// chords, so a tail delete has a survivor on beat 1 and a whole-bar delete has nothing left.
+    private static func fourChordBar() -> Score {
+        var score = EditingFixtures.parityFixture()
+        score[slot(0, 3)] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)]))
+        score[slot(0, 4)] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 65, tpc: 13)]))
+        return score
+    }
+
     @Test("undo restores the score exactly, collapse included")
     func undoIsExact() throws {
         var score = EditingFixtures.parityFixture()

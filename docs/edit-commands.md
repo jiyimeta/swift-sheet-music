@@ -201,9 +201,9 @@ intent.
 - [x] **`SetDurationInRange`** *(sugar)* — set the same duration
   on every selected timed element; loops
   `SetChord/RestDuration`. Implemented; see "A. Implemented" above.
-- [x] **`RespellRange`** *(sugar)* — re-spell a range as natural
-  / sharp / flat; loops `SetAccidental`. Implemented; see
-  "A. Implemented" above.
+- [x] **`RespellRange`** *(sugar)* — re-spell a range under a
+  `RespellMode` (simplest / preferSharps / preferFlats); loops
+  `SetNotePitch`. Implemented; see "A. Implemented" above.
 
 ### Spanners (depends on `Spanner` subtype coverage)
 

@@ -4,10 +4,15 @@ import SheetMusicFoundation
 /// all-rests into one measure rest — so a range delete and a click-delete of the same content produce the same
 /// score. Rests already in the range are left alone; non-timed elements (clefs, signatures, barlines) are kept.
 ///
-/// The collapse is planned against the post-delete score, per `(staff, measure, voice)` a delete touched, with
-/// `FullMeasureRestCollapse` — the same plan `.delete` uses — so tuplets dissolve and `.measure` is the spelling,
-/// not four quarter rests. The composite is ordered deletes first, collapses after, and the inverse unwinds it
-/// exactly: the collapse's pre-image restores the rests, then each delete's pre-image restores its chord.
+/// The collapse is planned against the post-delete score, per `(staff, measure, voice)` a delete touched — named by
+/// the LAST slot the range deleted there, so the exemption `FullMeasureRestCollapse` grants its named slot can only
+/// ever cover a slot this command emptied — with `FullMeasureRestCollapse`, the same plan `.delete` uses, so tuplets
+/// dissolve and `.measure` is the spelling, not four quarter rests. The composite is ordered deletes first,
+/// collapses after, and the inverse unwinds it exactly: the collapse's pre-image restores the rests, then each
+/// delete's pre-image restores its chord.
+///
+/// A tie running into a deleted chord is left dangling exactly as `.delete` leaves it — no chain repair here, so the
+/// two paths produce the same score.
 ///
 /// > Note: This command is sugar over `DeleteVoiceElement` (× chord) + `ReplaceVoiceElements` (× emptied voice)
 /// > bundled in a `CompositeEditCommand` by `RangeEditPlanner`. It exists to give the operation a
@@ -37,21 +42,23 @@ public struct DeleteRange: EditCommand {
     /// refuse identically.
     func plan(in score: Score) throws -> CompositeEditCommand? {
         guard !score.voiceElements(in: range).isEmpty else { throw Self.refused(.targetNotFound(range.start)) }
-        var touched: [VoiceRef] = []
+        // The last slot this command actually deleted, per `(staff, measure, voice)`, in the order the voices were
+        // first touched. The collapse must be planned against a slot the delete emptied — `FullMeasureRestCollapse`
+        // exempts the slot it is named with from its "every other slot is a rest" check, so naming a slot the range
+        // did NOT cover (the bar's tick-0 element, say) hands it an exemption for a surviving chord and collapses
+        // the bar on top of it. Element indices stay valid: `DeleteVoiceElement` replaces one slot with one rest.
+        var lastDeleted: [VoiceElementID] = []
         guard var plan = try RangeEditPlanner.plan(over: range, in: score, step: { target, working in
             guard case let .chord(chord)? = working[target], !chord.notes.isEmpty else { return [] }
-            if !touched.contains(VoiceRef(target)) { touched.append(VoiceRef(target)) }
+            if let seen = lastDeleted.firstIndex(where: { VoiceRef($0) == VoiceRef(target) }) {
+                lastDeleted[seen] = target
+            } else {
+                lastDeleted.append(target)
+            }
             return [DeleteVoiceElement(at: target)]
         }) else { return nil }
-        for voice in touched {
-            guard let first = plan.result.timedElementIndex(startingAt: 0, in: voice),
-                  let collapse = FullMeasureRestCollapse.plan(
-                      deleting: VoiceElementID(
-                          staff: voice.staff, measureIndex: voice.measureIndex,
-                          voiceIndex: voice.voiceIndex, elementIndex: first,
-                      ),
-                      in: plan.result,
-                  )
+        for deleted in lastDeleted {
+            guard let collapse = FullMeasureRestCollapse.plan(deleting: deleted, in: plan.result)
             else { continue }
             _ = try collapse.command.apply(to: &plan.result)
             plan.commands.append(collapse.command)
