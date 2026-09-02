@@ -33,16 +33,42 @@ extension PDFImporter {
             musicFontGateFraction: options.musicFontGateFraction,
             shapeAcceptanceThreshold: options.shapeAcceptanceThreshold,
         )
+        var content = walk.content
+        var pageSizes = walk.pageSizes
+        // `nil` means today's behavior LITERALLY: with no classifier and no
+        // injected detector nothing below runs — no rasterization, no page
+        // analysis, not even a second pass over the pages. That is what makes
+        // the byte-identical vector corpus gate meaningful.
+        // Which pages the detector read, so the clef consensus can be
+        // confined to them: it repairs DETECTOR uncertainty, and a
+        // vector-read page has none to repair. Empty for a vector document,
+        // which is what keeps the byte-identical vector corpus gate green.
+        var rasterPages: Set<Int> = []
+        if let detector = try rasterDetector(for: options) {
+            rasterPages = applyRasterFallback(
+                to: &content, pageSizes: &pageSizes,
+                document: document, detector: detector, options: options,
+            )
+        }
         return try buildScore(
             pageCount: document.pageCount,
-            walked: walk.content,
-            pageSizes: walk.pageSizes,
+            walked: content,
+            pageSizes: pageSizes,
             documentAttributes: walk.attributes,
             options: options,
+            rasterPages: rasterPages,
         )
     }
 
     /// Parse `pdfData` and also return the geometry side-car.
+    ///
+    /// Takes the same raster fallback as `parse(pdfData:options:)`: a host
+    /// that displays the source PDF is exactly the host holding a scan. The
+    /// side-car, though, carries NO rects for a page the fallback read — its
+    /// glyphs are positioned in the analysis frame, not the displayed page's
+    /// user space, and a cursor silently a few points off the ink is worse
+    /// than none. Such pages are named in an `info` diagnostic; their vector
+    /// neighbors keep their geometry untouched.
     public static func parseWithGeometry(
         pdfData: Data,
         options: PDFImportOptions = .init(),
@@ -58,13 +84,32 @@ extension PDFImporter {
             musicFontGateFraction: options.musicFontGateFraction,
             shapeAcceptanceThreshold: options.shapeAcceptanceThreshold,
         )
+        var content = walk.content
+        var pageSizes = walk.pageSizes
+        var rasterPages: Set<Int> = []
+        if let detector = try rasterDetector(for: options) {
+            rasterPages = applyRasterFallback(
+                to: &content, pageSizes: &pageSizes,
+                document: document, detector: detector, options: options,
+            )
+        }
+        if !rasterPages.isEmpty {
+            collector.excludePages(rasterPages)
+            options.diagnostics?(PDFImportDiagnostic(
+                severity: .info, location: "document",
+                message: "OMR: no geometry is recorded for the pages read as images "
+                    + "(\(rasterPages.sorted().map(String.init).joined(separator: ", "))); "
+                    + "the side-car covers the vector pages only",
+            ))
+        }
         let score = try buildScore(
             pageCount: document.pageCount,
-            walked: walk.content,
-            pageSizes: walk.pageSizes,
+            walked: content,
+            pageSizes: pageSizes,
             documentAttributes: walk.attributes,
             options: options,
             geometry: collector,
+            rasterPages: rasterPages,
         )
         return (score, collector.finalize())
     }

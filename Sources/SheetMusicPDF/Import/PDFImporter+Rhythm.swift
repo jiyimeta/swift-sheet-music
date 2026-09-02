@@ -326,7 +326,7 @@ extension PDFImporter {
     /// notehead within `stemAttachWindow` of the vertical's x and exclude
     /// verticals sitting on the cell's left / right edge (where barlines
     /// live).
-    private static func isStem(
+    static func isStem(
         in measure: ImportMeasure,
         _ path: PathSegment,
         noteheads: [ClassifiedGlyph],
@@ -351,11 +351,99 @@ extension PDFImporter {
         // (stem-down), offset by roughly the notehead width — which is a
         // fraction of the STAFF SPACE, not a fixed number of points.
         let window = stemAttachWindow(spatium: spatium)
+        // A RASTER-detected vertical must also abut the notehead in Y.
+        //
+        // The x-only test above is a VECTOR-path assumption: MuseScore
+        // strokes stems and barlines as paths and draws clefs,
+        // accidentals and time signatures as glyphs, so a `.vertical`
+        // that shares a notehead's x IS that note's stem. A raster
+        // front-end sees only ink, and an accidental's vertical stroke
+        // sits at the note's own y, inside the x-window, on the side the
+        // stem-legality penalty calls legal. Admitted, it competes for
+        // the notehead in `nearestStem`, and when it wins, `stemCluster`
+        // ejects the mate whose stem index no longer matches the lead's —
+        // splitting the chord, flipping the measure to two voices, and
+        // zeroing a voice-0-aligned pitch comparison without losing a
+        // single note. Measured: lowering the raster length floor to
+        // admit ~6,200 real short verticals recovered the eighths exactly
+        // as well as substituting the ORACLE's verticals did (990 lost vs
+        // 970) and cost pitch p50 97 -> 71, with note and measure counts
+        // byte-identical.
+        //
+        // The discriminating fact is that a notehead sits at ONE END of
+        // its stem, while a glyph stroke sharing its x is centred on it.
+        // Profiling every predicted vertical over 299 pages by the
+        // distance from its nearer end to such a notehead:
+        //
+        //     threshold   real kept   false admitted
+        //     0.25 sp     83.3%       2.6%
+        //     0.50 sp     90.3%       13.2%
+        //     0.75 sp     91.1%       54.5%
+        //
+        // The false population's knee is between 0.50 and 0.75 — a
+        // quarter of a staff space wide — so the threshold sits at 0.50,
+        // below the knee rather than on it.
+        //
+        // THE CONSTANT DID NOT MATCH THAT SENTENCE: it shipped at 0.25
+        // while the paragraph above chose 0.50, and nothing had ever
+        // measured the difference END TO END. Swept on v2-eval (32
+        // scorable renders), floor held at 2.5 sp:
+        //
+        //     gate    pitch p50   pitch mean   dur p50   dur mean
+        //     0.25    96.5        76.5         82.0      71.6
+        //     0.40    100.0       76.9         82.0      72.1
+        //     0.45    100.0       76.8         82.0      73.2
+        //     0.50    100.0       76.8         82.0      73.2
+        //     0.55    100.0       76.8         82.0      73.2
+        //     0.60    99.0        76.5         80.0      72.8
+        //     0.65    78.0        65.3         64.0      62.3
+        //     0.75    75.0        62.9         59.0      59.4
+        //     off     72.0        62.6         59.0      59.6
+        //
+        // The path-level knee shows up unchanged in the SCORE metric, and
+        // 0.50 is the midpoint of the [0.45, 0.55] plateau rather than an
+        // endpoint of it — the same reading rule the Otsu and deskew
+        // maxima needed. Paired against 0.25 it is 9 renders better, 2
+        // worse (worst −6), and it takes pitch p50 to the 100.0 that
+        // ORACLE verticals reach.
+        //
+        // The LENGTH FLOOR is not a second half of this filter, which is
+        // what the grid was run to find out. At gate 0.50 the floor does
+        // nothing — 2.0, 2.25 and 2.5 are the same 73.2 / 76.8 to the
+        // decimal, and 3.0 is slightly WORSE (73.0 / 76.6) because it
+        // starts cutting real beamed stems. There is no interaction to
+        // tune: the gate carries the whole separation.
+        //
+        // Gated on provenance, so this is unreachable on the vector path
+        // and byte-identity there is a property of the code rather than a
+        // measurement. Tuplet-bracket hooks, phantom verticals from thin
+        // filled quads and stem fragments would all change verdict under
+        // it, and each deserves its own corpus run before the gate goes.
         return noteheads.contains { g in
-            isNoteheadSemantic(g.semantic)
-                && abs(g.geometry.origin.x - x) <= window
+            guard isNoteheadSemantic(g.semantic),
+                  abs(g.geometry.origin.x - x) <= window
+            else { return false }
+            guard path.detectedFromRaster else { return true }
+            let toEnd = min(
+                abs(g.geometry.origin.y - path.rect.minY),
+                abs(g.geometry.origin.y - path.rect.maxY),
+            )
+            return toEnd <= stemHeadEndToleranceInSpaces * spatium
         }
     }
+
+    /// How close a notehead must sit to one END of a RASTER-detected
+    /// vertical for that vertical to be that note's stem, in staff
+    /// spaces. See the measurement table in `isStem`.
+    ///
+    /// `OMR_STEM_HEAD_END_TOL_SP` overrides it for a sweep, the same way
+    /// `OMR_VERTICAL_MIN_SP` overrides the length floor — see
+    /// `RasterPage.sweepOverride`. This gate and that floor are the two
+    /// halves of one false-positive filter, so they have to be swept as a
+    /// GRID off ONE release build; a value large enough to admit every
+    /// vertical (999) is how the gate is turned off for a measurement.
+    static let stemHeadEndToleranceInSpaces: CGFloat =
+        RasterPage.sweepOverride("OMR_STEM_HEAD_END_TOL_SP").map { CGFloat($0) } ?? 0.5
 
     /// Whether `path`'s y-span reaches BOTH outer staff lines (within ~1.5pt)
     /// — the signature of a barline as opposed to a note stem. With no usable

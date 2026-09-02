@@ -1,0 +1,768 @@
+#if !os(Android)
+    import CoreGraphics
+    import Foundation
+    @testable import SheetMusicCore
+    @testable import SheetMusicPDF
+
+    /// Glyphs from the labels — a perfect detector, restricted to the
+    /// frozen detector vocabulary — plus paths from the REAL raster
+    /// pipeline, composed into one `WalkedContent` for `buildScore`.
+    ///
+    /// This is what isolates P3a/P3b's contribution. The denominator is
+    /// the already-measured oracle-replay back-end ceiling (gate P0-G3),
+    /// so the reported delta is this stage's cost and nothing else's.
+    enum OMRHybridFrontEnd {
+        /// Which primitives the raster front-end is allowed to contribute.
+        ///
+        /// The lobotomy modes exist so the harness can be shown to be
+        /// capable of failing: dropping one primitive must crater one
+        /// specific metric, and `nullFrontEnd` establishes the floor the
+        /// real numbers have to sit far above. A harness whose floor is
+        /// near its ceiling is measuring nothing.
+        /// The `truth*` modes are the BISECT, not an anti-vacuity check.
+        /// Each hands one primitive back to the oracle and leaves the rest
+        /// raster, so the duration a mode recovers is that primitive's
+        /// share of the loss — measured rather than argued. Half the
+        /// eighths on this dataset arrive as quarters, which is a report
+        /// of lost beam membership, and membership needs a beam AND the
+        /// stem whose x it must span: `truthBeams` and `truthVerticals`
+        /// separate those two without touching the front-end.
+        enum Mode: String {
+            case full
+            case noStaffLines
+            case noVerticals
+            case noBeams
+            case nullFrontEnd
+            case truthStaffLines
+            /// The two halves of `truthStaffLines`, split at
+            /// `lineClusterWidthGate` = 50pt.
+            ///
+            /// That mode hands back TWO different things at once, and its
+            /// +3.5 durP50 cannot be attributed while they are joined.
+            /// The raster front-end's own horizontal gate is 50pt
+            /// (`staffLineMinWidthPt`), so everything narrower is a
+            /// population it cannot emit AT ALL — ledger lines,
+            /// tuplet-bracket arms — while everything wider is the same
+            /// five staff lines it did emit, in different places and with
+            /// different ends. `truthStaffLinesWide` substitutes only the
+            /// second; `truthStaffLinesNarrow` keeps every raster path
+            /// and ADDS only the first. Their fixes are unrelated: one is
+            /// a localisation defect, the other is a missing detector.
+            case truthStaffLinesWide
+            case truthStaffLinesNarrow
+            case truthVerticals
+            case truthBeams
+            /// Every path kind from the oracle at once — with label
+            /// glyphs, that is a fully-oracle front-end, so its score is
+            /// the CEILING the raster front-end is working against.
+            /// Without it, a per-primitive bisect cannot tell a deficit
+            /// the front-end could close from one that lives further
+            /// upstream (in `buildScore`, or in what the labels can
+            /// express at all).
+            case truthPaths
+            /// Glyphs come from a REAL detector (`OMRGlyphDetecting`)
+            /// instead of the label oracle; paths are still the raster
+            /// front-end's own classical CV, unchanged from `.full`. This
+            /// is the mode that turns the hybrid's numbers from "P3a/P3b's
+            /// contribution against a known ceiling" into an end-to-end
+            /// measurement. `nullFrontEnd` remains the floor for PATHS (no
+            /// front-end at all); for GLYPHS under this mode, the floor is
+            /// the untrained / random-checkpoint model (gate P3d-G1) —
+            /// there is no separate lobotomy mode for glyphs because the
+            /// detector itself, run with no training, already supplies one.
+            case detectorGlyphs
+            /// The four hybrid-VERTICAL modes. `truthVerticals` swaps the
+            /// whole predicted vertical set for the labels' and wins
+            /// +2.5 durP50 / +4.6 durMean; these take one component of
+            /// that swap each, so the fix round that follows targets the
+            /// component that actually dominates rather than the whole.
+            /// See `OMRVerticalHybrid` for what each one does and why the
+            /// matching has to be coverage-based.
+            case snapVerticalEndpoints
+            case dropVerticalFalsePositives
+            case addVerticalMisses
+            case unflagVerticals
+            /// Two COMBINATIONS, because the singles measured an
+            /// interaction rather than three addends: `unflagVerticals`
+            /// alone loses 23 durP50 — the `isStem` head-to-end gate is
+            /// load-bearing while 24% of the vertical set is junk — and
+            /// `truthVerticals` clears that gate on a set that has no
+            /// junk in it. Neither single can tell those apart; a clean
+            /// set WITH the gate off can.
+            case cleanUnflagVerticals
+            case snapUnflagVerticals
+            /// All four at once. Its gap to `truthVerticals` is what the
+            /// components CANNOT reach — the leniency in "explained"
+            /// (a stroke inside a truth's y-window at a compatible x
+            /// survives here and does not survive the oracle) and the
+            /// merged-vs-split representation the oracle also replaces.
+            /// Without it, the residual would be attributed to whichever
+            /// component was measured last.
+            case allVerticalComponents
+
+            /// The three hybrid-BEAM modes, and their combination, for the
+            /// same reason: `truthBeams` wins +2.5 durP50 / +2.1 durMean
+            /// and that number is compatible with an x-extent fix, a
+            /// precision fix or a recall fix. See `OMRBeamHybrid`.
+            case snapBeamXRanges
+            case dropBeamFalsePositives
+            case addBeamMisses
+            /// All three. Its gap to `truthBeams` is what the components
+            /// CANNOT reach — the labels' own edge fits, which no
+            /// component takes.
+            ///
+            /// `beamHybrid`, the map from these four cases to the edits
+            /// they apply, lives in `OMRBeamHybrid.swift` — this enum is at
+            /// SwiftLint's `type_body_length` ceiling.
+            case allBeamComponents
+
+            /// Which vertical-set edits this mode applies, in order.
+            /// Distinct from `substituted`: these modes keep the raster's
+            /// own verticals and EDIT them, so nothing is filtered out
+            /// and nothing is taken from the oracle wholesale.
+            var verticalHybrid: [OMRVerticalHybrid.Operation] {
+                switch self {
+                case .snapVerticalEndpoints: [.snapEndpoints]
+                case .dropVerticalFalsePositives: [.dropFalsePositives]
+                case .addVerticalMisses: [.addMisses]
+                case .cleanUnflagVerticals: [.dropFalsePositives, .unflagRaster]
+                case .snapUnflagVerticals: [.snapEndpoints, .unflagRaster]
+                case .allVerticalComponents:
+                    [.dropFalsePositives, .snapEndpoints, .addMisses, .unflagRaster]
+                case .unflagVerticals: [.unflagRaster]
+                default: []
+                }
+            }
+
+            /// Every path kind this mode takes from the oracle instead of
+            /// the raster front-end. Empty for the modes that substitute
+            /// nothing.
+            ///
+            /// A SET rather than one kind because of `.truthPaths`, which
+            /// takes all of them at once. Substituting one primitive
+            /// answers "what is this primitive costing", and the three
+            /// single-primitive modes each recovered only 2.6-4.2 points
+            /// of a 28-point duration deficit — which invites the reading
+            /// that the rest is elsewhere. It is not a safe reading
+            /// without `.truthPaths`: durations are read from stems AND
+            /// beams AND flags together, so the primitives are not
+            /// additive, and only substituting all of them separates
+            /// "the path front-end is costing this" from "this is lost
+            /// upstream of the front-end entirely".
+            var substituted: Set<PathSegment.Kind> {
+                switch self {
+                case .truthStaffLines, .truthStaffLinesWide: [.horizontal]
+                case .truthVerticals: [.vertical]
+                case .truthBeams: [.beam]
+                case .truthPaths: [.horizontal, .vertical, .beam, .rectangle]
+                default: []
+                }
+            }
+
+            /// Whether a SUBSTITUTED oracle path survives this mode's
+            /// width split. Only the two half-modes narrow it.
+            func admitsOracle(_ path: PathSegment) -> Bool {
+                guard self == .truthStaffLinesWide, path.kind == .horizontal
+                else { return true }
+                return path.rect.width > PDFImporter.lineClusterWidthGate
+            }
+
+            /// Whether this mode ADDS the oracle's sub-gate horizontals on
+            /// top of the raster's own paths.
+            var addsNarrowOracleHorizontals: Bool {
+                self == .truthStaffLinesNarrow
+            }
+        }
+
+        static func filter(_ paths: [PathSegment], mode: Mode) -> [PathSegment] {
+            let substituted = mode.substituted
+            if !substituted.isEmpty {
+                return paths.filter { !substituted.contains($0.kind) }
+            }
+            switch mode {
+            case .full: return paths
+            case .noStaffLines: return paths.filter { $0.kind != .horizontal }
+            case .noVerticals: return paths.filter { $0.kind != .vertical }
+            case .noBeams: return paths.filter { $0.kind != .beam }
+            case .nullFrontEnd: return []
+            default: return paths
+            }
+        }
+
+        /// Label glyphs a detector could actually emit.
+        ///
+        /// `unknown*` classes really occur in these labels
+        /// (`unknownE500`, `unknownECA5` in the `extz_` renders) and a
+        /// detector trained on a frozen vocabulary has no such class.
+        /// `stem` and `staff5Lines` are excluded by the parent design's
+        /// §7.1 — stems are this stage's own classical CV, and
+        /// `staff5Lines` is a vector-only rendering artifact whose
+        /// survival here would let `appendGlyphDetectedStaves` paper over
+        /// a raster staff-detection failure outright.
+        ///
+        /// `fontSize` is zeroed to match the raster contract: the
+        /// `staff5Lines` code path is unreachable from a front-end that
+        /// detects staff lines directly.
+        static func detectorVocabularyGlyphs(
+            _ glyphs: [ClassifiedGlyph],
+        ) -> [ClassifiedGlyph] {
+            glyphs.compactMap { glyph in
+                let name = OMRLabelClassNames.className(for: glyph.semantic)
+                guard !name.hasPrefix("unknown"),
+                      !excludedClasses.contains(name) else { return nil }
+                var out = glyph
+                out.geometry.fontSize = 0
+                return out
+            }
+        }
+
+        static let excludedClasses: Set = ["stem", "staff5Lines"]
+
+        /// EXPERIMENT, **MEASURED AND REJECTED**
+        /// (`OMR_HYBRID_DROP_GLYPH_VERTICALS=1`): drop raster verticals
+        /// whose ink sits inside a non-notehead glyph.
+        ///
+        /// The diagnosis it was built to test is sound. The seam assumes
+        /// `paths` and `glyphs` are DISJOINT ink, which holds for a
+        /// vector PDF — MuseScore draws barlines and stems as strokes and
+        /// clefs as glyphs — and fails for a raster, which sees only ink.
+        /// Measured on `cov_wholes`, the raster emits eleven extra
+        /// verticals at x = 49…106, the clef / key / time region, some of
+        /// them 30pt tall against a 25pt staff; one survives as a
+        /// barline, the score gains one measure, and the measure-aligned
+        /// pitch comparison then reads 0% on a render the oracle scores
+        /// 100%.
+        ///
+        /// The REMEDY is what failed. Over 177 renders:
+        ///
+        ///                        pitch p50   pitch mean   dur p50   measures exact
+        ///     unchanged          52          46.6         38        130
+        ///     drop-in-glyph      48          45.5         33        113
+        ///
+        /// Every column moves the wrong way: the filter also removes real
+        /// barlines, which at a system start sit right beside the clef it
+        /// is trying to reject. Kept here, env-gated and unused, so the
+        /// next reader does not spend another round rediscovering that a
+        /// correct diagnosis does not make this remedy correct — and
+        /// above all does NOT take it into `barlineCandidates`, where it
+        /// would have been measured only after shipping.
+        ///
+        /// Glyph boxes are available here only because the hybrid feeds
+        /// label glyphs; the front-end itself has none, which is why any
+        /// real fix has to live downstream.
+        static func dropVerticalsInsideGlyphs(
+            _ paths: [PathSegment], glyphs: [ClassifiedGlyph], spacingPt: Double,
+        ) -> [PathSegment] {
+            guard spacingPt > 0 else { return paths }
+            let blockers = glyphs.filter { !isNoteheadLike($0.semantic) }.map {
+                (
+                    x: Double($0.geometry.origin.x),
+                    y: Double($0.geometry.origin.y),
+                    w: Double($0.geometry.advance),
+                    h: Double($0.geometry.renderedSize),
+                )
+            }
+            guard !blockers.isEmpty else { return paths }
+            return paths.filter { path in
+                guard path.kind == .vertical else { return true }
+                let x = Double(path.rect.midX)
+                let y = Double(path.rect.midY)
+                return !blockers.contains { block in
+                    x >= block.x - 0.2 * spacingPt
+                        && x <= block.x + block.w + 0.2 * spacingPt
+                        && y >= block.y - block.h
+                        && y <= block.y + block.h
+                }
+            }
+        }
+
+        private static func isNoteheadLike(_ semantic: SMuFLSemantic) -> Bool {
+            OMRLabelClassNames.className(for: semantic).hasPrefix("notehead")
+        }
+
+        /// Bring label glyphs — which live in CLEAN page space — into the
+        /// frame the raster front-end emitted its paths in.
+        ///
+        /// The composition, and why each step is there:
+        ///
+        ///     clean pt  --(y-flip on the CLEAN raster height)-->  clean px
+        ///     clean px  --(image.label_transform)-->              source px
+        ///     source px --(the front-end's own deskew + flip)-->  page pt
+        ///
+        /// On a clean raster every step is the identity, which is exactly
+        /// why getting this wrong stays invisible until the first
+        /// degraded sweep and then reads as "the detector is bad". The
+        /// y-flip has to be anchored to `image.source_size_px` — the
+        /// CLEAN raster's height — because the degraded image has been
+        /// resampled and is a different size.
+        ///
+        /// Composed this way, whatever deskew error remains moves glyphs
+        /// and paths TOGETHER, so the relative geometry the back-end
+        /// actually reasons about stays consistent.
+        ///
+        /// NOTE: this overload maps only `geometry.origin` — `advance`
+        /// and `renderedSize` pass through UNMAPPED, unlike
+        /// `OMRPrepTargets.glyphs`, which derives its `advancePx`/
+        /// `renderedSizePx` targets from the mapped bbox corners (see
+        /// that function's own doc comment for the degraded-page bug
+        /// that fix addressed). The two are not the same job: this
+        /// overload reframes a DETECTOR'S OWN OUTPUT for seam-metric
+        /// comparison, where advance/renderedSize are decode artifacts,
+        /// not ground truth, so `OMRDetectorMetrics.match` never reads
+        /// them — only `geometry.origin` (origin-distance matching)
+        /// matters there. `OMRPrepTargets.glyphs` instead builds TRAINING
+        /// TARGETS from label ground truth, where advance/renderedSize
+        /// are exactly what the geom head regresses against, so they
+        /// must go through the same homography as everything else. Do
+        /// not "fix" this overload to match that one's shape — they are
+        /// deliberately different because they answer different
+        /// questions about the same coordinates.
+        static func reframe(
+            _ glyphs: [ClassifiedGlyph], page: OMRPageLabels, transform: PageTransform,
+        ) -> [ClassifiedGlyph] {
+            guard let context = frameContext(page: page, transform: transform)
+            else { return glyphs }
+            return glyphs.map { glyph in
+                var out = glyph
+                out.geometry.origin = context(glyph.geometry.origin)
+                return out
+            }
+        }
+
+        /// The same composition, for label PATHS.
+        ///
+        /// The seam harness compares the front-end's paths against these,
+        /// and needs them in the front-end's frame for the same reason
+        /// the hybrid needs the glyphs there. Skipping it is not a small
+        /// error: the first degraded seam sweep read 0.20 staff-line
+        /// recall against 0.77 clean, while a Python probe of the same
+        /// pipeline measured 0.91 — the whole gap was the unmapped
+        /// truth, not the detector.
+        static func reframe(
+            _ paths: [OMRPageLabels.Path], page: OMRPageLabels, transform: PageTransform,
+        ) -> [OMRPageLabels.Path] {
+            guard let context = frameContext(page: page, transform: transform)
+            else { return paths }
+            return paths.map { path in
+                var out = path
+                let a = context(CGPoint(x: path.rectPt[0], y: path.rectPt[1]))
+                let b = context(CGPoint(x: path.rectPt[2], y: path.rectPt[3]))
+                out.rectPt = [
+                    min(Double(a.x), Double(b.x)), min(Double(a.y), Double(b.y)),
+                    max(Double(a.x), Double(b.x)), max(Double(a.y), Double(b.y)),
+                ]
+                return out
+            }
+        }
+
+        /// The same composition, for label BEAMS: both edges are mapped
+        /// at their two endpoints and refitted, since a rotation changes
+        /// a line's slope as well as its position.
+        static func reframe(
+            _ beams: [OMRPageLabels.Beam], page: OMRPageLabels, transform: PageTransform,
+        ) -> [OMRPageLabels.Beam] {
+            guard let context = frameContext(page: page, transform: transform)
+            else { return beams }
+            return beams.map { beam in
+                var out = beam
+                let top = fit(
+                    context,
+                    x0: beam.x0,
+                    x1: beam.x1,
+                    slope: beam.topSlope,
+                    intercept: beam.topIntercept,
+                )
+                let bottom = fit(
+                    context,
+                    x0: beam.x0,
+                    x1: beam.x1,
+                    slope: beam.botSlope,
+                    intercept: beam.botIntercept,
+                )
+                out.x0 = top.x0
+                out.x1 = top.x1
+                out.topSlope = top.slope
+                out.topIntercept = top.intercept
+                out.botSlope = bottom.slope
+                out.botIntercept = bottom.intercept
+                return out
+            }
+        }
+
+        /// The same composition, for the ORACLE's own `PathSegment`s —
+        /// what the `truth*` bisect modes substitute for a raster
+        /// primitive. A `.beam` carries its quad, so both fitted edges are
+        /// re-fitted through the map exactly as the label-beam overload
+        /// does; every other kind is a degenerate rect and maps as two
+        /// corners.
+        static func reframe(
+            _ paths: [PathSegment], page: OMRPageLabels, transform: PageTransform,
+        ) -> [PathSegment] {
+            guard let context = frameContext(page: page, transform: transform)
+            else { return paths }
+            return paths.map { path in
+                var out = path
+                let a = context(CGPoint(x: path.rect.minX, y: path.rect.minY))
+                let b = context(CGPoint(x: path.rect.maxX, y: path.rect.maxY))
+                out.rect = CGRect(
+                    x: min(a.x, b.x), y: min(a.y, b.y),
+                    width: abs(b.x - a.x), height: abs(b.y - a.y),
+                )
+                if let q = path.quad {
+                    let top = fit(
+                        context, x0: Double(q.xRange.lowerBound),
+                        x1: Double(q.xRange.upperBound),
+                        slope: Double(q.topSlope), intercept: Double(q.topIntercept),
+                    )
+                    let bottom = fit(
+                        context, x0: Double(q.xRange.lowerBound),
+                        x1: Double(q.xRange.upperBound),
+                        slope: Double(q.botSlope), intercept: Double(q.botIntercept),
+                    )
+                    out.quad = BeamQuad(
+                        xRange: CGFloat(min(top.x0, top.x1))
+                            ... CGFloat(max(top.x0, top.x1)),
+                        topSlope: CGFloat(top.slope),
+                        topIntercept: CGFloat(top.intercept),
+                        botSlope: CGFloat(bottom.slope),
+                        botIntercept: CGFloat(bottom.intercept),
+                        pageIndex: q.pageIndex,
+                    )
+                }
+                return out
+            }
+        }
+
+        private static func fit(
+            _ map: (CGPoint) -> CGPoint, x0: Double, x1: Double,
+            slope: Double, intercept: Double,
+        ) -> (x0: Double, x1: Double, slope: Double, intercept: Double) {
+            let a = map(CGPoint(x: x0, y: slope * x0 + intercept))
+            let b = map(CGPoint(x: x1, y: slope * x1 + intercept))
+            let dx = Double(b.x - a.x)
+            let m = abs(dx) < 1e-9 ? 0 : Double(b.y - a.y) / dx
+            return (Double(a.x), Double(b.x), m, Double(a.y) - m * Double(a.x))
+        }
+
+        /// The clean-page-point → front-end-page-point map for this page.
+        ///
+        /// Non-private because the prep export needs exactly this
+        /// composition and must not grow a second copy of it: on a clean
+        /// raster every step is the identity, so a second copy stays
+        /// invisible until the first degraded run.
+        static func pointMap(
+            page: OMRPageLabels, transform: PageTransform,
+        ) -> (CGPoint) -> CGPoint {
+            frameContext(page: page, transform: transform) ?? { $0 }
+        }
+
+        /// The clean-page-point → front-end-page-point map for this page,
+        /// or nil when it is the identity.
+        private static func frameContext(
+            page: OMRPageLabels, transform: PageTransform,
+        ) -> ((CGPoint) -> CGPoint)? {
+            let h = page.image.labelTransform
+            let identity = h == [1, 0, 0, 0, 1, 0, 0, 0, 1]
+            guard !identity || transform.deskewDegrees != 0 else { return nil }
+            let dpi = Double(page.image.dpi)
+            let cleanHeightPx = Double(
+                page.image.sourceSizePx?[1]
+                    ?? Int((page.page.heightPt * dpi / 72.0).rounded()),
+            )
+            return { point in
+                mapped(
+                    point, h: h, dpi: dpi,
+                    cleanHeightPx: cleanHeightPx, transform: transform,
+                )
+            }
+        }
+
+        private static func mapped(
+            _ point: CGPoint, h: [Double], dpi: Double,
+            cleanHeightPx: Double, transform: PageTransform,
+        ) -> CGPoint {
+            let cleanX = Double(point.x) * dpi / 72.0
+            let cleanY = cleanHeightPx - Double(point.y) * dpi / 72.0
+            let w = h[6] * cleanX + h[7] * cleanY + h[8]
+            let denominator = w == 0 ? 1 : w
+            let sourceX = (h[0] * cleanX + h[1] * cleanY + h[2]) / denominator
+            let sourceY = (h[3] * cleanX + h[4] * cleanY + h[5]) / denominator
+            return transform.pagePoint(fromSourcePixelX: sourceX, y: sourceY)
+        }
+
+        /// Displace every glyph origin by a fixed offset in staff spaces,
+        /// deterministically per glyph index.
+        ///
+        /// The hybrid otherwise feeds PERFECT origins, while a real
+        /// detector will feed noisy ones — and `barlineCandidates`'
+        /// 2.0 / 0.6 staff-space windows, which decide whether a vertical
+        /// is a stem or a barline, were calibrated against vector
+        /// geometry rather than detector jitter. Running the sweep at a
+        /// few sigmas turns that into a number: the detector's
+        /// origin-error budget, obtained a stage early instead of as a
+        /// surprise. Reported, never gated.
+        ///
+        /// Deterministic (a fixed function of the index, not a PRNG draw)
+        /// so the run-twice gate still holds with jitter enabled.
+        static func jitter(
+            _ glyphs: [ClassifiedGlyph], sigmaInSpaces: Double, staffSpacingPt: Double,
+        ) -> [ClassifiedGlyph] {
+            guard sigmaInSpaces > 0, staffSpacingPt > 0 else { return glyphs }
+            let amplitude = sigmaInSpaces * staffSpacingPt
+            return glyphs.enumerated().map { index, glyph in
+                var out = glyph
+                let phase = Double(index)
+                out.geometry.origin.x += CGFloat(sin(phase * 1.7) * amplitude)
+                out.geometry.origin.y += CGFloat(cos(phase * 2.3) * amplitude)
+                return out
+            }
+        }
+
+        /// One render's pages → the `buildScore` input tuple.
+        ///
+        /// `pageSizes` comes from the FRONT-END's own frame (its deskewed
+        /// pixels × 72/dpi), never from the label's clean page size. On a
+        /// degraded page those differ, and mixing them shifts every path
+        /// relative to every glyph — silently, because on a clean raster
+        /// the two frames coincide.
+        static func compose(
+            pages: [OMRPageLabels], analyses: [Int: RasterPageAnalysis], mode: Mode,
+            originJitterInSpaces: Double = 0, detector: (any OMRGlyphDetecting)? = nil,
+        ) throws -> (walked: WalkedContent, pageSizes: [Int: CGSize], pageCount: Int) {
+            let oracle = try OMROracleFrontEnd.replay(pages: pages)
+            var walked = WalkedContent(glyphs: [], texts: [], paths: [], curves: [])
+            var sizes: [Int: CGSize] = [:]
+            for page in pages.sorted(by: { $0.page.index < $1.page.index }) {
+                let index = page.page.index
+                let vocabulary = detectorVocabularyGlyphs(
+                    oracle.walked.glyphs.filter { $0.geometry.pageIndex == index },
+                )
+                walked.texts += oracle.walked.texts.filter { $0.pageIndex == index }
+                guard let analysis = analyses[index] else {
+                    // For every OTHER mode this is "no raster data for
+                    // this page", so the page falls back to the oracle's
+                    // own (unreframed) vocabulary glyphs — unrelated to
+                    // detector plumbing. `.detectorGlyphs` must NOT take
+                    // that fallback: a corpus run that drops a page's
+                    // analysis (missing PNG, failed `RasterPage.analyze`)
+                    // would otherwise silently contribute perfect-label
+                    // glyphs for that page under a detector heading, with
+                    // no error and no signal — the same failure the
+                    // missing-detector guard below exists to prevent,
+                    // arriving through a different door.
+                    guard mode != .detectorGlyphs else {
+                        throw hybridError(
+                            "detectorGlyphs has no raster analysis for page \(index)",
+                        )
+                    }
+                    walked.glyphs += vocabulary
+                    sizes[index] = oracle.pageSizes[index] ?? .zero
+                    continue
+                }
+                switch mode {
+                case .full, .detectorGlyphs:
+                    // Both are the PRODUCT front-end; see
+                    // `productPageAssembly`'s doc comment.
+                    let assembled = try productPageAssembly(
+                        mode: mode, page: page, index: index, analysis: analysis,
+                        vocabulary: vocabulary, originJitterInSpaces: originJitterInSpaces,
+                        detector: detector,
+                    )
+                    walked.glyphs += assembled.walked.glyphs
+                    walked.paths += assembled.walked.paths
+                    sizes[index] = assembled.pageSize
+                default:
+                    walked.glyphs += jitter(
+                        reframe(vocabulary, page: page, transform: analysis.transform),
+                        sigmaInSpaces: originJitterInSpaces,
+                        staffSpacingPt: analysis.staffSpacingPt,
+                    )
+                    walked.paths += composedPaths(
+                        oracle: oracle, page: page, analysis: analysis,
+                        vocabulary: vocabulary, mode: mode, index: index,
+                    )
+                    sizes[index] = analysis.pageSizePt
+                }
+            }
+            return (walked, sizes, oracle.pageCount)
+        }
+
+        /// One page's PATHS: the raster front-end's, minus whatever this
+        /// mode lobotomizes or substitutes, plus the oracle's for the
+        /// kinds it takes wholesale, then the vertical-component edits.
+        static func composedPaths(
+            oracle: OMROracleFrontEnd.Replay, page: OMRPageLabels,
+            analysis: RasterPageAnalysis, vocabulary: [ClassifiedGlyph],
+            mode: Mode, index: Int,
+        ) -> [PathSegment] {
+            var pagePaths = filter(analysis.paths, mode: mode)
+            let substituted = mode.substituted
+            if !substituted.isEmpty {
+                pagePaths += reframe(
+                    oracle.walked.paths.filter {
+                        $0.pageIndex == index && substituted.contains($0.kind)
+                    },
+                    page: page, transform: analysis.transform,
+                    // AFTER the reframe: on a degraded page the frames
+                    // differ in scale, so a width gate applied before it
+                    // is a gate on the wrong page's points.
+                ).filter(mode.admitsOracle)
+            }
+            if mode.addsNarrowOracleHorizontals {
+                pagePaths += reframe(
+                    oracle.walked.paths.filter {
+                        $0.pageIndex == index && $0.kind == .horizontal
+                    },
+                    page: page, transform: analysis.transform,
+                ).filter { $0.rect.width <= PDFImporter.lineClusterWidthGate }
+            }
+            if !mode.verticalHybrid.isEmpty {
+                pagePaths = hybridVerticals(
+                    mode.verticalHybrid, pagePaths: pagePaths,
+                    truth: oracle.walked.paths.filter {
+                        $0.pageIndex == index && $0.kind == .vertical
+                    },
+                    page: page, analysis: analysis, mode: mode, index: index,
+                )
+            }
+            if !mode.beamHybrid.isEmpty {
+                pagePaths = hybridBeams(
+                    mode.beamHybrid, pagePaths: pagePaths,
+                    truth: oracle.walked.paths.filter {
+                        $0.pageIndex == index && $0.kind == .beam
+                    },
+                    page: page, analysis: analysis, mode: mode, index: index,
+                )
+            }
+            if ProcessInfo.processInfo
+                .environment["OMR_HYBRID_DROP_GLYPH_VERTICALS"] == "1"
+            {
+                pagePaths = dropVerticalsInsideGlyphs(
+                    pagePaths, glyphs: vocabulary,
+                    spacingPt: analysis.staffSpacingPt,
+                )
+            }
+            return pagePaths
+        }
+
+        /// One page's paths with the vertical set edited in place.
+        ///
+        /// Verticals are replaced/dropped WHERE THEY SIT and rescued
+        /// truths are appended last, so a no-op edit reproduces `.full`'s
+        /// path order byte for byte. The per-page `[vhybrid]` line is how
+        /// the decomposition is counted — `compose` is a static function
+        /// with no place to accumulate, and a mutable global in a Swift 6
+        /// test target is not worth the ceremony when the log is being
+        /// aggregated anyway.
+        static func hybridVerticals(
+            _ operations: [OMRVerticalHybrid.Operation], pagePaths: [PathSegment],
+            truth: [PathSegment], page: OMRPageLabels, analysis: RasterPageAnalysis,
+            mode: Mode, index: Int,
+        ) -> [PathSegment] {
+            let reframed = reframe(truth, page: page, transform: analysis.transform)
+            var paths = pagePaths
+            for operation in operations {
+                let edit = OMRVerticalHybrid.apply(
+                    operation,
+                    detected: paths.filter { $0.kind == .vertical },
+                    truth: reframed,
+                    spacing: Double(analysis.staffSpacingPt),
+                )
+                var cursor = 0
+                var rebuilt: [PathSegment] = []
+                for path in paths {
+                    guard path.kind == .vertical else {
+                        rebuilt.append(path)
+                        continue
+                    }
+                    if let kept = edit.kept[cursor] { rebuilt.append(kept) }
+                    cursor += 1
+                }
+                print(
+                    "[vhybrid] mode=\(mode.rawValue) op=\(operation) page=\(index) "
+                        + "spacingPt=\(analysis.staffSpacingPt) \(edit.stats.line)",
+                )
+                paths = rebuilt + edit.added
+            }
+            return paths
+        }
+
+        /// `.detectorGlyphs` asking for a detector it wasn't given must
+        /// throw, not silently fall back to the label oracle — a silent
+        /// fallback would report label-quality numbers under a detector
+        /// heading.
+        /// `fileprivate` rather than `private`: `productPageAssembly`, a
+        /// top-level function in this file (kept out of this enum's body
+        /// to stay under SwiftLint's `type_body_length` ceiling), needs
+        /// it too.
+        fileprivate static func hybridError(_ reason: String) -> Error {
+            SheetMusicError.malformedScore(ScoreFault(
+                code: "omr.hybrid", message: "OMRHybridFrontEnd: \(reason)",
+            ))
+        }
+    }
+
+    /// Wraps a precomputed glyph list as an `OMRGlyphDetecting`, so
+    /// `.full` mode can assemble its oracle-vocabulary glyphs through the
+    /// exact same `RasterFrontEnd.assembled` call `.detectorGlyphs` uses,
+    /// instead of a second, parallel assembly path that happens to agree
+    /// with it today.
+    ///
+    /// Top-level rather than nested in `OMRHybridFrontEnd` — that enum
+    /// sits at SwiftLint's `type_body_length` ceiling already (see the
+    /// note on `Mode.allBeamComponents`).
+    private struct OracleGlyphDetector: OMRGlyphDetecting {
+        let glyphs: [ClassifiedGlyph]
+
+        func glyphs(
+            pageIndex _: Int, analysis _: RasterPageAnalysis,
+            diagnostics _: (@Sendable (PDFImportDiagnostic) -> Void)?,
+        ) throws -> [ClassifiedGlyph] {
+            glyphs
+        }
+    }
+
+    /// The per-page assembly for `OMRHybridFrontEnd.compose`'s `.full`
+    /// and `.detectorGlyphs` modes — top-level for the same
+    /// `type_body_length` reason as `OracleGlyphDetector`.
+    ///
+    /// Both modes are the PRODUCT front-end — `.full` with a perfect
+    /// (oracle) glyph source standing in for the detector,
+    /// `.detectorGlyphs` with the real one — so both assemble through the
+    /// same `RasterFrontEnd.assembled` call `Sources` ships, and there is
+    /// exactly one implementation and one set of numbers between the seam
+    /// harnesses and the eventual product caller (Task 10).
+    ///
+    /// `feedingBackTheLabelGlyphsReproducesFullExactly` is what keeps this
+    /// honest: it feeds `.detectorGlyphs` a detector that returns exactly
+    /// what `.full` computes here and requires a bit-identical
+    /// `WalkedContent` back.
+    private func productPageAssembly(
+        mode: OMRHybridFrontEnd.Mode, page: OMRPageLabels, index: Int,
+        analysis: RasterPageAnalysis, vocabulary: [ClassifiedGlyph],
+        originJitterInSpaces: Double, detector: (any OMRGlyphDetecting)?,
+    ) throws -> (walked: WalkedContent, pageSize: CGSize) {
+        let pageDetector: any OMRGlyphDetecting
+        if mode == .detectorGlyphs {
+            guard let detector else {
+                throw OMRHybridFrontEnd.hybridError("detectorGlyphs needs a detector")
+            }
+            // No `reframe` and no `jitter` for the real detector: it
+            // works on the front-end's OWN deskewed pixels, so its
+            // output is already in the frame the paths are in. Reframing
+            // it would apply the label transform a second time, and
+            // jittering it would be simulating noise on top of the
+            // detector's own (real) noise.
+            pageDetector = detector
+        } else {
+            pageDetector = OracleGlyphDetector(glyphs: OMRHybridFrontEnd.jitter(
+                OMRHybridFrontEnd.reframe(vocabulary, page: page, transform: analysis.transform),
+                sigmaInSpaces: originJitterInSpaces,
+                staffSpacingPt: analysis.staffSpacingPt,
+            ))
+        }
+        return try RasterFrontEnd.assembled(
+            analysis: analysis, pageIndex: index, detector: pageDetector, diagnostics: nil,
+        )
+    }
+#endif

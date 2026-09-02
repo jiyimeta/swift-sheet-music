@@ -1,8 +1,12 @@
 import Foundation
 
 /// Non-fatal recognition issues surfaced from `PDFImporter`.
-public struct PDFImportDiagnostic {
-    public enum Severity { case info, warning }
+///
+/// `Sendable` because the callback that delivers it already is: a host that
+/// parses off the main actor collects these on the parse's thread and reads
+/// them back on its own.
+public struct PDFImportDiagnostic: Sendable {
+    public enum Severity: Sendable { case info, warning }
     public let severity: Severity
     public let location: String // e.g. "page 3, system 2, measure 17"
     public let message: String
@@ -19,7 +23,10 @@ public struct PDFImportDiagnostic {
     }
 }
 
-public struct PDFImportOptions {
+/// `Sendable` so a host can build the options once and hand them to the
+/// parse wherever it runs it: every stored value is a plain value, a
+/// `@Sendable` closure, or a `Sendable` protocol existential.
+public struct PDFImportOptions: Sendable {
     public var preserveBreaks = true
     public var useMetadataAsFallback = true
     /// Expand a collapsed "N-bar" multi-measure rest (the H-bar captioned
@@ -107,6 +114,36 @@ public struct PDFImportOptions {
     var musicFontGateFraction = 0.5
     var shapeAcceptanceThreshold = 0.15
     public var diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?
+
+    /// A tile classifier for pages the vector path cannot read. `nil` — the
+    /// default — means the importer behaves exactly as it always has: no
+    /// rasterization, no detection, no new pass over the pages.
+    ///
+    /// Takes the tile classifier rather than a glyph detector because the
+    /// detector's seam mentions importer internals; the importer builds
+    /// `OMRGlyphDetector(classifier:)` from this.
+    ///
+    /// The PDFKit entry points act on it: `PDFImporter.parse(pdfData:)` /
+    /// `parse(pdfURL:)` and their `parseWithGeometry` twins (whose side-car
+    /// carries no rects for the pages read this way). `parseUsingSwiftReader`
+    /// and the Android entry emit an `info` diagnostic saying they do not,
+    /// rather than ignoring it silently.
+    public var omrTileClassifier: (any OMRTileClassifier)?
+
+    /// Resolution at which a page with no vector content is rasterized. The
+    /// training corpus's DPI grid is 200/300/400, so 300 sits mid-distribution.
+    ///
+    /// Values below `PDFImporter.minimumRenderDPI` (72 — one pixel per point),
+    /// and non-finite ones, are clamped with a `warning` diagnostic rather
+    /// than silently rasterizing a 1x1 page.
+    public var omrRenderDPI: Double = 300
+
+    /// TESTING ONLY, INTERNAL. Substitutes the whole glyph-detection stage so the
+    /// harness can replay labels or precomputed detections through the product
+    /// path. Takes precedence over `omrTileClassifier`. Not `public` for the same
+    /// reason as `disableSMuFLCodepointTier`: a knob whose purpose is to bypass
+    /// the real detector cannot be withdrawn once it is API.
+    var omrDetector: (any OMRGlyphDetecting)?
 
     public init() {}
 }

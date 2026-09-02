@@ -32,7 +32,7 @@
     /// immediately instead of falling into the default sample-render loop.
     @available(macOS 15.0, *)
     @MainActor
-    func routeToDevTool() throws -> Bool {
+    func routeToDevTool() async throws -> Bool {
         // Corpus annotation-collision detector (SM_COLLIDE_DIR=… swift run
         // render-previews), the BEFORE/AFTER measurement tool for the
         // skyline autoplace pass.
@@ -50,7 +50,7 @@
         // used to exercise `PDFImporter.parse(pdfURL:)` against a chosen
         // file and see every diagnostic it emits.
         if AdHocPDFImport.isRequested {
-            try AdHocPDFImport.run()
+            try await AdHocPDFImport.run()
             return true
         }
         // Corpus batch render (SM_RENDER_DIR=… swift run render-previews),
@@ -71,8 +71,8 @@
 
     @available(macOS 15.0, *)
     @MainActor
-    func run() throws {
-        if try routeToDevTool() { return }
+    func run() async throws {
+        if try await routeToDevTool() { return }
         let args = CommandLine.arguments
         let outputDir: URL = args.count > 1
             ? URL(fileURLWithPath: args[1], isDirectory: true)
@@ -337,6 +337,6 @@
     }
 
     if #available(macOS 15.0, *) {
-        try MainActor.assumeIsolated { try run() }
+        try await run()
     }
 #endif

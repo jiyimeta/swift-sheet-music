@@ -49,7 +49,10 @@ public struct PDFElementRect: Hashable, Sendable {
 ///   playback.
 ///
 /// Produced only by `PDFImporter.parseWithGeometry`; `PDFImporter.parse`
-/// allocates none of this.
+/// allocates none of this. A page the raster (OMR) fallback read has no
+/// entry here at all — no rects and no `pageSizes` value — because its
+/// glyphs are positioned in the analysis frame rather than the displayed
+/// page's user space; the vector pages around it are unaffected.
 public struct PDFScoreGeometry: Sendable {
     /// Chord / rest onset rects, keyed by the SAME `ScoreItemID` that
     /// `PlaybackTimeline` emits as a cursor: a chord is keyed by its first

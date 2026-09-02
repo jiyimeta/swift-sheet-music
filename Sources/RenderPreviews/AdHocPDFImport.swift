@@ -2,6 +2,7 @@
     import Foundation
     import SheetMusicCore
     import SheetMusicLayoutApple
+    import SheetMusicOMRModel
     import SheetMusicPDF
 
     /// Ad-hoc single-PDF import path used to point `PDFImporter.parse(pdfURL:)`
@@ -15,6 +16,11 @@
     ///   SM_PDF      — path to a PDF (required to activate, tilde-expanded)
     ///   SM_PDF_OUT  — optional output PNG path; when set, the parsed score
     ///             is also rendered via the shared `renderScoreToPNG` helper
+    ///   SM_PDF_OMR  — optional; `1` constructs `CoreMLTileClassifier()` and
+    ///             assigns it to `options.omrTileClassifier`, so the tool can
+    ///             also exercise the scanned-page (raster) path. Unset — the
+    ///             default — leaves it `nil`, which is specified to mean the
+    ///             importer behaves exactly as it always has.
     ///
     /// Usage:
     ///   SM_PDF=~/Documents/.../foo.pdf swift run render-previews
@@ -25,7 +31,7 @@
             ProcessInfo.processInfo.environment["SM_PDF"] != nil
         }
 
-        static func run() throws {
+        static func run() async throws {
             let env = ProcessInfo.processInfo.environment
             guard let pdfPath = env["SM_PDF"] else { return }
             let url = URL(
@@ -44,6 +50,9 @@
                     line += " (\(context))"
                 }
                 print(line)
+            }
+            if env["SM_PDF_OMR"] == "1" {
+                options.omrTileClassifier = try CoreMLTileClassifier()
             }
 
             print("parsing \(url.path)")

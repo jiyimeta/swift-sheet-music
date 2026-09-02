@@ -171,6 +171,9 @@ var targets: [Target] = [
             "Import/PDFImporter+ContentStream.swift",
             "Import/PDFImporter+ContentStream+Operators.swift",
             "Import/PDFImporter+AppleEntry.swift",
+            // The raster fallback hangs off the Apple entry point and is
+            // driven by PDFKit + the CoreGraphics rasterizer below.
+            "Import/PDFImporter+RasterFallback.swift",
             "Import/FontCascade/PDFFontProgram.swift",
             "Import/FontCascade/GlyphBitmap.swift",
             "Import/FontCascade/ShapeDescriptor.swift",
@@ -178,6 +181,9 @@ var targets: [Target] = [
             "Import/FontCascade/GlyphClassifier.swift",
             "Import/FontCascade/GlyphClassifier+MusicFontGate.swift",
             "Import/FontCascade/GlyphClassifier+GlyphIDResolve.swift",
+            // CoreGraphics rasterization (a PDF page → pixels) has no Android
+            // shape yet; the Android front-end has no source of a `GrayBitmap`.
+            "OMR/PDFPageRasterizer.swift",
             // NOTE: SimpleFontEncoding / SimpleFontTextDecoder / AdobeGlyphList
             // are Foundation-only and stay in the Android build — the shared
             // `PDFPageState` holds the decoder registry, and the Android
@@ -362,6 +368,7 @@ if isWasm {
                 .product(name: "SwiftySynth", package: "swiftysynth"),
                 "SheetMusicAudioSwiftySynth",
                 "SheetMusicPDF",
+                "SheetMusicOMRModel",
                 .product(name: "Wirelet", package: "swift-wirelet"),
                 "SheetMusicFoundation",
                 "SheetMusicXMLTools",
@@ -384,6 +391,9 @@ if !isAndroid {
         // Pure-Swift, MIT SoundFont2 playback backend (SwiftySynth). Works on
         // iOS + macOS, App-Store clean — the default stealing-free synth.
         .library(name: "SheetMusicAudioSwiftySynth", targets: ["SheetMusicAudioSwiftySynth"]),
+        // Separately linkable so only a consumer that wants scanned-PDF reading carries
+        // the model's ~1.1MB. SheetMusicPDF itself never depends on it.
+        .library(name: "SheetMusicOMRModel", targets: ["SheetMusicOMRModel"]),
         .executable(name: "render-previews", targets: ["RenderPreviews"]),
     ]
     targets += [
@@ -430,6 +440,18 @@ if !isAndroid {
                 "SheetMusicAudioApple",
             ],
         ),
+        .target(
+            name: "SheetMusicOMRModel",
+            dependencies: ["SheetMusicPDF", "SheetMusicCore"],
+            resources: [
+                // .copy, NOT .process: the model is ALREADY compiled (Training/model/export.py
+                // runs coremlcompiler). SwiftPM has no Core ML build rule of its own, and
+                // `.process` behaves differently under Xcode's build system than under plain
+                // `swift build` — .copy makes the bundle layout identical under both.
+                .copy("Resources/model.mlmodelc"),
+                .copy("Resources/model.json"),
+            ],
+        ),
         .executableTarget(
             name: "RenderPreviews",
             dependencies: [
@@ -438,6 +460,7 @@ if !isAndroid {
                 "SheetMusicLayoutApple",
                 "SheetMusicUI",
                 "SheetMusicPDF",
+                "SheetMusicOMRModel",
             ],
         ),
     ]

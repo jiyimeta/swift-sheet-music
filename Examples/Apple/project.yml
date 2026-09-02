@@ -62,6 +62,10 @@ targets:
         product: SheetMusicAudioSwiftySynth
       - package: swift-sheet-music
         product: SheetMusicPDF
+      # The bundled OMR model (~1.1 MB): lets "Import Music PDF…" read a
+      # scanned (image-only) PDF through the same call as a typeset one.
+      - package: swift-sheet-music
+        product: SheetMusicOMRModel
 
   SheetMusicExampleMac:
     type: application
@@ -101,3 +105,7 @@ targets:
         product: SheetMusicAudioSwiftySynth
       - package: swift-sheet-music
         product: SheetMusicPDF
+      # The bundled OMR model (~1.1 MB): lets "Import Music PDF…" read a
+      # scanned (image-only) PDF through the same call as a typeset one.
+      - package: swift-sheet-music
+        product: SheetMusicOMRModel

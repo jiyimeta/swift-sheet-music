@@ -7,6 +7,53 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- Scanned (image-only) PDFs import. `PDFImporter.parse` and `parseWithGeometry` rasterize every page the
+  vector walker finds no music on and read it through an optical music recognition detector — when, and only
+  when, `PDFImportOptions.omrTileClassifier` is set. Left `nil`, the importer does exactly what it did before:
+  no rasterization, no model load, no new code path. The decision is per page, so a typeset title page followed
+  by scanned music needs no choice from the caller — though a page with no vector music on it, that cover
+  included, does pay one detector pass (about 1.5 s per page in a Release build; many times that in Debug).
+  `omrRenderDPI` (default 300) sets the resolution and is clamped, with a warning, below 72. A page that cannot be rasterized or read costs a warning and its own
+  content, never the document. Nothing textual comes off a scanned page — there is no OCR.
+- `SheetMusicOMRModel`, a new Apple-only product bundling the trained detector as a compiled Core ML model
+  (~1.1 MB) behind `CoreMLTileClassifier`. Separately linkable, so a consumer that never reads scans carries
+  none of it; `SheetMusicPDF` does not depend on it. `CoreMLTileClassifier(modelRoot:)` loads an external
+  checkpoint instead. The portable half of the detector — tiling, head decoding, merging, and the assembly of
+  detected glyphs with the classical-CV staff lines, stems and beams into the importer's own content model —
+  lives in `SheetMusicPDF` behind the public `OMRTileClassifier` protocol, which is the whole platform seam an
+  ONNX or other backend has to implement.
+- `PDFImportOptions` and `PDFImportDiagnostic` are `Sendable`, so a host can build the options on one actor,
+  parse on another, and carry the diagnostics back. `CoreMLTileClassifier()` is a synchronous `throws`
+  initializer — the bundled model is precompiled and nothing in its load awaits; only `init(modelRoot:)`,
+  which compiles at run time, stays `async`.
+- `SM_PDF_OMR=1` on `swift run render-previews` reads the `SM_PDF` file with the bundled model.
+- `Training/`: the Python pipeline that generates the synthetic dataset, trains the detector and exports the
+  bundled model, with its own tests; `Scripts/mscz-corpus-prep.sh` / `mscz-corpus-eval.sh` score the raster
+  path against a `.mscz` corpus's own answers.
+
+### Changed
+
+- `parseWithGeometry` takes the same raster fallback as `parse`. Its geometry side-car carries no rects and no
+  page size for a page read this way — the page's glyphs are positioned in the analysis frame, not the
+  displayed page's user space, and a cursor silently a few points off the ink is worse than none — and an
+  `info` diagnostic names those pages; vector pages keep their geometry untouched. The entry points that never
+  rasterize, `parseUsingSwiftReader` and the Android entry, say so with an `info` diagnostic instead of
+  ignoring the classifier silently.
+- The tuplet reader pads a raster-detected beam's member window by the same endpoint pad every other reader
+  of a beam's range applies: a fitted raster slab stops inside its outermost stems, so the raw range dropped
+  an end note and the mark with it. Vector beams are read raw, as before — padding them too moved one real
+  corpus score, and the 141-score vector corpus is byte-identical with the pad confined to raster beams.
+- A staff whose clef never arrived is reported as a warning instead of being assumed treble in silence, and a
+  key-signature block the reader turned down is reported with what it read. Diagnostics only; the score is
+  unchanged.
+- Pages read by the detector get a per-part clef consensus: a system-initial clef the detector was unsure
+  about is resolved against the same part's other systems, since a part's clef is one fact re-engraved every
+  system. Confined to detector-read pages, so vector output is untouched.
+- The example Mac app's "Import Music PDF…" reads scans through the bundled model and runs the import off the
+  main thread.
+
 ## [2.3.1] - 2026-08-31
 
 ### Fixed

@@ -25,6 +25,7 @@ extension PDFImporter {
         graceSizeThreshold: CGFloat = 0,
         options: PDFImportOptions,
         geometry: PDFGeometryCollector? = nil,
+        rasterPages: Set<Int>? = nil,
     ) -> Score {
         guard !systems.isEmpty else {
             return Score(division: 480, source: .pdf)
@@ -59,6 +60,14 @@ extension PDFImporter {
         // for documents with no F8va clef (the common case). See
         // `disambiguateF8vaClef`.
         let f8vaOverrides = resolveF8vaSlots(systems: systems, shape: shape)
+        // Pre-pass: resolve each staff slot's SYSTEM-INITIAL clef against the
+        // slot's other systems. A part's clef is one fact re-engraved every
+        // system, but the raster detector reads each independently, so a clef
+        // it is merely unsure about costs that system an octave. Empty when
+        // every slot is already self-consistent. See `consensusInitialClefs`.
+        let clefConsensus = resolveInitialClefConsensus(
+            systems: systems, shape: shape, rasterPages: rasterPages,
+        )
 
         for (sysIndex, system) in systems.enumerated() {
             appendSystem(
@@ -72,6 +81,7 @@ extension PDFImporter {
                 tieMarks: tieMarks,
                 graceSizeThreshold: graceSizeThreshold,
                 clefOverrides: f8vaOverrides,
+                clefConsensus: clefConsensus,
                 stavesContent: &stavesContent,
                 state: &state,
                 options: options,
@@ -157,6 +167,7 @@ extension PDFImporter {
         tieMarks: TieMarks,
         graceSizeThreshold: CGFloat,
         clefOverrides: [Int: Clef],
+        clefConsensus: [Int: [Int: Clef]],
         stavesContent: inout [[Measure]],
         state: inout StaffStateMap,
         options: PDFImportOptions,
@@ -212,6 +223,7 @@ extension PDFImporter {
                     tieMarks: tieMarks,
                     graceSizeThreshold: graceSizeThreshold,
                     clefOverride: clefOverrides[slot],
+                    clefConsensus: clefConsensus[slot]?[sysIndex],
                     nextStaffTopY: nextStaffTopY,
                     state: &state,
                     slot: slot,
@@ -286,6 +298,7 @@ extension PDFImporter {
         tieMarks: TieMarks,
         graceSizeThreshold: CGFloat,
         clefOverride: Clef?,
+        clefConsensus: Clef?,
         nextStaffTopY: CGFloat?,
         state: inout StaffStateMap,
         slot: Int,
@@ -298,6 +311,11 @@ extension PDFImporter {
             staff: importStaff, texts: [],
             diagnostics: options.diagnostics, location: location,
         )
+        // Resolve this system's opening clef against the slot's other
+        // systems before anything reads it. Ahead of the F8va remap on
+        // purpose: a clef this pass FILLS IN must be downgraded by the same
+        // whole-part decision as one the system read for itself.
+        events = applyInitialClefConsensus(events, to: clefConsensus)
         // Apply the whole-part E065 (F8va) clef resolution decided up front by
         // `resolveF8vaSlots`. Confined to the F8va case. See `remapF8vaClef`.
         events = remapF8vaClef(events, to: clefOverride)
