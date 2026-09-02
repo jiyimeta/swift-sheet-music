@@ -63,6 +63,31 @@ enum MeasureStructure {
         }
     }
 
+    /// Remaps `tuplets` across the insertion of ONE element at `index`: a tuplet starting at or after the index
+    /// moves whole, a tuplet straddling it keeps its start and grows its end. The general counterpart of
+    /// `shiftTuplets(_:by:after:)`, which can only move tuplets that lie entirely past a splice — a fermata or a
+    /// dynamic inserted before a tuplet's middle member is a splice INSIDE the tuplet's index range, and the
+    /// decoder already produces that shape for a `<Dynamic>` written between two tuplet members.
+    static func remapTuplets(_ tuplets: [Tuplet], insertingAt index: Int) -> [Tuplet] {
+        tuplets.map { tuplet in
+            var shifted = tuplet
+            if tuplet.startIndex >= index { shifted.startIndex += 1 }
+            if tuplet.endIndex >= index { shifted.endIndex += 1 }
+            return shifted
+        }
+    }
+
+    /// The inverse remap of `remapTuplets(_:insertingAt:)`: every endpoint past the removed index moves back by
+    /// one. The removed element is never itself an endpoint — a tuplet spans chords and rests, never a mark.
+    static func remapTuplets(_ tuplets: [Tuplet], removingAt index: Int) -> [Tuplet] {
+        tuplets.map { tuplet in
+            var shifted = tuplet
+            if tuplet.startIndex > index { shifted.startIndex -= 1 }
+            if tuplet.endIndex > index { shifted.endIndex -= 1 }
+            return shifted
+        }
+    }
+
     /// Removes every element `shouldRemove` accepts from `voice`, remapping each tuplet endpoint past the
     /// removals that preceded it so tuplet ranges keep pointing at the same elements. `shiftTuplets(in:by:)`
     /// is the special case where the removals form a uniform prefix; this is the general one, for removals
