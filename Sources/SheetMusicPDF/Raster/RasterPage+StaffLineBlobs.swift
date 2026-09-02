@@ -175,6 +175,7 @@ extension RasterPage {
             lineWidth: CGFloat(thicknessPt),
             pageIndex: pageIndex,
             quad: nil,
+            detectedFromRaster: true,
         )
     }
 }

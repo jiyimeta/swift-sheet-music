@@ -67,7 +67,9 @@ struct PathSegment: Equatable {
     ///
     /// Consumers that need the stricter reading gate on this flag, so the
     /// vector path — where it is always false — keeps its behavior
-    /// exactly. See `PDFImporter.isStem`.
+    /// exactly. See `PDFImporter.isStem` and `PDFImporter.beamMemberSpan`.
+    /// Every raster constructor sets it — verticals, beams and staff lines
+    /// alike — so a consumer can rely on it regardless of `kind`.
     var detectedFromRaster = false
 }
 

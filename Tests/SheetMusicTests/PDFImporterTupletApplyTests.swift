@@ -125,7 +125,10 @@
         ///
         /// STEM-DOWN members on purpose: that is the one direction
         /// `windowIndices` grants no slack on either side, so this test
-        /// depends on the pad and on nothing else.
+        /// depends on the pad and on nothing else. The fixture's beams are
+        /// raster-marked, which is the only provenance the pad applies to —
+        /// on vector beams it moved a real corpus score, see
+        /// `PDFImporterBeamMemberSpanTests`.
         @Test func aBeamTruncatedInsideItsOwnEndStemsKeepsTheOuterMembers() {
             let marks = PDFImporter.detectTupletMarks(
                 texts: [PDFImporterTupletMarkTests.digit("3", x: 461.16, y: 126.1)],

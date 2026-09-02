@@ -224,6 +224,7 @@ extension RasterPage {
             lineWidth: abs(topLeft.y - botLeft.y),
             pageIndex: pageIndex,
             quad: quad,
+            detectedFromRaster: true,
         )
     }
 

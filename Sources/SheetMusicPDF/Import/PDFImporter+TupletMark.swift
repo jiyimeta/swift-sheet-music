@@ -333,8 +333,17 @@ extension PDFImporter {
     /// against 370 stem inclusions lost to the unpadded range
     /// (`[beamdiag] windowDrop`), and only 14 of 5042 matched beam ends
     /// stop more than the pad short.
+    ///
+    /// GATED ON PROVENANCE. A vector beam's drawn endpoints already
+    /// coincide with its outermost stems, and padding those too was not
+    /// free: the real-PDF corpus gate (141 scores, 2026-09-02) moved one
+    /// score — `bacon_epi`, duration 95 % → 94 % — with the pad applied to
+    /// vector beams, and was byte-identical with it confined to raster
+    /// ones. So the vector path reads the range raw, as it always did, and
+    /// only a beam recovered from pixels gets the slack its fitter needs.
     static func beamMemberSpan(_ beam: PathSegment) -> ClosedRange<CGFloat> {
         let raw = beam.quad?.xRange ?? (beam.rect.minX ... beam.rect.maxX)
+        guard beam.detectedFromRaster else { return raw }
         return (raw.lowerBound - beamEndpointPad)
             ... (raw.upperBound + beamEndpointPad)
     }
