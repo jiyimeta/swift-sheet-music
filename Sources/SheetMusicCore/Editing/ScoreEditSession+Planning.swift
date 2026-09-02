@@ -17,7 +17,9 @@ extension ScoreEditSession {
     /// Plans an intent against `score`. `nil` when the intent has nothing to do — an empty composite, a composite
     /// whose members all planned to nothing, or a `.movePart` that would not move anything. Throws when a nested
     /// `.composite` exceeds `maxCompositeIntentDepth`.
-    static func command(for intent: EditIntent, in score: Score, depth: Int) throws -> (any EditCommand)? {
+    static func command( // swiftlint:disable:this function_body_length
+        for intent: EditIntent, in score: Score, depth: Int,
+    ) throws -> (any EditCommand)? {
         switch intent {
         case let .inputNote(location, pitch, tpc, duration):
             return inputNoteCommand(at: location, pitch: pitch, tpc: tpc, duration: duration, in: score)
@@ -125,6 +127,9 @@ extension ScoreEditSession {
             // through planners. Factored into `directNoteEditCommand` to keep this switch under SwiftLint's line
             // budget, not because they belong to a different subsystem.
             return try directNoteEditCommand(for: intent)
+        // TODO(edit-parity task 17): dispatch to `structuralParityCommand(for:in:)`.
+        case .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice:
+            return nil
         }
     }
 

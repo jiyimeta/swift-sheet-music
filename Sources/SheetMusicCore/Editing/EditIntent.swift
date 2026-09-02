@@ -7,7 +7,8 @@ import SheetMusicFoundation
 /// the same commands rather than shipping the commands themselves. The heavy commands — the ones carrying whole
 /// `VoiceElement` subtrees — are built on each side from these scalars and never travel.
 ///
-/// The case order is part of the wire format (`EditIntentWire`). Append; never renumber.
+/// The case order below is documentation; `EditIntentWire` (`SheetMusicEditWire`) is the committed wire order — new
+/// cases are appended to BOTH, at the end, and never renumbered.
 public enum EditIntent: Sendable, Equatable {
     /// Write a note into a rest slot. `duration` retimes the slot in the same undo step; `nil` keeps the slot's
     /// current length.
@@ -180,4 +181,28 @@ public enum EditIntent: Sendable, Equatable {
     /// An out-of-range `partIndex` is refused as `.targetNotFound` by `SetDrumsetEntry.apply`, so one place states
     /// the range.
     case setDrumsetEntry(partIndex: Int, pitch: Int, entry: DrumsetEntry?)
+
+    // Appended for the edit-command parity project's structural group (spec 2026-09-02) — indices 30…34.
+
+    /// Set or clear a layout-break flag (`.line`, `.page`, `.section`) on the measure column at `at`, on the
+    /// canonical staff. Resolves to nothing to apply when that flag already reads `enabled` — the same rule
+    /// `.setKeySignature` and `.movePart` apply to an edit that would restore the score to itself.
+    case setLayoutBreak(at: MeasureRef, kind: LayoutBreakKind, enabled: Bool)
+
+    /// Write `style` as the measure column's trailing barline, on every staff. `.normal` removes an explicit
+    /// barline rather than writing one. Resolves to nothing to apply when the canonical staff's trailing barline
+    /// already reads this way.
+    case setBarLine(at: MeasureRef, style: BarLineStyle)
+
+    /// Write the measure column's repeat flags: whether it opens a repeat, and how many times a repeat ending here
+    /// plays (`nil` for no end repeat). Resolves to nothing to apply when both flags already match.
+    case setRepeatBarLines(at: MeasureRef, startRepeat: Bool, endRepeatCount: Int?)
+
+    /// Turn `numMeasures` consecutive empty bars of `staff` starting at `at` into a measure-repeat group, or (with
+    /// `nil`) dissolve the group starting there back into measure rests. Resolves to nothing to apply when `nil` is
+    /// asked for a bar that carries no group.
+    case setMeasureRepeat(at: MeasureRef, staff: StaffAddress, numMeasures: Int?)
+
+    /// Move the chord or rest at `at` to `to` — another voice of the same bar, at the same tick.
+    case moveToVoice(at: VoiceElementID, to: VoiceRef)
 }

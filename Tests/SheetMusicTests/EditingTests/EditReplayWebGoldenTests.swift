@@ -198,7 +198,8 @@
             case .composite, .insertMeasure, .deleteMeasure, .addPart, .removePart, .movePart, .setPartNames,
                  .setKeySignature, .removeKeySignature, .setTimeSignature, .removeTimeSignature,
                  .setRehearsalMark, .removeRehearsalMark,
-                 .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry:
+                 .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry,
+                 .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }
