@@ -305,6 +305,7 @@
             )
             compareAccidentals(item, vector: vectorAccidentals, raster: rasterAccidentals)
             clefProbe(item, vector: vector.content, raster: raster, scored: scored.snapshot)
+            clefExtras(item, vector: vector.content, raster: raster, scored: scored.snapshot)
         }
 
         /// The observer closure is `@Sendable`; this is the lock around the
