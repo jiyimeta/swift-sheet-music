@@ -13,14 +13,19 @@ import SheetMusicLayout
 /// `installApple`; everywhere CoreText doesn't exist (Android, WebAssembly)
 /// it installs the same `bravura.smft` table the browser ships, via
 /// `makeSMuFLMetricsTableProvider(table:)`
-/// (`Sources/SheetMusicBridgeCore/SMuFLMetricsTable.swift:138`).
+/// (`Sources/SheetMusicBridgeCore/SMuFLMetricsTable.swift`).
 /// `Tools/GenWebFixtures/main.swift`'s `installSharedMetrics` does the
 /// equivalent install for the fixture generator.
 ///
-/// A measurement taken on this branch found the two providers agree on
-/// nearly every assertion in this suite (the exceptions — exact Y-position
-/// assertions on ascent/descent-centered Bravura glyphs — stay on
-/// `installApple` instead of `installFontMetrics`). Both installers are
+/// The two providers agree on every Bravura assertion in this suite, exact
+/// Y-positions of ascent/descent-centred glyphs included: the table carries
+/// Bravura's own ascent and descent since SMFT v3, and
+/// `LayoutElementShapeTests` / `SkylineAutoplaceTests` run on every shape
+/// through `installFontMetrics` to prove it. What they still disagree on is
+/// TEXT: the table measures Bravura alone, so Edwin's ascent and descent
+/// come from the stub, and the two assertions in those files that pin an
+/// Edwin-derived Y stay behind `SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT`
+/// for that reason. Both installers are
 /// `static let`s, so each runs its closure at most once per process, the
 /// same idempotence `SheetMusicLayoutApple.install` and the plain
 /// `FontMetrics.provider` static var already rely on elsewhere.

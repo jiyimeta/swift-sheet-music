@@ -64,10 +64,10 @@ public protocol FontMetricsProvider: Sendable {
 }
 
 extension FontMetricsProvider {
-    /// Providers that have no notion of line gap (the stub, and
-    /// Android's `SMuFLMetricsTable`-backed provider) stack lines at
-    /// `ascent + descent`. Their multi-line boxes come out one leading
-    /// per line tighter than Apple's — the same "Android text metrics
+    /// Providers that have no notion of line gap (the stub, and the
+    /// `SMuFLMetricsTable`-backed provider Android and the browser install)
+    /// stack lines at `ascent + descent`. Their multi-line boxes come out
+    /// one leading per line tighter than Apple's — the same "text metrics
     /// out of scope" boundary documented on
     /// `LayoutElementShape.smuflRunRect`.
     public func leading(font _: LayoutFont) -> CGFloat {

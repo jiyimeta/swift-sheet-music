@@ -73,6 +73,20 @@ and this project adheres to
 - The example Mac app's "Import Music PDF…" reads scans through the bundled model and runs the import off the
   main thread.
 
+### Fixed
+
+- **Articulations, fermatas and breath marks on Android and in the browser sit
+  where Apple draws them**, instead of about 1.2 staff spaces (~3 mm) too low.
+  The SMuFL metrics table both platforms engrave with carried per-glyph boxes
+  but not the face's ascent and descent, so the provider answered those from a
+  stub's 0.85 / 0.25 em — and `(ascent − descent) / 2`, which is how a centred
+  glyph finds its baseline, came out 0.3 em instead of Bravura's 0. The table
+  is now SMFT v3 with the pair in its header: `Tools/GenBravuraMetrics` writes
+  it for the browser and `BravuraMetricsBuilder.buildTable` for Android, and
+  `installSMuFLMetrics` / `nativeInstallSMuFLMetrics` refuse a v2 table rather
+  than engrave off it. A host that serves its own copy of `bravura.smft` must
+  take the regenerated one from `Web/sheet-music-web/assets/`.
+
 ## [2.3.1] - 2026-08-31
 
 ### Fixed

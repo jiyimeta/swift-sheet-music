@@ -15,13 +15,17 @@ import SheetMusicLayout
     private typealias CGRect = SheetMusicLayout.CGRect
 #endif
 
-/// Glyph-metrics table populated from Android `Paint.getTextPath` /
-/// `Path.computeBounds` at a fixed reference point size. Wire layout:
+/// Glyph-metrics table measured from Bravura at a fixed reference point
+/// size — on Android by `BravuraMetricsBuilder.kt` from `Paint.getTextPath` /
+/// `Path.computeBounds` at runtime, for the browser by
+/// `Tools/GenBravuraMetrics` from CoreText at build time. Wire layout:
 ///
 /// ```text
 /// u32 magic         = 0x534D4654 ("SMFT")
-/// u32 version       = 2
+/// u32 version       = 3
 /// f64 referenceSize
+/// f32 ascent          (positive, above the baseline)
+/// f32 descent         (positive, below the baseline)
 /// i32 glyphCount
 /// [entry] × glyphCount:
 ///     u32 codepoint
@@ -35,15 +39,21 @@ import SheetMusicLayout
 /// All little-endian. The values stored are in points at `referenceSize`;
 /// the provider rescales to the requested `pointSize` at lookup.
 ///
-/// The layout is a flat byte cursor — magic, version, referenceSize, an
-/// `Int32` glyph count, then `count` fixed-size entries. It is NOT
-/// `@WireFormat`/protobuf framing: the producer (`BravuraMetricsBuilder.kt`)
-/// hand-writes the bytes from raw `Paint` output, so `decode` hand-parses
-/// them to match. (A brief `@WireFormat` migration decoded this with the
-/// macro, which silently failed — the macro's tag/varint/length-delimited
-/// framing never matched the flat producer, so the table never installed.)
-/// The `version` field guards against accidental mix-and-match builds via
-/// `unsupportedVersion`.
+/// v3 added `ascent` and `descent`. `(ascent − descent) / 2` is how
+/// `ArticulationGlyphMetrics`, `FermataGlyphMetrics`, `BreathGlyphMetrics`,
+/// `ChordLineGeometry` and `LayoutElementShape` put a glyph's ink on its
+/// baseline, and a v2 table had nothing for the provider to answer with, so
+/// it fell back to `StubFontMetricsProvider`'s 0.85 / 0.25 em — 1.2 sp off
+/// Bravura's symmetric 2.012 em, on every platform that installs a table.
+///
+/// The layout is a flat byte cursor — magic, version, referenceSize, the
+/// two vertical metrics, an `Int32` glyph count, then `count` fixed-size
+/// entries. It is NOT `@WireFormat`/protobuf framing: the producers
+/// hand-write the bytes, so `decode` hand-parses them to match. (A brief
+/// `@WireFormat` migration decoded this with the macro, which silently
+/// failed — the macro's tag/varint/length-delimited framing never matched
+/// the flat producer, so the table never installed.) The `version` field
+/// guards against accidental mix-and-match builds via `unsupportedVersion`.
 package struct SMuFLMetricsTable {
     struct Entry {
         let advance: Double
@@ -54,9 +64,13 @@ package struct SMuFLMetricsTable {
     }
 
     static let magic: UInt32 = 0x534D_4654
-    static let version: UInt32 = 2
+    static let version: UInt32 = 3
 
     let referenceSize: Double
+    /// Bravura's ascent and descent in points at `referenceSize`, both
+    /// positive magnitudes as `FontMetricsProvider` reports them.
+    let ascent: Double
+    let descent: Double
     let entries: [UInt32: Entry]
 
     enum DecodeError: Error, Equatable {
@@ -66,11 +80,11 @@ package struct SMuFLMetricsTable {
     }
 
     /// Parse the flat little-endian byte layout written by Android's
-    /// `BravuraMetricsBuilder.kt` (a raw `ByteBuffer`, NOT protobuf-style
-    /// `@WireFormat` framing). The producer hand-rolls the bytes from raw
-    /// `Paint.getTextPath` output, so the reader is hand-written to match
-    /// it field-for-field — `magic | version | referenceSize | count |
-    /// [entry × count]` per the wire-layout doc above. (This used to go
+    /// `BravuraMetricsBuilder.kt` and `Tools/GenBravuraMetrics` (a raw byte
+    /// buffer, NOT protobuf-style `@WireFormat` framing). The producers
+    /// hand-roll the bytes, so the reader is hand-written to match them
+    /// field-for-field — `magic | version | referenceSize | ascent | descent |
+    /// count | [entry × count]` per the wire-layout doc above. (This used to go
     /// through `@WireFormat`, but that macro emits tag/varint/length-
     /// delimited framing the hand-written producer never matched, so the
     /// decode silently failed and the metrics table was never installed.)
@@ -110,6 +124,8 @@ package struct SMuFLMetricsTable {
             throw DecodeError.unsupportedVersion(versionValue)
         }
         let referenceSize = try readF64()
+        let ascent = try readF32()
+        let descent = try readF32()
         let count = try readU32()
         var entries: [UInt32: Entry] = [:]
         entries.reserveCapacity(Int(count))
@@ -124,7 +140,9 @@ package struct SMuFLMetricsTable {
             )
             entries[cp] = entry
         }
-        return SMuFLMetricsTable(referenceSize: referenceSize, entries: entries)
+        return SMuFLMetricsTable(
+            referenceSize: referenceSize, ascent: ascent, descent: descent, entries: entries,
+        )
     }
 }
 
@@ -141,10 +159,11 @@ package func makeSMuFLMetricsTableProvider(
     SMuFLMetricsTableProvider(table: table)
 }
 
-/// `FontMetricsProvider` that serves Bravura glyph metrics from a table
-/// captured on the Android side. Falls back to a `StubFontMetricsProvider`
-/// for non-Bravura faces (e.g. Edwin text widths) and for codepoints not
-/// present in the table.
+/// `FontMetricsProvider` that serves Bravura glyph metrics — the face's
+/// ascent and descent as well as per-glyph boxes and advances — from a
+/// measured table. Falls back to a `StubFontMetricsProvider` for non-Bravura
+/// faces (e.g. Edwin text widths) and for codepoints not present in the
+/// table.
 private struct SMuFLMetricsTableProvider: FontMetricsProvider {
     private let table: SMuFLMetricsTable
     private let stub = StubFontMetricsProvider()
@@ -162,11 +181,13 @@ private struct SMuFLMetricsTableProvider: FontMetricsProvider {
     }
 
     func ascent(font: LayoutFont) -> CGFloat {
-        stub.ascent(font: font)
+        guard isBravura(font) else { return stub.ascent(font: font) }
+        return CGFloat(table.ascent * scale(font))
     }
 
     func descent(font: LayoutFont) -> CGFloat {
-        stub.descent(font: font)
+        guard isBravura(font) else { return stub.descent(font: font) }
+        return CGFloat(table.descent * scale(font))
     }
 
     func glyphPathBoundingBox(

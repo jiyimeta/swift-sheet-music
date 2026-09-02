@@ -23,26 +23,25 @@ struct FontMetricsInstallTests {
     #else
         /// On Android and WebAssembly, `installFontMetrics` installs the
         /// portable `bravura.smft` table, never CoreText and never left as
-        /// the default stub. The table provider's `ascent`/`descent`
-        /// unconditionally delegate to `StubFontMetricsProvider`'s formula
-        /// (`Sources/SheetMusicBridgeCore/SMuFLMetricsTable.swift`), so
-        /// that signal alone can't tell it apart from a silent stub
-        /// fallback — but `glyphPathBoundingBox` for a real Bravura glyph
-        /// comes from measured table data and differs from the stub's
-        /// placeholder rectangle. Both signals together positively
-        /// identify the table provider rather than merely "not the stub".
+        /// the default stub. Two signals identify it: `ascent`/`descent` for
+        /// Bravura come from the table's own header (SMFT v3) and differ from
+        /// `StubFontMetricsProvider`'s 0.85 / 0.25 em formula, and
+        /// `glyphPathBoundingBox` for a real Bravura glyph comes from measured
+        /// table data and differs from the stub's placeholder rectangle.
         ///
-        /// **The two `ascent`/`descent` assertions pin a KNOWN DEFECT, not
-        /// intended behaviour.** `SMuFLMetricsTableProvider` delegates them to
-        /// the stub for every face including Bravura, where CoreText reports a
-        /// symmetric ascent ≈ descent ≈ 2.012em — so `(ascent - descent) / 2`,
-        /// which several call sites use to centre a glyph, is 0 on Apple and
-        /// 0.30 × pointSize elsewhere. When that is fixed, this test SHOULD
-        /// fail. Update these two lines to the corrected values; do not delete
-        /// them and do not loosen them, or the next regression in the same
-        /// place goes unnoticed. `glyphPathBoundingBox` alone is enough to
-        /// identify the provider, so nothing here depends on the defect
-        /// surviving.
+        /// **The `ascent`/`descent` values are pinned exactly on purpose.**
+        /// Bravura declares ascender 2012 and descender −2012 at 1000 upm —
+        /// hhea, OS/2 typo and win metrics all agree — so at the pointSize-4
+        /// "Bravura em" the table serves 8.048 for each, the same numbers
+        /// CoreText reports on Apple. (CoreText's own reading is 2012.004 at
+        /// the 1000 pt reference size, fixed-point noise the tolerance below
+        /// absorbs.) `(ascent − descent) / 2` is what
+        /// `ArticulationGlyphMetrics`, `FermataGlyphMetrics`,
+        /// `BreathGlyphMetrics`, `ChordLineGeometry` and `LayoutElementShape`
+        /// use to centre a glyph on its baseline; before v3 the provider fell
+        /// back to the stub here and put those glyphs 1.2 sp off on both
+        /// non-Apple platforms. Do not loosen these two lines to "not the
+        /// stub": that is exactly the assertion which let the defect ship.
         @Test("installs the SMuFL metrics table, not the stub")
         func installsTheTableProvider() {
             let bravuraEm = LayoutFont(face: SMuFLFamily.bravura, pointSize: 4)
@@ -50,8 +49,8 @@ struct FontMetricsInstallTests {
             let installed = FontMetrics.provider
 
             #expect(!(installed is StubFontMetricsProvider))
-            #expect(installed.ascent(font: bravuraEm) == stub.ascent(font: bravuraEm))
-            #expect(installed.descent(font: bravuraEm) == stub.descent(font: bravuraEm))
+            #expect(abs(Double(installed.ascent(font: bravuraEm)) - 8.048) < 1e-3)
+            #expect(abs(Double(installed.descent(font: bravuraEm)) - 8.048) < 1e-3)
 
             let noteheadBlack: UInt16 = 0xE0A4
             let installedBox = installed.glyphPathBoundingBox(

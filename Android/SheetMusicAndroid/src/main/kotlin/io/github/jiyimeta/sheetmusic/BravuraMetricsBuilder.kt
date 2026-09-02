@@ -11,7 +11,7 @@ import java.nio.ByteOrder
 /**
  * Computes a SMuFL glyph-metrics table by walking every codepoint in
  * Bravura's BMP private-use area, then packs the result into the byte
- * format defined at Sources/SheetMusicAndroidJNI/SMuFLMetricsTable.swift.
+ * format defined at Sources/SheetMusicBridgeCore/SMuFLMetricsTable.swift.
  *
  * Uses `Paint.getTextPath` + `Path.computeBounds(exact=true)` rather than
  * `Paint.getTextBounds`. The TextBounds API returns the **rasterized**
@@ -25,14 +25,25 @@ import java.nio.ByteOrder
  * Y convention conversion: Android paths are y-down with baseline at
  * Y=0; the Swift side expects CG-style y-up (matching CGPath). Flip Y
  * by negating bottom/top.
+ *
+ * The header also carries the face's ascent and descent (SMFT v3), read
+ * from `Paint.fontMetrics` at the same reference size. `(ascent − descent)
+ * / 2` is how the layout engine centres an articulation, fermata or breath
+ * mark on its baseline; before v3 the Swift provider had no such fields to
+ * consult and fell back to a stub's 0.85 / 0.25 em, which put those glyphs
+ * 1.2 sp below where Apple draws them. Bravura declares ascender 2012 and
+ * descender −2012 at 1000 upm in hhea, OS/2 typo and win alike, so the
+ * pair is the same whichever table Skia reads — and the same CoreText
+ * reports, which is what makes the three platforms agree.
  */
 object BravuraMetricsBuilder {
 
     private const val MAGIC = 0x53_4D_46_54
     // Keep in lockstep with `SMuFLMetricsTable.version` on the Swift side.
     // v2 swapped the hand-written byte cursor for `@WireFormat`; layout is
-    // byte-identical for any non-negative glyph count.
-    private const val VERSION = 2
+    // byte-identical for any non-negative glyph count. v3 added `f32 ascent`
+    // and `f32 descent` between `referenceSize` and the glyph count.
+    private const val VERSION = 3
     private const val REFERENCE_SIZE = 1000.0
 
     /** Bravura's BMP PUA range as defined by SMuFL. */
@@ -46,6 +57,13 @@ object BravuraMetricsBuilder {
             textSize = REFERENCE_SIZE.toFloat()
             isAntiAlias = true
         }
+        // `Paint.FontMetrics` is y-down: ascent is negative (above the
+        // baseline), descent positive. The Swift side wants both as positive
+        // magnitudes, the way `FontMetricsProvider` reports them.
+        val fontMetrics = paint.fontMetrics
+        val ascent = -fontMetrics.ascent
+        val descent = fontMetrics.descent
+
         val widths = FloatArray(2)
         val path = Path()
         val rectF = RectF()
@@ -75,7 +93,7 @@ object BravuraMetricsBuilder {
             entries.add(Entry(cp, widths[0], bx, by, bw, bh))
         }
 
-        val header = 4 + 4 + 8 + 4
+        val header = 4 + 4 + 8 + 4 + 4 + 4
         val perGlyph = 4 + 4 + 4 + 4 + 4 + 4
         val buf = ByteBuffer
             .allocate(header + entries.size * perGlyph)
@@ -83,6 +101,8 @@ object BravuraMetricsBuilder {
         buf.putInt(MAGIC)
         buf.putInt(VERSION)
         buf.putDouble(REFERENCE_SIZE)
+        buf.putFloat(ascent)
+        buf.putFloat(descent)
         buf.putInt(entries.size)
         for (e in entries) {
             buf.putInt(e.cp)

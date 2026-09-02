@@ -16,8 +16,12 @@
 //
 //     swift run GenBravuraMetrics Web/sheet-music-web/assets/bravura.smft
 //
-// Byte layout: see `SheetMusicBridgeCore/SMuFLMetricsTable.swift`. SMFT v2,
-// little-endian, values in points at a 1000 pt reference size.
+// Byte layout: see `SheetMusicBridgeCore/SMuFLMetricsTable.swift`. SMFT v3,
+// little-endian, values in points at a 1000 pt reference size. v3 put the
+// face's ascent and descent in the header: `(ascent − descent) / 2` is how
+// every glyph-centring call site finds its baseline, and per-glyph boxes
+// cannot stand in for it — without the pair the provider fell back to the
+// stub's 0.85 / 0.25 em and centred articulations 1.2 sp off.
 import Foundation
 import SheetMusicLayout
 import SheetMusicLayoutApple
@@ -25,7 +29,7 @@ import SheetMusicLayoutApple
 enum GenBravuraMetrics {
     static let referenceSize: Double = 1000
     static let magic: UInt32 = 0x534D_4654 // "SMFT"
-    static let tableVersion: UInt32 = 2
+    static let tableVersion: UInt32 = 3
     /// Bravura's BMP private-use area, as SMuFL defines it. Same range as
     /// `BravuraMetricsBuilder.kt` walks on Android.
     static let puaRange: ClosedRange<UInt32> = 0xE000 ... 0xF8FF
@@ -43,13 +47,21 @@ enum GenBravuraMetrics {
         let h: Double
     }
 
+    /// Everything one table carries: the face's vertical metrics and the
+    /// per-glyph boxes, all in points at `referenceSize`.
+    struct Measurement {
+        let ascent: Double
+        let descent: Double
+        let entries: [Entry]
+    }
+
     static func fail(_ message: String, code: Int32) -> Never {
         FileHandle.standardError.write(Data("error: \(message)\n".utf8))
         exit(code)
     }
 
     @available(macOS 15.0, *)
-    static func measureEntries() -> [Entry] {
+    static func measure() -> Measurement {
         guard BravuraFont.register else {
             fail("Bravura failed to register with CoreText", code: 3)
         }
@@ -81,10 +93,14 @@ enum GenBravuraMetrics {
                 ),
             )
         }
-        return entries
+        return Measurement(
+            ascent: Double(provider.ascent(font: font)),
+            descent: Double(provider.descent(font: font)),
+            entries: entries,
+        )
     }
 
-    static func encode(_ entries: [Entry]) -> Data {
+    static func encode(_ measurement: Measurement) -> Data {
         var out = Data()
         func appendU32(_ v: UInt32) {
             for i in 0 ..< 4 {
@@ -104,8 +120,10 @@ enum GenBravuraMetrics {
         appendU32(magic)
         appendU32(tableVersion)
         appendF64(referenceSize)
-        appendU32(UInt32(entries.count))
-        for entry in entries {
+        appendF32(measurement.ascent)
+        appendF32(measurement.descent)
+        appendU32(UInt32(measurement.entries.count))
+        for entry in measurement.entries {
             appendU32(entry.codepoint)
             appendF32(entry.advance)
             appendF32(entry.x)
@@ -125,20 +143,23 @@ enum GenBravuraMetrics {
             fail("macOS 15 or newer required", code: 1)
         }
         let outputURL = URL(fileURLWithPath: CommandLine.arguments[1])
-        let entries = measureEntries()
-        guard entries.count >= minimumExpectedGlyphs else {
+        let measurement = measure()
+        guard measurement.entries.count >= minimumExpectedGlyphs else {
             fail(
-                "only \(entries.count) glyphs measured; Bravura is probably not loaded",
+                "only \(measurement.entries.count) glyphs measured; Bravura is probably not loaded",
                 code: 4,
             )
         }
-        let out = encode(entries)
+        let out = encode(measurement)
         do {
             try out.write(to: outputURL)
         } catch {
             fail("could not write \(outputURL.path): \(error)", code: 5)
         }
-        print("wrote \(entries.count) glyphs, \(out.count) bytes to \(outputURL.path)")
+        print(
+            "wrote \(measurement.entries.count) glyphs, ascent \(measurement.ascent), "
+                + "descent \(measurement.descent), \(out.count) bytes to \(outputURL.path)",
+        )
     }
 }
 

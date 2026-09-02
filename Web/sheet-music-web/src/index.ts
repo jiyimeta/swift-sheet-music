@@ -1107,8 +1107,13 @@ export class SheetMusic {
    * `@jiyimeta/sheet-music-web/assets/bravura.smft`.
    *
    * Not optional in practice: without it the engraver falls back to rectangle
-   * approximations and the spacing is visibly wrong — but it still engraves, so
-   * nothing else will tell you.
+   * approximations, the spacing is visibly wrong and articulations sit about
+   * 1.2 staff spaces off — but it still engraves, so nothing else will tell
+   * you.
+   *
+   * Returns `false` for an unreadable table, which includes one written for an
+   * older format version. Serve the `bravura.smft` from the version of this
+   * package you load rather than a copy pinned elsewhere.
    */
   installSMuFLMetrics(bytes: Uint8Array): boolean {
     return this.bridge.installSMuFLMetrics(bytes);

@@ -217,9 +217,14 @@ failure modes look nothing alike, which is useful when something renders oddly:
 
 | file | what breaks without it |
 |---|---|
-| `bravura.smft` | Glyph metrics. The score renders with visibly wrong spacing; nothing errors. |
+| `bravura.smft` | Glyph metrics. Spacing is visibly wrong and articulations sit ~1.2 staff spaces off; nothing errors. |
 | `bravura.woff2` | Music glyphs become tofu boxes, correctly positioned. |
 | `edwin-roman.woff2` | Titles and text fall back to a system face. |
+
+Serve `bravura.smft` from the version of the package you load. The table's
+format is versioned, and `installSMuFLMetrics` returns `false` for a table
+written for an older one rather than engraving off it — a copy pinned in a
+host's own asset pipeline is the way that happens.
 
 Both fonts are SIL OFL 1.1 — see `assets/Bravura.LICENSE.txt` and
 `assets/Edwin.LICENSE.txt`.

@@ -160,9 +160,10 @@ struct LayoutEntryTests {
         let previousProvider = FontMetrics.provider
         defer { FontMetrics.provider = previousProvider }
 
-        // SMFT v2 with a single glyph, assembled by hand so the wasm suite needs
+        // SMFT v3 with a single glyph, assembled by hand so the wasm suite needs
         // no preopened directory. Layout: magic | version | f64 referenceSize |
-        // u32 count | (u32 codepoint + f32 × 5). See `SMuFLMetricsTable.swift`.
+        // f32 ascent | f32 descent | u32 count | (u32 codepoint + f32 × 5). See
+        // `SMuFLMetricsTable.swift`.
         var bytes: [UInt8] = []
         func u32(_ v: UInt32) {
             for i in 0 ..< 4 {
@@ -179,8 +180,10 @@ struct LayoutEntryTests {
             }
         }
         u32(0x534D_4654)
-        u32(2)
+        u32(3)
         f64(1000)
+        f32(2012) // ascent
+        f32(2012) // descent
         u32(1)
         u32(0xE0A4) // noteheadBlack
         f32(295)
