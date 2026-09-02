@@ -81,9 +81,7 @@
             // classifier reports, not the weights. Without it the corpus
             // cannot answer "is the glyph missing, or merely under τ?", which
             // is a different fix each way.
-            rasterOptions.omrTileClassifier = try await OMRDecodeOverriddenClassifier(
-                base: CoreMLTileClassifier(),
-            )
+            rasterOptions.omrTileClassifier = try await Self.rasterClassifier()
             rasterOptions.omrRenderDPI = Self.doubleEnv("OMR_MSCZ_RENDER_DPI", default: 300)
             if Self.env("OMR_MSCZ_CENSUS") == "1" {
                 for item in cases {
@@ -108,6 +106,26 @@
                 dumpDivergence: dump,
             )
             print(MSCZGroundTruthSweep.summaryLine(mode: .raster, totals: raster))
+        }
+
+        /// The classifier the raster mode runs, with the `OMR_DECODE_*` sweep
+        /// constants applied. `OMR_MODEL_ROOT` selects an exported model the
+        /// same way it does for the synthetic eval; unset means the bundled
+        /// one. The manifest's `checkpoint` is printed so the log itself says
+        /// which weights produced its rows — a run that silently measured the
+        /// bundled model under another model's name reported the two as
+        /// byte-identical once, and nothing in the output said why.
+        static func rasterClassifier() async throws -> OMRDecodeOverriddenClassifier {
+            let base: CoreMLTileClassifier = if let modelPath = env("OMR_MODEL_ROOT") {
+                try await CoreMLTileClassifier(
+                    modelRoot: URL(fileURLWithPath: modelPath, isDirectory: true),
+                )
+            } else {
+                try await CoreMLTileClassifier()
+            }
+            print("[mscz] model=\(env("OMR_MODEL_ROOT") ?? "bundled") "
+                + "checkpoint=\(base.manifest.checkpoint)")
+            return OMRDecodeOverriddenClassifier(base: base)
         }
 
         /// `nil` unless asked for: the sweep's own rows are the output, and a

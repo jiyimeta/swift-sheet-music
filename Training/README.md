@@ -1276,6 +1276,26 @@ converts `none` mostly into `sibling` (103 → 147; exact 236 → 284). It
 rescues absence, not the split — the split is a training question. Not
 implemented; the table is the answer.
 
+**Resolution is not the lever — counted, not reasoned** (`ダイナマイト`, 23
+`clefF8va` truths, run3, scan DPI swept; `clefcand-dyn-<dpi>.log`):
+
+| scan dpi | exact | sibling (→F) | none | mean score exact / plain F |
+|---|---|---|---|---|
+| 200 | 1 | 0 | 22 | 0.129 / 0.139 |
+| 300 (shipped) | 0 | 0 | 23 | 0.065 / 0.083 |
+| 400 | 0 | 10 | 13 | 0.097 / 0.243 |
+| 600 | 1 | 10 | 12 | 0.085 / 0.281 |
+
+More pixels move the mass toward the PLAIN sibling, not toward the exact
+class. The previous round's hypothesis 5 (blur from normalization) was
+rejected by reasoning; this is the count. `clefG8vb` on the same document
+is 46/46 at every dpi.
+
+**Score-level baseline, same 200 files, τ=0.30, HEAD binary**
+(`corpus-200-run3.log`): vector pitchP50 0.9862 / mean 0.9247, raster
+pitchP50 0.9244 / mean 0.8306 (199 scored, 1 failed). Paired A/B against
+another model: `Training/probes/corpus_ab.py <log-A> <log-B>`.
+
 More numbers land below as they are measured; the memory file
 `project_omr_training_round2` tracks the round between sessions.
 
