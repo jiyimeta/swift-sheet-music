@@ -444,7 +444,8 @@
             ])
             let metrics = StaffMetrics(staffSize: 28)
             let schedule = LayoutEngine.HeaderSchedule(
-                clefX: 0, keySigX: 0, timeSigX: 0, contentStartX: 40,
+                clefX: 0, keySigX: 0, timeSigX: 0, startRepeatX: nil,
+                contentStartX: 40,
             )
             let cols = LayoutEngine.tickColumns(
                 staves: [staff],

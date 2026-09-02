@@ -219,6 +219,13 @@ public final class LayoutCache: @unchecked Sendable {
         let division: Int
         let drumLineMap: [Int: Int]?
         let isLastMeasure: Bool
+        /// Whether the canonical staff's measure carries `endRepeatCount`.
+        /// Read from a staff this snapshot's `measure` may not be — a
+        /// lower staff's placement changes when the FIRST staff's flag
+        /// does — so it has to be part of the cache-hit predicate in its
+        /// own right. (The matching `startRepeat` flag reaches the
+        /// predicate through `headerSchedule.startRepeatX`.)
+        let endsRepeat: Bool
         let isFirstSystem: Bool
         let incomingMelismas: [MelismaContinuation]
         let effectiveMelismaTicks: [MelismaLyricKey: Int]

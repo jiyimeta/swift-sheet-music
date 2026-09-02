@@ -15,6 +15,10 @@ extension LayoutEngine {
         let clefX: CGFloat
         let keySigX: CGFloat
         let timeSigX: CGFloat
+        /// X of the synthesized start-repeat barline, when the canonical
+        /// staff's measure carries `startRepeat`. `contentStartX`
+        /// already includes the room it takes.
+        let startRepeatX: CGFloat?
         let contentStartX: CGFloat
     }
 
@@ -99,15 +103,52 @@ extension LayoutEngine {
             }
         }
 
+        return headerSchedule(
+            clefWidth: clefWidth,
+            keySigWidth: keySigWidth,
+            timeSigWidth: timeSigWidth,
+            staves: staves,
+            measureIdx: measureIdx,
+            metrics: metrics,
+        )
+    }
+
+    /// Turn the per-column widths `computeHeaderSchedule` measured into
+    /// the schedule's x-coordinates. Split out so that function's body
+    /// stays inside the project's length limit.
+    private static func headerSchedule(
+        clefWidth: CGFloat,
+        keySigWidth: CGFloat,
+        timeSigWidth: CGFloat,
+        staves: [Staff],
+        measureIdx: Int,
+        metrics: StaffMetrics,
+    ) -> HeaderSchedule {
         let clefX = metrics.sp * 2
         let keySigX = clefX + clefWidth
         let timeSigX = keySigX + keySigWidth
-        let contentStartX = timeSigX + timeSigWidth
+        var contentStartX = timeSigX + timeSigWidth
             + (timeSigWidth > 0 ? metrics.sp * 0.5 : 0)
+        // Repeat flags live on the canonical staff only
+        // (`Score.canonicalStaff`); MuseScore generates the barline from
+        // the flag rather than storing a `<BarLine>` element, so this is
+        // where it is generated here too.
+        let startsRepeat = staves.first.map {
+            measureIdx < $0.measures.count
+                && $0.measures[measureIdx].startRepeat
+        } ?? false
+        let startRepeatX: CGFloat? = startsRepeat
+            ? contentStartX + metrics.sp * 0.4
+            : nil
+        if startsRepeat {
+            // Thick + thin stroke + dots + a gap before the first note.
+            contentStartX += metrics.sp * 1.75
+        }
         return HeaderSchedule(
             clefX: clefX,
             keySigX: keySigX,
             timeSigX: timeSigX,
+            startRepeatX: startRepeatX,
             contentStartX: contentStartX,
         )
     }
