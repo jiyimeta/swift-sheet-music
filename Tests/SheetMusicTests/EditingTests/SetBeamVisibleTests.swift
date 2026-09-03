@@ -105,6 +105,47 @@ struct SetBeamVisibleTests {
         #expect(Self.chord(score, 1)?.beamVisible == true)
     }
 
+    @Test("undoing a clear on an orphaned flag never refuses, and the undo stack stays in sync")
+    func undoOfOrphanedClearDoesNotCorruptTheStack() throws {
+        let editor = ScoreEditor(score: EditingFixtures.twoBeamedEighths()) // [ts, C4 e, D4 e, r q, r h]
+
+        // Hide the beam while the group exists.
+        try editor.apply(SetBeamVisible(at: Self.slot(1), visible: false))
+        #expect(Self.chord(editor.score, 1)?.beamVisible == false)
+
+        // Dissolve the group with a real, already-shipped command — element 1 becomes a lone eighth.
+        try editor.apply(DeleteRange(over: VoiceElementRange(start: Self.slot(2), end: Self.slot(2))))
+        #expect(SetBeamVisible.leader(of: Self.slot(1), in: editor.score) == nil)
+
+        // Clear the orphaned flag — allowed since the earlier fix, and it writes straight to the chord.
+        try editor.apply(SetBeamVisible(at: Self.slot(1), visible: true))
+        #expect(Self.chord(editor.score, 1)?.beamVisible == true)
+
+        // The naive self-inverse would be `SetBeamVisible(visible: false)`, whose own `.notBeamed` precondition
+        // is unmet here (still no group) — undoing it must not throw, and must not desync the undo stack.
+        try editor.undo()
+        #expect(Self.chord(editor.score, 1)?.beamVisible == false)
+        #expect(editor.canUndo) // the hide's and the DeleteRange's inverses must still be on the stack underneath
+
+        // Undo the DeleteRange too: the group re-forms.
+        try editor.undo()
+        #expect(SetBeamVisible.leader(of: Self.slot(1), in: editor.score) == Self.slot(1))
+        #expect(editor.canUndo) // the hide's inverse is still there
+
+        // Undo the original hide: back to the untouched fixture, and the stack is exhausted correctly.
+        try editor.undo()
+        #expect(editor.score == EditingFixtures.twoBeamedEighths())
+        #expect(!editor.canUndo)
+
+        // Redo all three and land back exactly where the forward sequence left off.
+        try editor.redo()
+        try editor.redo()
+        try editor.redo()
+        #expect(SetBeamVisible.leader(of: Self.slot(1), in: editor.score) == nil)
+        #expect(Self.chord(editor.score, 1)?.beamVisible == true)
+        #expect(!editor.canRedo)
+    }
+
     private static func reason(of error: SheetMusicError?) -> EditRefusal.Reason? {
         guard case let .invalidEdit(refusal)? = error else { return nil }
         return refusal.reason
