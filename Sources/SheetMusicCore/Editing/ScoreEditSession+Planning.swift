@@ -139,10 +139,7 @@ extension ScoreEditSession {
              .setNoteParentheses:
             return notationCommand(for: intent, in: score)
         case .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible:
-            // The visibility group's payloads (58…61) exist on the wire from this commit; their planner lands in
-            // the next one. Until then the switch stays exhaustive rather than growing a `default` that would
-            // swallow a future intent nobody dispatched.
-            return nil
+            return visibilityCommand(for: intent, in: score)
         }
     }
 
