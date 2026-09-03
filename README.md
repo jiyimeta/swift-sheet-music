@@ -349,8 +349,11 @@ wrapping the wasm build with a Canvas2D renderer; see
 [its README](Web/sheet-music-web/README.md) for the consumer-side API, and
 [`Examples/Web/`](Examples/Web/) for a viewer you can open locally.
 
-The bindings expose display and playback. Editing exists in the Swift engine
-but is not exposed to JavaScript yet.
+The bindings expose display, playback and editing: `beginEditing()`, the typed
+`applyEdit(intent)`, the `applyEditIntentBytes(bytes)` relay for intents authored
+elsewhere, `undo()` / `redo()` and `editState()`. The browser replays the same
+byte-pinned golden chains as Swift and Kotlin — including the ninety-two-step
+edit-command parity chain — so a command behaves identically on all three.
 
 ```bash
 Scripts/wasm-build-web.sh                    # wasm + JavaScript glue

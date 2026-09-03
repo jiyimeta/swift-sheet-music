@@ -128,225 +128,104 @@ own substantive logic.
 | `SetPalmMute` | not in the example — host command registry | sugar |
 | `SetLetRing` | not in the example — host command registry | sugar |
 | `RemoveSpanner` | not in the example — host command registry | sugar |
+| `SetChordSymbol` | not in the example — host command registry | sugar |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
 command).
 
+Every command from `SetLayoutBreak` on is also an `EditIntent` case
+(wire indices 30–73, `EditIntentCodec.swift`'s case list) and a step of
+the frozen parity replay chain (`ReplayChain.parity`).
+
 ---
 
 ## B. To-do checklist
 
-The data model already supports each of these. Each item is a
-candidate library command. Sugar items are explicitly tagged so
-the implementer knows the body will be a thin Composite — but
-they're still part of the implementation queue (per the policy
-section above).
-
-### Structural
-
-- [x] **`CreateTuplet`** — convert a range of consecutive timed
-  elements into a tuplet (Ctrl+3 = triplet, Ctrl+5 = quintuplet, …).
-  Modifies `Voice.tuplets` + rebuilds element durations.
-  Implemented; see "A. Implemented" above.
-- [x] **`RemoveTuplet`** — drop a tuplet wrapper and restore its
-  constituents to ordinary durations. Implemented; see
-  "A. Implemented" above.
-- [x] **`MoveToVoice`** — move a chord or rest from one voice to
-  another within the same measure. Implemented; see "A. Implemented"
-  above.
-- [x] **`CreateVoice`** — append a voice to one measure, filled with a
-  full-measure rest. `ReplaceVoiceElements` refuses a voice that does
-  not exist, so this is what a write into a bar's second voice goes
-  through first. Implemented; see "A. Implemented" above.
-- [x] **`SplitRest`** — split one rest into two beat-aligned runs at a
-  tick offset, so a caret that landed inside a rest has a slot to
-  write into. Implemented; see "A. Implemented" above.
-- [x] **`SetDrumsetEntry`** — write (or remove) one pitch's row in a
-  part's drum kit. Without a row the layout engine falls back to the
-  pitched diatonic formula and draws the drum on a wrong line, so a pad
-  that can write an instrument the chart never used has to be able to
-  repair it. Implemented; see "A. Implemented" above.
-- [x] **`InsertMeasure`** / **`DeleteMeasure`** — measure-level
-  structural ops. Implemented; see "A. Implemented" above.
-- [x] **`AddPart`** / **`RemovePart`** / **`MovePart`** — part-level
-  structural ops: add an instrument, drop one (re-anchoring the
-  brackets and system elements that outlive it), reorder the score.
-  Implemented; see "A. Implemented" above.
-- [x] **`SetBarLineSubtype`** *(sugar)* — change a barline
-  (regular / double / repeat / end). Split into two intents once the
-  model work made the distinction concrete: **`SetBarLine`**
-  *(sugar)* writes the visible end-barline style (regular / double /
-  dashed / dotted / heavy / double-heavy); **`SetRepeatBarLines`**
-  writes the repeat flags (`startRepeat` / `endRepeatCount`), which
-  MuseScore treats as measure-level state rather than a barline
-  subtype. Both implemented; see "A. Implemented" above.
-- [x] **`SetMeasureRepeat`** — replace a measure's content with a
-  measure-repeat sign. Implemented; see "A. Implemented" above.
-
-### Score symbols (already present as `VoiceElement` cases)
-
-- [x] **`SetClef`** and **`RemoveClef`** at a position — including
-  mid-measure clef changes. Implemented; see "A. Implemented" above.
-- [x] **`SetKeySignature`** / **`RemoveKeySignature`** at a position.
-  Implemented; see "A. Implemented" above.
-- [x] **`SetTimeSignature`** / **`RemoveTimeSignature`** at a measure
-  start — with downstream tick-budget recompute. Implemented; see
-  "A. Implemented" above.
-- [x] **`SetTempo`** — insert / edit / remove a tempo marking.
-  Implemented; see "A. Implemented" above.
-- [x] **`SetDynamic`** *(sugar)* — pp / p / mf / f / ff / etc.
-  Implemented; see "A. Implemented" above.
-- [x] **`SetStaffText`** — arbitrary text label, staff or system.
-  Implemented; see "A. Implemented" above.
-- [x] **`SetRehearsalMark`** / **`RemoveRehearsalMark`** — set /
-  rename / remove the mark on one bar. Implemented; see
-  "A. Implemented" above.
-- [x] **`SetFermata`** *(sugar)* — toggle fermata over an element
-  (the fermata sits before it in the voice stream). Implemented; see
-  "A. Implemented" above.
-- [x] **`SetBreath`** *(sugar)* — breath mark / caesura after a
-  chord. Implemented; see "A. Implemented" above.
-- [x] **`SetJumps`** / **`SetMarkers`** — replace a bar's navigation
-  jumps / markers. Implemented; see "A. Implemented" above.
-
-### Note / Chord properties (fields already exist on the model)
-
-This group is closed: intents 50–57 all landed with the edit-command
-parity project. Three model fields the v1 wire deliberately does not
-carry — `ChordLine.isWavy` and `Arpeggio.timeStretch` / `userLen1` —
-stay reachable only by building the command (or a
-`ReplaceVoiceElement`) directly.
-
-- [x] **`SetArticulation`** *(sugar)* — one articulation kind on a
-  chord, with its anchor; a write replaces every entry of that kind.
-  Implemented; see "A. Implemented" above.
-- [x] **`SetGraceNotes`** *(sugar)* — replaces both of a chord's
-  grace lists at once. Implemented; see "A. Implemented" above.
-- [x] **`SetTremolo`** *(sugar)* — `Chord.tremolo`; a `.between` span
-  needs a following chord. Implemented; see "A. Implemented" above.
-- [x] **`SetArpeggio`** *(sugar)* — `Chord.arpeggio`; a write needs
-  two notes to spread. Implemented; see "A. Implemented" above.
-- [x] **`SetGlissando`** *(sugar)* — `Note.glissando`; the
-  destination is the next chord, so a write needs one. Implemented;
-  see "A. Implemented" above.
-- [x] **`SetNoteHead`** *(sugar)* — `Note.headType` (cross / diamond /
-  triangle / …). Implemented; see "A. Implemented" above.
-- [x] **`SetDots`** *(sugar)* — augmentation dots (0…3); thin wrapper
-  over `SetChordDuration` / `SetRestDuration`. Implemented; see
-  "A. Implemented" above.
-- [x] **`SetChordLine`** *(sugar)* — the jazz / brass inflection line
-  (fall / doit / plop / scoop), one per chord in v1. Implemented; see
-  "A. Implemented" above.
-- [x] **`SetNoteParentheses`** *(sugar)* — `Note.parentheses`;
-  `.none` is the clear. Implemented; see "A. Implemented" above.
-- [x] **`SetElementVisible`** / **`SetNoteVisible`** /
-  **`SetStemVisible`** / **`SetBeamVisible`** *(sugar)* —
-  `<visible>` on any voice element, a notehead, a stem, a beam group
-  (written on the group's leading chord; the intent may name any
-  member). Implemented; see "A. Implemented" above.
-
-### Range operations (composable from existing per-element
-commands + `CompositeEditCommand`)
-
-These iterate an existing per-element command across a `.range`
-selection. Sugar all the way down — but worth a named API for
-intent.
-
-- [x] **`TransposeRange`** *(sugar)* — by ±N semitones / octaves;
-  loops `SetNotePitch`. Implemented; see "A. Implemented" above.
-- [x] **`AddIntervalToSelection`** *(sugar)* — Alt+1…9 above /
-  Shift+Alt+1…9 below; loops `AddNoteToChord` with computed
-  pitches. Implemented; see "A. Implemented" above.
-- [x] **`DeleteRange`** *(sugar)* — replace each timed element in
-  the range with rests; loops `DeleteVoiceElement`. Implemented;
-  see "A. Implemented" above.
-- [x] **`SetAccidentalsInRange`** *(sugar)* — apply one accidental
-  to every selected note; loops `SetAccidental`. Implemented; see
-  "A. Implemented" above.
-- [x] **`SetDurationInRange`** *(sugar)* — set the same duration
-  on every selected timed element; loops
-  `SetChord/RestDuration`. Implemented; see "A. Implemented" above.
-- [x] **`RespellRange`** *(sugar)* — re-spell a range under a
-  `RespellMode` (simplest / preferSharps / preferFlats); loops
-  `SetNotePitch`. Implemented; see "A. Implemented" above.
-
-### Spanners (depends on `Spanner` subtype coverage)
-
-- [x] **`SetSlur`** *(sugar)* — phrase mark, and `RemoveSpanner`, which
-  is the removal for all of them. Implemented; see "A. Implemented"
-  above.
-- [x] **`SetHairpin`** *(sugar)* — crescendo / decrescendo.
-  Implemented; see "A. Implemented" above.
-- [x] **`SetPedal`** *(sugar)* — piano pedal. Implemented; see
-  "A. Implemented" above.
-- [x] **`SetVolta`** *(sugar)* — repeat 1./2. brackets. Implemented;
-  see "A. Implemented" above.
-- [x] **`SetOttava`** *(sugar)* — 8va / 8vb octave lines. Implemented;
-  see "A. Implemented" above.
-- [x] **`SetTextLine`** *(sugar)* — arbitrary text line spanner.
-  Implemented; see "A. Implemented" above.
-- [x] **`SetTrill`** *(sugar)* — trill line. Implemented; see
-  "A. Implemented" above.
-- [x] **`SetVibrato`** *(sugar)* — vibrato line. Implemented; see
-  "A. Implemented" above.
-- [x] **`SetPalmMute`** *(sugar)* — palm-mute line. Implemented; see
-  "A. Implemented" above.
-- [x] **`SetLetRing`** *(sugar)* — let-ring line. Implemented; see
-  "A. Implemented" above.
+Empty. Every operation the `Score` model can express has a named
+command in §A — the edit-command parity project
+(`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`,
+intents 30–73) closed the queue this section used to hold. New
+commands start with a gap from §C, or with a new feature
+altogether; either way they open a new wire chain rather than extending
+the frozen parity one (`ReplayChain`).
 
 ---
 
-## C. Out of scope for the current data model
+## C. Still out of reach
 
 Everything else this checklist used to list here — articulations,
 grace notes, tremolo, note color / visibility, stem/beam mode,
-layout breaks, chord symbols, spanners — already exists in
-`Sources/SheetMusicCore/Score/` and renders; it only lacked an edit
-command. That gap is closed by the edit-command parity project
-(`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`):
-the structural group above landed first, the Range group (intents
-35–40) second, the Marks group (41–49) third, the Note/chord
-group (50–57) fourth, the Visibility group (58–61) fifth and the
-Spanners group (62–72) sixth, and the remaining group (Harmony —
-intent 73) is queued in that spec.
+layout breaks, chord symbols, spanners — already existed in
+`Sources/SheetMusicCore/Score/` and rendered; it only lacked an edit
+command. The edit-command parity project
+(`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`)
+gave each one an edit command, landed in seven groups: Structural
+(intents 30–34), Range (35–40), Marks (41–49), Note / chord (50–57),
+Visibility (58–61), Spanners (62–72) and Harmony (73).
 
-What is left below genuinely needs a `Score` model extension before
-any edit command can make sense of it:
+What is left below is the true remainder — the rows that need the
+`Score` model to grow, plus the ones the parity groups recorded as
+deliberately out of their v1 (each is a spec §3.4 amendment). Nothing
+else is known to be missing:
 
-| Feature | Required model addition |
+| Feature | Why it is out of reach today |
 | --- | --- |
 | Ornaments other than trill (turn, mordent, …) | per-note ornament annotation — the model has `TrillType` but no general ornament case. |
-| Manual stem direction | `Chord.stemDirection` (currently auto only). |
-| Cue note (small) | `Chord`/`Note` scale / cue flag. |
+| Manual stem direction | `Chord.stemDirection` (auto only). |
+| Cue note (small) | `Chord` / `Note` scale or cue flag. |
 | Slash notation | dedicated voice element. |
 | Figured bass | dedicated annotation type. |
-| Pedal line style | `Spanner` has no pedal-style payload — `SetPedal` (#64) writes only `rawType = "Pedal"`. |
-| Chord-symbol transposition | `SetChordSymbol` (queued, #73) writes `Harmony.name` only and leaves `rootTpc` / `bassTpc` nil, so a written chord symbol carries no transposable root — transposing chord symbols is out of scope until it does. |
+| Pedal line style | `Spanner` has no pedal-style payload — `SetPedal` (#64) writes `rawType = "Pedal"` only. |
+| Chord-symbol transposition | `SetChordSymbol` (#73) writes `Harmony.name` and nils `rootTpc` / `bassTpc` (and nils them on a file-authored symbol it retypes), so a written symbol carries no transposable root. |
+| Tempo text words ("Allegro") | `Tempo` has no text field; `SetTempo.Marking` is the metronome mark alone, and the encoder synthesizes the `<text>` from it. |
+| A lane element at a tick no chord starts | tempo / staff text are addressed by the chord or rest they sit on (spec §2.3); a `<location>`-jogged file-authored lane element cannot be removed. |
+| A clef MuseScore wrote at the end of a bar | outside any attachment run; `SetClef` on the next bar's first chord inserts a second clef instead of replacing it (`RemoveClef` removes it explicitly). |
+| Dynamics on rests | `SetDynamic` requires a chord with notes; MuseScore allows a dynamic on a rest. |
+| 4-bar measure-repeat anchor | `SetMeasureRepeat` writes the `%` into the group's first bar; MuseScore anchors it in bar `numMeasures / 2`. Playback searches the whole group, so only the file differs. |
+| Cross-bar lengthening in a range | `SetDurationInRange` refuses a lengthening that crosses the bar line (`insufficientRoom`); no tied chain is spelled. |
+| Ties on added-interval notes | `AddIntervalToSelection` adds notes without ties even where the source note is tied. |
+| Arpeggio stretch, `userLen1`, wavy chord line | `Arpeggio.timeStretch` / `userLen1` and `ChordLine.isWavy` are on the model and round-trip, but the v1 wire keeps intents scalar and carries none of them; reachable only by building the command (or a `ReplaceVoiceElement`) directly. |
+| A second chord line on one chord | `SetChordLine` writes one line per chord and drops a second one a file may legitimately carry. |
+| Removing one slur of a chord that carries two | `RemoveSpanner` takes every entry of `Chord.spanners` at the target; a caller that means only the inner or the outer one writes the `ReplaceVoiceElement` directly. |
 
 ---
 
-## Suggested implementation order
+## History
 
-Roughly ordered by impact. A reasonable sweep:
+The queue in §B was worked in this order: tuplets, measures and parts,
+signatures, rehearsal marks, drum entry (M1–M6), then the parity
+project's seven groups — structural, range, marks, note / chord,
+visibility, spanners, harmony — one merge each, 2026-09-02 …
+2026-09-03.
 
-1. `CreateTuplet` / `RemoveTuplet` — rhythm editing core.
-   (Landed — see "A. Implemented" above.)
-2. `SetDots` — cheap, but unlocks dotted durations from the
-   keyboard.
-3. `InsertMeasure` / `DeleteMeasure` — structural foundation.
-   (Landed — see "A. Implemented" above.)
-4. Range commands (`TransposeRange` / `DeleteRange` /
-   `SetAccidentalsInRange` / …) — pure sugar, ergonomic wins for
-   the editor UX. (Landed — see "A. Implemented" above.)
-5. Text-mark commands together (`SetTempo` /`SetDynamic` /
-   `SetStaffText`) — shared shape, easy to batch.
-   (Landed — see "A. Implemented" above; `SetRehearsalMark` /
-   `RemoveRehearsalMark` had landed before them.)
-6. Chord/note property commands (`SetArpeggio` / `SetGlissando`) —
-   small, isolated. (`SetNoteHead` has landed already — see
-   "A. Implemented" above.)
-7. `MoveToVoice` — voice editing. (Landed — see "A. Implemented"
-   above.)
-8. Spanner commands once `Spanner` subtypes are confirmed. Landed as
-   intents 62–72. (Landed — see "A. Implemented" above.)
+### What proved it, at the close (2026-09-03)
+
+Stated as measurement, so a later reader can tell evidence from
+intention:
+
+- **Swift, the whole package:** 4100 tests in 698 suites pass. Two
+  known issues are unrelated to editing and predate the project (a PDF
+  text-glyph bbox case, and a hairpin MIDI velocity-ramp follow-up).
+- **The parity replay chain is frozen** at 92 steps: `goldens.txt` is
+  93 lines, `editReplay-parity/` holds 87 `step-*.bin` files (92 steps
+  less the 5 undos), and 61 of the 93 recorded fingerprints are
+  distinct against a floor of 57. It is never extended or re-recorded
+  again; a new command opens a new chain.
+- **Browser (WebAssembly):** 131 of 131 vitest tests pass across 12
+  files, 0 skipped. `edit.test.ts` drives BOTH chains — the original
+  and the 92-step parity one — through the wasm facade, asserting each
+  step's acceptance as well as the fingerprint. **Build the wasm binary
+  before trusting that suite**: with no binary in the tree the edit
+  tests SKIP and the run is still green, which is a suite that verified
+  nothing.
+- **MSCX save idempotency:** every score of a 669-file external corpus
+  that the reader accepts — 668 of them — encodes byte-identically on
+  pass 1 and pass 2, 0 differing. (The 669th is a MuseScore 1.x file,
+  outside this reader's stated scope.) A permanent version of this
+  gate, always-on over the in-tree fixtures and opt-in over an external
+  corpus, lands separately.
+- **Not run:** the Kotlin `EditSessionReplayParityTest`. It is
+  device-only instrumentation, and the chain has grown to 92 steps with
+  87 step assets that test has never consumed. Running it on a device
+  is the one outstanding verification for this project.
