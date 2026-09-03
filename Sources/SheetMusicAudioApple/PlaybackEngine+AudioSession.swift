@@ -42,6 +42,11 @@ extension PlaybackEngine {
     /// Registered for every policy, `.hostManaged` included: the invalid `state` is engine-internal, and a host that
     /// owns its session is just as exposed to it. A host that also pauses on `.began` costs nothing — `pause()` is
     /// idempotent.
+    ///
+    /// There is no macOS counterpart *in this file*, and none is missing: macOS has no `AVAudioSession`, so what
+    /// plays the equivalent role there — the engine losing its output from under a running transport — arrives as
+    /// `AVAudioEngineConfigurationChange`. See `PlaybackEngine+ConfigurationChange`, which is registered on every
+    /// platform including this one.
     func startObservingAudioSessionInterruptions() {
         #if os(iOS) || os(tvOS) || os(watchOS)
             interruptionObserver.token = NotificationCenter.default.addObserver(

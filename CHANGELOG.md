@@ -7,6 +7,21 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Playback follows a change of audio output. `AVAudioEngine` stops itself when
+  the I/O configuration changes — the user picks a different output device on a
+  Mac, headphones come out on iOS — and nothing observed that, so the score went
+  silent while `PlaybackEngine.state` still reported `.playing`. The engine now
+  rebuilds its graph on the new route, keeping the cursor, the transport (playing
+  stays playing, paused stays paused) and every mixer strip. Offline exports,
+  which render on their own engine, are untouched.
+- An automatic graph rebuild that fails is no longer silent: the error lands in
+  the new `PlaybackEngine.lastGraphRestartError` and the transport reports
+  `.stopped` instead of an inaudible `.playing`. This also covers the SoundFont
+  hot-swap (`reloadSoundfont(resolver:)`), whose failure was previously
+  unobservable by design.
+
 ## [2.4.0] - 2026-09-03
 
 ### Added

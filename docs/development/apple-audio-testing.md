@@ -54,3 +54,24 @@ it: a minimal entitled `.app` that constructs the node and exits.
 Descriptions used purely to *find* an Apple component (`makePeakLimiter`,
 `MIDISynthBuilder.make`) pass `componentFlagsMask: 0`, so their flags are not
 matched and need no change.
+
+## Audio route / device changes
+
+`AVAudioEngine` stops itself when its I/O configuration changes and posts
+`AVAudioEngineConfigurationChange`; `PlaybackEngine` observes it and rebuilds the
+graph in place (`PlaybackEngine+ConfigurationChange.swift`). The automated tests
+post that notification themselves, which proves the wiring and the rebuild but
+not that the system posts it for a real device switch — that part is manual:
+
+- **macOS.** With two output devices connected (built-in speakers and any USB /
+  Bluetooth / HDMI output), start playback in `SheetMusicExampleMac` and switch
+  the system output in System Settings → Sound, or from the menu-bar volume
+  control. Playback must continue, on the new device, from where it was.
+- **iOS.** Start playback and unplug (or plug in) headphones mid-score.
+  Note that unplugging *also* posts an `AVAudioSession` route change whose
+  default behavior pauses; what matters here is that playback does not end up
+  silent-but-`.playing`.
+
+If a device switch turns out not to post the notification on macOS, the fallback
+is a HAL property listener on `kAudioHardwarePropertyDefaultOutputDevice` — left
+out deliberately (YAGNI) until that manual test says otherwise.
