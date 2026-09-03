@@ -31,7 +31,13 @@
 
         var body: some View {
             GeometryReader { geo in
-                let width = geo.size.width - 32
+                // A fixed layout width is the whole point of the
+                // option: it must NOT be reduced by the window, and
+                // the `.task(id:)` below must not re-run when the
+                // window resizes. Falling back to the viewport width
+                // keeps the default behavior identical.
+                let width = options.fixedLayoutWidth
+                    ?? (geo.size.width - 32)
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
                         if let doc = verticalDoc {
@@ -119,7 +125,9 @@
     /// layout. Width and `scoreVersion` together capture every input
     /// that should trigger a re-layout — staffSize / systemGap come
     /// from the static `ScoreViewOptions` so they don't vary at
-    /// runtime.
+    /// runtime. When `options.fixedLayoutWidth` is set, `width` is
+    /// that value rather than the viewport's, which is what makes a
+    /// window resize a no-op.
     struct VerticalLayoutKey: Hashable {
         let width: CGFloat
         let scoreVersion: UUID
