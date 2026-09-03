@@ -347,6 +347,19 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// `+ConfigurationChange` extension.
     var pendingConfigurationRestart: Task<Void, Never>?
 
+    /// `true` for the duration of `performConfigurationChangeRestart()` (set at its start, cleared by its `defer`).
+    /// Consulted at the top of `configurationChangeDidPost()`, which returns early while it is set.
+    ///
+    /// `NotificationCenter` delivers a `queue: .main` block SYNCHRONOUSLY when the post happens on the main
+    /// thread, so our own `prepare(score:)` — called from inside `restartGraphPreservingState()` — can post
+    /// `AVAudioEngineConfigurationChange` reentrantly while this rebuild is still on the stack; that reentrant post
+    /// is exactly what this flag drops. A genuine EXTERNAL device change arriving while the main actor is busy
+    /// inside the rebuild is *enqueued* by `NotificationCenter` instead of delivered synchronously, so it is not
+    /// seen until `configurationChangeDidPost()` runs again after the rebuild returns and this flag has already
+    /// been cleared — it survives the flag, it just waits its turn. `internal` for the `+ConfigurationChange`
+    /// extension.
+    var isRebuildingForConfigurationChange = false
+
     public init(
         soundfontResolver: SoundfontResolver,
         metronomeClickProvider metronomeClickProvider0: MetronomeClickProvider? = nil,
@@ -706,6 +719,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             return
         }
         loadedScore = score
+        // A host that reads `lastGraphRestartError` and re-`prepare`s on it (the recovery path its own doc
+        // describes) needs this to actually dismiss — it was never cleared here before, so `@Observable` state
+        // from a failed automatic rebuild stuck around even after a successful manual `prepare`.
+        lastGraphRestartError = nil
         // Stop any in-flight playback before tearing down samplers.
         stop()
         // Drop any ringing tap-preview so it can't outlive this synth.
@@ -844,6 +861,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         let savedCursor = currentCursor
         let wasPlaying = state == .playing
         let savedMixer = mixerChannels
+        // `prepare(score:)` calls `clearLoop()` — an in-place rebuild is not the host asking to drop the loop, so
+        // it has to come back. Snapshotted here (score/notated ticks) and re-applied below via the same `apply(loop:)`
+        // the public loop setters use, once the transport has been re-seated: applying a loop projects it onto the
+        // freshly built sequence map / timeline (`projectLoopOntoTransport`), so it must run AFTER `play(...)` below,
+        // not before.
+        let savedLoop = loopRange
         try prepare(score: score)
         // `prepare` rebuilds the channel array at the score's defaults;
         // re-apply the user's mixer state.
@@ -860,6 +883,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // immediately when we weren't actively playing, so a paused rebuild
         // keeps its place without continuing to sound.
         if wasPlaying {
+            // No `usingBackend, backend?.isReady == false` guard needed here, unlike the paused branch below: the
+            // resolver is unchanged across a configuration-change / soundfont-reload rebuild (only the graph is
+            // rebuilt), so the backend's SoundFont is still the one already loaded, and if `play` is nonetheless
+            // deferred for some other reason, the backend's own ready-path replay self-heals it.
             play(from: savedCursor, in: score)
         } else if let savedCursor {
             // With an async-loading backend the play-then-pause dance is unsafe:
@@ -881,6 +908,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                     pause()
                 }
             }
+        }
+        // AFTER the transport re-seat above: `apply(loop:)` projects the score-tick loop onto the transport via
+        // `projectLoopOntoTransport`, which reads `timeline` / `unrolledTimeMap` — both rebuilt by `prepare(score:)`
+        // moments ago — so doing this earlier would project against the stale, pre-rebuild timeline.
+        if let savedLoop {
+            apply(loop: savedLoop)
         }
         graphRestartCount += 1
         lastGraphRestartError = nil

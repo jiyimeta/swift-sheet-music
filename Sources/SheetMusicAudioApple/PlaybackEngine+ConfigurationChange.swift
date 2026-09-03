@@ -32,18 +32,30 @@ extension PlaybackEngine {
         }
     }
 
-    /// Schedule one rebuild for however many notifications arrive.
+    /// Trailing-debounce window collapsing a burst of `AVAudioEngineConfigurationChange` posts into one rebuild.
     ///
-    /// A single device switch can post more than once (the output unit reconfigures in stages). Restarting per
-    /// notification would rebuild the graph two or three times over, each one an audible gap. The first post
-    /// schedules a main-actor task and keeps the handle; later posts see it pending and drop. The task clears the
-    /// handle *before* it rebuilds, so a genuine second change arriving during a rebuild still earns its own.
+    /// A single device switch reconfigures the output unit in stages and posts more than once — but tens to
+    /// hundreds of milliseconds apart, not back-to-back. A scheme that only dropped a post arriving WHILE a
+    /// rebuild was already scheduled bought nothing against that gap: by the time the second post lands the first
+    /// has already fired, so every post in the burst bought its own `prepare` + transport re-seat — several
+    /// audible gaps and several backward cursor re-seats for what the user experienced as one switch. `internal`
+    /// so a test can reason about it without hardcoding the literal twice.
+    static let configurationChangeDebounceInterval: Duration = .milliseconds(250)
+
+    /// Debounce a burst of notifications into one rebuild, fired 250 ms after the LAST post rather than the
+    /// first: every post cancels whatever rebuild is still pending and schedules a fresh one.
+    ///
+    /// Deliberately does no other work beyond scheduling. This can run reentrantly mid-`prepare` (a rebuild's own
+    /// `prepare(score:)` posts this same notification, delivered synchronously — see
+    /// `PlaybackEngine.isRebuildingForConfigurationChange`, which this checks first and which drops that
+    /// reentrant post), so anything heavier than scheduling a `Task` here would reenter the graph mutation.
     func configurationChangeDidPost() {
-        guard pendingConfigurationRestart == nil else { return }
+        guard !isRebuildingForConfigurationChange else { return }
+        pendingConfigurationRestart?.cancel()
         pendingConfigurationRestart = Task { @MainActor [weak self] in
-            guard let self else { return }
+            try? await Task.sleep(for: Self.configurationChangeDebounceInterval)
+            guard let self, !Task.isCancelled else { return }
             pendingConfigurationRestart = nil
-            guard !Task.isCancelled else { return }
             performConfigurationChangeRestart()
         }
     }
@@ -64,6 +76,11 @@ extension PlaybackEngine {
     func performConfigurationChangeRestart() {
         guard state == .playing || state == .paused else { return }
         guard loadedScore != nil else { return }
+        // Set for the duration of the rebuild so a reentrant post from our OWN `prepare(score:)` — delivered
+        // synchronously, see `isRebuildingForConfigurationChange` — is dropped rather than scheduling a rebuild of
+        // this rebuild.
+        isRebuildingForConfigurationChange = true
+        defer { isRebuildingForConfigurationChange = false }
         do {
             try restartGraphPreservingState()
         } catch {

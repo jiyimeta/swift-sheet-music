@@ -59,18 +59,33 @@ matched and need no change.
 
 `AVAudioEngine` stops itself when its I/O configuration changes and posts
 `AVAudioEngineConfigurationChange`; `PlaybackEngine` observes it and rebuilds the
-graph in place (`PlaybackEngine+ConfigurationChange.swift`). The automated tests
-post that notification themselves, which proves the wiring and the rebuild but
-not that the system posts it for a real device switch — that part is manual:
+graph in place (`PlaybackEngine+ConfigurationChange.swift`), debounced 250 ms
+trailing so a burst of posts from one device switch collapses into a single
+rebuild rather than one per post. The automated tests post that notification
+themselves, which proves the wiring, the debounce, and the rebuild, but not
+that the system posts it for a real device switch — that part is manual:
 
 - **macOS.** With two output devices connected (built-in speakers and any USB /
   Bluetooth / HDMI output), start playback in `SheetMusicExampleMac` and switch
   the system output in System Settings → Sound, or from the menu-bar volume
   control. Playback must continue, on the new device, from where it was.
+  Listen for the gap: a single switch should produce **exactly one** brief
+  gap (~0.3 s, the debounce interval plus the rebuild itself). Several gaps in
+  a row for one switch means the burst isn't being collapsed and the debounce
+  needs revisiting — check how many notifications the device actually posts
+  and whether 250 ms still covers the gap between them.
 - **iOS.** Start playback and unplug (or plug in) headphones mid-score.
   Note that unplugging *also* posts an `AVAudioSession` route change whose
   default behavior pauses; what matters here is that playback does not end up
   silent-but-`.playing`.
+
+The rebuild itself is `prepare(score:)`, which is synchronous and — per its own
+doc comment — can take tens of milliseconds (more on a large score, since it
+re-parses the SF2 and re-renders the full SMF). A configuration-change rebuild
+runs on the main actor like any other `prepare(score:)` call, so a device
+switch on a large score is a brief main-thread hitch the host has no way to
+opt out of; the debounce above bounds it to one hitch per switch rather than
+one per notification.
 
 If a device switch turns out not to post the notification on macOS, the fallback
 is a HAL property listener on `kAudioHardwarePropertyDefaultOutputDevice` — left
