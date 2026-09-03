@@ -1367,6 +1367,35 @@ clef glyph in a measure and has no score to prefer a sibling by; and the
 checkpoint=…` — its first run5 table was byte-identical to run3's because
 it had silently measured the bundled model.
 
+**run6-clefctx — the same lever with a real-world class prior.** Identical
+to run5 except the supplement is `v3b-clefctx` (plain `G`/`F` half the
+staves, the octave and C clefs real scores carry 40%, `15ma`/`15mb` 10%).
+Last val 0.307, `~/omr-models/run6-clefctx-last`. Same binary, same 200
+files:
+
+| | run3 | run5 | **run6** |
+|---|---|---|---|
+| clef exact / sibling / none (all classes, n=23757) | 23153 / 374 / 230 | 23342 / 370 / 45 | **23425 / 293 / 39** |
+| `clefF8va` exact of 475 | 242 | 475 | **475** (370 above 0.70) |
+| `clefG8vb` exact of 7556 | 7337 | 7189 | **7276** |
+| … read as `clefG15mb` | 9 | 155 | **106** |
+| false clefs above τ (200 files) | 75 | 88 | **50** |
+| raster pitchP50 / mean | 0.9249 / 0.8332 | 0.9255 / 0.8375 | **0.9295 / 0.8438** |
+| paired pitch vs run3 | — | 53/68, +94pt | **63/53, +208pt** |
+| paired dur vs run3 | — | 42/34, +84pt | **52/26, +123pt** |
+
+Against run5 directly: pitch 68 better / 47 worse, net +114pt. The
+narrowed prior kept every point of the `clefF8va` fix, took back a third
+of the `G15mb` confusion it introduced, and cut the false clefs below the
+shipped model's own count.
+
+**Held-out seam, val 99 pages** (guard): run6 clean recall 0.9969 /
+precision 0.9954 / origin 0.0348 against run3's 0.9974 / 0.9961 / 0.0331 —
+0.05, 0.07 and 0.0017 the wrong way; degraded recall 0.9935 vs 0.9922, its
+precision 0.9874 vs 0.9885. The synthetic seam is a wash, slightly
+negative on clean. The corpus is where this round's target lives, and the
+corpus moved; that trade is the ship decision, not a detail to bury.
+
 More numbers land below as they are measured; the memory file
 `project_omr_training_round2` tracks the round between sessions.
 
