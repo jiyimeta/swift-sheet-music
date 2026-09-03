@@ -90,6 +90,8 @@ struct EditRefusalTests {
             .noNextChord(at: voiceID),
             .chordTooSmall(at: voiceID, noteCount: 1),
             .notDottable(at: voiceID),
+            .duplicateSpanner(at: voiceID, kind: .hairpin),
+            .noSpannerAtLocation(voiceID),
             .unexpected(description: "boom"),
         ]
     }

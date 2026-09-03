@@ -24,6 +24,7 @@ public struct EditRefusal: Sendable, Hashable {
         case timed
         case tuplet
         case clef
+        case spanner
     }
 
     public enum Reason: Sendable, Hashable {
@@ -126,6 +127,14 @@ public struct EditRefusal: Sendable, Hashable {
         /// is about the element's KIND: the element here is a perfectly good chord or rest whose LENGTH has no
         /// dotted spelling.
         case notDottable(at: VoiceElementID)
+        /// A spanner of this kind already begins at this position. Spec §3.2 makes "already there" a refusal
+        /// rather than a `.nothingToApply`, which is what makes each `set…Spanner` intent idempotent in the
+        /// restating sense without the planner having to compare payloads it cannot fully see.
+        case duplicateSpanner(at: VoiceElementID, kind: Spanner.Kind)
+        /// `RemoveSpanner` found no spanner of the kind it was asked for: a chord with no slur in
+        /// `Chord.spanners`, or a `.spanner` element of a different kind. Distinct from `.targetNotFound` for the
+        /// reason `.cannotRemoveLastPart` is — the element IS there, it just carries nothing to remove.
+        case noSpannerAtLocation(VoiceElementID)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -206,6 +215,10 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.chordTooSmall"
         case .notDottable:
             "edit.notDottable"
+        case .duplicateSpanner:
+            "edit.duplicateSpanner"
+        case .noSpannerAtLocation:
+            "edit.noSpannerAtLocation"
         case .unexpected:
             "edit.unexpected"
         }
@@ -288,6 +301,10 @@ public struct EditRefusal: Sendable, Hashable {
             "chord at \(location) has \(noteCount) note(s); an arpeggio needs at least 2"
         case let .notDottable(location):
             "element at \(location) has no dotted spelling for that dot count"
+        case let .duplicateSpanner(location, kind):
+            "a \(kind.rawValue) spanner already begins at \(location)"
+        case let .noSpannerAtLocation(location):
+            "no spanner to remove at \(location)"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
@@ -309,6 +326,8 @@ extension EditRefusal.ExpectedKind {
             "a tuplet"
         case .clef:
             "a clef"
+        case .spanner:
+            "a spanner"
         }
     }
 }
