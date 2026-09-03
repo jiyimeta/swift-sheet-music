@@ -102,4 +102,35 @@ public enum NoteDuration: Sendable, Equatable, Hashable {
         let d = base.denominator * factorDenominator
         return .fraction(Fraction(numerator: n, denominator: d))
     }
+
+    /// Split this duration into the base and dot count `dotted(_:)` would produce it from, or `nil` when no such
+    /// pair exists. The exact inverse of `dotted(_:)`, and the decomposition `SetDots` needs: a host asking for
+    /// "two dots" is asking for `base.dotted(2)`, and `base` is whatever the slot is spelled with today.
+    ///
+    /// An undotted case answers `(self, 0)`. `.measure` answers `nil` — it has no intrinsic length to dot, and
+    /// `asFraction` traps on it, so the guard comes first. A `.fraction` answers only when it equals some
+    /// `base.dotted(dots)`: a tuplet-scaled member (`1/12`) and any other irregular value answer `nil`, which is
+    /// what `SetDots` turns into `.notDottable`.
+    ///
+    /// Dots are searched to three, the ceiling MuseScore's palette offers; its own decomposition
+    /// (`durationtype.cpp:85-109`) instead finds the largest type that FITS and truncates, which is right for
+    /// re-spelling an arbitrary tick count and wrong here — this must be lossless, because the value it decomposes
+    /// is one this model wrote.
+    public func baseAndDots() -> (base: NoteDuration, dots: Int)? {
+        if case .measure = self { return nil }
+        let bases: [NoteDuration] = [
+            .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
+            .oneTwentyEighth, .twoFiftySixth,
+        ]
+        if let plain = bases.first(where: { $0 == self }) {
+            return (base: plain, dots: 0)
+        }
+        let target = asFraction
+        for base in bases {
+            for dots in 1 ... 3 where base.dotted(dots).asFraction == target {
+                return (base: base, dots: dots)
+            }
+        }
+        return nil
+    }
 }
