@@ -1,5 +1,15 @@
 /// Shared mechanics for the measure-structure commands (`InsertMeasure` / `DeleteMeasure`).
 enum MeasureStructure {
+    /// One spanner's *begin* side, addressed precisely enough to write back to it. A `VoiceElementID` alone is
+    /// not enough: a chord can carry several entries in `Chord.spanners` (an inner and an outer slur), of which
+    /// only some may need adjusting, so the slot has to travel with the element address.
+    struct SpannerAddress: Hashable, Sendable {
+        /// The element carrying the spanner — a `.spanner` voice element, or the chord holding it.
+        let id: VoiceElementID
+        /// The index into `Chord.spanners`, or `nil` when `id` names the `.spanner` element itself.
+        let spannerIndex: Int?
+    }
+
     /// The signature kinds that belong to the score start and travel with it when bar 1 changes identity.
     static func isLeadingSignature(_ element: VoiceElement) -> Bool {
         switch element {
@@ -139,8 +149,9 @@ enum MeasureStructure {
     /// Spanners store a relative forward measure distance; a structural change between a spanner's anchor and its
     /// end must stretch or shrink that distance.
     static func adjustSpannerOffsets(in score: inout Score, forInsertionAt index: Int) {
-        adjustSpannerOffsets(in: &score) { id, offset in
-            id.measureIndex < index && index <= id.measureIndex + offset ? offset + 1 : offset
+        adjustSpannerOffsets(in: &score) { address, offset in
+            let anchor = address.id.measureIndex
+            return anchor < index && index <= anchor + offset ? offset + 1 : offset
         }
     }
 
@@ -150,19 +161,20 @@ enum MeasureStructure {
     /// column: `forInsertionAt` tests `index <= anchor + offset` against the already-shrunk offset, which
     /// no longer includes the boundary the shrink just excluded. See `DeleteMeasure.apply` / `InsertMeasure.apply`.
     @discardableResult
-    static func adjustSpannerOffsets(in score: inout Score, forDeletionAt index: Int) -> [VoiceElementID] {
-        var endpoints: [VoiceElementID] = []
-        adjustSpannerOffsets(in: &score) { id, offset in
-            guard id.measureIndex < index, index <= id.measureIndex + offset else { return offset }
-            if index == id.measureIndex + offset {
-                endpoints.append(id)
+    static func adjustSpannerOffsets(in score: inout Score, forDeletionAt index: Int) -> [SpannerAddress] {
+        var endpoints: [SpannerAddress] = []
+        adjustSpannerOffsets(in: &score) { address, offset in
+            let anchor = address.id.measureIndex
+            guard anchor < index, index <= anchor + offset else { return offset }
+            if index == anchor + offset {
+                endpoints.append(address)
             }
             return offset - 1
         }
         return endpoints
     }
 
-    private static func adjustSpannerOffsets(in score: inout Score, _ transform: (VoiceElementID, Int) -> Int) {
+    private static func adjustSpannerOffsets(in score: inout Score, _ transform: (SpannerAddress, Int) -> Int) {
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
                 for measureIndex in score.parts[partIndex].staves[staffIndex].measures.indices {
@@ -176,16 +188,20 @@ enum MeasureStructure {
                             )
                             switch elements[elementIndex] {
                             case var .spanner(spanner):
-                                spanner.nextMeasuresOffset = transform(id, spanner.nextMeasuresOffset)
+                                spanner.nextMeasuresOffset = transform(
+                                    SpannerAddress(id: id, spannerIndex: nil), spanner.nextMeasuresOffset,
+                                )
                                 score.parts[partIndex].staves[staffIndex].measures[measureIndex]
                                     .voices[voiceIndex].elements[elementIndex] = .spanner(spanner)
                             case var .chord(chord) where !chord.spanners.isEmpty:
                                 // A slur begin lives in `Chord.spanners`, not as a `.spanner` element, and its
                                 // `nextMeasuresOffset` is measured from the SAME anchor — so it has to move by the
                                 // same rule. This walk missed it until group 6 made slurs writable.
-                                for index in chord.spanners.indices {
-                                    chord.spanners[index].nextMeasuresOffset =
-                                        transform(id, chord.spanners[index].nextMeasuresOffset)
+                                for slot in chord.spanners.indices {
+                                    chord.spanners[slot].nextMeasuresOffset = transform(
+                                        SpannerAddress(id: id, spannerIndex: slot),
+                                        chord.spanners[slot].nextMeasuresOffset,
+                                    )
                                 }
                                 score.parts[partIndex].staves[staffIndex].measures[measureIndex]
                                     .voices[voiceIndex].elements[elementIndex] = .chord(chord)
