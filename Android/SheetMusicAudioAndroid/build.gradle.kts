@@ -134,6 +134,12 @@ wirelet {
         // hand-written ones under audio/model/ (ScoreItemID.kt, NoteID.kt, …).
         // Only SheetMusicEditWire/Path is scanned — Intent/ holds the edit-intent
         // schema, which has no Kotlin model classes here and must not be emitted.
+        //
+        // The corollary, and the reason `:SheetMusicAudioAndroid:compileDebugKotlin`
+        // broke on the reference family (MeasureRef / PartRef / VoiceRef /
+        // VoiceElementRange): a new `@WireFormat` mirror under Path/ needs a
+        // hand-written model added here in the same change, because the generated
+        // codec references it by name and nothing else checks that it exists.
         register("editWire") {
             schemaPaths.from(packageRoot.resolve("Sources/SheetMusicEditWire/Path"))
             codecPackage.set("io.github.jiyimeta.sheetmusic.audio.serialization")

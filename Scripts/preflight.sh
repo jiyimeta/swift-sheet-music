@@ -83,7 +83,7 @@ if [[ "$run_apple" == 1 ]]; then
     step "Apple / SwiftPM: browser fixtures are current"
     swift run --package-path "$ROOT" GenWebFixtures \
         "$ROOT/Web/sheet-music-web/test/fixtures" \
-        "$ROOT/Web/sheet-music-web/assets/bravura.smft"
+        "$ROOT/Web/sheet-music-web/assets/sheet-music.smft"
 fi
 
 if [[ "$run_wasm" == 1 ]]; then

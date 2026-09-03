@@ -52,8 +52,8 @@ for freehand-ink anchoring in a specific integration.
 
 Until SMFT v3, Android and the browser placed ascent/descent-centred Bravura glyphs —
 articulations, fermatas, breath marks — about **1.2 staff spaces (~3 mm) below where
-Apple places them**. `SMuFLMetricsTableProvider` served Bravura glyph boxes from the
-`bravura.smft` table, but the v2 wire format had no ascent or descent fields, so
+Apple places them**. `FontMetricsTableProvider` served Bravura glyph boxes from the
+`sheet-music.smft` table, but the v2 wire format had no ascent or descent fields, so
 `ascent` and `descent` fell back to `StubFontMetricsProvider` for **every** face,
 Bravura included:
 
@@ -73,12 +73,13 @@ Bravura   ascender 2012, descender −2012 at 1000 upm — hhea, OS/2 typo and w
 the *bounding box* from the table and the *ascent/descent* from the stub, so one
 formula was fed by two different providers.
 
-v3 carries the face's ascent and descent in the table header, at the reference size
-like every other value. Three things write or read it and move together:
-`SMuFLMetricsTable.decode`, `Tools/GenBravuraMetrics` (the browser's table, generated
-from CoreText and committed to `Web/sheet-music-web/assets/bravura.smft` with a copy
-under `Tests/SheetMusicTests/Resources/` for WASI), and `BravuraMetricsBuilder.kt`
-(Android's, measured from `Paint.fontMetrics` at runtime). A v2 table is refused with
+v3 put the face's ascent and descent in the table, at the reference size like every
+other value (v4 moved them from the header into a per-face record — see below). Three
+things write or read them and move together: `FontMetricsTable.decode`,
+`Tools/GenFontMetrics` (the browser's table, generated from CoreText and committed to
+`Web/sheet-music-web/assets/sheet-music.smft` with a copy under
+`Tests/SheetMusicTests/Resources/` for WASI), and `FontMetricsBuilder.kt` (Android's,
+measured from `Paint.fontMetrics` at runtime). An older table is refused with
 `unsupportedVersion`, so a stale asset fails `installSMuFLMetrics` rather than
 engraving 1.2 sp off.
 
@@ -88,21 +89,61 @@ wasm-versus-Apple comparison to the table provider, so that byte equality means 
 engines agree" rather than "the font stacks agree" — a sound goal whose side effect is
 that provider-induced differences cancel out by construction. A green parity run says
 nothing about whether the table provider agrees with CoreText. What does:
-`BravuraMetricsTableTests` pins the committed table, header included, against the
-CoreText provider it was generated from; `FontMetricsInstallTests` pins the installed
+`ShippedMetricsTableTests` pins the committed table, both faces' vertical metrics
+included, against the CoreText provider it was generated from;
+`FontMetricsInstallTests` pins the installed
 provider's Bravura ascent and descent to 8.048 at the pointSize-4 em on every non-Apple
-shape; `SMuFLMetricsTableTests` pins the wire layout from hand-assembled bytes; and
+shape; `FontMetricsTableTests` pins the wire layout from hand-assembled bytes; and
 `LayoutElementShapeTests` / `SkylineAutoplaceTests`, whose exact-Y assertions on
 centred glyphs are the ones that would have failed, run on WebAssembly through
 `installFontMetrics` instead of staying behind the Apple-only guard.
 
-**Text faces are still the stub's, and that boundary is unchanged.** The table
-measures Bravura and nothing else, so Edwin's ascent, descent and leading come from
-`StubFontMetricsProvider` — a lyric row lands about 1.4 pt off, and a tempo mark's
-Edwin half about 0.7 pt, at the sizes those two suites use. The two assertions that
-pin such a Y stay behind `SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT` and say so at
-the line. Closing this means measuring a second face into the table, which the format
-has room for and no host has asked for.
+## The text face, and why v4 measures it too
+
+Through v3 the table measured Bravura and nothing else, so every text face answered
+from `StubFontMetricsProvider`. That was worse than the glyph-centring bug in one
+respect and better in another. Vertically it was the same shape of error, one order
+smaller: 0.85 / 0.25 em against Edwin's measured 0.737 / 0.263, plus a `leading` of 0
+against Edwin's 0.2 em, which put a lyric row about 1.4 pt off and a tempo mark's
+Edwin half about 0.7 pt off at the sizes those suites use, and stacked every
+multi-line annotation one line gap tight. Horizontally it was worse than a
+mis-measurement: `StubFontMetricsProvider.advanceEm` is a *bucket estimate*, not a
+table — digits 0.5, uppercase 0.65, lowercase 0.5, punctuation 0.3, CJK 1.0 em — so
+every rehearsal-mark frame, harmony width and lyric width on Android and in the
+browser was sized off five averages.
+
+SMFT v4 therefore carries more than one face. The vertical metrics moved out of the
+header into a per-face record, `leading` joined them, and the face's name precedes
+them as length-prefixed UTF-8; `FontMetricsTable.face(named:)` matches
+`LayoutFont.face` case-insensitively, because a score's `<font face="…">` is
+author-supplied text. The shipped table carries Bravura over the SMuFL PUA and Edwin
+over its whole BMP coverage (869 codepoints), and the asset is named
+`sheet-music.smft` rather than `bravura.smft` to match.
+
+Two limits are deliberate. A face the table does not carry still falls through to the
+stub — a score naming Times New Roman gets bucket averages, as before. And a codepoint
+a carried face lacks falls through *per scalar*, which matters because Edwin has no
+CJK at all: a Japanese lyric is still measured at the stub's 1 em per ideograph rather
+than at a flat per-glyph guess.
+
+Two platform differences survive, both measured rather than assumed. **Widths are not
+identical**: `AppleFontMetricsProvider` goes through `CTLine`, which kerns, while the table sums
+per-glyph advances, which cannot — up to 0.1 em on Edwin (`P.` 99 units at the 1000 pt reference,
+`AV` 96, and −28 the other way for `rit.`; digits do not kern). **Android's table carries four
+fewer text codepoints than the browser's**, 865 against 869: Edwin's `cmap` maps 866 at or above
+U+0020, CoreText additionally resolves U+2010, U+2011 and U+A789 to glyphs the font does not
+contain, and U+00AD measures as inked under CoreText and blank under Skia. Both differences are
+smaller than the bucket estimate they replaced, and both are pinned by tests rather than left to
+be rediscovered.
+
+Because the CoreText provider and the table now answer the same numbers for text, the
+two assertions that used to pin an Edwin-derived Y behind
+`SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT` run on every shape, at a tolerance tight
+enough (0.05 pt) to fail if one platform's text metrics drift from another's. That
+required one change on the Apple side: `TestSupport.installApple` registers the repo's
+`Edwin-Roman.otf`, because `CTFontCreateWithName` answers an unregistered family with
+the system font and the suite was otherwise measuring Helvetica while calling it
+Edwin.
 
 ## Supported surface
 
@@ -523,7 +564,7 @@ non-zero on drift; both `Scripts/preflight.sh` and CI run it:
 ```bash
 swift run GenWebFixtures \
     Web/sheet-music-web/test/fixtures \
-    Web/sheet-music-web/assets/bravura.smft
+    Web/sheet-music-web/assets/sheet-music.smft
 ```
 
 When an engraving or playback change moves them on purpose, re-record and
@@ -532,12 +573,26 @@ commit the result:
 ```bash
 SM_WEB_FIXTURE_RECORD=1 swift run GenWebFixtures \
     Web/sheet-music-web/test/fixtures \
-    Web/sheet-music-web/assets/bravura.smft
+    Web/sheet-music-web/assets/sheet-music.smft
 ```
 
 Never re-record to make a red browser test go green without first establishing
 that the engine change behind it was intended — that is what the fixtures exist
 to detect.
+
+The metrics table itself is committed too, and only changes when one of the two
+bundled faces does. Regenerate it — and the WASI copy, which
+`ShippedMetricsTableTests` checks is byte-identical — with:
+
+```bash
+swift run GenFontMetrics Web/sheet-music-web/assets/sheet-music.smft
+cp Web/sheet-music-web/assets/sheet-music.smft \
+    Tests/SheetMusicTests/Resources/sheet-music.smft
+```
+
+It is macOS-only and refuses to write a table measured off a face that failed to
+register, since CoreText answers an unregistered family with the system font
+rather than an error.
 
 Run the portable Swift tests through PackageToJS:
 

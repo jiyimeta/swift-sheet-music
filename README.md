@@ -437,14 +437,16 @@ task. Supported ABIs: `arm64-v8a`, `x86_64`. Lowest API level: 28.
 
 Format support on Android matches Apple: `.mscz`, `.mscx`,
 `.musicxml`, `.mxl` all parse. Glyph rendering on Android is
-SMuFL-aware: `BravuraMetricsBuilder.buildTable` measures a Bravura
-metrics table on the Kotlin side and installs it via
+SMuFL-aware: `FontMetricsBuilder.buildTable` measures Bravura and Edwin
+on the Kotlin side and installs the pair via
 `SheetMusicJNI.nativeInstallSMuFLMetrics` (see
 [`Android/SheetMusicAndroid/README.md`](Android/SheetMusicAndroid/README.md)).
 Absent that install, layout falls back to a `StubFontMetricsProvider`
-rectangle approximation, which also mis-centres articulations, fermatas
-and breath marks by about 1.2 staff spaces — the table carries the
-face's own ascent and descent, and the stub guesses them.
+rectangle approximation, which mis-centres articulations, fermatas
+and breath marks by about 1.2 staff spaces — the table carries each
+face's own ascent and descent, and the stub guesses them — and sizes
+every lyric, harmony and rehearsal-mark frame off bucket-average
+advances rather than the font's own.
 
 ## Coverage
 

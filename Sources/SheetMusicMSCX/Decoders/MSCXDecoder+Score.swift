@@ -23,7 +23,18 @@ extension Score {
         "Division", "Part", "Staff", "Style", "metaTag", "programVersion",
     ]
 
-    static func decode(_ root: XMLTreeNode) throws -> Score {
+    /// Decode one `.mscx` document.
+    ///
+    /// `styleFileStyle` is the `<Style>` element of a sibling
+    /// `score_style.mss` when the score arrived inside a `.mscz`
+    /// container that ships one. MuseScore reads that file into
+    /// `MStyle` *before* the score body and lets the score's own
+    /// inline `<Style>` override it tag by tag
+    /// (`rw/mscloader.cpp:88-97`); passing it here reproduces that
+    /// layering. Plain `.mscx` input has no style file and passes nil.
+    static func decode(
+        _ root: XMLTreeNode, styleFileStyle: XMLTreeNode? = nil,
+    ) throws -> Score {
         guard root.name == "museScore" else {
             throw SheetMusicError.malformedScore(
                 ScoreFault(
@@ -56,12 +67,20 @@ extension Score {
         // because default" apart across wire-format generations.
         let version = detectVersion(root: root, scoreNode: scoreNode)
         return try MSCXParserContext.$version.withValue(version) {
-            try decodeBody(scoreNode: scoreNode, division: division, version: version)
+            try decodeBody(
+                scoreNode: scoreNode,
+                division: division,
+                version: version,
+                styleFileStyle: styleFileStyle,
+            )
         }
     }
 
     private static func decodeBody(
-        scoreNode: XMLTreeNode, division: Int, version: MSCXVersion,
+        scoreNode: XMLTreeNode,
+        division: Int,
+        version: MSCXVersion,
+        styleFileStyle: XMLTreeNode?,
     ) throws -> Score {
         let partPairings = try scoreNode.all("Part").enumerated().map {
             try Part.decodePairing($0.element, fallbackIndex: $0.offset + 1)
@@ -75,7 +94,9 @@ extension Score {
         let parts = concertKeysResolved(
             assembled.parts,
             version: version,
-            storesConcertPitch: storesConcertPitch(scoreNode: scoreNode),
+            storesConcertPitch: storesConcertPitch(
+                scoreNode: scoreNode, styleFileStyle: styleFileStyle,
+            ),
         )
         let systemMeasures = assembled.systemMeasures
 
@@ -98,11 +119,18 @@ extension Score {
             }
         }
 
+        // The container's `score_style.mss` (when present) is the base
+        // the score's own `<Style>` overrides — MuseScore reads them in
+        // that order. MuseScore 4 writes one or the other, never both,
+        // so in practice each side alone decides the style; the
+        // layering is what keeps a hand-assembled container correct.
+        let base = styleFileStyle
+            .map { ScoreStyle.decode(style: $0) } ?? .museScoreDefaults
         let style: ScoreStyle
         if let styleNode = scoreNode.first("Style") {
-            style = ScoreStyle.decode(style: styleNode)
+            style = ScoreStyle.decode(style: styleNode, base: base)
         } else {
-            style = .museScoreDefaults
+            style = base
         }
         let resolvedSystemMeasures = version == .v2
             ? promoteMS2StaffTextSwingToSystem(systemMeasures)
@@ -123,9 +151,15 @@ extension Score {
     ///
     /// MuseScore's default is off, so an absent element means "written pitch", matching
     /// `MStyle`'s own default. `ScoreStyle` does not model the flag (it is a view mode, not
-    /// engraving state), so it is read straight off the node here.
-    private static func storesConcertPitch(scoreNode: XMLTreeNode) -> Bool {
-        guard let text = scoreNode.first("Style")?.first("concertPitch")?.text else { return false }
+    /// engraving state), so it is read straight off the node here — from the score's inline
+    /// `<Style>` first, then from the container's `score_style.mss`, mirroring the order
+    /// MuseScore reads them in.
+    private static func storesConcertPitch(
+        scoreNode: XMLTreeNode, styleFileStyle: XMLTreeNode?,
+    ) -> Bool {
+        let text = scoreNode.first("Style")?.first("concertPitch")?.text
+            ?? styleFileStyle?.first("concertPitch")?.text
+        guard let text else { return false }
         return Int(text) == 1
     }
 

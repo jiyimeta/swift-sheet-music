@@ -6,8 +6,12 @@ import SheetMusicZip
 /// the main `.mscx` entry. When the archive ships an
 /// `audiosettings.json` (MuseScore 4), per-part preset overrides are
 /// merged into the score so consumers see the sounds MuseScore actually
-/// plays. Other auxiliary resources (style, thumbnails, pictures,
-/// excerpts, …) are ignored.
+/// plays. A `score_style.mss` entry supplies the score's `<Style>`:
+/// MuseScore 4.4+ writes the style block into that separate file and
+/// omits it from the `.mscx` entirely, so ignoring it silently reverts
+/// such a score to MuseScore's built-in defaults — which is how a
+/// score-level swing setting came to be dropped from playback. Other
+/// auxiliary resources (thumbnails, pictures, excerpts, …) are ignored.
 ///
 /// Mirrors `mu::engraving::MscReader::mainFileName` /
 /// `::readScoreFile`: prefer the exact name `score.mscx`, and fall back
@@ -31,7 +35,9 @@ public enum MSCZReader {
                 ),
             )
         }
-        let score = try MSCXParser.parse(mscxData)
+        let score = try MSCXParser.parse(
+            mscxData, styleFileData: styleFileData(in: reader),
+        )
         let settings = audioSettings(in: reader)
         return settings.map { apply($0, to: score) } ?? score
     }
@@ -68,7 +74,9 @@ public enum MSCZReader {
                 ),
             )
         }
-        let inner = try MSCXParser.parseWithDiagnostics(mscxData)
+        let inner = try MSCXParser.parseWithDiagnostics(
+            mscxData, styleFileData: styleFileData(in: reader),
+        )
         let settings = audioSettings(in: reader)
         let finalScore = settings.map { apply($0, to: inner.score) } ?? inner.score
         return MSCXParseResult(score: finalScore, diagnostics: inner.diagnostics)
@@ -117,6 +125,21 @@ public enum MSCZReader {
             )
         }
         return first
+    }
+
+    /// Raw bytes of the archive's `score_style.mss`, or nil when the
+    /// container has none. MuseScore 4.4+ writes the whole `<Style>`
+    /// block here instead of into the `.mscx`; older containers (and
+    /// every `.mscx` opened on its own) keep it inline. Reading the
+    /// entry cannot fail the load — a container without it is normal
+    /// — so a ZIP-level read error is treated as absence.
+    ///
+    /// C++: `MscReader::readStyleFile` (`mscreader.cpp:127`), read by
+    /// `MscLoader::loadMscz` before the score body
+    /// (`mscloader.cpp:88-97`).
+    private static func styleFileData(in reader: ZipReader) -> Data? {
+        guard reader.contains(path: "score_style.mss") else { return nil }
+        return try? reader.read(path: "score_style.mss")
     }
 
     /// Look up `audiosettings.json` at the archive root and parse it.

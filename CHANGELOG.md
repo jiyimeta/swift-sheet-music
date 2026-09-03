@@ -7,6 +7,93 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **The metrics table measures the text face too, and is served under a new
+  name.** Through SMFT v3 the table carried Bravura alone, so on Android and in
+  the browser every non-SMuFL face — Edwin, which is what MuseScore's
+  `Sid::*FontFace` defaults all name — answered from `StubFontMetricsProvider`:
+  0.85 / 0.25 em against Edwin's measured 0.737 / 0.263, a `leading` of 0
+  against Edwin's 0.2 em, and, for every advance, a *bucket estimate* rather
+  than a table (digits 0.5, uppercase 0.65, lowercase 0.5, punctuation 0.3 em).
+  Lyric rows landed about 1.4 pt off, a tempo mark's Edwin half about 0.7 pt,
+  multi-line annotations stacked one line gap tight, and every rehearsal-mark
+  frame, harmony width and lyric width was sized off five averages.
+
+  SMFT v4 carries several faces: the vertical metrics moved out of the header
+  into a per-face record, `leading` joined them, and the face's name precedes
+  them as length-prefixed UTF-8. Faces are matched case-insensitively, because
+  a score's `<font face="…">` is author-supplied text. A face the table does
+  not carry still falls through to the stub, and a codepoint a carried face
+  lacks falls through *per scalar* — Edwin has no CJK at all, so a Japanese
+  lyric keeps the stub's 1 em per ideograph.
+
+  **Breaking for hosts.** The browser asset is now
+  `assets/sheet-music.smft`, not `assets/bravura.smft` — a host fetching the
+  old name gets a 404 rather than a quietly stale table, and a v3 table still
+  makes `installSMuFLMetrics` return `false`. `BravuraMetricsBuilder` is now
+  `FontMetricsBuilder`, with the same `buildTable(assets:)` shape. Android
+  hosts should serve `fonts/Edwin-Roman.otf` from the same `AssetManager` as
+  `fonts/Bravura.otf` to get the text face; it is optional, and a host without
+  it keeps the pre-v4 text estimates rather than failing.
+  `installSMuFLMetrics` and `nativeInstallSMuFLMetrics` keep their names.
+
+  **Text WIDTHS still differ between Apple and the other two platforms, by up
+  to 0.1 em.** `AppleFontMetricsProvider` measures through `CTLine`, which
+  kerns; the table sums per-glyph advances, which cannot. Measured on Edwin at
+  a 1000 pt reference: `P.` 99 units, `AV` 96, `Va`/`Yo` 84, and the other way
+  for `rit.` (−28) and `Piano` (−17); digits do not kern at all. That is well
+  inside the error this change removed — the stub called every uppercase letter
+  0.65 em against Edwin's 0.722 for `A` alone — but it is not zero, and only
+  the vertical metrics are now identical across platforms.
+
+  Android's table also carries four fewer text codepoints than the browser's
+  (865 against 869), verified on a Pixel 8a. Edwin's `cmap` maps 866 at or
+  above U+0020; CoreText resolves three compatibility codepoints the font does
+  not contain (U+2010 and U+2011 to the U+002D glyph, U+A789 to U+003A) and
+  Skia does not, while U+00AD SOFT HYPHEN is mapped but measures as blank under
+  Skia and as inked under CoreText. All four are punctuation whose stub
+  estimate lands within 0.04 em of Edwin's own advance.
+
+- `FontMetricsBuilder` reads each font's `cmap` itself rather than asking
+  `Paint.hasGlyph` which codepoints a face has. `hasGlyph` consults the system
+  fallback chain even for a `Typeface.createFromAsset` face: measured on a
+  Pixel 8a it claimed Edwin covers CJK, kana and emoji, and a BMP walk driven
+  by it built a 55,093-entry text face — every codepoint the device can render
+  in any font, each measured against whatever font Android would have
+  substituted — where the font has 866. It cost the SMuFL face a glyph too
+  (3,411 against CoreText's 3,410). `getTextWidths` and `getTextPath`
+  substitute the same way, so the walk is now restricted up front by the file's
+  own `cmap`. `FontMetricsBuilderTest` runs on a device and pins the built
+  table against the committed one, which is the only check that would have
+  caught any of this.
+
+- Two exact-Y assertions that had to stay Apple-only — the tempo mark's band in
+  `LayoutElementShapeTests` and the lyric row's drop in `SkylineAutoplaceTests`
+  — now run on every platform shape, at a tolerance tight enough to fail if one
+  platform's text metrics drift from another's. `TestSupport.installApple`
+  registers the repo's `Edwin-Roman.otf` to make that comparison honest:
+  `CTFontCreateWithName` answers an unregistered family with the system font, so
+  the suite had been measuring Helvetica while calling it Edwin.
+
+## [2.4.1] - 2026-09-04
+
+### Fixed
+
+- **A `.mscz` saved by MuseScore 4.4+ lost its entire score `<Style>`, so a
+  score-level swing played straight.** Those versions write the style block to a
+  separate `score_style.mss` entry in the container and omit it from the `.mscx`
+  altogether; `MSCZReader` read only the `.mscx` and silently substituted
+  MuseScore's built-in defaults — swing off, 1.75 mm staff space, A4. Scores
+  that carry their swing as an in-piece `<swing>` directive were unaffected,
+  which is why the loss showed up as "swing works in some scores but not this
+  one". The reader now reads `score_style.mss` into the style before the score
+  body and lets an inline `<Style>` override it tag by tag, the order MuseScore
+  itself uses (`MscLoader::loadMscz`). Besides swing this restores the score's
+  real staff size and page geometry to PDF export. A style file that will not
+  parse is reported as a `mscz.styleFile.*` diagnostic and the score still
+  loads.
+
 ## [2.4.0] - 2026-09-03
 
 ### Added

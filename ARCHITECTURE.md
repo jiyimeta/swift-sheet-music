@@ -157,15 +157,18 @@ to fonts through a `FontMetricsProvider` dependency-injection seam:
 
 - On Apple platforms, `SheetMusicLayoutApple` supplies a CoreText-backed
   provider (auto-installed transitively by `SheetMusicUI` / `SheetMusicPDF`).
-- On Android, the host installs a Bravura-measured SMuFL metrics table
-  (`BravuraMetricsBuilder.buildTable` →
+- On Android, the host installs a measured metrics table
+  (`FontMetricsBuilder.buildTable` →
   `SheetMusicJNI.nativeInstallSMuFLMetrics`); the browser installs the
   same format, generated from CoreText at build time by
-  `Tools/GenBravuraMetrics`. Absent one, a `StubFontMetricsProvider`
-  returns rectangle approximations so layout still produces sane geometry
-  — sane, not correct: the stub's ascent and descent put centred glyphs
-  about 1.2 staff spaces off, which is why every real host installs a
-  table.
+  `Tools/GenFontMetrics` and served as `assets/sheet-music.smft`. One
+  table carries both faces the library draws with — Bravura's glyph
+  geometry and Edwin's text metrics — since SMFT v4. Absent one, a
+  `StubFontMetricsProvider` returns rectangle approximations so layout
+  still produces sane geometry — sane, not correct: the stub's ascent and
+  descent put centred glyphs about 1.2 staff spaces off and its per-glyph
+  advances are bucket averages rather than a table, which is why every
+  real host installs one.
 
 This DI seam is why the layout engine can be shared across platforms
 without `#if os(...)` scattered through the geometry code.

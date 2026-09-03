@@ -11,15 +11,20 @@ import SheetMusicLayout
     private typealias CGFloat = SheetMusicLayout.CGFloat
 #endif
 
-/// Install the SMuFL glyph-metrics table the layout engine measures with.
-/// Returns `false` on an empty or undecodable payload.
+/// Install the font-metrics table the layout engine measures with — Bravura's
+/// glyph geometry and Edwin's text metrics, in one payload since SMFT v4.
+/// Returns `false` on an empty or undecodable payload, which is also what a
+/// table written for an older format version gets.
 ///
-/// Android: `nativeInstallSMuFLMetrics`, fed by `BravuraMetricsBuilder.kt`
+/// Android: `nativeInstallSMuFLMetrics`, fed by `FontMetricsBuilder.kt`
 /// measuring `Paint.getTextPath` at runtime. The browser has no equivalent
 /// geometric measurement — Canvas2D's `actualBoundingBox*` reports rasterized
 /// ink, the quantity the Android builder explicitly avoided — so the web host
 /// loads a table generated at build time from CoreText by
-/// `Tools/GenBravuraMetrics`.
+/// `Tools/GenFontMetrics` and served as `assets/sheet-music.smft`.
+///
+/// The name predates the text face and is kept for source compatibility with
+/// hosts; `FontMetricsTable` is what it actually installs.
 ///
 /// Without a table the engraver falls back to `StubFontMetricsProvider`'s
 /// rectangle approximations and the spacing is visibly wrong, so a host that
@@ -28,8 +33,8 @@ import SheetMusicLayout
     let data = bytes.bridgedData
     guard !data.isEmpty else { return false }
     do {
-        FontMetrics.provider = try makeSMuFLMetricsTableProvider(
-            table: SMuFLMetricsTable.decode(data),
+        FontMetrics.provider = try makeFontMetricsTableProvider(
+            table: FontMetricsTable.decode(data),
         )
         return true
     } catch {

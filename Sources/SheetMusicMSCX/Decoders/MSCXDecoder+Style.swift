@@ -22,24 +22,54 @@ extension ScoreStyle {
 
     /// Parse a `<Style>` element. Permissive — unrecognized children
     /// are silently ignored, matching the existing
-    /// `MSCXDecoder+Voice` convention. Returns the MuseScore default
-    /// for any field the XML does not specify.
+    /// `MSCXDecoder+Voice` convention. Returns `base` (the MuseScore
+    /// default unless the caller supplies one) for any field the XML
+    /// does not specify.
+    ///
+    /// `base` exists for the container case: a `.mscz` may ship its
+    /// style in a separate `score_style.mss` entry, which MuseScore
+    /// reads into `MStyle` **before** the `.mscx`, letting an inline
+    /// `<Style>` override it tag by tag (`rw/mscloader.cpp:88-97`).
     ///
     /// MuseScore stores page geometry in **inches** and spatium in
     /// **millimetres**; we keep both in their native units so the
     /// values round-trip with what MuseScore writes. See
     /// `engraving/style/style.cpp:120-156, 385-386` for the read
     /// path.
-    static func decode(style node: XMLTreeNode) -> ScoreStyle {
-        var s = ScoreStyle.museScoreDefaults
+    static func decode(
+        style node: XMLTreeNode, base: ScoreStyle = .museScoreDefaults,
+    ) -> ScoreStyle {
+        var s = base
         decodePageLayout(node, into: &s.pageLayout)
         decodeSpatium(node, into: &s.spatium)
         decodeChrome(node, into: &s.pageChrome)
         decodeSwing(node, into: &s)
         decodeTitleBlockAlign(node, into: &s)
         decodeOttava(node, into: &s)
-        s.preservedMarkup = node.preservedMarkup(consuming: consumedStyleChildren)
+        // Preserved markup layers the same way the modeled fields do.
+        // A `.mscz` can carry its style in `score_style.mss` AND an
+        // inline `<Style>`, but only ONE `<Style>` is written back — so
+        // unmodeled keys that came from the style file have to survive
+        // into the inline one, or saving such a container would delete
+        // them. Inline wins per tag name, matching the tag-by-tag
+        // override MuseScore performs on the modeled side.
+        let inline = node.preservedMarkup(consuming: consumedStyleChildren)
+        let inlineNames = Set(inline.map(\.name))
+        s.preservedMarkup = base.preservedMarkup.filter {
+            !inlineNames.contains($0.name)
+        } + inline
         return s
+    }
+
+    /// The `<Style>` element of a standalone style document — the
+    /// `score_style.mss` entry MuseScore 4 writes into `.mscz`
+    /// containers, whose root is `<museScore version="…"><Style>`.
+    /// Returns nil when the document is not shaped that way, which
+    /// the caller treats as "no style file", not as an error
+    /// (`MscReader::readStyleFile`, `mscreader.cpp:127`).
+    static func styleNode(inStyleFile root: XMLTreeNode) -> XMLTreeNode? {
+        guard root.name == "museScore" else { return nil }
+        return root.first("Style")
     }
 }
 

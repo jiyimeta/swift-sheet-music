@@ -97,7 +97,7 @@ const tallExpectations = JSON.parse(
 
 /** The metrics table the browser installs, so both sides measure alike. */
 const metricsBytes = new Uint8Array(
-  readFileSync(fileURLToPath(new URL("../assets/bravura.smft", import.meta.url))),
+  readFileSync(fileURLToPath(new URL("../assets/sheet-music.smft", import.meta.url))),
 );
 const declarationText = readFileSync(
   fileURLToPath(new URL("../dist/bridge-js.d.ts", import.meta.url)),

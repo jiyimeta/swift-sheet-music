@@ -4,7 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sheetmusic.draw.DrawProgramReader
-import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
+import io.github.jiyimeta.sheetmusic.FontMetricsBuilder
 import io.github.jiyimeta.sheetmusic.LayoutOptionsWire
 import io.github.jiyimeta.sheetmusic.LayoutOptionsWireCodec
 import io.github.jiyimeta.sheetmusic.ScoreHandle
@@ -46,7 +46,7 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
             val app = getApplication<Application>()
 
             withContext(Dispatchers.Default) {
-                val table = BravuraMetricsBuilder.buildTable(app.assets)
+                val table = FontMetricsBuilder.buildTable(app.assets)
                 SheetMusicJNI.nativeInstallSMuFLMetrics(table)
             }
 
