@@ -1,7 +1,7 @@
 @testable import SheetMusicCore
 
 extension EditReplayScript {
-    /// Seventy-two steps over `EditingFixtures.parityFixture()`, covering every intent the edit-command parity
+    /// Eighty-eight steps over `EditingFixtures.parityFixture()`, covering every intent the edit-command parity
     /// project appended: its structural group (30…34: `setLayoutBreak`, `setBarLine`, `setRepeatBarLines`,
     /// `setMeasureRepeat`, `moveToVoice`) in steps 1…10, its range group (35…40: `transposeRange`,
     /// `addIntervalToSelection`, `deleteRange`, `setAccidentalsInRange`, `setDurationInRange`, `respellRange`) in
@@ -10,7 +10,9 @@ extension EditReplayScript {
     /// `setArticulation`, `setGraceNotes`, `setTremolo`, `setArpeggio`, `setGlissando`, `setDots`, `setChordLine`,
     /// `setNoteParentheses`) in steps 41…61 and its visibility group (58…61: `setElementVisible`,
     /// `setNoteVisible`, `setStemVisible`, `setBeamVisible`) in steps 64…72, prepared by two `inputNote`s
-    /// (62, 63) — none of which the standard chain, which predates them, encodes at all.
+    /// (62, 63), and its spanner group (62…72: `setSlur`, `setHairpin`, `setPedal`, `setVolta`, `setOttava`,
+    /// `setTextLine`, `setTrill`, `setVibrato`, `setPalmMute`, `setLetRing`, `removeSpanner`) in steps 73…88 —
+    /// none of which the standard chain, which predates them, encodes at all.
     ///
     /// Each of the five structural intents appears at least twice, in both directions where it has one, so the chain
     /// pins the wire bytes of the removal as well as the write: `setLayoutBreak` on then off (steps 1 / 10),
@@ -44,8 +46,12 @@ extension EditReplayScript {
     /// The visibility group is spelled hide-then-show for every flag (64 / 65, 66 / 71, 67 / 70, 68 / 69), the
     /// beam pair naming the follower on the way down and the leader on the way up, plus one hide left standing
     /// (72) on an untimed element. Its steps — and their own index-stability and repeat notes — live on
-    /// `parityVisibility()` in `EditReplayScript+Parity2.swift`, a sibling file only because this one is at its
-    /// 400-line budget.
+    /// `parityVisibility()` in `EditReplayScript+Parity2.swift`, a sibling only because this file is at its budget.
+    ///
+    /// The spanner group is spelled write-then-remove for the two forms that share a bar (73 / 76, 74 / 75), a
+    /// running chain of seven line spanners in the cello's bar 2 (77…83, one removed again at 87), and one undo /
+    /// re-apply pair around the volta (84 / 85 / 86). All three `<next>` spellings the writer rule distinguishes
+    /// are recorded: mid-measure at 73, bar-end at 74, score-end at 84. Its steps live on `paritySpanners(staff:)`.
     ///
     /// ## Index stability
     ///
@@ -64,9 +70,10 @@ extension EditReplayScript {
     /// - **Measure 2 of the CELLO (steps 4, 5)** is the one place a step rewrites bars wholesale: step 4 turns
     ///   cello measures 2 and 3 into a measure-repeat group (a `%` sign plus a continuation rest, replacing each
     ///   bar's single measure rest) and step 5 dissolves it back. Both name the group's first bar by column and
-    ///   the staff by address, and no step in this chain addresses a cello element by index, so the rewrite is
-    ///   self-contained. The cello is chosen precisely because `SetMeasureRepeat` demands empty bars: measures 2
-    ///   and 3 of the flute hold tied halves and a measure rest the chain must leave alone.
+    ///   the staff by address, and no step between them addresses a cello element by index — the visibility and
+    ///   spanner groups do, but only long after step 5 has put both bars back — so the rewrite is self-contained.
+    ///   The cello is chosen precisely because `SetMeasureRepeat` demands empty bars: measures 2 and 3 of the
+    ///   flute hold tied halves and a measure rest the chain must leave alone.
     /// - **Measure 0 of the FLUTE (steps 6, 8)** is the only element-level target of the structural group. Element
     ///   1 is the first C4 quarter — element 0 is the time signature, which carries no ticks — and `MoveToVoice`
     ///   replaces the source slot one-for-one with a rest of the same length, so voice 0's element count does not
@@ -136,8 +143,8 @@ extension EditReplayScript {
     /// - **Measure 1 of the FLUTE (step 61)** is the one step of this group that RETIMES, and it is deliberately
     ///   its last. Voice 0 reads `[r h, r h]` after step 16; dotting the first rest makes it a dotted half and
     ///   shortens the second to a quarter, which changes measure 1's element durations — and voice 1, whose two
-    ///   half rests `SetRestDuration` does not touch, is unaffected. Every step that follows belongs to the
-    ///   visibility group and addresses the CELLO, so nothing downstream can observe the retiming.
+    ///   half rests `SetRestDuration` does not touch, is unaffected. No step after it addresses measure 1 on any
+    ///   staff — groups 5 and 6 work on the cello and on the flute's bars 2 and 3 — so the retiming is unobserved.
     ///
     /// ## Fingerprints that repeat
     ///
@@ -169,10 +176,10 @@ extension EditReplayScript {
     /// 60 clears the parentheses step 59 wrote and lands back on step 58's. Step 61 does not: nothing takes its dot
     /// back.
     ///
-    /// The visibility group adds eleven values and four more repeats, listed on `parityVisibility()`; the chain
-    /// now ends on ITS last step, the standing hide of the cello's 4/4, which no earlier step produced. Forty-six
-    /// of the seventy-three recorded values are therefore distinct, against a floor of thirty-nine in
-    /// `ReplayChain.parity`.
+    /// The visibility group adds eleven values and four more repeats, listed on `parityVisibility()`, and the
+    /// spanner group twelve and four, listed on `paritySpanners(staff:)`; the chain now ends on ITS last step, the
+    /// standing diminuendo over the tied pair, which no earlier step produced. Fifty-eight of the eighty-nine
+    /// recorded values are therefore distinct, against a floor of fifty-four in `ReplayChain.parity`.
     ///
     /// As in the standard chain, an equal fingerprint would not by itself prove a step was inert, nor a different
     /// one prove it did what it was added for. What proves each step ran is `EditSessionReplayParityTest.kt`
@@ -382,10 +389,11 @@ extension EditReplayScript {
             .intent(.setNoteParentheses(at: note2(1, 0), parentheses: .both)),
             // Step 60: and removed — `.none` IS the clear, not a `nil`. Lands back on step 58's fingerprint.
             .intent(.setNoteParentheses(at: note2(1, 0), parentheses: .none)),
-            // Step 61: dot the first half rest of measure 1 — the only step of this group that RETIMES, and the
-            // last step of the chain for that reason. The second half rest shortens to a quarter, and nothing
-            // takes that back, which is what `scriptIsNotInert` needs.
+            // Step 61: dot the first half rest of measure 1 — the only step of this group that RETIMES, so it is
+            // sequenced last WITHIN the note/chord group (41…61); visibility and spanner groups still follow it
+            // in the full chain. The second half rest shortens to a quarter, and nothing takes that back.
             .intent(.setDots(at: firstRestOfBar1, dots: 1)),
         ] + parityVisibility() // steps 62…72 — see `EditReplayScript+Parity2.swift`
+            + paritySpanners(staff: staff) // steps 73…88 — see `EditReplayScript+Parity3.swift`
     }
 }

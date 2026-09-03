@@ -140,6 +140,9 @@ extension ScoreEditSession {
             return notationCommand(for: intent, in: score)
         case .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible:
             return visibilityCommand(for: intent, in: score)
+        case .setSlur, .setHairpin, .setPedal, .setVolta, .setOttava, .setTextLine, .setTrill, .setVibrato,
+             .setPalmMute, .setLetRing, .removeSpanner:
+            return spannerCommand(for: intent, in: score)
         }
     }
 

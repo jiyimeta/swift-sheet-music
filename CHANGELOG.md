@@ -118,7 +118,7 @@ and this project adheres to
 - `EditRefusal.ExpectedKind.engravable` (`SetElementVisible` aimed at a voice element that carries no
   `ElementProperties`) and `EditRefusal.Reason.notBeamed(at:)` (`SetBeamVisible` aimed at a chord that belongs
   to no beam group; a rest is `wrongElementKind(expected: .chord)`, as for `SetStemVisible`).
-- A second parity replay chain (`editReplay-parity/`) exercises the thirty-two new commands, in seventy-two
+- A second parity replay chain (`editReplay-parity/`) exercises the forty-three new commands, in eighty-eight
   steps, through the same cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain,
   byte-pinned like it.
 - Eleven spanner edit commands, the sixth group of the edit-command parity project:
@@ -138,8 +138,12 @@ and this project adheres to
   know about: `SetVolta` re-homes any range to the canonical staff, while `RemoveSpanner` is staff-literal,
   so the paired removal has to address the canonical staff (`SetVolta.affectedLocation`) rather than the
   staff the volta was written over. `Chord.spanners` now feeds `Score.stableFingerprint` by occupants, so a
-  chord carrying no spanner hashes exactly as before. These commands are public API; intents 62–72 and the
-  codec are a later stage of work.
+  chord carrying no spanner hashes exactly as before. Reachable as `EditIntent.setSlur` / `.setHairpin` /
+  `.setPedal` / `.setVolta` / `.setOttava` / `.setTextLine` / `.setTrill` / `.setVibrato` / `.setPalmMute` /
+  `.setLetRing` / `.removeSpanner`, wire cases 62–72, refused with the two new payloads
+  `EditRefusal.Reason.duplicateSpanner(at:kind:)` and `.noSpannerAtLocation(_:)` (`ExpectedKind.spanner`),
+  and built on the new `Fraction(ticks:division:)` initializer that feeds `Spanner.offsets`'s fractions
+  component.
 
 ### Changed
 

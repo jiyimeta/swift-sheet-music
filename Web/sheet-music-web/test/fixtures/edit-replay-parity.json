@@ -72,7 +72,23 @@
     "-3377873534860264966",
     "-324418041030252957",
     "1713967053497698554",
-    "-4979714836996113021"
+    "-4979714836996113021",
+    "3234457239457158045",
+    "452039336349498854",
+    "3234457239457158045",
+    "-4979714836996113021",
+    "3569699481999592840",
+    "8715855746229341313",
+    "3798801750082588776",
+    "-949803157598993429",
+    "5352035812633170560",
+    "8350088776149712691",
+    "-3104815773684595182",
+    "-211305378171379396",
+    "-3104815773684595182",
+    "-211305378171379396",
+    "-6838055365784561509",
+    "-8304424797561046301"
   ],
   "steps" : [
     {
@@ -391,6 +407,69 @@
     },
     {
       "base64" : "EzoKEAoMCgQIAhAAEAAYACAAEAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "IT4KHgocCgwKBAgAEAAQBBgAIAASDAoECAAQABAEGAAgAg==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Iz8KIAocCgwKBAgAEAAQBBgAIAASDAoECAAQABAEGAAgAhAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "GkgKFwoMCgQIABAAEAQYACAAEgdIYWlyUGlu",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "F0gKFAoMCgQIABAAEAQYACAAEgRTbHVy",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "IUAKHgocCgwKBAgCEAAQBBgAIAASDAoECAIQABAEGAAgAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "JkIKIwocCgwKBAgCEAAQBBgAIAISDAoECAIQABAEGAAgAhIDOHZh",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "KkMKJwocCgwKBAgCEAAQBBgAIAQSDAoECAIQABAEGAAgBBABGgVyYWxsLg==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "KEQKJQocCgwKBAgCEAAQBBgAIAYSDAoECAIQABAEGAAgBhIFdHJpbGw=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "MEUKLQocCgwKBAgCEAAQBBgAIAgSDAoECAIQABAEGAAgCBINZ3VpdGFyVmlicmF0bw==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "IUYKHgocCgwKBAgCEAAQBBgAIAoSDAoECAIQABAEGAAgCg==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "IUcKHgocCgwKBAgCEAAQBBgAIAwSDAoECAIQABAEGAAgDA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "KkEKJwocCgwKBAgAEAAQBhgAIAASDAoECAAQABAGGAAgABIBAhgBIgIxLg==",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "KkEKJwocCgwKBAgAEAAQBhgAIAASDAoECAAQABAGGAAgABIBAhgBIgIxLg==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "GEgKFQoMCgQIAhAAEAQYACAAEgVQZWRhbA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Iz8KIAocCgwKBAgAEAAQBBgAIAASDAoECAAQABAEGAAgAhAD",
       "op" : "intentBytes"
     }
   ]
