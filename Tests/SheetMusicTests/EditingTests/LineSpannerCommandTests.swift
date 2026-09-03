@@ -41,6 +41,34 @@ struct LineSpannerCommandTests {
             name: "hairpin", build: { SetHairpin(over: $0, subtype: .decrescendo) },
             kind: .hairpin, rawType: "HairPin", payload: { $0.hairpin?.subtype == .decrescendo },
         ),
+        Row(
+            name: "pedal", build: { SetPedal(over: $0) },
+            kind: .pedal, rawType: "Pedal", payload: { _ in true },
+        ),
+        Row(
+            name: "ottava", build: { SetOttava(over: $0, subtype: .fifteenMA) },
+            kind: .ottava, rawType: "Ottava", payload: { $0.ottava?.subtype == .fifteenMA },
+        ),
+        Row(
+            name: "textLine", build: { SetTextLine(over: $0, text: "rall.") },
+            kind: .textLine, rawType: "TextLine", payload: { $0.beginText == "rall." },
+        ),
+        Row(
+            name: "trill", build: { SetTrill(over: $0, type: .upprall) },
+            kind: .trill, rawType: "Trill", payload: { $0.trill?.type == .upprall },
+        ),
+        Row(
+            name: "vibrato", build: { SetVibrato(over: $0, type: .sawtoothWide) },
+            kind: .vibrato, rawType: "Vibrato", payload: { $0.vibrato?.type == .sawtoothWide },
+        ),
+        Row(
+            name: "palmMute", build: { SetPalmMute(over: $0) },
+            kind: .palmMute, rawType: "PalmMute", payload: { _ in true },
+        ),
+        Row(
+            name: "letRing", build: { SetLetRing(over: $0) },
+            kind: .letRing, rawType: "LetRing", payload: { _ in true },
+        ),
     ]
 
     @Test(
@@ -101,5 +129,18 @@ struct LineSpannerCommandTests {
         // `m` on the last measure and spells the whole bar rather than rolling into a measure that is not there.
         #expect(written.nextMeasuresOffset == 0)
         #expect(written.nextFractionsOffset == Fraction(numerator: 1, denominator: 1))
+    }
+
+    /// A text line without a label is a perfectly good line — whitespace-only text trims to empty and is
+    /// stored as `nil`, exactly what MuseScore's absent `<beginText>` means, rather than being refused.
+    @Test("a whitespace-only text line writes a nil beginText")
+    func textLineBlankTextWritesNilBeginText() throws {
+        var score = EditingFixtures.parityFixture()
+        _ = try SetTextLine(over: Self.range, text: "  ").apply(to: &score)
+        guard case let .spanner(written) = score.parts[0].staves[0].measures[0].voices[0].elements[1] else {
+            Issue.record("expected the text line")
+            return
+        }
+        #expect(written.beginText == nil)
     }
 }
