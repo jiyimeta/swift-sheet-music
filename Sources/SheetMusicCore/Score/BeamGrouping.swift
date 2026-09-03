@@ -185,7 +185,7 @@ package enum BeamGrouping {
     ///   matches modern American engraving where the half-bar is
     ///   the natural beam break, not the individual beat.
     /// - **Other meters** (3/4, 5/4, 7/8, etc.): single beat.
-    package static func groupTicks(
+    private static func groupTicks(
         timeSignature: TimeSignature?, division: Int,
     ) -> Int {
         guard let ts = timeSignature else { return division * 2 }

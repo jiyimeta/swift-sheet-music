@@ -129,10 +129,12 @@ public struct EditRefusal: Sendable, Hashable {
         /// is about the element's KIND: the element here is a perfectly good chord or rest whose LENGTH has no
         /// dotted spelling.
         case notDottable(at: VoiceElementID)
-        /// `SetBeamVisible` was aimed at a chord that belongs to no beam group — a quarter, a lone eighth, the
-        /// only chord between two rests. The beam flag is read from a group's leading chord and from nowhere else,
-        /// so writing it here would change nothing on screen and put a `<Beam>` in front of an unbeamable note
-        /// in the saved file. Distinct from `.wrongElementKind`: the element IS a chord.
+        /// `SetBeamVisible` was asked to HIDE (`visible == false`) a chord that belongs to no beam group — a
+        /// quarter, a lone eighth, the only chord between two rests. The beam flag is read from a group's leading
+        /// chord and from nowhere else, so writing `false` here would change nothing on screen and put a `<Beam>`
+        /// in front of an unbeamable note in the saved file. Distinct from `.wrongElementKind`: the element IS a
+        /// chord. Gates the write only — SHOWING (`visible == true`) an ungrouped chord is never refused, so a flag
+        /// orphaned by a group dissolving out from under it stays clearable.
         case notBeamed(at: VoiceElementID)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by

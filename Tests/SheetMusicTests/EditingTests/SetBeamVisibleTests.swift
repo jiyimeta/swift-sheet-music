@@ -74,6 +74,37 @@ struct SetBeamVisibleTests {
         #expect(lone == EditingFixtures.chordAtIndex1())
     }
 
+    @Test("a lone chord is never refused for showing, only for hiding")
+    func showNeverRefusedOnLoneChord() throws {
+        var lone = EditingFixtures.chordAtIndex1() // a lone quarter — beam level 0, no group
+        #expect(SetBeamVisible.leader(of: Self.slot(1), in: lone) == nil)
+        let inverse = try SetBeamVisible(at: Self.slot(1), visible: true).apply(to: &lone)
+        #expect(Self.chord(lone, 1)?.beamVisible == true)
+        _ = try inverse.apply(to: &lone)
+        #expect(lone == EditingFixtures.chordAtIndex1())
+    }
+
+    @Test("a flag orphaned by a dissolved beam group is clearable through SetBeamVisible")
+    func orphanedFlagIsClearable() throws {
+        var score = EditingFixtures.twoBeamedEighths() // [ts, C4 e, D4 e, r q, r h]
+        // Hide the beam while the group exists — this is the only way to get `beamVisible == false`
+        // onto element 1 in the first place.
+        _ = try SetBeamVisible(at: Self.slot(1), visible: false).apply(to: &score)
+        #expect(Self.chord(score, 1)?.beamVisible == false)
+
+        // Dissolve the group with a real, already-shipped command — not by poking the model directly.
+        // Deleting element 2 (D4) leaves element 1 as a lone eighth between rests: no group.
+        _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(2), end: Self.slot(2))).apply(to: &score)
+        #expect(SetBeamVisible.leader(of: Self.slot(1), in: score) == nil)
+        // The orphaned flag is still sitting there, false, with nothing left to clear it.
+        #expect(Self.chord(score, 1)?.beamVisible == false)
+
+        // Before the fix this throws `.notBeamed` — the flag is permanently stuck. After the fix, clearing
+        // (showing) an orphaned flag is never refused.
+        _ = try SetBeamVisible(at: Self.slot(1), visible: true).apply(to: &score)
+        #expect(Self.chord(score, 1)?.beamVisible == true)
+    }
+
     private static func reason(of error: SheetMusicError?) -> EditRefusal.Reason? {
         guard case let .invalidEdit(refusal)? = error else { return nil }
         return refusal.reason

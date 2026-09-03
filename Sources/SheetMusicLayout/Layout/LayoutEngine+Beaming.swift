@@ -24,10 +24,6 @@ extension LayoutEngine {
         BeamGrouping.level(of: dur)
     }
 
-    static func beamGroupTicks(timeSignature: TimeSignature?, division: Int) -> Int {
-        BeamGrouping.groupTicks(timeSignature: timeSignature, division: division)
-    }
-
     // MARK: - Beam slope
 
     /// Endpoint y-coordinates of a sloped beam line.

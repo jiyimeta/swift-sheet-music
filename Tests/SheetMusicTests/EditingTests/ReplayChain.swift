@@ -53,7 +53,10 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
         webFixtureStem: "edit-replay-parity",
         fixture: { EditingFixtures.parityFixture() },
         steps: { EditReplayScript.parity(staff: $0) },
-        minimumDistinctFingerprints: 39,
+        // Actual is 46 of 73 steps as of the visibility group (58-61) landing. 42 keeps the same 4-value slack
+        // below actual that the previous floor (39, the pre-visibility-group actual) carried, so the floor stays
+        // meaningful without being so tight it flakes on harmless fingerprint coincidences.
+        minimumDistinctFingerprints: 42,
     )
 
     static let all: [ReplayChain] = [.standard, .parity]

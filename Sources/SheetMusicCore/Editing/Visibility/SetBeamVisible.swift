@@ -7,9 +7,16 @@ import SheetMusicFoundation
 /// Phase 5 in `LayoutEngine+Placement`). This command writes exactly where it is pointed — its inverse must land on
 /// the same slot — so the re-targeting from any member to the leader is the planner's
 /// (`ScoreEditSession.visibilityCommand`), which every `EditIntent.setBeamVisible` goes through; a caller building
-/// the command directly passes `leader(of:in:)`'s answer. A chord that is a member of no group is refused as
-/// `.notBeamed`, since the flag would be invisible there and the encoder would write a `<Beam>` in front of an
-/// unbeamable note. Grouping is `BeamGrouping`, the same rule the layout beams with.
+/// the command directly passes `leader(of:in:)`'s answer. Grouping is `BeamGrouping`, the same rule the layout
+/// beams with.
+///
+/// `.notBeamed` gates the WRITE (`visible == false`) only: hiding a beam on a chord that belongs to no group is
+/// refused, since the flag would be invisible there and the encoder would write a `<Beam>` in front of an unbeamable
+/// note. Showing/clearing (`visible == true`) is NEVER refused — with a group it targets the leader as usual; with
+/// no group it writes `true` straight onto the chord `location` names. This asymmetry exists so a flag orphaned by
+/// a group dissolving out from under it (a later `setDots` / `setDurationInRange` / `deleteRange` lengthening or
+/// removing a member) stays clearable: before the encoder persisted `beamVisible == false` on non-leader chords too,
+/// an orphaned `false` evaporated on save; now it would otherwise become permanent and unreachable.
 ///
 /// > Note: This command is sugar over `ReplaceVoiceElement`. It exists to give the operation a domain-meaningful
 /// > name and to own the group check; callers can equally construct the primitive directly. See
@@ -33,7 +40,9 @@ public struct SetBeamVisible: EditCommand {
         guard case var .chord(chord) = element, !chord.notes.isEmpty else {
             throw Self.refused(.wrongElementKind(at: location, expected: .chord))
         }
-        guard Self.leader(of: location, in: score) != nil else { throw Self.refused(.notBeamed(at: location)) }
+        if !visible, Self.leader(of: location, in: score) == nil {
+            throw Self.refused(.notBeamed(at: location))
+        }
         let old = chord.beamVisible
         chord.beamVisible = visible
         score[location] = .chord(chord)
