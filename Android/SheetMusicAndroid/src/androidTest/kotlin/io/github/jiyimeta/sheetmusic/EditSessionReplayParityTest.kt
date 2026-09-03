@@ -28,10 +28,11 @@ import org.junit.runner.RunWith
  * edit session does — the host's Swift core is always the one that encodes an intent, Kotlin only ever relays the
  * result.
  *
- * Whether a step is an edit or an undo is derived from asset presence: index `i` has a `step-i.bin` when the host
- * applied an intent there, and has none when that step was an undo — indices 6, 17, 36, 52 and 84 in this chain,
- * the undo of the move-to-voice that step 7 then re-applies, the undo of the range delete that step 18 then
- * re-applies, the undo of the marker write that step 37 then re-applies, the undo of the glissando write that step
+ * Whether a step is an edit or an undo is derived from asset presence: index `i` (0-based, this asset numbering)
+ * has a `step-i.bin` when the host applied an intent there, and has none when that step was an undo — indices 6,
+ * 17, 36, 52 and 84 in this chain, the undo of the move-to-voice that step 8 (the host's 1-based chain step, one
+ * higher than the 0-based index just named) then re-applies, the undo of the range delete that step 19 then
+ * re-applies, the undo of the marker write that step 38 then re-applies, the undo of the glissando write that step
  * 54 then re-applies, and the undo of the volta that step 86 then re-applies.
  * That is a real, if implicit, coupling between the two sides; it is not part of the wire format itself, just this
  * harness's own convention for telling the two step kinds apart from a directory listing.

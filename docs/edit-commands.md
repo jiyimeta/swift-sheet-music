@@ -117,6 +117,17 @@ own substantive logic.
 | `SetNoteVisible` | not in the example — host command registry | sugar |
 | `SetStemVisible` | not in the example — host command registry | sugar |
 | `SetBeamVisible` | not in the example — host command registry | sugar |
+| `SetSlur` | not in the example — host command registry | sugar |
+| `SetHairpin` | not in the example — host command registry | sugar |
+| `SetPedal` | not in the example — host command registry | sugar |
+| `SetVolta` | not in the example — host command registry | sugar |
+| `SetOttava` | not in the example — host command registry | sugar |
+| `SetTextLine` | not in the example — host command registry | sugar |
+| `SetTrill` | not in the example — host command registry | sugar |
+| `SetVibrato` | not in the example — host command registry | sugar |
+| `SetPalmMute` | not in the example — host command registry | sugar |
+| `SetLetRing` | not in the example — host command registry | sugar |
+| `RemoveSpanner` | not in the example — host command registry | sugar |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -262,11 +273,27 @@ intent.
 
 ### Spanners (depends on `Spanner` subtype coverage)
 
-- [ ] **`SetSlur`** — phrase mark.
-- [ ] **`SetHairpin`** — crescendo / decrescendo.
-- [ ] **`SetPedal`** — piano pedal.
-- [ ] **`SetVolta`** — repeat 1./2. brackets.
-- [ ] **`SetOttava`** — 8va / 8vb octave lines.
+- [x] **`SetSlur`** *(sugar)* — phrase mark, and `RemoveSpanner`, which
+  is the removal for all of them. Implemented; see "A. Implemented"
+  above.
+- [x] **`SetHairpin`** *(sugar)* — crescendo / decrescendo.
+  Implemented; see "A. Implemented" above.
+- [x] **`SetPedal`** *(sugar)* — piano pedal. Implemented; see
+  "A. Implemented" above.
+- [x] **`SetVolta`** *(sugar)* — repeat 1./2. brackets. Implemented;
+  see "A. Implemented" above.
+- [x] **`SetOttava`** *(sugar)* — 8va / 8vb octave lines. Implemented;
+  see "A. Implemented" above.
+- [x] **`SetTextLine`** *(sugar)* — arbitrary text line spanner.
+  Implemented; see "A. Implemented" above.
+- [x] **`SetTrill`** *(sugar)* — trill line. Implemented; see
+  "A. Implemented" above.
+- [x] **`SetVibrato`** *(sugar)* — vibrato line. Implemented; see
+  "A. Implemented" above.
+- [x] **`SetPalmMute`** *(sugar)* — palm-mute line. Implemented; see
+  "A. Implemented" above.
+- [x] **`SetLetRing`** *(sugar)* — let-ring line. Implemented; see
+  "A. Implemented" above.
 
 ---
 
@@ -280,9 +307,9 @@ command. That gap is closed by the edit-command parity project
 (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`):
 the structural group above landed first, the Range group (intents
 35–40) second, the Marks group (41–49) third, the Note/chord
-group (50–57) fourth and the Visibility group (58–61) fifth, and the
-remaining groups (Spanners, Harmony — intents 62–73) are queued in
-that spec.
+group (50–57) fourth, the Visibility group (58–61) fifth and the
+Spanners group (62–72) sixth, and the remaining group (Harmony —
+intent 73) is queued in that spec.
 
 What is left below genuinely needs a `Score` model extension before
 any edit command can make sense of it:
@@ -294,7 +321,7 @@ any edit command can make sense of it:
 | Cue note (small) | `Chord`/`Note` scale / cue flag. |
 | Slash notation | dedicated voice element. |
 | Figured bass | dedicated annotation type. |
-| Pedal line style | `Spanner` has no pedal-style payload — `SetPedal` (queued, #64) writes only `rawType = "Pedal"`. |
+| Pedal line style | `Spanner` has no pedal-style payload — `SetPedal` (#64) writes only `rawType = "Pedal"`. |
 | Chord-symbol transposition | `SetChordSymbol` (queued, #73) writes `Harmony.name` only and leaves `rootTpc` / `bassTpc` nil, so a written chord symbol carries no transposable root — transposing chord symbols is out of scope until it does. |
 
 ---
@@ -321,6 +348,5 @@ Roughly ordered by impact. A reasonable sweep:
    "A. Implemented" above.)
 7. `MoveToVoice` — voice editing. (Landed — see "A. Implemented"
    above.)
-8. Spanner commands once `Spanner` subtypes are confirmed. Queued as
-   intents 62–72 in
-   `docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`.
+8. Spanner commands once `Spanner` subtypes are confirmed. Landed as
+   intents 62–72. (Landed — see "A. Implemented" above.)

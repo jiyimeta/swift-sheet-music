@@ -389,9 +389,9 @@ extension EditReplayScript {
             .intent(.setNoteParentheses(at: note2(1, 0), parentheses: .both)),
             // Step 60: and removed — `.none` IS the clear, not a `nil`. Lands back on step 58's fingerprint.
             .intent(.setNoteParentheses(at: note2(1, 0), parentheses: .none)),
-            // Step 61: dot the first half rest of measure 1 — the only step of this group that RETIMES, and the
-            // last step of the chain for that reason. The second half rest shortens to a quarter, and nothing
-            // takes that back, which is what `scriptIsNotInert` needs.
+            // Step 61: dot the first half rest of measure 1 — the only step of this group that RETIMES, so it is
+            // sequenced last WITHIN the note/chord group (41…61); visibility and spanner groups still follow it
+            // in the full chain. The second half rest shortens to a quarter, and nothing takes that back.
             .intent(.setDots(at: firstRestOfBar1, dots: 1)),
         ] + parityVisibility() // steps 62…72 — see `EditReplayScript+Parity2.swift`
             + paritySpanners(staff: staff) // steps 73…88 — see `EditReplayScript+Parity3.swift`
