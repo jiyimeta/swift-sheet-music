@@ -129,6 +129,11 @@ public struct EditRefusal: Sendable, Hashable {
         /// is about the element's KIND: the element here is a perfectly good chord or rest whose LENGTH has no
         /// dotted spelling.
         case notDottable(at: VoiceElementID)
+        /// `SetBeamVisible` was aimed at a chord that belongs to no beam group — a quarter, a lone eighth, the
+        /// only chord between two rests. The beam flag is read from a group's leading chord and from nowhere else,
+        /// so writing it here would change nothing on screen and put a `<Beam>` in front of an unbeamable note
+        /// in the saved file. Distinct from `.wrongElementKind`: the element IS a chord.
+        case notBeamed(at: VoiceElementID)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -209,6 +214,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.chordTooSmall"
         case .notDottable:
             "edit.notDottable"
+        case .notBeamed:
+            "edit.notBeamed"
         case .unexpected:
             "edit.unexpected"
         }
@@ -291,6 +298,8 @@ public struct EditRefusal: Sendable, Hashable {
             "chord at \(location) has \(noteCount) note(s); an arpeggio needs at least 2"
         case let .notDottable(location):
             "element at \(location) has no dotted spelling for that dot count"
+        case let .notBeamed(location):
+            "element at \(location) is not in a beam group"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
