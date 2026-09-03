@@ -20,7 +20,15 @@
 // Tests/SheetMusicTests/Resources: those fixtures are GPL-3.0 copies of
 // MuseScore's own and must stay confined to the test target — see CLAUDE.md.
 //
+// Checks the committed fixtures by default and exits non-zero when one has
+// drifted; `SM_WEB_FIXTURE_RECORD=1` rewrites them instead. See
+// `FixtureEmitter` for why the check is a process rather than a test.
+//
 //     swift run GenWebFixtures \
+//         Web/sheet-music-web/test/fixtures \
+//         Web/sheet-music-web/assets/bravura.smft
+//
+//     SM_WEB_FIXTURE_RECORD=1 swift run GenWebFixtures \
 //         Web/sheet-music-web/test/fixtures \
 //         Web/sheet-music-web/assets/bravura.smft
 import Foundation
@@ -218,12 +226,16 @@ enum GenWebFixtures {
             try FileManager.default.createDirectory(
                 at: directory, withIntermediateDirectories: true,
             )
-            try opcodes.write(to: directory.appendingPathComponent("all-opcodes.smdf"))
-            try container.write(to: directory.appendingPathComponent("sample.mscz"))
-            try encoder.encode(expectations)
-                .write(to: directory.appendingPathComponent("sample-expectations.json"))
-            try encoder.encode(editExpectations)
-                .write(to: directory.appendingPathComponent("sample-edit-expectations.json"))
+            try FixtureEmitter.emit(opcodes, as: "all-opcodes.smdf", in: directory)
+            try FixtureEmitter.emit(container, as: "sample.mscz", in: directory)
+            try FixtureEmitter.emit(
+                encoder.encode(expectations), as: "sample-expectations.json", in: directory,
+            )
+            try FixtureEmitter.emit(
+                encoder.encode(editExpectations),
+                as: "sample-edit-expectations.json",
+                in: directory,
+            )
         } catch {
             fail("could not write fixtures to \(directory.path): \(error)", code: 7)
         }
@@ -257,16 +269,17 @@ enum GenWebFixtures {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {
-            try container.write(to: directory.appendingPathComponent("tall.mscz"))
-            try flat.write(to: directory.appendingPathComponent("tall.smdf"))
-            try encoder.encode(expectations)
-                .write(to: directory.appendingPathComponent("tall-expectations.json"))
+            try FixtureEmitter.emit(container, as: "tall.mscz", in: directory)
+            try FixtureEmitter.emit(flat, as: "tall.smdf", in: directory)
+            try FixtureEmitter.emit(
+                encoder.encode(expectations), as: "tall-expectations.json", in: directory,
+            )
         } catch {
             fail("could not write tall fixtures to \(directory.path): \(error)", code: 12)
         }
 
         print(
-            "wrote tall.mscz (\(container.count)B), tall.smdf (\(flat.count)B), "
+            "\(FixtureEmitter.verb) tall.mscz (\(container.count)B), tall.smdf (\(flat.count)B), "
                 + "tall-expectations.json — \(expectations.pageHeightMM)mm, "
                 + "\(expectations.commandCount) commands",
         )
@@ -275,13 +288,30 @@ enum GenWebFixtures {
     static func run() {
         guard CommandLine.arguments.count == 3 else {
             FileHandle.standardError.write(
-                Data("usage: GenWebFixtures <output-dir> <bravura.smft>\n".utf8),
+                Data(
+                    """
+                    usage: GenWebFixtures <fixture-dir> <bravura.smft>
+                    checks the committed fixtures; \
+                    \(FixtureEmitter.recordVariable)=1 rewrites them
+
+                    """.utf8,
+                ),
             )
             exit(2)
         }
         let directory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
         installSharedMetrics(tableURL: URL(fileURLWithPath: CommandLine.arguments[2]))
 
+        writeSampleFixtures(to: directory)
+        writeRepeatFixtures(to: directory)
+        writeMixerScore(to: directory)
+        writeTallScore(to: directory)
+        FixtureEmitter.finish()
+    }
+
+    /// The draw-program and sample-score half: every opcode, plus a score small
+    /// enough that a decoder disagreement is readable in the diff.
+    private static func writeSampleFixtures(to directory: URL) {
         let opcodes = DrawProgramFlat.encode(pages: [
             allOpcodesPage,
             EncodablePage(widthMM: 100, heightMM: 50, commands: []),
@@ -311,38 +341,12 @@ enum GenWebFixtures {
         )
 
         print(
-            "wrote all-opcodes.smdf (\(opcodes.count)B), sample.mscz (\(container.count)B), "
+            "\(FixtureEmitter.verb) all-opcodes.smdf (\(opcodes.count)B), "
+                + "sample.mscz (\(container.count)B), "
                 + "sample-expectations.json, sample-edit-expectations.json — \(flat.count)B flat over "
                 + "\(expectations.pageCount) page(s), "
                 + "\(expectations.firstPageCommandCount) commands",
         )
-
-        // The playback fixture goes through the same container round trip: the
-        // browser loads a `.mscz`, so the expectations have to be computed from
-        // the score that comes back out of one rather than the one built above.
-        let repeatContainer: Data
-        let repeatReloaded: Score
-        do {
-            repeatContainer = try MSCZWriter.write(score: repeatScore)
-            repeatReloaded = try ScoreBridge.loadScore(bytes: repeatContainer)
-        } catch {
-            fail("could not round-trip the repeat score: \(error)", code: 5)
-        }
-        let playback = makePlaybackExpectations(score: repeatReloaded)
-        writePlayback(
-            container: repeatContainer, expectations: playback, to: directory,
-        )
-
-        print(
-            "wrote repeat.mscz (\(repeatContainer.count)B), repeat-playback.json — "
-                + "\(playback.measureCount) measure(s), "
-                + "notated \(playback.totalNotatedSeconds)s vs player "
-                + "\(playback.totalPlayerSeconds)s, "
-                + "midi \(playback.midiByteCount)B",
-        )
-
-        writeMixerScore(to: directory)
-        writeTallScore(to: directory)
     }
 }
 

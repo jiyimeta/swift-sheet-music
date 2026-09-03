@@ -12,6 +12,15 @@
  *
  * Expected values come from `swift run GenWebFixtures`, never typed by hand.
  * Requires `Scripts/wasm-build-web.sh` to have run.
+ *
+ * A failure here is one of two things, and they are not interchangeable: the
+ * wasm build genuinely disagrees with the Apple build, or an intended engine
+ * change moved both and the fixture was never re-recorded. Run
+ * `swift run GenWebFixtures Web/sheet-music-web/test/fixtures
+ * Web/sheet-music-web/assets/bravura.smft` to tell them apart — it checks the
+ * committed fixtures against the Apple build and names what drifted. Only once
+ * that says the Apple side moved too may you re-record with
+ * `SM_WEB_FIXTURE_RECORD=1`.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

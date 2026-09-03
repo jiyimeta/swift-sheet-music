@@ -229,11 +229,37 @@ extension GenWebFixtures {
             fail("could not write the mixer score: \(error)", code: 5)
         }
         do {
-            try container.write(to: directory.appendingPathComponent("mixer.mscz"))
+            try FixtureEmitter.emit(container, as: "mixer.mscz", in: directory)
         } catch {
             fail("could not write mixer.mscz: \(error)", code: 11)
         }
-        print("wrote mixer.mscz (\(container.count)B)")
+        print("\(FixtureEmitter.verb) mixer.mscz (\(container.count)B)")
+    }
+
+    /// The playback fixture goes through the same container round trip the
+    /// browser does: it loads a `.mscz`, so the expectations have to be
+    /// computed from the score that comes back out of one rather than from
+    /// `repeatScore` directly.
+    static func writeRepeatFixtures(to directory: URL) {
+        let container: Data
+        let reloaded: Score
+        do {
+            container = try MSCZWriter.write(score: repeatScore)
+            reloaded = try ScoreBridge.loadScore(bytes: container)
+        } catch {
+            fail("could not round-trip the repeat score: \(error)", code: 5)
+        }
+        let playback = makePlaybackExpectations(score: reloaded)
+        writePlayback(container: container, expectations: playback, to: directory)
+
+        print(
+            "\(FixtureEmitter.verb) repeat.mscz (\(container.count)B), "
+                + "repeat-playback.json — "
+                + "\(playback.measureCount) measure(s), "
+                + "notated \(playback.totalNotatedSeconds)s vs player "
+                + "\(playback.totalPlayerSeconds)s, "
+                + "midi \(playback.midiByteCount)B",
+        )
     }
 
     static func writePlayback(
@@ -244,9 +270,10 @@ extension GenWebFixtures {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {
-            try container.write(to: directory.appendingPathComponent("repeat.mscz"))
-            try encoder.encode(expectations)
-                .write(to: directory.appendingPathComponent("repeat-playback.json"))
+            try FixtureEmitter.emit(container, as: "repeat.mscz", in: directory)
+            try FixtureEmitter.emit(
+                encoder.encode(expectations), as: "repeat-playback.json", in: directory,
+            )
         } catch {
             fail("could not write playback fixtures to \(directory.path): \(error)", code: 11)
         }

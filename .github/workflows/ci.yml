@@ -53,6 +53,19 @@ jobs:
           export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
           swift test
 
+      # The browser fixtures under Web/sheet-music-web/test/fixtures are
+      # recorded from this build. Until this step existed nothing on the Apple
+      # side noticed when an engraving or playback change moved them: the
+      # browser job caught it, but as a mismatch between two builds that were
+      # in fact agreeing, weeks after the change. Re-record with
+      # SM_WEB_FIXTURE_RECORD=1 once the engine change is confirmed intended.
+      - name: Browser fixtures are current
+        run: |
+          export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
+          swift run GenWebFixtures \
+            Web/sheet-music-web/test/fixtures \
+            Web/sheet-music-web/assets/bravura.smft
+
   lint:
     name: Lint
     runs-on: macos-15

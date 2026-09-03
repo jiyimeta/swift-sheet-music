@@ -67,6 +67,18 @@ if [[ "$run_apple" == 1 ]]; then
 
     step "Apple / SwiftPM: swift test"
     swift test --package-path "$ROOT"
+
+    # The browser fixtures are recorded from this build, and nothing on the
+    # Apple side used to notice when an engraving or playback change moved
+    # them. The browser suite does — but only in the wasm stage below, and
+    # there it reads as the two builds disagreeing rather than as a fixture
+    # that stopped describing either. Checking here names the real cause, and
+    # does so without a wasm toolchain. Re-record with
+    # SM_WEB_FIXTURE_RECORD=1 once the engine change is confirmed intended.
+    step "Apple / SwiftPM: browser fixtures are current"
+    swift run --package-path "$ROOT" GenWebFixtures \
+        "$ROOT/Web/sheet-music-web/test/fixtures" \
+        "$ROOT/Web/sheet-music-web/assets/bravura.smft"
 fi
 
 if [[ "$run_wasm" == 1 ]]; then
