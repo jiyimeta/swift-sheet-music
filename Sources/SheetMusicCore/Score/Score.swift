@@ -67,22 +67,80 @@ public struct Score: Sendable, Equatable {
                 stripped.parts[partIndex].staves[staffIndex].staffTypePreservedMarkup = []
                 stripped.parts[partIndex].staves[staffIndex].preservedMarkup = []
                 for measureIndex in stripped.parts[partIndex].staves[staffIndex].measures.indices {
-                    stripped.parts[partIndex].staves[staffIndex]
-                        .measures[measureIndex].preservedMarkup = []
-                    for voiceIndex in stripped.parts[partIndex].staves[staffIndex]
-                        .measures[measureIndex].voices.indices
-                    {
-                        MeasureStructure.removeElements(
-                            in: &stripped.parts[partIndex].staves[staffIndex]
-                                .measures[measureIndex].voices[voiceIndex],
-                        ) { element in
-                            if case .preserved = element { return true }
-                            return false
-                        }
-                    }
+                    stripPreservedMarkup(
+                        from: &stripped.parts[partIndex].staves[staffIndex]
+                            .measures[measureIndex],
+                    )
                 }
             }
         }
         return stripped
+    }
+}
+
+/// Clear container bags and ordered preserved elements inside one measure.
+private func stripPreservedMarkup(from measure: inout Measure) {
+    measure.preservedMarkup = []
+    for markerIndex in measure.markers.indices {
+        measure.markers[markerIndex].preservedMarkup = []
+    }
+    for jumpIndex in measure.jumps.indices {
+        measure.jumps[jumpIndex].preservedMarkup = []
+    }
+    for voiceIndex in measure.voices.indices {
+        MeasureStructure.removeElements(in: &measure.voices[voiceIndex]) { element in
+            if case .preserved = element { return true }
+            return false
+        }
+        for elementIndex in measure.voices[voiceIndex].elements.indices {
+            measure.voices[voiceIndex].elements[elementIndex] = strippingPreservedMarkup(
+                from: measure.voices[voiceIndex].elements[elementIndex],
+            )
+        }
+    }
+}
+
+/// Return one modeled voice element with its preserved-markup bag cleared.
+private func strippingPreservedMarkup(from element: VoiceElement) -> VoiceElement {
+    if case let .chord(value) = element { return .chord(strippingPreservedMarkup(from: value)) }
+    if case var .keySignature(value) = element {
+        value.preservedMarkup = []; return .keySignature(value)
+    }
+    if case var .timeSignature(value) = element {
+        value.preservedMarkup = []; return .timeSignature(value)
+    }
+    if case var .clef(value) = element { value.preservedMarkup = []; return .clef(value) }
+    if case var .barLine(value) = element { value.preservedMarkup = []; return .barLine(value) }
+    if case var .dynamic(value) = element { value.preservedMarkup = []; return .dynamic(value) }
+    if case var .spanner(value) = element { value.preservedMarkup = []; return .spanner(value) }
+    if case var .harmony(value) = element { value.preservedMarkup = []; return .harmony(value) }
+    return element
+}
+
+/// Clear a chord/rest bag and every preserved-markup bag nested inside it.
+private func strippingPreservedMarkup(from source: Chord) -> Chord {
+    var chord = source
+    chord.preservedMarkup = []
+    for noteIndex in chord.notes.indices {
+        chord.notes[noteIndex].preservedMarkup = []
+    }
+    for lyricIndex in chord.lyrics.indices {
+        chord.lyrics[lyricIndex].preservedMarkup = []
+    }
+    for spannerIndex in chord.spanners.indices {
+        chord.spanners[spannerIndex].preservedMarkup = []
+    }
+    stripPreservedMarkup(from: &chord.graceNotesBefore)
+    stripPreservedMarkup(from: &chord.graceNotesAfter)
+    return chord
+}
+
+/// Clear grace-chord bags and the note bags they contain.
+private func stripPreservedMarkup(from graces: inout [GraceChord]) {
+    for graceIndex in graces.indices {
+        graces[graceIndex].preservedMarkup = []
+        for noteIndex in graces[graceIndex].notes.indices {
+            graces[graceIndex].notes[noteIndex].preservedMarkup = []
+        }
     }
 }

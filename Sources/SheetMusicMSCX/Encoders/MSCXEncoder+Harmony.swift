@@ -67,6 +67,7 @@ extension Harmony {
         }
         children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "Harmony", children: children)
     }
 

@@ -262,13 +262,13 @@ extension Voice {
         case let .keySignature(key):
             return key.encode(options: options)
         case let .timeSignature(time):
-            return time.encode()
+            return time.encode(options: options)
         case let .clef(clef):
-            return clef.encode()
+            return clef.encode(options: options)
         case let .dynamic(dynamic):
-            return dynamic.encode()
+            return dynamic.encode(options: options)
         case let .barLine(barLine):
-            return barLine.encode()
+            return barLine.encode(options: options)
         case let .harmony(harmony):
             return harmony.encode(options: options)
         case let .preserved(markup):

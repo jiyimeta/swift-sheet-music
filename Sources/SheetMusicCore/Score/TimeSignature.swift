@@ -19,10 +19,20 @@ public struct TimeSignature: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
-    public init(numerator: Int, denominator: Int, visible: Bool = true, showCourtesy: Bool = true) {
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
+
+    public init(
+        numerator: Int,
+        denominator: Int,
+        visible: Bool = true,
+        showCourtesy: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
+    ) {
         self.numerator = numerator
         self.denominator = denominator
         self.showCourtesy = showCourtesy
+        self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }
 }

@@ -52,11 +52,19 @@ public struct Marker: Sendable, Equatable {
     /// Display text as rendered (sometimes includes SMuFL glyphs or
     /// translated strings; kept verbatim for round-trip fidelity).
     public var text: String
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
 
-    public init(kind: Kind, label: String = "", text: String = "") {
+    public init(
+        kind: Kind,
+        label: String = "",
+        text: String = "",
+        preservedMarkup: [PreservedXML] = [],
+    ) {
         self.kind = kind
         self.label = label
         self.text = text
+        self.preservedMarkup = preservedMarkup
     }
 
     /// Label used for jump-target resolution: the explicit `<label>`

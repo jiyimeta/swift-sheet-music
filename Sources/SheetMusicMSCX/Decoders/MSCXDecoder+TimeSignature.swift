@@ -3,6 +3,10 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension TimeSignature {
+    private static let consumedTimeSignatureChildren: Set = [
+        "color", "showCourtesySig", "sigD", "sigN", "visible",
+    ]
+
     static func decode(_ node: XMLTreeNode) throws -> TimeSignature {
         guard let nText = node.first("sigN")?.text, let n = Int(nText) else {
             throw SheetMusicError.malformedScore(ScoreFault(
@@ -22,6 +26,9 @@ extension TimeSignature {
         var timeSig = TimeSignature(
             numerator: n, denominator: d,
             showCourtesy: (node.first("showCourtesySig")?.text ?? "1") != "0",
+            preservedMarkup: node.preservedMarkup(
+                consuming: consumedTimeSignatureChildren,
+            ),
         )
         timeSig.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return timeSig

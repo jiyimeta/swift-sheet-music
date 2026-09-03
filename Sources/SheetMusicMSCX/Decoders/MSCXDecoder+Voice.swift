@@ -157,6 +157,7 @@ extension Voice {
                         graceType: graceType,
                         duration: inner.duration,
                         notes: inner.notes,
+                        preservedMarkup: inner.preservedMarkup,
                     ))
                     continue
                 }

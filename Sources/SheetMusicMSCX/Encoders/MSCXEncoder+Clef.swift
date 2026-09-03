@@ -3,7 +3,7 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Clef {
-    func encode() -> XMLTreeNode {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = [
             XMLTreeNode(name: "concertClefType", text: concertClefType),
         ]
@@ -13,6 +13,7 @@ extension Clef {
             ))
         }
         children.append(contentsOf: elementProperties.mscxChildren())
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "Clef", children: children)
     }
 }

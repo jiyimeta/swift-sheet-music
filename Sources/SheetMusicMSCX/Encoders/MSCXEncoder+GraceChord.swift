@@ -123,6 +123,7 @@ extension GraceChord {
                 options: options,
             ))
         }
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "Chord", children: children)
     }
 

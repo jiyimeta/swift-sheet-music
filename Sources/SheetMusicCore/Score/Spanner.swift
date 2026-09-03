@@ -90,6 +90,8 @@ public struct Spanner: Sendable, Equatable {
     /// Meaningful only when `kind == .trill`. Selects the SMuFL glyph
     /// pair repeated along the line during rendering.
     public var trill: TrillPayload?
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
 
     public init(
         kind: Kind,
@@ -104,6 +106,7 @@ public struct Spanner: Sendable, Equatable {
         ottava: OttavaPayload? = nil,
         vibrato: VibratoPayload? = nil,
         trill: TrillPayload? = nil,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.kind = kind
         self.rawType = rawType
@@ -117,6 +120,7 @@ public struct Spanner: Sendable, Equatable {
         self.ottava = ottava
         self.vibrato = vibrato
         self.trill = trill
+        self.preservedMarkup = preservedMarkup
     }
 
     /// MuseScore `<Trill>` payload.

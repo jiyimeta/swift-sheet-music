@@ -3,6 +3,15 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Harmony {
+    /// Every direct `<Harmony>` child read either directly or through
+    /// the version-dependent `<harmonyInfo>` lookup.
+    private static let consumedHarmonyChildren: Set = [
+        "base", "baseCase", "bass", "bassCase", "bold", "color", "face",
+        "framePadding", "frameType", "harmonyInfo", "harmonyType", "italic",
+        "leftParen", "name", "offset", "play", "rightParen", "root", "rootCase",
+        "size", "strike", "underline", "visible",
+    ]
+
     /// Decode a `<Harmony>` element. Mirrors
     /// `TRead::read(Harmony*, ...)` in MuseScore's
     /// `engraving/rw/read410/tread.cpp` (around line 2970).
@@ -67,6 +76,7 @@ extension Harmony {
             offsetY: offset.1,
             color: color,
             properties: properties,
+            preservedMarkup: node.preservedMarkup(consuming: consumedHarmonyChildren),
         )
         harmony.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return harmony

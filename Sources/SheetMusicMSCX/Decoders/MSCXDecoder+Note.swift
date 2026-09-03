@@ -2,7 +2,27 @@ import SheetMusicCore
 import SheetMusicFoundation
 import SheetMusicXMLTools
 
+// Connector and note-payload decoding live together so their consumed
+// child policy stays next to the one decoder that owns it.
+// swiftlint:disable file_length
+
 extension Note {
+    /// Every direct `<Note>` child this decoder or its owning chord
+    /// decoder reads. `<Symbol>` is conditional and is handled by
+    /// `preservedNoteMarkup(in:)` instead of this name-only set.
+    /// `tpc2` is encoder-owned: the writer regenerates it from the
+    /// instrument transposition, so preserving the source spelling
+    /// would collide with the generated value.
+    private static let consumedNoteChildren: Set = [
+        "Accidental", "Bend", "ChordLine", "Parenthesis", "Spanner", "Tie",
+        "color", "endSpanner", "fret", "head", "parentheses", "pitch", "play",
+        "small", "string", "tpc", "tpc2", "veloType", "velocity", "visible",
+    ]
+
+    private static let parenthesisSymbolNames: Set = [
+        "noteheadParenthesisLeft", "noteheadParenthesisRight",
+    ]
+
     static func decode(_ node: XMLTreeNode) throws -> Note {
         guard let pitchText = node.first("pitch")?.text, let pitch = Int(pitchText) else {
             throw SheetMusicError.malformedScore(ScoreFault(
@@ -51,6 +71,7 @@ extension Note {
             // `<Staff><StringData>` — the instrument tuning — never reach here.
             fret: (node.first("fret")?.text).flatMap(Int.init),
             string: (node.first("string")?.text).flatMap(Int.init),
+            preservedMarkup: preservedNoteMarkup(in: node),
         )
         note.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         // `Note.legacyBend` holds one curve, so only the first `<Bend>` can be
@@ -257,6 +278,24 @@ extension Note {
         // <parentheses> property still mean the note is parenthesized.
         if node.children.contains(where: { $0.name == "Parenthesis" }) { return .both }
         return .none
+    }
+
+    /// Preserve only `<Symbol>` values `decodeParentheses` does not
+    /// interpret, while keeping their order among every other
+    /// unconsumed note child. A tag-name consumed set cannot express
+    /// "consumed only for the two notehead-parenthesis names", so the
+    /// value-aware filter mirrors Measure's conditional LayoutBreak
+    /// preservation.
+    private static func preservedNoteMarkup(
+        in node: XMLTreeNode,
+    ) -> [PreservedXML] {
+        node.preservedMarkup(consuming: consumedNoteChildren)
+            .filter { markup in
+                guard markup.name == "Symbol" else { return true }
+                let name = markup.children
+                    .first(where: { $0.name == "name" })?.text
+                return !parenthesisSymbolNames.contains(name ?? "")
+            }
     }
 
     /// Normalize `<head>` to a MS4 string token.

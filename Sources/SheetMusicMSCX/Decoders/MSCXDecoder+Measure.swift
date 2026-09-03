@@ -25,6 +25,14 @@ extension Measure {
         "line", "page", "section",
     ]
 
+    private static let consumedMarkerChildren: Set = [
+        "label", "markerType", "text",
+    ]
+
+    private static let consumedJumpChildren: Set = [
+        "continueAt", "jumpTo", "playRepeats", "playUntil", "text",
+    ]
+
     /// Decoded `Measure` plus any system-level elements lifted out
     /// of its voices during decoding. The caller stamps each
     /// `PositionedSystemElement.originalStaff` with the appropriate
@@ -219,6 +227,7 @@ extension Measure {
             // omits `<label>` still targets jumps by that default.
             label: rawLabel.isEmpty ? kind.defaultLabel : rawLabel,
             text: text,
+            preservedMarkup: node.preservedMarkup(consuming: consumedMarkerChildren),
         )
     }
 
@@ -229,6 +238,7 @@ extension Measure {
             continueAt: node.first("continueAt")?.text ?? "",
             playRepeats: node.first("playRepeats")?.text == "1",
             text: node.first("text")?.text ?? "",
+            preservedMarkup: node.preservedMarkup(consuming: consumedJumpChildren),
         )
     }
 }

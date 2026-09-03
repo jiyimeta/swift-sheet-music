@@ -43,8 +43,11 @@ enum MSCXPreservation {
     private static let elementIdentityReason =
         "by design: MuseScore element identity is regenerated instead of preserved (spec §3.4)."
     private static let linkedIdentityReason =
-        "by design: MuseScore linked-element bookkeeping is recomputed from the score link structure, "
-            + "like eid identity (spec §3.4)."
+        "genuinely lost under this design: <linked> / <linkedMain> is MuseScore's excerpt link "
+            + "bookkeeping, which this library does not model at all. On a chord, note, rest, or "
+            + "barline it now survives as preserved markup; these four sit INSIDE a modeled "
+            + "spanner payload, where the wrapper-level bag cannot reach them. A payload-level bag "
+            + "would be needed — see spannerPayloadReason, which is the same limitation."
     private static let flatFormReason =
         "by design: the MS2/MS3 flat form moves under <voice> in the encoder's canonical structure."
     private static let spatiumReason =
@@ -52,6 +55,11 @@ enum MSCXPreservation {
     private static let endpointReason =
         "by design: spanner endpoint markers are recomputed from modeled offsets; "
             + "the <prev> side carries no model state (MSCXDecoder+Chord.swift)."
+    private static let crossVoiceEndpointReason =
+        endpointReason + " Voice deltas are genuinely lost because Spanner models "
+            + "measure/fraction offsets but not cross-voice endpoints, as pinned by "
+            + "slur_ms3_exchangevoices.mscx and MSCXDecoder+Chord.swift's "
+            + "mscx.slur.locationDropped diagnostic."
     private static let tremoloReason =
         "by design: unsupported tremolo embellishments are dropped after a diagnostic under the parser policy."
     private static let textContentReason =
@@ -75,10 +83,42 @@ enum MSCXPreservation {
         "by design: MuseScore 5's <InstrumentLabel> wrapper holds <longName> / <shortName>, which "
             + "are modeled and re-emitted in MuseScore 4's direct-child form. Preserving the "
             + "wrapper too would duplicate modeled data and go stale on the first rename."
+    private static let keySignatureDialectReason =
+        "by design, and not a preservation gap: MSCXDecoder+KeySignature.swift consumes "
+            + "<concertKey>, falls back to <accidental>, and uses <mode> in its custom-key "
+            + "fallback; MSCXEncoder+KeySignature.swift then writes the target-version spelling. "
+            + "Preserved markup cannot restore a tag the decoder consumed."
+    private static let harmonyStructureReason =
+        "by design, and not a preservation gap: Harmony.name is modeled, and "
+            + "MSCXEncoder+Harmony.swift moves it into <harmonyInfo> for the v4.60 reader; "
+            + "the parent/child pair changes while the value survives, as pinned by "
+            + "harmony-basic.mscx."
+    private static let defaultCourtesyReason =
+        "by design, and not a preservation gap: MSCXDecoder+TimeSignature.swift consumes "
+            + "explicit <showCourtesySig>1</showCourtesySig>, and MSCXEncoder+TimeSignature.swift "
+            + "elides that default; testInitialKeySigThenRepeatToMeas2.mscx pins the canonical "
+            + "omission."
+    private static let noteParenthesisSymbolReason =
+        "by design, and not a preservation gap in this corpus: every <Note><Symbol> here is a "
+            + "noteheadParenthesisLeft/Right consumed by MSCXDecoder+Note.swift's "
+            + "decodeParentheses and re-emitted by MSCXEncoder+Note.swift as <parentheses> / "
+            + "<Parenthesis>, as pinned by guitarbend_prebend.mscx. Other Symbol names are now "
+            + "preserved, but no committed fixture exercises that branch."
+    private static let spannerPayloadReason =
+        "genuinely lost under this design: these fields are nested inside a modeled spanner "
+            + "payload, and the wrapper-level Spanner preserved-markup bag cannot retain only the "
+            + "unconsumed part of that payload. MSCXDecoder+Spanner.swift plus "
+            + "slur_ms4_glissando_legato.mscx, testSingleNoteDynamics.mscx, and repeat52.mscx "
+            + "pin the loss; a payload-level bag or model field would be required."
+    private static let glissandoAnchorReason =
+        "by design, and not user-data loss: <anchor>3</anchor> is the fixed note-anchor marker "
+            + "inside the modeled Glissando payload. MSCXDecoder+Note.swift derives the anchor "
+            + "from Note containment and MSCXEncoder+Note.swift writes the spanner there; the "
+            + "nested source tag cannot ride in the wrapper-level bag. "
+            + "slur_ms4_glissando_legato.mscx pins this spelling."
     private static func makeAllowedLosses() -> [String: String] {
         var result: [String: String] = [:]
         addPermanentLosses(to: &result)
-        addTask6Losses(to: &result)
         return result
     }
 
@@ -95,15 +135,20 @@ enum MSCXPreservation {
         // Permanent: identity and generated file metadata.
         allow([
             "Accidental/eid", "BarLine/eid", "Chord/eid", "Clef/eid", "Dynamic/eid",
-            "GuitarBend/eid", "GuitarBendHold/eid", "HBox/eid", "KeySig/eid", "LaissezVib/eid",
+            "GuitarBend/eid", "GuitarBendHold/eid", "HBox/eid", "KeySig/eid",
             "LayoutBreak/eid", "Lyrics/eid", "Marker/eid", "Measure/eid", "Note/eid", "Rest/eid",
             "Score/eid", "Staff/eid", "StaffText/eid", "Symbol/eid", "SystemText/eid", "Tempo/eid",
             "Text/eid", "Tie/eid", "TimeSig/eid", "VBox/eid", "museScore/LastEID",
         ], because: elementIdentityReason, into: &result)
+        // `LaissezVib/eid` is deliberately NOT here. `<LaissezVib>` is
+        // itself preserved whole, and the exclusion list only fires at
+        // a CAPTURE point — an id nested inside a verbatim subtree
+        // rides along with the element it identifies, which keeps that
+        // subtree internally consistent. The exclusion exists for ids
+        // on elements the model represents, where an edit could strand
+        // them.
         allow([
-            "BarLine/linked", "BarLine/linkedMain", "Chord/linked", "Chord/linkedMain",
-            "Glissando/linked", "Glissando/linkedMain", "Note/linked", "Note/linkedMain",
-            "Rest/linked", "Rest/linkedMain", "Slur/linked", "Slur/linkedMain",
+            "Glissando/linked", "Glissando/linkedMain", "Slur/linked", "Slur/linkedMain",
         ], because: linkedIdentityReason, into: &result)
         allow([
             "museScore/programRevision", "museScore/programVersion",
@@ -117,8 +162,12 @@ enum MSCXPreservation {
             "Style/Spatium",
         ], because: spatiumReason, into: &result)
         allow([
-            "location/measures", "prev/location",
+            "Note/Spanner", "Spanner/prev", "location/fractions", "location/measures",
+            "next/location", "prev/location",
         ], because: endpointReason, into: &result)
+        allow([
+            "location/voices",
+        ], because: crossVoiceEndpointReason, into: &result)
 
         // Permanent: parser policy and markup explicitly outside this design.
         allow([
@@ -141,20 +190,29 @@ enum MSCXPreservation {
         allow([
             "Instrument/InstrumentLabel", "InstrumentLabel/longName", "InstrumentLabel/shortName",
         ], because: instrumentLabelReason, into: &result)
+        addLeafPermanentLosses(to: &result)
     }
 
-    private static func addTask6Losses(to result: inout [String: String]) {
-        // Temporary: Task 6 preserves chord, note, notation-leaf, and spanner containers.
+    private static func addLeafPermanentLosses(to result: inout [String: String]) {
         allow([
-            "Arpeggio/subtype", "Arpeggio/timeStretch", "Arpeggio/userLen1", "BarLine/span",
-            "Chord/Arpeggio", "Chord/BeamMode", "Chord/StemDirection", "Chord/noStem", "Clef/isHeader",
-            "Dynamic/veloChange", "Dynamic/veloChangeSpeed", "Event/len", "Events/Event",
-            "Glissando/anchor", "Glissando/diagonal", "HairPin/Segment", "Harmony/name", "Jump/style",
-            "KeySig/accidental", "KeySig/concertKey", "KeySig/mode", "Lyrics/ticks_f", "Marker/style",
-            "Note/Events", "Note/LaissezVib", "Note/Spanner", "Note/Symbol", "Segment/off2",
-            "Segment/offset", "Segment/subtype", "Spanner/prev", "Symbol/name", "TimeSig/showCourtesySig",
-            "Volta/endHookType", "location/fractions", "location/voices", "next/location",
-        ], because: "Task 6: preserve unmodeled chord, note, notation-leaf, and spanner markup.", into: &result)
+            "KeySig/accidental", "KeySig/concertKey", "KeySig/mode",
+        ], because: keySignatureDialectReason, into: &result)
+        allow([
+            "Harmony/name",
+        ], because: harmonyStructureReason, into: &result)
+        allow([
+            "TimeSig/showCourtesySig",
+        ], because: defaultCourtesyReason, into: &result)
+        allow([
+            "Note/Symbol", "Symbol/name",
+        ], because: noteParenthesisSymbolReason, into: &result)
+        allow([
+            "Glissando/diagonal", "HairPin/Segment", "Segment/off2", "Segment/offset",
+            "Segment/subtype", "Volta/endHookType",
+        ], because: spannerPayloadReason, into: &result)
+        allow([
+            "Glissando/anchor",
+        ], because: glissandoAnchorReason, into: &result)
     }
 
     private static func counts(_ root: XMLTreeNode) -> [String: Int] {

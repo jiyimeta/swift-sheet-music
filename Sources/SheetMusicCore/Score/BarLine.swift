@@ -15,8 +15,16 @@ public struct BarLine: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
-    public init(subtype: String? = nil, visible: Bool = true) {
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
+
+    public init(
+        subtype: String? = nil,
+        visible: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
+    ) {
         self.subtype = subtype
+        self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }
 }

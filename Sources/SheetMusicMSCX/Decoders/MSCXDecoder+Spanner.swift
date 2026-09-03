@@ -3,6 +3,13 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Spanner {
+    /// Wrapper children every spanner decoder consumes. The payload
+    /// child is named by the `type` attribute, so `decode(_:)` adds
+    /// that runtime name before capturing anything else.
+    private static let consumedSpannerChildren: Set = [
+        "next", "prev", "visible",
+    ]
+
     static func decode(_ node: XMLTreeNode) throws -> Spanner {
         let raw = node.attributes["type"] ?? ""
         let kind = Kind(rawValue: raw) ?? .other
@@ -66,6 +73,9 @@ extension Spanner {
             ottava: ottava,
             vibrato: vibrato,
             trill: trill,
+            preservedMarkup: node.preservedMarkup(
+                consuming: consumedSpannerChildren.union([raw]),
+            ),
         )
     }
 

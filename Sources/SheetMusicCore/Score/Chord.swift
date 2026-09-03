@@ -81,6 +81,8 @@ public struct Chord: Sendable, Equatable {
     /// The `<Beam>` element's other payloads (`<StemDirection>`, custom
     /// beam fragments) are not modelled.
     public var beamVisible: Bool
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
 
     public init(
         duration: NoteDuration,
@@ -96,6 +98,7 @@ public struct Chord: Sendable, Equatable {
         visible: Bool = true,
         stemVisible: Bool = true,
         beamVisible: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.duration = duration
         self.notes = notes
@@ -109,6 +112,7 @@ public struct Chord: Sendable, Equatable {
         self.spanners = spanners
         self.stemVisible = stemVisible
         self.beamVisible = beamVisible
+        self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }
 }

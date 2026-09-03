@@ -4,6 +4,9 @@ import SheetMusicCore
 @testable import SheetMusicXMLTools
 import Testing
 
+// One suite owns the primitive, fixture, stripping, and collision coverage.
+// swiftlint:disable file_length
+
 /// The capture / restore primitives behind preserved markup.
 ///
 /// The end-to-end property — "a fixture loses nothing on decode →
@@ -165,6 +168,58 @@ struct MSCXPreservedMarkupTests {
         #expect(text.contains("nobreak"))
     }
 
+    @Test("<Chord><StemDirection> and <Note><Events> survive")
+    func chordAndNoteMarkupSurvives() throws {
+        let source = try MSCXFixtureLoader.mscxData("testDurationLargeError_ref")
+        let encoded = try MSCXEncoder.encode(MSCXParser.parse(source))
+        let text = try #require(String(data: encoded, encoding: .utf8))
+        #expect(Self.occurrences(of: "<StemDirection>", in: text) == 14)
+        #expect(Self.occurrences(of: "<Events>", in: text) == 2)
+    }
+
+    @Test("a non-parenthesis <Note><Symbol> survives")
+    func unmodeledNoteSymbolSurvives() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60"><Score><Division>480</Division>
+        <Part><Staff id="1"/><Instrument/></Part>
+        <Staff id="1"><Measure><voice><Chord><durationType>quarter</durationType>
+        <Note><Symbol><name>guitarString0</name></Symbol><pitch>60</pitch><tpc>14</tpc></Note>
+        </Chord></voice></Measure></Staff></Score></museScore>
+        """
+        let encoded = try MSCXEncoder.encode(MSCXParser.parse(Data(xml.utf8)))
+        let text = try #require(String(data: encoded, encoding: .utf8))
+        #expect(text.contains("<Symbol>"))
+        #expect(text.contains("<name>guitarString0</name>"))
+    }
+
+    @Test("grace-chord <BeamMode> and <noStem> survive")
+    func graceChordMarkupSurvives() throws {
+        let source = try MSCXFixtureLoader.mscxData("guitarbend_gracebend")
+        let encoded = try MSCXEncoder.encode(MSCXParser.parse(source))
+        let text = try #require(String(data: encoded, encoding: .utf8))
+        #expect(Self.occurrences(of: "<BeamMode>", in: text) == 3)
+        #expect(Self.occurrences(of: "<noStem>", in: text) == 3)
+    }
+
+    @Test("<BarLine><span> survives")
+    func barLineMarkupSurvives() throws {
+        let source = try MSCXFixtureLoader.mscxData("legacybend_ms3_canonical")
+        let encoded = try MSCXEncoder.encode(MSCXParser.parse(source))
+        let text = try #require(String(data: encoded, encoding: .utf8))
+        #expect(text.contains("<span>1</span>"))
+    }
+
+    @Test("modeled <Arpeggio> content is re-emitted")
+    func arpeggioContentSurvives() throws {
+        let source = try MSCXFixtureLoader.mscxData("testArpeggio")
+        let encoded = try MSCXEncoder.encode(MSCXParser.parse(source))
+        let text = try #require(String(data: encoded, encoding: .utf8))
+        #expect(Self.occurrences(of: "<Arpeggio>", in: text) == 5)
+        #expect(Self.occurrences(of: "<timeStretch>", in: text) == 3)
+        #expect(Self.occurrences(of: "<userLen1>", in: text) == 3)
+    }
+
     @Test("emitPreservedMarkup: false leaves preserved markup out")
     func preservedMarkupCanBeSuppressed() throws {
         let source = try MSCXFixtureLoader.mscxData("grace_after")
@@ -190,6 +245,7 @@ struct MSCXPreservedMarkupTests {
         score.parts[0].staves[0].preservedMarkup = [marker]
         score.parts[0].staves[0].staffTypePreservedMarkup = [marker]
         score.parts[0].staves[0].measures[0].preservedMarkup = [marker]
+        Self.installTask6Markup(marker, in: &score)
         let stripped = score.strippingPreservedMarkup()
         #expect(stripped.preservedMarkup.isEmpty)
         #expect(stripped.style.preservedMarkup.isEmpty)
@@ -199,6 +255,7 @@ struct MSCXPreservedMarkupTests {
         #expect(stripped.parts[0].staves[0].preservedMarkup.isEmpty)
         #expect(stripped.parts[0].staves[0].staffTypePreservedMarkup.isEmpty)
         #expect(stripped.parts[0].staves[0].measures[0].preservedMarkup.isEmpty)
+        #expect(Self.task6Markup(in: stripped).isEmpty)
     }
 
     /// A tag that appears both in a node's preserved markup and in
@@ -248,7 +305,85 @@ struct MSCXPreservedMarkupTests {
                 writtenScore: encodedScore,
                 sourceName: url.lastPathComponent,
             )
+            expectNoTask6NameCollisions(
+                score: score,
+                sourceName: url.lastPathComponent,
+                options: options,
+            )
         }
+    }
+
+    private static func occurrences(of needle: String, in text: String) -> Int {
+        text.components(separatedBy: needle).count - 1
+    }
+}
+
+extension MSCXPreservedMarkupTests {
+    fileprivate static func installTask6Markup(_ marker: PreservedXML, in score: inout Score) {
+        let note = Note(pitch: 60, tpc: 14, preservedMarkup: [marker])
+        let grace = GraceChord(
+            graceType: .acciaccatura,
+            duration: .eighth,
+            notes: ChordNotes([note]),
+            preservedMarkup: [marker],
+        )
+        let spanner = Spanner(
+            kind: .slur,
+            rawType: "Slur",
+            preservedMarkup: [marker],
+        )
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([note]),
+            lyrics: [Lyric(text: "la", preservedMarkup: [marker])],
+            graceNotesBefore: [grace],
+            spanners: [spanner],
+            preservedMarkup: [marker],
+        )
+        var measure = score.parts[0].staves[0].measures[0]
+        measure.markers = [Marker(kind: .segno, preservedMarkup: [marker])]
+        measure.jumps = [Jump(jumpTo: "start", playUntil: "end", preservedMarkup: [marker])]
+        measure.voices[0].elements = [
+            .chord(chord),
+            .keySignature(KeySignature(concertKey: 0, preservedMarkup: [marker])),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4, preservedMarkup: [marker])),
+            .clef(Clef(concertClefType: "G", preservedMarkup: [marker])),
+            .barLine(BarLine(preservedMarkup: [marker])),
+            .dynamic(Dynamic(subtype: "mf", velocity: 80, preservedMarkup: [marker])),
+            .spanner(spanner),
+            .harmony(Harmony(name: "C", preservedMarkup: [marker])),
+        ]
+        score.parts[0].staves[0].measures[0] = measure
+    }
+
+    fileprivate static func task6Markup(in score: Score) -> [PreservedXML] {
+        let measure = score.parts[0].staves[0].measures[0]
+        var result = measure.markers.flatMap(\.preservedMarkup)
+            + measure.jumps.flatMap(\.preservedMarkup)
+        for element in measure.voices[0].elements {
+            if case let .chord(value) = element { result += task6Markup(in: value) }
+            if case let .keySignature(value) = element { result += value.preservedMarkup }
+            if case let .timeSignature(value) = element { result += value.preservedMarkup }
+            if case let .clef(value) = element { result += value.preservedMarkup }
+            if case let .barLine(value) = element { result += value.preservedMarkup }
+            if case let .dynamic(value) = element { result += value.preservedMarkup }
+            if case let .spanner(value) = element { result += value.preservedMarkup }
+            if case let .harmony(value) = element { result += value.preservedMarkup }
+        }
+        return result
+    }
+
+    fileprivate static func task6Markup(in chord: Chord) -> [PreservedXML] {
+        chord.preservedMarkup
+            + chord.notes.flatMap(\.preservedMarkup)
+            + chord.lyrics.flatMap(\.preservedMarkup)
+            + chord.spanners.flatMap(\.preservedMarkup)
+            + chord.graceNotesBefore.flatMap {
+                $0.preservedMarkup + $0.notes.flatMap(\.preservedMarkup)
+            }
+            + chord.graceNotesAfter.flatMap {
+                $0.preservedMarkup + $0.notes.flatMap(\.preservedMarkup)
+            }
     }
 
     private func expectNoMeasureNameCollisions(
@@ -326,6 +461,136 @@ struct MSCXPreservedMarkupTests {
                 )
             }
         }
+    }
+
+    private func expectNoTask6NameCollisions(
+        score: Score,
+        sourceName: String,
+        options: MSCXEncoderOptions,
+    ) {
+        for (partIndex, part) in score.parts.enumerated() {
+            for (staffIndex, staff) in part.staves.enumerated() {
+                for (measureIndex, measure) in staff.measures.enumerated() {
+                    let context = "\(sourceName): <Part>[\(partIndex)]/<Staff>[\(staffIndex)]"
+                        + "/<Measure>[\(measureIndex)]"
+                    for (index, marker) in measure.markers.enumerated() {
+                        expectNoNameCollision(
+                            marker.preservedMarkup,
+                            writtenChildren: marker.encode(options: options).children,
+                            context: "\(context)/<Marker>[\(index)]",
+                        )
+                    }
+                    for (index, jump) in measure.jumps.enumerated() {
+                        expectNoNameCollision(
+                            jump.preservedMarkup,
+                            writtenChildren: jump.encode(options: options).children,
+                            context: "\(context)/<Jump>[\(index)]",
+                        )
+                    }
+                    for (voiceIndex, voice) in measure.voices.enumerated() {
+                        for (elementIndex, element) in voice.elements.enumerated() {
+                            expectNoVoiceElementNameCollisions(
+                                element,
+                                context: "\(context)/<voice>[\(voiceIndex)]/[\(elementIndex)]",
+                                options: options,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func expectNoVoiceElementNameCollisions(
+        _ element: VoiceElement,
+        context: String,
+        options: MSCXEncoderOptions,
+    ) {
+        if case let .chord(chord) = element {
+            expectNoChordNameCollisions(chord, context: context, options: options)
+        }
+        if case let .keySignature(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .timeSignature(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .clef(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .dynamic(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .barLine(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .harmony(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .spanner(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+    }
+
+    private func expectNoChordNameCollisions(
+        _ chord: Chord,
+        context: String,
+        options: MSCXEncoderOptions,
+    ) {
+        // A `.measure` rest traps in the single-argument `encodeAsRest`
+        // overload, which exists precisely to catch a caller that lost
+        // the measure's effective duration. This check only compares
+        // TAG NAMES, and those do not depend on the resolved value, so
+        // a nominal 4/4 is enough to reach the same child list.
+        let written = chord.notes.isEmpty
+            ? chord.encodeAsRest(
+                options: options, in: Fraction(numerator: 4, denominator: 4),
+            )
+            : chord.encodeAsChord(options: options)
+        expectNoNameCollision(chord.preservedMarkup, written, context: context)
+        for (index, note) in chord.notes.enumerated() {
+            expectNoNameCollision(
+                note.preservedMarkup, note.encode(options: options),
+                context: "\(context)/<Note>[\(index)]",
+            )
+        }
+        for (index, lyric) in chord.lyrics.enumerated() {
+            expectNoNameCollision(
+                lyric.preservedMarkup, lyric.encode(options: options),
+                context: "\(context)/<Lyrics>[\(index)]",
+            )
+        }
+        for (index, spanner) in chord.spanners.enumerated() {
+            expectNoNameCollision(
+                spanner.preservedMarkup, spanner.encodeChordAnchoredBegin(options: options),
+                context: "\(context)/<Spanner>[\(index)]",
+            )
+        }
+        for (index, grace) in chord.mscxFileOrderedGraces.enumerated() {
+            let graceContext = "\(context)/<Chord>[grace \(index)]"
+            expectNoNameCollision(
+                grace.preservedMarkup, grace.encode(parentChord: chord, options: options),
+                context: graceContext,
+            )
+            for (noteIndex, note) in grace.notes.enumerated() {
+                expectNoNameCollision(
+                    note.preservedMarkup, note.encode(options: options),
+                    context: "\(graceContext)/<Note>[\(noteIndex)]",
+                )
+            }
+        }
+    }
+
+    private func expectNoNameCollision(
+        _ preservedMarkup: [PreservedXML],
+        _ writtenNode: XMLTreeNode,
+        context: String,
+    ) {
+        expectNoNameCollision(
+            preservedMarkup,
+            writtenChildren: writtenNode.children,
+            context: context,
+        )
     }
 
     private func expectNoNameCollision(

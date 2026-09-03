@@ -89,6 +89,9 @@ public struct Note: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
+
     public init(
         pitch: Int,
         tpc: Int,
@@ -110,6 +113,7 @@ public struct Note: Sendable, Equatable {
         fret: Int? = nil,
         string: Int? = nil,
         visible: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.pitch = pitch
         self.tpc = tpc
@@ -130,6 +134,7 @@ public struct Note: Sendable, Equatable {
         self.velocityType = velocityType
         self.fret = fret
         self.string = string
+        self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }
 }
