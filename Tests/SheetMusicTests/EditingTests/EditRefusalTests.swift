@@ -53,6 +53,16 @@ struct EditRefusalTests {
         }
     }
 
+    @Test("wrongElementKind spells out the kind the command needed")
+    func wrongElementKindNamesTheExpectedKind() {
+        let refusal = EditRefusal(
+            operation: "SetElementVisible",
+            reason: .wrongElementKind(at: Self.voiceID, expected: .engravable),
+        )
+        #expect(refusal.code == "edit.wrongElementKind")
+        #expect(refusal.developerDescription.hasSuffix("is not an element that carries visibility"))
+    }
+
     private static var sampleReasons: [EditRefusal.Reason] {
         [
             .targetNotFound(voiceID),

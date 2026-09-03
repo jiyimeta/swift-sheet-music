@@ -24,6 +24,9 @@ public struct EditRefusal: Sendable, Hashable {
         case timed
         case tuplet
         case clef
+        /// An element that carries `ElementProperties`, and so has a `<visible>` flag to write. Every
+        /// `VoiceElement` case except `.measureRepeat` and `.locationShift`.
+        case engravable
     }
 
     public enum Reason: Sendable, Hashable {
@@ -309,6 +312,8 @@ extension EditRefusal.ExpectedKind {
             "a tuplet"
         case .clef:
             "a clef"
+        case .engravable:
+            "an element that carries visibility"
         }
     }
 }
