@@ -113,6 +113,11 @@ public struct EditRefusal: Sendable, Hashable {
         /// nothing. `SetStaffText` refuses rather than write one, the rule `.emptyRehearsalMarkText` states for
         /// a rehearsal mark, under its own name so a host's copy can say which field was empty.
         case emptyStaffText
+        /// A chord symbol whose text is empty (or whitespace only) is not a symbol — it would engrave as nothing.
+        /// `SetChordSymbol` refuses rather than write one; removing a symbol is spelled `name: nil`. The rule
+        /// `.emptyStaffText` states for staff text, under its own name so a host's copy can say which field was
+        /// empty.
+        case emptyChordSymbol
         /// A notation payload whose partner is named by ADJACENCY has no partner to name. `SetTremolo` with
         /// `.between` needs the next timed element of the voice to be a chord — a rest, a bar line or the end of
         /// the measure leaves the pair half-written, and a `.between` with no follower decodes back as no tremolo
@@ -219,6 +224,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.invalidInterval"
         case .emptyStaffText:
             "edit.emptyStaffText"
+        case .emptyChordSymbol:
+            "edit.emptyChordSymbol"
         case .noNextChord:
             "edit.noNextChord"
         case .chordTooSmall:
@@ -307,6 +314,8 @@ public struct EditRefusal: Sendable, Hashable {
             "an interval is ±1 (unison) … ±9 (ninth) (got \(steps))"
         case .emptyStaffText:
             "staff text is empty"
+        case .emptyChordSymbol:
+            "chord symbol text is empty"
         case let .noNextChord(location):
             "no following chord after \(location)"
         case let .chordTooSmall(location, noteCount):

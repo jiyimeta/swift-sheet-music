@@ -91,6 +91,12 @@ struct ScoreFingerprintParityTests {
         let treble = score.stableFingerprint
         score[Self.slot] = .clef(Clef(concertClefType: "F"))
         #expect(score.stableFingerprint != treble)
+        score[Self.slot] = .harmony(Harmony(name: "C"))
+        let cMajor = score.stableFingerprint
+        score[Self.slot] = .harmony(Harmony(name: "Am7"))
+        #expect(score.stableFingerprint != cMajor)
+        score[Self.slot] = .harmony(Harmony(name: "C", harmonyType: .roman))
+        #expect(score.stableFingerprint != cMajor)
     }
 
     @Test("chord and note element properties are covered by occupants")

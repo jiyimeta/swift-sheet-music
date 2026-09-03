@@ -97,6 +97,7 @@ struct EditRefusalTests {
             .invalidTransposition(semitones: 25),
             .invalidInterval(steps: 0),
             .emptyStaffText,
+            .emptyChordSymbol,
             .noNextChord(at: voiceID),
             .chordTooSmall(at: voiceID, noteCount: 1),
             .notDottable(at: voiceID),
