@@ -37,6 +37,15 @@ android {
     // script before any Gradle invocation that compiles sources.
     sourceSets["main"].java.srcDirs("src/main/java-generated")
 
+    // `FontMetricsBuilder` measures fonts out of the caller's AssetManager, so
+    // the instrumented test needs Bravura and Edwin in the test APK. Borrow the
+    // copies SheetMusicComposeAndroid already ships rather than committing a
+    // third set of the same ~800 kB of OFL binaries — the point of the test is
+    // that the builder agrees with the table generated from these exact files.
+    sourceSets["androidTest"].assets.srcDir(
+        rootProject.projectDir.resolve("SheetMusicComposeAndroid/src/main/assets")
+    )
+
     publishing {
         singleVariant("release") {
             withSourcesJar()

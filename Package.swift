@@ -485,11 +485,11 @@ if !isAndroid {
             // products: their output is committed, so a consumer never builds
             // them, and they are macOS-only because that is where CoreText is —
             // which is the whole reason the metrics table is generated rather
-            // than measured in the browser. See Tools/GenBravuraMetrics.
+            // than measured in the browser. See Tools/GenFontMetrics.
             .executableTarget(
-                name: "GenBravuraMetrics",
+                name: "GenFontMetrics",
                 dependencies: ["SheetMusicLayout", "SheetMusicLayoutApple"],
-                path: "Tools/GenBravuraMetrics",
+                path: "Tools/GenFontMetrics",
             ),
             // The fixtures Web/sheet-music-web/test reads: a draw program
             // carrying every opcode, a small score, and what the Apple build

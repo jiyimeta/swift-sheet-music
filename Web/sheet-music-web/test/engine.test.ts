@@ -23,7 +23,7 @@ const fixturePath = (name: string) =>
   fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 
 const metricsBytes = new Uint8Array(
-  readFileSync(fileURLToPath(new URL("../assets/bravura.smft", import.meta.url))),
+  readFileSync(fileURLToPath(new URL("../assets/sheet-music.smft", import.meta.url))),
 );
 
 class FakeTransport implements SynthTransport {

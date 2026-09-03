@@ -346,47 +346,46 @@ struct LayoutElementAutoplacedShapeTests {
         #expect(abs(box.maxY - (40 + metrics.sp * 0.61)) < 0.5)
     }
 
-    #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
-        /// Tempo mixes an Edwin run with a Bravura beat glyph, so the
-        /// same em-box trap applies to its glyph half: the union must
-        /// use the glyph's measured ink, not Bravura's 4 em line box.
-        ///
-        /// And it must place that ink the way `ScoreLayerBuilder` draws
-        /// it — `bravuraInkCenteredLayer` centres the glyph's INK on
-        /// `origin.y`. Offsetting it by the Edwin run's baseline (which
-        /// sits 3.98 pt below `origin.y` at this size) instead put the
-        /// band 0.57 sp off, more than the pass's whole 0.5 sp
-        /// `minVerticalDistance` budget — and a height-only assertion
-        /// could not see it. Hence the explicit min/max Y below.
-        ///
-        /// Apple-only for the band's absolute position, not for the rule it
-        /// checks. The union's edges are set by the EDWIN run's ascent and
-        /// descent, and `SMuFLMetricsTable` measures Bravura alone — a text
-        /// face still falls back to `StubFontMetricsProvider`, which puts
-        /// these two edges 0.7 pt out at this size. Everything about the
-        /// Bravura half is asserted portably by the centring checks in this
-        /// file.
-        @Test func tempoRectDoesNotInheritTheBravuraEmBox() throws {
-            let el = LayoutElement.textMark(
-                kind: .tempo, text: "\u{E1D5} = 120",
-                origin: CGPoint(x: 20, y: -14),
-            )
-            let shape = try #require(LayoutElementShape.shape(
-                for: el, id: 0, xOffset: 0, metrics: metrics,
-            ))
-            let box = try #require(shape.bbox)
-            // The beat glyph reaches below the Edwin run's own
-            // descent, so the union is taller than the text box…
-            #expect(box.height > metrics.sp * 2)
-            // …but nowhere near Bravura's 4 em (≈ 9.7 sp here).
-            #expect(box.height < metrics.sp * 5)
-            // Both the Edwin box and the glyph ink are centred on
-            // `origin.y`, so their union is too — exactly.
-            #expect(abs((box.minY + box.maxY) / 2 - -14) < 0.01)
-            #expect(abs(box.minY - (-14 - metrics.sp * 1.22)) < 0.5)
-            #expect(abs(box.maxY - (-14 + metrics.sp * 1.22)) < 0.5)
-        }
-    #endif
+    /// Tempo mixes an Edwin run with a Bravura beat glyph, so the
+    /// same em-box trap applies to its glyph half: the union must
+    /// use the glyph's measured ink, not Bravura's 4 em line box.
+    ///
+    /// And it must place that ink the way `ScoreLayerBuilder` draws
+    /// it — `bravuraInkCenteredLayer` centres the glyph's INK on
+    /// `origin.y`. Offsetting it by the Edwin run's baseline (which
+    /// sits 3.98 pt below `origin.y` at this size) instead put the
+    /// band 0.57 sp off, more than the pass's whole 0.5 sp
+    /// `minVerticalDistance` budget — and a height-only assertion
+    /// could not see it. Hence the explicit min/max Y below.
+    ///
+    /// The band's absolute position used to be Apple-only, because the
+    /// union's edges are set by the EDWIN run's ascent and descent while the
+    /// metrics table measured Bravura alone: a text face fell back to
+    /// `StubFontMetricsProvider`'s 0.85 / 0.25 em, which put these two edges
+    /// 0.7 pt out at this size. SMFT v4 measures Edwin too, so the CoreText
+    /// provider and the table answer the same numbers and the whole test runs
+    /// on every shape. That agreement is what the tight tolerance is for: it
+    /// fails the moment one platform's text metrics drift from another's.
+    @Test func tempoRectDoesNotInheritTheBravuraEmBox() throws {
+        let el = LayoutElement.textMark(
+            kind: .tempo, text: "\u{E1D5} = 120",
+            origin: CGPoint(x: 20, y: -14),
+        )
+        let shape = try #require(LayoutElementShape.shape(
+            for: el, id: 0, xOffset: 0, metrics: metrics,
+        ))
+        let box = try #require(shape.bbox)
+        // The beat glyph reaches below the Edwin run's own
+        // descent, so the union is taller than the text box…
+        #expect(box.height > metrics.sp * 2)
+        // …but nowhere near Bravura's 4 em (≈ 9.7 sp here).
+        #expect(box.height < metrics.sp * 5)
+        // Both the Edwin box and the glyph ink are centred on
+        // `origin.y`, so their union is too — exactly.
+        #expect(abs((box.minY + box.maxY) / 2 - -14) < 0.01)
+        #expect(abs(box.minY - (-14 - metrics.sp * 1.2192)) < 0.05)
+        #expect(abs(box.maxY - (-14 + metrics.sp * 1.2192)) < 0.05)
+    }
 
     @Test func melismaAndHyphenAreThinSpans() throws {
         let melisma = LayoutElement.lyricsMelisma(

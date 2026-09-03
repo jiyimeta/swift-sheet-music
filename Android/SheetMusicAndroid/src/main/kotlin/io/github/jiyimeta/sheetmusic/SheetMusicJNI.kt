@@ -82,8 +82,8 @@ object SheetMusicJNI {
      * `true` on success, `false` if the byte format is invalid — a table
      * written for an older format version included, since a stale one
      * would engrave centred glyphs off their baselines. Build it with
-     * [BravuraMetricsBuilder.buildTable]; the wire format spec is on
-     * `Sources/SheetMusicBridgeCore/SMuFLMetricsTable.swift`.
+     * [FontMetricsBuilder.buildTable]; the wire format spec is on
+     * `Sources/SheetMusicBridgeCore/FontMetricsTable.swift`.
      */
     fun nativeInstallSMuFLMetrics(bytes: ByteArray): Boolean {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA

@@ -81,17 +81,22 @@ public func nativePartsStaves(scoreHandle: Int64) -> Data {
     return PartsStavesWire(score: score).encodeToData()
 }
 
-// MARK: - SMuFL font metrics (swift-java entry point)
+// MARK: - Font metrics (swift-java entry point)
 
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicJNI.nativeInstallSMuFLMetrics(...)` call site. Returns
 /// `true` on success, `false` if the byte payload is empty or fails to
 /// decode.
+///
+/// The name kept its `SMuFL` since v3, when the table measured Bravura
+/// alone; v4 carries the text face too. Renaming a JNI entry point buys a
+/// tidier symbol and costs every host a source break, so the accurate name
+/// lives on the type (`FontMetricsTable`) instead.
 public func nativeInstallSMuFLMetrics(bytes: Data) -> Bool {
     guard !bytes.isEmpty else { return false }
     do {
-        let table = try SMuFLMetricsTable.decode(bytes)
-        FontMetrics.provider = makeSMuFLMetricsTableProvider(table: table)
+        let table = try FontMetricsTable.decode(bytes)
+        FontMetrics.provider = makeFontMetricsTableProvider(table: table)
         return true
     } catch {
         return false

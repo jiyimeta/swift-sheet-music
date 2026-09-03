@@ -17,7 +17,7 @@
  * wasm build genuinely disagrees with the Apple build, or an intended engine
  * change moved both and the fixture was never re-recorded. Run
  * `swift run GenWebFixtures Web/sheet-music-web/test/fixtures
- * Web/sheet-music-web/assets/bravura.smft` to tell them apart — it checks the
+ * Web/sheet-music-web/assets/sheet-music.smft` to tell them apart — it checks the
  * committed fixtures against the Apple build and names what drifted. Only once
  * that says the Apple side moved too may you re-record with
  * `SM_WEB_FIXTURE_RECORD=1`.
@@ -58,7 +58,7 @@ const expectations = JSON.parse(
 
 /** The metrics table the browser installs, so both sides measure alike. */
 const metricsBytes = new Uint8Array(
-  readFileSync(fileURLToPath(new URL("../assets/bravura.smft", import.meta.url))),
+  readFileSync(fileURLToPath(new URL("../assets/sheet-music.smft", import.meta.url))),
 );
 
 /** FNV-1a, 32-bit — the same walk `GenWebFixtures.digest` does in Swift. */

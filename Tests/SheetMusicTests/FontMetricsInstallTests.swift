@@ -22,10 +22,10 @@ struct FontMetricsInstallTests {
         }
     #else
         /// On Android and WebAssembly, `installFontMetrics` installs the
-        /// portable `bravura.smft` table, never CoreText and never left as
+        /// portable `sheet-music.smft` table, never CoreText and never left as
         /// the default stub. Two signals identify it: `ascent`/`descent` for
-        /// Bravura come from the table's own header (SMFT v3) and differ from
-        /// `StubFontMetricsProvider`'s 0.85 / 0.25 em formula, and
+        /// Bravura come from the table's own face record (SMFT v3) and differ
+        /// from `StubFontMetricsProvider`'s 0.85 / 0.25 em formula, and
         /// `glyphPathBoundingBox` for a real Bravura glyph comes from measured
         /// table data and differs from the stub's placeholder rectangle.
         ///
@@ -61,6 +61,31 @@ struct FontMetricsInstallTests {
             )
             #expect(installedBox != nil)
             #expect(installedBox != stubBox)
+        }
+
+        /// The same argument, one face down. SMFT v4 measures Edwin as well,
+        /// and the way that fails silently is the table installing with only
+        /// Bravura in it: text keeps answering from the stub, every lyric row
+        /// sits ~1.4 pt off and every text width is a bucket average, and
+        /// nothing errors.
+        ///
+        /// Pinned exactly, for the same reason the Bravura pair is. Edwin
+        /// reports 0.737 / 0.263 / 0.200 em where the stub answers
+        /// 0.85 / 0.25 / 0 — and it is the leading that no "not the stub"
+        /// check would catch, since a table with no text face and a table
+        /// whose text face lost its line gap both answer 0.
+        @Test("installs the text face too, line gap included")
+        func installsTheTextFace() {
+            let edwin = LayoutFont(face: "Edwin", pointSize: 100)
+            let installed = FontMetrics.provider
+            #expect(abs(Double(installed.ascent(font: edwin)) - 73.7) < 0.1)
+            #expect(abs(Double(installed.descent(font: edwin)) - 26.3) < 0.1)
+            #expect(abs(Double(installed.leading(font: edwin)) - 20.0) < 0.1)
+            // "Ill" is where the stub's buckets are worst: 0.65 / 0.5 / 0.5 em
+            // against three of Edwin's narrowest letters.
+            let stub = StubFontMetricsProvider()
+            let measured = installed.typographicWidth(text: "Ill", font: edwin)
+            #expect(abs(Double(measured - stub.typographicWidth(text: "Ill", font: edwin))) > 10)
         }
     #endif
 }

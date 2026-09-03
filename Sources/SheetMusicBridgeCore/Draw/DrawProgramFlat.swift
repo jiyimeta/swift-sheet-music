@@ -8,7 +8,7 @@ import SheetMusicFoundation
 /// length-delimited records. Kotlin can read it because the Wirelet Gradle
 /// plugin generates a matching decoder; there is no such generator for
 /// TypeScript, and hand-writing one against macro framing is a mistake this
-/// repository has already made once — see `SMuFLMetricsTable.swift`, whose doc
+/// repository has already made once — see `FontMetricsTable.swift`, whose doc
 /// comment records a hand-written producer and a `@WireFormat` reader silently
 /// failing to agree. This format exists so the JavaScript side never has to
 /// know anything about Wirelet.

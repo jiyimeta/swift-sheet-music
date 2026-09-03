@@ -1,4 +1,8 @@
-#if !os(Android)
+// `&& !os(WASI)` to match the guard on `MSCZGroundTruthSweep.swift`, whose
+// type this file extends: `SheetMusicPDF` is not in the WebAssembly manifest's
+// test dependencies, so without it the whole test target fails to compile
+// there with `no such module`.
+#if !os(Android) && !os(WASI)
     import Foundation
     @testable import SheetMusicPDF
 

@@ -111,9 +111,9 @@ async function boot() {
     platform: "browser",
   });
 
-  const metrics = await fetch(new URL("assets/bravura.smft", PACKAGE_ROOT));
+  const metrics = await fetch(new URL("assets/sheet-music.smft", PACKAGE_ROOT));
   if (!metrics.ok) {
-    throw new Error(`could not fetch bravura.smft (${metrics.status})`);
+    throw new Error(`could not fetch sheet-music.smft (${metrics.status})`);
   }
   if (!sheetMusic.installSMuFLMetrics(new Uint8Array(await metrics.arrayBuffer()))) {
     throw new Error("the Bravura metrics table failed to install");

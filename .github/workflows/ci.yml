@@ -64,7 +64,7 @@ jobs:
           export PATH="$(Scripts/swift-org-toolchain.sh):$PATH"
           swift run GenWebFixtures \
             Web/sheet-music-web/test/fixtures \
-            Web/sheet-music-web/assets/bravura.smft
+            Web/sheet-music-web/assets/sheet-music.smft
 
   lint:
     name: Lint

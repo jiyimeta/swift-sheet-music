@@ -266,7 +266,7 @@ extension LayoutElementShape {
     /// Falls back to the em box only when *no* glyph in the run has a
     /// measurable path — an unmapped codepoint, not a platform. Both
     /// non-Apple providers return a box: `StubFontMetricsProvider` a fixed
-    /// `pointSize × 0.7·pointSize` rect, and the `SMuFLMetricsTable`
+    /// `pointSize × 0.7·pointSize` rect, and the `FontMetricsTable`
     /// provider genuine Bravura bboxes. The table provider also serves
     /// Bravura's own `ascent`/`descent` (SMFT v3), so `baselineY` lands
     /// where CoreText puts it; only the stub still answers with its
