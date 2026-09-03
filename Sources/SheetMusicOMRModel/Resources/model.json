@@ -1,5 +1,5 @@
 {
-  "checkpoint": "/Users/kiichi/omr-models/run3-mixed/checkpoint_last.pt",
+  "checkpoint": "/Users/kiichi/omr-models/run6-clefctx/checkpoint_last.pt",
   "classes": [
     "brace",
     "noteheadDoubleWhole",
@@ -64,14 +64,16 @@
     "articulation",
     "ornament"
   ],
-  "commit": "bb71327451cd5a0f8cfc2a6081338cb047cda98f",
+  "commit": "de72f22a5b2f5edf2a39848795e092eadfa74209",
   "decode_defaults_measured": false,
   "mean": 0.0,
   "nms_radius_sp": 0.5,
   "overlap": 64,
   "prep_root": [
     "/Users/kiichi/Datasets/sheet-music-omr/v2-prep-v3",
-    "/Users/kiichi/Datasets/sheet-music-omr/v2-prep-frozen-v3"
+    "/Users/kiichi/Datasets/sheet-music-omr/v2-prep-frozen-v3",
+    "/Users/kiichi/Datasets/sheet-music-omr/v3b-clefctx-prep",
+    "/Users/kiichi/Datasets/sheet-music-omr/v3b-clefctx-prep-frozen"
   ],
   "seed": 20260811,
   "staff_space_px": 12.0,
@@ -80,5 +82,5 @@
   "threshold": 0.3,
   "tile": 384,
   "top_k": 300,
-  "training_config_hash": "589cf3742d135e7f9d1e68219163e734bff95b3cb946ae72c9ef8250359328db"
+  "training_config_hash": "bd38832088681b9d7139f5e44ee1d2216f5a2e1a4ac01b543afe9bd354ac06e8"
 }

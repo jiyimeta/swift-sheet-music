@@ -10,8 +10,11 @@ def _swift_source_path() -> Path:
     # Training/tests/test_vocabulary.py -> parents[0]=tests, [1]=Training,
     # [2]=repo root. Locate relative to this file, not cwd or a hard-coded
     # absolute path, so the test works from any checkout/worktree.
+    # `detectorTable` moved from the test helper `OMRLabelClassNames.swift`
+    # into the product (`OMRGlyphVocabulary`) when the detector left the
+    # test target; the helper now forwards to it.
     repo_root = Path(__file__).resolve().parents[2]
-    return repo_root / "Tests" / "SheetMusicTests" / "Helpers" / "OMRLabelClassNames.swift"
+    return repo_root / "Sources" / "SheetMusicPDF" / "OMR" / "OMRGlyphVocabulary.swift"
 
 
 def _parse_detector_table_names_from_source(text: str) -> list[str]:

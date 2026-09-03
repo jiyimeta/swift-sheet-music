@@ -60,8 +60,9 @@ if __package__ in (None, ""):  # pragma: no cover - exercised via subprocess
 import numpy as np  # noqa: E402  (must follow the bootstrap above)
 
 from generate import (coco_export, degrade, export_pdf,  # noqa: E402
-                      gen_coverage, gen_texture, manifest, pdf_fonts,
-                      rasterize, style_matrix, validate_mscx, vocabulary)
+                      gen_clefctx, gen_coverage, gen_texture, manifest,
+                      pdf_fonts, rasterize, style_matrix, validate_mscx,
+                      vocabulary)
 
 SCHEMA = 1
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -128,14 +129,22 @@ def _mscore_bin(engine: str) -> str:
 
 
 def collect_sources(seed: int, texture_count: int,
-                    extra_sources=()) -> list[dict]:
+                    extra_sources=(), clefctx_count: int = 0,
+                    coverage: bool = True) -> list[dict]:
     """Every admissible source for this dataset, sorted by `source_id`.
 
     Each entry is `{"source_id", "kind", "origin", "payload"}` where
-    `kind` is one of `coverage` / `texture` / `extra_mscx` /
+    `kind` is one of `coverage` / `texture` / `clefctx` / `extra_mscx` /
     `extra_mscz`, `origin` is the generator module or the on-disk path
     the source came from (recorded verbatim into `render.json` as
     provenance), and `payload` is `.mscx` text or `.mscz` bytes.
+
+    `clefctx_count` (default 0) adds `gen_clefctx`'s sources; `coverage`
+    (default True) can drop `gen_coverage`'s, for a SUPPLEMENTARY root
+    trained alongside an existing one -- the coverage sources would
+    otherwise be exported twice under the same ids and hash into the
+    same split twice, doubling their weight for no new information. Both
+    defaults leave an existing dataset's source list byte-identical.
 
     Duplicate ids raise instead of silently collapsing: two
     `--extra-sources` directories that each contain `song.mscx` both map
@@ -144,12 +153,16 @@ def collect_sources(seed: int, texture_count: int,
     the dataset with no message anywhere.
     """
     out: list[dict] = []
-    for source_id, text in gen_coverage.coverage_sources(seed):
-        out.append({"source_id": source_id, "kind": "coverage",
-                    "origin": "generate.gen_coverage", "payload": text})
+    if coverage:
+        for source_id, text in gen_coverage.coverage_sources(seed):
+            out.append({"source_id": source_id, "kind": "coverage",
+                        "origin": "generate.gen_coverage", "payload": text})
     for source_id, text in gen_texture.texture_sources(seed, texture_count):
         out.append({"source_id": source_id, "kind": "texture",
                     "origin": "generate.gen_texture", "payload": text})
+    for source_id, text in gen_clefctx.clefctx_sources(seed, clefctx_count):
+        out.append({"source_id": source_id, "kind": "clefctx",
+                    "origin": "generate.gen_clefctx", "payload": text})
     for directory in sorted(Path(d) for d in extra_sources):
         for path in sorted(directory.glob("*.mscx")):
             out.append({"source_id": f"ext_{path.stem}", "kind": "extra_mscx",
@@ -182,7 +195,7 @@ def _reject_invalid_generated_sources(sources: list[dict]) -> None:
     """
     failures: list[str] = []
     for source in sources:
-        if source["kind"] not in ("coverage", "texture"):
+        if source["kind"] not in ("coverage", "texture", "clefctx"):
             continue
         source_id = source["source_id"]
         allow_unknown = source_id in gen_coverage.UNDECODABLE_DURATION_SOURCES
@@ -255,7 +268,8 @@ def _render_id(source_id: str, engine: str, variant, index: int) -> str:
 
 def plan_renders(seed: int, engines: list[str], per_face: int,
                  texture_count: int, extra_source_ids=None,
-                 face_overrides=None, pin_page: bool = False) -> list[dict]:
+                 face_overrides=None, pin_page: bool = False,
+                 clefctx_count: int = 0, coverage: bool = True) -> list[dict]:
     """The full render plan, sorted by `render_id`: the cross product of
     (engine x style variant x source), with each render's rasterization
     dpi already drawn from `rasterize.DPI_GRID`.
@@ -268,7 +282,8 @@ def plan_renders(seed: int, engines: list[str], per_face: int,
     dict/set iteration.
     """
     source_ids = sorted(
-        [s["source_id"] for s in collect_sources(seed, texture_count)]
+        [s["source_id"] for s in collect_sources(
+            seed, texture_count, clefctx_count=clefctx_count, coverage=coverage)]
         + list(extra_source_ids or []))
     variants = _variants_by_engine(seed, engines, per_face, face_overrides,
                                    pin_page=pin_page)
@@ -375,7 +390,8 @@ def generate_dataset(root: Path, seed: int, engines: list[str], per_face: int,
                      texture_count: int, extra_sources: list[Path],
                      exporter=None, rasterizer=None, face_overrides=None,
                      allow_existing: bool = False, resume: bool = False,
-                     pin_page: bool = False) -> dict:
+                     pin_page: bool = False, clefctx_count: int = 0,
+                     coverage: bool = True) -> dict:
     """Phase 1: write every render directory, export, rasterize, and
     record the failures in `quarantine.json`.
 
@@ -415,12 +431,15 @@ def generate_dataset(root: Path, seed: int, engines: list[str], per_face: int,
     root.mkdir(parents=True, exist_ok=True)
 
     sources = {s["source_id"]: s
-               for s in collect_sources(seed, texture_count, extra_sources)}
+               for s in collect_sources(seed, texture_count, extra_sources,
+                                        clefctx_count=clefctx_count,
+                                        coverage=coverage)}
     extra_ids = [source_id for source_id, s in sources.items()
                  if s["kind"].startswith("extra_")]
     plan = plan_renders(seed, engines, per_face, texture_count,
                         extra_source_ids=extra_ids,
-                        face_overrides=face_overrides, pin_page=pin_page)
+                        face_overrides=face_overrides, pin_page=pin_page,
+                        clefctx_count=clefctx_count, coverage=coverage)
     variants = _variants_by_engine(seed, engines, per_face, face_overrides,
                                    pin_page=pin_page)
 
@@ -436,6 +455,7 @@ def generate_dataset(root: Path, seed: int, engines: list[str], per_face: int,
     (root / "dataset_plan.json").write_text(json.dumps({
         "schema": SCHEMA, "seed": seed, "engines": sorted(engines),
         "per_face": per_face, "textures": texture_count,
+        "clef_contexts": clefctx_count, "coverage": coverage,
         "extra_source_ids": sorted(extra_ids),
         "face_overrides": {e: list(f) for e, f in (face_overrides or {}).items()},
         "pin_page": pin_page,
@@ -1087,6 +1107,13 @@ def _build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--engines", default="ms4")
     gen.add_argument("--per-face", type=int, default=1)
     gen.add_argument("--textures", type=int, default=20)
+    gen.add_argument("--clef-contexts", type=int, default=0,
+                     help="gen_clefctx sources: multi-part scores whose "
+                          "staves draw system-start clefs from the full "
+                          "clef vocabulary (octave variants included)")
+    gen.add_argument("--no-coverage", action="store_true",
+                     help="omit gen_coverage's sources — for a supplementary "
+                          "root trained alongside one that already has them")
     gen.add_argument("--extra-sources", nargs="*", default=[])
     gen.add_argument("--probe-faces", nargs="*", default=[],
                      metavar="ENGINE=Face,Face")
@@ -1140,7 +1167,9 @@ def main(argv=None) -> int:
                 args.per_face, args.textures,
                 [Path(p) for p in args.extra_sources],
                 face_overrides=overrides, pin_page=args.pin_page,
-                allow_existing=args.allow_existing, resume=args.resume)
+                allow_existing=args.allow_existing, resume=args.resume,
+                clefctx_count=args.clef_contexts,
+                coverage=not args.no_coverage)
         except (DatasetExists, DuplicateSourceID) as error:
             # Operator mistakes (rerunning into a populated root; two
             # source directories claiming one id), not crashes -- they
