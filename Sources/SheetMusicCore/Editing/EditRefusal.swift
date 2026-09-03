@@ -115,6 +115,11 @@ public struct EditRefusal: Sendable, Hashable {
         /// (`MSCXDecoder+Voice.resolveTremoloPairs`). `SetGlissando` needs any later sounding chord in the voice,
         /// since its destination is implicit. `at` names the element the write was asked for, not the missing one.
         case noNextChord(at: VoiceElementID)
+        /// `SetArpeggio` was asked to spread a chord that holds fewer than two notes. An arpeggio distributes a
+        /// chord's notes in time; on a single note it engraves a wiggle with nothing to distribute, which is why
+        /// MuseScore's palette refuses it too. Clearing an arpeggio is NOT refused — a chord that lost a note
+        /// while carrying one must stay editable.
+        case chordTooSmall(at: VoiceElementID, noteCount: Int)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -191,6 +196,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.emptyStaffText"
         case .noNextChord:
             "edit.noNextChord"
+        case .chordTooSmall:
+            "edit.chordTooSmall"
         case .unexpected:
             "edit.unexpected"
         }
@@ -269,6 +276,8 @@ public struct EditRefusal: Sendable, Hashable {
             "staff text is empty"
         case let .noNextChord(location):
             "no following chord after \(location)"
+        case let .chordTooSmall(location, noteCount):
+            "chord at \(location) has \(noteCount) note(s); an arpeggio needs at least 2"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }

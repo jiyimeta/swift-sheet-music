@@ -88,6 +88,7 @@ struct EditRefusalTests {
             .invalidInterval(steps: 0),
             .emptyStaffText,
             .noNextChord(at: voiceID),
+            .chordTooSmall(at: voiceID, noteCount: 1),
             .unexpected(description: "boom"),
         ]
     }
