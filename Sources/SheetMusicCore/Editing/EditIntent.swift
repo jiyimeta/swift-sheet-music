@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import SheetMusicFoundation
 
 /// What a host asked the score to become — the unit of editing that crosses a process or image boundary.
@@ -390,4 +391,13 @@ public enum EditIntent: Sendable, Equatable {
     /// Remove the spanner of `kind` anchored at `at` — the `.spanner` element itself, or (for a slur) the chord
     /// carrying it. Refused as `.noSpannerAtLocation` when `at` carries no spanner of that kind.
     case removeSpanner(at: VoiceElementID, kind: Spanner.Kind)
+
+    // Appended for the edit-command parity project's harmony group (spec 2026-09-02) — index 73, the last.
+
+    /// Write `name` as the chord symbol on the chord or rest at `at` — replacing the one already there, which keeps
+    /// its parentheses, offsets and font overrides but loses any `rootTpc` / `bassTpc` a file gave it, since `name`
+    /// is now the whole text — or remove it with `nil`. Trimmed engine-side; empty after trimming is refused as
+    /// `.emptyChordSymbol`. Resolves to nothing to apply when the symbol already reads this way (name, type, and no
+    /// root or bass left standing).
+    case setChordSymbol(at: VoiceElementID, name: String?, harmonyType: HarmonyType)
 }

@@ -106,6 +106,7 @@ import Wirelet
 /// 70 = setPalmMute(SetPalmMuteIntentWire)
 /// 71 = setLetRing(SetLetRingIntentWire)
 /// 72 = removeSpanner(RemoveSpannerIntentWire)
+/// 73 = setChordSymbol(SetChordSymbolIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -114,6 +115,7 @@ import Wirelet
 /// for the edit-command parity project's structural group (spec 2026-09-02). Cases 35…40 were appended for its
 /// range group. Cases 41…49 were appended for its mark group. Cases 50…57 were appended for its note / chord
 /// group. Cases 58…61 were appended for its visibility group. Cases 62…72 were appended for its spanner group.
+/// Case 73 was appended for its harmony group, and is the catalogue's last.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -720,6 +722,14 @@ import Wirelet
 /// tag 2: kind      string — `Spanner.Kind.rawValue`; an unknown kind throws (`.other` is a legal value and
 ///                  decodes as itself)
 /// ```
+///
+/// `SetChordSymbolIntentWire` (`setChordSymbol`'s payload):
+/// ```
+/// tag 1: location     VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: hasName      u8, varint — 0 = remove, 1 = write `name`
+/// tag 3: name         string — the symbol as typed ("Am7", "bVII", "C/E"); "" when hasName == 0
+/// tag 4: harmonyType  u8, varint — 0 standard / 1 roman / 2 nashville, else throws; 0 when hasName == 0
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -1011,6 +1021,9 @@ public enum EditIntentWire {
     /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 72. Never renumber
     /// anything above it.
     case removeSpanner(RemoveSpannerIntentWire)
+    /// Appended for the edit-command parity project's harmony group (spec 2026-09-02) — index 73. Never renumber
+    /// anything above it.
+    case setChordSymbol(SetChordSymbolIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1194,6 +1207,8 @@ public enum EditIntentWire {
             self = .setLetRing(SetLetRingIntentWire(range: range))
         case let .removeSpanner(location, kind):
             self = .removeSpanner(RemoveSpannerIntentWire(location: location, kind: kind))
+        case let .setChordSymbol(location, name, harmonyType):
+            self = .setChordSymbol(SetChordSymbolIntentWire(location: location, name: name, harmonyType: harmonyType))
         }
     }
 
@@ -1433,6 +1448,9 @@ public enum EditIntentWire {
         case let .removeSpanner(wire):
             let decoded = try wire.decoded()
             return .removeSpanner(at: decoded.location, kind: decoded.kind)
+        case let .setChordSymbol(wire):
+            let decoded = try wire.decoded()
+            return .setChordSymbol(at: decoded.location, name: decoded.name, harmonyType: decoded.harmonyType)
         }
     }
 }
