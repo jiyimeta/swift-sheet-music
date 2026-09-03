@@ -174,24 +174,32 @@ struct SetTimeSignatureChordSpannerTests {
 
     // MARK: - Per-slot addressing
 
-    /// A chord can carry several entries — an inner and an outer slur — of which only some declare an endpoint
-    /// worth restating. The slot has to travel with the address or the wrong entry gets written, which is why
+    /// A chord can carry several entries — an inner and an outer slur — each declaring its OWN endpoint. The
+    /// slot has to travel with the address or the wrong entry gets written, which is why
     /// `MeasureStructure.SpannerAddress` carries one too.
-    @Test("only the slot that declares an endpoint is restated")
+    ///
+    /// Both slots here declare an endpoint (offsets 3 and 2) so the test pins that each one lands in ITS OWN
+    /// slot rather than merely proving "some slot gets written" — the shape a `setOffsets` that always wrote
+    /// `chord.spanners[0]` would still pass if only one slot declared anything (the previous version of this
+    /// test used offset 0 / no fraction for the second slur, which `remapped` treats as "nothing to restate"
+    /// and therefore never reaches `setOffsets` at all).
+    @Test("each slot that declares an endpoint is restated to its OWN slot")
     func onlyTheDeclaringSlotIsRestated() {
         var original = uniform44()
-        Self.attach([Self.slur(measures: 3), Self.slur(measures: 0)], toChordIn: 0, of: &original)
+        Self.attach([Self.slur(measures: 3), Self.slur(measures: 2)], toChordIn: 0, of: &original)
 
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setTimeSignature(measureIndex: 1, numerator: 2, denominator: 4)))
         let restated = Self.chordSpanners(session.score, measure: 0)
         #expect(restated.count == 2)
         #expect(restated.first?.nextMeasuresOffset == 5)
-        // Offset 0 and no fraction says "ends inside its own bar", which stays true however that bar is re-cut.
-        #expect(restated.last?.nextMeasuresOffset == 0)
+        #expect(restated.first?.nextFractionsOffset == nil)
+        #expect(restated.last?.nextMeasuresOffset == 3)
         #expect(restated.last?.nextFractionsOffset == nil)
         #expect(session.undo())
         #expect(session.score == original)
+        #expect(Self.chordSpanners(session.score, measure: 0).first?.nextMeasuresOffset == 3)
+        #expect(Self.chordSpanners(session.score, measure: 0).last?.nextMeasuresOffset == 2)
     }
 
     // MARK: - The shape that must not change

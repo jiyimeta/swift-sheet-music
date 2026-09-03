@@ -49,13 +49,46 @@ enum MSCXIdempotency {
 
     /// Where two encodings first diverge, as a line number plus both lines. A byte offset alone is unusable on
     /// a 4000-line MSCX; the line is what a reader can go and look at.
+    ///
+    /// The pass/fail decision above is byte-level, but `lines(of:)` trims whitespace to line the two documents
+    /// up for a readable diff — so an INDENTATION-only divergence, or non-UTF-8 output (`String(bytes:encoding:)`
+    /// answers `nil` and both sides read as empty), can make every trimmed line compare equal while the raw
+    /// bytes still differ. Falls back to the first differing BYTE offset and a short hex/context window then,
+    /// so the message still names something a reader can go and look at instead of "0 lines vs 0 lines".
     static func difference(_ first: Data, _ second: Data) -> String {
         let left = lines(of: first)
         let right = lines(of: second)
         for index in 0 ..< min(left.count, right.count) where left[index] != right[index] {
             return "line \(index + 1): pass1 <\(left[index])> vs pass2 <\(right[index])>"
         }
-        return "pass1 has \(left.count) lines, pass2 has \(right.count)"
+        if left.count != right.count {
+            return "pass1 has \(left.count) lines, pass2 has \(right.count)"
+        }
+        return byteOffsetDifference(first, second)
+    }
+
+    /// The fallback when a line-level diff cannot name a line — either the two documents are byte-different but
+    /// line-identical after whitespace trimming, or one/both are not valid UTF-8. Reports the first byte index
+    /// that differs plus a short hex window of context around it on each side.
+    private static func byteOffsetDifference(_ first: Data, _ second: Data) -> String {
+        let firstBytes = [UInt8](first)
+        let secondBytes = [UInt8](second)
+        guard let offset = (0 ..< min(firstBytes.count, secondBytes.count))
+            .first(where: { firstBytes[$0] != secondBytes[$0] })
+        else {
+            return "pass1 is \(firstBytes.count) bytes, pass2 is \(secondBytes.count) bytes, "
+                + "identical up to the shorter length"
+        }
+        return "byte offset \(offset): pass1 <\(hexWindow(firstBytes, around: offset))> "
+            + "vs pass2 <\(hexWindow(secondBytes, around: offset))>"
+    }
+
+    /// Up to 8 bytes of hex context centered on `offset`, so a non-UTF-8 or whitespace-only divergence still
+    /// points at something concrete.
+    private static func hexWindow(_ bytes: [UInt8], around offset: Int) -> String {
+        let lower = max(0, offset - 4)
+        let upper = min(bytes.count, offset + 4)
+        return bytes[lower ..< upper].map { String(format: "%02x", $0) }.joined(separator: " ")
     }
 
     private static func lines(of data: Data) -> [String] {
@@ -86,6 +119,32 @@ struct MSCXIdempotencyTests {
     ///   each other and not just with themselves.
     /// - `spanner_offsets_score_end` — a spanner ending at the score end, the boundary where MuseScore's own
     ///   `measureByTick` steps BACK onto the last measure instead of past it.
+    /// - `slur_ms3_exchangevoices` — 4 `<voice>` nodes and 6 `<location>` nodes across 3 measures, none of them
+    ///   single-voice. The gate's other fixtures are ALL single-voice (`<voice>` count == `<Measure>` count,
+    ///   measured — every one of them), so without this one the gate could not even in principle catch a bug
+    ///   confined to a second voice. **What this fixture actually covers: multi-voice `<location>` MARKER
+    ///   writing** — the six `<location>` nodes here are all `<Spanner><next>/<prev>` slur begin/end markers
+    ///   spanning several voices in one measure (`MSCXEncoder+ChordSlur.swift`'s `pendingSlurEnds` walk, and
+    ///   the cross-voice `<voices>` field it deliberately does NOT place — see that file's doc comment).
+    ///   `8623592d` (`fix(mscx): walk one cursor through voice-level <location> jogs`) is cited here as the
+    ///   MOTIVATION for adding a multi-voice fixture to this gate at all, not as something this specific
+    ///   fixture reproduces: that commit's bug was in bare voice-level jog `<location>` elements
+    ///   (`VoiceElement.locationShift`), and this fixture has none — every `<location>` in it sits inside a
+    ///   `<Spanner>`. **The literal voice-jog mechanism is NOT covered by any committed fixture.** Measured,
+    ///   not assumed: a `.locationShift` in a non-zero voice was built and probed directly (decode → encode →
+    ///   decode → encode stayed byte-identical even with the encoder's cursor-advance for `.locationShift`
+    ///   disabled outright), because the only channel through which that cursor's value reaches the written
+    ///   bytes — interleaving a system element (`<Tempo>` / `<StaffText>` / …) at its position — is wired to
+    ///   voice 0 only (`MSCXEncoder+Measure.swift`: `index == 0 ? voice0SystemElements : []`), and neither a
+    ///   slur end marker (`MSCXDecoder+Chord.swift`: "the `<prev>` side carries no model state — the encoder
+    ///   recomputes it") nor a tie's `<location>` (`MSCXEncoder+Voice+Ties.swift`'s `forwardTieDelta` /
+    ///   `backwardTieDelta` depend only on chord duration and the PREVIOUS MEASURE's carry, never the
+    ///   within-measure cursor) reads that cursor's value either. Covering the literal mechanism would need
+    ///   the encoder taught to interleave a system element into a non-zero voice too, plus a fixture — not
+    ///   just a fixture on its own.
+    /// - `guitarbend_simple` — 6 `<location>` nodes, and the most recently reworked endpoint writer
+    ///   (`bb3474ae feat(mscx): encode GuitarBend spanners with real endpoint locations`) had no fixture here at
+    ///   all until now.
     @Test("committed MSCX fixtures encode to a fixed point", arguments: [
         "testVoltaTemp",
         "testSingleNoteDynamics",
@@ -94,6 +153,8 @@ struct MSCXIdempotencyTests {
         "grace_after",
         "multiPartMixedStaves",
         "spanner_offsets_score_end",
+        "slur_ms3_exchangevoices",
+        "guitarbend_simple",
     ])
     func mscxFixtureIsAFixedPoint(_ name: String) throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData(name))
@@ -158,8 +219,12 @@ struct MSCXIdempotencyTests {
 ///
 /// A file that will not DECODE is reported and skipped rather than failed: a corpus of real scores contains
 /// MuseScore 1.x files this reader does not claim to open, and a gate that fails on them says nothing about
-/// idempotency. The run prints the loaded / identical / differing counts, because "no failure was reported"
-/// and "it compared 668 scores" are different facts.
+/// idempotency. A file that decodes but whose ENCODE throws is a different animal — that is the encoder itself
+/// breaking on real input, not an unsupported format — so it is counted separately as `failed` and makes the
+/// sweep fail: a `try?` that folded a throwing encode into "no difference to report" would let a broken encoder
+/// hide inside `differing=0`, which is exactly the kind of unverified green result this gate exists to catch.
+/// The run prints the loaded / unreadable / failed / differing counts, because "no failure was reported" and
+/// "it compared 668 scores" are different facts.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["SM_MSCX_IDEMPOTENCY_DIR"] != nil))
 struct MSCXIdempotencySweep {
     @Test("every score in the corpus encodes to a fixed point")
@@ -171,6 +236,7 @@ struct MSCXIdempotencySweep {
 
         var loaded = 0
         var unreadable: [String] = []
+        var failed: [String] = []
         var differing: [String] = []
         for file in files {
             guard let score = try? Self.score(at: file) else {
@@ -178,20 +244,29 @@ struct MSCXIdempotencySweep {
                 continue
             }
             loaded += 1
-            guard let passes = try? MSCXIdempotency.passes(of: score), passes.first != passes.second else {
-                continue
+            do {
+                let passes = try MSCXIdempotency.passes(of: score)
+                guard passes.first != passes.second else { continue }
+                differing.append(
+                    "\(file.lastPathComponent): \(MSCXIdempotency.difference(passes.first, passes.second))",
+                )
+            } catch {
+                failed.append("\(file.lastPathComponent): \(error)")
             }
-            differing.append("\(file.lastPathComponent): \(MSCXIdempotency.difference(passes.0, passes.1))")
         }
 
         print("[mscx-idempotency] files=\(files.count) loaded=\(loaded) "
-            + "unreadable=\(unreadable.count) differing=\(differing.count)")
+            + "unreadable=\(unreadable.count) failed=\(failed.count) differing=\(differing.count)")
         for name in unreadable.prefix(20) {
             print("[mscx-idempotency][unreadable] \(name)")
+        }
+        for line in failed.prefix(20) {
+            print("[mscx-idempotency][failed] \(line)")
         }
         for line in differing.prefix(20) {
             print("[mscx-idempotency][differs] \(line)")
         }
+        #expect(failed.isEmpty, "\(failed.count) of \(loaded) scores decoded but threw on re-encode")
         #expect(differing.isEmpty, "\(differing.count) of \(loaded) scores re-encode differently on pass 2")
     }
 

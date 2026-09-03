@@ -254,6 +254,44 @@ struct SetTimeSignatureTests {
         #expect(session.score == original)
     }
 
+    /// `RemoveTimeSignature` re-bars through the exact same `TimeSignatureRegion.rebar` path
+    /// `.setTimeSignature` does (`SetTimeSignature.swift`'s `rebar(_:from:to:declaringAtHead:)` is shared by
+    /// both commands), so the chord-anchored spanner fix `SetTimeSignatureChordSpannerTests` pins is fixed for
+    /// this command too — but that suite exercises `.setTimeSignature` only. This is the pinning gap, not a
+    /// gap in the fix: a chord-anchored slur anchored before the removed region, asserted on the same
+    /// ABSOLUTE-TICK invariant `SetTimeSignatureChordSpannerTests` uses throughout.
+    @Test("removing a change also restates a chord-anchored slur's endpoint, not just an element-shaped one")
+    func removeTimeSignatureRestatesAChordAnchoredSlurToo() {
+        var original = changeAtBarTwo()
+        // The slur's chord sits in bar 0, which `.removeTimeSignature(measureIndex: 2)` never touches — only
+        // how many bars lie between it and the moment it reaches, exactly the shape the reported defect was.
+        original.parts[0].staves[0].measures[0].voices[0].elements[2] = .chord(Chord(
+            duration: .whole, notes: [Note(pitch: 72, tpc: 14)],
+            spanners: [Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 3)],
+        ))
+        let endTick = original.effectiveMeasureDurations().prefix(3)
+            .reduce(0) { $0 + $1.ticks(division: Self.division) }
+
+        let session = ScoreEditSession(score: original)
+        #expect(session.apply(.removeTimeSignature(measureIndex: 2)))
+        let score = session.score
+        #expect(Self.measureCounts(score) == [4, 4, 4])
+
+        guard case let .chord(chord) = Self.content(score, 0, 0, 0).first,
+              let slur = chord.spanners.first
+        else { Issue.record("expected the slurred chord still in bar 0"); return }
+        // Not hardcoding the offset/fraction pair: the point (as every test in
+        // `SetTimeSignatureChordSpannerTests` puts it) is that the pair is only a spelling of the ABSOLUTE
+        // TICK the endpoint falls on, and that tick must survive the re-bar unchanged.
+        let restatedTick = score.effectiveMeasureDurations().prefix(slur.nextMeasuresOffset)
+            .reduce(0) { $0 + $1.ticks(division: Self.division) }
+            + (slur.nextFractionsOffset?.ticks(division: Self.division) ?? 0)
+        #expect(restatedTick == endTick)
+
+        #expect(session.undo())
+        #expect(session.score == original)
+    }
+
     @Test("the score's opening meter cannot be removed")
     func removeAtZeroRefused() {
         let score = changeAtBarTwo()

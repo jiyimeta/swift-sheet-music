@@ -40,9 +40,48 @@ each one's reason is in the test's doc comment. Briefly: `testVoltaTemp` (a
 `Chord.spanners` rather than as their own element), `own/grace-notes` (the only
 `<Tuplet>` fixture, and it has grace notes), `grace_after` (after-grace
 placement, absolute `<grace>` vs delta `<notes>`), `multiPartMixedStaves`
-(per-staff tick cursors that must agree with each other), and
-`spanner_offsets_score_end` (the score-end boundary). `own/test_lyrics.mscz`
-covers the zipped container through `MSCZReader`.
+(per-staff tick cursors that must agree with each other),
+`spanner_offsets_score_end` (the score-end boundary), `slur_ms3_exchangevoices`
+(4 `<voice>` nodes and 6 `<location>` nodes across 3 measures — the only
+fixture here that is not single-voice), and `guitarbend_simple` (6
+`<location>` nodes, covering the endpoint writer `bb3474ae` reworked).
+`own/test_lyrics.mscz` covers the zipped container through `MSCZReader`.
+
+**Every other fixture here is single-voice** (`<voice>` count equals
+`<Measure>` count) — measured, not assumed. That made the gate structurally
+unable to catch ANY bug confined to a second voice, of any shape, until
+`slur_ms3_exchangevoices` was added.
+
+**What `slur_ms3_exchangevoices` actually covers, precisely.** Its six
+`<location>` nodes are all `<Spanner><next>/<prev>` slur begin/end markers
+spanning several voices in one measure — multi-voice `<location>` MARKER
+writing, not the literal historical bug. `8623592d` (`fix(mscx): walk one
+cursor through voice-level <location> jogs`) is cited as the MOTIVATION for
+having a multi-voice fixture in this gate at all — a per-voice tick-cursor
+disagreement can only ever be caught by a fixture with more than one voice —
+not as something this specific fixture reproduces: that commit's bug was in
+bare voice-level jog `<location>` elements (`VoiceElement.locationShift`),
+and this fixture carries none.
+
+**The literal voice-jog mechanism is NOT covered by any committed fixture.**
+Measured, not assumed: a `.locationShift` was built directly into a
+non-zero voice and probed with the encoder's cursor-advance for
+`.locationShift` disabled outright — decode → encode → decode → encode
+stayed byte-identical regardless. The reason: the only channel through
+which that within-measure cursor's value reaches the written bytes at all —
+interleaving a system element (`<Tempo>` / `<StaffText>` / …) at its
+position — is wired to voice 0 only
+(`Sources/SheetMusicMSCX/Encoders/MSCXEncoder+Measure.swift`:
+`index == 0 ? voice0SystemElements : []`). Neither a slur end marker
+(`Sources/SheetMusicMSCX/Decoders/MSCXDecoder+Chord.swift`: "the `<prev>`
+side carries no model state — the encoder recomputes it") nor a tie's
+`<location>` (`Sources/SheetMusicMSCX/Encoders/MSCXEncoder+Voice+Ties.swift`'s
+`forwardTieDelta` / `backwardTieDelta` depend only on chord duration and the
+PREVIOUS MEASURE's carry, never the within-measure cursor) reads that
+cursor's value either. **Covering the literal mechanism would need the
+encoder taught to interleave a system element into a non-zero voice too —
+not just a fixture on its own** — which is a real architectural gap, not
+merely an untested one.
 
 One case is **synthesized** rather than loaded: a hidden beam
 (`<Beam><visible>0</visible></Beam>`) is a tag the encoder writes from
@@ -70,11 +109,15 @@ carries it, following `SM_VELOCITY_DIR` (`Sources/RenderPreviews/VelocityReport
 
 A file that will not **decode** is reported and skipped rather than failed: a
 corpus of real scores contains MuseScore 1.x files this reader does not claim to
-open, and failing on those says nothing about idempotency. The run prints its
-counts —
+open, and failing on those says nothing about idempotency. A file that decodes
+but whose **encode throws** is counted separately, as `failed`, and makes the
+sweep fail rather than pass quietly — folding a throwing encode into "not
+different" (`try?` swallowing the error) would let a broken encoder hide inside
+a green `differing=0`, exactly the "a pass is not evidence" failure this gate
+exists to catch, reproduced inside the gate itself. The run prints its counts —
 
 ```
-[mscx-idempotency] files=669 loaded=668 unreadable=1 differing=0
+[mscx-idempotency] files=669 loaded=668 unreadable=1 failed=0 differing=0
 ```
 
 — because "no failure was reported" and "it compared 668 scores" are different
