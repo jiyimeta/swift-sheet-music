@@ -32,11 +32,22 @@ import SheetMusicFoundation
 /// tick: the planner emits a voice's untimed elements in tick order, so the k-th spanner of a given
 /// part/staff/voice in the region is the k-th one in the rebuilt columns. Counts that fail to line up are left
 /// alone rather than guessed at.
+///
+/// ## Where the spanners come from
+///
+/// Finding them, and writing an endpoint back to one, is `SetTimeSignature+SpannerWalk.swift` — a spanner's
+/// begin side takes two storage SHAPES (a `.spanner` voice element, or an entry in `Chord.spanners`) and both
+/// have to be walked. The math here is indifferent to which one it is answering about.
 extension TimeSignatureRegion {
     /// A spanner's address paired with the endpoint it declares — the pre-image a restore puts back, and the
     /// restated value a re-bar writes.
+    ///
+    /// `id` alone is not an address, for the reason `MeasureStructure.SpannerAddress` gives: a chord can carry
+    /// several entries in `Chord.spanners` — an inner and an outer slur — of which only some need restating, so
+    /// the slot has to travel with the element. `nil` names the `.spanner` element itself.
     struct SpannerEndpoint: Sendable, Equatable {
         var id: VoiceElementID
+        var spannerIndex: Int?
         var measuresOffset: Int
         var fractionsOffset: Fraction?
     }
@@ -196,38 +207,16 @@ extension TimeSignatureRegion {
             )
             result.append((
                 previous: SpannerEndpoint(
-                    id: id, measuresOffset: found.offset, fractionsOffset: found.fraction,
+                    id: id, spannerIndex: found.spannerIndex,
+                    measuresOffset: found.offset, fractionsOffset: found.fraction,
                 ),
                 restated: SpannerEndpoint(
-                    id: id, measuresOffset: restated.offset, fractionsOffset: restated.fraction,
+                    id: id, spannerIndex: found.spannerIndex,
+                    measuresOffset: restated.offset, fractionsOffset: restated.fraction,
                 ),
             ))
         }
         return result
-    }
-
-    /// Writes each restated endpoint onto the spanner it names, skipping any address that no longer holds one.
-    static func writeEndpoints(_ endpoints: [SpannerEndpoint], into score: inout Score) {
-        for entry in endpoints {
-            guard case var .spanner(spanner) = score[entry.id] else { continue }
-            spanner.nextMeasuresOffset = entry.measuresOffset
-            spanner.nextFractionsOffset = entry.fractionsOffset
-            score[entry.id] = .spanner(spanner)
-        }
-    }
-
-    /// The endpoints the addresses in `endpoints` carry in `score` RIGHT NOW — the pre-image a restore's own
-    /// inverse needs. Every such address is anchored before the region, so it names the same slot in either
-    /// barring.
-    static func currentEndpoints(for endpoints: [SpannerEndpoint], in score: Score) -> [SpannerEndpoint] {
-        endpoints.map { entry in
-            guard case let .spanner(spanner) = score[entry.id] else { return entry }
-            return SpannerEndpoint(
-                id: entry.id,
-                measuresOffset: spanner.nextMeasuresOffset,
-                fractionsOffset: spanner.nextFractionsOffset,
-            )
-        }
     }
 
     // MARK: - Anchored inside the region
@@ -250,98 +239,5 @@ extension TimeSignatureRegion {
                 write(restated, into: &columns[target.measureIndex], at: target)
             }
         }
-    }
-
-    private static func write(
-        _ endpoint: (offset: Int, fraction: Fraction?), into column: inout MeasureSlice, at found: FoundSpanner,
-    ) {
-        guard column.staffMeasures.indices.contains(found.partIndex),
-              column.staffMeasures[found.partIndex].indices.contains(found.staffIndex)
-        else { return }
-        var measure = column.staffMeasures[found.partIndex][found.staffIndex]
-        guard measure.voices.indices.contains(found.voiceIndex),
-              measure.voices[found.voiceIndex].elements.indices.contains(found.elementIndex),
-              case var .spanner(spanner) = measure.voices[found.voiceIndex].elements[found.elementIndex]
-        else { return }
-        spanner.nextMeasuresOffset = endpoint.offset
-        spanner.nextFractionsOffset = endpoint.fraction
-        measure.voices[found.voiceIndex].elements[found.elementIndex] = .spanner(spanner)
-        column.staffMeasures[found.partIndex][found.staffIndex] = measure
-    }
-
-    // MARK: - Finding them
-
-    /// One spanner and where it sits. `measureIndex` is an absolute bar index when the walk was over a score, and
-    /// an index into `columns` when it was over the rebuilt region.
-    struct FoundSpanner {
-        var partIndex: Int
-        var staffIndex: Int
-        var voiceIndex: Int
-        var elementIndex: Int
-        var measureIndex: Int
-        var offset: Int
-        var fraction: Fraction?
-
-        /// The voice a spanner belongs to, which is what the two walks are matched up within.
-        var voiceKey: VoiceKey {
-            VoiceKey(part: partIndex, staff: staffIndex, voice: voiceIndex)
-        }
-    }
-
-    struct VoiceKey: Hashable {
-        var part: Int
-        var staff: Int
-        var voice: Int
-    }
-
-    private static func spanners(inRegion region: Range<Int>, of score: Score) -> [FoundSpanner] {
-        var result: [FoundSpanner] = []
-        for partIndex in score.parts.indices {
-            for staffIndex in score.parts[partIndex].staves.indices {
-                let measures = score.parts[partIndex].staves[staffIndex].measures
-                for measureIndex in measures.indices where region.contains(measureIndex) {
-                    result.append(contentsOf: spanners(
-                        in: measures[measureIndex], partIndex: partIndex, staffIndex: staffIndex,
-                        measureIndex: measureIndex,
-                    ))
-                }
-            }
-        }
-        return result
-    }
-
-    private static func spanners(inColumns columns: [MeasureSlice]) -> [FoundSpanner] {
-        var result: [FoundSpanner] = []
-        for (columnIndex, column) in columns.enumerated() {
-            for partIndex in column.staffMeasures.indices {
-                for staffIndex in column.staffMeasures[partIndex].indices {
-                    result.append(contentsOf: spanners(
-                        in: column.staffMeasures[partIndex][staffIndex],
-                        partIndex: partIndex, staffIndex: staffIndex, measureIndex: columnIndex,
-                    ))
-                }
-            }
-        }
-        // Column-major on purpose: grouped by voice afterwards, each key's entries then read in column order and
-        // then element order — the same order the score-side walk produces in bar order.
-        return result
-    }
-
-    private static func spanners(
-        in measure: Measure, partIndex: Int, staffIndex: Int, measureIndex: Int,
-    ) -> [FoundSpanner] {
-        var result: [FoundSpanner] = []
-        for voiceIndex in measure.voices.indices {
-            let elements = measure.voices[voiceIndex].elements
-            for elementIndex in elements.indices {
-                guard case let .spanner(spanner) = elements[elementIndex] else { continue }
-                result.append(FoundSpanner(
-                    partIndex: partIndex, staffIndex: staffIndex, voiceIndex: voiceIndex,
-                    elementIndex: elementIndex, measureIndex: measureIndex,
-                    offset: spanner.nextMeasuresOffset, fraction: spanner.nextFractionsOffset,
-                ))
-            }
-        }
-        return result
     }
 }

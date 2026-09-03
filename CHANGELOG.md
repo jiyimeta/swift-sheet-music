@@ -204,15 +204,15 @@ and this project adheres to
   popped their entry off the stack before applying it, so a throwing inverse vanished while the score stayed
   untouched, desynchronizing the undo history from the score for every undo/redo after it. Both now apply first
   and pop only on success.
-- `InsertMeasure` / `DeleteMeasure` left a chord-anchored slur's `nextMeasuresOffset` stale.
-  `MeasureStructure.adjustSpannerOffsets` walked `.spanner` voice elements only, so a slur — whose begin side
-  lives in `Chord.spanners`, not as its own voice element — kept a stale offset across an insertion or deletion
-  inside its span, leaving it pointing at the wrong end chord; a delete whose span ENDED at the deleted bar also
-  came back one measure short from undo. The walk now moves both shapes by the same rule, and the undo restore
-  addresses the exact `Chord.spanners` slot that was shrunk, so a chord carrying an inner and an outer slur
-  re-widens only the one that ended there. This covers the two measure-structure commands only:
-  `SetTimeSignature`'s re-bar path still re-derives `.spanner` offsets alone and does not yet carry
-  chord-anchored spanners across a re-bar.
+- Every command that moves barlines left a chord-anchored slur's `nextMeasuresOffset` stale.
+  `MeasureStructure.adjustSpannerOffsets` and `SetTimeSignature`'s re-bar path both walked `.spanner` voice
+  elements only, so a slur — whose begin side lives in `Chord.spanners`, not as its own voice element — kept an
+  offset counting bars of the old barring: pointing at the wrong end chord after an `InsertMeasure` /
+  `DeleteMeasure` inside its span, and at the wrong moment entirely after a `.setTimeSignature` re-bar, which
+  re-derives both the measure and the fraction half of the endpoint. A delete whose span ENDED at the deleted bar
+  also came back one measure short from undo. All three walks now move both shapes by the same rule, and every
+  write addresses the exact `Chord.spanners` slot, so a chord carrying an inner and an outer slur restates only
+  the one whose endpoint moved.
 
 ## [2.3.1] - 2026-08-31
 
