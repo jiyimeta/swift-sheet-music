@@ -27,7 +27,19 @@ struct SpannerPlanningTests {
         #expect(session.apply(.setTrill(over: Self.range(0, 5, 6), type: .trill)))
         #expect(session.apply(.setVibrato(over: Self.range(0, 6, 7), type: .guitarVibrato)))
         #expect(session.apply(.setPalmMute(over: Self.range(0, 7, 8))))
+        // Pin the planner arm: `SetPalmMute` and `SetLetRing` share the exact same `init(over:)` signature, so a
+        // planner arm that built one where the other belongs would compile and pass every other assertion here.
+        if case let .spanner(spanner) = session.score[Self.slot(0, 7)] {
+            #expect(spanner.kind == .palmMute)
+        } else {
+            Issue.record("expected a .spanner element at bar 0 element 7")
+        }
         #expect(session.apply(.setLetRing(over: Self.range(0, 8, 9))))
+        if case let .spanner(spanner) = session.score[Self.slot(0, 8)] {
+            #expect(spanner.kind == .letRing)
+        } else {
+            Issue.record("expected a .spanner element at bar 0 element 8")
+        }
         #expect(session.apply(.setVolta(over: Self.range(2, 0, 1), endings: [1], text: "1.")))
         #expect(session.apply(.removeSpanner(at: Self.slot(0, 1), kind: .hairpin)))
         for _ in 0 ..< 11 {

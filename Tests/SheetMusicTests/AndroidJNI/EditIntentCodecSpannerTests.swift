@@ -17,7 +17,10 @@ struct EditIntentCodecSpannerTests {
     /// and one outside it — so a dropped flag, a mis-framed list or a silently-defaulted enum cannot look right.
     private static let cases: [EditIntent] = [
         .setSlur(over: range),
+        .setHairpin(over: range, subtype: .crescendo),
         .setHairpin(over: range, subtype: .dimLine),
+        .setHairpin(over: range, subtype: .decrescendo),
+        .setHairpin(over: range, subtype: .crescLine),
         .setPedal(over: range),
         .setVolta(over: range, endings: [1, 2, 3], text: "1.–3."),
         .setVolta(over: range, endings: [], text: nil),

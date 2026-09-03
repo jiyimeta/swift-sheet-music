@@ -352,9 +352,11 @@ public enum EditIntent: Sendable, Equatable {
     // `set…` takes the RANGE it spans; the engine narrows that range to one voice and decides the storage form and
     // the end tick per kind. There is no "nil clears" here: a spanner is removed by `removeSpanner`, because the
     // removal targets a different location than the write — the `.spanner` element, or the chord holding the
-    // slur — which is exactly the §3.1 exception `RemoveClef` already is.
+    // slur — which is exactly the §3.1 exception `RemoveClef` already is. Re-issuing a `set…` at a position that
+    // already carries a spanner of that kind is refused as `.duplicateSpanner`, not accepted and not
+    // `.nothingToApply`, so a toggle button pairs a `set…` with `removeSpanner` rather than calling `set…` twice.
 
-    /// Draw a slur over `over`.
+    /// Draw a slur over `over`. Refused as `.noNextChord` when the range is one element (nothing to slur to).
     case setSlur(over: VoiceElementRange)
 
     /// Draw a hairpin of `subtype` over `over`.
@@ -386,6 +388,6 @@ public enum EditIntent: Sendable, Equatable {
     case setLetRing(over: VoiceElementRange)
 
     /// Remove the spanner of `kind` anchored at `at` — the `.spanner` element itself, or (for a slur) the chord
-    /// carrying it.
+    /// carrying it. Refused as `.noSpannerAtLocation` when `at` carries no spanner of that kind.
     case removeSpanner(at: VoiceElementID, kind: Spanner.Kind)
 }
