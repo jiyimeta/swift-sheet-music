@@ -23,6 +23,9 @@ and this project adheres to
   detected glyphs with the classical-CV staff lines, stems and beams into the importer's own content model —
   lives in `SheetMusicPDF` behind the public `OMRTileClassifier` protocol, which is the whole platform seam an
   ONNX or other backend has to implement.
+- A raster page hands the importer one clef per position — the highest-scoring one. The detector's own
+  suppression is per class, so a clef and its octave variant on the same spot both survive it, and the
+  reader took whichever came first in the glyph list.
 - `PDFImportDiagnostic` is `Sendable`, so a host parsing off the main actor can carry the diagnostics back.
 - `SM_PDF_OMR=1` on `swift run render-previews` reads the `SM_PDF` file with the bundled model.
 - `Training/`: the Python pipeline that generates the synthetic dataset, trains the detector and exports the
@@ -31,6 +34,13 @@ and this project adheres to
 
 ### Changed
 
+- The bundled detector is retrained. A clef's octave variant — `clefF8va` and the rest — was engraved in the
+  training data only as a lone staff or as a wall of cue-size mid-bar changes, never as the full-size clef of
+  one staff among several in an ordinary score, and on real engraving the reader's confidence split between
+  the clef and its plain sibling so that neither was read. Over 200 real scores it now reads all 475 of them
+  where it read 242, and over the whole 657-score corpus the raster path gains 610 pitch points and 371
+  duration points against the previous model, with the vector path byte-identical. Known residual: a
+  `clefG8vb` is sometimes read as `clefG15mb`, priced at −37 points over that corpus.
 - `parseWithGeometry` takes the same raster fallback as `parse`. Its geometry side-car carries no rects and no
   page size for a page read this way — the page's glyphs are positioned in the analysis frame, not the
   displayed page's user space, and a cursor silently a few points off the ink is worse than none — and an

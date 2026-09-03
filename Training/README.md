@@ -1396,6 +1396,52 @@ precision 0.9874 vs 0.9885. The synthetic seam is a wash, slightly
 negative on clean. The corpus is where this round's target lives, and the
 corpus moved; that trade is the ship decision, not a detail to bury.
 
+**The ship gate — all 657 files, one binary** (`de72f22a`, clef probes off;
+`chain-657.sh`). The vector control moved **0 files** in either metric,
+which is what says the raster numbers are the detector and nothing else:
+
+| raster | run3 | run6 |
+|---|---|---|
+| pitchP50 / pitchMean | 0.9389 / 0.8390 | **0.9406 / 0.8486** |
+| durP50 / durMean | 0.9127 / 0.8591 | **0.9188 / 0.8648** |
+
+Paired over the 655 files both sides scored:
+
+| | better | worse | same | gain | loss | net |
+|---|---|---|---|---|---|---|
+| pitch | 159 | **193** | 300 | +1368pt | −758pt | **+610pt** |
+| dur | 149 | 77 | 426 | +641pt | −270pt | **+371pt** |
+
+**More files get worse on pitch than better, and the round is still a
+clear win**: the wins are large (three files 0 → 100, 粉雪 34 → 96,
+幻想的インパクト 19 → 74) and the losses are mostly small, but four are
+not — 曖昧 100 → 41, 虜_acoustic 62 → 13, mimicopy_もしも 38 → 0,
+アイデア#0043 55 → 17. That asymmetry is the number to weigh, not the net
+alone: this is the same shape as the τ counterfactual that was rejected
+(better 32 / worse 85), except there the net was negative and here it is
++610pt on 3.3× the population that decided the 200-file view.
+
+**The loss tail is mostly NOT clefs.** The four largest pitch losses,
+diagnosed one at a time with the divergence dump and both probes
+(`diag-losers.sh`):
+
+| file | run3 → run6 | what changed |
+|---|---|---|
+| 曖昧 | 100 → 41 | **a real clef regression** — one of four staves flips `clefG8vb` → `clefG15mb` (plus one extra clef). A 5-measure file, so one staff is 59% of its pitches |
+| 虜_acoustic | 62 → 13 | identical clefs in force, extras 0 on both — run6 reads **8 parts where run3 read 7**, and the harness's part alignment shifts under it |
+| mimicopy_もしも | 38 → 0 | identical clefs in force; one extra clef, two notes |
+| アイデア#0043 | 55 → 17 | identical clefs; **both readings are already garbage** (24 and 30 measures against a truth of 200), so the delta is noise on a broken read |
+
+And the residual `clefG8vb` → `clefG15mb` confusion was priced rather than
+assumed: over the 200-file set it touches 59 files for a NET of +42pt
+(losses −37pt). It is real, it is worth naming, and it is not what the
+loss tail is made of — the tail is part/measure structure, where the same
+mechanism produces the three 0 → 100 wins.
+
+**Shipped: `run6-clefctx-last`.** `Sources/SheetMusicOMRModel/Resources/`
+now carries its `model.json` + `model.mlmodelc`. `~/omr-models/run3-mixed-last`
+stays as the provenance of this document's earlier tables.
+
 More numbers land below as they are measured; the memory file
 `project_omr_training_round2` tracks the round between sessions.
 
