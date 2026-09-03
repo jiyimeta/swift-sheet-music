@@ -103,7 +103,22 @@ and this project adheres to
 - `NoteDuration.baseAndDots()`, the inverse of `dotted(_:)`, and `ChordArticulation.Kind.mscxToken` /
   `init(mscxToken:)` — the MSCX token table moved into Core where the wire can reach it, with both MSCX paths
   delegating to it.
-- A second parity replay chain (`editReplay-parity/`) exercises the twenty-eight new commands, in sixty-one
+- Four visibility edit commands, closing the parity spec's Visibility group: `SetElementVisible` writes
+  `<visible>` on any voice element that carries `ElementProperties` — a chord or rest, clef, barline, key or time
+  signature, dynamic, fermata, breath, spanner or harmony; a measure repeat and a location shift carry none and
+  are refused; `SetNoteVisible` writes one notehead's own flag; `SetStemVisible` writes a chord's stem (refused
+  on a rest); `SetBeamVisible` writes a beam group's flag, which lives on the group's LEADING chord — the intent
+  may name any member and the planner re-targets, so a host need not know where a group starts. Reachable as
+  `EditIntent.setElementVisible` / `.setNoteVisible` / `.setStemVisible` / `.setBeamVisible`, wire cases 58–61.
+  No flag cascades onto another: MuseScore's `V` on a notehead also hides its stem and beam, and here that is a
+  host-side `.composite` of the three intents, which keeps each flag its own undoable fact. The beam-grouping
+  rule moved out of `SheetMusicLayout` into `SheetMusicCore` as `BeamGrouping` (package-internal; the layout now
+  forwards to it), so "the group's leading chord" means exactly the same thing to an edit command and to the
+  renderer.
+- `EditRefusal.ExpectedKind.engravable` (`SetElementVisible` aimed at a voice element that carries no
+  `ElementProperties`) and `EditRefusal.Reason.notBeamed(at:)` (`SetBeamVisible` aimed at a chord that belongs
+  to no beam group; a rest is `wrongElementKind(expected: .chord)`, as for `SetStemVisible`).
+- A second parity replay chain (`editReplay-parity/`) exercises the thirty-two new commands, in seventy-two
   steps, through the same cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain,
   byte-pinned like it.
 
