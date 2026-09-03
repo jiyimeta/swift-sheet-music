@@ -110,6 +110,16 @@ extension Voice {
                 options: options,
             )
         }
+        // `<Beam><visible>0</visible></Beam>` is a SIBLING before the chord or rest that leads the group, the way
+        // MuseScore writes it (`TWrite::write(const Chord*)`: graces, then `writeChordRestBeam`, then the chord)
+        // and the way the decoder reads it back (`pendingBeamVisible` lands on the next chord / rest). Only the
+        // hidden state is written — the default omits the tag, as `<Stem>` does. `<StemDirection>` and beam
+        // fragments are not modelled, so `<visible>` is the element's only child.
+        if case let .chord(chord) = element, !chord.beamVisible {
+            state.children.append(XMLTreeNode(name: "Beam", children: [
+                XMLTreeNode(name: "visible", text: "0"),
+            ]))
+        }
         // The chord's own position within the measure, read before the
         // cursor advances past it: both halves of the chord-anchored slur
         // bookkeeping — the end markers landing here and the begin sides

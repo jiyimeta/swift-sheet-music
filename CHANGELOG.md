@@ -103,7 +103,22 @@ and this project adheres to
 - `NoteDuration.baseAndDots()`, the inverse of `dotted(_:)`, and `ChordArticulation.Kind.mscxToken` /
   `init(mscxToken:)` — the MSCX token table moved into Core where the wire can reach it, with both MSCX paths
   delegating to it.
-- A second parity replay chain (`editReplay-parity/`) exercises the twenty-eight new commands, in sixty-one
+- Four visibility edit commands, closing the parity spec's Visibility group: `SetElementVisible` writes
+  `<visible>` on any voice element that carries `ElementProperties` — a chord or rest, clef, barline, key or time
+  signature, dynamic, fermata, breath, spanner or harmony; a measure repeat and a location shift carry none and
+  are refused; `SetNoteVisible` writes one notehead's own flag; `SetStemVisible` writes a chord's stem (refused
+  on a rest); `SetBeamVisible` writes a beam group's flag, which lives on the group's LEADING chord — the intent
+  may name any member and the planner re-targets, so a host need not know where a group starts. Reachable as
+  `EditIntent.setElementVisible` / `.setNoteVisible` / `.setStemVisible` / `.setBeamVisible`, wire cases 58–61.
+  No flag cascades onto another: MuseScore's `V` on a notehead also hides its stem and beam, and here that is a
+  host-side `.composite` of the three intents, which keeps each flag its own undoable fact. The beam-grouping
+  rule moved out of `SheetMusicLayout` into `SheetMusicCore` as `BeamGrouping` (package-internal; the layout now
+  forwards to it), so "the group's leading chord" means exactly the same thing to an edit command and to the
+  renderer.
+- `EditRefusal.ExpectedKind.engravable` (`SetElementVisible` aimed at a voice element that carries no
+  `ElementProperties`) and `EditRefusal.Reason.notBeamed(at:)` (`SetBeamVisible` aimed at a chord that belongs
+  to no beam group; a rest is `wrongElementKind(expected: .chord)`, as for `SetStemVisible`).
+- A second parity replay chain (`editReplay-parity/`) exercises the thirty-two new commands, in seventy-two
   steps, through the same cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain,
   byte-pinned like it.
 
@@ -130,6 +145,12 @@ and this project adheres to
 
 ### Fixed
 
+- A hidden beam now survives a save. `MSCXDecoder` read `<Beam><visible>0</visible></Beam>` onto the following
+  chord or rest and the layout honored it, but no encoder ever wrote the element back, so a score whose beam was
+  hidden in MuseScore opened correctly and was silently saved with the beam shown. `MSCXEncoder` now writes the
+  `<Beam>` sibling before the chord or rest that leads the group, exactly where MuseScore's `TWrite` puts it —
+  after the chord's grace notes, before the `<Chord>` / `<Rest>` — and only for the hidden state, so a visible
+  beam still writes nothing.
 - A tempo saved through this package is no longer invisible in MuseScore 4. `MSCXEncoder` wrote a `<Tempo>` with
   its `<tempo>` alone, and MuseScore 4 draws a tempo marking only through its text, so every tempo this package
   wrote re-opened as an empty marking on the page. The encoder now derives the printed marking from the beat,

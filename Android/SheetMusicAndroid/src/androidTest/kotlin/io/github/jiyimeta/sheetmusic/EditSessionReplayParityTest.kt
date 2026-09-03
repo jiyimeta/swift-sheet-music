@@ -9,12 +9,13 @@ import org.junit.runner.RunWith
 
 /**
  * [EditSessionReplayTest]'s twin for the edit-command parity project's chain (`ReplayChain.parity` on the host):
- * the nineteen `EditReplayScript.parity` steps — layout breaks, barlines, repeat barlines, measure repeats and a
- * move-to-voice (`EditIntent` cases 30…34) in steps 1…10, then range transposes, an added interval, a range
- * delete, range accidentals, a range duration and a respell (cases 35…40) in steps 11…19, none of which the
- * standard chain encodes — relayed from Kotlin across the JNI boundary into a second, separately-linked image of
- * the engine. Equal fingerprints at every step is the claim the whole Android editing design rests on: relaying an
- * intent's bytes keeps two copies of a score identical.
+ * the seventy-two `EditReplayScript.parity` steps — layout breaks, barlines, repeat barlines, measure repeats and
+ * a move-to-voice (`EditIntent` cases 30…34) in steps 1…10, then range transposes, an added interval, a range
+ * delete, range accidentals, a range duration and a respell (cases 35…40) in steps 11…19, then two note writes,
+ * an element / note / stem / beam hide-and-show and one standing hide (cases 58…61, with 0) in steps 62…72, none
+ * of which the standard chain encodes — relayed from Kotlin across the JNI boundary into a second,
+ * separately-linked image of the engine. Equal fingerprints at every step is the claim the whole Android editing
+ * design rests on: relaying an intent's bytes keeps two copies of a score identical.
  *
  * A separate class rather than a parameterized one because the two chains share nothing but this procedure, and a
  * failure that names the class says immediately which chain drifted.
@@ -38,7 +39,7 @@ import org.junit.runner.RunWith
 class EditSessionReplayParityTest {
     companion object {
         /** Must track `EditReplayScript.parity(staff:).count` on the host exactly — see the assertion below. */
-        private const val EXPECTED_STEP_COUNT = 61
+        private const val EXPECTED_STEP_COUNT = 72
 
         private const val ASSET_DIR = "editReplay-parity"
     }

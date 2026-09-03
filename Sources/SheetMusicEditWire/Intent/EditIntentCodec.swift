@@ -91,6 +91,10 @@ import Wirelet
 /// 55 = setDots(SetDotsIntentWire)
 /// 56 = setChordLine(SetChordLineIntentWire)
 /// 57 = setNoteParentheses(SetNoteParenthesesIntentWire)
+/// 58 = setElementVisible(SetElementVisibleIntentWire)
+/// 59 = setNoteVisible(SetNoteVisibleIntentWire)
+/// 60 = setStemVisible(SetStemVisibleIntentWire)
+/// 61 = setBeamVisible(SetBeamVisibleIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -98,7 +102,7 @@ import Wirelet
 /// for part renaming; 0…4 predate them all and must keep their indices and byte layout. Cases 30…34 were appended
 /// for the edit-command parity project's structural group (spec 2026-09-02). Cases 35…40 were appended for its
 /// range group. Cases 41…49 were appended for its mark group. Cases 50…57 were appended for its note / chord
-/// group.
+/// group. Cases 58…61 were appended for its visibility group.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -604,6 +608,32 @@ import Wirelet
 /// tag 1: location     NoteIDWire, see PathIDCodecs.swift
 /// tag 2: parentheses  u8, varint — 0 none, 1 left, 2 right, 3 both; else throws
 /// ```
+///
+/// `SetElementVisibleIntentWire` (`setElementVisible`'s payload):
+/// ```
+/// tag 1: location  VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: visible   u8, varint — 0 hidden, non-zero shown (the `SetLayoutBreakIntentWire.enabled` rule; the
+///                  encoder writes 0 or 1)
+/// ```
+///
+/// `SetNoteVisibleIntentWire` (`setNoteVisible`'s payload):
+/// ```
+/// tag 1: location  NoteIDWire, see PathIDCodecs.swift
+/// tag 2: visible   u8, varint — 0 hidden, non-zero shown
+/// ```
+///
+/// `SetStemVisibleIntentWire` (`setStemVisible`'s payload):
+/// ```
+/// tag 1: location  VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: visible   u8, varint — 0 hidden, non-zero shown
+/// ```
+///
+/// `SetBeamVisibleIntentWire` (`setBeamVisible`'s payload):
+/// ```
+/// tag 1: location  VoiceElementIDWire — the chord the HOST addressed, not the beam leader: both images re-target
+///                  to the leader in the planner, so the bytes carry the host's slot
+/// tag 2: visible   u8, varint — 0 hidden, non-zero shown
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -709,7 +739,11 @@ public struct NoteDurationWire {
     }
 }
 
+/// The wire vocabulary is append-only: every intent ever shipped keeps a case here, and the two exhaustive
+/// switches below must keep an arm for each. That makes the body grow monotonically with the protocol and puts
+/// it past `type_body_length`; splitting the type is not an option, since the discriminator IS the index.
 @WireFormatChoice
+// swiftlint:disable:next type_body_length
 public enum EditIntentWire {
     case inputNote(InputNoteIntentWire)
     case setRestDuration(SlotDurationIntentWire)
@@ -846,6 +880,18 @@ public enum EditIntentWire {
     /// Appended for the edit-command parity project's note / chord group (spec 2026-09-02) — index 57. Never
     /// renumber anything above it.
     case setNoteParentheses(SetNoteParenthesesIntentWire)
+    /// Appended for the edit-command parity project's visibility group (spec 2026-09-02) — index 58. Never
+    /// renumber anything above it.
+    case setElementVisible(SetElementVisibleIntentWire)
+    /// Appended for the edit-command parity project's visibility group (spec 2026-09-02) — index 59. Never
+    /// renumber anything above it.
+    case setNoteVisible(SetNoteVisibleIntentWire)
+    /// Appended for the edit-command parity project's visibility group (spec 2026-09-02) — index 60. Never
+    /// renumber anything above it.
+    case setStemVisible(SetStemVisibleIntentWire)
+    /// Appended for the edit-command parity project's visibility group (spec 2026-09-02) — index 61. Never
+    /// renumber anything above it.
+    case setBeamVisible(SetBeamVisibleIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -999,6 +1045,14 @@ public enum EditIntentWire {
             self = .setNoteParentheses(
                 SetNoteParenthesesIntentWire(location: location, parentheses: parentheses),
             )
+        case let .setElementVisible(location, visible):
+            self = .setElementVisible(SetElementVisibleIntentWire(location: location, visible: visible))
+        case let .setNoteVisible(location, visible):
+            self = .setNoteVisible(SetNoteVisibleIntentWire(location: location, visible: visible))
+        case let .setStemVisible(location, visible):
+            self = .setStemVisible(SetStemVisibleIntentWire(location: location, visible: visible))
+        case let .setBeamVisible(location, visible):
+            self = .setBeamVisible(SetBeamVisibleIntentWire(location: location, visible: visible))
         }
     }
 
@@ -1197,6 +1251,18 @@ public enum EditIntentWire {
         case let .setNoteParentheses(wire):
             let decoded = try wire.decoded()
             return .setNoteParentheses(at: decoded.location, parentheses: decoded.parentheses)
+        case let .setElementVisible(wire):
+            let decoded = wire.decoded()
+            return .setElementVisible(at: decoded.location, visible: decoded.visible)
+        case let .setNoteVisible(wire):
+            let decoded = wire.decoded()
+            return .setNoteVisible(at: decoded.location, visible: decoded.visible)
+        case let .setStemVisible(wire):
+            let decoded = wire.decoded()
+            return .setStemVisible(at: decoded.location, visible: decoded.visible)
+        case let .setBeamVisible(wire):
+            let decoded = wire.decoded()
+            return .setBeamVisible(at: decoded.location, visible: decoded.visible)
         }
     }
 }

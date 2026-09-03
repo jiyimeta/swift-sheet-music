@@ -124,6 +124,20 @@ enum EditingFixtures {
         return score
     }
 
+    /// `[ts 4/4, C4 e, D4 e, r q, r h]` — elements 1 and 2 are one beam group (both level 1, ticks 0 and 240 of
+    /// beat 1), element 1 its leader. The remaining rests keep the bar full.
+    static func twoBeamedEighths() -> Score {
+        var score = fourQuarterRests()
+        score.parts[0].staves[0].measures[0].voices[0] = Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .eighth, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .eighth, notes: [Note(pitch: 62, tpc: 16)])),
+            .rest(duration: .quarter),
+            .rest(duration: .half),
+        ])
+        return score
+    }
+
     /// Two measures: measure 0's last quarter (element index 4) is C4; measure 1 opens with C4 — a cross-barline
     /// tie candidate.
     static func c4AcrossBarline() -> Score {

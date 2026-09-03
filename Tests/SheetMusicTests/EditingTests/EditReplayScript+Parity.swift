@@ -1,15 +1,16 @@
 @testable import SheetMusicCore
 
 extension EditReplayScript {
-    /// Sixty-one steps over `EditingFixtures.parityFixture()`, covering every intent the edit-command parity
+    /// Seventy-two steps over `EditingFixtures.parityFixture()`, covering every intent the edit-command parity
     /// project appended: its structural group (30…34: `setLayoutBreak`, `setBarLine`, `setRepeatBarLines`,
     /// `setMeasureRepeat`, `moveToVoice`) in steps 1…10, its range group (35…40: `transposeRange`,
     /// `addIntervalToSelection`, `deleteRange`, `setAccidentalsInRange`, `setDurationInRange`, `respellRange`) in
     /// steps 11…19, its mark group (41…49: `setClef`, `removeClef`, `setTempo`, `setStaffText`, `setDynamic`,
-    /// `setFermata`, `setBreath`, `setJumps`, `setMarkers`) in steps 20…40 and its note / chord group (50…57:
+    /// `setFermata`, `setBreath`, `setJumps`, `setMarkers`) in steps 20…40, its note / chord group (50…57:
     /// `setArticulation`, `setGraceNotes`, `setTremolo`, `setArpeggio`, `setGlissando`, `setDots`, `setChordLine`,
-    /// `setNoteParentheses`) in steps 41…61 — none of which the standard chain, which predates them, encodes at
-    /// all.
+    /// `setNoteParentheses`) in steps 41…61 and its visibility group (58…61: `setElementVisible`,
+    /// `setNoteVisible`, `setStemVisible`, `setBeamVisible`) in steps 64…72, prepared by two `inputNote`s
+    /// (62, 63) — none of which the standard chain, which predates them, encodes at all.
     ///
     /// Each of the five structural intents appears at least twice, in both directions where it has one, so the chain
     /// pins the wire bytes of the removal as well as the write: `setLayoutBreak` on then off (steps 1 / 10),
@@ -38,7 +39,13 @@ extension EditReplayScript {
     /// group has no second chance to encode: 45 writes a non-default `strokeStyle`, 46 the `.between` span (whose
     /// follower is the tail chord, named by adjacency rather than stored), and 52 a glissando with every field
     /// non-default at once. `setDots` (61) is the only member with no "off" — `dots: 0` is a value, not a clear —
-    /// so it writes once, and does so last for the reason given under "Index stability".
+    /// so it writes once, and does so last within its group for the reason given under "Index stability".
+    ///
+    /// The visibility group is spelled hide-then-show for every flag (64 / 65, 66 / 71, 67 / 70, 68 / 69), the
+    /// beam pair naming the follower on the way down and the leader on the way up, plus one hide left standing
+    /// (72) on an untimed element. Its steps — and their own index-stability and repeat notes — live on
+    /// `parityVisibility()` in `EditReplayScript+Parity2.swift`, a sibling file only because this one is at its
+    /// 400-line budget.
     ///
     /// ## Index stability
     ///
@@ -127,11 +134,10 @@ extension EditReplayScript {
     ///   of adjacent chords the chain still has: measure 0's voice 0 is one measure rest by step 19, and the C4
     ///   steps 6 / 8 moved sits alone in voice 1.
     /// - **Measure 1 of the FLUTE (step 61)** is the one step of this group that RETIMES, and it is deliberately
-    ///   last. Voice 0 reads `[r h, r h]` after step 16; dotting the first rest makes it a dotted half and shortens
-    ///   the second to a quarter, which changes measure 1's element durations — and voice 1, whose two half rests
-    ///   `SetRestDuration` does not touch, is unaffected. No step follows, so nothing downstream can observe the
-    ///   retiming; and because nothing takes it back, the chain still ends on a value no later step undoes, which
-    ///   is what `EditReplayDeterminismTests.scriptIsNotInert` reads.
+    ///   its last. Voice 0 reads `[r h, r h]` after step 16; dotting the first rest makes it a dotted half and
+    ///   shortens the second to a quarter, which changes measure 1's element durations — and voice 1, whose two
+    ///   half rests `SetRestDuration` does not touch, is unaffected. Every step that follows belongs to the
+    ///   visibility group and addresses the CELLO, so nothing downstream can observe the retiming.
     ///
     /// ## Fingerprints that repeat
     ///
@@ -161,16 +167,21 @@ extension EditReplayScript {
     /// 51's; step 54 re-applies step 52 and lands back on step 52's; step 55 removes the glissando and lands back
     /// on step 51's again; step 58 clears the chord lines steps 56 / 57 wrote and lands back on step 55's; and step
     /// 60 clears the parentheses step 59 wrote and lands back on step 58's. Step 61 does not: nothing takes its dot
-    /// back, so the chain ends on a value it has never held. Thirty-nine of the sixty-two recorded values are
-    /// therefore distinct, against a floor of thirty-five in `ReplayChain.parity`.
+    /// back.
+    ///
+    /// The visibility group adds eleven values and four more repeats, listed on `parityVisibility()`; the chain
+    /// now ends on ITS last step, the standing hide of the cello's 4/4, which no earlier step produced. Forty-six
+    /// of the seventy-three recorded values are therefore distinct, against a floor of thirty-nine in
+    /// `ReplayChain.parity`.
     ///
     /// As in the standard chain, an equal fingerprint would not by itself prove a step was inert, nor a different
     /// one prove it did what it was added for. What proves each step ran is `EditSessionReplayParityTest.kt`
     /// asserting every `nativeApplyEditIntent` returned `true`, and `EditReplayWebGoldenTests` asserting the same
     /// of `ScoreEditSession.apply` — those catch a step that starts being refused, which a `nil`-planning intent
     /// (see `ScoreEditSession.structuralParityCommand`, `ScoreEditSession.rangeCommand(for:in:)`,
-    /// `ScoreEditSession.markCommand(for:in:)` and `ScoreEditSession.notationCommand(for:in:)`, where restating
-    /// what the score already says plans to nothing) would be if a future change made one of these steps a no-op.
+    /// `ScoreEditSession.markCommand(for:in:)`, `ScoreEditSession.notationCommand(for:in:)` and
+    /// `ScoreEditSession.visibilityCommand(for:in:)`, where restating what the score already says plans to
+    /// nothing) would be if a future change made one of these steps a no-op.
     static func parity(staff: StaffAddress) -> [EditReplayStep] { // swiftlint:disable:this function_body_length
         let cello = StaffAddress(partIndex: 1, staffIndexInPart: 0)
         let measure1 = MeasureRef(measureIndex: 1)
@@ -375,6 +386,6 @@ extension EditReplayScript {
             // last step of the chain for that reason. The second half rest shortens to a quarter, and nothing
             // takes that back, which is what `scriptIsNotInert` needs.
             .intent(.setDots(at: firstRestOfBar1, dots: 1)),
-        ]
+        ] + parityVisibility() // steps 62…72 — see `EditReplayScript+Parity2.swift`
     }
 }

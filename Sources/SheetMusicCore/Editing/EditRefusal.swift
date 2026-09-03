@@ -24,6 +24,9 @@ public struct EditRefusal: Sendable, Hashable {
         case timed
         case tuplet
         case clef
+        /// An element that carries `ElementProperties`, and so has a `<visible>` flag to write. Every
+        /// `VoiceElement` case except `.measureRepeat` and `.locationShift`.
+        case engravable
     }
 
     public enum Reason: Sendable, Hashable {
@@ -126,6 +129,13 @@ public struct EditRefusal: Sendable, Hashable {
         /// is about the element's KIND: the element here is a perfectly good chord or rest whose LENGTH has no
         /// dotted spelling.
         case notDottable(at: VoiceElementID)
+        /// `SetBeamVisible` was asked to HIDE (`visible == false`) a chord that belongs to no beam group — a
+        /// quarter, a lone eighth, the only chord between two rests. The beam flag is read from a group's leading
+        /// chord and from nowhere else, so writing `false` here would change nothing on screen and put a `<Beam>`
+        /// in front of an unbeamable note in the saved file. Distinct from `.wrongElementKind`: the element IS a
+        /// chord. Gates the write only — SHOWING (`visible == true`) an ungrouped chord is never refused, so a flag
+        /// orphaned by a group dissolving out from under it stays clearable.
+        case notBeamed(at: VoiceElementID)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -206,6 +216,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.chordTooSmall"
         case .notDottable:
             "edit.notDottable"
+        case .notBeamed:
+            "edit.notBeamed"
         case .unexpected:
             "edit.unexpected"
         }
@@ -288,6 +300,8 @@ public struct EditRefusal: Sendable, Hashable {
             "chord at \(location) has \(noteCount) note(s); an arpeggio needs at least 2"
         case let .notDottable(location):
             "element at \(location) has no dotted spelling for that dot count"
+        case let .notBeamed(location):
+            "element at \(location) is not in a beam group"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
@@ -309,6 +323,8 @@ extension EditRefusal.ExpectedKind {
             "a tuplet"
         case .clef:
             "a clef"
+        case .engravable:
+            "an element that carries visibility"
         }
     }
 }

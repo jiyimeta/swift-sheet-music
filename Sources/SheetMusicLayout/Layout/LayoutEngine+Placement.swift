@@ -115,23 +115,10 @@ extension LayoutEngine {
         var currentClef = activeClef
         var currentKey = activeKey
 
-        // --- Scan: time signature in this measure (for beam grouping) ---
-        //
-        // `beamGroups` needs the raw `TimeSignature` element (if present)
-        // to compute beat boundaries and beam-group lengths. This scan is
-        // separate from `measureDuration`: the latter is passed in from
-        // the caller so the prevailing TS carries forward across measures
-        // that lack an explicit `<TimeSignature>` element.
-        var measureTimeSig: TimeSignature?
-        for voice in measure.voices {
-            for el in voice.elements {
-                if case let .timeSignature(ts) = el {
-                    measureTimeSig = ts
-                    break
-                }
-            }
-            if measureTimeSig != nil { break }
-        }
+        // The bar's own time-signature element, if any — the input `beamGroups` groups with; `nil` falls back to
+        // `division`-based beats. Asked through `BeamGrouping.explicitTimeSignature` so the editor's beam-leader
+        // lookup (`BeamGrouping.leader`) asks the identical question.
+        let measureTimeSig = BeamGrouping.explicitTimeSignature(in: measure)
         // `measureDuration` is passed in from the caller, which derives
         // it via `[Measure].effectiveMeasureDurations()` so the
         // prevailing time signature carries forward across measures that

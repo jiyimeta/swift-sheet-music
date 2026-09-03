@@ -113,6 +113,10 @@ own substantive logic.
 | `SetDots` | not in the example — host command registry | sugar |
 | `SetChordLine` | not in the example — host command registry | sugar |
 | `SetNoteParentheses` | not in the example — host command registry | sugar |
+| `SetElementVisible` | not in the example — host command registry | sugar |
+| `SetNoteVisible` | not in the example — host command registry | sugar |
+| `SetStemVisible` | not in the example — host command registry | sugar |
+| `SetBeamVisible` | not in the example — host command registry | sugar |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -225,6 +229,11 @@ stay reachable only by building the command (or a
   "A. Implemented" above.
 - [x] **`SetNoteParentheses`** *(sugar)* — `Note.parentheses`;
   `.none` is the clear. Implemented; see "A. Implemented" above.
+- [x] **`SetElementVisible`** / **`SetNoteVisible`** /
+  **`SetStemVisible`** / **`SetBeamVisible`** *(sugar)* —
+  `<visible>` on any voice element, a notehead, a stem, a beam group
+  (written on the group's leading chord; the intent may name any
+  member). Implemented; see "A. Implemented" above.
 
 ### Range operations (composable from existing per-element
 commands + `CompositeEditCommand`)
@@ -270,9 +279,10 @@ layout breaks, chord symbols, spanners — already exists in
 command. That gap is closed by the edit-command parity project
 (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`):
 the structural group above landed first, the Range group (intents
-35–40) second, the Marks group (41–49) third and the Note/chord
-group (50–57) fourth, and the remaining groups (Visibility,
-Spanners, Harmony — intents 58–73) are queued in that spec.
+35–40) second, the Marks group (41–49) third, the Note/chord
+group (50–57) fourth and the Visibility group (58–61) fifth, and the
+remaining groups (Spanners, Harmony — intents 62–73) are queued in
+that spec.
 
 What is left below genuinely needs a `Score` model extension before
 any edit command can make sense of it:

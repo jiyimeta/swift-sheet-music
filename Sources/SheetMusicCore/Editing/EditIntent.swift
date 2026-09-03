@@ -325,4 +325,26 @@ public enum EditIntent: Sendable, Equatable {
     /// Write the parentheses drawn around the notehead at `at`; `.none` removes them. Resolves to nothing to
     /// apply when the note already reads this way.
     case setNoteParentheses(at: NoteID, parentheses: NoteParentheses)
+
+    // Appended for the edit-command parity project's visibility group (spec 2026-09-02) — indices 58…61. A
+    // visibility flag is never absent, so these carry a plain `Bool` rather than the "nil clears" optional the mark
+    // group uses; restating the flag the score already holds plans to nothing.
+
+    /// Show or hide the element at `at` — any voice element that carries `ElementProperties` (a chord or rest, a
+    /// clef, a barline, a key or time signature, a dynamic, a fermata, a breath, a spanner, a chord symbol). Refused
+    /// as `.wrongElementKind(expected: .engravable)` on a measure repeat or a location shift.
+    case setElementVisible(at: VoiceElementID, visible: Bool)
+
+    /// Show or hide one notehead. Only the note's own flag moves — no cascade to the stem or beam (compose with
+    /// `.setStemVisible` / `.setBeamVisible` for MuseScore's behavior).
+    case setNoteVisible(at: NoteID, visible: Bool)
+
+    /// Show or hide the stem (and flag) of the chord at `at`. Refused as `.wrongElementKind(expected: .chord)` on
+    /// a rest.
+    case setStemVisible(at: VoiceElementID, visible: Bool)
+
+    /// Show or hide the beam of the group the chord at `at` belongs to. The planner re-targets to the group's
+    /// LEADING chord, where the flag lives, so any member may be named; refused as `.notBeamed` when the chord is in
+    /// no beam group.
+    case setBeamVisible(at: VoiceElementID, visible: Bool)
 }
