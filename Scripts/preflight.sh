@@ -66,6 +66,11 @@ if [[ "$run_apple" == 1 ]]; then
     swift build --package-path "$ROOT"
 
     step "Apple / SwiftPM: swift test"
+    # Includes the always-on MSCX 2-pass idempotency gate (encode → decode →
+    # encode must be byte-identical; see docs/development/mscx-idempotency.md).
+    # Its corpus sweep is opt-in and is NOT run here — before a release, or
+    # after any change under Sources/SheetMusicMSCX/, also run:
+    #   SM_MSCX_IDEMPOTENCY_DIR=<scores dir> swift test --filter MSCXIdempotencySweep
     swift test --package-path "$ROOT"
 
     # The browser fixtures are recorded from this build, and nothing on the

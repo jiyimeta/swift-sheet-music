@@ -27,6 +27,8 @@ Muse Group, or Apple's `MusicKit` framework.
   fixture requirements.
 - `docs/development/apple-audio-testing.md` — AVFoundation export and
   SoundFont test constraints.
+- `docs/development/mscx-idempotency.md` — the MSCX 2-pass encode gate, what it
+  detects that no other test can, and its opt-in corpus sweep.
 - `docs/musescore-engraving-reference.md` — recurring findings from the
   upstream MuseScore implementation.
 
