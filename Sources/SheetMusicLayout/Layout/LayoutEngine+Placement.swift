@@ -1228,6 +1228,9 @@ extension LayoutEngine {
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
                     break
+                case .preserved:
+                    // Source-only MSCX markup has no layout behavior.
+                    break
                 case let .locationShift(delta):
                     // Voice-level cursor shift. Adds the location's
                     // fractional delta to `tickCursor` so the next

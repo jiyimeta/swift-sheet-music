@@ -72,6 +72,32 @@ extension Voice {
         return result
     }
 
+    /// `<Beam><visible>0</visible></Beam>` is a SIBLING before the chord or rest that leads the group, the way
+    /// MuseScore writes it (`TWrite::write(const Chord*)`: graces, then `writeChordRestBeam`, then the chord)
+    /// and the way the decoder reads it back (`pendingBeamVisible` lands on the next chord / rest). Only the
+    /// hidden state is written — the default omits the tag, as `<Stem>` does.
+    ///
+    /// Skipped when a preserved `<Beam>` already sits immediately before this chord: that node came from the
+    /// source and carries its own `<visible>`, so synthesizing a second one would write the tag twice. This is
+    /// the voice-stream form of the rule that the encoder's own output wins over preserved markup of the same
+    /// name (spec §3.5.1) — here the preserved node is the one that got there first.
+    private func emitHiddenBeamIfNeeded(
+        element: VoiceElement,
+        index: Int,
+        state: inout EncodeState,
+        options: MSCXEncoderOptions,
+    ) {
+        guard case let .chord(chord) = element, !chord.beamVisible else { return }
+        if options.emitPreservedMarkup, index > elements.startIndex,
+           case let .preserved(markup) = elements[index - 1], markup.name == "Beam"
+        {
+            return
+        }
+        state.children.append(XMLTreeNode(name: "Beam", children: [
+            XMLTreeNode(name: "visible", text: "0"),
+        ]))
+    }
+
     func emitElement(
         element: VoiceElement,
         index: Int,
@@ -82,6 +108,9 @@ extension Voice {
         staffGroup: String,
         voiceIndex: Int,
     ) throws {
+        if case .preserved = element, !options.emitPreservedMarkup {
+            return
+        }
         let voiceBarLength = plan.voiceBarLength
         let effectiveDuration = plan.effectiveDuration
         let isLastChord: Bool = {
@@ -110,16 +139,9 @@ extension Voice {
                 options: options,
             )
         }
-        // `<Beam><visible>0</visible></Beam>` is a SIBLING before the chord or rest that leads the group, the way
-        // MuseScore writes it (`TWrite::write(const Chord*)`: graces, then `writeChordRestBeam`, then the chord)
-        // and the way the decoder reads it back (`pendingBeamVisible` lands on the next chord / rest). Only the
-        // hidden state is written — the default omits the tag, as `<Stem>` does. `<StemDirection>` and beam
-        // fragments are not modelled, so `<visible>` is the element's only child.
-        if case let .chord(chord) = element, !chord.beamVisible {
-            state.children.append(XMLTreeNode(name: "Beam", children: [
-                XMLTreeNode(name: "visible", text: "0"),
-            ]))
-        }
+        emitHiddenBeamIfNeeded(
+            element: element, index: index, state: &state, options: options,
+        )
         // The chord's own position within the measure, read before the
         // cursor advances past it: both halves of the chord-anchored slur
         // bookkeeping — the end markers landing here and the begin sides
@@ -249,6 +271,8 @@ extension Voice {
             return barLine.encode()
         case let .harmony(harmony):
             return harmony.encode(options: options)
+        case let .preserved(markup):
+            return XMLTreeNode(preserved: markup)
         case let .measureRepeat(measureRepeat):
             return measureRepeat.encode(options: options, in: effectiveDuration)
         case let .fermata(fermata):

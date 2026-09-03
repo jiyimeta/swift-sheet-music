@@ -127,6 +127,44 @@ struct MSCXPreservedMarkupTests {
         ])
     }
 
+    @Test("an unknown voice child keeps its position in the stream")
+    func unknownVoiceChildKeepsPosition() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60"><Score><Division>480</Division>
+        <Part><Staff id="1"/><Instrument/></Part>
+        <Staff id="1"><Measure><voice>
+        <Chord><durationType>quarter</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+        <FiguredBass><ticks>480</ticks></FiguredBass>
+        <Chord><durationType>quarter</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
+        </voice></Measure></Staff></Score></museScore>
+        """
+        let score = try MSCXParser.parse(Data(xml.utf8))
+        let elements = score.parts[0].staves[0].measures[0].voices[0].elements
+        guard case let .preserved(kept) = elements[1] else {
+            Issue.record(Comment(
+                rawValue: "expected the FiguredBass between the two chords, got \(elements)",
+            ))
+            return
+        }
+        #expect(kept.name == "FiguredBass")
+
+        let root = try XMLTreeParser.parse(MSCXEncoder.encode(score))
+        let voice = try #require(
+            root.first("Score")?.all("Staff").last?
+                .first("Measure")?.first("voice"),
+        )
+        #expect(voice.children.map(\.name) == ["Chord", "FiguredBass", "Chord"])
+    }
+
+    @Test("<LayoutBreak><subtype>nobreak</subtype> survives")
+    func nobreakLayoutBreakSurvives() throws {
+        let source = try MSCXFixtureLoader.mscxData("testMeasureRepeats")
+        let encoded = try MSCXEncoder.encode(MSCXParser.parse(source))
+        let text = try #require(String(data: encoded, encoding: .utf8))
+        #expect(text.contains("nobreak"))
+    }
+
     @Test("emitPreservedMarkup: false leaves preserved markup out")
     func preservedMarkupCanBeSuppressed() throws {
         let source = try MSCXFixtureLoader.mscxData("grace_after")
@@ -151,6 +189,7 @@ struct MSCXPreservedMarkupTests {
         score.parts[0].instrument.channels[0].preservedMarkup = [marker]
         score.parts[0].staves[0].preservedMarkup = [marker]
         score.parts[0].staves[0].staffTypePreservedMarkup = [marker]
+        score.parts[0].staves[0].measures[0].preservedMarkup = [marker]
         let stripped = score.strippingPreservedMarkup()
         #expect(stripped.preservedMarkup.isEmpty)
         #expect(stripped.style.preservedMarkup.isEmpty)
@@ -159,6 +198,7 @@ struct MSCXPreservedMarkupTests {
         #expect(stripped.parts[0].instrument.channels[0].preservedMarkup.isEmpty)
         #expect(stripped.parts[0].staves[0].preservedMarkup.isEmpty)
         #expect(stripped.parts[0].staves[0].staffTypePreservedMarkup.isEmpty)
+        #expect(stripped.parts[0].staves[0].measures[0].preservedMarkup.isEmpty)
     }
 
     /// A tag that appears both in a node's preserved markup and in
@@ -203,6 +243,31 @@ struct MSCXPreservedMarkupTests {
                 writtenScore: encodedScore,
                 sourceName: url.lastPathComponent,
             )
+            expectNoMeasureNameCollisions(
+                score: score,
+                writtenScore: encodedScore,
+                sourceName: url.lastPathComponent,
+            )
+        }
+    }
+
+    private func expectNoMeasureNameCollisions(
+        score: Score,
+        writtenScore: XMLTreeNode,
+        sourceName: String,
+    ) {
+        let staves = score.parts.flatMap(\.staves)
+        for (staffIndex, pair) in zip(staves, writtenScore.all("Staff")).enumerated() {
+            for (measureIndex, measurePair) in zip(
+                pair.0.measures,
+                pair.1.all("Measure"),
+            ).enumerated() {
+                expectNoNameCollision(
+                    measurePair.0.preservedMarkup,
+                    writtenChildren: measurePair.1.children,
+                    context: "\(sourceName): <Staff>[\(staffIndex)]/<Measure>[\(measureIndex)]",
+                )
+            }
         }
     }
 

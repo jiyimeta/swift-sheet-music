@@ -66,6 +66,21 @@ public struct Score: Sendable, Equatable {
             for staffIndex in stripped.parts[partIndex].staves.indices {
                 stripped.parts[partIndex].staves[staffIndex].staffTypePreservedMarkup = []
                 stripped.parts[partIndex].staves[staffIndex].preservedMarkup = []
+                for measureIndex in stripped.parts[partIndex].staves[staffIndex].measures.indices {
+                    stripped.parts[partIndex].staves[staffIndex]
+                        .measures[measureIndex].preservedMarkup = []
+                    for voiceIndex in stripped.parts[partIndex].staves[staffIndex]
+                        .measures[measureIndex].voices.indices
+                    {
+                        MeasureStructure.removeElements(
+                            in: &stripped.parts[partIndex].staves[staffIndex]
+                                .measures[measureIndex].voices[voiceIndex],
+                        ) { element in
+                            if case .preserved = element { return true }
+                            return false
+                        }
+                    }
+                }
             }
         }
         return stripped

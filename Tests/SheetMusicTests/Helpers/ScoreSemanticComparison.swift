@@ -174,6 +174,7 @@ enum ScoreSemanticComparison {
         case let .harmony(h): return "harmony(\"\(h.name)\")"
         case let .locationShift(delta):
             return "locationShift(\(delta.numerator)/\(delta.denominator))"
+        case let .preserved(markup): return "preserved(<\(markup.name)>)"
         }
     }
 

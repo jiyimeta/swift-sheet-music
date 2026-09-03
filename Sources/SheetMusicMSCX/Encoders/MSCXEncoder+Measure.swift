@@ -106,6 +106,11 @@ extension Measure {
                 children: [XMLTreeNode(name: "subtype", text: "section")],
             ))
         }
+        appendPreservedMarkup(
+            preservedMarkup,
+            to: &children,
+            options: options,
+        )
         var attributes: [String: String] = [:]
         if let actualLength {
             attributes["len"] =

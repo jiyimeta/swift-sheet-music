@@ -65,6 +65,12 @@ enum MSCXPreservation {
             + "this decoder collapses them, and the encoder synthesizes the element for a drumset — "
             + "so preserving it would make a programmatic drumset score stop comparing equal to "
             + "itself across a round trip. Recovering the Sound ID needs Instrument to model it."
+    private static let staffHeadCMajorReason =
+        "by design, and not a preservation gap: this <KeySig> is a staff-head C major, which IS "
+            + "modeled as VoiceElement.keySignature(concertKey: 0). The encoder omits re-emitting "
+            + "it because MuseScore does not write a redundant natural-sign key at the staff head — "
+            + "behavior pinned by MSCXEncoderMS3Tests.initialZeroKeySigOmittedV4. Preserved markup "
+            + "cannot restore a tag the decoder consumed."
     private static let instrumentLabelReason =
         "by design: MuseScore 5's <InstrumentLabel> wrapper holds <longName> / <shortName>, which "
             + "are modeled and re-emitted in MuseScore 4's direct-child form. Preserving the "
@@ -72,7 +78,6 @@ enum MSCXPreservation {
     private static func makeAllowedLosses() -> [String: String] {
         var result: [String: String] = [:]
         addPermanentLosses(to: &result)
-        addTask5Losses(to: &result)
         addTask6Losses(to: &result)
         return result
     }
@@ -131,16 +136,11 @@ enum MSCXPreservation {
             "Instrument/instrumentId",
         ], because: soundIDReason, into: &result)
         allow([
+            "voice/KeySig",
+        ], because: staffHeadCMajorReason, into: &result)
+        allow([
             "Instrument/InstrumentLabel", "InstrumentLabel/longName", "InstrumentLabel/shortName",
         ], because: instrumentLabelReason, into: &result)
-    }
-
-    private static func addTask5Losses(to result: inout [String: String]) {
-        // Temporary: Task 5 preserves Measure bags and the ordered voice stream.
-        allow([
-            "Beam/l1", "Beam/l2", "LayoutBreak/subtype", "Measure/LayoutBreak", "voice/Beam",
-            "voice/KeySig",
-        ], because: "Task 5: preserve unmodeled Measure and position-sensitive voice markup.", into: &result)
     }
 
     private static func addTask6Losses(to result: inout [String: String]) {
