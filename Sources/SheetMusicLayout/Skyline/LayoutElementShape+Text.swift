@@ -265,14 +265,14 @@ extension LayoutElementShape {
     ///
     /// Falls back to the em box only when *no* glyph in the run has a
     /// measurable path — an unmapped codepoint, not a platform. Both
-    /// Android providers return a box: `StubFontMetricsProvider` a fixed
-    /// `pointSize × 0.7·pointSize` rect, and the JNI
-    /// `SMuFLMetricsTable` provider genuine Bravura bboxes. What Android
-    /// *does* get wrong is the baseline, not the extent: both providers
-    /// take `ascent`/`descent` from the stub (0.85 / 0.25 em), so
-    /// `baselineY` returns `originY + 0.3 · pointSize` and the ink band
-    /// sits ~1.2 sp lower than on Apple. That is the spec's declared
-    /// "Android text metrics out of scope" boundary.
+    /// non-Apple providers return a box: `StubFontMetricsProvider` a fixed
+    /// `pointSize × 0.7·pointSize` rect, and the `SMuFLMetricsTable`
+    /// provider genuine Bravura bboxes. The table provider also serves
+    /// Bravura's own `ascent`/`descent` (SMFT v3), so `baselineY` lands
+    /// where CoreText puts it; only the stub still answers with its
+    /// 0.85 / 0.25 em formula, which sets the ink band ~1.2 sp lower than
+    /// on Apple. That remaining gap is the spec's declared "text metrics
+    /// out of scope" boundary for hosts that install no table.
     private static func smuflRunRect(
         glyphs: String, font: LayoutFont, origin: CGPoint,
     ) -> CGRect {

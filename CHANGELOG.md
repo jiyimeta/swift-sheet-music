@@ -9,6 +9,19 @@ and this project adheres to
 
 ### Added
 
+- **M4A and AIFF export in the browser.** `PlaybackEngine.exportAudio` takes a
+  `format` and returns the bytes together with the MIME type and file extension
+  to call them, so a host no longer hardcodes both; `exportWav` stays as the
+  shorthand it was. M4A goes through WebCodecs' `AudioEncoder` and an ISOBMFF
+  muxer written in the package — `MediaRecorder` would also mux MP4 but records
+  in real time, which would undo the point of rendering offline. The muxer
+  writes an edit list so the encoder's 2,048 frames of analysis delay stay out
+  of the presentation: without it the file decodes, holds the right audio and
+  reports a plausible duration while starting 46 ms after the WAV from the same
+  render. AIFF needs no browser capability at all and was missing only because
+  WAV went first. `supportedExportFormats()` reports what this browser can
+  actually write.
+
 - Scanned (image-only) PDFs import. `PDFImporter.parse` and `parseWithGeometry` rasterize every page the
   vector walker finds no music on and read it through an optical music recognition detector — when, and only
   when, `PDFImportOptions.omrTileClassifier` is set. Left `nil`, the importer does exactly what it did before:
@@ -116,6 +129,12 @@ and this project adheres to
 
 ### Changed
 
+- **MP3 export is refused in the browser, explicitly.** No browser ships an
+  encoder for it — WebCodecs has no `mp3` codec and `MediaRecorder` rejects
+  `audio/mpeg` — and bundling a wasm LAME would put an LGPL dependency in an MIT
+  package whose only runtime dependency is the WASI shim. `exportAudio({ format:
+  "mp3" })` throws and `supportedExportFormats()` never lists it, which is the
+  state Android already reaches on a device whose MediaCodec has no MP3 encoder.
 - The bundled detector is retrained. A clef's octave variant — `clefF8va` and the rest — was engraved in the
   training data only as a lone staff or as a wall of cue-size mid-bar changes, never as the full-size clef of
   one staff among several in an ordinary score, and on real engraving the reader's confidence split between
@@ -144,6 +163,17 @@ and this project adheres to
 
 ### Fixed
 
+- **Articulations, fermatas and breath marks on Android and in the browser sit
+  where Apple draws them**, instead of about 1.2 staff spaces (~3 mm) too low.
+  The SMuFL metrics table both platforms engrave with carried per-glyph boxes
+  but not the face's ascent and descent, so the provider answered those from a
+  stub's 0.85 / 0.25 em — and `(ascent − descent) / 2`, which is how a centred
+  glyph finds its baseline, came out 0.3 em instead of Bravura's 0. The table
+  is now SMFT v3 with the pair in its header: `Tools/GenBravuraMetrics` writes
+  it for the browser and `BravuraMetricsBuilder.buildTable` for Android, and
+  `installSMuFLMetrics` / `nativeInstallSMuFLMetrics` refuse a v2 table rather
+  than engrave off it. A host that serves its own copy of `bravura.smft` must
+  take the regenerated one from `Web/sheet-music-web/assets/`.
 - A hidden beam now survives a save. `MSCXDecoder` read `<Beam><visible>0</visible></Beam>` onto the following
   chord or rest and the layout honored it, but no encoder ever wrote the element back, so a score whose beam was
   hidden in MuseScore opened correctly and was silently saved with the beam shown. `MSCXEncoder` now writes the

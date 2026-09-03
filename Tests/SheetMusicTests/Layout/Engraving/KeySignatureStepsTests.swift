@@ -119,59 +119,57 @@ struct KeySignatureStepsTests {
     }
 }
 
-#if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
-    /// End-to-end: the layout engine must hand the renderers the clef
-    /// that is in force, so an F-clef staff's flats are drawn a line
-    /// lower than a G-clef staff's.
-    @Suite("Key signature clef placement")
-    struct KeySignatureClefPlacementTests {
-        /// `LayoutEngine.layout` asserts a real FontMetrics provider.
-        private let _installApple = TestSupport.installApple
+/// End-to-end: the layout engine must hand the renderers the clef
+/// that is in force, so an F-clef staff's flats are drawn a line
+/// lower than a G-clef staff's.
+@Suite("Key signature clef placement")
+struct KeySignatureClefPlacementTests {
+    /// `LayoutEngine.layout` asserts a real FontMetrics provider.
+    private let _installFontMetrics = TestSupport.installFontMetrics
 
-        private func keySignatureElements(
-            clefType: String,
-        ) -> [LayoutElement] {
-            let note = Note(pitch: 60, tpc: 14)
-            let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
-            let voice = Voice(elements: [
-                .clef(Clef(concertClefType: clefType)),
-                .keySignature(KeySignature(concertKey: -2)),
-                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-                .chord(chord),
-            ])
-            let score = Score(
-                division: 480,
-                parts: [Part(
-                    id: "P1",
-                    instrument: Instrument(id: "voice"),
-                    staves: [Staff(measures: [Measure(voices: [voice])])],
-                )],
-            )
-            let doc = LayoutEngine.layout(
-                score: score,
-                options: ScoreViewOptions(),
-                availableWidth: 800,
-            )
-            return doc.systems.flatMap(\.measures)
-                .flatMap(\.elements)
-                .filter { if case .keySignature = $0 { true } else { false } }
-        }
-
-        @Test func layoutTagsKeySignatureWithTheClefInForce() {
-            guard case let .keySignature(_, _, bassClef, _, _) =
-                keySignatureElements(clefType: "F").first
-            else {
-                Issue.record("no key signature laid out for the F clef staff")
-                return
-            }
-            #expect(bassClef == .bass)
-            guard case let .keySignature(_, _, trebleClef, _, _) =
-                keySignatureElements(clefType: "G").first
-            else {
-                Issue.record("no key signature laid out for the G clef staff")
-                return
-            }
-            #expect(trebleClef == .treble)
-        }
+    private func keySignatureElements(
+        clefType: String,
+    ) -> [LayoutElement] {
+        let note = Note(pitch: 60, tpc: 14)
+        let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+        let voice = Voice(elements: [
+            .clef(Clef(concertClefType: clefType)),
+            .keySignature(KeySignature(concertKey: -2)),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(chord),
+        ])
+        let score = Score(
+            division: 480,
+            parts: [Part(
+                id: "P1",
+                instrument: Instrument(id: "voice"),
+                staves: [Staff(measures: [Measure(voices: [voice])])],
+            )],
+        )
+        let doc = LayoutEngine.layout(
+            score: score,
+            options: ScoreViewOptions(),
+            availableWidth: 800,
+        )
+        return doc.systems.flatMap(\.measures)
+            .flatMap(\.elements)
+            .filter { if case .keySignature = $0 { true } else { false } }
     }
-#endif
+
+    @Test func layoutTagsKeySignatureWithTheClefInForce() {
+        guard case let .keySignature(_, _, bassClef, _, _) =
+            keySignatureElements(clefType: "F").first
+        else {
+            Issue.record("no key signature laid out for the F clef staff")
+            return
+        }
+        #expect(bassClef == .bass)
+        guard case let .keySignature(_, _, trebleClef, _, _) =
+            keySignatureElements(clefType: "G").first
+        else {
+            Issue.record("no key signature laid out for the G clef staff")
+            return
+        }
+        #expect(trebleClef == .treble)
+    }
+}

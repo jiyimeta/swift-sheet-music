@@ -1,4 +1,4 @@
-#if !os(Android)
+#if !os(Android) && !os(WASI)
     import Foundation
 
     /// Opt-in wall-clock accounting for the `OMR_DETECT_EVAL=1` sweep,

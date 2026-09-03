@@ -1,4 +1,4 @@
-#if !os(Android)
+#if !os(Android) && !os(WASI)
     import CoreGraphics
     import CoreText
     import Foundation

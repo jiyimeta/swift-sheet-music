@@ -286,6 +286,62 @@ struct PlaybackEntryTests {
         #expect(measureIndexAtPlayerSeconds(handle: 999_999, playerSeconds: 0) == -1)
     }
 
+    // MARK: Keyboard navigation
+
+    @Test("measure stepping follows transport semantics")
+    func measureSteppingFollowsTransportSemantics() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
+        defer { releaseScore(handle: handle) }
+        #expect(stepMeasureCursor(
+            handle: handle, measureIndex: 1, tickInMeasure: 480, direction: 0,
+        ) == [1, 0])
+        #expect(stepMeasureCursor(
+            handle: handle, measureIndex: 1, tickInMeasure: 0, direction: 0,
+        ) == [0, 0])
+        #expect(stepMeasureCursor(
+            handle: handle, measureIndex: 1, tickInMeasure: 0, direction: 1,
+        ) == [2, 0])
+    }
+
+    @Test("measure stepping refuses positions and directions that do not resolve")
+    func measureSteppingRefusesInvalidInput() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
+        defer { releaseScore(handle: handle) }
+        #expect(stepMeasureCursor(
+            handle: 999_999, measureIndex: 0, tickInMeasure: 0, direction: 1,
+        ).isEmpty)
+        #expect(stepMeasureCursor(
+            handle: handle, measureIndex: 999, tickInMeasure: 0, direction: 1,
+        ).isEmpty)
+        #expect(stepMeasureCursor(
+            handle: handle, measureIndex: 0, tickInMeasure: 0, direction: 2,
+        ).isEmpty)
+    }
+
+    @Test("beat advancement crosses a measure boundary")
+    func beatAdvancementCrossesMeasureBoundary() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
+        defer { releaseScore(handle: handle) }
+        #expect(cursorAdvancedByBeats(
+            handle: handle, measureIndex: 0, tickInMeasure: 1440, beats: 2,
+        ) == [1, 480])
+    }
+
+    @Test("beat advancement refuses invalid and non-finite input")
+    func beatAdvancementRefusesInvalidInput() throws {
+        let handle = try loadScore(bytes: jsBytes(SampleScore.repeatingMscz()))
+        defer { releaseScore(handle: handle) }
+        #expect(cursorAdvancedByBeats(
+            handle: 999_999, measureIndex: 0, tickInMeasure: 0, beats: 1,
+        ).isEmpty)
+        #expect(cursorAdvancedByBeats(
+            handle: handle, measureIndex: -1, tickInMeasure: 0, beats: 1,
+        ).isEmpty)
+        #expect(cursorAdvancedByBeats(
+            handle: handle, measureIndex: 0, tickInMeasure: 0, beats: Double.infinity,
+        ).isEmpty)
+    }
+
     // MARK: Tap seek
 
     @Test("a tap on the first note seeks to the top of the score")
@@ -404,6 +460,12 @@ struct PlaybackEntryTests {
         #expect(measureFrame(handle: handle, measureIndex: 0).isEmpty)
         #expect(rehearsalMarkCount(handle: handle) == 0)
         #expect(staffDescriptorCount(handle: handle) == 0)
+        #expect(stepMeasureCursor(
+            handle: handle, measureIndex: 0, tickInMeasure: 0, direction: 1,
+        ).isEmpty)
+        #expect(cursorAdvancedByBeats(
+            handle: handle, measureIndex: 0, tickInMeasure: 0, beats: 1,
+        ).isEmpty)
     }
 
     private func layoutOptions() -> LayoutOptions {

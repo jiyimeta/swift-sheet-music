@@ -274,6 +274,7 @@ if isWasm {
                 "SheetMusicCore",
                 "SheetMusicEditWire",
                 "SheetMusicFoundation",
+                "SheetMusicLayout",
                 "SheetMusicMIDI",
                 "SheetMusicMSCX",
             ],
@@ -296,6 +297,7 @@ if isWasm {
                 "SheetMusicFoundation",
                 "SheetMusicXMLTools",
                 "SheetMusicZip",
+                .product(name: "Wirelet", package: "swift-wirelet"),
             ],
             resources: [
                 .process("Resources"),

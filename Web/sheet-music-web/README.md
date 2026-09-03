@@ -151,21 +151,64 @@ To drive a different synth, implement `SynthHost` instead of calling
 
 ```js
 if (engine.canExport) {
-  const wav = await engine.exportWav({ range: loopRange }); // omit for the whole score
-  const url = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
+  const formats = await engine.supportedExportFormats(); // e.g. ["wav", "aiff", "m4a"]
+  const { bytes, mimeType, fileExtension } = await engine.exportAudio({
+    format: "m4a",
+    range: loopRange, // omit for the whole score
+  });
+  const url = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
 }
 ```
 
-16-bit PCM, rendered offline and faster than real time, carrying the mixer
-exactly as it stands — the file is what you are hearing. The metronome is not
-included, matching the iOS and Android exports.
+Rendered offline and faster than real time, carrying the mixer exactly as it
+stands — the file is what you are hearing. The metronome is not included,
+matching the iOS and Android exports. `exportWav()` is a shorthand for
+`exportAudio({ format: "wav" })` that returns the bytes alone.
+
+| format | notes |
+|---|---|
+| `wav` | 16-bit PCM. Always available. |
+| `aiff` | 16-bit PCM, big-endian. Always available. |
+| `m4a` | AAC-LC via WebCodecs. Available where `AudioEncoder` offers `mp4a.40.2`; pass `bitRate` to override the 192 kbps default. |
+| `mp3` | **Never available.** No browser ships an MP3 encoder. Export `wav` and convert. |
+
+Ask `supportedExportFormats()` before building a picker — offering a format the
+browser cannot write means failing after a full render rather than before one.
 
 `canExport` is `false` when the host has no offline path; implementing
-`renderOffline` on a custom `SynthHost` is what turns it on. `encodeWav` is
-exported separately if you want the `AudioBuffer` step yourself.
+`renderOffline` on a custom `SynthHost` is what turns it on. `encodeWav`,
+`encodeAiff`, `encodeAudioFile` and `muxAacIntoMp4` are exported separately if
+you want the `AudioBuffer` step yourself.
 
-Not here yet: compressed formats. Writing M4A or MP3 in a browser needs WebCodecs
-or `MediaRecorder`; WAV needs neither, so it went first.
+## Editing
+
+```js
+score.beginEditing();
+const hit = score.hitTest(xMM, yMM);          // "note" | "rest" | "tuplet", or null
+// A SelectedItem carries every field an ElementRef or NoteRef needs, so it goes
+// straight through as `at`.
+const outcome = score.applyEdit({ type: "setNotePitch", at: hit, pitch, tpc });
+if (outcome.accepted) redraw(score);
+else console.warn(outcome.code, outcome.message);
+score.undo();
+score.endEditing();                           // publishes, does not revert
+```
+
+An accepted edit publishes back into the same handle, so every consumer of that
+`Score` keeps working across it. A refused one says why: `EditOutcome` carries
+`accepted`, `code`, `operation` and `message` rather than throwing.
+
+`editGeneration` bumps on each accepted apply, relay, undo and redo. A
+`PlaybackEngine` pins the value it was created with, and `play`, `seekToMeasure`,
+`seekToPoint` and `exportAudio` all throw once the score has moved underneath it
+— a pre-edit sequence must not sound against post-edit geometry. Dispose the
+engine and create a new one after editing.
+
+`applyEdit` takes a typed union of the thirteen leaf intents, discriminated on
+`type`. `applyEditIntentBytes` is the relay path for `EditIntentCodec` bytes
+authored elsewhere, and the only way to apply a composite intent. `editState()`
+reports whether a session is open and whether undo and redo are available;
+`caretRect` gives the geometry to draw over a selection.
 
 ## Assets
 
@@ -174,9 +217,14 @@ failure modes look nothing alike, which is useful when something renders oddly:
 
 | file | what breaks without it |
 |---|---|
-| `bravura.smft` | Glyph metrics. The score renders with visibly wrong spacing; nothing errors. |
+| `bravura.smft` | Glyph metrics. Spacing is visibly wrong and articulations sit ~1.2 staff spaces off; nothing errors. |
 | `bravura.woff2` | Music glyphs become tofu boxes, correctly positioned. |
 | `edwin-roman.woff2` | Titles and text fall back to a system face. |
+
+Serve `bravura.smft` from the version of the package you load. The table's
+format is versioned, and `installSMuFLMetrics` returns `false` for a table
+written for an older one rather than engraving off it — a copy pinned in a
+host's own asset pipeline is the way that happens.
 
 Both fonts are SIL OFL 1.1 — see `assets/Bravura.LICENSE.txt` and
 `assets/Edwin.LICENSE.txt`.
@@ -195,7 +243,11 @@ leading bytes.
 
 ## Not here yet
 
-Editing. The Swift engine supports it; these bindings expose display and
-playback so far.
+MP3 export. No browser ships an encoder for it — see the export table above.
+
+Layout on a Worker with OffscreenCanvas is not planned, and the reason is a
+measurement rather than a preference: a viewport-sized redraw costs 0–0.1 ms and
+a renderer Worker would have nothing to protect. `loadSheetMusic` is async
+anyway, so the option stays open if that ever stops being true.
 
 [repo]: https://github.com/jiyimeta/swift-sheet-music

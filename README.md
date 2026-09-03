@@ -442,7 +442,9 @@ metrics table on the Kotlin side and installs it via
 `SheetMusicJNI.nativeInstallSMuFLMetrics` (see
 [`Android/SheetMusicAndroid/README.md`](Android/SheetMusicAndroid/README.md)).
 Absent that install, layout falls back to a `StubFontMetricsProvider`
-rectangle approximation.
+rectangle approximation, which also mis-centres articulations, fermatas
+and breath marks by about 1.2 staff spaces — the table carries the
+face's own ascent and descent, and the stub guesses them.
 
 ## Coverage
 

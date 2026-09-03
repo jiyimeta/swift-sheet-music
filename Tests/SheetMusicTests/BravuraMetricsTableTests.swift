@@ -22,6 +22,12 @@
             .deletingLastPathComponent() // repo root
             .appendingPathComponent("Web/sheet-music-web/assets/bravura.smft")
 
+        /// The copy the non-Apple test shapes install through `TestResources`,
+        /// since WASI can reach the resource bundle and not the web package.
+        private static let fixtureURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // Tests/SheetMusicTests
+            .appendingPathComponent("Resources/bravura.smft")
+
         /// noteheadBlack, gClef, fClef, restQuarter — no score renders without them.
         private static let essentialGlyphs: [UInt32] = [0xE0A4, 0xE050, 0xE062, 0xE4E5]
 
@@ -54,6 +60,11 @@
             try #require(BravuraFont.register)
             let provider = AppleFontMetricsProvider()
             let font = LayoutFont(face: BravuraFont.familyName, pointSize: 1000)
+            // The header's ascent/descent are what centre articulations, fermatas
+            // and breath marks on every non-Apple platform; a table regenerated
+            // from a font that failed to register would carry the system font's.
+            #expect(abs(table.ascent - Double(provider.ascent(font: font))) < 0.5)
+            #expect(abs(table.descent - Double(provider.descent(font: font))) < 0.5)
             for codepoint in Self.essentialGlyphs {
                 let entry = try #require(table.entries[codepoint])
                 let scalar = try #require(Unicode.Scalar(codepoint))
@@ -87,6 +98,16 @@
             )
             #expect(fromTable.width != fromStub.width)
             #expect(fromTable.width > 0)
+        }
+
+        /// `Tests/SheetMusicTests/Resources/bravura.smft` exists only because WASI
+        /// cannot read the web package's copy. Two tables that drift apart would
+        /// have the wasm suite passing against geometry the browser never ships.
+        @Test("the test fixture is a byte-for-byte copy of the shipped table")
+        func fixtureIsACopyOfTheShippedTable() throws {
+            let shipped = try Data(contentsOf: Self.tableURL)
+            let fixture = try Data(contentsOf: Self.fixtureURL)
+            #expect(fixture == shipped)
         }
     }
 #endif

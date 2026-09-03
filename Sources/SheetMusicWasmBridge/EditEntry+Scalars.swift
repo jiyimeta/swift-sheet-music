@@ -53,6 +53,45 @@ func scalarNoteID(
     )
 }
 
+func scalarScoreItemID(
+    kind: String,
+    partIndex: Int,
+    staffIndexInPart: Int,
+    measureIndex: Int,
+    voiceIndex: Int,
+    elementIndex: Int,
+    noteIndexInChord: Int,
+) -> ScoreItemID? {
+    switch kind {
+    case "note":
+        return .note(scalarNoteID(
+            partIndex: partIndex,
+            staffIndexInPart: staffIndexInPart,
+            measureIndex: measureIndex,
+            voiceIndex: voiceIndex,
+            elementIndex: elementIndex,
+            noteIndexInChord: noteIndexInChord,
+        ))
+    case "rest":
+        return .rest(scalarRestID(
+            partIndex: partIndex,
+            staffIndexInPart: staffIndexInPart,
+            measureIndex: measureIndex,
+            voiceIndex: voiceIndex,
+            elementIndex: elementIndex,
+        ))
+    case "tuplet":
+        return .tuplet(TupletID(
+            staff: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndexInPart),
+            measureIndex: measureIndex,
+            voiceIndex: voiceIndex,
+            startElementIndex: elementIndex,
+        ))
+    default:
+        return nil
+    }
+}
+
 func parseOptionalDuration(kind: Int, numerator: Int, denominator: Int) throws -> NoteDuration? {
     guard kind != 0 else { return nil }
     return try parseRequiredDuration(kind: kind, numerator: numerator, denominator: denominator)

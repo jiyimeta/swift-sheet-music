@@ -17,33 +17,40 @@ package enum AudioMidiBridge {}
 // MARK: - T18: Note pitch lookup + earliest item
 
 extension AudioMidiBridge {
+    package struct PitchAndStaff: Equatable {
+        package let pitch: Int
+        package let staffIndex: Int
+
+        package init(pitch: Int, staffIndex: Int) {
+            self.pitch = pitch
+            self.staffIndex = staffIndex
+        }
+    }
+
+    package static func pitchAndStaff(score: Score, noteID: NoteID) -> PitchAndStaff? {
+        guard let note = score[noteID],
+              let staffIndex = score.allStaves.firstIndex(where: { $0.address == noteID.staff })
+        else { return nil }
+        return PitchAndStaff(pitch: note.pitch, staffIndex: staffIndex)
+    }
+
     /// Returns `(pitch as UInt32) << 32 | (staffIndex as UInt32)`.
     /// Returns the sentinel `0xFFFFFFFFFFFFFFFF` (-1 as Int64) when
     /// the noteId no longer resolves.
     package static func pitchAndStaffOfNote(score: Score, noteId: NoteID) -> Int64 {
         let invalid = Int64(bitPattern: 0xFFFF_FFFF_FFFF_FFFF)
-        guard let staff = score[noteId.staff] else { return invalid }
-        let flatIdx = score.allStaves.firstIndex {
-            $0.address == noteId.staff
-        } ?? -1
-        guard flatIdx >= 0,
-              noteId.measureIndex < staff.measures.count
-        else { return invalid }
-        let measure = staff.measures[noteId.measureIndex]
-        guard noteId.voiceIndex < measure.voices.count else { return invalid }
-        let voice = measure.voices[noteId.voiceIndex]
-        guard noteId.elementIndex < voice.elements.count,
-              case let .chord(chord) = voice.elements[noteId.elementIndex],
-              noteId.noteIndexInChord < chord.notes.count
-        else { return invalid }
-        let pitch = UInt32(clamping: chord.notes[noteId.noteIndexInChord].pitch)
-        let staffIdx = UInt32(flatIdx)
+        guard let resolved = pitchAndStaff(score: score, noteID: noteId) else { return invalid }
+        let pitch = UInt32(clamping: resolved.pitch)
+        let staffIdx = UInt32(resolved.staffIndex)
         return Int64(bitPattern: (UInt64(pitch) << 32) | UInt64(staffIdx))
     }
 
+    package static func earliestItem(score: Score, ids: [ScoreItemID]) -> ScoreItemID? {
+        PlaybackTimeline(score: score).earliest(of: ids)
+    }
+
     package static func earliestOf(score: Score, ids: [ScoreItemID]) -> Data {
-        let timeline = PlaybackTimeline(score: score)
-        guard let earliest = timeline.earliest(of: ids) else { return Data() }
+        guard let earliest = earliestItem(score: score, ids: ids) else { return Data() }
         return ScoreItemIDCodec.encode(earliest)
     }
 }

@@ -22,14 +22,87 @@ into `cursorRectAtPlayerSeconds` and `playerSecondsAtPoint`. Likewise
 `gmInstrumentNames` + `gmInstrumentFamilies`, and `nativeCountIn` is
 `countInSeconds` + `renderCountInMetronomeMidi`.
 
+**Equivalent with a different boundary shape.** Android's tick-space
+introspection (`nativeEarliestOf` / `nativeItemEndTick` /
+`nativePitchAndStaffOfNote`) and keyboard navigation
+(`nativeStepMeasureCursor` / `nativeCursorAdvancedByBeats`) carry path and cursor
+codecs because Kotlin can author those payloads through a second Swift image.
+The wasm equivalents lower the same identities and positions to scalars instead;
+the browser has no second Swift image and must not author codec blobs.
+`itemEndTick` and `earliestOf` accept only notes and rests because those are the
+only item kinds the playback timeline records. Measure-step direction is also
+deliberately stricter at the untyped JavaScript boundary: wasm accepts only `0`
+or `1`, while Android treats any nonzero value as forward. This prevents a
+coerced `undefined` from silently becoming a valid forward command.
+
+**Deliberately not ported.** Android's `nativeInstrumentParams` /
+`nativeStaffParams` configure its synthesizer. Their synth content is already on
+wasm's `MixerStrip`, at the deduped part-by-instrument granularity used by
+`renderMidi`'s channel assignment. The genuinely missing per-staff metadata —
+track name, instrument long name, and staff group — is instead carried by
+`StaffDescriptor`.
+
 **Present only on one side.** wasm has the thirteen scalar edit-intent entry
 points, `editSessionState`, and the mixer surface, none of which Android needs —
 its host authors intents in a second Swift image and reads its own session
 directly. Android still has `nativeAnchorReferencePoint` / `nativeResolveAnchor`
-(freehand-ink anchoring for a specific integration), the tick-space introspection
-`nativeEarliestOf` / `nativeItemEndTick` / `nativePitchAndStaffOfNote`, the synth
-configuration `nativeInstrumentParams` / `nativeStaffParams`, and the keyboard
-navigation `nativeStepMeasureCursor` / `nativeCursorAdvancedByBeats`.
+for freehand-ink anchoring in a specific integration.
+
+## Glyph centring, and why a green parity run could not see it
+
+Until SMFT v3, Android and the browser placed ascent/descent-centred Bravura glyphs —
+articulations, fermatas, breath marks — about **1.2 staff spaces (~3 mm) below where
+Apple places them**. `SMuFLMetricsTableProvider` served Bravura glyph boxes from the
+`bravura.smft` table, but the v2 wire format had no ascent or descent fields, so
+`ascent` and `descent` fell back to `StubFontMetricsProvider` for **every** face,
+Bravura included:
+
+```
+stub      ascent = 0.85 × pointSize,  descent = 0.25 × pointSize
+          (ascent − descent) / 2  =  0.30 × pointSize
+          at the pointSize 4 "Bravura em" where 1 sp = 1 unit  →  1.2 sp
+
+Bravura   ascender 2012, descender −2012 at 1000 upm — hhea, OS/2 typo and win
+          metrics all agree, and CoreText reports the same symmetric pair
+          (ascent − descent) / 2  =  0
+```
+
+`(ascent − descent) / 2` is exactly what `ArticulationGlyphMetrics`,
+`FermataGlyphMetrics`, `BreathGlyphMetrics`, `ChordLineGeometry` and
+`LayoutElementShape` use to put a glyph's ink on a reference Y. Those call sites took
+the *bounding box* from the table and the *ascent/descent* from the stub, so one
+formula was fed by two different providers.
+
+v3 carries the face's ascent and descent in the table header, at the reference size
+like every other value. Three things write or read it and move together:
+`SMuFLMetricsTable.decode`, `Tools/GenBravuraMetrics` (the browser's table, generated
+from CoreText and committed to `Web/sheet-music-web/assets/bravura.smft` with a copy
+under `Tests/SheetMusicTests/Resources/` for WASI), and `BravuraMetricsBuilder.kt`
+(Android's, measured from `Paint.fontMetrics` at runtime). A v2 table is refused with
+`unsupportedVersion`, so a stale asset fails `installSMuFLMetrics` rather than
+engraving 1.2 sp off.
+
+**Nothing in the parity run catches this class of bug, and the reason is
+structural.** `Tools/GenWebFixtures` deliberately pins BOTH sides of the
+wasm-versus-Apple comparison to the table provider, so that byte equality means "the
+engines agree" rather than "the font stacks agree" — a sound goal whose side effect is
+that provider-induced differences cancel out by construction. A green parity run says
+nothing about whether the table provider agrees with CoreText. What does:
+`BravuraMetricsTableTests` pins the committed table, header included, against the
+CoreText provider it was generated from; `FontMetricsInstallTests` pins the installed
+provider's Bravura ascent and descent to 8.048 at the pointSize-4 em on every non-Apple
+shape; `SMuFLMetricsTableTests` pins the wire layout from hand-assembled bytes; and
+`LayoutElementShapeTests` / `SkylineAutoplaceTests`, whose exact-Y assertions on
+centred glyphs are the ones that would have failed, run on WebAssembly through
+`installFontMetrics` instead of staying behind the Apple-only guard.
+
+**Text faces are still the stub's, and that boundary is unchanged.** The table
+measures Bravura and nothing else, so Edwin's ascent, descent and leading come from
+`StubFontMetricsProvider` — a lyric row lands about 1.4 pt off, and a tempo mark's
+Edwin half about 0.7 pt, at the sizes those two suites use. The two assertions that
+pin such a Y stay behind `SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT` and say so at
+the line. Closing this means measuring a second face into the table, which the format
+has room for and no host has asked for.
 
 ## Supported surface
 
@@ -76,6 +149,19 @@ Use the compatibility APIs in `SheetMusicFoundation`:
 
 The SwiftLint `no_foundation_umbrella` rule is the fast source-level gate. A
 genuinely platform-scoped exception needs a local disable and an explanation.
+
+**`#if !os(Android)` does not mean "Apple only" — it is true on WASI.** An
+Apple-only test file guarded that way compiles on WebAssembly and fails with
+`no such module`, because the wasm test target builds against the portable graph
+and has no `SheetMusicPDF`, `SheetMusicUI`, `CoreGraphics`, `PDFKit` or the rest.
+There are now three non-Apple shapes, not two, and a guard written when there
+were two silently stops covering. Use `#if !os(Android) && !os(WASI)`, or
+`#if os(macOS)` where the file is genuinely macOS-bound.
+
+Nothing outside the wasm CI job catches this: `swift build` does not build test
+targets, and the Apple and Android jobs both compile the file successfully. It is
+worth a grep — `git grep -ln '^#if !os(Android)$' -- Tests/` — after landing a
+feature whose tests reach for Apple frameworks.
 
 ## The shadow stack is the smallest resource here
 
@@ -184,6 +270,53 @@ to.
 metronome loads and stays inaudible until it is moved to the front of the
 priority order, because the General MIDI bank underneath keeps answering the
 click notes.
+
+**An M4A without an edit list is 46 ms late, and every other measurement of it
+looks right.** An AAC-LC encoder emits 2,048 frames of analysis delay before the
+signal; the `elst` box in `trak/edts` is what hides them. Drop it and the file
+still decodes, still holds the right audio, and still reports a plausible
+duration — it just starts later than the WAV from the same render. Measure the
+leading silence, not only the length and the peak. `elst`'s `segment_duration`
+is in MOVIE units while its `media_time` is in MEDIA units; writing both in the
+sample rate declares a segment 44 times too long.
+
+## Audio export
+
+The browser writes WAV, AIFF and M4A. Every encoder is in this package —
+`src/playback/{wav,aiff,mp4}.ts` — so a host that replaces `SynthHost` still
+gets an export and the bytes stay this package's contract rather than a
+dependency's.
+
+M4A goes through WebCodecs' `AudioEncoder` (`mp4a.40.2`) and an ISOBMFF muxer
+written here. `MediaRecorder` will also produce `audio/mp4`, and is not used:
+it records a `MediaStream` in real time, so a five-minute score would take five
+minutes to export, and an `OfflineAudioContext` has no
+`createMediaStreamDestination` to record from in the first place. The split
+between `aac.ts` and `mp4.ts` is deliberate — `AudioEncoder` does not exist in
+Node, so everything that can be tested without a browser lives on the far side
+of a pure function taking frames and returning bytes.
+
+**MP3 cannot be written in a browser.** WebCodecs has no `mp3` encoder codec and
+`MediaRecorder` refuses `audio/mpeg` (measured on Chromium 151, both the
+Playwright build and system Chrome). Shipping a wasm LAME would put an LGPL
+dependency in an MIT package whose only runtime dependency today is the WASI
+shim — for a format a host can reach by running the exported WAV through an
+encoder of its own. `exportAudio({ format: "mp3" })` throws, the same state
+Android reaches when a device's MediaCodec has no MP3 encoder and Apple reaches
+below iOS 17 / macOS 14.
+
+**Bit depth and channel count are not exposed**, unlike `PCMOptions` on Apple
+and Android. The offline render is stereo, and 16-bit is what every consumer of
+a rendered score accepts; float32 WAVE doubles the file for headroom nothing
+here uses.
+
+**Chromium writes AIFF and cannot read it back.** `decodeAudioData` takes WAV,
+MP3, AAC/MP4, Ogg and FLAC; handed an AIFF it rejects with a null error. The
+file is fine — CoreAudio's `afinfo` reads the same bytes as a 2-channel
+44.1 kHz big-endian PCM of exactly the expected duration. So AIFF cannot be
+verified by round-tripping it through the browser the way WAV and M4A are;
+`Web/sheet-music-web/test/aiff.test.ts` pins it field by field in Node instead,
+and the browser test only checks that it reaches the picker and downloads.
 
 ## Editing
 

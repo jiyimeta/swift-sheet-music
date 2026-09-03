@@ -1,4 +1,4 @@
-#if !os(Android)
+#if !os(Android) && !os(WASI)
     import Foundation
 
     /// The vertical (stem / barline) seam re-scored with a matching that

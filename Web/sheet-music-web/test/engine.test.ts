@@ -593,3 +593,95 @@ describe("PlaybackEngine mixer", () => {
     expect(host.score.banks).toEqual([]);
   });
 });
+
+/**
+ * Format dispatch on the engine, with a synth that renders a known buffer.
+ *
+ * The bytes of each container are pinned by `test/wav.test.ts`,
+ * `test/aiff.test.ts` and `test/mp4.test.ts`; what is left here is that the
+ * engine picks the right one, reports what to call the file, and refuses the
+ * two things it cannot do. The M4A path needs `AudioEncoder`, so it belongs to
+ * `e2e/playback.spec.ts`.
+ */
+describe("PlaybackEngine export", () => {
+  let sheetMusic: SheetMusic;
+  let score: Score;
+
+  beforeAll(async () => {
+    sheetMusic = await loadSheetMusic({
+      bundleURL: new URL("../dist/", import.meta.url),
+      platform: "node",
+    });
+    expect(sheetMusic.installSMuFLMetrics(metricsBytes)).toBe(true);
+    score = sheetMusic.loadScore(
+      new Uint8Array(readFileSync(fixturePath("repeat.mscz"))),
+    );
+    score.layout({ pageWidthMM: 210, pageHeightMM: 297 });
+  });
+
+  afterAll(() => {
+    score?.release();
+  });
+
+  /** A host that renders a fixed tone, so the encoders have something to chew. */
+  class RenderingHost extends FakeHost {
+    lastRequest: { sampleRate: number; seconds: number } | null = null;
+
+    async renderOffline(options: { sampleRate: number; seconds: number }) {
+      this.lastRequest = options;
+      const frames = Math.max(1, Math.round(options.seconds * options.sampleRate));
+      const channels = [new Float32Array(frames), new Float32Array(frames)];
+      for (const channel of channels) channel.fill(0.5);
+      return {
+        numberOfChannels: 2,
+        length: frames,
+        sampleRate: options.sampleRate,
+        duration: frames / options.sampleRate,
+        getChannelData: (index: number) => channels[index]!,
+      } as unknown as AudioBuffer;
+    }
+  }
+
+  const engineWith = async (host: SynthHost) =>
+    PlaybackEngine.create({ score, host, scheduler: new ManualScheduler() });
+
+  it("writes WAVE by default, and says what to call the file", async () => {
+    const engine = await engineWith(new RenderingHost());
+    const result = await engine.exportAudio();
+    expect(String.fromCharCode(...result.bytes.subarray(0, 4))).toBe("RIFF");
+    expect(result.mimeType).toBe("audio/wav");
+    expect(result.fileExtension).toBe("wav");
+  });
+
+  it("writes AIFF when asked for it", async () => {
+    const engine = await engineWith(new RenderingHost());
+    const result = await engine.exportAudio({ format: "aiff" });
+    expect(String.fromCharCode(...result.bytes.subarray(0, 4))).toBe("FORM");
+    expect(result.fileExtension).toBe("aiff");
+  });
+
+  /** 2.0.0 shipped this, and it is still the common call. */
+  it("keeps exportWav as a shorthand returning raw bytes", async () => {
+    const engine = await engineWith(new RenderingHost());
+    const bytes = await engine.exportWav();
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(String.fromCharCode(...bytes.subarray(0, 4))).toBe("RIFF");
+  });
+
+  it("refuses MP3 without rendering anything", async () => {
+    const host = new RenderingHost();
+    const engine = await engineWith(host);
+    await expect(engine.exportAudio({ format: "mp3" })).rejects.toThrow(/mp3/i);
+    expect(host.lastRequest).toBeNull();
+  });
+
+  it("refuses to export through a host that cannot render offline", async () => {
+    const engine = await engineWith(new FakeHost());
+    await expect(engine.exportAudio()).rejects.toThrow(/offline/i);
+  });
+
+  it("reports which formats this environment can write", async () => {
+    const engine = await engineWith(new RenderingHost());
+    expect(await engine.supportedExportFormats()).toEqual(["wav", "aiff"]);
+  });
+});

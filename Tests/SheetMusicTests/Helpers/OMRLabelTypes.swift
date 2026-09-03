@@ -1,4 +1,4 @@
-#if !os(Android)
+#if !os(Android) && !os(WASI)
     import Foundation
 
     /// Page-label file format, schema v1 (spec §7.1). All coordinates are

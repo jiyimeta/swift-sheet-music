@@ -1,4 +1,4 @@
-#if !os(Android)
+#if !os(Android) && !os(WASI)
     @testable import SheetMusicCore
     @testable import SheetMusicPDF
 

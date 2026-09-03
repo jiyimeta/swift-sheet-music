@@ -125,6 +125,10 @@ import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.ScoreHandle
 import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
 
+// Measure the metrics table and install it before laying anything out.
+// Build it with the builder that ships in this AAR rather than caching
+// bytes across versions: the format is versioned, and the install returns
+// false for an older table rather than engraving off it.
 val table = BravuraMetricsBuilder.buildTable(context.assets)
 SheetMusicJNI.nativeInstallSMuFLMetrics(table)
 

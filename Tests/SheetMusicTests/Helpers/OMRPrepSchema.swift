@@ -1,4 +1,4 @@
-#if !os(Android)
+#if !os(Android) && !os(WASI)
     import Foundation
 
     /// One normalized page: the detector's input image plus its targets,
