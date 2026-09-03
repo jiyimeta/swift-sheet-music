@@ -39,7 +39,22 @@
                 let width = options.fixedLayoutWidth
                     ?? (geo.size.width - 32)
                 ScrollViewReader { proxy in
-                    ScrollView([.vertical, .horizontal]) {
+                    // A fixed layout width can exceed the window, so the
+                    // horizontal axis is needed to reach the right edge.
+                    // But enabling it unconditionally also makes
+                    // `autoScrollVerticalMac`'s `UnitPoint(x: 0.5, …)`
+                    // anchor (AutoScroll.swift:297) live: with both axes
+                    // scrollable, aligning the center of a ~1 pt-wide
+                    // anchor view against the viewport center resets the
+                    // horizontal offset to the leading edge on every
+                    // playback auto-scroll. So the horizontal axis is
+                    // added only in fixed-width mode, where reaching the
+                    // right edge matters more, and the default path keeps
+                    // the exact scrolling behavior it had before.
+                    ScrollView(
+                        options.fixedLayoutWidth == nil
+                            ? .vertical : [.vertical, .horizontal],
+                    ) {
                         if let doc = verticalDoc {
                             ZStack(alignment: .topLeading) {
                                 ScoreView(
