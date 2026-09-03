@@ -109,6 +109,12 @@ public struct EditRefusal: Sendable, Hashable {
         /// nothing. `SetStaffText` refuses rather than write one, the rule `.emptyRehearsalMarkText` states for
         /// a rehearsal mark, under its own name so a host's copy can say which field was empty.
         case emptyStaffText
+        /// A notation payload whose partner is named by ADJACENCY has no partner to name. `SetTremolo` with
+        /// `.between` needs the next timed element of the voice to be a chord — a rest, a bar line or the end of
+        /// the measure leaves the pair half-written, and a `.between` with no follower decodes back as no tremolo
+        /// (`MSCXDecoder+Voice.resolveTremoloPairs`). `SetGlissando` needs any later sounding chord in the voice,
+        /// since its destination is implicit. `at` names the element the write was asked for, not the missing one.
+        case noNextChord(at: VoiceElementID)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -183,6 +189,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.invalidInterval"
         case .emptyStaffText:
             "edit.emptyStaffText"
+        case .noNextChord:
+            "edit.noNextChord"
         case .unexpected:
             "edit.unexpected"
         }
@@ -259,6 +267,8 @@ public struct EditRefusal: Sendable, Hashable {
             "an interval is ±1 (unison) … ±9 (ninth) (got \(steps))"
         case .emptyStaffText:
             "staff text is empty"
+        case let .noNextChord(location):
+            "no following chord after \(location)"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
