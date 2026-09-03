@@ -106,6 +106,21 @@ and this project adheres to
 - A second parity replay chain (`editReplay-parity/`) exercises the twenty-eight new commands, in sixty-one
   steps, through the same cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain,
   byte-pinned like it.
+- Eleven spanner edit commands, the sixth group of the edit-command parity project:
+  `SetSlur`, `SetHairpin`, `SetPedal`, `SetVolta`, `SetOttava`, `SetTextLine`, `SetTrill`, `SetVibrato`,
+  `SetPalmMute`, `SetLetRing` and `RemoveSpanner`, all routed through one internal `SpannerPlacement` engine.
+  Spanners come in three storage forms: a slur lives in `Chord.spanners` at its start chord; a line spanner
+  is a `.spanner` `VoiceElement` immediately before its start chord (anchored by `AdjacentElementSlot`); a
+  volta is measure-granular at index 0 of the canonical staff's first measure. Both slur and line spanner
+  store `nextMeasuresOffset` and `nextFractionsOffset`, differing only in the tick they are computed from: a
+  slur's pair is computed from the end chord's ONSET, a line spanner's from the last element's END tick.
+  `Spanner.offsets(from:to:in:)` spells the `<next>` block the way MuseScore's writer does, pinned
+  byte-for-byte against MuseScore-authored fixtures. `RemoveSpanner` takes every slur entry of a chord (a
+  chord can carry an inner and an outer slur); a caller that means only one writes the `ReplaceVoiceElement`
+  directly. Restating a spanner of the same kind at the same position is refused as `duplicateSpanner` rather
+  than silently ignored, so a host toggles by pairing a `set…` with `RemoveSpanner`. `Chord.spanners` now
+  feeds `Score.stableFingerprint` by occupants, so a chord carrying no spanner hashes exactly as before. These
+  commands are public API; intents 62–72 and the codec are a later stage of work.
 
 ### Changed
 
