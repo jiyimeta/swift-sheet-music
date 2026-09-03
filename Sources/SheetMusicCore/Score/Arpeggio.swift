@@ -3,7 +3,8 @@ import SheetMusicFoundation
 /// Arpeggio attached to a chord. Spreads the chord's notes in time.
 /// C++: `mu::engraving::Arpeggio`.
 public struct Arpeggio: Sendable, Equatable {
-    /// Mscx subtype: 0=NORMAL, 1=UP, 2=DOWN, 3=UP_STRAIGHT, 4=DOWN_STRAIGHT, 5=BRACKET.
+    /// Mscx subtype, in MuseScore's own order (`TConv`'s `ARPEGGIO_TYPES`, `types/typesconv.cpp:2558-2565`):
+    /// 0=NORMAL, 1=UP, 2=DOWN, 3=BRACKET, 4=UP_STRAIGHT, 5=DOWN_STRAIGHT.
     public var subtype: Int
     /// `<timeStretch>` multiplier on the per-note offset. Defaults to 1.
     public var timeStretch: Double
@@ -32,8 +33,10 @@ public struct Arpeggio: Sendable, Equatable {
         elementProperties = ElementProperties(visible: visible)
     }
 
-    /// True for ascending arpeggios (lowest note first); false for DOWN/DOWN_STRAIGHT.
+    /// True for ascending arpeggios (lowest note first); false for DOWN (2) and DOWN_STRAIGHT (5) — the only two
+    /// of the six that spread downwards. A bracket (3) has no direction of its own and plays bottom-up like
+    /// NORMAL, which is what MuseScore's own renderer does with it.
     public var isAscending: Bool {
-        subtype != 2 && subtype != 4
+        subtype != 2 && subtype != 5
     }
 }

@@ -83,13 +83,22 @@ import Wirelet
 /// 47 = setBreath(SetBreathIntentWire)
 /// 48 = setJumps(SetJumpsIntentWire)
 /// 49 = setMarkers(SetMarkersIntentWire)
+/// 50 = setArticulation(SetArticulationIntentWire)
+/// 51 = setGraceNotes(SetGraceNotesIntentWire)
+/// 52 = setTremolo(SetTremoloIntentWire)
+/// 53 = setArpeggio(SetArpeggioIntentWire)
+/// 54 = setGlissando(SetGlissandoIntentWire)
+/// 55 = setDots(SetDotsIntentWire)
+/// 56 = setChordLine(SetChordLineIntentWire)
+/// 57 = setNoteParentheses(SetNoteParenthesesIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
 /// creation, 19…22 for M3 signature changes, 23…24 for M4 rehearsal marks, 25…28 for M6 drum note entry and 29
 /// for part renaming; 0…4 predate them all and must keep their indices and byte layout. Cases 30…34 were appended
 /// for the edit-command parity project's structural group (spec 2026-09-02). Cases 35…40 were appended for its
-/// range group. Cases 41…49 were appended for its mark group.
+/// range group. Cases 41…49 were appended for its mark group. Cases 50…57 were appended for its note / chord
+/// group.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -515,6 +524,86 @@ import Wirelet
 /// tag 1: measure  MeasureRefWire, see ReferenceCodecs.swift
 /// tag 2: markers  [MarkerWire] — the `SetJumpsIntentWire.jumps` framing
 /// ```
+///
+/// `SetArticulationIntentWire` (`setArticulation`'s payload):
+/// ```
+/// tag 1: location   VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: kind       string — `ChordArticulation.Kind.mscxToken`; an UNKNOWN token decodes to
+///                   `.unknown(subtype:)` rather than throwing, the deliberate exception to the raw-string rule
+/// tag 3: hasAnchor  u8, varint — 0 = no anchor written, 1 = `anchor` names one
+/// tag 4: anchor     u8, varint — 0 above / 1 below, else throws; 0 when hasAnchor == 0
+/// tag 5: present    u8, varint — 1 = write the mark, 0 = take every entry of that kind off
+/// ```
+///
+/// `GraceNoteWire` (one element of `GraceChordWire.notes`):
+/// ```
+/// tag 1: pitch       i32, zig-zag varint
+/// tag 2: tpc         i32, zig-zag varint
+/// tag 3: accidental  AccidentalWire — present flag + raw string
+/// ```
+///
+/// `GraceChordWire` (one element of `SetGraceNotesIntentWire.before` / `.after`):
+/// ```
+/// tag 1: graceType  string — `GraceType.mscxTag`; an unknown tag throws
+/// tag 2: duration   NoteDurationWire
+/// tag 3: notes      [GraceNoteWire] — the `SetJumpsIntentWire.jumps` framing, nested one level deeper; an empty
+///                   inner list is the tag with a zero length
+/// ```
+///
+/// `SetGraceNotesIntentWire` (`setGraceNotes`'s payload):
+/// ```
+/// tag 1: location  VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: before    [GraceChordWire]
+/// tag 3: after     [GraceChordWire]
+/// ```
+///
+/// `SetTremoloIntentWire` (`setTremolo`'s payload):
+/// ```
+/// tag 1: location     VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: hasTremolo   u8, varint — 0 = remove, 1 = write
+/// tag 3: subtype      u8, varint — `Tremolo.Subtype.rawValue`: 1 r8, 2 r16, 3 r32, 4 r64; else throws
+/// tag 4: span         u8, varint — 0 single / 1 between, else throws
+/// tag 5: strokeStyle  u8, varint — 0 default, 1 traditional, 2 z; else throws
+/// ```
+///
+/// `SetArpeggioIntentWire` (`setArpeggio`'s payload):
+/// ```
+/// tag 1: location     VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: hasArpeggio  u8, varint — 0 = remove, 1 = write
+/// tag 3: subtype      i32, zig-zag varint — 0…5, MuseScore's whole ARPEGGIO_TYPES table; else throws
+/// ```
+///
+/// `SetGlissandoIntentWire` (`setGlissando`'s payload):
+/// ```
+/// tag 1: location      NoteIDWire, see PathIDCodecs.swift
+/// tag 2: hasGlissando  u8, varint — 0 = remove, 1 = write
+/// tag 3: style         u8, varint — 0 chromatic, 1 diatonic, 2 whiteKeys, 3 blackKeys, 4 portamento; else throws
+/// tag 4: visualType    u8, varint — 0 straight / 1 wavy, else throws
+/// tag 5: easeIn        i32, zig-zag varint
+/// tag 6: easeOut       i32, zig-zag varint
+/// tag 7: hasText       u8, varint — an ABSENT text is not an empty one, so both shapes survive
+/// tag 8: text          string — "" when hasText == 0
+/// ```
+///
+/// `SetDotsIntentWire` (`setDots`'s payload):
+/// ```
+/// tag 1: location  VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: dots      i32, zig-zag varint — 0…3, else throws
+/// ```
+///
+/// `SetChordLineIntentWire` (`setChordLine`'s payload):
+/// ```
+/// tag 1: location    VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: hasLine     u8, varint — 0 = clear the chord's lines, 1 = write one
+/// tag 3: kind        u8, varint — `ChordLine.Kind.rawValue`: 1 fall, 2 doit, 3 plop, 4 scoop; else throws
+/// tag 4: isStraight  u8, varint
+/// ```
+///
+/// `SetNoteParenthesesIntentWire` (`setNoteParentheses`'s payload):
+/// ```
+/// tag 1: location     NoteIDWire, see PathIDCodecs.swift
+/// tag 2: parentheses  u8, varint — 0 none, 1 left, 2 right, 3 both; else throws
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -733,6 +822,30 @@ public enum EditIntentWire {
     /// Appended for the edit-command parity project's mark group (spec 2026-09-02) — index 49. Never renumber
     /// anything above it.
     case setMarkers(SetMarkersIntentWire)
+    /// Appended for the edit-command parity project's note / chord group (spec 2026-09-02) — index 50. Never
+    /// renumber anything above it.
+    case setArticulation(SetArticulationIntentWire)
+    /// Appended for the edit-command parity project's note / chord group (spec 2026-09-02) — index 51. Never
+    /// renumber anything above it.
+    case setGraceNotes(SetGraceNotesIntentWire)
+    /// Appended for the edit-command parity project's note / chord group (spec 2026-09-02) — index 52. Never
+    /// renumber anything above it.
+    case setTremolo(SetTremoloIntentWire)
+    /// Appended for the edit-command parity project's note / chord group (spec 2026-09-02) — index 53. Never
+    /// renumber anything above it.
+    case setArpeggio(SetArpeggioIntentWire)
+    /// Appended for the edit-command parity project's note / chord group (spec 2026-09-02) — index 54. Never
+    /// renumber anything above it.
+    case setGlissando(SetGlissandoIntentWire)
+    /// Appended for the edit-command parity project's note / chord group (spec 2026-09-02) — index 55. Never
+    /// renumber anything above it.
+    case setDots(SetDotsIntentWire)
+    /// Appended for the edit-command parity project's note / chord group (spec 2026-09-02) — index 56. Never
+    /// renumber anything above it.
+    case setChordLine(SetChordLineIntentWire)
+    /// Appended for the edit-command parity project's note / chord group (spec 2026-09-02) — index 57. Never
+    /// renumber anything above it.
+    case setNoteParentheses(SetNoteParenthesesIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -866,6 +979,26 @@ public enum EditIntentWire {
             self = .setJumps(SetJumpsIntentWire(measure: measure, jumps: jumps))
         case let .setMarkers(measure, markers):
             self = .setMarkers(SetMarkersIntentWire(measure: measure, markers: markers))
+        case let .setArticulation(location, kind, anchor, present):
+            self = .setArticulation(SetArticulationIntentWire(
+                location: location, kind: kind, anchor: anchor, present: present,
+            ))
+        case let .setGraceNotes(location, before, after):
+            self = .setGraceNotes(SetGraceNotesIntentWire(location: location, before: before, after: after))
+        case let .setTremolo(location, tremolo):
+            self = .setTremolo(SetTremoloIntentWire(location: location, tremolo: tremolo))
+        case let .setArpeggio(location, subtype):
+            self = .setArpeggio(SetArpeggioIntentWire(location: location, subtype: subtype))
+        case let .setGlissando(location, glissando):
+            self = .setGlissando(SetGlissandoIntentWire(location: location, glissando: glissando))
+        case let .setDots(location, dots):
+            self = .setDots(SetDotsIntentWire(location: location, dots: dots))
+        case let .setChordLine(location, kind, isStraight):
+            self = .setChordLine(SetChordLineIntentWire(location: location, kind: kind, isStraight: isStraight))
+        case let .setNoteParentheses(location, parentheses):
+            self = .setNoteParentheses(
+                SetNoteParenthesesIntentWire(location: location, parentheses: parentheses),
+            )
         }
     }
 
@@ -1038,6 +1171,32 @@ public enum EditIntentWire {
         case let .setMarkers(wire):
             let decoded = try wire.decoded()
             return .setMarkers(at: decoded.measure, markers: decoded.markers)
+        case let .setArticulation(wire):
+            let decoded = try wire.decoded()
+            return .setArticulation(
+                at: decoded.location, kind: decoded.kind, anchor: decoded.anchor, present: decoded.present,
+            )
+        case let .setGraceNotes(wire):
+            let decoded = try wire.decoded()
+            return .setGraceNotes(at: decoded.location, before: decoded.before, after: decoded.after)
+        case let .setTremolo(wire):
+            let decoded = try wire.decoded()
+            return .setTremolo(at: decoded.location, tremolo: decoded.tremolo)
+        case let .setArpeggio(wire):
+            let decoded = try wire.decoded()
+            return .setArpeggio(at: decoded.location, subtype: decoded.subtype)
+        case let .setGlissando(wire):
+            let decoded = try wire.decoded()
+            return .setGlissando(at: decoded.location, glissando: decoded.glissando)
+        case let .setDots(wire):
+            let decoded = try wire.decoded()
+            return .setDots(at: decoded.location, dots: decoded.dots)
+        case let .setChordLine(wire):
+            let decoded = try wire.decoded()
+            return .setChordLine(at: decoded.location, kind: decoded.kind, isStraight: decoded.isStraight)
+        case let .setNoteParentheses(wire):
+            let decoded = try wire.decoded()
+            return .setNoteParentheses(at: decoded.location, parentheses: decoded.parentheses)
         }
     }
 }

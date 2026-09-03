@@ -278,4 +278,51 @@ public enum EditIntent: Sendable, Equatable {
     /// Replace the markers of the measure column at `at` (on the canonical staff). Resolves to nothing to apply
     /// when the list is already equal.
     case setMarkers(at: MeasureRef, markers: [Marker])
+
+    // Appended for the edit-command parity project's note / chord group (spec 2026-09-02) — indices 50…57. Every
+    // payload here lives INSIDE the chord or note it addresses, so none of them moves an element index and none
+    // needs the adjacency machinery the mark group built.
+
+    /// Put `kind` on the chord at `at` (with `anchor`, or the encoder's default side when `nil`), or take every
+    /// entry of that kind off it with `present: false`. Other kinds are untouched. Resolves to nothing to apply
+    /// when the chord already reads exactly this way.
+    case setArticulation(
+        at: VoiceElementID, kind: ChordArticulation.Kind, anchor: ChordArticulation.Anchor?, present: Bool,
+    )
+
+    /// Replace BOTH grace lists of the chord at `at`. Two empty lists clear them. Resolves to nothing to apply
+    /// when both lists already read this way.
+    case setGraceNotes(at: VoiceElementID, before: [GraceChord], after: [GraceChord])
+
+    /// Write `tremolo` on the chord at `at`, or remove it with `nil`. A `.between` span is refused as
+    /// `.noNextChord` unless the next timed element of the voice is a sounding chord. Resolves to nothing to
+    /// apply when the chord already carries this exact tremolo.
+    case setTremolo(at: VoiceElementID, tremolo: Tremolo?)
+
+    /// Spread the chord at `at` with an arpeggio of `subtype` (0 normal, 1 up, 2 down, 3 bracket, 4 up-straight,
+    /// 5 down-straight), or remove it with `nil`. A write needs two notes (`.chordTooSmall`). Resolves to nothing
+    /// to apply when the subtype already matches.
+    ///
+    /// `subtype: Int?` rather than an `Arpeggio` because an intent is scalar by construction (see the type's own
+    /// doc comment) and `Arpeggio` carries `timeStretch`, `userLen1` and `elementProperties` the wire does not
+    /// encode. The planner builds `Arpeggio(subtype:)` with its defaults; a host that needs a stretched arpeggio
+    /// builds `SetArpeggio` directly.
+    case setArpeggio(at: VoiceElementID, subtype: Int?)
+
+    /// Write `glissando` on the note at `at`, or remove it with `nil`. A write is refused as `.noNextChord` when
+    /// no sounding chord follows in the voice. Resolves to nothing to apply when the note already reads this way.
+    case setGlissando(at: NoteID, glissando: Glissando?)
+
+    /// Set the augmentation dots (0…3) of the chord or rest at `at`, delegating the retiming to
+    /// `setChordDuration` / `setRestDuration`'s rules. Resolves to nothing to apply when the slot already carries
+    /// that many.
+    case setDots(at: VoiceElementID, dots: Int)
+
+    /// Write one chord line (fall / doit / plop / scoop, curved or straight) on the chord at `at`, or clear the
+    /// chord's lines with `nil`. Resolves to nothing to apply when the chord already carries exactly this one.
+    case setChordLine(at: VoiceElementID, kind: ChordLine.Kind?, isStraight: Bool)
+
+    /// Write the parentheses drawn around the notehead at `at`; `.none` removes them. Resolves to nothing to
+    /// apply when the note already reads this way.
+    case setNoteParentheses(at: NoteID, parentheses: NoteParentheses)
 }

@@ -27,9 +27,10 @@ import org.junit.runner.RunWith
  * result.
  *
  * Whether a step is an edit or an undo is derived from asset presence: index `i` has a `step-i.bin` when the host
- * applied an intent there, and has none when that step was an undo — indices 6, 17 and 36 in this chain, the undo
- * of the move-to-voice that step 7 then re-applies, the undo of the range delete that step 18 then re-applies, and
- * the undo of the marker write that step 37 then re-applies.
+ * applied an intent there, and has none when that step was an undo — indices 6, 17, 36 and 52 in this chain, the
+ * undo of the move-to-voice that step 7 then re-applies, the undo of the range delete that step 18 then re-applies,
+ * the undo of the marker write that step 37 then re-applies, and the undo of the glissando write that step 54 then
+ * re-applies.
  * That is a real, if implicit, coupling between the two sides; it is not part of the wire format itself, just this
  * harness's own convention for telling the two step kinds apart from a directory listing.
  */
@@ -37,7 +38,7 @@ import org.junit.runner.RunWith
 class EditSessionReplayParityTest {
     companion object {
         /** Must track `EditReplayScript.parity(staff:).count` on the host exactly — see the assertion below. */
-        private const val EXPECTED_STEP_COUNT = 40
+        private const val EXPECTED_STEP_COUNT = 61
 
         private const val ASSET_DIR = "editReplay-parity"
     }

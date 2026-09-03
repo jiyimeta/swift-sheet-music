@@ -105,6 +105,14 @@ own substantive logic.
 | `SetBreath` | not in the example — host command registry | sugar |
 | `SetJumps` | not in the example — host command registry | — |
 | `SetMarkers` | not in the example — host command registry | — |
+| `SetArticulation` | not in the example — host command registry | sugar |
+| `SetGraceNotes` | not in the example — host command registry | sugar |
+| `SetTremolo` | not in the example — host command registry | sugar |
+| `SetArpeggio` | not in the example — host command registry | sugar |
+| `SetGlissando` | not in the example — host command registry | sugar |
+| `SetDots` | not in the example — host command registry | sugar |
+| `SetChordLine` | not in the example — host command registry | sugar |
+| `SetNoteParentheses` | not in the example — host command registry | sugar |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -189,12 +197,34 @@ section above).
 
 ### Note / Chord properties (fields already exist on the model)
 
-- [ ] **`SetArpeggio`** *(sugar)* — `Chord.arpeggio`.
-- [ ] **`SetGlissando`** *(sugar)* — `Note.glissando`.
+This group is closed: intents 50–57 all landed with the edit-command
+parity project. Three model fields the v1 wire deliberately does not
+carry — `ChordLine.isWavy` and `Arpeggio.timeStretch` / `userLen1` —
+stay reachable only by building the command (or a
+`ReplaceVoiceElement`) directly.
+
+- [x] **`SetArticulation`** *(sugar)* — one articulation kind on a
+  chord, with its anchor; a write replaces every entry of that kind.
+  Implemented; see "A. Implemented" above.
+- [x] **`SetGraceNotes`** *(sugar)* — replaces both of a chord's
+  grace lists at once. Implemented; see "A. Implemented" above.
+- [x] **`SetTremolo`** *(sugar)* — `Chord.tremolo`; a `.between` span
+  needs a following chord. Implemented; see "A. Implemented" above.
+- [x] **`SetArpeggio`** *(sugar)* — `Chord.arpeggio`; a write needs
+  two notes to spread. Implemented; see "A. Implemented" above.
+- [x] **`SetGlissando`** *(sugar)* — `Note.glissando`; the
+  destination is the next chord, so a write needs one. Implemented;
+  see "A. Implemented" above.
 - [x] **`SetNoteHead`** *(sugar)* — `Note.headType` (cross / diamond /
   triangle / …). Implemented; see "A. Implemented" above.
-- [ ] **`SetDots`** *(sugar)* — augmentation dot (`.fraction(...)`);
-  thin wrapper over `SetChordDuration`.
+- [x] **`SetDots`** *(sugar)* — augmentation dots (0…3); thin wrapper
+  over `SetChordDuration` / `SetRestDuration`. Implemented; see
+  "A. Implemented" above.
+- [x] **`SetChordLine`** *(sugar)* — the jazz / brass inflection line
+  (fall / doit / plop / scoop), one per chord in v1. Implemented; see
+  "A. Implemented" above.
+- [x] **`SetNoteParentheses`** *(sugar)* — `Note.parentheses`;
+  `.none` is the clear. Implemented; see "A. Implemented" above.
 
 ### Range operations (composable from existing per-element
 commands + `CompositeEditCommand`)
@@ -239,10 +269,10 @@ layout breaks, chord symbols, spanners — already exists in
 `Sources/SheetMusicCore/Score/` and renders; it only lacked an edit
 command. That gap is closed by the edit-command parity project
 (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`):
-the structural group above landed first and the Range group
-(intents 35–40) second, and the remaining groups (Marks,
-Note/chord, Visibility, Spanners, Harmony — intents 41–73) are
-queued in that spec.
+the structural group above landed first, the Range group (intents
+35–40) second, the Marks group (41–49) third and the Note/chord
+group (50–57) fourth, and the remaining groups (Visibility,
+Spanners, Harmony — intents 58–73) are queued in that spec.
 
 What is left below genuinely needs a `Score` model extension before
 any edit command can make sense of it:

@@ -87,9 +87,25 @@ and this project adheres to
   without moving a byte.
 - `Measure.Flags` groups the seven measure-level fields MuseScore writes on the first staff only — layout breaks,
   markers, jumps, `startRepeat` / `endRepeatCount` — so they move, hash and hoist as one unit.
-- A second parity replay chain (`editReplay-parity/`) exercises the twenty new commands, in forty steps,
-  through the same cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain, byte-pinned
-  like it.
+- Eight note- and chord-level edit commands, closing the parity spec's Note/chord group: `SetArticulation`
+  (toggle one articulation kind on a chord), `SetGraceNotes` (replace both grace lists), `SetTremolo` (a
+  `.between` span is refused when the next timed element of the voice is not a chord — the follower is named by
+  adjacency, not stored), `SetArpeggio` (needs two notes to spread), `SetGlissando` (refused on a note with no
+  following chord, since the destination is implicit), `SetDots` (0–3, delegating the retiming to
+  `SetChordDuration` / `SetRestDuration`), `SetChordLine` and `SetNoteParentheses`. Each has an `EditIntent` case
+  and a wire payload (indices 50–57), so an Android or wasm host can relay them as bytes. `setArpeggio` travels
+  as a subtype alone and its planner compares only that, so re-sending a stretched arpeggio's subtype does not
+  reset its `timeStretch`; `Arpeggio.timeStretch` / `userLen1` and `ChordLine.isWavy` stay reachable only by
+  building the command directly.
+- `EditRefusal.Reason.noNextChord(at:)`, `.chordTooSmall(at:noteCount:)` and `.notDottable(at:)`. All three
+  carry the `VoiceElementID` they were asked about, and the first two gate the write only — clearing an
+  arpeggio or a glissando is never refused.
+- `NoteDuration.baseAndDots()`, the inverse of `dotted(_:)`, and `ChordArticulation.Kind.mscxToken` /
+  `init(mscxToken:)` — the MSCX token table moved into Core where the wire can reach it, with both MSCX paths
+  delegating to it.
+- A second parity replay chain (`editReplay-parity/`) exercises the twenty-eight new commands, in sixty-one
+  steps, through the same cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain,
+  byte-pinned like it.
 
 ### Changed
 
@@ -136,6 +152,10 @@ and this project adheres to
 - `SplitRest` remaps tuplet indices after a split. Splitting a rest inside a measure that also holds a tuplet
   later in the voice shifted every subsequent element right by one without adjusting the tuplets' stored index
   ranges, so a later `RemoveTuplet` or duration edit could target the wrong elements.
+- `Arpeggio.isAscending` treated MuseScore subtype 4 as a *down* arpeggio. MuseScore's order is `3` bracket, `4`
+  up-straight, `5` down-straight (`TConv`'s `ARPEGGIO_TYPES`), so a file using either straight arpeggio played its
+  notes in the wrong order — 4 top-down and 5 bottom-up. Subtypes 0–3, which is everything in this repo's
+  fixtures, are unaffected.
 
 ## [2.3.1] - 2026-08-31
 
