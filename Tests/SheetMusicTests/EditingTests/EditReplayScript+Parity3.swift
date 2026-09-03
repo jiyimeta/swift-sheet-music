@@ -29,7 +29,7 @@ extension EditReplayScript {
     ///   step of groups 1…6 addresses by index (steps 4 / 5 rewrite it wholesale by COLUMN and put it back). Each
     ///   line spanner is inserted immediately before that rest, so the rest is pushed one slot along per step and
     ///   the running index reads 0, 1, 2, 3, 4, 5, 6 — one place to check rather than seven. Step 87 removes the
-    ///   pedal, which is still element 0, and the rest falls back to element 5.
+    ///   pedal, which is still element 0, and the rest falls back to element 6.
     /// - **Bar 3 of the FLUTE (steps 84, 86)** is a measure rest carrying the group-3 jumps flag and the system
     ///   text step 27 wrote, neither of which is a voice element. `SetVolta` is measure-granular and writes on the
     ///   CANONICAL staff whatever the range names, at index 0 ahead of the bar's own signatures; step 85 undoes
@@ -102,7 +102,7 @@ extension EditReplayScript {
             // can commit.
             .undo,
             firstEnding,
-            // Step 87: take the pedal back off the cello (still element 0), shifting the rest back to element 5.
+            // Step 87: take the pedal back off the cello (still element 0), shifting the rest back to element 6.
             .intent(.removeSpanner(at: celloBar2(0), kind: .pedal)),
             // Step 88: a diminuendo over the tied pair — bar 2 went back to `[E4, E4]` at step 76 and nothing has
             // touched it since, so the head and tail are the fixture's elements 0 and 1 again. A second hairpin

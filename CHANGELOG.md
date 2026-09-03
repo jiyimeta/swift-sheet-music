@@ -118,7 +118,7 @@ and this project adheres to
 - `EditRefusal.ExpectedKind.engravable` (`SetElementVisible` aimed at a voice element that carries no
   `ElementProperties`) and `EditRefusal.Reason.notBeamed(at:)` (`SetBeamVisible` aimed at a chord that belongs
   to no beam group; a rest is `wrongElementKind(expected: .chord)`, as for `SetStemVisible`).
-- A second parity replay chain (`editReplay-parity/`) exercises the thirty-two new commands, in seventy-two
+- A second parity replay chain (`editReplay-parity/`) exercises the forty-three new commands, in eighty-eight
   steps, through the same cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain,
   byte-pinned like it.
 - Eleven spanner edit commands, the sixth group of the edit-command parity project:
