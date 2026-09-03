@@ -7,7 +7,7 @@ import SheetMusicFoundation
 ///
 /// Wire layout (little-endian, hand-rolled to match the Kotlin `RehearsalMarkCodec`
 /// decoder field-for-field — the same family of hand-written codecs as
-/// `SMuFLMetricsTable` / `PageBreaksWire`, NOT a `@WireFormat` macro framing):
+/// `FontMetricsTable` / `PageBreaksWire`, NOT a `@WireFormat` macro framing):
 /// ```
 /// i32 count
 /// count × {

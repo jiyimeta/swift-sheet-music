@@ -10,8 +10,8 @@
 # NOTICE.
 #
 # The renderer only rasterizes glyphs whose positions the engraver already
-# decided — the geometry comes from assets/bravura.smft, which
-# Tools/GenBravuraMetrics produces. These files change what the page looks like,
+# decided — the geometry comes from assets/sheet-music.smft, which
+# Tools/GenFontMetrics produces. These files change what the page looks like,
 # not where anything is.
 #
 # Requires woff2 (brew install woff2). The output is committed, so this runs only

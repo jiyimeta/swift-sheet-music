@@ -1103,16 +1103,18 @@ export class SheetMusic {
   }
 
   /**
-   * Install the Bravura glyph-metrics table. Ship
-   * `@jiyimeta/sheet-music-web/assets/bravura.smft`.
+   * Install the font-metrics table — Bravura's glyph geometry and Edwin's text
+   * metrics, in one payload. Ship
+   * `@jiyimeta/sheet-music-web/assets/sheet-music.smft`.
    *
    * Not optional in practice: without it the engraver falls back to rectangle
-   * approximations, the spacing is visibly wrong and articulations sit about
-   * 1.2 staff spaces off — but it still engraves, so nothing else will tell
-   * you.
+   * approximations, the spacing is visibly wrong, articulations sit about
+   * 1.2 staff spaces off and every lyric, harmony and rehearsal-mark frame is
+   * sized off bucket-average advances — but it still engraves, so nothing else
+   * will tell you.
    *
    * Returns `false` for an unreadable table, which includes one written for an
-   * older format version. Serve the `bravura.smft` from the version of this
+   * older format version. Serve the `sheet-music.smft` from the version of this
    * package you load rather than a copy pinned elsewhere.
    */
   installSMuFLMetrics(bytes: Uint8Array): boolean {

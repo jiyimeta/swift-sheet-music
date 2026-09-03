@@ -416,17 +416,17 @@ struct SkylineAutoplaceRegressionTests {
             abs((lyr.minY - dyn.maxY) - clearance) < 0.01,
             "gap \(lyr.minY - dyn.maxY) pt vs minDistance \(clearance)",
         )
-        // Apple-only: where the row lands is measured off EDWIN's ascent and
-        // descent, and `SMuFLMetricsTable` measures Bravura alone, so a text
-        // face still answers from `StubFontMetricsProvider` and puts the row
-        // 1.4 pt lower. The clearance above is the rule this test exists for
-        // and holds on every platform; this pins the fixture's own number.
-        #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
-            #expect(
-                abs((lyr.maxY - staffBottom) - system.sp * 5.13) < 1.0,
-                "lyric row \(lyr.maxY - staffBottom) pt below the staff",
-            )
-        #endif
+        // Where the row lands is measured off EDWIN's ascent and descent. That
+        // used to make this assertion Apple-only: the metrics table measured
+        // Bravura alone, so a text face answered from `StubFontMetricsProvider`
+        // and the row came out 1.4 pt lower on Android and in the browser.
+        // SMFT v4 measures Edwin too, so the number is the same on every shape
+        // — which is what the tolerance below is really pinning, the clearance
+        // above being the rule this test exists for.
+        #expect(
+            abs((lyr.maxY - staffBottom) - system.sp * 5.134) < 0.05,
+            "lyric row \(lyr.maxY - staffBottom) pt below the staff",
+        )
     }
 
     /// A melisma rule belongs to the verse row it underlines, even

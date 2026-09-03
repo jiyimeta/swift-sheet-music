@@ -2,7 +2,7 @@
  * Loads the two faces the renderer draws with.
  *
  * The engraver's geometry does not come from here — layout runs inside wasm
- * against the `bravura.smft` metrics table. These faces only rasterize glyphs
+ * against the `sheet-music.smft` metrics table. These faces only rasterize glyphs
  * whose positions were already decided, which is why the two failure modes look
  * nothing alike: a missing font gives tofu boxes in the right places, a missing
  * metrics table gives correct glyphs in the wrong ones.

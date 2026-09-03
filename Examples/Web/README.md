@@ -43,7 +43,7 @@ The engine needs all of `Web/sheet-music-web/assets/`:
 
 | file | what breaks without it |
 |---|---|
-| `bravura.smft` | Glyph metrics the engraver measures with. The score still renders, with visibly wrong spacing — nothing errors. |
+| `sheet-music.smft` | Font metrics the engraver measures with, Bravura's and Edwin's alike. The score still renders, with visibly wrong spacing — nothing errors. |
 | `bravura.woff2` | Music glyphs rasterize as tofu boxes, correctly positioned. |
 | `edwin-roman.woff2` | Titles and text fall back to a system face. |
 

@@ -98,6 +98,30 @@ review its diff because its heuristic can over-wrap portable tests.
 After editing `Package.swift`, verify both manifest shapes resolve: ordinary
 SwiftPM and a build with `SWIFT_SHEET_MUSIC_ANDROID=1`.
 
+### The font-metrics table needs a device
+
+`FontMetricsBuilder` measures Bravura and Edwin out of the caller's assets at
+runtime, so nothing on the host exercises it and a wrong measurement does not
+fail anything — it engraves, slightly wrongly, on Android alone.
+`FontMetricsBuilderTest` is an instrumented test that builds the table on a
+device and pins it against the one `Tools/GenFontMetrics` writes from CoreText:
+
+```bash
+Android/gradlew -p Android :SheetMusicAndroid:connectedDebugAndroidTest \
+    -Pandroid.testInstrumentationRunnerArguments.class=io.github.jiyimeta.sheetmusic.FontMetricsBuilderTest
+```
+
+It needs the two OFL fonts in the test APK; the module's `androidTest` asset
+source set borrows `SheetMusicComposeAndroid`'s copies rather than committing a
+third set. On an `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, uninstall the stale
+package first: `adb uninstall io.github.jiyimeta.sheetmusic.test`.
+
+**Do not reach for `Paint.hasGlyph` to ask what a face covers.** It consults the
+system fallback chain even for a `Typeface.createFromAsset` face — measured on a
+Pixel 8a it reports that Edwin has CJK, kana and emoji — and `getTextWidths` and
+`getTextPath` substitute the same way. The builder parses each font's own `cmap`
+for that reason, and the instrumented test pins the resulting glyph counts.
+
 ## Wirelet bootstrap and schema rules
 
 Gradle invokes `io.github.jiyimeta.wirelet` against SwiftPM's pinned checkout.

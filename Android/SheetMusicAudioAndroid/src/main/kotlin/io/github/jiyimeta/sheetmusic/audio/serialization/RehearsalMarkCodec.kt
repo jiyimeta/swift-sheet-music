@@ -10,8 +10,8 @@ import java.nio.ByteOrder
  * surfaced by [io.github.jiyimeta.sheetmusic.SheetMusicJNI.nativeRehearsalMarks].
  *
  * Unlike the wirelet TLV codecs, the Swift producer here hand-rolls fixed-width
- * **little-endian** fields (the same family as `SMuFLMetricsTable` /
- * `BravuraMetricsBuilder`), so this reader is hand-written field-for-field rather
+ * **little-endian** fields (the same family as `FontMetricsTable` /
+ * `FontMetricsBuilder`), so this reader is hand-written field-for-field rather
  * than going through `BinaryReader`:
  *
  * ```
