@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-09-03
+
 ### Added
 
 - **M4A and AIFF export in the browser.** `PlaybackEngine.exportAudio` takes a
