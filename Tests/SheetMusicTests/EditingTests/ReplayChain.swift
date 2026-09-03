@@ -43,22 +43,27 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
         minimumDistinctFingerprints: 10,
     )
 
-    /// The edit-command parity project's chain: eighty-eight steps over `EditingFixtures.parityFixture()` covering
-    /// intents 30…72 — the structural group in steps 1…10, the range group in steps 11…19, the mark group in
-    /// steps 20…40, the note / chord group in steps 41…61, the visibility group in steps 64…72 (prepared by
-    /// two `inputNote`s in steps 62 / 63) and the spanner group in steps 73…88 — which the standard chain
-    /// predates and therefore never encodes.
+    /// The edit-command parity project's chain: ninety-two steps over `EditingFixtures.parityFixture()` covering
+    /// every intent the project appended, 30…73 — the structural group in steps 1…10, the range group in steps
+    /// 11…19, the mark group in steps 20…40, the note / chord group in steps 41…61, the visibility group in steps
+    /// 64…72 (prepared by two `inputNote`s in steps 62 / 63), the spanner group in steps 73…88 and the harmony
+    /// group in steps 89…92 — which the standard chain predates and therefore never encodes.
+    ///
+    /// FROZEN, like `standard`, since intent 73 landed: the catalogue is complete, so this chain is never extended
+    /// and never re-recorded. A `step-N.bin`, `goldens.txt` line or `edit-replay-parity.json` byte that changes is
+    /// a wire or fingerprint regression to fix, not a golden to refresh — the same reading `EditReplayGoldenTests`
+    /// gives the standard chain. A future intent family starts a third chain.
     static let parity = ReplayChain(
         name: "parity",
         androidAssetDir: "editReplay-parity",
         webFixtureStem: "edit-replay-parity",
         fixture: { EditingFixtures.parityFixture() },
         steps: { EditReplayScript.parity(staff: $0) },
-        // Actual is 58 of 89 recorded values as of the spanner group (62-72) landing — the twelve the group adds
-        // on top of the 46 the visibility group left. The floor keeps the margin group 5 chose when it replaced a
-        // floor sitting exactly ON the actual: four below, tight enough that the spanner steps are load-bearing,
-        // loose enough not to flake on a harmless coincidence.
-        minimumDistinctFingerprints: 54,
+        // Actual is 61 of 93 recorded values as of the harmony group (73) landing and the chain freezing — the
+        // three the group adds on top of the 58 the spanner group left. The floor keeps the margin group 5 chose
+        // when it replaced a floor sitting exactly ON the actual: four below, tight enough that the harmony steps
+        // are load-bearing, loose enough not to flake on a harmless coincidence.
+        minimumDistinctFingerprints: 57,
     )
 
     static let all: [ReplayChain] = [.standard, .parity]

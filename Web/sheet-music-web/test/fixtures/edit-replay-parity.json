@@ -88,7 +88,11 @@
     "-3104815773684595182",
     "-211305378171379396",
     "-6838055365784561509",
-    "-8304424797561046301"
+    "-8304424797561046301",
+    "5627393158404315432",
+    "7374111504887655755",
+    "-8304424797561046301",
+    "-7074353330488640160"
   ],
   "steps" : [
     {
@@ -470,6 +474,22 @@
     },
     {
       "base64" : "Iz8KIAocCgwKBAgAEAAQBBgAIAASDAoECAAQABAEGAAgAhAD",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "GkkKFwoMCgQIABAAEAYYACACEAEaA0FtNyAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "G0kKGAoMCgQIABAAEAYYACAEEAEaBGJWSUkgAQ==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "F0kKFAoMCgQIABAAEAYYACAEEAAaACAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "GEkKFQoMCgQIABAAEAYYACACEAEaAUMgAA==",
       "op" : "intentBytes"
     }
   ]
