@@ -16,6 +16,11 @@ struct SetSlurTests {
         return refusal.reason
     }
 
+    private static func operation(of error: SheetMusicError?) -> String? {
+        guard case let .invalidEdit(refusal)? = error else { return nil }
+        return refusal.operation
+    }
+
     @Test("writes a slur on the start chord pointing at the end chord's onset, moving no index")
     func writes() throws {
         var score = EditingFixtures.parityFixture()
@@ -66,6 +71,8 @@ struct SetSlurTests {
                 .apply(to: &score)
         }
         #expect(Self.reason(of: lonely) == .noNextChord(at: Self.slot(2, 0)))
+        // `SpannerPlacement` serves eleven commands; the refusal has to name this one.
+        #expect(Self.operation(of: lonely) == "SetSlur")
         #expect(throws: SheetMusicError.self) {
             _ = try SetSlur(over: VoiceElementRange(start: Self.slot(9, 0), end: Self.slot(9, 1)))
                 .apply(to: &score)

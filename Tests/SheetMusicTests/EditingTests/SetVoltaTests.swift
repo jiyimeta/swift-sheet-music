@@ -16,6 +16,11 @@ struct SetVoltaTests {
         return refusal.reason
     }
 
+    private static func operation(of error: SheetMusicError?) -> String? {
+        guard case let .invalidEdit(refusal)? = error else { return nil }
+        return refusal.operation
+    }
+
     @Test("a volta over bars 1…2 of the CELLO lands at index 0 of the flute's bar 1 and spans two bars")
     func writesOnTheCanonicalStaff() throws {
         var score = EditingFixtures.parityFixture()
@@ -82,6 +87,8 @@ struct SetVoltaTests {
         #expect(Self.reason(of: twice) == .duplicateSpanner(
             at: VoiceElementID(staff: Self.flute, measureIndex: 1, voiceIndex: 0, elementIndex: 0), kind: .volta,
         ))
+        // `SpannerPlacement` serves eleven commands; the refusal has to name this one.
+        #expect(Self.operation(of: twice) == "SetVolta")
         #expect(throws: SheetMusicError.self) {
             _ = try SetVolta(
                 over: VoiceElementRange(start: Self.slot(Self.flute, 9), end: Self.slot(Self.flute, 9)),

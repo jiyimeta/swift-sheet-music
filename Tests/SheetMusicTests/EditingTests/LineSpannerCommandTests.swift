@@ -22,6 +22,11 @@ struct LineSpannerCommandTests {
         return refusal.reason
     }
 
+    private static func operation(of error: SheetMusicError?) -> String? {
+        guard case let .invalidEdit(refusal)? = error else { return nil }
+        return refusal.operation
+    }
+
     /// One line-spanner command under test. `large_tuple` (`.swiftlint.yml`) caps tuples at 4 elements, so this
     /// is a named-field `Sendable` struct rather than the 5-tuple a bare `arguments:` list would suggest — the
     /// shape every later row (Tasks 6, 8–13) reuses verbatim.
@@ -108,6 +113,9 @@ struct LineSpannerCommandTests {
         let shifted = VoiceElementRange(start: Self.slot(0, 2), end: Self.slot(0, 3))
         let twice = #expect(throws: SheetMusicError.self) { _ = try entry.build(shifted).apply(to: &score) }
         #expect(Self.reason(of: twice) == .duplicateSpanner(at: Self.slot(0, 2), kind: entry.kind), "\(entry.name)")
+        // Eleven commands share one engine, so the refusal has to name THIS command — not "setSpanner" for all
+        // of them — or a host cannot tell which of them the user pressed.
+        #expect(Self.operation(of: twice) == String(describing: type(of: entry.build(shifted))), "\(entry.name)")
         #expect(score == written, "\(entry.name): a refusal mutates nothing")
         let missing = VoiceElementRange(start: Self.slot(9, 0), end: Self.slot(9, 1))
         #expect(throws: SheetMusicError.self) { _ = try entry.build(missing).apply(to: &score) }

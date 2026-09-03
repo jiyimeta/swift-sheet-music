@@ -32,11 +32,16 @@ enum SpannerPlacement {
         case measureVolta
     }
 
+    /// Every case named, so a new `Spanner.Kind` has to choose rather than defaulting into `.voiceElement`.
+    /// `.glissando` and `.other` route there too, but only because the line-spanner path is where a caller
+    /// finds out they are not spanner commands at all: a glissando lives on `Note.glissando`, and `.other`
+    /// is the decoder's catch-all for a `<Spanner type>` this package does not model.
     static func storage(of kind: Spanner.Kind) -> Storage {
         switch kind {
         case .slur: .chordAnchored
         case .volta: .measureVolta
-        default: .voiceElement
+        case .hairpin, .pedal, .ottava, .textLine, .trill, .vibrato, .palmMute, .letRing: .voiceElement
+        case .glissando, .other: .voiceElement
         }
     }
 
@@ -56,63 +61,70 @@ enum SpannerPlacement {
     }
 
     /// The command that writes `template` over `range`, its offsets filled in. Throws every refusal.
-    static func add(_ template: Spanner, over range: VoiceElementRange, in score: Score) throws -> any EditCommand {
+    ///
+    /// `operation` is the refusing command's own type name — every caller passes `String(describing: Self.self)`,
+    /// the way `EditCommand.refused(_:)` stamps it for a command that refuses on its own. Eleven commands share
+    /// this engine, so a fixed literal here would tell a host "a spanner was refused" without saying which one.
+    static func add(
+        _ template: Spanner, over range: VoiceElementRange, in score: Score, operation: String,
+    ) throws -> any EditCommand {
         switch storage(of: template.kind) {
         case .measureVolta:
-            return try addVolta(template, over: range, in: score)
+            return try addVolta(template, over: range, in: score, operation: operation)
         case .chordAnchored, .voiceElement:
             guard let (anchor, last) = run(of: range, in: score) else {
-                throw refused(.targetNotFound(range.start), operation: "setSpanner")
+                throw refused(.targetNotFound(range.start), operation: operation)
             }
             let form = storage(of: template.kind)
             if form == .chordAnchored, anchor == last {
-                throw refused(.noNextChord(at: anchor), operation: "setSpanner")
+                throw refused(.noNextChord(at: anchor), operation: operation)
             }
             guard let endPosition = form == .chordAnchored ? score.onset(of: last) : score.end(of: last),
                   let offsets = Spanner.offsets(from: anchor, to: endPosition, in: score)
             else {
-                throw refused(.targetNotFound(last), operation: "setSpanner")
+                throw refused(.targetNotFound(last), operation: operation)
             }
-            try refuseDuplicate(template.kind, at: anchor, in: score)
+            try refuseDuplicate(template.kind, at: anchor, in: score, operation: operation)
             var spanner = template
             spanner.nextMeasuresOffset = offsets.measures
             spanner.nextFractionsOffset = offsets.fractions
             return form == .chordAnchored
-                ? try attach(spanner, to: anchor, in: score)
-                : try insert(spanner, before: anchor, in: score)
+                ? try attach(spanner, to: anchor, in: score, operation: operation)
+                : try insert(spanner, before: anchor, in: score, operation: operation)
         }
     }
 
-    /// The command that takes `kind` off the element at `location`. Throws every refusal.
+    /// The command that takes `kind` off the element at `location`. Throws every refusal. `operation` is the
+    /// refusing command's own type name — see `add(_:over:in:operation:)`.
     static func remove(
-        _ kind: Spanner.Kind, at location: VoiceElementID, in score: Score,
+        _ kind: Spanner.Kind, at location: VoiceElementID, in score: Score, operation: String,
     ) throws -> any EditCommand {
         guard let element = score[location] else {
-            throw refused(.targetNotFound(location), operation: "removeSpanner")
+            throw refused(.targetNotFound(location), operation: operation)
         }
         let form = storage(of: kind)
         switch (form, element) {
         case let (.chordAnchored, .chord(chord)):
             guard chord.spanners.contains(where: { $0.kind == kind }) else {
-                throw refused(.noSpannerAtLocation(location), operation: "removeSpanner")
+                throw refused(.noSpannerAtLocation(location), operation: operation)
             }
             var stripped = chord
             stripped.spanners.removeAll { $0.kind == kind }
             return AdjacentElementSlot.replacing(.chord(stripped), at: location.elementIndex, in: VoiceRef(location))
         case let (_, .spanner(spanner)) where form != .chordAnchored:
             guard spanner.kind == kind else {
-                throw refused(.noSpannerAtLocation(location), operation: "removeSpanner")
+                throw refused(.noSpannerAtLocation(location), operation: operation)
             }
             guard let command = AdjacentElementSlot.removing(
                 at: location.elementIndex, in: VoiceRef(location), of: score,
             ) else {
-                throw refused(.targetNotFound(location), operation: "removeSpanner")
+                throw refused(.targetNotFound(location), operation: operation)
             }
             return command
         default:
             throw refused(
                 .wrongElementKind(at: location, expected: form == .chordAnchored ? .chord : .spanner),
-                operation: "removeSpanner",
+                operation: operation,
             )
         }
     }
@@ -125,7 +137,7 @@ enum SpannerPlacement {
 extension SpannerPlacement {
     /// The volta's own resolution: first and last MEASURE of the range, both re-homed to the canonical staff.
     private static func addVolta(
-        _ template: Spanner, over range: VoiceElementRange, in score: Score,
+        _ template: Spanner, over range: VoiceElementRange, in score: Score, operation: String,
     ) throws -> any EditCommand {
         let bounds = [range.start.measureIndex, range.end.measureIndex]
         let first = bounds.min() ?? 0
@@ -136,26 +148,26 @@ extension SpannerPlacement {
         guard let staff = score[Score.canonicalStaff], staff.measures.indices.contains(last),
               score[voice: VoiceRef(anchor)] != nil
         else {
-            throw refused(.targetNotFound(anchor), operation: "setVolta")
+            throw refused(.targetNotFound(anchor), operation: operation)
         }
         let durations = staff.measures.effectiveMeasureDurations()
         let end = ScoreTickPosition(measure: last, tick: durations[last].ticks(division: score.division))
         guard let offsets = Spanner.offsets(from: anchor, to: end, in: score) else {
-            throw refused(.targetNotFound(anchor), operation: "setVolta")
+            throw refused(.targetNotFound(anchor), operation: operation)
         }
-        try refuseDuplicate(.volta, at: anchor, in: score)
+        try refuseDuplicate(.volta, at: anchor, in: score, operation: operation)
         var spanner = template
         spanner.nextMeasuresOffset = offsets.measures
         spanner.nextFractionsOffset = offsets.fractions
-        return try insert(spanner, at: 0, in: VoiceRef(anchor), of: score, reporting: anchor)
+        return try insert(spanner, at: 0, in: VoiceRef(anchor), of: score, reporting: anchor, operation: operation)
     }
 
     /// `Chord.spanners` grows by one; no element index moves, so this is a plain in-place replace.
     private static func attach(
-        _ spanner: Spanner, to anchor: VoiceElementID, in score: Score,
+        _ spanner: Spanner, to anchor: VoiceElementID, in score: Score, operation: String,
     ) throws -> any EditCommand {
         guard case let .chord(chord)? = score[anchor] else {
-            throw refused(.wrongElementKind(at: anchor, expected: .chord), operation: "setSpanner")
+            throw refused(.wrongElementKind(at: anchor, expected: .chord), operation: operation)
         }
         var updated = chord
         updated.spanners.append(spanner)
@@ -163,19 +175,20 @@ extension SpannerPlacement {
     }
 
     private static func insert(
-        _ spanner: Spanner, before anchor: VoiceElementID, in score: Score,
+        _ spanner: Spanner, before anchor: VoiceElementID, in score: Score, operation: String,
     ) throws -> any EditCommand {
         try insert(
             spanner, at: AdjacentElementSlot.insertionIndex(.before, of: anchor.elementIndex),
-            in: VoiceRef(anchor), of: score, reporting: anchor,
+            in: VoiceRef(anchor), of: score, reporting: anchor, operation: operation,
         )
     }
 
     private static func insert(
-        _ spanner: Spanner, at index: Int, in voice: VoiceRef, of score: Score, reporting anchor: VoiceElementID,
+        _ spanner: Spanner, at index: Int, in voice: VoiceRef, of score: Score,
+        reporting anchor: VoiceElementID, operation: String,
     ) throws -> any EditCommand {
         guard let command = AdjacentElementSlot.inserting(.spanner(spanner), at: index, in: voice, of: score) else {
-            throw refused(.targetNotFound(anchor), operation: "setSpanner")
+            throw refused(.targetNotFound(anchor), operation: operation)
         }
         return command
     }
@@ -184,7 +197,9 @@ extension SpannerPlacement {
     /// chord's own array; for a line kind, the attachment RUN before the anchor (§3.4's group-3 amendment); for a
     /// volta, the head of the canonical staff's bar. So a hairpin written by step N is found by step N+1 even
     /// though it shifted the chord's index.
-    private static func refuseDuplicate(_ kind: Spanner.Kind, at anchor: VoiceElementID, in score: Score) throws {
+    private static func refuseDuplicate(
+        _ kind: Spanner.Kind, at anchor: VoiceElementID, in score: Score, operation: String,
+    ) throws {
         let found: Bool
         switch storage(of: kind) {
         case .chordAnchored:
@@ -200,7 +215,7 @@ extension SpannerPlacement {
             } ?? false
         }
         if found {
-            throw refused(.duplicateSpanner(at: anchor, kind: kind), operation: "setSpanner")
+            throw refused(.duplicateSpanner(at: anchor, kind: kind), operation: operation)
         }
     }
 }

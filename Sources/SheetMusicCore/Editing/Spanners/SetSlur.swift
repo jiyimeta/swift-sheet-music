@@ -26,6 +26,9 @@ public struct SetSlur: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
-        try SpannerPlacement.add(Spanner(kind: .slur, rawType: "Slur"), over: range, in: score).apply(to: &score)
+        let template = Spanner(kind: .slur, rawType: Spanner.Kind.slur.rawValue)
+        return try SpannerPlacement.add(
+            template, over: range, in: score, operation: String(describing: Self.self),
+        ).apply(to: &score)
     }
 }

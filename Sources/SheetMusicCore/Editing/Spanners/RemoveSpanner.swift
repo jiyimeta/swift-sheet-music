@@ -31,6 +31,8 @@ public struct RemoveSpanner: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
-        try SpannerPlacement.remove(kind, at: location, in: score).apply(to: &score)
+        try SpannerPlacement.remove(
+            kind, at: location, in: score, operation: String(describing: Self.self),
+        ).apply(to: &score)
     }
 }

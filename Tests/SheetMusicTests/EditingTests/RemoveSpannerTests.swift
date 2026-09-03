@@ -14,6 +14,11 @@ struct RemoveSpannerTests {
         return refusal.reason
     }
 
+    private static func operation(of error: SheetMusicError?) -> String? {
+        guard case let .invalidEdit(refusal)? = error else { return nil }
+        return refusal.operation
+    }
+
     @Test("removes a line spanner element, shifting the later indices back, and undo restores them")
     func removesLineSpanner() throws {
         var score = EditingFixtures.parityFixture()
@@ -27,14 +32,17 @@ struct RemoveSpannerTests {
         #expect(score == written)
     }
 
-    @Test("removes every slur entry of the chord, leaving the chord itself alone")
+    @Test("removes every slur entry of the chord, leaving the chord's other spanners and the chord itself alone")
     func removesSlurs() throws {
         var score = EditingFixtures.parityFixture()
         guard case var .chord(head) = score.parts[0].staves[0].measures[0].voices[0].elements[1] else {
             Issue.record("expected the C4"); return
         }
+        // A non-slur entry sits between the two slurs: the removal filters by kind, it does not empty the array.
+        let survivor = Spanner(kind: .hairpin, rawType: "HairPin", nextMeasuresOffset: 2)
         head.spanners = [
             Spanner(kind: .slur, rawType: "Slur"),
+            survivor,
             Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 1),
         ]
         score.parts[0].staves[0].measures[0].voices[0].elements[1] = .chord(head)
@@ -42,7 +50,7 @@ struct RemoveSpannerTests {
         guard case let .chord(stripped) = score.parts[0].staves[0].measures[0].voices[0].elements[1] else {
             Issue.record("expected the C4"); return
         }
-        #expect(stripped.spanners.isEmpty)
+        #expect(stripped.spanners == [survivor])
         #expect(stripped.notes == head.notes)
         #expect(stripped.duration == head.duration)
     }
@@ -66,6 +74,8 @@ struct RemoveSpannerTests {
             _ = try RemoveSpanner(at: Self.slot(0, 1), kind: .hairpin).apply(to: &score)
         }
         #expect(Self.reason(of: wrongKind) == .noSpannerAtLocation(Self.slot(0, 1)))
+        // `SpannerPlacement` serves eleven commands; the refusal has to name this one.
+        #expect(Self.operation(of: wrongKind) == "RemoveSpanner")
         let noSlur = #expect(throws: SheetMusicError.self) {
             _ = try RemoveSpanner(at: Self.slot(0, 2), kind: .slur).apply(to: &score)
         }
