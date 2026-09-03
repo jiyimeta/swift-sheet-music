@@ -279,4 +279,70 @@ struct ScoreFingerprintTests {
         ])]
         #expect(markedA.stableFingerprint != markedB.stableFingerprint)
     }
+
+    // MARK: - Chord-anchored spanners (Task 2, group 6)
+
+    private static func slurred(_ score: Score) -> Score {
+        var score = score
+        guard case var .chord(chord) = score.parts[0].staves[0].measures[0].voices[0].elements[1] else {
+            return score
+        }
+        chord.spanners = [Spanner(
+            kind: .slur, rawType: "Slur",
+            nextMeasuresOffset: 0, nextFractionsOffset: Fraction(numerator: 1, denominator: 2),
+        )]
+        score.parts[0].staves[0].measures[0].voices[0].elements[1] = .chord(chord)
+        return score
+    }
+
+    /// The by-occupants half of the §2.5 rule, and the reason every committed golden survives this change: a
+    /// score whose chords carry no spanner must hash to what it hashed BEFORE `Chord.spanners` entered the walk.
+    /// The literal is the value `EditingFixtures.parityFixture()` produced on `main` at the time this landed —
+    /// re-read it from the failing test's output, do not invent it, and never "update" it to make a later change
+    /// pass (that is exactly the regression this pin exists to catch).
+    @Test("a score with no chord-anchored spanner hashes as it did before spanners entered the walk")
+    func defaultsHashUnchanged() {
+        #expect(EditingFixtures.parityFixture().stableFingerprint == 7_849_725_953_743_034_330)
+        #expect(EditingFixtures.replayFixture().stableFingerprint == 5_905_105_043_072_328_748)
+    }
+
+    @Test("adding a chord-anchored slur moves the fingerprint; removing it restores the old value")
+    func slurIsVisible() {
+        let plain = EditingFixtures.parityFixture()
+        let withSlur = Self.slurred(plain)
+        #expect(withSlur.stableFingerprint != plain.stableFingerprint)
+        var restored = withSlur
+        guard case var .chord(chord) = restored.parts[0].staves[0].measures[0].voices[0].elements[1] else {
+            Issue.record("expected the chord"); return
+        }
+        chord.spanners = []
+        restored.parts[0].staves[0].measures[0].voices[0].elements[1] = .chord(chord)
+        #expect(restored.stableFingerprint == plain.stableFingerprint)
+    }
+
+    @Test("two chord-anchored spanners that differ only in their end offsets hash differently")
+    func offsetsAreVisible() {
+        var a = Self.slurred(EditingFixtures.parityFixture())
+        guard case var .chord(chord) = a.parts[0].staves[0].measures[0].voices[0].elements[1] else {
+            Issue.record("expected the chord"); return
+        }
+        let b = a
+        chord.spanners[0].nextFractionsOffset = Fraction(numerator: 1, denominator: 4)
+        a.parts[0].staves[0].measures[0].voices[0].elements[1] = .chord(chord)
+        #expect(a.stableFingerprint != b.stableFingerprint)
+    }
+
+    @Test("the same slur on a different chord hashes differently")
+    func positionIsVisible() {
+        var moved = EditingFixtures.parityFixture()
+        guard case var .chord(chord) = moved.parts[0].staves[0].measures[0].voices[0].elements[2] else {
+            Issue.record("expected the second chord"); return
+        }
+        chord.spanners = [Spanner(
+            kind: .slur, rawType: "Slur",
+            nextMeasuresOffset: 0, nextFractionsOffset: Fraction(numerator: 1, denominator: 2),
+        )]
+        moved.parts[0].staves[0].measures[0].voices[0].elements[2] = .chord(chord)
+        #expect(moved.stableFingerprint != Self.slurred(EditingFixtures.parityFixture()).stableFingerprint)
+    }
 }

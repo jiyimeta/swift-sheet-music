@@ -27,6 +27,7 @@ public struct EditRefusal: Sendable, Hashable {
         /// An element that carries `ElementProperties`, and so has a `<visible>` flag to write. Every
         /// `VoiceElement` case except `.measureRepeat` and `.locationShift`.
         case engravable
+        case spanner
     }
 
     public enum Reason: Sendable, Hashable {
@@ -136,6 +137,14 @@ public struct EditRefusal: Sendable, Hashable {
         /// chord. Gates the write only — SHOWING (`visible == true`) an ungrouped chord is never refused, so a flag
         /// orphaned by a group dissolving out from under it stays clearable.
         case notBeamed(at: VoiceElementID)
+        /// A spanner of this kind already begins at this position. Spec §3.2 makes "already there" a refusal
+        /// rather than a `.nothingToApply`, which is what makes each `set…Spanner` intent idempotent in the
+        /// restating sense without the planner having to compare payloads it cannot fully see.
+        case duplicateSpanner(at: VoiceElementID, kind: Spanner.Kind)
+        /// `RemoveSpanner` found no spanner of the kind it was asked for: a chord with no slur in
+        /// `Chord.spanners`, or a `.spanner` element of a different kind. Distinct from `.targetNotFound` for the
+        /// reason `.cannotRemoveLastPart` is — the element IS there, it just carries nothing to remove.
+        case noSpannerAtLocation(VoiceElementID)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -218,6 +227,10 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.notDottable"
         case .notBeamed:
             "edit.notBeamed"
+        case .duplicateSpanner:
+            "edit.duplicateSpanner"
+        case .noSpannerAtLocation:
+            "edit.noSpannerAtLocation"
         case .unexpected:
             "edit.unexpected"
         }
@@ -302,6 +315,10 @@ public struct EditRefusal: Sendable, Hashable {
             "element at \(location) has no dotted spelling for that dot count"
         case let .notBeamed(location):
             "element at \(location) is not in a beam group"
+        case let .duplicateSpanner(location, kind):
+            "a \(kind.rawValue) spanner already begins at \(location)"
+        case let .noSpannerAtLocation(location):
+            "no spanner to remove at \(location)"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
@@ -325,6 +342,8 @@ extension EditRefusal.ExpectedKind {
             "a clef"
         case .engravable:
             "an element that carries visibility"
+        case .spanner:
+            "a spanner"
         }
     }
 }

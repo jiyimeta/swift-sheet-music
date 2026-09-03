@@ -15,8 +15,9 @@ public struct InsertMeasure: EditCommand {
     let restoredIncomingVoice0: [[Voice]]?
     /// Also inverse-only: addresses of spanners whose span *ended exactly at* the deleted measure, so the
     /// generic insertion predicate can't tell they need re-incrementing — see
-    /// `MeasureStructure.adjustSpannerOffsets(forDeletionAt:)`.
-    let endpointSpannersToRestore: [VoiceElementID]
+    /// `MeasureStructure.adjustSpannerOffsets(forDeletionAt:)`. Each names the exact slot that was shrunk,
+    /// chord-anchored ones included, so a chord carrying two slurs re-widens only the one that ended there.
+    let endpointSpannersToRestore: [MeasureStructure.SpannerAddress]
 
     public init(measureIndex: Int) {
         self.measureIndex = measureIndex
@@ -29,7 +30,7 @@ public struct InsertMeasure: EditCommand {
         measureIndex: Int,
         restoredContents: MeasureSlice,
         restoredIncomingVoice0: [[Voice]]?,
-        endpointSpannersToRestore: [VoiceElementID],
+        endpointSpannersToRestore: [MeasureStructure.SpannerAddress],
     ) {
         self.measureIndex = measureIndex
         self.restoredContents = restoredContents
@@ -63,12 +64,7 @@ public struct InsertMeasure: EditCommand {
                 }
             }
             insert(contents, into: &score)
-            for address in endpointSpannersToRestore {
-                guard case let .spanner(spanner) = score[address] else { continue }
-                var restored = spanner
-                restored.nextMeasuresOffset += 1
-                score[address] = .spanner(restored)
-            }
+            restoreEndpointSpanners(in: &score)
             return DeleteMeasure(measureIndex: measureIndex)
         }
 
@@ -93,6 +89,28 @@ public struct InsertMeasure: EditCommand {
         }
         insert(column, into: &score)
         return DeleteMeasure(measureIndex: measureIndex)
+    }
+
+    /// Re-widens the spanners the paired delete shrunk at the boundary, each through the storage form its
+    /// address names — `MeasureStructure.adjustSpannerOffsets(forDeletionAt:)` walks both forms, so this
+    /// inverse has to write back to both. The addresses are all anchored *before* the reinserted column, so
+    /// they are still current after the insert.
+    private func restoreEndpointSpanners(in score: inout Score) {
+        for address in endpointSpannersToRestore {
+            guard let element = score[address.id] else { continue }
+            switch (element, address.spannerIndex) {
+            case let (.spanner(spanner), nil):
+                var restored = spanner
+                restored.nextMeasuresOffset += 1
+                score[address.id] = .spanner(restored)
+            case let (.chord(chord), slot?) where chord.spanners.indices.contains(slot):
+                var restored = chord
+                restored.spanners[slot].nextMeasuresOffset += 1
+                score[address.id] = .chord(restored)
+            default:
+                continue
+            }
+        }
     }
 
     private func insert(_ column: MeasureSlice, into score: inout Score) {

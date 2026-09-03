@@ -101,6 +101,8 @@ struct EditRefusalTests {
             .chordTooSmall(at: voiceID, noteCount: 1),
             .notDottable(at: voiceID),
             .notBeamed(at: voiceID),
+            .duplicateSpanner(at: voiceID, kind: .hairpin),
+            .noSpannerAtLocation(voiceID),
             .unexpected(description: "boom"),
         ]
     }

@@ -101,6 +101,55 @@ struct DeleteMeasureTests {
         #expect(score == original)
     }
 
+    /// The `nextMeasuresOffset` of every slur on the chord this suite parks at bar 0, element 2.
+    private func slurOffsets(in score: Score) -> [Int] {
+        guard case let .chord(chord) = score.parts[0].staves[0].measures[0].voices[0].elements[2] else { return [] }
+        return chord.spanners.map(\.nextMeasuresOffset)
+    }
+
+    /// Parks a chord carrying `offsets`-worth of slurs at bar 0, element 2 (the bar's measure rest slot).
+    private func scoreWithChordSlurs(_ offsets: [Int]) -> Score {
+        var score = threeBarScore()
+        var head = Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])
+        head.spanners = offsets.map {
+            Spanner(kind: .slur, rawType: Spanner.Kind.slur.rawValue, nextMeasuresOffset: $0)
+        }
+        score.parts[0].staves[0].measures[0].voices[0].elements[2] = .chord(head)
+        return score
+    }
+
+    /// The chord-anchored twin of `deleteEndpointSpannerUndo`: the same boundary, but the slur lives in
+    /// `Chord.spanners` rather than as a `.spanner` voice element, so the restore has to reach INTO the chord.
+    @Test("undo restores a chord-anchored slur that ended exactly at the deleted measure")
+    func deleteEndpointChordSlurUndo() throws {
+        var score = scoreWithChordSlurs([2])
+        let original = score
+
+        let inverse = try DeleteMeasure(measureIndex: 2).apply(to: &score)
+        #expect(slurOffsets(in: score) == [1])
+
+        _ = try inverse.apply(to: &score)
+        #expect(slurOffsets(in: score) == [2])
+        #expect(score == original)
+    }
+
+    /// A chord can carry an inner and an outer slur, and only one of them may be the endpoint — so the
+    /// restore has to name the SLOT, not just the chord. A restore that re-widened the whole chord would
+    /// leave the inner slur at 2 instead of 1.
+    @Test("only the chord slur that ended at the deleted measure is re-widened")
+    func deleteEndpointChordSlurAmongSiblings() throws {
+        var score = scoreWithChordSlurs([1, 2])
+        let original = score
+
+        let inverse = try DeleteMeasure(measureIndex: 2).apply(to: &score)
+        // The inner slur's span never reached bar 2, so the delete left it alone; the outer one ended there.
+        #expect(slurOffsets(in: score) == [1, 1])
+
+        _ = try inverse.apply(to: &score)
+        #expect(slurOffsets(in: score) == [1, 2])
+        #expect(score == original)
+    }
+
     @Test("delete → undo is exact for a score whose systemMeasures never tracked measures")
     func deleteUndoWithEmptySystemMeasures() throws {
         var score = EditingFixtures.twoMeasuresOfQuarterRests()

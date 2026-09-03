@@ -121,6 +121,25 @@ and this project adheres to
 - A second parity replay chain (`editReplay-parity/`) exercises the thirty-two new commands, in seventy-two
   steps, through the same cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain,
   byte-pinned like it.
+- Eleven spanner edit commands, the sixth group of the edit-command parity project:
+  `SetSlur`, `SetHairpin`, `SetPedal`, `SetVolta`, `SetOttava`, `SetTextLine`, `SetTrill`, `SetVibrato`,
+  `SetPalmMute`, `SetLetRing` and `RemoveSpanner`, all routed through one internal `SpannerPlacement` engine.
+  Spanners come in three storage forms: a slur lives in `Chord.spanners` at its start chord; a line spanner
+  is a `.spanner` `VoiceElement` immediately before its start chord (anchored by `AdjacentElementSlot`); a
+  volta is measure-granular, at index 0 of the FIRST MEASURE OF THE RANGE on the canonical staff, whatever
+  staff the range names. All three store `nextMeasuresOffset` and `nextFractionsOffset`, differing only in
+  the tick they are computed from: a slur's pair is computed from the end chord's ONSET, a line spanner's
+  from the last element's END tick, a volta's from the END of the range's last measure.
+  `Spanner.offsets(from:to:in:)` spells the `<next>` block the way MuseScore's writer does, pinned
+  byte-for-byte against MuseScore-authored fixtures. `RemoveSpanner` takes every slur entry of a chord (a
+  chord can carry an inner and an outer slur); a caller that means only one writes the `ReplaceVoiceElement`
+  directly. Restating a spanner of the same kind at the same position is refused as `duplicateSpanner` rather
+  than silently ignored, so a host toggles by pairing a `set…` with `RemoveSpanner` — with one asymmetry to
+  know about: `SetVolta` re-homes any range to the canonical staff, while `RemoveSpanner` is staff-literal,
+  so the paired removal has to address the canonical staff (`SetVolta.affectedLocation`) rather than the
+  staff the volta was written over. `Chord.spanners` now feeds `Score.stableFingerprint` by occupants, so a
+  chord carrying no spanner hashes exactly as before. These commands are public API; intents 62–72 and the
+  codec are a later stage of work.
 
 ### Changed
 
@@ -181,6 +200,15 @@ and this project adheres to
   popped their entry off the stack before applying it, so a throwing inverse vanished while the score stayed
   untouched, desynchronizing the undo history from the score for every undo/redo after it. Both now apply first
   and pop only on success.
+- `InsertMeasure` / `DeleteMeasure` left a chord-anchored slur's `nextMeasuresOffset` stale.
+  `MeasureStructure.adjustSpannerOffsets` walked `.spanner` voice elements only, so a slur — whose begin side
+  lives in `Chord.spanners`, not as its own voice element — kept a stale offset across an insertion or deletion
+  inside its span, leaving it pointing at the wrong end chord; a delete whose span ENDED at the deleted bar also
+  came back one measure short from undo. The walk now moves both shapes by the same rule, and the undo restore
+  addresses the exact `Chord.spanners` slot that was shrunk, so a chord carrying an inner and an outer slur
+  re-widens only the one that ended there. This covers the two measure-structure commands only:
+  `SetTimeSignature`'s re-bar path still re-derives `.spanner` offsets alone and does not yet carry
+  chord-anchored spanners across a re-bar.
 
 ## [2.3.1] - 2026-08-31
 

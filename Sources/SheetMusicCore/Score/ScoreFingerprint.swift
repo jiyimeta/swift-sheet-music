@@ -17,9 +17,10 @@ import SheetMusicFoundation
 ///   `Note.visible`. Still not covered: `fret` and `string` (the tablature position, a rendering of the pitch
 ///   this walk already covers) and `guitarBend` / `guitarBendBack` (import-only notation, set by no edit
 ///   command).
-/// - `Chord.spanners` is NOT hashed — a slur (or any other spanner) that BEGINS on a chord travels in that
-///   array, so adding or removing one leaves this digest unchanged. No command touches it today; group 6's
-///   `SetSlur` / `RemoveSpanner` must add it here as part of landing, or the parity chain will not see them.
+/// - `Chord.spanners` IS covered, by occupants: a chord carrying one or more spanner begins (a slur, in
+///   practice) feeds tag 32, the count and each spanner's identity via `combine(_ spanner:)`; a chord with an
+///   empty array feeds nothing, so every score without slurs hashes as it did before. Added with group 6's
+///   `SetSlur` / `RemoveSpanner`. See `ScoreFingerprintHasher+Parity.swift`.
 /// - Not covered within the nested types the walk now recurses into: `Arpeggio.elementProperties`,
 ///   `Lyric.elementProperties`, and `ChordLine.elementProperties` (visibility/color on those attachments, same
 ///   reasoning as the two bullets above), plus `Lyric.properties` (text positioning/formatting) and
