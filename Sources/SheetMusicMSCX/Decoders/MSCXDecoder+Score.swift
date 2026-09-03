@@ -40,6 +40,7 @@ extension Score {
                 location: "Division",
             ))
         }
+        try guardPostMuseScore4(root: root, scoreNode: scoreNode)
         // Resolved up front and published as a TaskLocal: element
         // decoders nested arbitrarily deep need it to tell "absent
         // because default" apart across wire-format generations.
@@ -233,6 +234,75 @@ extension Score {
             """,
             location: "museScore",
         ))
+    }
+
+    /// Guard a wire format newer than the MuseScore 4 shapes this
+    /// reader implements. Refuses only what it knows it would get
+    /// wrong; everything else is admitted with a diagnostic.
+    ///
+    /// `detectVersion` folds every major >= 4 into `.v4`, so without
+    /// this a MuseScore 5 file parses "successfully" no matter what it
+    /// contains. The one MSC 5.00 change that is catastrophic rather
+    /// than lossy is `<Score><SpannerMap>`: MuseScore 5 moved every
+    /// spanner in `Score::spannerMap()` out of the inline `<Spanner>` +
+    /// `<location>` form into that node, with endpoints written as EID
+    /// references (`rw/write/twrite.cpp:writeScoreSpanners`, reached
+    /// from `rw/write/writer.cpp`; `<startElement>` / `<endElement>` in
+    /// `TWrite::writeProperties(const Spanner*)`). This decoder never
+    /// visits it, so slurs, hairpins, ottavas, voltas and pedals would
+    /// all vanish — taking repeat structure, and therefore MIDI output,
+    /// with them. Silence is the wrong answer to that, so it throws.
+    ///
+    /// A MuseScore 5 file *without* that node is a different case. The
+    /// writer emits `<SpannerMap>` only when the score has spanners, so
+    /// a spanner-free 5.00 score is still within what the 4.x-shaped
+    /// reader handles — the MusicXML reference corpus under
+    /// `Tests/SheetMusicTests/Resources/musicxml/` is exactly that, and
+    /// refusing it would reject files this package reads correctly
+    /// today. Those get a warning instead, per the permissive parser
+    /// policy in `AGENTS.md`: unaudited 5.00 deltas may still be
+    /// dropped, and the diagnostic is how a host learns to distrust the
+    /// result.
+    ///
+    /// The fault reuses `malformedScore` so hosts that already branch
+    /// on it keep working, but carries its own `code`: the advice
+    /// differs from `mscx.version.unsupported`. A MuseScore 1 file is
+    /// the reader's user's problem to fix (re-save it); a MuseScore 5
+    /// file is this package's problem to fix (ship support). See
+    /// `docs/musescore-model-parity.md` §3.
+    private static func guardPostMuseScore4(root: XMLTreeNode, scoreNode: XMLTreeNode) throws {
+        guard let versionAttr = root.attributes["version"],
+              let major = versionAttr.split(separator: ".").first,
+              let majorInt = Int(major), majorInt >= 5
+        else { return }
+        // Bound to a local rather than tested inline: SwiftLint reads
+        // `first(…) == nil` as the `first(where:)` overload and asks for
+        // `contains`, which `XMLTreeNode`'s name-keyed lookup is not.
+        let spannerMap = scoreNode.first("SpannerMap")
+        guard spannerMap == nil else {
+            throw SheetMusicError.malformedScore(ScoreFault(
+                code: "mscx.version.tooNew",
+                message: """
+                MuseScore \(majorInt) file (museScore version="\(versionAttr)") \
+                with a <SpannerMap>; this reader implements the MuseScore 3 and 4 \
+                wire formats, where spanners are written inline, and would drop \
+                every slur, hairpin, ottava, volta and pedal in the score — \
+                export it as MusicXML, or save it from MuseScore 4, to open it here
+                """,
+                location: "museScore",
+            ))
+        }
+        mscxDecoderWarn(
+            code: "mscx.version.newerThanSupported",
+            message: """
+            MuseScore \(majorInt) file (museScore version="\(versionAttr)"); \
+            this reader implements the MuseScore 3 and 4 wire formats. It has no \
+            <SpannerMap>, so it is being parsed through the MuseScore 4 reader — \
+            elements introduced or moved in MuseScore \(majorInt) may be dropped \
+            silently.
+            """,
+            location: "museScore",
+        )
     }
 
     private static func detectVersion(
