@@ -9,14 +9,18 @@ import org.junit.runner.RunWith
 
 /**
  * [EditSessionReplayTest]'s twin for the edit-command parity project's chain (`ReplayChain.parity` on the host):
- * the eighty-eight `EditReplayScript.parity` steps — layout breaks, barlines, repeat barlines, measure repeats and
- * a move-to-voice (`EditIntent` cases 30…34) in steps 1…10, then range transposes, an added interval, a range
- * delete, range accidentals, a range duration and a respell (cases 35…40) in steps 11…19, then two note writes,
- * an element / note / stem / beam hide-and-show and one standing hide (cases 58…61, with 0) in steps 62…72, then
- * a slur, two hairpins, seven line spanners, a volta and three removals (cases 62…72) in steps 73…88, none
- * of which the standard chain encodes — relayed from Kotlin across the JNI boundary into a second,
- * separately-linked image of the engine. Equal fingerprints at every step is the claim the whole Android editing
- * design rests on: relaying an intent's bytes keeps two copies of a score identical.
+ * the ninety-two `EditReplayScript.parity` steps — layout breaks, barlines, repeat barlines, measure repeats and
+ * a move-to-voice (`EditIntent` cases 30…34) in steps 1…10; range transposes, an added interval, a range delete,
+ * range accidentals, a range duration and a respell (cases 35…40) in steps 11…19; clefs, a tempo, staff and
+ * system text, dynamics, a fermata, a breath, jumps and markers (cases 41…49) in steps 20…40; articulations,
+ * grace notes, tremolos, an arpeggio, a glissando, dots, chord lines and note parentheses (cases 50…57) in steps
+ * 41…61; an element / note / stem / beam hide-and-show and one standing hide (cases 58…61) in steps 64…72,
+ * prepared by two note writes in steps 62…63; a slur, two hairpins, seven line spanners, a volta and three
+ * removals (cases 62…72) in steps 73…88; and a chord symbol written, retyped as a roman numeral, cleared and
+ * re-written (case 73) in steps 89…92 — none of which the standard chain encodes — relayed from Kotlin across the
+ * JNI boundary into a second, separately-linked image of the engine. Equal fingerprints at every step is the
+ * claim the whole Android editing design rests on: relaying an intent's bytes keeps two copies of a score
+ * identical.
  *
  * A separate class rather than a parameterized one because the two chains share nothing but this procedure, and a
  * failure that names the class says immediately which chain drifted.
@@ -41,7 +45,7 @@ import org.junit.runner.RunWith
 class EditSessionReplayParityTest {
     companion object {
         /** Must track `EditReplayScript.parity(staff:).count` on the host exactly — see the assertion below. */
-        private const val EXPECTED_STEP_COUNT = 88
+        private const val EXPECTED_STEP_COUNT = 92
 
         private const val ASSET_DIR = "editReplay-parity"
     }

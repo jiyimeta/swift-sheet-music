@@ -1,7 +1,7 @@
 @testable import SheetMusicCore
 
 extension EditReplayScript {
-    /// Eighty-eight steps over `EditingFixtures.parityFixture()`, covering every intent the edit-command parity
+    /// Ninety-two steps over `EditingFixtures.parityFixture()`, covering every intent the edit-command parity
     /// project appended: its structural group (30…34: `setLayoutBreak`, `setBarLine`, `setRepeatBarLines`,
     /// `setMeasureRepeat`, `moveToVoice`) in steps 1…10, its range group (35…40: `transposeRange`,
     /// `addIntervalToSelection`, `deleteRange`, `setAccidentalsInRange`, `setDurationInRange`, `respellRange`) in
@@ -11,8 +11,9 @@ extension EditReplayScript {
     /// `setNoteParentheses`) in steps 41…61 and its visibility group (58…61: `setElementVisible`,
     /// `setNoteVisible`, `setStemVisible`, `setBeamVisible`) in steps 64…72, prepared by two `inputNote`s
     /// (62, 63), and its spanner group (62…72: `setSlur`, `setHairpin`, `setPedal`, `setVolta`, `setOttava`,
-    /// `setTextLine`, `setTrill`, `setVibrato`, `setPalmMute`, `setLetRing`, `removeSpanner`) in steps 73…88 —
-    /// none of which the standard chain, which predates them, encodes at all.
+    /// `setTextLine`, `setTrill`, `setVibrato`, `setPalmMute`, `setLetRing`, `removeSpanner`) in steps 73…88, and
+    /// its harmony group (73: `setChordSymbol`) in steps 89…92 — the catalogue's last intent, after which this
+    /// chain is complete and frozen. None of which the standard chain, which predates them, encodes at all.
     ///
     /// Each of the five structural intents appears at least twice, in both directions where it has one, so the chain
     /// pins the wire bytes of the removal as well as the write: `setLayoutBreak` on then off (steps 1 / 10),
@@ -52,6 +53,12 @@ extension EditReplayScript {
     /// running chain of seven line spanners in the cello's bar 2 (77…83, one removed again at 87), and one undo /
     /// re-apply pair around the volta (84 / 85 / 86). All three `<next>` spellings the writer rule distinguishes
     /// are recorded: mid-measure at 73, bar-end at 74, score-end at 84. Its steps live on `paritySpanners(staff:)`.
+    ///
+    /// The harmony group is one intent, so it is spelled written (89), retyped as a roman numeral (90 — the
+    /// replace path, and the only step in either chain encoding a harmony type other than 0), cleared (91) and
+    /// written once more (92), over bar 3's measure rest of the flute. Its steps — and their own index-stability
+    /// and repeat notes, which turn on step 84's volta still standing ahead of that rest — live on
+    /// `parityHarmony(staff:)` in `EditReplayScript+Parity4.swift`.
     ///
     /// ## Index stability
     ///
@@ -176,10 +183,11 @@ extension EditReplayScript {
     /// 60 clears the parentheses step 59 wrote and lands back on step 58's. Step 61 does not: nothing takes its dot
     /// back.
     ///
-    /// The visibility group adds eleven values and four more repeats, listed on `parityVisibility()`, and the
-    /// spanner group twelve and four, listed on `paritySpanners(staff:)`; the chain now ends on ITS last step, the
-    /// standing diminuendo over the tied pair, which no earlier step produced. Fifty-eight of the eighty-nine
-    /// recorded values are therefore distinct, against a floor of fifty-four in `ReplayChain.parity`.
+    /// The visibility group adds eleven values and four more repeats, listed on `parityVisibility()`, the spanner
+    /// group twelve and four, listed on `paritySpanners(staff:)`, and the harmony group three and one, listed on
+    /// `parityHarmony(staff:)`; the chain now ends on ITS last step, the standing `C` over bar 3's rest, which no
+    /// earlier step produced. Sixty-one of the ninety-three recorded values are therefore distinct, against a
+    /// floor of fifty-seven in `ReplayChain.parity`.
     ///
     /// As in the standard chain, an equal fingerprint would not by itself prove a step was inert, nor a different
     /// one prove it did what it was added for. What proves each step ran is `EditSessionReplayParityTest.kt`
@@ -395,5 +403,6 @@ extension EditReplayScript {
             .intent(.setDots(at: firstRestOfBar1, dots: 1)),
         ] + parityVisibility() // steps 62…72 — see `EditReplayScript+Parity2.swift`
             + paritySpanners(staff: staff) // steps 73…88 — see `EditReplayScript+Parity3.swift`
+            + parityHarmony(staff: staff) // steps 89…92 — see `EditReplayScript+Parity4.swift`
     }
 }

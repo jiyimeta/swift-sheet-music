@@ -54,6 +54,11 @@
             // Off by default: one dump is several lines per file, which over
             // a 657-file sweep buries the rows the sweep exists to produce.
             let dump = Self.env("OMR_MSCZ_DIVERGENCE") == "1"
+            // `OMR_MSCZ_PROBES_ONLY=1` runs the census / clef probes and
+            // skips both score-level sweeps. The probes are what a decode
+            // sweep at τ=0.02 is run FOR — the score-level rows at that τ
+            // are junk and cost the same 15 minutes per 200 files.
+            let probesOnly = Self.env("OMR_MSCZ_PROBES_ONLY") == "1"
 
             var vectorOptions = PDFImportOptions()
             // Attached to BOTH modes, deliberately. A diagnostic the importer
@@ -61,11 +66,13 @@
             // NOT to fire on ordinary vector documents before it ships — and
             // this corpus is the only place that can be measured.
             vectorOptions.diagnostics = Self.diagnosticSink(mode: "vector")
-            let vector = MSCZGroundTruthSweep.sweep(
-                cases: cases, mode: .vector, scanDPI: scanDPI, options: vectorOptions,
-                dumpDivergence: dump,
-            )
-            print(MSCZGroundTruthSweep.summaryLine(mode: .vector, totals: vector))
+            if !probesOnly {
+                let vector = MSCZGroundTruthSweep.sweep(
+                    cases: cases, mode: .vector, scanDPI: scanDPI, options: vectorOptions,
+                    dumpDivergence: dump,
+                )
+                print(MSCZGroundTruthSweep.summaryLine(mode: .vector, totals: vector))
+            }
 
             var rasterOptions = PDFImportOptions()
             rasterOptions.diagnostics = Self.diagnosticSink(mode: "raster")
@@ -74,9 +81,7 @@
             // classifier reports, not the weights. Without it the corpus
             // cannot answer "is the glyph missing, or merely under τ?", which
             // is a different fix each way.
-            rasterOptions.omrTileClassifier = try await OMRDecodeOverriddenClassifier(
-                base: CoreMLTileClassifier(),
-            )
+            rasterOptions.omrTileClassifier = try await Self.rasterClassifier()
             rasterOptions.omrRenderDPI = Self.doubleEnv("OMR_MSCZ_RENDER_DPI", default: 300)
             if Self.env("OMR_MSCZ_CENSUS") == "1" {
                 for item in cases {
@@ -92,11 +97,37 @@
                     )
                 }
             }
+            if probesOnly {
+                print("[mscz] probes only — score-level sweeps skipped (OMR_MSCZ_PROBES_ONLY=1)")
+                return
+            }
             let raster = MSCZGroundTruthSweep.sweep(
                 cases: cases, mode: .raster, scanDPI: scanDPI, options: rasterOptions,
                 dumpDivergence: dump,
             )
             print(MSCZGroundTruthSweep.summaryLine(mode: .raster, totals: raster))
+        }
+
+        /// The classifier the raster mode runs, with the `OMR_DECODE_*` sweep
+        /// constants applied. `OMR_MODEL_ROOT` selects an exported model the
+        /// same way it does for the synthetic eval; unset means the bundled
+        /// one. The manifest's `checkpoint` is printed so the log itself says
+        /// which weights produced its rows — a run that silently measured the
+        /// bundled model under another model's name reported the two as
+        /// byte-identical once, and nothing in the output said why.
+        static func rasterClassifier() async throws -> OMRDecodeOverriddenClassifier {
+            let base: CoreMLTileClassifier = if let modelPath = env("OMR_MODEL_ROOT") {
+                try await CoreMLTileClassifier(
+                    modelRoot: URL(fileURLWithPath: modelPath, isDirectory: true),
+                )
+            } else {
+                // Synchronous: the bundled model is precompiled, and only
+                // `init(modelRoot:)` compiles at run time.
+                try CoreMLTileClassifier()
+            }
+            print("[mscz] model=\(env("OMR_MODEL_ROOT") ?? "bundled") "
+                + "checkpoint=\(base.manifest.checkpoint)")
+            return OMRDecodeOverriddenClassifier(base: base)
         }
 
         /// `nil` unless asked for: the sweep's own rows are the output, and a

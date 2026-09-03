@@ -24,6 +24,9 @@ and this project adheres to
   detected glyphs with the classical-CV staff lines, stems and beams into the importer's own content model —
   lives in `SheetMusicPDF` behind the public `OMRTileClassifier` protocol, which is the whole platform seam an
   ONNX or other backend has to implement.
+- A raster page hands the importer one clef per position — the highest-scoring one. The detector's own
+  suppression is per class, so a clef and its octave variant on the same spot both survive it, and the
+  reader took whichever came first in the glyph list.
 - `PDFImportOptions` and `PDFImportDiagnostic` are `Sendable`, so a host can build the options on one actor,
   parse on another, and carry the diagnostics back. `CoreMLTileClassifier()` is a synchronous `throws`
   initializer — the bundled model is precompiled and nothing in its load awaits; only `init(modelRoot:)`,
@@ -32,121 +35,94 @@ and this project adheres to
 - `Training/`: the Python pipeline that generates the synthetic dataset, trains the detector and exports the
   bundled model, with its own tests; `Scripts/mscz-corpus-prep.sh` / `mscz-corpus-eval.sh` score the raster
   path against a `.mscz` corpus's own answers.
-- Five structural edit commands, the first group of the edit-command parity project
-  (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`): `SetLayoutBreak` sets or clears a line /
-  page / section break on a measure; `SetBarLine` writes a measure's visible end-barline style (regular / double /
-  end / dashed / dotted / heavy / double-heavy); `SetRepeatBarLines` writes a measure's `startRepeat` /
-  `endRepeatCount`; `SetMeasureRepeat` turns 1, 2 or 4 empty bars into a measure-repeat group (`%` sign) or
-  dissolves one back into measure rests; `MoveToVoice` moves a chord or rest to another voice at the same tick,
-  splitting rests around it as needed. Reachable as `EditIntent.setLayoutBreak` / `.setBarLine` /
-  `.setRepeatBarLines` / `.setMeasureRepeat` / `.moveToVoice`, wire cases 30–34. `MoveToVoice` no longer refuses a
-  slot that follows a tuplet in its bar: a tuplet member stores its sounding length, so every tick walker was
-  already ratio-aware and the refusal guarded nothing. `EditRefusal.Reason.tupletPrecedesSlot` is gone with it;
-  the enum gained `invalidTransposition(semitones:)` and `invalidInterval(steps:)` for the range group below.
-- Six range edit commands, the second group of the same project: `TransposeRange` moves every note in a range by
-  ±1…24 semitones, optionally re-spelling the result in the key; `AddIntervalToSelection` adds a diatonic
-  interval (Alt+1…9 above, Shift+Alt+1…9 below) to every chord; `DeleteRange` replaces each chord with a rest and
-  collapses any bar-voice the deletes emptied; `SetAccidentalsInRange` applies one accidental — or clears the
-  glyph — across a range; `SetDurationInRange` re-times every chord and rest to one duration; `RespellRange`
-  re-spells a range enharmonically. Reachable as `EditIntent.transposeRange` / `.addIntervalToSelection` /
-  `.deleteRange` / `.setAccidentalsInRange` / `.setDurationInRange` / `.respellRange`, wire cases 35–40. Each
-  takes a `VoiceElementRange` whose bounds may be given in either order and whose band is every voice of the
-  staves between them. All six are one `CompositeEditCommand` and therefore one undo step, built by a shared
-  `RangeEditPlanner`: targets run in ascending onset order, each re-found by its tick in the score the previous
-  step produced, so an onset a lengthening already swallowed is skipped (`[q q q q]` to half is `[h h]`, as in
-  MuseScore) — and any refusal rolls the whole range back, leaving nothing written. A tie chain is one sounding
-  note: pitch edits move it whole, with the accidental on its head alone.
-- Nine mark edit commands, the third group of the same project: `SetClef` writes a clef change before a chord or
-  rest (replacing one already there, or landing at index 0 as the bar's header clef when nothing timed precedes
-  the target) and `RemoveClef` takes an explicit clef out; `SetTempo` writes, replaces or removes the tempo at a
-  beat, taking a `SetTempo.Marking(beatsPerSecond:beatNote:beatDots:)` — the metronome mark alone, since `Tempo`
-  has no text field, so a marking's words ("Allegro") are neither written nor kept; `SetStaffText` writes,
-  renames or removes
-  the staff text — or, with `isSystemText`, the system text — at a beat; `SetDynamic` writes a dynamic on a chord
-  with MuseScore's default velocity for the subtype; `SetFermata` writes a fermata over a chord or rest with a
-  `timeStretch`; `SetBreath` writes a breath mark or caesura after a chord; `SetJumps` and `SetMarkers` replace a
-  bar's navigation jumps / markers on the canonical staff. Reachable as `EditIntent.setClef` / `.removeClef` /
-  `.setTempo` / `.setStaffText` / `.setDynamic` / `.setFermata` / `.setBreath` / `.setJumps` / `.setMarkers`, wire
-  cases 41–49. Every mark that can be present or absent is ONE intent whose payload is optional: a value writes or
-  replaces, `nil` removes; an empty list clears for the two plural ones. Lane marks (tempo, staff text) are
-  addressed by the chord or rest they sit on rather than by a raw tick, so a file-authored lane mark at a tick no
-  chord starts is not reachable in this version. An intent that restates what the score already says plans to
-  nothing and is refused rather than recorded as an empty undo step.
-- `Dynamic.defaultVelocity(for:)` exposes MuseScore's dynamics table (the numbers the MSCX decoder already filled
-  in for a `<Dynamic>` with no `<velocity>`) on `Dynamic` itself, where a host writing a dynamic can reach it.
-- `EditRefusal.ExpectedKind.clef` (`RemoveClef` aimed at something that is not a clef) and
-  `EditRefusal.Reason.emptyStaffText` (`SetStaffText` given text that is empty once trimmed).
-- `RespellMode` (`.simplest` / `.preferSharps` / `.preferFlats`) and `PitchSpelling.tpc(forPitch:keySig:mode:)`,
-  which returns the one tpc for a pitch inside the twelve-wide line-of-fifths window that mode places around the
-  key — the seam `RespellRange` and `TransposeRange(respellInKey:)` both spell through.
-- The reference family — `MeasureRef`, `PartRef`, `VoiceRef`, `VoiceElementRange`
-  (`Sources/SheetMusicCore/Score/References/`) — gives every new intent's score location a named, resolvable type
-  instead of a bare integer, with `Score.canonicalStaff` / `score.contains(_:)` / `score[part:]` / `score[voice:]`
-  / `score[measure:staff:]` / `score[system:]` / `score.voiceElements(in:)` as the sole resolution seam. Each
-  member's wire mirror is a nested struct with a reserved tag, so a future stable identity (SP0) can attach to it
-  without moving a byte.
-- `Measure.Flags` groups the seven measure-level fields MuseScore writes on the first staff only — layout breaks,
-  markers, jumps, `startRepeat` / `endRepeatCount` — so they move, hash and hoist as one unit.
-- Eight note- and chord-level edit commands, closing the parity spec's Note/chord group: `SetArticulation`
-  (toggle one articulation kind on a chord), `SetGraceNotes` (replace both grace lists), `SetTremolo` (a
-  `.between` span is refused when the next timed element of the voice is not a chord — the follower is named by
-  adjacency, not stored), `SetArpeggio` (needs two notes to spread), `SetGlissando` (refused on a note with no
-  following chord, since the destination is implicit), `SetDots` (0–3, delegating the retiming to
-  `SetChordDuration` / `SetRestDuration`), `SetChordLine` and `SetNoteParentheses`. Each has an `EditIntent` case
-  and a wire payload (indices 50–57), so an Android or wasm host can relay them as bytes. `setArpeggio` travels
-  as a subtype alone and its planner compares only that, so re-sending a stretched arpeggio's subtype does not
-  reset its `timeStretch`; `Arpeggio.timeStretch` / `userLen1` and `ChordLine.isWavy` stay reachable only by
-  building the command directly.
-- `EditRefusal.Reason.noNextChord(at:)`, `.chordTooSmall(at:noteCount:)` and `.notDottable(at:)`. All three
-  carry the `VoiceElementID` they were asked about, and the first two gate the write only — clearing an
-  arpeggio or a glissando is never refused.
-- `NoteDuration.baseAndDots()`, the inverse of `dotted(_:)`, and `ChordArticulation.Kind.mscxToken` /
-  `init(mscxToken:)` — the MSCX token table moved into Core where the wire can reach it, with both MSCX paths
-  delegating to it.
-- Four visibility edit commands, closing the parity spec's Visibility group: `SetElementVisible` writes
-  `<visible>` on any voice element that carries `ElementProperties` — a chord or rest, clef, barline, key or time
-  signature, dynamic, fermata, breath, spanner or harmony; a measure repeat and a location shift carry none and
-  are refused; `SetNoteVisible` writes one notehead's own flag; `SetStemVisible` writes a chord's stem (refused
-  on a rest); `SetBeamVisible` writes a beam group's flag, which lives on the group's LEADING chord — the intent
-  may name any member and the planner re-targets, so a host need not know where a group starts. Reachable as
-  `EditIntent.setElementVisible` / `.setNoteVisible` / `.setStemVisible` / `.setBeamVisible`, wire cases 58–61.
-  No flag cascades onto another: MuseScore's `V` on a notehead also hides its stem and beam, and here that is a
-  host-side `.composite` of the three intents, which keeps each flag its own undoable fact. The beam-grouping
-  rule moved out of `SheetMusicLayout` into `SheetMusicCore` as `BeamGrouping` (package-internal; the layout now
-  forwards to it), so "the group's leading chord" means exactly the same thing to an edit command and to the
-  renderer.
-- `EditRefusal.ExpectedKind.engravable` (`SetElementVisible` aimed at a voice element that carries no
-  `ElementProperties`) and `EditRefusal.Reason.notBeamed(at:)` (`SetBeamVisible` aimed at a chord that belongs
-  to no beam group; a rest is `wrongElementKind(expected: .chord)`, as for `SetStemVisible`).
-- A second parity replay chain (`editReplay-parity/`) exercises the forty-three new commands, in eighty-eight
-  steps, through the same cross-platform golden suites (Swift, WebAssembly, Kotlin) as the existing chain,
-  byte-pinned like it.
-- Eleven spanner edit commands, the sixth group of the edit-command parity project:
-  `SetSlur`, `SetHairpin`, `SetPedal`, `SetVolta`, `SetOttava`, `SetTextLine`, `SetTrill`, `SetVibrato`,
-  `SetPalmMute`, `SetLetRing` and `RemoveSpanner`, all routed through one internal `SpannerPlacement` engine.
-  Spanners come in three storage forms: a slur lives in `Chord.spanners` at its start chord; a line spanner
-  is a `.spanner` `VoiceElement` immediately before its start chord (anchored by `AdjacentElementSlot`); a
-  volta is measure-granular, at index 0 of the FIRST MEASURE OF THE RANGE on the canonical staff, whatever
-  staff the range names. All three store `nextMeasuresOffset` and `nextFractionsOffset`, differing only in
-  the tick they are computed from: a slur's pair is computed from the end chord's ONSET, a line spanner's
-  from the last element's END tick, a volta's from the END of the range's last measure.
-  `Spanner.offsets(from:to:in:)` spells the `<next>` block the way MuseScore's writer does, pinned
-  byte-for-byte against MuseScore-authored fixtures. `RemoveSpanner` takes every slur entry of a chord (a
-  chord can carry an inner and an outer slur); a caller that means only one writes the `ReplaceVoiceElement`
-  directly. Restating a spanner of the same kind at the same position is refused as `duplicateSpanner` rather
-  than silently ignored, so a host toggles by pairing a `set…` with `RemoveSpanner` — with one asymmetry to
-  know about: `SetVolta` re-homes any range to the canonical staff, while `RemoveSpanner` is staff-literal,
-  so the paired removal has to address the canonical staff (`SetVolta.affectedLocation`) rather than the
-  staff the volta was written over. `Chord.spanners` now feeds `Score.stableFingerprint` by occupants, so a
-  chord carrying no spanner hashes exactly as before. Reachable as `EditIntent.setSlur` / `.setHairpin` /
-  `.setPedal` / `.setVolta` / `.setOttava` / `.setTextLine` / `.setTrill` / `.setVibrato` / `.setPalmMute` /
-  `.setLetRing` / `.removeSpanner`, wire cases 62–72, refused with the two new payloads
-  `EditRefusal.Reason.duplicateSpanner(at:kind:)` and `.noSpannerAtLocation(_:)` (`ExpectedKind.spanner`),
-  and built on the new `Fraction(ticks:division:)` initializer that feeds `Spanner.offsets`'s fractions
-  component.
+- **Every notation feature the `Score` model can express now has a named `EditCommand` reaching it, short of the
+  handful `docs/edit-commands.md` §C still lists** — the edit-command parity project
+  (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`): forty-four
+  commands, reachable as `EditIntent` cases at wire indices 30–73, planned by `ScoreEditSession`, and pinned by a
+  second cross-platform replay chain (`editReplay-parity/`, Swift + WebAssembly + Kotlin) that is now frozen at
+  ninety-two steps like the first — never extended or re-recorded again, so a new command opens a new chain. A
+  "nil clears" mark is one intent whose payload is optional (a value writes or replaces, `nil` removes); an intent
+  that restates what the score already says plans to nothing and is refused rather than recorded as an empty undo
+  step; every score location travels as a nested reference-family struct (`MeasureRef`, `PartRef`, `VoiceRef`,
+  `VoiceElementRange`, `Sources/SheetMusicCore/Score/References/`) resolved only through `Score.canonicalStaff` /
+  `score.contains(_:)` / `score[part:]` / `score[voice:]` / `score[measure:staff:]` / `score[system:]` /
+  `score.voiceElements(in:)`, each mirror reserving its next wire tag, so a future stable identity can attach
+  without moving a byte. `docs/edit-commands.md` §A lists them all; §C is now the true list of what is still out
+  of reach.
+  - Structural (30–34): `SetLayoutBreak` (line / page / section break on a measure), `SetBarLine` (a measure's
+    visible end-barline style), `SetRepeatBarLines` (`startRepeat` / `endRepeatCount`, which MuseScore treats as
+    measure-level state rather than a barline subtype), `SetMeasureRepeat` (1, 2 or 4 empty bars ↔ a `%` group),
+    `MoveToVoice` (same tick, another voice, rests split around it). `Measure.Flags` groups the seven
+    measure-level fields MuseScore writes on the first staff only, and a new `MeasureFlagsHoist` pass keeps them
+    on the canonical staff across `RemovePart` / `MovePart`.
+  - Range (35–40): `TransposeRange` (±1…24 semitones, tie chains moved whole with the accidental on the head
+    alone, optionally re-spelled in the key), `AddIntervalToSelection` (Alt+1…9 above, Shift+Alt+1…9 below),
+    `DeleteRange` (collapsing the bar-voices it emptied), `SetAccidentalsInRange`, `SetDurationInRange`,
+    `RespellRange`. Each takes a `VoiceElementRange` whose bounds may be given in either order, and each is one
+    `CompositeEditCommand` — therefore one undo step — built by a shared `RangeEditPlanner`: targets run in
+    ascending onset order, re-found by tick in the score the previous step produced, so an onset a lengthening
+    already swallowed is skipped (`[q q q q]` to half is `[h h]`, as in MuseScore), and any refusal rolls the
+    whole range back.
+  - Marks (41–49): `SetClef` / `RemoveClef`, `SetTempo` (a `SetTempo.Marking(beatsPerSecond:beatNote:beatDots:)`
+    — the metronome mark alone, since `Tempo` has no text field), `SetStaffText` (staff or, with `isSystemText`,
+    system), `SetDynamic`, `SetFermata`, `SetBreath`, `SetJumps`, `SetMarkers`. "Immediately before" means an
+    attachment run — the stretch of annotations and signatures ending at the chord — so a command finds its
+    element by predicate anywhere in the run and inserts nearest the chord. Lane marks are addressed by the chord
+    or rest they sit on rather than by a raw tick.
+  - Note / chord (50–57): `SetArticulation` (a SET, not a toggle: the intent carries `present`, so a replay is
+    idempotent, and a write replaces every entry of the same kind), `SetGraceNotes` (both lists at once),
+    `SetTremolo` (a `.between` span needs a following chord), `SetArpeggio` (needs two notes to spread, and
+    travels as a subtype alone so re-sending it does not reset `timeStretch`), `SetGlissando` (the destination is
+    the next chord), `SetDots` (0–3, delegating the retiming to `SetChordDuration` / `SetRestDuration` and
+    raising their refusals under their own names), `SetChordLine`, `SetNoteParentheses`.
+  - Visibility (58–61): `SetElementVisible` (any voice element carrying `ElementProperties`; a measure repeat and
+    a location shift carry none and are refused), `SetNoteVisible`, `SetStemVisible`, `SetBeamVisible` — whose
+    flag lives on the beam group's LEADING chord, so the intent may name any member and the planner re-targets.
+    No flag cascades onto another: MuseScore's `V` on a notehead also hides its stem and beam, and here that is a
+    host-side `.composite` of the three intents, which keeps each flag its own undoable fact.
+  - Spanners (62–72): `SetSlur`, `SetHairpin`, `SetPedal`, `SetVolta`, `SetOttava`, `SetTextLine`, `SetTrill`,
+    `SetVibrato`, `SetPalmMute`, `SetLetRing` and `RemoveSpanner`, all routed through one internal
+    `SpannerPlacement` engine over three storage forms — a slur in `Chord.spanners` at its start chord, a line
+    spanner as a `.spanner` element immediately before its start chord, a volta measure-granular at index 0 of
+    the range's first measure on the canonical staff — with `Spanner.offsets(from:to:in:)` spelling MuseScore's
+    `<next>` block byte-for-byte. Restating a spanner is refused as `duplicateSpanner` rather than silently
+    ignored, so a host toggles by pairing a `set…` with `RemoveSpanner`; note the one asymmetry, that `SetVolta`
+    re-homes any range to the canonical staff while `RemoveSpanner` is staff-literal, so the paired removal
+    addresses `SetVolta.affectedLocation`. `Chord.spanners` now feeds `Score.stableFingerprint` by occupants, so
+    a chord carrying no spanner hashes exactly as before.
+  - Harmony (73): `SetChordSymbol` writes, retypes or removes the chord symbol on a chord or rest — MuseScore
+    parents a harmony on any chord-rest, and a lead sheet's symbols over rests are its ordinary shape. `name` is
+    the whole text as the page shows it ("Am7", "bVII", "C/E"), so every write nils `rootTpc` / `bassTpc`,
+    including on a MuseScore-authored symbol it retypes, whose root letter the renderer would otherwise keep
+    prefixing; a written symbol therefore carries no transposable root, and transposing chord symbols stays out
+    of scope. Parentheses, offsets, `play`, font overrides and visibility survive a retype. Text is trimmed, and
+    empty after trimming is refused as `EditRefusal.Reason.emptyChordSymbol`.
+  - Public API the commands needed, now reachable on its own: `Dynamic.defaultVelocity(for:)` exposes MuseScore's
+    dynamics table on `Dynamic` itself; `RespellMode` (`.simplest` / `.preferSharps` / `.preferFlats`) and
+    `PitchSpelling.tpc(forPitch:keySig:mode:)` are the spelling seam `RespellRange` and
+    `TransposeRange(respellInKey:)` both go through; `NoteDuration.baseAndDots()` inverts `dotted(_:)`; and
+    `ChordArticulation.Kind.mscxToken` / `init(mscxToken:)` moved the MSCX token table into Core with both MSCX
+    paths delegating to it.
+    `Arpeggio.timeStretch` / `userLen1` and `ChordLine.isWavy` are deliberately not on the v1 wire, which keeps
+    intents scalar; they stay reachable by building the command directly.
+  - New `EditRefusal` cases across the project: `Reason.invalidRepeatCount`, `.invalidMeasureRepeatSpan`,
+    `.measureRepeatSpanNotEmpty`, `.voiceMismatch`, `.destinationNotFree`, `.invalidTransposition(semitones:)`,
+    `.invalidInterval(steps:)`, `.emptyStaffText`, `.noNextChord(at:)`, `.chordTooSmall(at:noteCount:)`,
+    `.notDottable(at:)`, `.notBeamed(at:)`, `.duplicateSpanner(at:kind:)`, `.noSpannerAtLocation(_:)`,
+    `.emptyChordSymbol`; and `ExpectedKind.clef`, `.engravable`, `.spanner`. `noNextChord` and `chordTooSmall`
+    gate the write only — clearing an arpeggio or a glissando is never refused. `tupletPrecedesSlot` was added
+    and removed within the project and never shipped: tuplet members store their sounding length, so every tick
+    walker was already ratio-aware and the refusal guarded nothing.
 
 ### Changed
 
+- The bundled detector is retrained. A clef's octave variant — `clefF8va` and the rest — was engraved in the
+  training data only as a lone staff or as a wall of cue-size mid-bar changes, never as the full-size clef of
+  one staff among several in an ordinary score, and on real engraving the reader's confidence split between
+  the clef and its plain sibling so that neither was read. Over 200 real scores it now reads all 475 of them
+  where it read 242, and over the whole 657-score corpus the raster path gains 610 pitch points and 371
+  duration points against the previous model, with the vector path byte-identical. Known residual: a
+  `clefG8vb` is sometimes read as `clefG15mb`, priced at −37 points over that corpus.
 - `parseWithGeometry` takes the same raster fallback as `parse`. Its geometry side-car carries no rects and no
   page size for a page read this way — the page's glyphs are positioned in the analysis frame, not the
   displayed page's user space, and a cursor silently a few points off the ink is worse than none — and an

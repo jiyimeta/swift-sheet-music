@@ -1,7 +1,8 @@
 import SheetMusicFoundation
 
-/// `ScoreEditSession`'s planning half for the parity project's mark intents (41…49). Its own file for the reason
-/// `+RangePlanning.swift` exists: `+Planning.swift` sits at its line budget.
+/// `ScoreEditSession`'s planning half for the parity project's mark intents (41…49) and its chord symbol (73), an
+/// adjacent mark in every respect a planner cares about. Its own file for the reason `+RangePlanning.swift`
+/// exists: `+Planning.swift` sits at its line budget.
 ///
 /// Every planner here follows the standing rule: an intent that restates what the score already says plans to
 /// `nil` (`.nothingToApply`), never to a self-restoring undo entry. Each reads the score through the command's
@@ -46,6 +47,19 @@ extension ScoreEditSession {
         case let .setMarkers(measure, markers):
             let current = score[measure: measure, staff: Score.canonicalStaff]?.markers
             return current == markers ? nil : SetMarkers(at: measure, markers: markers)
+        case let .setChordSymbol(location, name, harmonyType):
+            // Trimmed for the comparison only — an empty result is the command's `.emptyChordSymbol` to raise. A
+            // file-authored symbol still carrying a root or bass is never a restatement: the command nils both,
+            // and `HarmonyRendering.displayedName` prefixes the root's letter to `name` only while one stands.
+            let current = SetChordSymbol.current(at: location, in: score)
+            guard let name else {
+                return current == nil ? nil : SetChordSymbol(at: location, name: nil, harmonyType: harmonyType)
+            }
+            let trimmed = name.trimmingWhitespaceAndNewlines()
+            let same = current.map {
+                $0.name == trimmed && $0.harmonyType == harmonyType && $0.rootTpc == nil && $0.bassTpc == nil
+            } ?? false
+            return same ? nil : SetChordSymbol(at: location, name: name, harmonyType: harmonyType)
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.

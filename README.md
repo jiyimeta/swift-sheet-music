@@ -291,9 +291,10 @@ and the system structure. What does not, yet:
 - **Real scans, measured.** Every accuracy number comes from synthetic
   scans — MuseScore renders degraded with noise, blur, skew and uneven
   illumination. Over 657 scores rendered, rasterized and read back,
-  the median score keeps 93.6 % of its pitches and 91.3 % of its
+  the median score keeps 94.1 % of its pitches and 91.9 % of its
   durations, against 99.2 % / 99.5 % for the same PDFs read as vectors.
-  Octave clefs (8va / 8vb) are the detector's known weak spot.
+  What is still open, and what has been measured and closed, is
+  `docs/omr-open-work.md`.
 
 Diagnostics (`PDFImportOptions.diagnostics`) name every page that was
 rasterized, every page that could not be read, and — on the entry
@@ -349,8 +350,11 @@ wrapping the wasm build with a Canvas2D renderer; see
 [its README](Web/sheet-music-web/README.md) for the consumer-side API, and
 [`Examples/Web/`](Examples/Web/) for a viewer you can open locally.
 
-The bindings expose display and playback. Editing exists in the Swift engine
-but is not exposed to JavaScript yet.
+The bindings expose display, playback and editing: `beginEditing()`, the typed
+`applyEdit(intent)`, the `applyEditIntentBytes(bytes)` relay for intents authored
+elsewhere, `undo()` / `redo()` and `editState()`. The browser replays the same
+byte-pinned golden chains as Swift and Kotlin — including the ninety-two-step
+edit-command parity chain — so a command behaves identically on all three.
 
 ```bash
 Scripts/wasm-build-web.sh                    # wasm + JavaScript glue
