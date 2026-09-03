@@ -24,9 +24,10 @@ import {
 
 const sheetMusic = await loadSheetMusic({ bundleURL: "/sheet-music/" });
 
-// Glyph metrics the engraver measures with. Not an optimization: without them
-// the spacing is visibly wrong, and nothing errors.
-const metrics = await fetch("/sheet-music/bravura.smft");
+// Font metrics the engraver measures with — Bravura's glyph geometry and
+// Edwin's text metrics, in one file. Not an optimization: without them the
+// spacing is visibly wrong, and nothing errors.
+const metrics = await fetch("/sheet-music/sheet-music.smft");
 sheetMusic.installSMuFLMetrics(new Uint8Array(await metrics.arrayBuffer()));
 
 const fonts = await loadScoreFonts({
@@ -217,14 +218,18 @@ failure modes look nothing alike, which is useful when something renders oddly:
 
 | file | what breaks without it |
 |---|---|
-| `bravura.smft` | Glyph metrics. Spacing is visibly wrong and articulations sit ~1.2 staff spaces off; nothing errors. |
+| `sheet-music.smft` | Font metrics. Spacing is visibly wrong, articulations sit ~1.2 staff spaces off and every text width is a bucket average; nothing errors. |
 | `bravura.woff2` | Music glyphs become tofu boxes, correctly positioned. |
 | `edwin-roman.woff2` | Titles and text fall back to a system face. |
 
-Serve `bravura.smft` from the version of the package you load. The table's
+Serve `sheet-music.smft` from the version of the package you load. The table's
 format is versioned, and `installSMuFLMetrics` returns `false` for a table
 written for an older one rather than engraving off it — a copy pinned in a
 host's own asset pipeline is the way that happens.
+
+This file was called `bravura.smft` before SMFT v4, which added the measured
+Edwin metrics beside Bravura's; a host still fetching the old name gets a 404
+rather than a quietly stale table.
 
 Both fonts are SIL OFL 1.1 — see `assets/Bravura.LICENSE.txt` and
 `assets/Edwin.LICENSE.txt`.

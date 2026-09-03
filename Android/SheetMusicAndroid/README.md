@@ -123,13 +123,18 @@ dependencies {
 ```kotlin
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import io.github.jiyimeta.sheetmusic.ScoreHandle
-import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
+import io.github.jiyimeta.sheetmusic.FontMetricsBuilder
 
 // Measure the metrics table and install it before laying anything out.
-// Build it with the builder that ships in this AAR rather than caching
-// bytes across versions: the format is versioned, and the install returns
-// false for an older table rather than engraving off it.
-val table = BravuraMetricsBuilder.buildTable(context.assets)
+// The builder reads `fonts/Bravura.otf` and `fonts/Edwin-Roman.otf` from the
+// AssetManager you hand it and measures both — glyph geometry from the first,
+// text metrics from the second. Bravura is required; Edwin is optional and
+// only costs you the text face, which then falls back to estimated advances
+// and an estimated ascent/descent, as it did before SMFT v4. Build the table
+// with the builder that ships in this AAR rather than caching bytes across
+// versions: the format is versioned, and the install returns false for an
+// older table rather than engraving off it.
+val table = FontMetricsBuilder.buildTable(context.assets)
 SheetMusicJNI.nativeInstallSMuFLMetrics(table)
 
 val bytes = context.assets.open("score.mscz").use { it.readBytes() }

@@ -26,11 +26,11 @@
 //
 //     swift run GenWebFixtures \
 //         Web/sheet-music-web/test/fixtures \
-//         Web/sheet-music-web/assets/bravura.smft
+//         Web/sheet-music-web/assets/sheet-music.smft
 //
 //     SM_WEB_FIXTURE_RECORD=1 swift run GenWebFixtures \
 //         Web/sheet-music-web/test/fixtures \
-//         Web/sheet-music-web/assets/bravura.smft
+//         Web/sheet-music-web/assets/sheet-music.smft
 import Foundation
 import SheetMusicBridgeCore
 import SheetMusicCore
@@ -160,7 +160,7 @@ enum GenWebFixtures {
         exit(code)
     }
 
-    /// Installs the same `bravura.smft` table the browser installs, NOT the
+    /// Installs the same `sheet-music.smft` table the browser installs, NOT the
     /// CoreText provider.
     ///
     /// The table is generated from CoreText but is not identical to it: values
@@ -183,8 +183,8 @@ enum GenWebFixtures {
             fail("Bravura failed to register with CoreText", code: 4)
         }
         do {
-            let table = try SMuFLMetricsTable.decode(Data(contentsOf: tableURL))
-            FontMetrics.provider = makeSMuFLMetricsTableProvider(table: table)
+            let table = try FontMetricsTable.decode(Data(contentsOf: tableURL))
+            FontMetrics.provider = makeFontMetricsTableProvider(table: table)
         } catch {
             fail("could not install \(tableURL.path): \(error)", code: 8)
         }
@@ -290,7 +290,7 @@ enum GenWebFixtures {
             FileHandle.standardError.write(
                 Data(
                     """
-                    usage: GenWebFixtures <fixture-dir> <bravura.smft>
+                    usage: GenWebFixtures <fixture-dir> <sheet-music.smft>
                     checks the committed fixtures; \
                     \(FixtureEmitter.recordVariable)=1 rewrites them
 

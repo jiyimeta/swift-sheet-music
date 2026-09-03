@@ -7,19 +7,26 @@ struct ScoreFingerprintParityTests {
     private static let staff0 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
     private static let slot = VoiceElementID(staff: staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1)
 
-    /// The committed standard chain's first fingerprint — `editReplay/goldens.txt` line 1 — computed from the
-    /// in-memory fixture. Pins "a score with none of the new fields set hashes exactly as before" directly, so
-    /// the by-occupants rule is checked here and not only through the golden suites.
-    @Test("a score with every new field at its default hashes exactly as it did before this change")
-    func defaultsHashUnchanged() throws {
-        let goldens = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Android/SheetMusicAndroid/src/androidTest/assets/editReplay/goldens.txt")
-        let first = try String(contentsOf: goldens, encoding: .utf8)
-            .split(separator: "\n", omittingEmptySubsequences: true).first.flatMap { Int64($0) }
-        #expect(EditingFixtures.replayFixture().stableFingerprint == first)
-    }
+    #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
+        /// The committed standard chain's first fingerprint — `editReplay/goldens.txt` line 1 — computed from
+        /// the in-memory fixture. Pins "a score with none of the new fields set hashes exactly as before"
+        /// directly, so the by-occupants rule is checked here and not only through the golden suites.
+        ///
+        /// Apple-only because it reaches the goldens through `#filePath`, the same reason
+        /// `ShippedMetricsTableTests` is: WASI has no preopened directory beyond the test bundle, so on the
+        /// WebAssembly shape this reads as "the file doesn't exist" rather than as a fingerprint mismatch. The
+        /// rest of this suite is in-memory and runs everywhere.
+        @Test("a score with every new field at its default hashes exactly as it did before this change")
+        func defaultsHashUnchanged() throws {
+            let goldens = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Android/SheetMusicAndroid/src/androidTest/assets/editReplay/goldens.txt")
+            let first = try String(contentsOf: goldens, encoding: .utf8)
+                .split(separator: "\n", omittingEmptySubsequences: true).first.flatMap { Int64($0) }
+            #expect(EditingFixtures.replayFixture().stableFingerprint == first)
+        }
+    #endif
 
     /// `WritableKeyPath` is a class and does not conform to `Sendable`, which `@Test(arguments:)` requires of its
     /// elements — this wrapper carries the keypath across that boundary; it is safe because a keypath is

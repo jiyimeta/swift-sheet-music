@@ -5,15 +5,13 @@
     @testable import SheetMusicLayout
     import Testing
 
-    /// Whether the host has Edwin installed. The package does not bundle it — a host registers it
-    /// via `SheetMusicFonts.register(urls:)` — and `CTFontCreateWithName` answers an unregistered
-    /// family with a silent system-font fallback rather than nil. Any assertion about *Edwin's own*
-    /// metrics is therefore only meaningful where the family actually resolves; on a bare CI runner
-    /// it would be asserting against Helvetica.
-    var edwinFontIsInstalled: Bool {
-        let ct = CTFontCreateWithName("Edwin" as CFString, 12, nil)
-        return (CTFontCopyFamilyName(ct) as String) == "Edwin"
-    }
+    // The package does not bundle Edwin — a host registers it via
+    // `SheetMusicFonts.register(urls:)` — and `CTFontCreateWithName` answers
+    // an unregistered family with a silent system-font fallback rather than
+    // nil, so an assertion about *Edwin's own* metrics on a bare CI runner
+    // would be an assertion about Helvetica. `TestSupport.installApple`
+    // registers the repo's own copy, which is why the suites below can measure
+    // Edwin and not the system font.
 
     /// `HorizontalClampPass` — annotation text is pulled back inside the
     /// system instead of running off the page and being clipped by the
@@ -250,16 +248,15 @@
             #expect(abs(rect.maxY - (100 + lineHeight)) < 0.01)
         }
 
-        /// Edwin asks for a non-zero line gap, so a provider that
-        /// ignored `leading` would stack the lines too tightly. Skipped
-        /// where Edwin isn't installed (CI runners): CoreText answers an
-        /// unregistered family with the system font, whose leading is 0,
-        /// so the assertion would be about Helvetica rather than about
-        /// `AppleFontMetricsProvider`. The rest of this suite derives its
-        /// expectations from the provider itself and runs everywhere.
+        /// Edwin asks for a 0.2 em line gap, so a provider that ignored
+        /// `leading` would stack the lines too tightly. This used to be
+        /// skipped where Edwin isn't installed — a bare CI runner, and most
+        /// dev machines — because CoreText answers an unregistered family with
+        /// the system font, whose leading is 0, and the assertion would have
+        /// been about Helvetica. `TestSupport.installApple` now registers the
+        /// repo's Edwin, so it runs everywhere and means what it says.
         @available(macOS 15.0, iOS 16.0, *)
-        @Test(.enabled(if: edwinFontIsInstalled))
-        func appleProviderReportsEdwinsLeading() {
+        @Test func appleProviderReportsEdwinsLeading() {
             #expect(FontMetrics.provider.leading(font: font) > 0)
         }
 
