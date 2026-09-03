@@ -32,3 +32,25 @@ Do not route the other formats through `AVAssetWriter`. macOS rejects MP3
 output through `AVAssetWriter` at runtime even on releases where the API is
 available. See `Sources/SheetMusicAudio/Export/AudioExportWriter.swift` for the
 platform gates.
+
+## Audio Units this package registers itself
+
+Every `AudioComponentDescription` this package *registers* — as opposed to the
+ones it uses to look Apple's own components up — must set
+`AudioComponentFlags.sandboxSafe` in `componentFlags`. Inside an App Sandbox the
+component manager refuses a locally registered component that does not declare
+it, and `AVAudioUnitEffect(audioComponentDescription:)` then throws an
+Objective-C exception (`com.apple.coreaudio.avfaudio`, error -3000) which Swift
+cannot catch. `PlaybackEngine.init` builds the master chain eagerly, so the host
+process dies a few seconds after launch without ever starting playback.
+
+Nothing in this package's own test suite can catch that: the tests run in an
+unsandboxed host, where both flag values work. The failure was found with a
+2×2 bench outside the package (App Sandbox entitlement × `componentFlags`),
+which crashed in exactly one cell — sandboxed with flags `0` — and exited
+cleanly in the other three. Rebuilding that bench is the only way to re-verify
+it: a minimal entitled `.app` that constructs the node and exits.
+
+Descriptions used purely to *find* an Apple component (`makePeakLimiter`,
+`MIDISynthBuilder.make`) pass `componentFlagsMask: 0`, so their flags are not
+matched and need no change.
