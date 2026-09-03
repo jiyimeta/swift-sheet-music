@@ -44,14 +44,11 @@ public struct PagedScoreView: View {
 
     @ViewBuilder
     private func pageContent(in proxy: GeometryProxy) -> some View {
-        let w = max(proxy.size.width, options.staffSize * 4)
-        let pageOpts = ScoreViewOptions(
-            staffSize: options.staffSize,
-            systemGap: options.systemGap,
-            wrapToViewWidth: true,
-            breakPolicy: options.breakPolicy,
-            multiMeasureRest: options.multiMeasureRest,
+        let w = ScoreView.flooredWrapWidth(
+            options.fixedLayoutWidth ?? proxy.size.width,
+            options: options,
         )
+        let pageOpts = Self.pageOptions(from: options)
         let doc = LayoutEngine.layout(
             score: score, options: pageOpts,
             availableWidth: w,
@@ -126,6 +123,22 @@ public struct PagedScoreView: View {
                 .offset(x: sys.origin.x, y: pageOrigins[idx])
             }
         }
+    }
+
+    /// The caller's options as the page layout needs them: wrapping
+    /// is forced on (a page is wrapped by definition) and everything
+    /// else is carried through unchanged.
+    ///
+    /// Written as a mutation of the caller's value rather than a
+    /// field-by-field `ScoreViewOptions(...)` call on purpose: the
+    /// field-by-field version is what silently dropped seven options
+    /// as the struct grew. `PagedScoreViewOptionsCopyTests` pins it.
+    static func pageOptions(
+        from options: ScoreViewOptions,
+    ) -> ScoreViewOptions {
+        var copy = options
+        copy.wrapToViewWidth = true
+        return copy
     }
 
     static func paginate(
