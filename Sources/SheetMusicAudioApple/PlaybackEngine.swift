@@ -291,6 +291,29 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// AUMIDISynth path, which loads synchronously.
     public private(set) var isPreparingSoundfont = false
 
+    /// The error from the most recent **automatic** graph rebuild that failed, or `nil` if the last one succeeded.
+    ///
+    /// Two things rebuild the graph without the host asking directly: a SoundFont hot-swap
+    /// (`reloadSoundfont(resolver:)`) and an audio I/O configuration change (an output-device switch on macOS, a
+    /// route change on iOS — see `PlaybackEngine+ConfigurationChange`). Both re-run `prepare(score:)`, which can
+    /// throw from `engine.start()`. Before this existed the failure was swallowed: the engine went quiet, the mixer
+    /// was back at score defaults, and nothing said so. A host can surface this, or re-`prepare` on it.
+    ///
+    /// Cleared by the next rebuild that completes. Never set by an explicit `prepare(score:)` — that one throws to
+    /// its caller, who is in a position to handle it.
+    public private(set) var lastGraphRestartError: (any Error)?
+
+    /// Completed `restartGraphPreservingState()` calls. Not host-facing state: it exists so a test can tell
+    /// "the restart ran" from "nothing happened", which no other observable distinguishes when a rebuild is
+    /// successful and therefore invisible.
+    private(set) var graphRestartCount = 0
+
+    /// Test-only injection: the next `restartGraphPreservingState()` throws this instead of rebuilding, and clears
+    /// it. It throws *before* `prepare(score:)` runs — which is deliberately unlike the real failure (inside
+    /// `prepare`, after it has already stopped the transport), because that is what leaves `state` still claiming
+    /// `.playing` and so actually exercises the caller's obligation to correct it.
+    var graphRestartFailureForTesting: (any Error)?
+
     /// A play requested while the backend was still loading its SoundFont,
     /// replayed the moment the backend reports ready.
     private var pendingBackendPlay: (cursor: ScoreCursor?, score: Score, countIn: Bool)?
@@ -763,8 +786,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// cannot observe (a future `prepareWithDiagnostics`-style API should
     /// surface both, mirroring `MSCXParser.parseWithDiagnostics`):
     /// - If the re-prepare throws (only `engine.start()` can), the swap is
-    ///   silently abandoned and the engine is left stopped with the mixer
-    ///   reset to the score's defaults.
+    ///   abandoned and the engine is left stopped with the mixer reset to the
+    ///   score's defaults. The error itself is no longer lost — it lands in
+    ///   `lastGraphRestartError` — but nothing is thrown from here.
     /// - A missing / corrupt SoundFont does NOT fail here: the AU rejects
     ///   the file inside `prepareSynth`'s `try?`-guarded `loadSoundFont`,
     ///   so the sampler stays attached but silent and this returns as if
@@ -780,20 +804,38 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         clickResolver = MetronomeClickResolver(
             provider: metronomeClickProvider, soundfontResolver: newResolver,
         )
+        do {
+            try restartGraphPreservingState()
+        } catch {
+            recordGraphRestartFailure(error)
+        }
+    }
+
+    /// Re-`prepare` the currently-loaded score in place, preserving what `prepare(score:)` would otherwise reset:
+    /// the cursor, the playing / paused transport, and the per-channel mixer state (volume / mute / solo / program).
+    /// `rate`, `masterTuningCents` and `transposeSemitones` are engine fields re-applied inside `prepareSynth` /
+    /// sequencer construction, so they survive on their own.
+    ///
+    /// No-op before the first `prepare(score:)`. Throws whatever `prepare(score:)` throws (in practice only
+    /// `engine.start()`); the caller decides what a failure means — see `recordGraphRestartFailure(_:)`.
+    ///
+    /// This is the *only* sanctioned in-place graph rebuild. Both callers (a SoundFont hot-swap and an audio
+    /// configuration change) go through it rather than reconnecting nodes themselves: `prepare(score:)` hard-stops
+    /// the engine before it mutates the graph, which is what keeps a live render cycle from faulting on freed
+    /// sampler memory.
+    func restartGraphPreservingState() throws {
+        if let injected = graphRestartFailureForTesting {
+            graphRestartFailureForTesting = nil
+            throw injected
+        }
         guard let score = loadedScore else { return }
         // Snapshot the state `prepare(score:)` would otherwise reset.
         let savedCursor = currentCursor
         let wasPlaying = state == .playing
         let savedMixer = mixerChannels
-        do {
-            try prepare(score: score)
-        } catch {
-            return
-        }
+        try prepare(score: score)
         // `prepare` rebuilds the channel array at the score's defaults;
-        // re-apply the user's mixer state. `rate`, `masterTuningCents`,
-        // and `transposeSemitones` are engine fields re-applied inside
-        // `prepareSynth` / sequencer construction, so they survive.
+        // re-apply the user's mixer state.
         for channel in savedMixer {
             setVolume(forChannel: channel.id, to: channel.volume)
             setMuted(forChannel: channel.id, to: channel.isMuted)
@@ -804,7 +846,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
         // `prepare(score:)` reset the sequencer, so building it via
         // `play(from:)` is the only way to re-seat the cursor. Re-pause
-        // immediately when we weren't actively playing, so a paused reload
+        // immediately when we weren't actively playing, so a paused rebuild
         // keeps its place without continuing to sound.
         if wasPlaying {
             play(from: savedCursor, in: score)
@@ -812,7 +854,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // With an async-loading backend the play-then-pause dance is unsafe:
             // `play` would DEFER (the SoundFont isn't ready), leaving `state ==
             // .stopped`, so the `if state == .playing` re-pause never fires and the
-            // deferred play later starts audibly — a paused reload spontaneously
+            // deferred play later starts audibly — a paused rebuild spontaneously
             // resuming. Just keep the position; the next real play resumes from
             // `currentCursor` once the synth is ready.
             if usingBackend, backend?.isReady == false {
@@ -829,6 +871,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 }
             }
         }
+        graphRestartCount += 1
+        lastGraphRestartError = nil
+    }
+
+    /// Record an automatic rebuild that failed, and stop the transport lying about it.
+    ///
+    /// `prepare(score:)` throws only after it has already stopped playback, so `state` is normally `.stopped`
+    /// here anyway; the assignment is what guarantees it for every future throw site.
+    func recordGraphRestartFailure(_ error: any Error) {
+        lastGraphRestartError = error
+        state = .stopped
     }
 
     /// Build the AUMIDISynth unit(s): always a melodic unit (pitched channels), plus a separate percussion unit (GM
