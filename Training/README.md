@@ -2,6 +2,9 @@
 
 Scripts that generate the synthetic training/eval datasets for the raster
 OMR program (see docs/superpowers/specs/2026-08-06-omr-raster-foundation-design.md).
+What is still open in the OMR path, and what has already been measured
+and closed about each, is `docs/omr-open-work.md`.
+
 Datasets live OUTSIDE the repo at `~/Datasets/sheet-music-omr/<version>/`
 (override with `OMR_DATA_ROOT`). Nothing dataset-sized or copyrighted is
 ever committed; admissible sources are procedurally generated scores,
