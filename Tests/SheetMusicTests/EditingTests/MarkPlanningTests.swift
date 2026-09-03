@@ -68,4 +68,36 @@ struct MarkPlanningTests {
             VoiceElementID(staff: Self.flute, measureIndex: 9, voiceIndex: 0, elementIndex: 0),
         ))
     }
+
+    @Test("a chord symbol plans, restates to nothing, and never restates over a file-authored root")
+    func chordSymbolPlanning() {
+        let session = ScoreEditSession(score: EditingFixtures.parityFixture())
+        let before = session.score
+        #expect(!session.apply(.setChordSymbol(at: Self.slot(3, 0), name: nil, harmonyType: .standard)))
+        #expect(session.lastRefusal?.reason == .nothingToApply)
+        #expect(session.apply(.setChordSymbol(at: Self.slot(3, 0), name: "Am7", harmonyType: .standard)))
+        // m3: [harmony, r] — the rest is element 1 now.
+        #expect(!session.apply(.setChordSymbol(at: Self.slot(3, 1), name: " Am7 ", harmonyType: .standard)))
+        #expect(session.lastRefusal?.reason == .nothingToApply)
+        #expect(session.apply(.setChordSymbol(at: Self.slot(3, 1), name: "Am7", harmonyType: .roman)))
+        #expect(session.undo())
+        #expect(session.undo())
+        #expect(session.score == before)
+        // A MuseScore-authored `<name>m7</name><root>13</root>` reads "Am7" on the page; restating "m7" would
+        // drop the root and read "m7", so it is a real edit.
+        var authored = EditingFixtures.parityFixture()
+        authored.parts[0].staves[0].measures[3].voices[0].elements.insert(
+            .harmony(Harmony(name: "m7", rootTpc: 13)), at: 0,
+        )
+        let second = ScoreEditSession(score: authored)
+        #expect(second.apply(.setChordSymbol(at: Self.slot(3, 1), name: "m7", harmonyType: .standard)))
+        #expect(SetChordSymbol.current(at: Self.slot(3, 1), in: second.score)?.rootTpc == nil)
+    }
+
+    @Test("an empty chord symbol surfaces its own refusal")
+    func chordSymbolEmptyRefusal() {
+        let session = ScoreEditSession(score: EditingFixtures.parityFixture())
+        #expect(!session.apply(.setChordSymbol(at: Self.slot(3, 0), name: "  ", harmonyType: .standard)))
+        #expect(session.lastRefusal?.reason == .emptyChordSymbol)
+    }
 }
