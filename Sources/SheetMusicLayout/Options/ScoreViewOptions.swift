@@ -185,6 +185,24 @@ public struct ScoreViewOptions: Sendable, Equatable {
     ///
     /// Default: `true` (behavior from before this option existed).
     public var lyricsVisible: Bool
+    /// Pins the width the vertical (wrapping) layout wraps to,
+    /// instead of following the view's container.
+    ///
+    /// When non-nil and `wrapToViewWidth` is true, systems wrap to
+    /// this width regardless of how wide the view actually is; the
+    /// rendered view is then wider or narrower than its container
+    /// and the host is expected to zoom / scroll it. This is what
+    /// keeps a page-shaped engraving stable while a window is
+    /// resized — MuseScore's continuous-vertical mode does the same
+    /// thing, fixing the width to the page width and letting zoom
+    /// absorb the difference (`pagelayout.cpp:392`).
+    ///
+    /// Ignored when `wrapToViewWidth` is false (horizontal mode
+    /// derives its width from the music, not from a container).
+    ///
+    /// Default: `nil` (follow the container, the behavior from
+    /// before this option existed).
+    public var fixedLayoutWidth: CGFloat?
 
     public init(
         staffSize: CGFloat = 28,
@@ -199,6 +217,7 @@ public struct ScoreViewOptions: Sendable, Equatable {
         showsInvisibleElements: Bool = false,
         measureNumbers: MeasureNumberPolicy = .systemStart,
         lyricsVisible: Bool = true,
+        fixedLayoutWidth: CGFloat? = nil,
     ) {
         self.staffSize = staffSize
         self.systemGap = systemGap
@@ -212,5 +231,6 @@ public struct ScoreViewOptions: Sendable, Equatable {
         self.showsInvisibleElements = showsInvisibleElements
         self.measureNumbers = measureNumbers
         self.lyricsVisible = lyricsVisible
+        self.fixedLayoutWidth = fixedLayoutWidth
     }
 }
