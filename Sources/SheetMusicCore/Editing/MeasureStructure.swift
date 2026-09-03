@@ -170,14 +170,28 @@ enum MeasureStructure {
                         let elements = score.parts[partIndex].staves[staffIndex].measures[measureIndex]
                             .voices[voiceIndex].elements
                         for elementIndex in elements.indices {
-                            guard case var .spanner(spanner) = elements[elementIndex] else { continue }
                             let id = VoiceElementID(
                                 staff: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex),
                                 measureIndex: measureIndex, voiceIndex: voiceIndex, elementIndex: elementIndex,
                             )
-                            spanner.nextMeasuresOffset = transform(id, spanner.nextMeasuresOffset)
-                            score.parts[partIndex].staves[staffIndex].measures[measureIndex]
-                                .voices[voiceIndex].elements[elementIndex] = .spanner(spanner)
+                            switch elements[elementIndex] {
+                            case var .spanner(spanner):
+                                spanner.nextMeasuresOffset = transform(id, spanner.nextMeasuresOffset)
+                                score.parts[partIndex].staves[staffIndex].measures[measureIndex]
+                                    .voices[voiceIndex].elements[elementIndex] = .spanner(spanner)
+                            case var .chord(chord) where !chord.spanners.isEmpty:
+                                // A slur begin lives in `Chord.spanners`, not as a `.spanner` element, and its
+                                // `nextMeasuresOffset` is measured from the SAME anchor — so it has to move by the
+                                // same rule. This walk missed it until group 6 made slurs writable.
+                                for index in chord.spanners.indices {
+                                    chord.spanners[index].nextMeasuresOffset =
+                                        transform(id, chord.spanners[index].nextMeasuresOffset)
+                                }
+                                score.parts[partIndex].staves[staffIndex].measures[measureIndex]
+                                    .voices[voiceIndex].elements[elementIndex] = .chord(chord)
+                            default:
+                                continue
+                            }
                         }
                     }
                 }

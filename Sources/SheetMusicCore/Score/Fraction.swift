@@ -23,6 +23,14 @@ public struct Fraction: Hashable, Sendable {
         self.init(numerator: n, denominator: d)
     }
 
+    /// The fraction-of-a-whole-note that `ticks` represents at `division` PPQ — the inverse of
+    /// `ticks(division:)`, which is `numerator * 4 * division / denominator`. Reduced by this type's own gcd, so
+    /// 960 ticks at 480 PPQ is `1/2`; the gcd is taken on `abs(numerator)`, so a negative tick count keeps its
+    /// sign (a spanner's `<fractions>` is routinely negative — see `Spanner.offsets(from:to:in:)`).
+    public init(ticks: Int, division: Int) {
+        self.init(numerator: ticks, denominator: 4 * division)
+    }
+
     /// Number of MIDI ticks this fraction-of-a-whole-note represents at the given PPQ division.
     /// A whole note = 4 quarter notes = 4 * division ticks.
     public func ticks(division: Int) -> Int {

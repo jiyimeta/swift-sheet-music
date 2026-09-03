@@ -156,6 +156,10 @@ and this project adheres to
   up-straight, `5` down-straight (`TConv`'s `ARPEGGIO_TYPES`), so a file using either straight arpeggio played its
   notes in the wrong order — 4 top-down and 5 bottom-up. Subtypes 0–3, which is everything in this repo's
   fixtures, are unaffected.
+- `MeasureStructure.adjustSpannerOffsets` walked `.spanner` voice elements only, so a chord-anchored slur — whose
+  begin side lives in `Chord.spanners`, not as its own voice element — kept a stale `nextMeasuresOffset` across an
+  `InsertMeasure` or `DeleteMeasure` inside its span, leaving the slur pointing at the wrong end chord. The walk
+  now moves both shapes by the same rule.
 
 ## [2.3.1] - 2026-08-31
 
