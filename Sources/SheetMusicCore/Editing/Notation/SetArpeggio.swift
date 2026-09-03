@@ -11,6 +11,11 @@ import SheetMusicFoundation
 /// `types/typesconv.cpp`) is enforced on the WIRE, where a relayed payload is untrusted input, not in a command a
 /// caller built from a value it already holds.
 ///
+/// The inverse this returns can itself be refused — `.chordTooSmall`, if a later edit dropped the chord to one
+/// note before undo runs. `ScoreEditor.undo()` pops its stack LIFO, so whatever removed the note was applied
+/// after this command and is undone first, restoring the note count before this inverse ever resolves; nothing
+/// in this command re-checks that at undo time.
+///
 /// > Note: This command is sugar over `ReplaceVoiceElement`. See `docs/edit-commands.md`.
 public struct SetArpeggio: EditCommand {
     public let location: VoiceElementID

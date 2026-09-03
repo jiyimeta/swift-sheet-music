@@ -97,9 +97,9 @@ and this project adheres to
   as a subtype alone and its planner compares only that, so re-sending a stretched arpeggio's subtype does not
   reset its `timeStretch`; `Arpeggio.timeStretch` / `userLen1` and `ChordLine.isWavy` stay reachable only by
   building the command directly.
-- `EditRefusal.Reason.noNextChord(at:)`, `.chordTooSmall(at:noteCount:)` and `.notDottable(at:)`, plus
-  `EditRefusal.ExpectedKind.chordOrRest`. All three carry the `VoiceElementID` they were asked about, and the
-  first two gate the write only — clearing an arpeggio or a glissando is never refused.
+- `EditRefusal.Reason.noNextChord(at:)`, `.chordTooSmall(at:noteCount:)` and `.notDottable(at:)`. All three
+  carry the `VoiceElementID` they were asked about, and the first two gate the write only — clearing an
+  arpeggio or a glissando is never refused.
 - `NoteDuration.baseAndDots()`, the inverse of `dotted(_:)`, and `ChordArticulation.Kind.mscxToken` /
   `init(mscxToken:)` — the MSCX token table moved into Core where the wire can reach it, with both MSCX paths
   delegating to it.

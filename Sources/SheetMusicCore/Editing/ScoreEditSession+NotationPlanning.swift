@@ -37,8 +37,8 @@ extension ScoreEditSession {
             return SetArpeggio.current(at: location, in: score)?.subtype == subtype ? nil : command
         case let .setGlissando(location, glissando):
             let command = SetGlissando(at: location, glissando: glissando)
-            guard let note = score[location] else { return command }
-            return note.glissando == glissando ? nil : command
+            guard score[location] != nil else { return command }
+            return SetGlissando.current(at: location, in: score) == glissando ? nil : command
         case let .setDots(location, dots):
             let command = SetDots(at: location, dots: dots)
             guard let current = SetDots.current(at: location, in: score) else { return command }
@@ -50,8 +50,8 @@ extension ScoreEditSession {
             return current == wanted ? nil : command
         case let .setNoteParentheses(location, parentheses):
             let command = SetNoteParentheses(at: location, parentheses: parentheses)
-            guard let note = score[location] else { return command }
-            return note.parentheses == parentheses ? nil : command
+            guard score[location] != nil else { return command }
+            return SetNoteParentheses.current(at: location, in: score) == parentheses ? nil : command
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.

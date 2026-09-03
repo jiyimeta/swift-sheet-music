@@ -12,6 +12,11 @@ import SheetMusicFoundation
 /// from the second (`MSCXDecoder+Voice.resolveTremoloPairs`), so this model's one-sided storage is the canonical
 /// form and the encoder re-doubles it on the way out.
 ///
+/// The inverse this returns can itself be refused — `.noNextChord`, if a later edit removed the follower before
+/// undo runs. `ScoreEditor.undo()` pops its stack LIFO, so whatever removed the follower was applied after this
+/// command and is undone first, restoring the follower before this inverse ever resolves; nothing in this command
+/// re-checks that at undo time.
+///
 /// > Note: This command is sugar over `ReplaceVoiceElement`. See `docs/edit-commands.md`.
 public struct SetTremolo: EditCommand {
     public let location: VoiceElementID

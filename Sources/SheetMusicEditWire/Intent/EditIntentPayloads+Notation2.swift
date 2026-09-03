@@ -91,6 +91,11 @@ public struct SetChordLineIntentWire {
         self.location = VoiceElementIDWire(from: location)
         hasLine = kind == nil ? 0 : 1
         self.kind = UInt8(kind?.rawValue ?? 1)
+        // Passed through as given even when `hasLine == 0`, unlike the sibling glissando payload, which zeroes an
+        // absent value's fields. `isStraight` is not optional on `EditIntent.setChordLine` — it is a plain `Bool`
+        // associated value — so `decoded()` always returns whatever this wire carries; zeroing it here would make
+        // `EditIntent` round-trip unequal to itself whenever a caller clears a line with `isStraight: true`. Do
+        // not "fix" this into a zero.
         self.isStraight = isStraight ? 1 : 0
     }
 

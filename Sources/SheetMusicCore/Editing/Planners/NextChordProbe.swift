@@ -12,14 +12,17 @@ import SheetMusicFoundation
 /// So a WRITE has to check what a read would find: a `.between` tremolo with no follower decodes back as no
 /// tremolo at all, and a glissando on the last chord draws a line to nowhere.
 enum NextChordProbe {
-    /// The next timed element (chord or rest) after `location` in the SAME voice of the SAME measure, skipping
-    /// every non-timed element between them; `nil` at the end of the measure or when `location` does not resolve.
+    /// The next `.chord` case after `location` in the SAME voice of the SAME measure, skipping every other
+    /// element between them; `nil` at the end of the measure or when `location` does not resolve.
     ///
     /// In-measure on purpose: a two-note tremolo does not cross a bar line in MuseScore, and neither the decoder's
     /// pairing pass nor the renderer's follower search looks past the voice's element array for one measure.
     ///
     /// Rests answer this too — a rest is a `.chord` with no notes (`VoiceElement.rest(duration:)`) — because the
-    /// caller, not the walk, decides whether a rest is an acceptable partner.
+    /// caller, not the walk, decides whether a rest is an acceptable partner. A `.measureRepeat` is also timed and
+    /// the walk steps past it without matching, but it is unreachable here today: it fills its voice alone, for the
+    /// whole measure (`SetMeasureRepeat` requires the bar's one voice to be empty before writing one), so no chord
+    /// `location` can resolve to shares a voice with one for this walk to ever reach.
     static func nextTimedElement(after location: VoiceElementID, in score: Score) -> VoiceElement? {
         guard let voice = score[voice: VoiceRef(location)],
               voice.elements.indices.contains(location.elementIndex)
