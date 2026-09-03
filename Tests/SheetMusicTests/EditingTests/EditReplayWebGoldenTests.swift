@@ -219,7 +219,9 @@
                  .setJumps, .setMarkers,
                  .setArticulation, .setGraceNotes, .setTremolo, .setArpeggio, .setGlissando, .setDots,
                  .setChordLine, .setNoteParentheses,
-                 .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible:
+                 .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible,
+                 .setSlur, .setHairpin, .setPedal, .setVolta, .setOttava, .setTextLine, .setTrill, .setVibrato,
+                 .setPalmMute, .setLetRing, .removeSpanner:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }

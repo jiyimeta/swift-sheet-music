@@ -347,4 +347,45 @@ public enum EditIntent: Sendable, Equatable {
     /// LEADING chord, where the flag lives, so any member may be named; refused as `.notBeamed` when the chord is in
     /// no beam group.
     case setBeamVisible(at: VoiceElementID, visible: Bool)
+
+    // Appended for the edit-command parity project's spanner group (spec 2026-09-02) — indices 62…72. Every
+    // `set…` takes the RANGE it spans; the engine narrows that range to one voice and decides the storage form and
+    // the end tick per kind. There is no "nil clears" here: a spanner is removed by `removeSpanner`, because the
+    // removal targets a different location than the write — the `.spanner` element, or the chord holding the
+    // slur — which is exactly the §3.1 exception `RemoveClef` already is.
+
+    /// Draw a slur over `over`.
+    case setSlur(over: VoiceElementRange)
+
+    /// Draw a hairpin of `subtype` over `over`.
+    case setHairpin(over: VoiceElementRange, subtype: Spanner.HairpinPayload.Subtype)
+
+    /// Draw a pedal line over `over`.
+    case setPedal(over: VoiceElementRange)
+
+    /// Draw a volta over `over`, printing `endings` as its take-numbers and `text` as its label (or the endings'
+    /// own default text when `nil`).
+    case setVolta(over: VoiceElementRange, endings: [Int], text: String?)
+
+    /// Draw an ottava of `subtype` over `over`.
+    case setOttava(over: VoiceElementRange, subtype: Spanner.OttavaPayload.Subtype)
+
+    /// Draw a text line over `over`, with `text` as its label (or no label when `nil`).
+    case setTextLine(over: VoiceElementRange, text: String?)
+
+    /// Draw a trill of `type` over `over`.
+    case setTrill(over: VoiceElementRange, type: TrillType)
+
+    /// Draw a vibrato of `type` over `over`.
+    case setVibrato(over: VoiceElementRange, type: VibratoType)
+
+    /// Draw a palm-mute line over `over`.
+    case setPalmMute(over: VoiceElementRange)
+
+    /// Draw a let-ring line over `over`.
+    case setLetRing(over: VoiceElementRange)
+
+    /// Remove the spanner of `kind` anchored at `at` — the `.spanner` element itself, or (for a slur) the chord
+    /// carrying it.
+    case removeSpanner(at: VoiceElementID, kind: Spanner.Kind)
 }

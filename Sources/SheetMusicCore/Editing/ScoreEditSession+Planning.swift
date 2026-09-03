@@ -140,6 +140,12 @@ extension ScoreEditSession {
             return notationCommand(for: intent, in: score)
         case .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible:
             return visibilityCommand(for: intent, in: score)
+        case .setSlur, .setHairpin, .setPedal, .setVolta, .setOttava, .setTextLine, .setTrill, .setVibrato,
+             .setPalmMute, .setLetRing, .removeSpanner:
+            // The spanner group's payloads (62…72) exist on the wire from this commit; their planner lands in the
+            // next one. Until then the switch stays exhaustive rather than growing a `default` that would swallow
+            // a future intent nobody dispatched — the same bridge the visibility group's wire commit used.
+            return nil
         }
     }
 

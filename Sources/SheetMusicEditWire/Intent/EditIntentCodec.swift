@@ -95,6 +95,17 @@ import Wirelet
 /// 59 = setNoteVisible(SetNoteVisibleIntentWire)
 /// 60 = setStemVisible(SetStemVisibleIntentWire)
 /// 61 = setBeamVisible(SetBeamVisibleIntentWire)
+/// 62 = setSlur(SetSlurIntentWire)
+/// 63 = setHairpin(SetHairpinIntentWire)
+/// 64 = setPedal(SetPedalIntentWire)
+/// 65 = setVolta(SetVoltaIntentWire)
+/// 66 = setOttava(SetOttavaIntentWire)
+/// 67 = setTextLine(SetTextLineIntentWire)
+/// 68 = setTrill(SetTrillIntentWire)
+/// 69 = setVibrato(SetVibratoIntentWire)
+/// 70 = setPalmMute(SetPalmMuteIntentWire)
+/// 71 = setLetRing(SetLetRingIntentWire)
+/// 72 = removeSpanner(RemoveSpannerIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -102,7 +113,7 @@ import Wirelet
 /// for part renaming; 0…4 predate them all and must keep their indices and byte layout. Cases 30…34 were appended
 /// for the edit-command parity project's structural group (spec 2026-09-02). Cases 35…40 were appended for its
 /// range group. Cases 41…49 were appended for its mark group. Cases 50…57 were appended for its note / chord
-/// group. Cases 58…61 were appended for its visibility group.
+/// group. Cases 58…61 were appended for its visibility group. Cases 62…72 were appended for its spanner group.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -634,6 +645,81 @@ import Wirelet
 ///                  to the leader in the planner, so the bytes carry the host's slot
 /// tag 2: visible   u8, varint — 0 hidden, non-zero shown
 /// ```
+///
+/// `SetSlurIntentWire` (`setSlur`'s payload):
+/// ```
+/// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
+/// ```
+///
+/// `SetHairpinIntentWire` (`setHairpin`'s payload):
+/// ```
+/// tag 1: range    VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: subtype  u8, varint — 0 crescendo / 1 decrescendo / 2 crescLine / 3 dimLine, else throws
+/// ```
+///
+/// `SetPedalIntentWire` (`setPedal`'s payload):
+/// ```
+/// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
+/// ```
+///
+/// `SetVoltaIntentWire` (`setVolta`'s payload). `endings` is the codec's first SCALAR array: Wirelet writes
+/// `[Int32]` as one length-delimited field whose body is the concatenated bare `encode(into:)` of each element —
+/// for a primitive that is a run of zig-zag varints with no per-element length prefix, self-delimiting and
+/// byte-stable (`Conformances+Collections.swift:9-45`); an empty list is the tag with a zero length:
+/// ```
+/// tag 1: range     VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: endings   [i32], zig-zag varints — the volta's take-numbers, in order; length-delimited, an empty list
+///                  is the tag with a zero length
+/// tag 3: hasText   u8, varint — 0 = no explicit label, 1 = text holds it
+/// tag 4: text      string — "" when hasText == 0
+/// ```
+///
+/// `SetOttavaIntentWire` (`setOttava`'s payload). The one raw-string enum here that does NOT throw on an unlisted
+/// spelling: `OttavaPayload.Subtype` has `case other(String)` and a non-failable `init(rawValue:)`
+/// (`Spanner.swift:186-205`), so an unknown subtype is a value the model can hold and a file can carry, not a
+/// decode failure:
+/// ```
+/// tag 1: range    VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: subtype  string — `OttavaPayload.Subtype.rawValue` ("8va", "8vb", "15ma", "15mb", "22ma", "22mb"); an
+///                 unlisted spelling round-trips as `.other(_)` rather than throwing
+/// ```
+///
+/// `SetTextLineIntentWire` (`setTextLine`'s payload):
+/// ```
+/// tag 1: range    VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: hasText  u8, varint — 0 = no label, 1 = text holds it
+/// tag 3: text     string — "" when hasText == 0
+/// ```
+///
+/// `SetTrillIntentWire` (`setTrill`'s payload):
+/// ```
+/// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: type   string — `TrillType.rawValue`; an unknown spelling throws — `TrillType` is a closed
+///               `CaseIterable` enum with no escape hatch, unlike the ottava subtype above
+/// ```
+///
+/// `SetVibratoIntentWire` (`setVibrato`'s payload):
+/// ```
+/// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: type   string — `VibratoType.rawValue`; an unknown spelling throws, the same rule as the trill type
+/// ```
+///
+/// `SetPalmMuteIntentWire` (`setPalmMute`'s payload):
+/// ```
+/// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
+/// ```
+///
+/// `SetLetRingIntentWire` (`setLetRing`'s payload):
+/// ```
+/// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
+/// ```
+///
+/// `RemoveSpannerIntentWire` (`removeSpanner`'s payload):
+/// ```
+/// tag 1: location  VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: kind      string — `Spanner.Kind.rawValue`; an unknown kind throws (`.other` is a legal value and
+///                  decodes as itself)
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -892,6 +978,39 @@ public enum EditIntentWire {
     /// Appended for the edit-command parity project's visibility group (spec 2026-09-02) — index 61. Never
     /// renumber anything above it.
     case setBeamVisible(SetBeamVisibleIntentWire)
+    /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 62. Never renumber
+    /// anything above it.
+    case setSlur(SetSlurIntentWire)
+    /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 63. Never renumber
+    /// anything above it.
+    case setHairpin(SetHairpinIntentWire)
+    /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 64. Never renumber
+    /// anything above it.
+    case setPedal(SetPedalIntentWire)
+    /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 65. Never renumber
+    /// anything above it.
+    case setVolta(SetVoltaIntentWire)
+    /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 66. Never renumber
+    /// anything above it.
+    case setOttava(SetOttavaIntentWire)
+    /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 67. Never renumber
+    /// anything above it.
+    case setTextLine(SetTextLineIntentWire)
+    /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 68. Never renumber
+    /// anything above it.
+    case setTrill(SetTrillIntentWire)
+    /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 69. Never renumber
+    /// anything above it.
+    case setVibrato(SetVibratoIntentWire)
+    /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 70. Never renumber
+    /// anything above it.
+    case setPalmMute(SetPalmMuteIntentWire)
+    /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 71. Never renumber
+    /// anything above it.
+    case setLetRing(SetLetRingIntentWire)
+    /// Appended for the edit-command parity project's spanner group (spec 2026-09-02) — index 72. Never renumber
+    /// anything above it.
+    case removeSpanner(RemoveSpannerIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1053,6 +1172,28 @@ public enum EditIntentWire {
             self = .setStemVisible(SetStemVisibleIntentWire(location: location, visible: visible))
         case let .setBeamVisible(location, visible):
             self = .setBeamVisible(SetBeamVisibleIntentWire(location: location, visible: visible))
+        case let .setSlur(range):
+            self = .setSlur(SetSlurIntentWire(range: range))
+        case let .setHairpin(range, subtype):
+            self = .setHairpin(SetHairpinIntentWire(range: range, subtype: subtype))
+        case let .setPedal(range):
+            self = .setPedal(SetPedalIntentWire(range: range))
+        case let .setVolta(range, endings, text):
+            self = .setVolta(SetVoltaIntentWire(range: range, endings: endings, text: text))
+        case let .setOttava(range, subtype):
+            self = .setOttava(SetOttavaIntentWire(range: range, subtype: subtype))
+        case let .setTextLine(range, text):
+            self = .setTextLine(SetTextLineIntentWire(range: range, text: text))
+        case let .setTrill(range, type):
+            self = .setTrill(SetTrillIntentWire(range: range, type: type))
+        case let .setVibrato(range, type):
+            self = .setVibrato(SetVibratoIntentWire(range: range, type: type))
+        case let .setPalmMute(range):
+            self = .setPalmMute(SetPalmMuteIntentWire(range: range))
+        case let .setLetRing(range):
+            self = .setLetRing(SetLetRingIntentWire(range: range))
+        case let .removeSpanner(location, kind):
+            self = .removeSpanner(RemoveSpannerIntentWire(location: location, kind: kind))
         }
     }
 
@@ -1263,6 +1404,35 @@ public enum EditIntentWire {
         case let .setBeamVisible(wire):
             let decoded = wire.decoded()
             return .setBeamVisible(at: decoded.location, visible: decoded.visible)
+        case let .setSlur(wire):
+            return .setSlur(over: wire.decoded())
+        case let .setHairpin(wire):
+            let decoded = try wire.decoded()
+            return .setHairpin(over: decoded.range, subtype: decoded.subtype)
+        case let .setPedal(wire):
+            return .setPedal(over: wire.decoded())
+        case let .setVolta(wire):
+            let decoded = wire.decoded()
+            return .setVolta(over: decoded.range, endings: decoded.endings, text: decoded.text)
+        case let .setOttava(wire):
+            let decoded = wire.decoded()
+            return .setOttava(over: decoded.range, subtype: decoded.subtype)
+        case let .setTextLine(wire):
+            let decoded = wire.decoded()
+            return .setTextLine(over: decoded.range, text: decoded.text)
+        case let .setTrill(wire):
+            let decoded = try wire.decoded()
+            return .setTrill(over: decoded.range, type: decoded.type)
+        case let .setVibrato(wire):
+            let decoded = try wire.decoded()
+            return .setVibrato(over: decoded.range, type: decoded.type)
+        case let .setPalmMute(wire):
+            return .setPalmMute(over: wire.decoded())
+        case let .setLetRing(wire):
+            return .setLetRing(over: wire.decoded())
+        case let .removeSpanner(wire):
+            let decoded = try wire.decoded()
+            return .removeSpanner(at: decoded.location, kind: decoded.kind)
         }
     }
 }
