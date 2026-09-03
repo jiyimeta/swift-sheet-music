@@ -3,6 +3,23 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension ScoreStyle {
+    /// Every `<Style>` child read by this decoder or directly by the
+    /// score decoder. Anything else becomes preserved markup — see
+    /// `PreservedXML`.
+    private static let consumedStyleChildren: Set = [
+        "Spatium", "composerAlign", "concertPitch", "evenFooterC", "evenFooterL",
+        "evenFooterR", "evenHeaderC", "evenHeaderL", "evenHeaderR", "footerFirstPage",
+        "footerFontFace", "footerFontSize", "footerFontStyle", "footerOddEven",
+        "headerFirstPage", "headerFontFace", "headerFontSize", "headerFontStyle",
+        "headerOddEven", "lyricistAlign", "oddFooterC", "oddFooterL", "oddFooterR",
+        "oddHeaderC", "oddHeaderL", "oddHeaderR", "ottavaNumbersOnly", "pageEvenBottomMargin",
+        "pageEvenLeftMargin", "pageEvenTopMargin", "pageHeight", "pageNumberFontFace",
+        "pageNumberFontSize", "pageNumberOddEven", "pageOddBottomMargin", "pageOddLeftMargin",
+        "pageOddTopMargin", "pagePrintableWidth", "pageTwosided", "pageWidth", "showFooter",
+        "showHeader", "showPageNumber", "showPageNumberOne", "spatium", "subtitleAlign",
+        "swingRatio", "swingUnit", "titleAlign",
+    ]
+
     /// Parse a `<Style>` element. Permissive — unrecognized children
     /// are silently ignored, matching the existing
     /// `MSCXDecoder+Voice` convention. Returns the MuseScore default
@@ -21,6 +38,7 @@ extension ScoreStyle {
         decodeSwing(node, into: &s)
         decodeTitleBlockAlign(node, into: &s)
         decodeOttava(node, into: &s)
+        s.preservedMarkup = node.preservedMarkup(consuming: consumedStyleChildren)
         return s
     }
 }

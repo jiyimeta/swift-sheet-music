@@ -40,6 +40,33 @@ extension XMLTreeNode {
     }
 }
 
+/// Append preserved markup after the children the encoder built
+/// itself, skipping any tag the encoder already wrote for this node.
+///
+/// The skip is what makes the v3 target safe: `<showFrames>`,
+/// `<showMargins>`, `<LayerTag>`, and `<currentLayer>` are read by no
+/// decoder — so they land in preserved markup — but
+/// `MSCXEncoder+Score.swift` SYNTHESIZES them for a v3 target. Without
+/// the skip a v3 encode would carry two of each. The rule is that the
+/// encoder's own value wins, decided per node and per tag name.
+///
+/// This also silently absorbs a missing entry in a decoder's consumed
+/// set, which would otherwise show up as a double write. That is the
+/// safer failure, but it means the preservation gate cannot detect
+/// such a drift — `MSCXPreservedMarkupTests.preservedNamesNeverCollide`
+/// is what catches it.
+func appendPreservedMarkup(
+    _ preserved: [PreservedXML],
+    to children: inout [XMLTreeNode],
+    options: MSCXEncoderOptions,
+) {
+    guard options.emitPreservedMarkup, !preserved.isEmpty else { return }
+    let alreadyWritten = Set(children.map(\.name))
+    children.append(contentsOf: preserved.lazy
+        .filter { !alreadyWritten.contains($0.name) }
+        .map(XMLTreeNode.init(preserved:)))
+}
+
 extension PreservedXML {
     /// Deep-copy an XML subtree into the model's inert mirror of it.
     init(_ node: XMLTreeNode) {

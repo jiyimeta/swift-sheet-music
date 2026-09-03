@@ -1,3 +1,4 @@
+import Foundation
 import SheetMusicCore
 @testable import SheetMusicMSCX
 @testable import SheetMusicXMLTools
@@ -55,5 +56,78 @@ struct MSCXPreservedMarkupTests {
         let kept = source.preservedMarkup(consuming: [])
         #expect(kept.count == 1)
         #expect(XMLTreeNode(preserved: kept[0]) == source.children[0])
+    }
+
+    @Test("<Order> and <showFrames> survive decode → encode")
+    func scoreLevelUnknownSubtreesSurvive() throws {
+        let source = try MSCXFixtureLoader.mscxData("grace_after")
+        let encoded = try MSCXEncoder.encode(MSCXParser.parse(source))
+        let root = try XMLTreeParser.parse(encoded)
+        let score = try #require(root.first("Score"))
+        let order = score.first("Order")
+        let showFrames = score.first("showFrames")
+        #expect(order != nil)
+        #expect(showFrames != nil)
+    }
+
+    @Test("emitPreservedMarkup: false leaves preserved markup out")
+    func preservedMarkupCanBeSuppressed() throws {
+        let source = try MSCXFixtureLoader.mscxData("grace_after")
+        var options = MSCXEncoderOptions()
+        options.emitPreservedMarkup = false
+        let encoded = try MSCXEncoder.encode(MSCXParser.parse(source), options: options)
+        let root = try XMLTreeParser.parse(encoded)
+        let score = try #require(root.first("Score"))
+        let order = score.first("Order")
+        let showFrames = score.first("showFrames")
+        #expect(order == nil)
+        #expect(showFrames == nil)
+    }
+
+    @Test("strippingPreservedMarkup clears it")
+    func strippingClearsPreservedMarkup() throws {
+        let source = try MSCXFixtureLoader.mscxData("grace_after")
+        let stripped = try MSCXParser.parse(source).strippingPreservedMarkup()
+        #expect(stripped.preservedMarkup.isEmpty)
+        #expect(stripped.style.preservedMarkup.isEmpty)
+    }
+
+    /// A tag that appears both in a node's preserved markup and in
+    /// the children the encoder writes means the decoder read it but
+    /// its consumed set does not list it. The emit helper quietly
+    /// drops that duplicate, so the preservation and idempotency
+    /// gates cannot expose the drift; this test compares against an
+    /// encode with preserved markup disabled so it can.
+    @Test("no preserved tag collides with one the encoder writes")
+    func preservedNamesNeverCollide() throws {
+        for url in MSCXFixtureLoader.allMSCXURLs() {
+            guard let score = try? MSCXParser.parse(Data(contentsOf: url)) else { continue }
+            var options = MSCXEncoderOptions()
+            options.emitPreservedMarkup = false
+            let root = try score.encode(options: options)
+            let encodedScore = try #require(root.first("Score"))
+
+            let scoreNames = Set(score.preservedMarkup.map(\.name))
+            let writtenScoreNames = Set(encodedScore.children.map(\.name))
+            let scoreCollisions = scoreNames.intersection(writtenScoreNames).sorted()
+            #expect(
+                scoreCollisions.isEmpty,
+                Comment(
+                    rawValue: "\(url.lastPathComponent): <Score> writes \(scoreCollisions) and also "
+                        + "preserves them — add them to the decoder's consumed set",
+                ),
+            )
+
+            let styleNames = Set(score.style.preservedMarkup.map(\.name))
+            let writtenStyleNames = Set(encodedScore.first("Style")?.children.map(\.name) ?? [])
+            let styleCollisions = styleNames.intersection(writtenStyleNames).sorted()
+            #expect(
+                styleCollisions.isEmpty,
+                Comment(
+                    rawValue: "\(url.lastPathComponent): <Style> writes \(styleCollisions) and also "
+                        + "preserves them — add them to the decoder's consumed set",
+                ),
+            )
+        }
     }
 }

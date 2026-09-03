@@ -25,6 +25,10 @@ public struct Score: Sendable, Equatable {
     /// Records the format this score was loaded from. Defaults to
     /// `.unknown` for programmatic construction.
     public var source: ScoreSource
+    /// Source markup under this element that the model does not
+    /// represent, kept so that read → write does not delete it. See
+    /// `PreservedXML`.
+    public var preservedMarkup: [PreservedXML] = []
 
     public init(
         division: Int,
@@ -34,6 +38,7 @@ public struct Score: Sendable, Equatable {
         titleFrame: ScoreFrame? = nil,
         style: ScoreStyle = .museScoreDefaults,
         source: ScoreSource = .unknown,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.division = division
         self.parts = parts
@@ -42,5 +47,16 @@ public struct Score: Sendable, Equatable {
         self.titleFrame = titleFrame
         self.style = style
         self.source = source
+        self.preservedMarkup = preservedMarkup
+    }
+
+    /// Return a copy without source-only XML carried for MSCX
+    /// fidelity. As more model layers gain preserved markup, their
+    /// clearing passes are added here.
+    public func strippingPreservedMarkup() -> Score {
+        var stripped = self
+        stripped.preservedMarkup = []
+        stripped.style.preservedMarkup = []
+        return stripped
     }
 }

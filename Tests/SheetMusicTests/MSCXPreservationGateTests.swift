@@ -65,7 +65,6 @@ enum MSCXPreservation {
     private static func makeAllowedLosses() -> [String: String] {
         var result: [String: String] = [:]
         addPermanentLosses(to: &result)
-        addTask3Losses(to: &result)
         addTask4Losses(to: &result)
         addTask5Losses(to: &result)
         addTask6Losses(to: &result)
@@ -124,48 +123,6 @@ enum MSCXPreservation {
         ], because: staffBodyBoxReason, into: &result)
     }
 
-    private static func addTask3Losses(to result: inout [String: String]) {
-        // Temporary: Task 3 preserves Score and Style containers.
-        allow([
-            "Order/family", "Order/instrument", "Order/name", "Order/section", "Order/soloists",
-            "Order/unsorted", "Page/System", "PageList/Page", "Score/LayerTag", "Score/Order",
-            "Score/PageList", "Score/Synthesizer", "Score/currentLayer", "Score/open", "Score/showFrames",
-            "Score/showInvisible", "Score/showMargins", "Score/showUnprintable", "section/family",
-            "section/unsorted",
-        ], because: "Task 3: preserve unmodeled Score markup and its nested subtrees.", into: &result)
-        allow([
-            "Style/articulationFontSize", "Style/barNoteDistance", "Style/bendFontSize",
-            "Style/clefKeyRightMargin", "Style/clefLeftMargin", "Style/composerFramePadding",
-            "Style/composerFrameRound", "Style/composerFrameWidth", "Style/copyrightFontSize",
-            "Style/defaultFramePadding", "Style/defaultFrameRound", "Style/defaultFrameWidth",
-            "Style/dynamicsFontItalic", "Style/fingeringFontSize", "Style/fingeringFramePadding",
-            "Style/fingeringFrameRound", "Style/fingeringFrameWidth", "Style/glissandoFontSize",
-            "Style/hideInstrumentNameIfOneInstrument", "Style/lastSystemFillLimit",
-            "Style/lhGuitarFingeringFontSize", "Style/lhGuitarFingeringFramePadding",
-            "Style/lhGuitarFingeringFrameRound", "Style/lhGuitarFingeringFrameWidth",
-            "Style/lyricistFramePadding", "Style/lyricistFrameRound", "Style/lyricistFrameWidth",
-            "Style/lyricsMinBottomDistance", "Style/measureNumberFontSize", "Style/measureNumberInterval",
-            "Style/measureNumberSystem", "Style/metronomeFontSize", "Style/mmRestRangeFontSize",
-            "Style/nashvilleNumberFontSize", "Style/page-layout", "Style/partInstrumentFontSize",
-            "Style/partInstrumentFramePadding", "Style/partInstrumentFrameRound",
-            "Style/partInstrumentFrameWidth", "Style/rehearsalMarkFontSize",
-            "Style/repeatLeftFramePadding", "Style/repeatLeftFrameRound", "Style/repeatLeftFrameWidth",
-            "Style/repeatRightFramePadding", "Style/repeatRightFrameRound", "Style/repeatRightFrameWidth",
-            "Style/rhGuitarFingeringFontSize", "Style/rhGuitarFingeringFramePadding",
-            "Style/rhGuitarFingeringFrameRound", "Style/rhGuitarFingeringFrameWidth",
-            "Style/showMeasureNumberOne", "Style/staffAlign", "Style/staffFramePadding",
-            "Style/staffFrameRound", "Style/staffFrameWidth", "Style/stringNumberFontSize",
-            "Style/stringTuningsFontSize", "Style/subTitleFramePadding", "Style/subTitleFrameRound",
-            "Style/subTitleFrameWidth", "Style/systemFramePadding", "Style/systemFrameRound",
-            "Style/systemFrameWidth", "Style/tempoChangeFontSize", "Style/tempoFontSize",
-            "Style/tempoFramePadding", "Style/tempoFrameRound", "Style/tempoFrameWidth",
-            "Style/titleFramePadding", "Style/titleFrameRound", "Style/titleFrameWidth",
-            "Style/tupletFontSize", "page-layout/page-height", "page-layout/page-margins",
-            "page-layout/page-width", "page-margins/bottom-margin", "page-margins/left-margin",
-            "page-margins/right-margin", "page-margins/top-margin",
-        ], because: "Task 3: preserve unmodeled Style markup and legacy style subtrees.", into: &result)
-    }
-
     private static func addTask4Losses(to result: inout [String: String]) {
         // Temporary: Task 4 preserves part, instrument, channel, and staff declarations.
         allow([
@@ -174,7 +131,7 @@ enum MSCXPreservation {
             "Instrument/glissandoStyle", "Instrument/instrumentId", "Instrument/singleNoteDynamics",
             "InstrumentLabel/longName", "InstrumentLabel/shortName", "Staff/BracketItem",
             "Staff/barLineSpan", "Staff/linkedTo", "Staff/playbackVoice2", "StringData/frets",
-            "StringData/string", "instrument/family",
+            "StringData/string",
         ], because: task4DeclarationReason, into: &result)
         allow([
             "StaffType/durationFontName", "StaffType/durationFontSize", "StaffType/durationFontY",
