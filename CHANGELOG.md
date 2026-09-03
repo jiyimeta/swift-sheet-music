@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-09-04
+
 ### Fixed
 
 - **A `.mscz` saved by MuseScore 4.4+ lost its entire score `<Style>`, so a
