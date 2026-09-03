@@ -1,8 +1,10 @@
 # Building the Apple example apps
 
 `Examples/Apple/SheetMusicExample` is an Xcode project (Mac + iOS targets)
-that lives outside the SwiftPM package graph. `swift test` and
-`Scripts/preflight.sh` never touch it, so it needs its own build record.
+that lives outside the SwiftPM package graph. Neither `swift test` nor
+`Scripts/preflight.sh` builds or tests it — `preflight.sh` does lint its
+Swift files with `swiftformat Sources Tests Examples Tools --lint`, but
+compiling and running the Xcode project needs its own build record.
 
 ## Fresh-worktree setup
 
@@ -66,4 +68,7 @@ xcodebuild -project Examples/Apple/SheetMusicExample.xcodeproj -scheme SheetMusi
 - `SheetMusicExample` (`generic/platform=iOS Simulator`) — **BUILD
   SUCCEEDED**.
 
-No gate had built `SheetMusicExampleMac` since 2026-08-24 before this run.
+Per the macOS-foundations §B plan (task 5's commit brief, 2026-09-04): no
+gate had built `SheetMusicExampleMac` since 2026-08-24 before this run —
+a claim inherited from the plan's own text, not independently verified by
+this document.

@@ -81,6 +81,16 @@
             #expect(ScoreView.flooredWrapWidth(
                 900, options: ScoreViewOptions(staffSize: 28),
             ) == 900)
+            // A zero or negative container width — a collapsed
+            // `GeometryReader` during the first layout pass — must
+            // also floor to the four-staff-height minimum, per
+            // `flooredWrapWidth`'s doc comment.
+            #expect(ScoreView.flooredWrapWidth(
+                0, options: ScoreViewOptions(staffSize: 28),
+            ) == 112)
+            #expect(ScoreView.flooredWrapWidth(
+                -50, options: ScoreViewOptions(staffSize: 28),
+            ) == 112)
         }
 
         @Test("fixedLayoutWidth is ignored in horizontal mode")

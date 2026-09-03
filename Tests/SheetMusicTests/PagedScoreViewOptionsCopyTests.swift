@@ -83,5 +83,38 @@
             )
             #expect(copy.wrapToViewWidth == true)
         }
+
+        // MARK: - pageWidth
+
+        @Test("fixedLayoutWidth wins over the container width")
+        func pageWidthPrefersFixed() {
+            guard #available(macOS 15.0, *) else { return }
+            let opts = ScoreViewOptions(fixedLayoutWidth: 800)
+            #expect(PagedScoreView.pageWidth(
+                containerWidth: 400, options: opts,
+            ) == 800)
+        }
+
+        @Test("without fixedLayoutWidth the container width is used")
+        func pageWidthUsesContainerWhenNoFixed() {
+            guard #available(macOS 15.0, *) else { return }
+            let opts = ScoreViewOptions()
+            #expect(PagedScoreView.pageWidth(
+                containerWidth: 400, options: opts,
+            ) == 400)
+        }
+
+        @Test("the staffSize * 4 floor applies to pageWidth")
+        func pageWidthFloorApplies() {
+            guard #available(macOS 15.0, *) else { return }
+            #expect(PagedScoreView.pageWidth(
+                containerWidth: 10,
+                options: ScoreViewOptions(staffSize: 28),
+            ) == 112)
+            #expect(PagedScoreView.pageWidth(
+                containerWidth: 10,
+                options: ScoreViewOptions(staffSize: 28, fixedLayoutWidth: 5),
+            ) == 112)
+        }
     }
 #endif

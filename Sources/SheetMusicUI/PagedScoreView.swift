@@ -9,7 +9,9 @@ import SwiftUI
 /// Systems are wrapped to the available width (like vertical-scroll
 /// mode) then grouped into pages by available height. The caller
 /// controls navigation via the `pageIndex` binding; `totalPages`
-/// is written back when layout completes.
+/// is written back when layout completes. The page width comes from
+/// `options.fixedLayoutWidth` when the host set one, else the
+/// available width.
 @available(macOS 15.0, *)
 public struct PagedScoreView: View {
     private let score: Score
@@ -44,9 +46,8 @@ public struct PagedScoreView: View {
 
     @ViewBuilder
     private func pageContent(in proxy: GeometryProxy) -> some View {
-        let w = ScoreView.flooredWrapWidth(
-            options.fixedLayoutWidth ?? proxy.size.width,
-            options: options,
+        let w = Self.pageWidth(
+            containerWidth: proxy.size.width, options: options,
         )
         let pageOpts = Self.pageOptions(from: options)
         let doc = LayoutEngine.layout(
@@ -139,6 +140,18 @@ public struct PagedScoreView: View {
         var copy = options
         copy.wrapToViewWidth = true
         return copy
+    }
+
+    /// The width the page layout wraps to: `fixedLayoutWidth` when the
+    /// host pinned one, else the available width, floored either way.
+    static func pageWidth(
+        containerWidth: CGFloat,
+        options: ScoreViewOptions,
+    ) -> CGFloat {
+        ScoreView.flooredWrapWidth(
+            options.fixedLayoutWidth ?? containerWidth,
+            options: options,
+        )
     }
 
     static func paginate(

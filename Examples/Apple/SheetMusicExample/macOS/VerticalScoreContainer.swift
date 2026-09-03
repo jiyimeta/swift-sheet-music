@@ -39,7 +39,7 @@
                 let width = options.fixedLayoutWidth
                     ?? (geo.size.width - 32)
                 ScrollViewReader { proxy in
-                    ScrollView(.vertical) {
+                    ScrollView([.vertical, .horizontal]) {
                         if let doc = verticalDoc {
                             ZStack(alignment: .topLeading) {
                                 ScoreView(

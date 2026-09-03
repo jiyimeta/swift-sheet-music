@@ -7,8 +7,23 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `ScoreViewOptions.fixedLayoutWidth` pins the wrap width of vertical-scroll
+  mode so the engraving stops re-flowing when its container resizes — a
+  window resize scrolls or zooms instead of re-wrapping every system.
+  Default `nil` keeps existing behavior, which follows the container width.
+
 ### Fixed
 
+- `PagedScoreView` was reverting seven caller options to their defaults —
+  `includeTitleFrame`, `breakIndicatorVisibility`, `graceNoteMag`,
+  `smallNoteMag`, `showsInvisibleElements`, `measureNumbers` and
+  `lyricsVisible` — because it rebuilt `ScoreViewOptions` field by field
+  instead of copying the caller's value. **This is a user-visible behavior
+  change on upgrade**: any host that set one of those options and used
+  paged mode was silently getting the default instead. `PagedScoreView` now
+  copies the caller's options and only forces `wrapToViewWidth` on.
 - Playback follows a change of audio output. `AVAudioEngine` stops itself when
   the I/O configuration changes — the user picks a different output device on a
   Mac, headphones come out on iOS — and nothing observed that, so the score went

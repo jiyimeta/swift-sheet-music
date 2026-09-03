@@ -48,11 +48,14 @@ struct ScoreViewOptionsFixedLayoutWidthTests {
         #expect(ScoreViewOptions().fixedLayoutWidth == nil)
     }
 
-    @Test func initTakesItInFinalPosition() {
+    @Test func initAcceptsTheField() {
         let opts = ScoreViewOptions(staffSize: 18, fixedLayoutWidth: 612)
         #expect(opts.fixedLayoutWidth == 612)
-        // The other fields keep their defaults — the new parameter is
-        // appended, not inserted.
+        // Every argument here is labeled and every other parameter is
+        // defaulted, so this passes regardless of the field's position
+        // in the initializer's parameter list — it does not verify
+        // parameter order. The real source-compatibility gate is that
+        // the package and both example targets still compile.
         #expect(opts.staffSize == 18)
         #expect(opts.lyricsVisible == true)
     }

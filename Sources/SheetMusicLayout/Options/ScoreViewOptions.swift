@@ -200,6 +200,11 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// Ignored when `wrapToViewWidth` is false (horizontal mode
     /// derives its width from the music, not from a container).
     ///
+    /// `PagedScoreView` always wraps — a page is wrapped by definition
+    /// — regardless of `wrapToViewWidth`, so it honors this width
+    /// unconditionally. A width wider than the page view is clipped;
+    /// that view has no horizontal scroll.
+    ///
     /// Default: `nil` (follow the container, the behavior from
     /// before this option existed).
     public var fixedLayoutWidth: CGFloat?

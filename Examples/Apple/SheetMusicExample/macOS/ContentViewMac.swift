@@ -279,10 +279,6 @@
             return hidden
         }
 
-        /// systemGap targets MuseScore's `Sid::minSystemDistance` of
-        /// 8.5 sp; with our staff-distance pads contributing ~3.5 sp
-        /// below the last lyric staff, ~5 sp here (≈ 1.25 × staffSize)
-        /// lands the visible system-to-system gap in MuseScore range.
         /// The content width of the score's own page geometry — the
         /// same number `PDFPreviewLayout` lays the PDF preview out at,
         /// so "fixed width" means "as wide as a printed page" rather
@@ -300,6 +296,10 @@
             )
         }
 
+        /// systemGap targets MuseScore's `Sid::minSystemDistance` of
+        /// 8.5 sp; with our staff-distance pads contributing ~3.5 sp
+        /// below the last lyric staff, ~5 sp here (≈ 1.25 × staffSize)
+        /// lands the visible system-to-system gap in MuseScore range.
         private var verticalOptions: ScoreViewOptions {
             ScoreViewOptions(
                 staffSize: 18, systemGap: 22, wrapToViewWidth: true,
