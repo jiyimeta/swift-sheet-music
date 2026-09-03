@@ -62,6 +62,22 @@ extension FNV1a {
         }
     }
 
+    /// Chord-anchored spanner begins (`Chord.spanners` — slurs, in practice), BY OCCUPANTS: an empty array feeds
+    /// nothing, so every chord in a score without slurs hashes exactly as it did before this walk existed, which
+    /// is what keeps the committed replay goldens byte-identical (`ScoreFingerprintTests
+    /// .defaultsHashUnchanged`). A count byte would have been the obvious spelling and would have moved them all.
+    ///
+    /// Closes the blind spot `ScoreFingerprint.swift` names and spec §2.5's group-1 amendment assigns to group 6:
+    /// without it a `SetSlur` / `RemoveSpanner` pair is invisible to every golden.
+    mutating func combineOccupied(_ spanners: [Spanner], tag: Int) {
+        guard !spanners.isEmpty else { return }
+        combine(tag)
+        combine(spanners.count)
+        for spanner in spanners {
+            combine(spanner)
+        }
+    }
+
     mutating func combine(_ clef: Clef) {
         combine(clef.concertClefType)
         combine(clef.transposingClefType)
