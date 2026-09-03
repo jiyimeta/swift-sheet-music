@@ -120,6 +120,12 @@ public struct EditRefusal: Sendable, Hashable {
         /// MuseScore's palette refuses it too. Clearing an arpeggio is NOT refused — a chord that lost a note
         /// while carrying one must stay editable.
         case chordTooSmall(at: VoiceElementID, noteCount: Int)
+        /// `SetDots` was asked for a dot count this slot cannot be spelled with: its duration decomposes into no
+        /// (base, dots) pair — a `.measure` rest, or an irregular `.fraction` such as a tuplet-scaled member —
+        /// or the count itself is outside the 0…3 this package writes. Distinct from `.wrongElementKind`, which
+        /// is about the element's KIND: the element here is a perfectly good chord or rest whose LENGTH has no
+        /// dotted spelling.
+        case notDottable(at: VoiceElementID)
         /// A non-`invalidEdit` error escaped a command: a bug kept visible
         /// rather than crashed on. Constructed only by
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
@@ -198,6 +204,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.noNextChord"
         case .chordTooSmall:
             "edit.chordTooSmall"
+        case .notDottable:
+            "edit.notDottable"
         case .unexpected:
             "edit.unexpected"
         }
@@ -278,6 +286,8 @@ public struct EditRefusal: Sendable, Hashable {
             "no following chord after \(location)"
         case let .chordTooSmall(location, noteCount):
             "chord at \(location) has \(noteCount) note(s); an arpeggio needs at least 2"
+        case let .notDottable(location):
+            "element at \(location) has no dotted spelling for that dot count"
         case let .unexpected(description):
             "unexpected error: \(description)"
         }
