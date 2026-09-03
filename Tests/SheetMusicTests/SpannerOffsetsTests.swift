@@ -127,9 +127,6 @@ struct SpannerOffsetsTests {
         #expect(try MSCXParser.parse(once) == MSCXParser.parse(data))
     }
 
-    /// A `<measures>`-only spelling and its `<fractions>`-carrying twin resolve to the same anchor through
-    /// `endAnchor`, which is why the writer — not that reader — decides the spelling. Guards against someone
-    /// "simplifying" `offsets` into an `endAnchor` inverse later.
     @Test("an end that precedes the start, and an unresolvable start, are nil")
     func refusals() throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("slur_ms4_resave"))
