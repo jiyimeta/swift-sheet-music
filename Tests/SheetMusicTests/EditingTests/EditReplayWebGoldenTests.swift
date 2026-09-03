@@ -218,7 +218,8 @@
                  .setClef, .removeClef, .setTempo, .setStaffText, .setDynamic, .setFermata, .setBreath,
                  .setJumps, .setMarkers,
                  .setArticulation, .setGraceNotes, .setTremolo, .setArpeggio, .setGlissando, .setDots,
-                 .setChordLine, .setNoteParentheses:
+                 .setChordLine, .setNoteParentheses,
+                 .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }
