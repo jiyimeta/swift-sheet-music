@@ -1,13 +1,15 @@
 @testable import SheetMusicCore
 
 extension EditReplayScript {
-    /// Forty steps over `EditingFixtures.parityFixture()`, covering every intent the edit-command parity project
-    /// appended: its structural group (30…34: `setLayoutBreak`, `setBarLine`, `setRepeatBarLines`,
+    /// Sixty-one steps over `EditingFixtures.parityFixture()`, covering every intent the edit-command parity
+    /// project appended: its structural group (30…34: `setLayoutBreak`, `setBarLine`, `setRepeatBarLines`,
     /// `setMeasureRepeat`, `moveToVoice`) in steps 1…10, its range group (35…40: `transposeRange`,
     /// `addIntervalToSelection`, `deleteRange`, `setAccidentalsInRange`, `setDurationInRange`, `respellRange`) in
-    /// steps 11…19 and its mark group (41…49: `setClef`, `removeClef`, `setTempo`, `setStaffText`, `setDynamic`,
-    /// `setFermata`, `setBreath`, `setJumps`, `setMarkers`) in steps 20…40 — none of which the standard chain,
-    /// which predates them, encodes at all.
+    /// steps 11…19, its mark group (41…49: `setClef`, `removeClef`, `setTempo`, `setStaffText`, `setDynamic`,
+    /// `setFermata`, `setBreath`, `setJumps`, `setMarkers`) in steps 20…40 and its note / chord group (50…57:
+    /// `setArticulation`, `setGraceNotes`, `setTremolo`, `setArpeggio`, `setGlissando`, `setDots`, `setChordLine`,
+    /// `setNoteParentheses`) in steps 41…61 — none of which the standard chain, which predates them, encodes at
+    /// all.
     ///
     /// Each of the five structural intents appears at least twice, in both directions where it has one, so the chain
     /// pins the wire bytes of the removal as well as the write: `setLayoutBreak` on then off (steps 1 / 10),
@@ -28,6 +30,15 @@ extension EditReplayScript {
     /// pair (36 / 37 / 38). `setStaffText` is written twice over — once as staff text stamped with the flute
     /// (25 / 26) and once as system text with no staff (27) — because `isSystemText` picks a different lane
     /// identity, not just a different flag byte.
+    ///
+    /// The note / chord group is spelled write-then-clear for every one of its eight (41 / 42, 43 / 44, 45…47,
+    /// 49 / 50, 52…55, 56…58, 59 / 60), plus one undo / re-apply pair (52 / 53 / 54) and the two already-pinned
+    /// intents that bracket the arpeggio: step 48 `addNoteToChord` widens the tied head to two notes so a spread is
+    /// legal at all, and step 51 `removeNoteFromChord` takes that note back off. Three steps carry a payload the
+    /// group has no second chance to encode: 45 writes a non-default `strokeStyle`, 46 the `.between` span (whose
+    /// follower is the tail chord, named by adjacency rather than stored), and 52 a glissando with every field
+    /// non-default at once. `setDots` (61) is the only member with no "off" — `dots: 0` is a value, not a clear —
+    /// so it writes once, and does so last for the reason given under "Index stability".
     ///
     /// ## Index stability
     ///
@@ -104,6 +115,23 @@ extension EditReplayScript {
     /// - **Steps 35, 36, 38, 39** write `Measure.jumps` / `Measure.markers` on the canonical staff by COLUMN, like
     ///   steps 1 / 3 / 9 / 10 before them, so they move nothing; step 37 is the undo of 36 and step 38 re-applies
     ///   its identical intent, the same undo-then-reapply convention steps 6 / 7 / 8 and 17 / 18 / 19 use.
+    /// - **Measure 2 of the FLUTE (steps 41…60)** needs none of the index arithmetic the mark group's steps 20…34
+    ///   did, because no intent of the note / chord group inserts or removes a voice element: every payload it
+    ///   writes lives INSIDE the `Chord` or the `Note`. Measure 2 reads `[E4 h tied →, E4 h]` when step 41 arrives
+    ///   (step 34 removed the last of the mark group's inserted elements), and both indices stay put for the whole
+    ///   block — element 0 is the head, element 1 the tail, in every one of these twenty steps. The two exceptions
+    ///   are steps 48 and 51, which change the head chord's NOTE count and not the element count: 48 appends G4, so
+    ///   the head reads `[E4, G4]` and `note2(0, 1)` names the G4, and 51 removes it again, leaving the head a
+    ///   single note for step 52's glissando. Measure 2 is chosen over measure 0 because steps 45 / 46 (a `.between`
+    ///   tremolo) and 52 (a glissando) both need a FOLLOWING sounding chord, and the tied halves are the only pair
+    ///   of adjacent chords the chain still has: measure 0's voice 0 is one measure rest by step 19, and the C4
+    ///   steps 6 / 8 moved sits alone in voice 1.
+    /// - **Measure 1 of the FLUTE (step 61)** is the one step of this group that RETIMES, and it is deliberately
+    ///   last. Voice 0 reads `[r h, r h]` after step 16; dotting the first rest makes it a dotted half and shortens
+    ///   the second to a quarter, which changes measure 1's element durations — and voice 1, whose two half rests
+    ///   `SetRestDuration` does not touch, is unaffected. No step follows, so nothing downstream can observe the
+    ///   retiming; and because nothing takes it back, the chain still ends on a value no later step undoes, which
+    ///   is what `EditReplayDeterminismTests.scriptIsNotInert` reads.
     ///
     /// ## Fingerprints that repeat
     ///
@@ -123,16 +151,26 @@ extension EditReplayScript {
     /// the dynamic steps 28 / 29 wrote and lands back on step 27's; step 37 undoes step 36 and lands back on step
     /// 35's; step 38 re-applies step 36 and lands back on step 36's. Steps 39 and 40, which clear what steps 35 and
     /// 23 wrote, do NOT land back on an earlier value — measure 1's `Fine` marker and measure 3's system text are
-    /// still standing. Twenty-eight of the forty-one recorded values are therefore distinct, against a floor of
-    /// twenty-four in `ReplayChain.parity`.
+    /// still standing.
+    ///
+    /// The note / chord group adds ten more, and every one of them is a clear landing exactly on what the write it
+    /// undid started from: step 42 clears the articulation step 41 wrote and lands back on step 40's value; step 44
+    /// clears the graces step 43 wrote and lands back on step 42's; step 47 removes the tremolo steps 45 / 46 wrote
+    /// and lands back on step 44's; step 50 removes the arpeggio step 49 wrote and lands back on step 48's; step 51
+    /// removes the note step 48 added and lands back on step 47's; step 53 undoes step 52 and lands back on step
+    /// 51's; step 54 re-applies step 52 and lands back on step 52's; step 55 removes the glissando and lands back
+    /// on step 51's again; step 58 clears the chord lines steps 56 / 57 wrote and lands back on step 55's; and step
+    /// 60 clears the parentheses step 59 wrote and lands back on step 58's. Step 61 does not: nothing takes its dot
+    /// back, so the chain ends on a value it has never held. Thirty-nine of the sixty-two recorded values are
+    /// therefore distinct, against a floor of thirty-five in `ReplayChain.parity`.
     ///
     /// As in the standard chain, an equal fingerprint would not by itself prove a step was inert, nor a different
     /// one prove it did what it was added for. What proves each step ran is `EditSessionReplayParityTest.kt`
     /// asserting every `nativeApplyEditIntent` returned `true`, and `EditReplayWebGoldenTests` asserting the same
     /// of `ScoreEditSession.apply` — those catch a step that starts being refused, which a `nil`-planning intent
-    /// (see `ScoreEditSession.structuralParityCommand`, `ScoreEditSession.rangeCommand(for:in:)` and
-    /// `ScoreEditSession.markCommand(for:in:)`, where restating what the score already says plans to nothing)
-    /// would be if a future change made one of these steps a no-op.
+    /// (see `ScoreEditSession.structuralParityCommand`, `ScoreEditSession.rangeCommand(for:in:)`,
+    /// `ScoreEditSession.markCommand(for:in:)` and `ScoreEditSession.notationCommand(for:in:)`, where restating
+    /// what the score already says plans to nothing) would be if a future change made one of these steps a no-op.
     static func parity(staff: StaffAddress) -> [EditReplayStep] { // swiftlint:disable:this function_body_length
         let cello = StaffAddress(partIndex: 1, staffIndexInPart: 0)
         let measure1 = MeasureRef(measureIndex: 1)
@@ -164,6 +202,17 @@ extension EditReplayScript {
         // Steps 36 and 38 apply the identical intent — bound once for the reason `move` is.
         let fineMarker = EditReplayStep.intent(.setMarkers(
             at: measure1, markers: [Marker(kind: .fine, label: "fine", text: "Fine")],
+        ))
+        func note2(_ element: Int, _ noteIndex: Int) -> NoteID {
+            NoteID(
+                staff: staff, measureIndex: 2, voiceIndex: 0,
+                elementIndex: element, noteIndexInChord: noteIndex,
+            )
+        }
+        // Steps 52 and 54 apply the identical intent — bound once for the reason `move` is.
+        let glissando = EditReplayStep.intent(.setGlissando(
+            at: note2(0, 0),
+            glissando: Glissando(style: .portamento, visualType: .wavy, easeIn: 25, easeOut: 75, text: "gliss."),
         ))
 
         return [
@@ -268,8 +317,64 @@ extension EditReplayScript {
             // Step 39: clear the jumps — the empty-list wire shape.
             .intent(.setJumps(at: measure3, jumps: [])),
             // Step 40: and remove the tempo — the tempo removal's wire shape. Measure 1's marker and the system
-            // text in measure 3 still stand, so the chain ends on a new fingerprint, as `scriptIsNotInert` needs.
+            // text in measure 3 still stand, so the chain does not return to its opening fingerprint here.
             .intent(.setTempo(anchor: firstRestOfBar1, marking: nil)),
+            // Step 41: a staccato above the tied E4 head — the write shape, with an anchor.
+            .intent(.setArticulation(at: bar2(0), kind: .staccato, anchor: .above, present: true)),
+            // Step 42: and cleared — the wire's `present == 0`, `hasAnchor == 0` shape. Lands back on step 40's.
+            .intent(.setArticulation(at: bar2(0), kind: .staccato, anchor: nil, present: false)),
+            // Step 43: an acciaccatura D♯4 before the head — the nested-list write, one inner note.
+            .intent(.setGraceNotes(
+                at: bar2(0),
+                before: [GraceChord(
+                    graceType: .acciaccatura, duration: .sixteenth, notes: [Note(pitch: 63, tpc: 23)],
+                )],
+                after: [],
+            )),
+            // Step 44: both lists empty — the empty-array framing on the wire. Lands back on step 42's.
+            .intent(.setGraceNotes(at: bar2(0), before: [], after: [])),
+            // Step 45: two tremolo bars on the head's own stem, with a non-default stroke style.
+            .intent(.setTremolo(
+                at: bar2(0), tremolo: Tremolo(subtype: .r16, span: .single, strokeStyle: .traditional),
+            )),
+            // Step 46: the `.between` shape — the follower is the tail chord, named by adjacency, so it is accepted.
+            .intent(.setTremolo(at: bar2(0), tremolo: Tremolo(subtype: .r16, span: .between))),
+            // Step 47: and removed — lands back on step 44's fingerprint.
+            .intent(.setTremolo(at: bar2(0), tremolo: nil)),
+            // Step 48: a G4 on the head — intent 7, already pinned by the standard chain, here because an arpeggio
+            // needs two notes to spread and this chain has no two-note chord left.
+            .intent(.addNoteToChord(at: bar2(0), pitch: 67, tpc: 15, accidental: nil)),
+            // Step 49: spread it up-straight. Subtype 4 deliberately: it is one of the two the arpeggio-direction
+            // fix moved, so a regression there shows up in this chain's own bytes.
+            .intent(.setArpeggio(at: bar2(0), subtype: 4)),
+            // Step 50: and removed — lands back on step 48's fingerprint.
+            .intent(.setArpeggio(at: bar2(0), subtype: nil)),
+            // Step 51: take the G4 back off — intent 8, already pinned; the head is a single note again and this
+            // lands back on step 47's fingerprint.
+            .intent(.removeNoteFromChord(at: note2(0, 1))),
+            // Step 52: a glissando off the head with every field non-default at once. The tail follows it, so the
+            // implicit destination exists and the write is legal.
+            glissando,
+            // Step 53 / step 54: undo it, then re-apply the identical intent — the chain's fourth redo.
+            .undo,
+            glissando,
+            // Step 55: and removed — lands back on step 51's fingerprint.
+            .intent(.setGlissando(at: note2(0, 0), glissando: nil)),
+            // Step 56: a curved fall off the TAIL, whose own chord line needs no follower.
+            .intent(.setChordLine(at: bar2(1), kind: .fall, isStraight: false)),
+            // Step 57: a straight doit on the same chord — the replace path, and the only step with `isStraight`
+            // set.
+            .intent(.setChordLine(at: bar2(1), kind: .doit, isStraight: true)),
+            // Step 58: and cleared — lands back on step 55's fingerprint.
+            .intent(.setChordLine(at: bar2(1), kind: nil, isStraight: false)),
+            // Step 59: parentheses around the tail's notehead.
+            .intent(.setNoteParentheses(at: note2(1, 0), parentheses: .both)),
+            // Step 60: and removed — `.none` IS the clear, not a `nil`. Lands back on step 58's fingerprint.
+            .intent(.setNoteParentheses(at: note2(1, 0), parentheses: .none)),
+            // Step 61: dot the first half rest of measure 1 — the only step of this group that RETIMES, and the
+            // last step of the chain for that reason. The second half rest shortens to a quarter, and nothing
+            // takes that back, which is what `scriptIsNotInert` needs.
+            .intent(.setDots(at: firstRestOfBar1, dots: 1)),
         ]
     }
 }

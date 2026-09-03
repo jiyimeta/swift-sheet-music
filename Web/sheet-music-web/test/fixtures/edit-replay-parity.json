@@ -40,7 +40,28 @@
     "804177785227587482",
     "1997643059543218252",
     "-5786173062307942582",
-    "3014722022092336787"
+    "3014722022092336787",
+    "1247565600740753898",
+    "3014722022092336787",
+    "-7547203076663243080",
+    "3014722022092336787",
+    "737854687029514035",
+    "-3198055491679196564",
+    "3014722022092336787",
+    "1670194818085616160",
+    "-1971392603503017448",
+    "1670194818085616160",
+    "3014722022092336787",
+    "6048786595546295076",
+    "3014722022092336787",
+    "6048786595546295076",
+    "3014722022092336787",
+    "-3264716132972037",
+    "3836408775516369947",
+    "3014722022092336787",
+    "6592216269061892484",
+    "3014722022092336787",
+    "-8220855616272601544"
   ],
   "steps" : [
     {
@@ -198,6 +219,104 @@
     },
     {
       "base64" : "JisKIwoMCgQIABAAEAIYACAAEAAZAAAAAAAAAAAiBggDEAAYACgA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "JjIKIwoMCgQIABAAEAQYACAAEg1hcnRpY1N0YWNjYXRvGAEgACgB",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "JjIKIwoMCgQIABAAEAQYACAAEg1hcnRpY1N0YWNjYXRvGAAgACgA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "OTMKNgoMCgQIABAAEAQYACAAEiQjCgxhY2NpYWNjYXR1cmESBggFEAAYABoLCgh+EC4aBAgAEgAaAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FTMKEgoMCgQIABAAEAQYACAAEgAaAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "GTQKFgoMCgQIABAAEAQYACAAEAEYAiAAKAE=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "GTQKFgoMCgQIABAAEAQYACAAEAEYAiABKAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "GTQKFgoMCgQIABAAEAQYACAAEAAYASAAKAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "at" : {
+        "elementIndex" : 0,
+        "measureIndex" : 2,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "op" : "addNoteToChord",
+      "pitch" : 67,
+      "tpc" : 15
+    },
+    {
+      "base64" : "FTUKEgoMCgQIABAAEAQYACAAEAEYCA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FTUKEgoMCgQIABAAEAQYACAAEAAYAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "at" : {
+        "elementIndex" : 0,
+        "measureIndex" : 2,
+        "noteIndexInChord" : 1,
+        "partIndex" : 0,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "op" : "removeNoteFromChord"
+    },
+    {
+      "base64" : "KDYKJQoOCgQIABAAEAQYACAAKAAQARgEIAEoMjCWATgBQgZnbGlzcy4=",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "KDYKJQoOCgQIABAAEAQYACAAKAAQARgEIAEoMjCWATgBQgZnbGlzcy4=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "ITYKHgoOCgQIABAAEAQYACAAKAAQABgAIAAoADAAOABCAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FzgKFAoMCgQIABAAEAQYACACEAEYASAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FzgKFAoMCgQIABAAEAQYACACEAEYAiAB",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FzgKFAoMCgQIABAAEAQYACACEAAYASAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FTkKEgoOCgQIABAAEAQYACACKAAQAw==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FTkKEgoOCgQIABAAEAQYACACKAAQAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "EzcKEAoMCgQIABAAEAIYACAAEAI=",
       "op" : "intentBytes"
     }
   ]
