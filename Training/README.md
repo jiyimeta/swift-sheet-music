@@ -2,6 +2,9 @@
 
 Scripts that generate the synthetic training/eval datasets for the raster
 OMR program (see docs/superpowers/specs/2026-08-06-omr-raster-foundation-design.md).
+What is still open in the OMR path, and what has already been measured
+and closed about each, is `docs/omr-open-work.md`.
+
 Datasets live OUTSIDE the repo at `~/Datasets/sheet-music-omr/<version>/`
 (override with `OMR_DATA_ROOT`). Nothing dataset-sized or copyrighted is
 ever committed; admissible sources are procedurally generated scores,
@@ -1196,6 +1199,254 @@ every epoch, i.e. a once-corrupted dataset rather than augmentation) and not
 reset per epoch (`persistent_workers=True` keeps worker processes alive, so a
 `set_epoch()` on the main-process dataset would be a silent no-op in the copies
 the workers hold). A run is reproducible for a fixed (seed, workers).
+
+#### Round 2 (2026-09-02) — sibling-class calibration on real renders
+
+The integration phase shipped `run3-mixed-last` with one detector defect
+disclosed: on a real MuseScore Studio 4.7.4 render the heatmap splits its
+confidence between `clefF` and `clefF8va` at the same cell and neither
+clears τ=0.30, while the synthetic held-out set reports `clefF8va` recall
+0.995. τ cannot fix it in either direction (200-file counterfactual at
+τ=0.20: pitch net −27pt) and the importer-side clef consensus cannot help a
+1-system PDF. Plan: `docs/superpowers/plans/2026-09-02-omr-training-round-2.md`.
+
+**Why the two eval populations disagree — the census.** Every octave-clef
+glyph in the clean prep root (`clefF8va`, `clefG8va`, `clefF15ma`, …: 1184
+each, 117 pages, 32 renders) comes from `cov_clef_<x>` (one staff, 8 bars)
+or `cov_clef_changes` (four cue-size mid-bar changes per bar). The realistic
+`tex_*` sources draw `G` / `F` / `PERC` plus `G8vb` on the "band" kind's
+Tenor part — and `clefG8vb` (6188 glyphs, 480 renders) is the one octave
+clef the real corpus reads correctly. The one variant that appears as a
+full-size system-start clef among ordinary staves is the one that works.
+
+**Instruments added this round.**
+
+- `OMRGlyphDetector(classifier:observer:)` — an optional measurement tap
+  that sees each page's glyphs WITH their heatmap scores. The product path
+  passes `nil`; `ClassifiedGlyph` itself still carries no score.
+- `[mscz-clefcand]` lines in `MSCZGroundTruthSweep.clefProbe`
+  (`OMR_MSCZ_CLEF_PROBE=1`): every raster candidate within 12pt of a vector
+  clef as `class@score@distance`. Run under `OMR_DECODE_THRESHOLD=0.02` and
+  `OMR_MSCZ_PROBES_ONLY=1` (skips both score-level sweeps) so one sweep
+  lists what the shipped τ discards.
+- `Training/probes/clef_table.py` — aggregates that dump into the per-class
+  {exact, sibling, other, none} table and prices decode rules offline
+  (shipped τ / family-sum / family-argmax) with no re-run per rule.
+- `gen_clefctx.py` + `build_dataset generate --clef-contexts N
+  [--no-coverage]` — `clx_NNNN` multi-part sources whose staves draw their
+  default clef from the full pitched vocabulary (plain `G`/`F` half the
+  time, the nine other tokens uniformly otherwise), melodic fabric reused
+  from `gen_texture`, notes pitched for the clef. Defaults (`0`, coverage
+  on) leave an existing root byte-identical. `--no-coverage` is for a
+  SUPPLEMENTARY root trained next to v2: the `cov_*` ids would otherwise
+  be exported twice and hash into the same split twice.
+
+**Baseline — the real-render clef table** (`run3-mixed-last` as bundled,
+commit `43693fa9`, first 200 corpus files sorted, 23757 vector clefs, τ=0.30,
+neighbourhood 12pt; `~/omr-models/r2/clefcand-200-run3.log`):
+
+| vector clef | n | exact | sibling (→) | other | none |
+|---|---|---|---|---|---|
+| `clefG` | 9162 | 8904 | 54 (G8vb) | 164 | 40 |
+| `clefG8vb` | 7556 | 7188 | 201 (G 192, G15mb 9) | 157 | 10 |
+| `clefF` | 3687 | 3502 | 0 | 168 | 17 |
+| `clefPercussion` | 2855 | 2823 | 0 | 1 | 31 |
+| **`clefF8va`** | **475** | **236** | **103 (F 70, F15ma 33)** | 13 | **123** |
+| `clefF8vb` | 21 | 14 | 5 (F) | 0 | 2 |
+
+`clefF8va` is the defect, and it is population-wide: 30 of the 200 files
+carry `none`/`sibling` outcomes on it (ダイナマイト none=23, 餃子_full
+none=13/15, DESIRE2 none=12, POP none=14, 君は0から1になれ sibling=22 …).
+The two octave clefs' score distributions say what "learned" looks like:
+
+| best score in the neighbourhood | `clefF8va` exact / plain `clefF` | `clefG8vb` exact / plain `clefG` |
+|---|---|---|
+| ≥ 0.70 | **1** / 0 | **5403** / 140 |
+| 0.50–0.70 | 103 / 14 | 1651 / 235 |
+| 0.30–0.50 | 177 / 84 | 388 / 331 |
+| < 0.30 | 194 / 377 | 114 / 6850 |
+| mean | 0.336 / 0.197 | 0.762 / 0.099 |
+
+A learned octave clef (G8vb, 480 renders of realistic context in the prep
+root) peaks above 0.7 with its plain sibling near zero; F8va (32 coverage
+renders, no realistic context) never reaches 0.7 and its sibling sits at
+0.1–0.5 — the split. That is the histogram run5 has to move.
+
+**Decode alone, priced from the same dump (Task 3, bounded):** a
+family-sum rule (family total > τ, argmax within the family) lifts the
+all-class `exact` 22667 → 22820 and `none` 223 → 106, but on `clefF8va` it
+converts `none` mostly into `sibling` (103 → 147; exact 236 → 284). It
+rescues absence, not the split — the split is a training question. Not
+implemented; the table is the answer.
+
+**Resolution is not the lever — counted, not reasoned** (`ダイナマイト`, 23
+`clefF8va` truths, run3, scan DPI swept; `clefcand-dyn-<dpi>.log`):
+
+| scan dpi | exact | sibling (→F) | none | mean score exact / plain F |
+|---|---|---|---|---|
+| 200 | 1 | 0 | 22 | 0.129 / 0.139 |
+| 300 (shipped) | 0 | 0 | 23 | 0.065 / 0.083 |
+| 400 | 0 | 10 | 13 | 0.097 / 0.243 |
+| 600 | 1 | 10 | 12 | 0.085 / 0.281 |
+
+More pixels move the mass toward the PLAIN sibling, not toward the exact
+class. The previous round's hypothesis 5 (blur from normalization) was
+rejected by reasoning; this is the count. `clefG8vb` on the same document
+is 46/46 at every dpi.
+
+**Score-level baseline, same 200 files, τ=0.30, HEAD binary**
+(`corpus-200-run3.log`): vector pitchP50 0.9862 / mean 0.9247, raster
+pitchP50 0.9244 / mean 0.8306 (199 scored, 1 failed). Paired A/B against
+another model: `Training/probes/corpus_ab.py <log-A> <log-B>`.
+
+**run5-clefctx — the data lever, measured** (v2 clean + frozen roots +
+`v3-clefctx` clean + frozen — 80 `clx_*` sources, 8 faces × 2, uniform draw
+over the nine non-plain clefs — photometric augmentation, seed 20260811,
+8 epochs, `--samples-per-epoch 110158`, `checkpoint_last.pt`; exported to
+`~/omr-models/run5-clefctx-last`). The real-render clef table, clef
+candidates only (an accidental within 12pt of a clef is not what `readClef`
+chooses between — the first cut of this table counted it as "other"), same
+200 files, τ=0.30, one binary (`2e5500c3`, with one-clef-per-position):
+
+| vector clef | n | run3 exact / sibling / none | **run5** exact / sibling / none |
+|---|---|---|---|
+| `clefG` | 9162 | 9066 / 56 / 40 | 9139 / 21 / 2 |
+| `clefG8vb` | 7556 | 7337 / 205 (→G 196) / 14 | 7189 / **348 (→G 193, →G15mb 155)** / 19 |
+| `clefF` | 3687 | 3670 / 0 / 17 | 3687 / 0 / 0 |
+| `clefPercussion` | 2855 | 2824 / 0 / 31 | 2831 / 0 / 24 |
+| **`clefF8va`** | 475 | 242 / 107 / 126 | **475 / 0 / 0** |
+| `clefF8vb` | 21 | 14 / 5 / 2 | 21 / 0 / 0 |
+| ALL | 23757 | 23153 / 374 / 230 | **23342 / 370 / 45** |
+
+`clefF8va`'s score histogram moved to the learned shape: 359 of 475 above
+0.70 (was 1), none below 0.30 (was 194), plain `clefF` below 0.20 on every
+one of them, mean 0.750 / 0.025 (was 0.336 / 0.197). **The context
+hypothesis counted** — the first of this program's hypotheses to survive
+its counterfactual (0 for 8 before it). ダイナマイト reads at pitch 98 (was 78).
+
+**And it taught one confusion the corpus did not have:** 155 real
+`clefG8vb` now read as `clefG15mb`, a class real scores almost never
+carry, drawn as often as the tenor clef by the uniform prior. The same
+sibling split, one octave further out. `gen_clefctx` now draws plain 50% /
+common octave + C 40% / 15ma-15mb 10% (`v3b-clefctx`), and run6 trains on
+it.
+
+**Attribution — augmentation alone does not do this.** `run4-augment-last`
+(clean root + photometric, no clef context) on the same binary: `clefF8va`
+213 / 146 / 116, `clefG8vb` 6982 / 392 / 182, ALL none 733; paired pitch
+against run3 better 40 / worse 76, net −32pt. The data did it.
+
+**Score level, same binary, paired per file** (`corpus_ab.py`, 199 files):
+
+| | run3 | run5 |
+|---|---|---|
+| raster pitchP50 / mean | 0.9249 / 0.8332 | 0.9255 / 0.8375 |
+| pitch better / worse / same | | 53 / 68 / 78, +341pt / −247pt, **net +94pt** |
+| dur better / worse / same | | 42 / 34 / 123, net +84pt |
+
+Winners are the octave-clef documents (Boogie_oogie_oogie +53, DANCE DANCE
+DANCE +26, ダイナマイト +20, 手紙 +19 …). Losers split two ways: the
+`G8vb → G15mb` documents (I_Want_You_Back −22, Automatic 6 −8, 君は0から1に
+なれ −8), and **one false clef each** — `[mscz-clefextra]`, the probe that
+lists raster clefs with no vector clef within 12pt — a `clefF` at 0.36–0.39
+inside a measure on Start over! (−21) and 366日 (−15), which changes the
+clef in force for every note after it. Extras above τ over the 200 files:
+run3 75 (52 percussion, 22 F, 1 G; 51 files), run5 88 (33 F, 18
+percussion, 10 C, 8 F8vb, 5 F15mb, 3 G8vb, 3 G15mb, 3 F15ma, 2 G, 2 F8va,
+1 G15ma; 56 files), run4 21. Most are harmless (they sit where `readClef`
+never looks); the two that hurt sat in the courtesy-clef position.
+
+**Held-out seam, same binary** (val 99 pages): run5 clean recall 0.9976 /
+precision 0.9937 / origin 0.0324, degraded 0.9940 / 0.9867 / 0.0376; run3
+clean 0.9974 / 0.9961 / 0.0331, degraded 0.9922 / 0.9885 / 0.0385. Recall
+and origin up, precision down 0.2pt — the octave-clef fp on synthetic
+pages (`clefG15mb` fp 103 clean) is the sibling-at-the-same-cell case the
+one-clef-per-position pass now resolves for the importer.
+
+**Also landed this round:** `OMRGlyphDetector` hands the importer one clef
+per position (the highest-scoring), because `readClef` takes the first
+clef glyph in a measure and has no score to prefer a sibling by; and the
+`.mscz` harness now honors `OMR_MODEL_ROOT` and prints `[mscz] model=…
+checkpoint=…` — its first run5 table was byte-identical to run3's because
+it had silently measured the bundled model.
+
+**run6-clefctx — the same lever with a real-world class prior.** Identical
+to run5 except the supplement is `v3b-clefctx` (plain `G`/`F` half the
+staves, the octave and C clefs real scores carry 40%, `15ma`/`15mb` 10%).
+Last val 0.307, `~/omr-models/run6-clefctx-last`. Same binary, same 200
+files:
+
+| | run3 | run5 | **run6** |
+|---|---|---|---|
+| clef exact / sibling / none (all classes, n=23757) | 23153 / 374 / 230 | 23342 / 370 / 45 | **23425 / 293 / 39** |
+| `clefF8va` exact of 475 | 242 | 475 | **475** (370 above 0.70) |
+| `clefG8vb` exact of 7556 | 7337 | 7189 | **7276** |
+| … read as `clefG15mb` | 9 | 155 | **106** |
+| false clefs above τ (200 files) | 75 | 88 | **50** |
+| raster pitchP50 / mean | 0.9249 / 0.8332 | 0.9255 / 0.8375 | **0.9295 / 0.8438** |
+| paired pitch vs run3 | — | 53/68, +94pt | **63/53, +208pt** |
+| paired dur vs run3 | — | 42/34, +84pt | **52/26, +123pt** |
+
+Against run5 directly: pitch 68 better / 47 worse, net +114pt. The
+narrowed prior kept every point of the `clefF8va` fix, took back a third
+of the `G15mb` confusion it introduced, and cut the false clefs below the
+shipped model's own count.
+
+**Held-out seam, val 99 pages** (guard): run6 clean recall 0.9969 /
+precision 0.9954 / origin 0.0348 against run3's 0.9974 / 0.9961 / 0.0331 —
+0.05, 0.07 and 0.0017 the wrong way; degraded recall 0.9935 vs 0.9922, its
+precision 0.9874 vs 0.9885. The synthetic seam is a wash, slightly
+negative on clean. The corpus is where this round's target lives, and the
+corpus moved; that trade is the ship decision, not a detail to bury.
+
+**The ship gate — all 657 files, one binary** (`de72f22a`, clef probes off;
+`chain-657.sh`). The vector control moved **0 files** in either metric,
+which is what says the raster numbers are the detector and nothing else:
+
+| raster | run3 | run6 |
+|---|---|---|
+| pitchP50 / pitchMean | 0.9389 / 0.8390 | **0.9406 / 0.8486** |
+| durP50 / durMean | 0.9127 / 0.8591 | **0.9188 / 0.8648** |
+
+Paired over the 655 files both sides scored:
+
+| | better | worse | same | gain | loss | net |
+|---|---|---|---|---|---|---|
+| pitch | 159 | **193** | 300 | +1368pt | −758pt | **+610pt** |
+| dur | 149 | 77 | 426 | +641pt | −270pt | **+371pt** |
+
+**More files get worse on pitch than better, and the round is still a
+clear win**: the wins are large (three files 0 → 100, 粉雪 34 → 96,
+幻想的インパクト 19 → 74) and the losses are mostly small, but four are
+not — 曖昧 100 → 41, 虜_acoustic 62 → 13, mimicopy_もしも 38 → 0,
+アイデア#0043 55 → 17. That asymmetry is the number to weigh, not the net
+alone: this is the same shape as the τ counterfactual that was rejected
+(better 32 / worse 85), except there the net was negative and here it is
++610pt on 3.3× the population that decided the 200-file view.
+
+**The loss tail is mostly NOT clefs.** The four largest pitch losses,
+diagnosed one at a time with the divergence dump and both probes
+(`diag-losers.sh`):
+
+| file | run3 → run6 | what changed |
+|---|---|---|
+| 曖昧 | 100 → 41 | **a real clef regression** — one of four staves flips `clefG8vb` → `clefG15mb` (plus one extra clef). A 5-measure file, so one staff is 59% of its pitches |
+| 虜_acoustic | 62 → 13 | identical clefs in force, extras 0 on both — run6 reads **8 parts where run3 read 7**, and the harness's part alignment shifts under it |
+| mimicopy_もしも | 38 → 0 | identical clefs in force; one extra clef, two notes |
+| アイデア#0043 | 55 → 17 | identical clefs; **both readings are already garbage** (24 and 30 measures against a truth of 200), so the delta is noise on a broken read |
+
+And the residual `clefG8vb` → `clefG15mb` confusion was priced rather than
+assumed: over the 200-file set it touches 59 files for a NET of +42pt
+(losses −37pt). It is real, it is worth naming, and it is not what the
+loss tail is made of — the tail is part/measure structure, where the same
+mechanism produces the three 0 → 100 wins.
+
+**Shipped: `run6-clefctx-last`.** `Sources/SheetMusicOMRModel/Resources/`
+now carries its `model.json` + `model.mlmodelc`. `~/omr-models/run3-mixed-last`
+stays as the provenance of this document's earlier tables.
+
+More numbers land below as they are measured; the memory file
+`project_omr_training_round2` tracks the round between sessions.
 
 ### RESOLVED: P0-G1 failed at scale — `buildScore` was not order-invariant
 

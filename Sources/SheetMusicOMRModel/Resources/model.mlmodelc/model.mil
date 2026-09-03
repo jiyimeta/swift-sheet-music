@@ -152,7 +152,7 @@ program(1.0)
             tensor<int32, [2]> var_226_dilations_0 = const()[name = tensor<string, []>("op_226_dilations_0"), val = tensor<int32, [2]>([1, 1])];
             tensor<int32, []> var_226_groups_0 = const()[name = tensor<string, []>("op_226_groups_0"), val = tensor<int32, []>(1)];
             tensor<fp16, [2, 64, 1, 1]> model_offset_head_weight_to_fp16 = const()[name = tensor<string, []>("model_offset_head_weight_to_fp16"), val = tensor<fp16, [2, 64, 1, 1]>(BLOBFILE(path = tensor<string, []>("@model_path/weights/weight.bin"), offset = tensor<uint64, []>(1137280)))];
-            tensor<fp16, [2]> model_offset_head_bias_to_fp16 = const()[name = tensor<string, []>("model_offset_head_bias_to_fp16"), val = tensor<fp16, [2]>([0x1.e54p-3, 0x1.03p-2])];
+            tensor<fp16, [2]> model_offset_head_bias_to_fp16 = const()[name = tensor<string, []>("model_offset_head_bias_to_fp16"), val = tensor<fp16, [2]>([0x1.cf4p-3, 0x1.bb4p-3])];
             tensor<fp16, [1, 2, 96, 96]> var_226_cast_fp16 = conv(bias = model_offset_head_bias_to_fp16, dilations = var_226_dilations_0, groups = var_226_groups_0, pad = var_226_pad_0, pad_type = var_226_pad_type_0, strides = var_226_strides_0, weight = model_offset_head_weight_to_fp16, x = input_cast_fp16)[name = tensor<string, []>("op_226_cast_fp16")];
             tensor<string, []> var_226_cast_fp16_to_fp32_dtype_0 = const()[name = tensor<string, []>("op_226_cast_fp16_to_fp32_dtype_0"), val = tensor<string, []>("fp32")];
             tensor<string, []> var_233_pad_type_0 = const()[name = tensor<string, []>("op_233_pad_type_0"), val = tensor<string, []>("valid")];
@@ -161,7 +161,7 @@ program(1.0)
             tensor<int32, [2]> var_233_dilations_0 = const()[name = tensor<string, []>("op_233_dilations_0"), val = tensor<int32, [2]>([1, 1])];
             tensor<int32, []> var_233_groups_0 = const()[name = tensor<string, []>("op_233_groups_0"), val = tensor<int32, []>(1)];
             tensor<fp16, [4, 64, 1, 1]> model_geom_head_weight_to_fp16 = const()[name = tensor<string, []>("model_geom_head_weight_to_fp16"), val = tensor<fp16, [4, 64, 1, 1]>(BLOBFILE(path = tensor<string, []>("@model_path/weights/weight.bin"), offset = tensor<uint64, []>(1137600)))];
-            tensor<fp16, [4]> model_geom_head_bias_to_fp16 = const()[name = tensor<string, []>("model_geom_head_bias_to_fp16"), val = tensor<fp16, [4]>([-0x1.728p-2, -0x1.644p-8, 0x1.71p-1, 0x1.2ep-1])];
+            tensor<fp16, [4]> model_geom_head_bias_to_fp16 = const()[name = tensor<string, []>("model_geom_head_bias_to_fp16"), val = tensor<fp16, [4]>([-0x1.81cp-2, -0x1.07p-6, 0x1.82cp-1, 0x1.48p-1])];
             tensor<fp16, [1, 4, 96, 96]> var_233_cast_fp16 = conv(bias = model_geom_head_bias_to_fp16, dilations = var_233_dilations_0, groups = var_233_groups_0, pad = var_233_pad_0, pad_type = var_233_pad_type_0, strides = var_233_strides_0, weight = model_geom_head_weight_to_fp16, x = input_cast_fp16)[name = tensor<string, []>("op_233_cast_fp16")];
             tensor<string, []> var_233_cast_fp16_to_fp32_dtype_0 = const()[name = tensor<string, []>("op_233_cast_fp16_to_fp32_dtype_0"), val = tensor<string, []>("fp32")];
             tensor<fp16, [1, 62, 96, 96]> var_238_cast_fp16 = sigmoid(x = hm_logits_cast_fp16)[name = tensor<string, []>("op_238_cast_fp16")];
