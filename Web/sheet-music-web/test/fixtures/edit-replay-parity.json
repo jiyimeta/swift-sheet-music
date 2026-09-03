@@ -61,7 +61,18 @@
     "3014722022092336787",
     "6592216269061892484",
     "3014722022092336787",
-    "-8220855616272601544"
+    "-8220855616272601544",
+    "5398065078572717407",
+    "1713967053497698554",
+    "7810295946503443255",
+    "1713967053497698554",
+    "-324418041030252957",
+    "-3377873534860264966",
+    "-5648642093503803389",
+    "-3377873534860264966",
+    "-324418041030252957",
+    "1713967053497698554",
+    "-4979714836996113021"
   ],
   "steps" : [
     {
@@ -317,6 +328,69 @@
     },
     {
       "base64" : "EzcKEAoMCgQIABAAEAIYACAAEAI=",
+      "op" : "intentBytes"
+    },
+    {
+      "at" : {
+        "elementIndex" : 0,
+        "measureIndex" : 1,
+        "partIndex" : 1,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "duration" : {
+        "value" : "eighth"
+      },
+      "op" : "inputNote",
+      "pitch" : 43,
+      "tpc" : 15
+    },
+    {
+      "at" : {
+        "elementIndex" : 1,
+        "measureIndex" : 1,
+        "partIndex" : 1,
+        "staffIndexInPart" : 0,
+        "voiceIndex" : 0
+      },
+      "op" : "inputNote",
+      "pitch" : 45,
+      "tpc" : 17
+    },
+    {
+      "base64" : "EzoKEAoMCgQIAhAAEAIYACACEAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "EzoKEAoMCgQIAhAAEAIYACACEAE=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FTsKEgoOCgQIAhAAEAIYACAAKAAQAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "EzwKEAoMCgQIAhAAEAIYACAAEAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Ez0KEAoMCgQIAhAAEAIYACACEAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Ez0KEAoMCgQIAhAAEAIYACAAEAE=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "EzwKEAoMCgQIAhAAEAIYACAAEAE=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FTsKEgoOCgQIAhAAEAIYACAAKAAQAQ==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "EzoKEAoMCgQIAhAAEAAYACAAEAA=",
       "op" : "intentBytes"
     }
   ]
