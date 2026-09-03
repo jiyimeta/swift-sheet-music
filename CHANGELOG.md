@@ -177,6 +177,10 @@ and this project adheres to
   up-straight, `5` down-straight (`TConv`'s `ARPEGGIO_TYPES`), so a file using either straight arpeggio played its
   notes in the wrong order — 4 top-down and 5 bottom-up. Subtypes 0–3, which is everything in this repo's
   fixtures, are unaffected.
+- `ScoreEditor.undo()` / `.redo()` no longer drop the stack entry when the inverse they replay refuses. Both
+  popped their entry off the stack before applying it, so a throwing inverse vanished while the score stayed
+  untouched, desynchronizing the undo history from the score for every undo/redo after it. Both now apply first
+  and pop only on success.
 
 ## [2.3.1] - 2026-08-31
 

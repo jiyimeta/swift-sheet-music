@@ -43,29 +43,38 @@ public final class ScoreEditor {
         lastAffectedLocation = command.affectedLocation
     }
 
-    /// Pops the most recent inverse off the undo stack and applies
-    /// it, pushing *its* inverse onto the redo stack.
+    /// Applies the most recent inverse off the undo stack, pushing
+    /// *its* inverse onto the redo stack.
+    ///
+    /// The entry is only removed from `undoStack` once `apply`
+    /// succeeds — peek, then pop on success — so a throwing inverse
+    /// (a precondition of its own that no longer holds) leaves the
+    /// stack exactly as it was rather than losing the entry while
+    /// the score stays unmoved.
     public func undo() throws {
-        guard let inverse = undoStack.popLast() else {
+        guard let inverse = undoStack.last else {
             throw SheetMusicError.invalidEdit(EditRefusal(
                 operation: "undo",
                 reason: .nothingToUndo,
             ))
         }
         let redo = try inverse.apply(to: &score)
+        undoStack.removeLast()
         redoStack.append(redo)
         lastAffectedLocation = inverse.affectedLocation
     }
 
-    /// Symmetric counterpart of `undo()`.
+    /// Symmetric counterpart of `undo()`; see its doc comment for
+    /// why the pop is deferred until after a successful `apply`.
     public func redo() throws {
-        guard let command = redoStack.popLast() else {
+        guard let command = redoStack.last else {
             throw SheetMusicError.invalidEdit(EditRefusal(
                 operation: "redo",
                 reason: .nothingToRedo,
             ))
         }
         let inverse = try command.apply(to: &score)
+        redoStack.removeLast()
         undoStack.append(inverse)
         lastAffectedLocation = command.affectedLocation
     }
