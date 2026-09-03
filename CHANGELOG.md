@@ -7,6 +7,22 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `.mscz` saved by MuseScore 4.4+ lost its entire score `<Style>`, so a
+  score-level swing played straight.** Those versions write the style block to a
+  separate `score_style.mss` entry in the container and omit it from the `.mscx`
+  altogether; `MSCZReader` read only the `.mscx` and silently substituted
+  MuseScore's built-in defaults — swing off, 1.75 mm staff space, A4. Scores
+  that carry their swing as an in-piece `<swing>` directive were unaffected,
+  which is why the loss showed up as "swing works in some scores but not this
+  one". The reader now reads `score_style.mss` into the style before the score
+  body and lets an inline `<Style>` override it tag by tag, the order MuseScore
+  itself uses (`MscLoader::loadMscz`). Besides swing this restores the score's
+  real staff size and page geometry to PDF export. A style file that will not
+  parse is reported as a `mscz.styleFile.*` diagnostic and the score still
+  loads.
+
 ## [2.4.0] - 2026-09-03
 
 ### Added
