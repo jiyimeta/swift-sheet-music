@@ -49,8 +49,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// SoundFont resolver without the host re-supplying it.
     private let metronomeClickProvider: MetronomeClickProvider?
     /// The score last passed to `prepare(score:)`, so `reloadSoundfont`
-    /// can re-prepare in place. `nil` until the first `prepare`.
-    private var loadedScore: Score?
+    /// can re-prepare in place. `nil` until the first `prepare`. `internal` so
+    /// `PlaybackEngine+ConfigurationChange` can check it before rebuilding.
+    var loadedScore: Score?
     /// `internal` so `PlaybackEngine+Master` can call
     /// `engine.attach` / `engine.connect` from a sibling file when
     /// building the master output stage.
@@ -335,7 +336,16 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     /// Holder for the block-based `AVAudioSession.interruptionNotification` observer token. `internal` for the
     /// `+AudioSession` extension that fills it in; see `startObservingAudioSessionInterruptions()`.
-    let interruptionObserver = AudioSessionInterruptionObserver()
+    let interruptionObserver = NotificationObserverToken()
+
+    /// Holder for the block-based `AVAudioEngineConfigurationChange` observer token. `internal` for the
+    /// `+ConfigurationChange` extension that fills it in; see `startObservingConfigurationChanges()`.
+    let configurationChangeObserver = NotificationObserverToken()
+
+    /// The scheduled, not-yet-run rebuild for an audio configuration change, or `nil` when none is pending.
+    /// Holding it is what collapses a burst of notifications into one rebuild. `internal` for the
+    /// `+ConfigurationChange` extension.
+    var pendingConfigurationRestart: Task<Void, Never>?
 
     public init(
         soundfontResolver: SoundfontResolver,
@@ -368,6 +378,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         metronome = MetronomeController(engine: engine, output: scoreGainMixer)
         buildMasterChain()
         startObservingAudioSessionInterruptions()
+        startObservingConfigurationChanges()
     }
 
     /// Scale playback speed. `1.0` is the score's native tempo;
@@ -2633,12 +2644,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// teardown-on-dealloc, and is a no-op on an already-stopped engine —
     /// so an explicit `teardown()` first leaves this harmless.
     deinit {
-        // The interruption observer needs no unregistering here — `AudioSessionInterruptionObserver` removes it in
-        // its own (unisolated) deinit as this instance releases it.
+        // Neither notification observer needs unregistering here — each `NotificationObserverToken` removes its own
+        // in its (unisolated) deinit as this instance releases it.
         engine.stop()
     }
 
     public func teardown() {
+        // A rebuild scheduled by an audio configuration change must not run against a graph the host has just torn
+        // down. `performConfigurationChangeRestart()` would also refuse (teardown leaves `state == .stopped`), but
+        // cancelling here is what makes that a belt-and-braces guard rather than the only one.
+        pendingConfigurationRestart?.cancel()
+        pendingConfigurationRestart = nil
         stop()
         clearLoop()
         // Quiesce the render thread BEFORE mutating the graph. `stop()` above
