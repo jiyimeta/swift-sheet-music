@@ -70,6 +70,63 @@ struct MSCXPreservedMarkupTests {
         #expect(showFrames != nil)
     }
 
+    @Test("<StringData> and <Instrument><clef> survive decode → encode")
+    func partLevelMarkupSurvives() throws {
+        let source = try MSCXFixtureLoader.mscxData("guitarbend_simple")
+        let encoded = try MSCXEncoder.encode(MSCXParser.parse(source))
+        let root = try XMLTreeParser.parse(encoded)
+        let part = try #require(root.first("Score")?.first("Part"))
+        let instrument = try #require(part.first("Instrument"))
+        let strings = try #require(instrument.first("StringData"))
+        let clef = instrument.first("clef")
+        #expect(strings.all("string").count == 6)
+        #expect(clef != nil)
+        // The MusicXML Sound ID does NOT come back: `<instrumentId>` is
+        // consumed as a fallback for the `id` attribute and synthesized
+        // for drumsets, so it cannot ride in preserved markup. See
+        // `MSCXPreservation.soundIDReason`. Bound to a local because
+        // SwiftLint reads a bare `first(…) != nil` as the
+        // `first(where:)` overload and asks for `contains`.
+        let soundID = instrument.first("instrumentId")
+        #expect(soundID == nil)
+        #expect(instrument.attributes["id"] == "guitar-steel")
+    }
+
+    @Test("<Channel><controller> survives decode → encode")
+    func channelControllerSurvives() throws {
+        let source = try MSCXFixtureLoader.mscxData("testMidiPort")
+        let encoded = try MSCXEncoder.encode(MSCXParser.parse(source))
+        let root = try XMLTreeParser.parse(encoded)
+        let score = try #require(root.first("Score"))
+        let controllers = score.all("Part")
+            .compactMap { $0.first("Instrument") }
+            .flatMap { $0.all("Channel") }
+            .flatMap { $0.all("controller") }
+        #expect(controllers.count == 149)
+        #expect(controllers.allSatisfy {
+            $0.attributes["ctrl"] == "0" && $0.attributes["value"] == "1"
+        })
+    }
+
+    @Test("unmodeled <StaffType> children survive decode → encode")
+    func staffTypeMarkupSurvives() throws {
+        let source = try MSCXFixtureLoader.mscxData("slur_ms4_glissando_legato")
+        let encoded = try MSCXEncoder.encode(MSCXParser.parse(source))
+        let root = try XMLTreeParser.parse(encoded)
+        let part = try #require(root.first("Score")?.first("Part"))
+        let staffType = try #require(
+            part.all("Staff")
+                .compactMap { $0.first("StaffType") }
+                .first { $0.attributes["group"] == "tablature" },
+        )
+        #expect(staffType.children.map(\.name) == [
+            "name", "lines", "lineDistance", "stemless", "timesig", "durations",
+            "durationFontName", "durationFontSize", "durationFontY", "fretFontName",
+            "fretFontSize", "fretFontY", "linesThrough", "minimStyle", "onLines",
+            "showRests", "stemsDown", "stemsThrough", "upsideDown", "useNumbers",
+        ])
+    }
+
     @Test("emitPreservedMarkup: false leaves preserved markup out")
     func preservedMarkupCanBeSuppressed() throws {
         let source = try MSCXFixtureLoader.mscxData("grace_after")
@@ -87,9 +144,21 @@ struct MSCXPreservedMarkupTests {
     @Test("strippingPreservedMarkup clears it")
     func strippingClearsPreservedMarkup() throws {
         let source = try MSCXFixtureLoader.mscxData("grace_after")
-        let stripped = try MSCXParser.parse(source).strippingPreservedMarkup()
+        var score = try MSCXParser.parse(source)
+        let marker = PreservedXML(name: "unknown")
+        score.parts[0].preservedMarkup = [marker]
+        score.parts[0].instrument.preservedMarkup = [marker]
+        score.parts[0].instrument.channels[0].preservedMarkup = [marker]
+        score.parts[0].staves[0].preservedMarkup = [marker]
+        score.parts[0].staves[0].staffTypePreservedMarkup = [marker]
+        let stripped = score.strippingPreservedMarkup()
         #expect(stripped.preservedMarkup.isEmpty)
         #expect(stripped.style.preservedMarkup.isEmpty)
+        #expect(stripped.parts[0].preservedMarkup.isEmpty)
+        #expect(stripped.parts[0].instrument.preservedMarkup.isEmpty)
+        #expect(stripped.parts[0].instrument.channels[0].preservedMarkup.isEmpty)
+        #expect(stripped.parts[0].staves[0].preservedMarkup.isEmpty)
+        #expect(stripped.parts[0].staves[0].staffTypePreservedMarkup.isEmpty)
     }
 
     /// A tag that appears both in a node's preserved markup and in
@@ -128,6 +197,89 @@ struct MSCXPreservedMarkupTests {
                         + "preserves them — add them to the decoder's consumed set",
                 ),
             )
+
+            try expectNoPartLevelNameCollisions(
+                score: score,
+                writtenScore: encodedScore,
+                sourceName: url.lastPathComponent,
+            )
         }
+    }
+
+    private func expectNoPartLevelNameCollisions(
+        score: Score,
+        writtenScore: XMLTreeNode,
+        sourceName: String,
+    ) throws {
+        for (partIndex, pair) in zip(score.parts, writtenScore.all("Part")).enumerated() {
+            let part = pair.0
+            let writtenPart = pair.1
+            let context = "\(sourceName): <Part>[\(partIndex)]"
+            expectNoNameCollision(
+                part.preservedMarkup,
+                writtenChildren: writtenPart.children,
+                context: context,
+            )
+            let writtenInstrument = try #require(writtenPart.first("Instrument"))
+            let instrumentContext = "\(context)/<Instrument>"
+            let permittedInstrumentCollisions: Set<String> = part.instrument.useDrumset
+                ? ["instrumentId"]
+                : []
+            expectNoNameCollision(
+                part.instrument.preservedMarkup,
+                writtenChildren: writtenInstrument.children,
+                permitted: permittedInstrumentCollisions,
+                context: instrumentContext,
+            )
+            for (channelIndex, channelPair) in zip(
+                part.instrument.channels,
+                writtenInstrument.all("Channel"),
+            ).enumerated() {
+                expectNoNameCollision(
+                    channelPair.0.preservedMarkup,
+                    writtenChildren: channelPair.1.children,
+                    context: "\(instrumentContext)/<Channel>[\(channelIndex)]",
+                )
+            }
+            for (staffIndex, staffPair) in zip(
+                part.staves,
+                writtenPart.all("Staff"),
+            ).enumerated() {
+                let staff = staffPair.0
+                let writtenStaff = staffPair.1
+                let staffContext = "\(context)/<Staff>[\(staffIndex)]"
+                expectNoNameCollision(
+                    staff.preservedMarkup,
+                    writtenChildren: writtenStaff.children,
+                    context: staffContext,
+                )
+                let writtenStaffType = try #require(writtenStaff.first("StaffType"))
+                expectNoNameCollision(
+                    staff.staffTypePreservedMarkup,
+                    writtenChildren: writtenStaffType.children,
+                    context: "\(staffContext)/<StaffType>",
+                )
+            }
+        }
+    }
+
+    private func expectNoNameCollision(
+        _ preservedMarkup: [PreservedXML],
+        writtenChildren: [XMLTreeNode],
+        permitted: Set<String> = [],
+        context: String,
+    ) {
+        let preservedNames = Set(preservedMarkup.map(\.name))
+        let writtenNames = Set(writtenChildren.map(\.name))
+        let collisions = preservedNames.intersection(writtenNames)
+            .subtracting(permitted)
+            .sorted()
+        #expect(
+            collisions.isEmpty,
+            Comment(
+                rawValue: "\(context) writes \(collisions) and also preserves them — "
+                    + "add them to the decoder's consumed set",
+            ),
+        )
     }
 }

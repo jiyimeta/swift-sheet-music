@@ -3,6 +3,12 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Part {
+    /// Every `<Part>` child this decoder reads. Anything else becomes
+    /// preserved markup — see `PreservedXML`.
+    private static let consumedPartChildren: Set = [
+        "Instrument", "Staff", "show", "trackName",
+    ]
+
     /// Decode the per-`<Part>` declaration. Top-level `<Staff>` measures
     /// are paired in afterwards by `assembleParts`.
     /// `fallbackIndex` (1-based) is the position of this `<Part>` in
@@ -36,6 +42,7 @@ extension Part {
             instrument: instrument,
             declared: declared,
             isVisibleInScore: isVisibleInScore,
+            preservedMarkup: node.preservedMarkup(consuming: consumedPartChildren),
         )
     }
 }

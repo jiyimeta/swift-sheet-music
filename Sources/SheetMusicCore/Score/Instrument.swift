@@ -26,6 +26,9 @@ public struct Instrument: Sendable, Equatable {
     /// The layout engine reads only the lines, through `drumLineMap`; the heads and voices are what the MSCX
     /// encoder needs and what drum note entry writes.
     public var drumset: [Int: DrumsetEntry]
+    /// Source markup under this element that the model does not
+    /// represent, kept so that read → write does not delete it.
+    public var preservedMarkup: [PreservedXML] = []
 
     /// Per-pitch staff-line mapping for drum instruments. Key = MIDI pitch
     /// (35 = bass drum, 42 = hi-hat, etc.), value = MuseScore line number
@@ -94,6 +97,7 @@ public struct Instrument: Sendable, Equatable {
         drumset: [Int: DrumsetEntry] = [:],
         transposeDiatonic: Int = 0,
         transposeChromatic: Int = 0,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.id = id
         self.longName = longName
@@ -117,5 +121,6 @@ public struct Instrument: Sendable, Equatable {
         }
         self.transposeDiatonic = transposeDiatonic
         self.transposeChromatic = transposeChromatic
+        self.preservedMarkup = preservedMarkup
     }
 }

@@ -57,6 +57,17 @@ public struct Score: Sendable, Equatable {
         var stripped = self
         stripped.preservedMarkup = []
         stripped.style.preservedMarkup = []
+        for partIndex in stripped.parts.indices {
+            stripped.parts[partIndex].preservedMarkup = []
+            stripped.parts[partIndex].instrument.preservedMarkup = []
+            for channelIndex in stripped.parts[partIndex].instrument.channels.indices {
+                stripped.parts[partIndex].instrument.channels[channelIndex].preservedMarkup = []
+            }
+            for staffIndex in stripped.parts[partIndex].staves.indices {
+                stripped.parts[partIndex].staves[staffIndex].staffTypePreservedMarkup = []
+                stripped.parts[partIndex].staves[staffIndex].preservedMarkup = []
+            }
+        }
         return stripped
     }
 }

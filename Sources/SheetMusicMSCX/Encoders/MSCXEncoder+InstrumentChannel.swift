@@ -13,10 +13,11 @@ extension InstrumentChannel {
     /// from a fixture without explicit controllers re-encodes to the
     /// same shape.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        let children: [XMLTreeNode] = switch options.targetVersion {
+        var children: [XMLTreeNode] = switch options.targetVersion {
         case .v2, .v3: v3Children()
         case .v4: v4Children()
         }
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         var attrs: [String: String] = [:]
         if let name { attrs["name"] = name }
         return XMLTreeNode(name: "Channel", attributes: attrs, children: children)

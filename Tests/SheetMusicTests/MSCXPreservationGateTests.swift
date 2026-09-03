@@ -59,13 +59,19 @@ enum MSCXPreservation {
             + "(spec §6; parity doc §7.1)."
     private static let staffBodyBoxReason =
         "by design: top-level staff body boxes and their ordering are outside this spec (spec §3.5)."
-    private static let task4DeclarationReason =
-        "Task 4: preserve unmodeled part, instrument, channel, and staff declaration markup."
-
+    private static let soundIDReason =
+        "genuinely lost, and not fixable by preserving it: MuseScore's <Instrument id> attribute "
+            + "(template id) and <instrumentId> element (MusicXML Sound ID) hold different values, "
+            + "this decoder collapses them, and the encoder synthesizes the element for a drumset — "
+            + "so preserving it would make a programmatic drumset score stop comparing equal to "
+            + "itself across a round trip. Recovering the Sound ID needs Instrument to model it."
+    private static let instrumentLabelReason =
+        "by design: MuseScore 5's <InstrumentLabel> wrapper holds <longName> / <shortName>, which "
+            + "are modeled and re-emitted in MuseScore 4's direct-child form. Preserving the "
+            + "wrapper too would duplicate modeled data and go stale on the first rename."
     private static func makeAllowedLosses() -> [String: String] {
         var result: [String: String] = [:]
         addPermanentLosses(to: &result)
-        addTask4Losses(to: &result)
         addTask5Losses(to: &result)
         addTask6Losses(to: &result)
         return result
@@ -121,26 +127,12 @@ enum MSCXPreservation {
             "TBox/bottomMargin", "TBox/height", "TBox/leftMargin", "TBox/rightMargin", "TBox/topGap",
             "TBox/topMargin", "Text/text", "VBox/bottomGap",
         ], because: staffBodyBoxReason, into: &result)
-    }
-
-    private static func addTask4Losses(to result: inout [String: String]) {
-        // Temporary: Task 4 preserves part, instrument, channel, and staff declarations.
         allow([
-            "BracketItem/bracketSpan", "BracketItem/level", "BracketItem/type", "Channel/controller",
-            "Channel/synti", "Instrument/InstrumentLabel", "Instrument/StringData", "Instrument/clef",
-            "Instrument/glissandoStyle", "Instrument/instrumentId", "Instrument/singleNoteDynamics",
-            "InstrumentLabel/longName", "InstrumentLabel/shortName", "Staff/BracketItem",
-            "Staff/barLineSpan", "Staff/linkedTo", "Staff/playbackVoice2", "StringData/frets",
-            "StringData/string",
-        ], because: task4DeclarationReason, into: &result)
+            "Instrument/instrumentId",
+        ], because: soundIDReason, into: &result)
         allow([
-            "StaffType/durationFontName", "StaffType/durationFontSize", "StaffType/durationFontY",
-            "StaffType/durations", "StaffType/fretFontName", "StaffType/fretFontSize",
-            "StaffType/fretFontY", "StaffType/keysig", "StaffType/lineDistance",
-            "StaffType/linesThrough", "StaffType/minimStyle", "StaffType/onLines", "StaffType/showRests",
-            "StaffType/stemless", "StaffType/stemsDown", "StaffType/stemsThrough", "StaffType/timesig",
-            "StaffType/upsideDown", "StaffType/useNumbers",
-        ], because: "Task 4: preserve the unmodeled children of staff declarations' StaffType nodes.", into: &result)
+            "Instrument/InstrumentLabel", "InstrumentLabel/longName", "InstrumentLabel/shortName",
+        ], because: instrumentLabelReason, into: &result)
     }
 
     private static func addTask5Losses(to result: inout [String: String]) {

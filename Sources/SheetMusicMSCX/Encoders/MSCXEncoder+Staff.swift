@@ -20,6 +20,11 @@ extension Staff {
                 XMLTreeNode(name: "lines", text: String(lineCount)),
             )
         }
+        appendPreservedMarkup(
+            staffTypePreservedMarkup,
+            to: &staffTypeChildren,
+            options: options,
+        )
         children.append(XMLTreeNode(
             name: "StaffType",
             attributes: ["group": group],
@@ -41,6 +46,7 @@ extension Staff {
                 name: "bracket", attributes: bracketAttrs,
             ))
         }
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(
             name: "Staff",
             attributes: ["id": staffID],
