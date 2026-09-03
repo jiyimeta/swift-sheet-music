@@ -32,8 +32,9 @@ and this project adheres to
 - `Training/`: the Python pipeline that generates the synthetic dataset, trains the detector and exports the
   bundled model, with its own tests; `Scripts/mscz-corpus-prep.sh` / `mscz-corpus-eval.sh` score the raster
   path against a `.mscz` corpus's own answers.
-- **Every notation feature the `Score` model can express is now editable through a named `EditCommand`** — the
-  edit-command parity project (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`): forty-four
+- **Every notation feature the `Score` model can express now has a named `EditCommand` reaching it, short of the
+  handful `docs/edit-commands.md` §C still lists** — the edit-command parity project
+  (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`): forty-four
   commands, reachable as `EditIntent` cases at wire indices 30–73, planned by `ScoreEditSession`, and pinned by a
   second cross-platform replay chain (`editReplay-parity/`, Swift + WebAssembly + Kotlin) that is now frozen at
   ninety-two steps like the first — never extended or re-recorded again, so a new command opens a new chain. A
@@ -96,9 +97,9 @@ and this project adheres to
   - Public API the commands needed, now reachable on its own: `Dynamic.defaultVelocity(for:)` exposes MuseScore's
     dynamics table on `Dynamic` itself; `RespellMode` (`.simplest` / `.preferSharps` / `.preferFlats`) and
     `PitchSpelling.tpc(forPitch:keySig:mode:)` are the spelling seam `RespellRange` and
-    `TransposeRange(respellInKey:)` both go through; `NoteDuration.baseAndDots()` inverts `dotted(_:)`;
+    `TransposeRange(respellInKey:)` both go through; `NoteDuration.baseAndDots()` inverts `dotted(_:)`; and
     `ChordArticulation.Kind.mscxToken` / `init(mscxToken:)` moved the MSCX token table into Core with both MSCX
-    paths delegating to it; and `Fraction(ticks:division:)` feeds `Spanner.offsets`'s fractions component.
+    paths delegating to it.
     `Arpeggio.timeStretch` / `userLen1` and `ChordLine.isWavy` are deliberately not on the v1 wire, which keeps
     intents scalar; they stay reachable by building the command directly.
   - New `EditRefusal` cases across the project: `Reason.invalidRepeatCount`, `.invalidMeasureRepeatSpan`,

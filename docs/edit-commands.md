@@ -85,6 +85,7 @@ own substantive logic.
 | `SplitRest` | not in the example — the drum pad's column caret, landing inside a rest | — |
 | `SetNoteHead` | not in the example — the drum pad, writing a cross-head hi-hat | sugar |
 | `SetDrumsetEntry` | not in the example — the drum pad, repairing a kit that never named this drum | — |
+| `SetPartNames` | not in the example — driven by a host app's instruments sheet | — |
 | `SetLayoutBreak` | not in the example — host command registry | — |
 | `SetBarLine` | not in the example — host command registry | sugar |
 | `SetRepeatBarLines` | not in the example — host command registry | — |
@@ -134,9 +135,11 @@ own substantive logic.
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
 command).
 
-Every command from `SetLayoutBreak` on is also an `EditIntent` case
-(wire indices 30–73, `EditIntentCodec.swift`'s case list) and a step of
-the frozen parity replay chain (`ReplayChain.parity`).
+Every command from `SetLayoutBreak` through `SetChordSymbol` is also an
+`EditIntent` case (wire indices 30–73, `EditIntentCodec.swift`'s case
+list) and a step of the frozen parity replay chain (`ReplayChain.parity`).
+`CompositeEditCommand`, listed last as infrastructure, is not: it
+predates the project and keeps its own earlier wire index.
 
 ---
 
@@ -171,11 +174,11 @@ else is known to be missing:
 
 | Feature | Why it is out of reach today |
 | --- | --- |
-| Ornaments other than trill (turn, mordent, …) | per-note ornament annotation — the model has `TrillType` but no general ornament case. |
-| Manual stem direction | `Chord.stemDirection` (auto only). |
-| Cue note (small) | `Chord` / `Note` scale or cue flag. |
-| Slash notation | dedicated voice element. |
-| Figured bass | dedicated annotation type. |
+| Ornaments other than trill (turn, mordent, …) | the model has `TrillType` (`SetTrill`, #68) but no general ornament case — a turn or mordent has nowhere to attach. |
+| Manual stem direction | the model has no field for it — `Chord` carries `stemVisible` (`SetStemVisible`, #60), not a direction; MuseScore always computes it. |
+| Cue note (small) | neither `Chord` nor `Note` carries a scale or cue flag — nothing in the model distinguishes a cue-sized note from a full-sized one. |
+| Slash notation | no dedicated voice element represents it — a slash is neither a `Chord` nor a `Rest` in the model. |
+| Figured bass | no dedicated annotation type carries it — the model has nothing analogous to `Harmony` for a figured-bass numeral. |
 | Pedal line style | `Spanner` has no pedal-style payload — `SetPedal` (#64) writes `rawType = "Pedal"` only. |
 | Chord-symbol transposition | `SetChordSymbol` (#73) writes `Harmony.name` and nils `rootTpc` / `bassTpc` (and nils them on a file-authored symbol it retypes), so a written symbol carries no transposable root. |
 | Tempo text words ("Allegro") | `Tempo` has no text field; `SetTempo.Marking` is the metronome mark alone, and the encoder synthesizes the `<text>` from it. |
