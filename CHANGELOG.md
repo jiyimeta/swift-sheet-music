@@ -130,6 +130,12 @@ and this project adheres to
 
 ### Fixed
 
+- A hidden beam now survives a save. `MSCXDecoder` read `<Beam><visible>0</visible></Beam>` onto the following
+  chord or rest and the layout honored it, but no encoder ever wrote the element back, so a score whose beam was
+  hidden in MuseScore opened correctly and was silently saved with the beam shown. `MSCXEncoder` now writes the
+  `<Beam>` sibling before the chord or rest that leads the group, exactly where MuseScore's `TWrite` puts it —
+  after the chord's grace notes, before the `<Chord>` / `<Rest>` — and only for the hidden state, so a visible
+  beam still writes nothing.
 - A tempo saved through this package is no longer invisible in MuseScore 4. `MSCXEncoder` wrote a `<Tempo>` with
   its `<tempo>` alone, and MuseScore 4 draws a tempo marking only through its text, so every tempo this package
   wrote re-opened as an empty marking on the page. The encoder now derives the printed marking from the beat,
