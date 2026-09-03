@@ -135,6 +135,9 @@ extension ScoreEditSession {
         case .setClef, .removeClef, .setTempo, .setStaffText, .setDynamic, .setFermata, .setBreath, .setJumps,
              .setMarkers:
             return markCommand(for: intent, in: score)
+        case .setArticulation, .setGraceNotes, .setTremolo, .setArpeggio, .setGlissando, .setDots, .setChordLine,
+             .setNoteParentheses:
+            return notationCommand(for: intent, in: score)
         }
     }
 
