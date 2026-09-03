@@ -11,13 +11,24 @@ import Foundation
 /// pull the upstream audio into the output buffers, shape each sample,
 /// done.
 final class SoftClipAudioUnit: AUAudioUnit {
-    /// Our own component identity. Registered in-process only, which is
-    /// all `AVAudioUnitEffect` needs to instantiate it.
+    /// Our own component identity. Registered in-process only, which is all
+    /// `AVAudioUnitEffect` needs to instantiate it.
+    ///
+    /// `sandboxSafe` is not decoration. A locally registered component that does
+    /// not declare it is refused by the component manager inside an App Sandbox,
+    /// and `AVAudioUnitEffect(audioComponentDescription:)` then throws an
+    /// Objective-C exception (`com.apple.coreaudio.avfaudio`, error -3000) that
+    /// Swift cannot catch — the host process dies. Since `PlaybackEngine.init`
+    /// builds the master chain eagerly, that is a launch crash for any sandboxed
+    /// app, not merely a playback failure. Measured on a 2×2 bench (sandbox
+    /// entitlement × flag): the crash appears in exactly one cell, sandboxed with
+    /// no flag. The claim the flag makes is true of this unit — it reads and
+    /// writes its own buffers and touches nothing else.
     static let componentDescription = AudioComponentDescription(
         componentType: kAudioUnitType_Effect,
         componentSubType: 0x736D_7363, // 'smsc'
         componentManufacturer: 0x536D_7473, // 'Smts'
-        componentFlags: 0,
+        componentFlags: AudioComponentFlags.sandboxSafe.rawValue,
         componentFlagsMask: 0,
     )
 
