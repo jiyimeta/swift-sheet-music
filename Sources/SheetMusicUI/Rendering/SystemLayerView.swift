@@ -9,8 +9,8 @@ import SwiftUI
     import UIKit
 #endif
 
-/// SwiftUI host for a CALayer-rendered system.  Replaces the old
-/// `SystemCanvas` (SwiftUI `Canvas`, rasterised once at layout size)
+/// SwiftUI host for a CALayer-rendered system.  Replaces the original
+/// SwiftUI `Canvas` renderer, which rasterised once at layout size,
 /// with a layer tree that stays sharp at any zoom level.
 ///
 /// The view reports a fixed frame of `system.size.width` ×

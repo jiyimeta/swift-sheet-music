@@ -3,51 +3,15 @@ import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
 
-/// A single system rendered in its own SwiftUI `Canvas`.
+/// A horizontal slice of a single system, rendered in its own SwiftUI
+/// `Canvas`.
 ///
-/// **Currently instantiated nowhere.** `ScoreView` renders both of
-/// its modes as `SystemLayerView` CALayer trees; this type is the
-/// SwiftUI-`Canvas` rendering of the same thing, kept as the
-/// reference implementation next to the `ScoreCanvasDrawing`
-/// routines it shares with `PagedScoreView`, `PDFPageView` and
-/// `TitleFrameView` — which are very much alive.
-@available(macOS 15.0, *)
-struct SystemCanvas: View {
-    let system: LayoutSystem
-    let metrics: StaffMetrics
-
-    private static let overlap: CGFloat = 1
-
-    var body: some View {
-        let h = system.size.height + Self.overlap
-        Canvas(opaque: true, rendersAsynchronously: true) { context, _ in
-            context.fill(
-                Path(CGRect(
-                    origin: .zero,
-                    size: CGSize(
-                        width: system.size.width, height: h,
-                    ),
-                )),
-                with: .color(.white),
-            )
-            var local = context
-            local.translateBy(x: -system.origin.x, y: -system.origin.y)
-            ScoreCanvasDrawing.drawSystem(
-                system, metrics: metrics, into: &local,
-            )
-        }
-        .frame(
-            width: system.size.width,
-            height: h,
-            alignment: .topLeading,
-        )
-        .environment(\.colorScheme, .light)
-    }
-}
-
-/// A horizontal slice of a single system. Used by `ScoreView` in
-/// horizontal-scroll mode inside a `LazyHStack` so only visible
-/// portions of a long system are rasterised.
+/// **Currently instantiated nowhere.** `ScoreView`'s horizontal mode
+/// stopped slicing long systems into 600 pt chunks when it moved to
+/// `SystemLayerView` CALayer trees — CoreAnimation composites
+/// off-screen tiles without manual slicing. Kept as the SwiftUI-
+/// `Canvas` rendering of one slice; the `ScoreCanvasDrawing` routines
+/// below are the live part of this file.
 @available(macOS 15.0, *)
 struct SystemSliceCanvas: View {
     let system: LayoutSystem
@@ -82,8 +46,9 @@ struct SystemSliceCanvas: View {
 }
 
 /// Static drawing routines shared between single-system and full-
-/// document canvases. Factored out of `ScoreCanvas` so `SystemCanvas`
-/// can call them too.
+/// document canvases. Factored out so every `Canvas`-based renderer —
+/// `PagedScoreView`, `PDFPageView`, `TitleFrameView` — draws a system
+/// exactly the same way.
 @available(macOS 15.0, *)
 public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
     public static func drawSystem( // swiftlint:disable:this function_body_length
