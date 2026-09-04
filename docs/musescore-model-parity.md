@@ -16,7 +16,8 @@ MuseScoreの`ElementType` enumを背骨にして全件洗い出した記録。�
 
 **出荷済みMuseScoreに対する穴が2層、未リリースのMuseScore 5に対する断層が1つ。**
 
-1. **要素そのものが存在しない（MISSING）: 25件** — fret diagram、figured bass、capo、
+1. **要素そのものが存在しない（MISSING）: 25件**（調査時点。`ORNAMENT`をmodel化したので
+   2026-09-04時点では24件——§4.6） — fret diagram、figured bass、capo、
    string tunings、harp pedal diagram、fingering、sticking、expression、symbol、image、
    HBox / TBox / FBox、spacer、staff type change、linked parts（excerpt）など。
    MSCX decoderは未知elementを黙って捨てる（`MSCXDecoder+Voice.swift:329`）ので、
@@ -425,14 +426,36 @@ link graph）を作る話で、value type設計そのものへの追加になる
 
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
-| `ORNAMENT` | `dom/ornament.h:29` | なし | MuseScore 4で`Articulation`から分離したornament。interval / accidental / cue note / playback。chord decoderは`<Articulation>`しか見ない（`MSCXDecoder+Chord.swift:31`） |
+| ~~`ORNAMENT`~~ | `dom/ornament.h:29` | **`ChordOrnament`**（2026-09-04実装） | 下の追記を参照 |
 | `AMBITUS` | `dom/ambitus.h:38` | なし | 音域表示 |
 | `MMREST_RANGE` | `dom/mmrestrange.h:34` | なし | 多小節休符の範囲label |
 | `DEAD_SLAPPED` | `dom/deadslapped.h:34` | なし | rest添付のdead slap |
 | `CHORD_BRACKET` | `dom/chordbracket.h:29` | なし | chord bracket |
 
-`ORNAMENT`が実質的に一番効く。trill / turn / mordentのplayback intervalとaccidentalが
-MuseScore 4以降ここに載っているため、無いと装飾音のMIDI再現ができない。
+**［2026-09-04 追記］`ORNAMENT`はmodel化した。** `SheetMusicCore`の`ChordOrnament`と
+`Chord.ornaments`、decoderは`MSCXDecoder+ChordOrnament.swift`、encoderは
+`MSCXEncoder+ChordOrnament.swift`。fixtureは`Tests/SheetMusicTests/Resources/own/ornaments.mscx`。
+持っているのは23種のpalette symbol（+ `.unknown`）、`intervalAbove` / `intervalBelow`、
+above / belowのaccidental、`ornamentShowAccidental` / `ornamentShowCueNote` /
+`startOnUpperNote` / `ornamentStyle` / `play`。
+
+意図的に持っていないものが3つあり、いずれもpreserved markupで往復する:
+
+- **cue noteの`<Chord>`** — `Ornament::computeNotesAboveAndBelow`（`dom/ornament.cpp:253`）が
+  親chordのtop noteからlayoutのたびに再計算する派生値。modelに置くと、下のnoteを編集した
+  瞬間にstaleになる値をmodelが抱えることになる。
+- **`<direction>` / `<placement>`** — ornament固有ではなく`Articulation` / `EngravingItem`の
+  base property。`ChordArticulation`も持っていないので揃えた。
+- **MuseScore 3形式の変換** — MS3は同じsymbolを`<Articulation><subtype>ornamentTrill</subtype>`
+  として書く。これは今まで通り`ChordArticulation.unknown`にdecodeする。`ChordOrnament`に
+  寄せるとround-tripのelement形が変わり（`Chord/Articulation`が`Chord/Ornament`になる）、
+  gateに嘘のlossが出る。compat変換はparityとは別問題。testで固定してある。
+
+**残っているのはplaybackとlayout。** intervalとaccidentalはmodelにあるが、
+`MidiRenderer`はornamentを音に展開しないし、engravingもglyphを置かない。
+これは「単独で追加できるMISSING」の外側——`LayoutElement`はwasm / Android bridgeにも
+mirrorされるので、それぞれ別sliceになる。intervalをmodelに入れたのは、
+その2つが読む先を用意するため。
 
 ---
 
@@ -592,7 +615,8 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    round-trip lossを止める。MISSING 25件の実害の大半がこれで消える。
 2. **横断的な4つ**（§7）— TextContent、ElementProperties拡張、style、時間軸map。
    個別要素のPARTIALの大半がここに帰着する。
-3. **単独で追加できるMISSING** — `ORNAMENT`、`StringData`+`FRET_DIAGRAM`+`STRING_TUNINGS`+`CAPO`、
+3. **単独で追加できるMISSING** — ~~`ORNAMENT`~~（2026-09-04完了、§4.6の追記）、
+   `StringData`+`FRET_DIAGRAM`+`STRING_TUNINGS`+`CAPO`、
    `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`、`FINGERING`/`STICKING`/`EXPRESSION`。
    互いに独立なので並列に進められる。
 4. **構造変更を伴うもの** — box family（`MeasureBase`相当の並びが要る）、

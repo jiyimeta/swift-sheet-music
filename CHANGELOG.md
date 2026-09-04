@@ -7,6 +7,36 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Chord ornaments are modeled.** MuseScore 4 split `Ornament` out of
+  `Articulation` so that a trill, turn, or mordent could carry the state that
+  makes it sound — which scale degree the auxiliary note takes above and below
+  the written note, whether that note draws an accidental, and whether the
+  realization starts on the upper note. This library modeled none of it, and
+  read `<Ornament>` as an unrecognized element.
+
+  `Chord.ornaments` now holds `ChordOrnament` values: the 23 symbols
+  MuseScore's master ornaments palette offers plus an `.unknown` escape for
+  anything outside it, both intervals, the accidental pair, and
+  `ornamentShowAccidental` / `ornamentShowCueNote` / `startOnUpperNote` /
+  `ornamentStyle` / `play`. A `.mscx` round trip is typed rather than opaque,
+  and a v3 encode degrades each ornament to the `<Articulation>` spelling
+  MuseScore 3 understands.
+
+  Three things stay outside the model on purpose. The cue-note `<Chord>` is a
+  value MuseScore recomputes from the parent chord on every layout, so holding
+  it here would go stale the moment that note is edited; `<direction>` and
+  `<placement>` are base `Articulation` properties that `ChordArticulation`
+  does not model either. Both ride through a round trip as preserved markup.
+  MuseScore 3's spelling of an ornament — `<Articulation>` with an `ornament…`
+  SymId — keeps decoding as an articulation, because converting it would change
+  the element shape a round trip produces.
+
+  **Playback and engraving are unchanged.** The MIDI renderer does not yet
+  realize an ornament into notes and the engraver does not place its glyph; the
+  intervals are modeled so that both have somewhere to read them from.
+
 ### Changed
 
 - **Reading a `.mscx` and writing it back no longer deletes what the model
