@@ -229,3 +229,131 @@ struct ChordOrnamentDecodeTests {
         #expect(ornament.preservedMarkup.isEmpty)
     }
 }
+
+@Suite("ChordOrnament encoding")
+struct ChordOrnamentEncodeTests {
+    @Test func writesMuseScoreChildOrder() {
+        let ornament = ChordOrnament(
+            kind: .turn,
+            intervalAbove: .init(step: .second, quality: .major),
+            intervalBelow: .init(step: .third, quality: .minor),
+            showAccidental: .always,
+            showCueNote: .on,
+            startOnUpperNote: true,
+            ornamentStyle: .baroque,
+            plays: false,
+            accidentalAbove: .sharp,
+            accidentalBelow: .flat,
+        )
+        let node = ornament.encode()
+        #expect(node.name == "Ornament")
+        #expect(node.children.map(\.name) == [
+            "Accidental", "Accidental", "intervalAbove", "intervalBelow",
+            "ornamentShowAccidental", "ornamentShowCueNote", "startOnUpperNote",
+            "subtype", "play", "ornamentStyle",
+        ])
+        #expect(node.first("intervalAbove")?.text == "second,major")
+        #expect(node.first("ornamentShowAccidental")?.text == "2")
+        #expect(node.first("ornamentShowCueNote")?.text == "on")
+        #expect(node.first("startOnUpperNote")?.text == "1")
+        #expect(node.first("play")?.text == "0")
+        #expect(node.first("ornamentStyle")?.text == "baroque")
+    }
+
+    @Test func placesTheAboveAccidentalByItsPlacementTag() {
+        let node = ChordOrnament(kind: .trill, accidentalAbove: .sharp, accidentalBelow: .flat)
+            .encode()
+        let accidentals = node.all("Accidental")
+        #expect(accidentals.count == 2)
+        #expect(accidentals[0].first("subtype")?.text == "accidentalSharp")
+        #expect(accidentals[0].first("placement")?.text == "above")
+        #expect(accidentals[1].first("subtype")?.text == "accidentalFlat")
+        #expect(!accidentals[1].children.contains { $0.name == "placement" })
+    }
+
+    @Test func omitsEverythingUnset() {
+        let node = ChordOrnament(kind: .trill).encode()
+        #expect(node.children.map(\.name) == ["subtype"])
+        #expect(node.first("subtype")?.text == "ornamentTrill")
+    }
+
+    @Test func writesPreservedMarkupAfterItsOwnChildren() {
+        let node = ChordOrnament(
+            kind: .trill,
+            preservedMarkup: [PreservedXML(name: "Chord")],
+        ).encode()
+        #expect(node.children.map(\.name) == ["subtype", "Chord"])
+    }
+
+    @Test func preservedMarkupIsOmittedWhenTheCallerAsks() {
+        var options = MSCXEncoderOptions()
+        options.emitPreservedMarkup = false
+        let node = ChordOrnament(
+            kind: .trill,
+            preservedMarkup: [PreservedXML(name: "Chord")],
+        ).encode(options: options)
+        #expect(node.children.map(\.name) == ["subtype"])
+    }
+
+    @Test func v3TargetDegradesToArticulation() {
+        let node = ChordOrnament(
+            kind: .mordent,
+            intervalAbove: .init(step: .third, quality: .major),
+        ).encode(options: MSCXEncoderOptions(targetVersion: .v3))
+        #expect(node.name == "Articulation")
+        #expect(node.children.map(\.name) == ["subtype"])
+        #expect(node.first("subtype")?.text == "ornamentMordent")
+    }
+
+    @Test func chordEncodesOrnamentsAfterArticulationsAndBeforeNotes() throws {
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            articulations: [ChordArticulation(kind: .staccato, anchor: .above)],
+            ornaments: [ChordOrnament(kind: .trill)],
+        )
+        let names = chord.encodeAsChord().children.map(\.name)
+        let articulation = try #require(names.firstIndex(of: "Articulation"))
+        let ornament = try #require(names.firstIndex(of: "Ornament"))
+        let note = try #require(names.firstIndex(of: "Note"))
+        #expect(articulation < ornament)
+        #expect(ornament < note)
+    }
+
+    @Test func roundTripsEverythingModeled() throws {
+        let source = """
+        <durationType>quarter</durationType>
+        <Ornament>
+          <Accidental><subtype>accidentalSharp</subtype><placement>above</placement></Accidental>
+          <Accidental><subtype>accidentalNatural</subtype></Accidental>
+          <intervalAbove>third,major</intervalAbove>
+          <intervalBelow>second,minor</intervalBelow>
+          <ornamentShowAccidental>1</ornamentShowAccidental>
+          <ornamentShowCueNote>off</ornamentShowCueNote>
+          <startOnUpperNote>1</startOnUpperNote>
+          <subtype>ornamentTrill</subtype>
+          <play>0</play>
+          <ornamentStyle>baroque</ornamentStyle>
+        </Ornament>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """
+        let decoded = try parseChord(source)
+        let reDecoded = try Chord.decode(decoded.encodeAsChord())
+        #expect(reDecoded.ornaments == decoded.ornaments)
+    }
+
+    @Test func roundTripsTheCueNoteChordThroughPreservedMarkup() throws {
+        let decoded = try parseChord("""
+        <durationType>quarter</durationType>
+        <Ornament>
+          <Chord><durationType>eighth</durationType>
+                 <Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
+          <subtype>ornamentTurn</subtype>
+        </Ornament>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        let ornamentNode = try #require(decoded.encodeAsChord().first("Ornament"))
+        let cueNote = try #require(ornamentNode.first("Chord"))
+        #expect(cueNote.first("Note")?.first("pitch")?.text == "62")
+    }
+}
