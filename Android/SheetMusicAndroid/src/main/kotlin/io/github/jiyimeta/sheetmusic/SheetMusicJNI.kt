@@ -518,6 +518,32 @@ object SheetMusicJNI {
     }
 
     /**
+     * Where to draw the authoring badges that mark measures carrying an
+     * explicit `<LayoutBreak>`.
+     *
+     * `LayoutOptionsWire.breakIndicatorVisibilityRaw` is what asks for these;
+     * this is what answers. Both the visibility and the break policy come from
+     * the cached layout rather than from parameters, so the badges can only
+     * describe the layout actually on screen — a badge drawn from a different
+     * policy than the one that laid the score out points at a break that is not
+     * happening.
+     *
+     * Returns a `BreakIndicatorsWire` payload with each badge's CENTRE in
+     * document millimetres and its kind (0 = line, 1 = page). Draw the badge at
+     * a fixed size: it is an authoring hint about the file, not notation, and
+     * one that shrinks with the staff becomes unreadable exactly when the score
+     * is zoomed out to look at its breaks.
+     *
+     * An empty *list* is the normal answer for a score with no authored breaks
+     * or with the badges turned off; an empty array means no answer at all —
+     * unknown handle, or no cached layout.
+     */
+    fun nativeBreakIndicators(scoreHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeBreakIndicators(scoreHandle, arena).toByteArray()
+    }
+
+    /**
      * The sticky-header pane for a horizontal continuous view: the clef, key
      * signature, time signature and instrument name in force at [scrollXMm],
      * frozen so a reader who has scrolled past bar 1 can still see what key and

@@ -110,6 +110,28 @@ smooth scroll costs one JNI round trip per bar rather than one per frame.
 Lay the score out in horizontal mode (`layoutMode = 1`) — the pane exists for
 that mode, and in page mode the header is already on screen.
 
+### Break indicators
+
+`BreakIndicatorOverlay` marks the measures that carry an explicit
+`<LayoutBreak>`, so an author can see where the file forces a system or page to
+end. Ask for them when computing the layout —
+`LayoutOptionsWire.breakIndicatorVisibilityRaw` is `0` none (the default), `1`
+page breaks only, `2` all — then overlay:
+
+```kotlin
+BreakIndicatorOverlay(
+    scoreHandle = handle.raw,
+    pxPerMM = pxPerMM,
+    transform = transform,
+)
+```
+
+The bridge applies the break *policy* before the visibility, so a badge never
+appears for a break the current layout is ignoring. The badge itself is a fixed
+16×12 px and does **not** scale with the staff: it is an authoring hint about the
+file, not notation, and one that shrinks with the music becomes unreadable
+exactly when the score is zoomed out to look at its breaks.
+
 ### Playback overlays
 
 `PlaybackCursorOverlay` and `LoopHighlightOverlay` take the same

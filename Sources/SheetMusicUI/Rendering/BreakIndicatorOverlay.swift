@@ -93,37 +93,24 @@ public struct BreakIndicatorOverlay: View {
         }
     }
 
+    /// Delegates to `SheetMusicLayout.BreakIndicators`.
+    ///
+    /// The rule moved down when a second renderer needed the identical answer: a badge that appears
+    /// on one platform and not another — or on a measure whose break the current `LayoutBreakPolicy`
+    /// is ignoring — is a lie about the file, and two spellings of "which measure earns a badge" is
+    /// how that happens. This view keeps its own `BreakKind` because it is the type its badge sub-view
+    /// switches on; the mapping is one line either way.
     private func breakKind(for m: LayoutMeasure) -> BreakKind? {
-        let policyKind: BreakKind?
-        switch policy {
-        case .honor:
-            if m.pageBreak {
-                policyKind = .page
-            } else if m.lineBreak {
-                policyKind = .line
-            } else {
-                policyKind = nil
-            }
-        case .ignoreSystemBreaks:
-            // Page indicators only — line breaks are ignored at
-            // layout time, so showing their badges would mislead.
-            policyKind = m.pageBreak ? .page : nil
-        case .ignoreAll:
-            policyKind = nil
-        }
-        guard let kind = policyKind else { return nil }
-        switch visibility {
-        case .all: return kind
-        case .pageOnly: return kind == .page ? kind : nil
-        case .none: return nil
+        switch BreakIndicators.kind(for: m, policy: policy, visibility: visibility) {
+        case .line: .line
+        case .page: .page
+        case nil: nil
         }
     }
 
-    /// Badge center's distance from the system's top edge. We sit
-    /// the badge slightly above the top staff so it floats clearly
-    /// without overlapping staff lines.
+    /// See `BreakIndicators.badgeOffsetY(metrics:)`.
     private func badgeOffsetY(metrics: StaffMetrics) -> CGFloat {
-        metrics.sp * 0.5
+        BreakIndicators.badgeOffsetY(metrics: metrics)
     }
 
     private struct Indicator {

@@ -69,6 +69,44 @@ and this project adheres to
   because `Dictionary` iteration order is seeded per process and an unsorted
   encode would make the same score produce different bytes on every run.
 
+- **Break indicators reach non-Apple hosts.** `nativeBreakIndicators` /
+  `BreakIndicatorOverlay` mark the measures carrying an explicit `<LayoutBreak>`,
+  which `LayoutOptionsWire.breakIndicatorVisibilityRaw` could ask for and nothing
+  answered. The rule for which measure earns a badge moved out of the SwiftUI
+  overlay into `SheetMusicLayout.BreakIndicators` so both renderers read one
+  spelling: a badge that appears on one platform and not the other — or on a
+  measure whose break the current `LayoutBreakPolicy` is ignoring — is a lie
+  about the file. The policy therefore gates before the visibility does.
+
+- **The continuous-view sticky header reaches non-Apple hosts.**
+  `nativeStickyHeaderProgram` / `StickyHeaderPane` freeze the current clef, key
+  signature, time signature and instrument name at a horizontal view's left edge,
+  so a reader scrolled past bar 1 can still see what key and metre they are in.
+  `SheetMusicUI.StickyHeaderView` has done this on Apple; no other host could,
+  because the pane is a *synthesized* system rather than a slice of the score and
+  nothing bridged the synthesis. The synthesis itself
+  (`LayoutEngine.stickyHeaderSystem`) was already portable, so the pane comes
+  back as an ordinary one-page draw program — one renderer, and a change to how a
+  clef is drawn reaches the pane for free.
+
+- **Kotlin can author an edit intent, not just relay one.** The wirelet
+  registration for `SheetMusicEditWire/Intent` was deliberately absent, so
+  `nativeApplyEditIntent` could only take bytes produced elsewhere: an Android
+  host could hit-test, place a caret, apply, undo and redo, and never originate
+  an edit, while an Apple host had the whole `EditCommand` set and the browser a
+  typed `EditIntent` union. `emitModels` generates the models as well as the
+  codecs, which is what makes the registration possible. Proven against Swift's
+  own bytes rather than against itself: the 87 committed edit-replay step assets
+  all decode and re-encode byte-identically through the generated codec.
+
+- **`armeabi-v7a` is an opt-in ABI rather than an unsupported one.** Three
+  READMEs said "not supported"; measured, the Swift Android SDK carries the
+  triple and runtime, the NDK has the sysroot, and both native dependencies of
+  the audio module ship the ABI. `SHEET_MUSIC_ANDROID_ABIS=…,armeabi-v7a
+  Scripts/android-build-libs.sh` links and stages it. It stays out of the default
+  because a third full cross-compile costs a third more wall clock on every
+  build, for a shrinking share of API-28-and-later devices.
+
 - **`Android/SheetMusicComposeAndroid/README.md`** — the module is published and
   named in the root README's artifact table and was the only one of the three
   AARs without a README of its own.
@@ -128,6 +166,16 @@ and this project adheres to
   into a second, separately-linked image of the engine, with equal fingerprints
   at every step. `docs/edit-commands.md` recorded that run as "the one
   outstanding verification for this project"; it now records the result.
+
+  `ScoreCanvasGoldenTest` joins them, and it is the first thing anywhere that
+  looks at what the Android renderer actually draws: it engraves a score, paints
+  page 0 into a `Bitmap` through the same `drawCommands` the screen uses, and
+  compares it to a committed PNG. The Swift suite asserts on the draw *program*
+  and the Kotlin unit tests on band arithmetic; neither can see a glyph that
+  stopped drawing or a paint state that leaked past its `setColor`. Its fixture
+  carries a bold tempo mark and a framed bold rehearsal mark on purpose — a
+  golden taken from a score with no styling would match another picture of a
+  score with no styling while the style path silently broke.
 
 - **Reading a `.mscx` and writing it back no longer deletes what the model
   does not cover.** The decoder skipped every element it did not recognize and
