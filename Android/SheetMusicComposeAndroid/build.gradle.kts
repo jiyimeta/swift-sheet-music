@@ -13,7 +13,16 @@ android {
     defaultConfig {
         minSdk = 28
         consumerProguardFiles("proguard-consumer.pro")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
+    // The golden-render test needs a score to engrave. It borrows the edit-replay
+    // chain's committed `fixture.mscx` rather than adding a fourth copy of a
+    // fixture to the tree — the same borrowing `:SheetMusicAndroid`'s androidTest
+    // does for this module's fonts, in the other direction.
+    sourceSets["androidTest"].assets.srcDir(
+        rootProject.projectDir.resolve("SheetMusicAndroid/src/androidTest/assets")
+    )
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -22,6 +31,17 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     buildFeatures { compose = true }
+
+    // The androidTest APK packages both transitive JNI libraries — the Swift
+    // bridge's and the CMake-built FluidSynth wrapper's — and both ship the
+    // NDK's own libc++_shared.so. Pick first; the two copies are byte-identical
+    // NDK artefacts. The example app has the same block for the same reason;
+    // this is the first configuration in THIS module that packages an APK.
+    packaging {
+        jniLibs {
+            pickFirsts += setOf("**/libc++_shared.so")
+        }
+    }
 
     publishing {
         singleVariant("release") { withSourcesJar() }
@@ -42,6 +62,8 @@ dependencies {
     // wirelet codecs (ScoreCursorCodec) live in the audio module.
     api(project(":SheetMusicAudioAndroid"))
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:runner:1.5.2")
 }
 
 val packageRoot: File = rootProject.projectDir.resolve("..").canonicalFile

@@ -141,6 +141,13 @@ jobs:
       # on. `docs/edit-commands.md` recorded the parity one as "the one
       # outstanding verification for this project".
       #
+      # `:SheetMusicComposeAndroid` joins them with `ScoreCanvasGoldenTest`,
+      # which engraves a score and compares the painted bitmap against a
+      # committed PNG. That is the only thing anywhere that looks at what the
+      # Android renderer actually draws: the Swift tests assert on the draw
+      # *program*, the Kotlin unit tests on band arithmetic, and neither can see
+      # a glyph that stopped drawing or a paint state that leaked.
+      #
       # In THIS job rather than a Linux one with KVM, despite the acceleration
       # Linux would bring: the wirelet Gradle plugin shells out to `swift run`,
       # so any job that compiles Kotlin needs the Swift toolchain and the
@@ -164,10 +171,13 @@ jobs:
           script: >-
             ./Android/gradlew -p Android
             :SheetMusicAndroid:connectedDebugAndroidTest
+            :SheetMusicComposeAndroid:connectedDebugAndroidTest
 
       - name: Upload instrumented test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: instrumented-test-reports
-          path: Android/SheetMusicAndroid/build/reports/androidTests/
+          path: |
+            Android/SheetMusicAndroid/build/reports/androidTests/
+            Android/SheetMusicComposeAndroid/build/reports/androidTests/
