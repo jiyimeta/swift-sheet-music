@@ -22,6 +22,12 @@ extension ChordOrnament {
     ///
     /// `XMLTreeNode.all` matches direct children only, so an `<Ornament>` nested
     /// inside this chord's own cue-note `<Chord>` is not picked up here.
+    ///
+    /// Rests are not covered. MuseScore reads `<Ornament>` in
+    /// `TRead::readProperties(ChordRest*, …)`, so a rest can carry one, but this
+    /// package's `Rest` models no articulation either — an ornament on a rest
+    /// keeps round-tripping through that decoder's preserved markup, which is
+    /// the same treatment `<Articulation>` gets there.
     static func decodeAll(inChord node: XMLTreeNode) -> [ChordOrnament] {
         node.all("Ornament").map(decode)
     }
