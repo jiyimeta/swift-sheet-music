@@ -18,9 +18,11 @@ extension ScoreStyle {
             // MuseScore Studio 3 writes only the engraving unit anchor
             // inside <Style> for round-tripped fixtures (capital-S
             // <Spatium>); see ms3-target spec, Style block.
-            return XMLTreeNode(name: "Style", children: [
+            var children = [
                 XMLTreeNode(name: "Spatium", text: String(spatium)),
-            ])
+            ]
+            appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+            return XMLTreeNode(name: "Style", children: children)
         case .v4:
             let defaults = ScoreStyle.museScoreDefaults
             var children: [XMLTreeNode] = []
@@ -55,6 +57,7 @@ extension ScoreStyle {
                 lyricist: lyricistAlign,
                 into: &children,
             )
+            appendPreservedMarkup(preservedMarkup, to: &children, options: options)
             return XMLTreeNode(name: "Style", children: children)
         }
     }

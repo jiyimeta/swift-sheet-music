@@ -15,6 +15,9 @@ public struct InstrumentChannel: Sendable, Equatable, Hashable {
     public var midiChannel: Int?
     /// Explicit MIDI port from `<midiPort>`. nil means port 0.
     public var midiPort: Int?
+    /// Source markup under this element that the model does not
+    /// represent, kept so that read → write does not delete it.
+    public var preservedMarkup: [PreservedXML] = []
 
     public init(
         name: String? = nil,
@@ -26,6 +29,7 @@ public struct InstrumentChannel: Sendable, Equatable, Hashable {
         chorus: Int = 0,
         midiChannel: Int? = nil,
         midiPort: Int? = nil,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.name = name
         self.program = program
@@ -36,5 +40,21 @@ public struct InstrumentChannel: Sendable, Equatable, Hashable {
         self.chorus = chorus
         self.midiChannel = midiChannel
         self.midiPort = midiPort
+        self.preservedMarkup = preservedMarkup
+    }
+
+    /// Hashes the modeled playback state. Inert preserved markup is
+    /// excluded; unequal values may share a hash, while equal values
+    /// still always produce the same hash as `Hashable` requires.
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(program)
+        hasher.combine(bank)
+        hasher.combine(volume)
+        hasher.combine(pan)
+        hasher.combine(reverb)
+        hasher.combine(chorus)
+        hasher.combine(midiChannel)
+        hasher.combine(midiPort)
     }
 }

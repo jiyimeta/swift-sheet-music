@@ -97,9 +97,8 @@ targets) are resolved inside rendering passes, not stored in the types.
 
 The importers are **permissive by design** — real-world files contain
 elements newer or more exotic than any parser fully models, and refusing
-to load them is worse than degrading gracefully. Unknown elements inside
-a `<voice>` are silently skipped. For *known* elements with unknown or
-missing values, decoders apply a three-way policy:
+to load them is worse than degrading gracefully. For *known* elements
+with unknown or missing values, decoders apply a three-way policy:
 
 - **Structural** (pitch, voice structure, time signature, division):
   throw `SheetMusicError.malformedScore`. Without these the score cannot
@@ -114,6 +113,26 @@ missing values, decoders apply a three-way policy:
 
 This lets a single malformed ornament coexist with a fully usable score,
 while genuinely un-representable input still fails fast.
+
+**Unknown MSCX elements are kept, not skipped.** Being permissive on read
+used to mean the element was gone on the next write, which quietly
+deleted fret diagrams, figured bass, excerpts, and most of `<Style>` from
+any file this library saved. Each MSCX decoder now declares the child
+tags it consumes and hands the rest to the model as `PreservedXML`, which
+the encoder writes back; a `<voice>` child keeps its position in the
+stream as `VoiceElement.preserved`, because a symbol between two chords
+means "at that tick". Preserved markup is inert — no layout, MIDI,
+playback, or editing pass reads it — and it is source fidelity rather
+than a semantic guarantee, so it can go stale under editing. See
+`docs/development/mscx-preserved-markup.md`.
+
+This is the one place the model layer carries format-specific data. The
+alternative, a side table keyed by score address, does not survive an
+edit that inserts a measure, and the whole point is that a host can open,
+edit, and save without losing what it does not understand.
+
+MusicXML has no counterpart: it is import-only, so there is nothing to
+write the markup back to.
 
 ## MuseScore as a behavioural specification
 

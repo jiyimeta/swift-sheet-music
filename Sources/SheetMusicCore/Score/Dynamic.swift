@@ -18,15 +18,20 @@ public struct Dynamic: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
+
     public init(
         subtype: String,
         velocity: Int,
         properties: TextProperties = TextProperties(),
         visible: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.subtype = subtype
         self.velocity = velocity
         self.properties = properties
+        self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }
 

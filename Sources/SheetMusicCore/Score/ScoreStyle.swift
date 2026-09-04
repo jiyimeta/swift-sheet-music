@@ -43,6 +43,10 @@ public struct ScoreStyle: Sendable, Equatable {
     /// MSCX field `<ottavaNumbersOnly>`.
     /// C++: `Sid::ottavaNumbersOnly` (`styledef.cpp:679`).
     public var ottavaNumbersOnly: Bool
+    /// Source markup under this element that the model does not
+    /// represent, kept so that read → write does not delete it. See
+    /// `PreservedXML`.
+    public var preservedMarkup: [PreservedXML] = []
 
     public init(
         spatium: Double,
@@ -55,6 +59,7 @@ public struct ScoreStyle: Sendable, Equatable {
         composerAlign: TextAlign? = nil,
         lyricistAlign: TextAlign? = nil,
         ottavaNumbersOnly: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.spatium = spatium
         self.pageLayout = pageLayout
@@ -66,6 +71,7 @@ public struct ScoreStyle: Sendable, Equatable {
         self.composerAlign = composerAlign
         self.lyricistAlign = lyricistAlign
         self.ottavaNumbersOnly = ottavaNumbersOnly
+        self.preservedMarkup = preservedMarkup
     }
 
     /// MuseScore's documented defaults: 1.75 mm spatium, A4 paper

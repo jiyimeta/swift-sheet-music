@@ -157,6 +157,7 @@ extension Voice {
                         graceType: graceType,
                         duration: inner.duration,
                         notes: inner.notes,
+                        preservedMarkup: inner.preservedMarkup,
                     ))
                     continue
                 }
@@ -221,12 +222,15 @@ extension Voice {
                     cursor += rest.duration.asFraction
                 }
             case "Beam":
-                // Only `<visible>` is modelled; `<StemDirection>` and
-                // custom beam fragments are dropped (they change how a
-                // beam looks, not whether it exists). Consumed by the
-                // next chord / rest — see `pendingBeamVisible`.
+                // `<visible>` still feeds the modeled flag on the next
+                // chord/rest, but the whole node also stays in the
+                // ordered stream so unmodeled `<l1>` / `<l2>` stem
+                // positions survive. The encoder suppresses its
+                // synthesized hidden Beam when this preserved one is
+                // immediately before that chord/rest.
                 pendingBeamVisible =
                     (child.first("visible")?.text ?? "1") != "0"
+                appendVoiceElement(.preserved(PreservedXML(child)))
             case "Tuplet":
                 if let ratio = tupletRatio(from: child) {
                     tupletStack.append(OpenTuplet(
@@ -326,10 +330,15 @@ extension Voice {
                     pendingShift += frac
                 }
             default:
-                // Unknown elements are silently ignored. Decoder is permissive on purpose
-                // — once we see what features individual MIDI tests actually need, they
-                // can be promoted to first-class VoiceElement cases.
-                continue
+                guard !PreservedMarkupPolicy.neverPreserved.contains(child.name)
+                else { continue }
+                // `appendVoiceElement` deliberately flushes a pending
+                // `.locationShift` first. A preserved child marks a
+                // position in the voice stream, so the jog must precede
+                // it; leaving the jog pending until the next modeled
+                // element would move the preserved child to the wrong
+                // tick on re-encode.
+                appendVoiceElement(.preserved(PreservedXML(child)))
             }
         }
         // Stranded `pendingGraces` (no following chord in this

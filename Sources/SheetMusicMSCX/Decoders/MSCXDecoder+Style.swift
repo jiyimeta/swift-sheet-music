@@ -3,6 +3,23 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension ScoreStyle {
+    /// Every `<Style>` child read by this decoder or directly by the
+    /// score decoder. Anything else becomes preserved markup — see
+    /// `PreservedXML`.
+    private static let consumedStyleChildren: Set = [
+        "Spatium", "composerAlign", "concertPitch", "evenFooterC", "evenFooterL",
+        "evenFooterR", "evenHeaderC", "evenHeaderL", "evenHeaderR", "footerFirstPage",
+        "footerFontFace", "footerFontSize", "footerFontStyle", "footerOddEven",
+        "headerFirstPage", "headerFontFace", "headerFontSize", "headerFontStyle",
+        "headerOddEven", "lyricistAlign", "oddFooterC", "oddFooterL", "oddFooterR",
+        "oddHeaderC", "oddHeaderL", "oddHeaderR", "ottavaNumbersOnly", "pageEvenBottomMargin",
+        "pageEvenLeftMargin", "pageEvenTopMargin", "pageHeight", "pageNumberFontFace",
+        "pageNumberFontSize", "pageNumberOddEven", "pageOddBottomMargin", "pageOddLeftMargin",
+        "pageOddTopMargin", "pagePrintableWidth", "pageTwosided", "pageWidth", "showFooter",
+        "showHeader", "showPageNumber", "showPageNumberOne", "spatium", "subtitleAlign",
+        "swingRatio", "swingUnit", "titleAlign",
+    ]
+
     /// Parse a `<Style>` element. Permissive — unrecognized children
     /// are silently ignored, matching the existing
     /// `MSCXDecoder+Voice` convention. Returns `base` (the MuseScore
@@ -29,6 +46,18 @@ extension ScoreStyle {
         decodeSwing(node, into: &s)
         decodeTitleBlockAlign(node, into: &s)
         decodeOttava(node, into: &s)
+        // Preserved markup layers the same way the modeled fields do.
+        // A `.mscz` can carry its style in `score_style.mss` AND an
+        // inline `<Style>`, but only ONE `<Style>` is written back — so
+        // unmodeled keys that came from the style file have to survive
+        // into the inline one, or saving such a container would delete
+        // them. Inline wins per tag name, matching the tag-by-tag
+        // override MuseScore performs on the modeled side.
+        let inline = node.preservedMarkup(consuming: consumedStyleChildren)
+        let inlineNames = Set(inline.map(\.name))
+        s.preservedMarkup = base.preservedMarkup.filter {
+            !inlineNames.contains($0.name)
+        } + inline
         return s
     }
 

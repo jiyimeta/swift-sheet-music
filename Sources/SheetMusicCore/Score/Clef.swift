@@ -16,9 +16,18 @@ public struct Clef: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
-    public init(concertClefType: String, transposingClefType: String? = nil, visible: Bool = true) {
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
+
+    public init(
+        concertClefType: String,
+        transposingClefType: String? = nil,
+        visible: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
+    ) {
         self.concertClefType = concertClefType
         self.transposingClefType = transposingClefType
+        self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }
 }

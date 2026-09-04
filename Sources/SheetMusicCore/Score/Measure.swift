@@ -45,6 +45,10 @@ public struct Measure: Sendable, Equatable {
     /// `<irregular>1</irregular>` — exclude this measure from the running
     /// displayed measure number. Typically set on an anacrusis.
     public var irregular: Bool
+    /// Source markup under this element that the model does not
+    /// represent, kept so that read → write does not delete it. See
+    /// `PreservedXML`.
+    public var preservedMarkup: [PreservedXML] = []
 
     public init(
         voices: [Voice],
@@ -58,6 +62,7 @@ public struct Measure: Sendable, Equatable {
         sectionBreak: Bool = false,
         actualLength: Fraction? = nil,
         irregular: Bool = false,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.voices = voices
         self.startRepeat = startRepeat
@@ -70,5 +75,6 @@ public struct Measure: Sendable, Equatable {
         self.sectionBreak = sectionBreak
         self.actualLength = actualLength
         self.irregular = irregular
+        self.preservedMarkup = preservedMarkup
     }
 }

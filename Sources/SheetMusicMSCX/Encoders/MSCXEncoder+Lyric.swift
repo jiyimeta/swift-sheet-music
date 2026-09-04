@@ -30,6 +30,7 @@ extension Lyric {
         children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
         children.append(XMLTreeNode(name: "text", text: text))
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "Lyrics", children: children)
     }
 

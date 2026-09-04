@@ -3,6 +3,18 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Chord {
+    /// Every direct `<Chord>` child this decoder reads, including
+    /// children interpreted by the voice decoder before this method
+    /// is called. Anything else becomes preserved markup.
+    private static let consumedChordChildren: Set = [
+        "Arpeggio", "Articulation", "ChordLine", "Lyrics",
+        "Note", "NoteParenGroup", "Spanner", "Stem", "Tremolo",
+        "TremoloSingleChord", "TremoloTwoChord", "acciaccatura",
+        "appoggiatura", "color", "dots", "durationType", "grace16",
+        "grace16after", "grace32", "grace32after", "grace4", "grace8after",
+        "small", "track", "visible",
+    ]
+
     static func decode(_ node: XMLTreeNode) throws -> Chord {
         guard
             let durationText = node.first("durationType")?.text,
@@ -57,6 +69,7 @@ extension Chord {
             tremolo: tremolo,
             chordLines: ChordLine.decodeAll(inChord: node),
             stemVisible: stemVisible,
+            preservedMarkup: node.preservedMarkup(consuming: consumedChordChildren),
         )
         chord.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         chord.spanners = decodeChordSpanners(node)
@@ -236,6 +249,9 @@ extension Chord {
                 text: text, syllabic: syllabic, ticks: ticks,
                 verse: verse,
                 properties: TextProperties.decode(lyricsNode),
+                preservedMarkup: lyricsNode.preservedMarkup(
+                    consuming: consumedLyricsChildren,
+                ),
             )
             lyric.elementProperties = ElementProperties(decodingMSCXChildrenOf: lyricsNode)
             lyricsMap[verse] = lyric
@@ -246,6 +262,14 @@ extension Chord {
             lyricsMap[i] ?? Lyric(text: "", verse: i)
         }
     }
+
+    /// Every direct `<Lyrics>` child read by `decodeLyrics`,
+    /// `TextProperties.decode`, or `ElementProperties`.
+    private static let consumedLyricsChildren: Set = [
+        "bold", "color", "face", "framePadding", "frameType", "italic",
+        "no", "size", "strike", "syllabic", "text", "ticks", "underline",
+        "visible",
+    ]
 
     /// Decode the `<Note>` children of a `<Chord>` node, propagating
     /// chord-level `<small>1</small>` to every note that isn't already

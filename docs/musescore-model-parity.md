@@ -106,6 +106,21 @@ modelが持っている情報だけを書く。生XMLのpassthrough保存は無�
 の2-pass gateはpass 1とpass 2の一致を見るもので、元fileとの差分は見ないため、この消失は
 既存testでは検出されない。
 
+**［2026-09-04 追記］この節はもう成り立たない。** §8の優先順1（preserved markup）を実装した。
+各decoderが消費した子tagを宣言し、残りを`PreservedXML`としてmodelが持ち帰り、encoderが書き戻す。
+`<voice>`の子だけは`VoiceElement.preserved`としてstream中の位置ごと保持する。
+検出手段も入った——`Tests/SheetMusicTests/MSCXPreservationGateTests.swift`が
+**source fileとpass 1**を`parent/child`単位で比較する。設計は
+`docs/superpowers/specs/2026-09-04-mscx-preserved-markup-design.md`、運用は
+`docs/development/mscx-preserved-markup.md`。
+
+したがって以降の§4・§5を読むときは、「MISSING = 消える」ではなく
+**「MISSING = modelとして扱えないが、fileからは消えない」**と読み替えること。
+消えるものは限定され、gateのallowlistに理由付きで列挙されている。主なものは
+`<eid>`（MS5 identity、意図的に捨てる）、`<instrumentId>`（Sound IDがattributeの`id`と
+畳まれている）、`<text>`のinline markup（§7.1のTextContent作業待ち）、
+`<Staff>` body直下のbox（§4.4の構造作業待ち）。
+
 ---
 
 ## 3. MSC 5.00の`<SpannerMap>`断層

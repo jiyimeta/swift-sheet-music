@@ -43,7 +43,7 @@ extension Measure {
     ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
         var children: [XMLTreeNode] = []
         for marker in markers {
-            children.append(marker.encode())
+            children.append(marker.encode(options: options))
         }
         if startRepeat {
             children.append(XMLTreeNode(name: "startRepeat"))
@@ -86,7 +86,7 @@ extension Measure {
             ))
         }
         for jump in jumps {
-            children.append(jump.encode())
+            children.append(jump.encode(options: options))
         }
         if lineBreak {
             children.append(XMLTreeNode(
@@ -106,6 +106,11 @@ extension Measure {
                 children: [XMLTreeNode(name: "subtype", text: "section")],
             ))
         }
+        appendPreservedMarkup(
+            preservedMarkup,
+            to: &children,
+            options: options,
+        )
         var attributes: [String: String] = [:]
         if let actualLength {
             attributes["len"] =
@@ -139,14 +144,16 @@ extension Measure {
 extension Marker {
     /// Build a `<Marker>` element matching the decoder in
     /// `MSCXDecoder+Measure.swift`.
-    func encode() -> XMLTreeNode {
-        XMLTreeNode(
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children = [
+            XMLTreeNode(name: "markerType", text: kind.rawValue),
+            XMLTreeNode(name: "label", text: label),
+            XMLTreeNode(name: "text", text: text),
+        ]
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        return XMLTreeNode(
             name: "Marker",
-            children: [
-                XMLTreeNode(name: "markerType", text: kind.rawValue),
-                XMLTreeNode(name: "label", text: label),
-                XMLTreeNode(name: "text", text: text),
-            ],
+            children: children,
         )
     }
 }
@@ -156,7 +163,7 @@ extension Jump {
     /// `MSCXDecoder+Measure.swift`. `<playRepeats>` is emitted only
     /// when true (the non-default), keeping existing fixtures
     /// byte-stable.
-    func encode() -> XMLTreeNode {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = [
             XMLTreeNode(name: "jumpTo", text: jumpTo),
             XMLTreeNode(name: "playUntil", text: playUntil),
@@ -166,6 +173,7 @@ extension Jump {
             children.append(XMLTreeNode(name: "playRepeats", text: "1"))
         }
         children.append(XMLTreeNode(name: "text", text: text))
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "Jump", children: children)
     }
 }

@@ -27,6 +27,16 @@ public enum VoiceElement: Sendable, Equatable {
     case fermata(Fermata)
     case breath(Breath)
     case harmony(Harmony)
+    /// A `<voice>` child this library does not model, kept at its
+    /// position in the stream. Unlike container-level
+    /// `preservedMarkup` bags, a voice child's position is its
+    /// meaning: a `<Symbol>` or `<FiguredBass>` between two chords
+    /// attaches at that tick. No layout, MIDI, or playback pass reads
+    /// the preserved subtree.
+    ///
+    /// Occupies no tick budget: both `tickCount` overloads return
+    /// `nil`, exactly as they do for `.locationShift`.
+    case preserved(PreservedXML)
     /// MuseScore `<location><fractions>N/D</fractions></location>`
     /// at voice level — a move of the voice's ONE cursor, not a
     /// one-shot offset for the element that follows. Every walker

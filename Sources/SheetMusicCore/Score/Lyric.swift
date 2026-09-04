@@ -58,6 +58,9 @@ public struct Lyric: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
+
     public init(
         text: String,
         syllabic: Syllabic = .single,
@@ -65,12 +68,14 @@ public struct Lyric: Sendable, Equatable {
         verse: Int = 0,
         properties: TextProperties = TextProperties(),
         visible: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.text = text
         self.syllabic = syllabic
         self.ticks = ticks
         self.verse = verse
         self.properties = properties
+        self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }
 

@@ -352,6 +352,9 @@ struct FNV1a {
         case let .locationShift(delta):
             combine(11)
             combine(delta)
+        case .preserved:
+            // Source-only XML is outside the semantic edit fingerprint.
+            break
         }
     }
 

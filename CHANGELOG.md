@@ -9,6 +9,42 @@ and this project adheres to
 
 ### Changed
 
+- **Reading a `.mscx` and writing it back no longer deletes what the model
+  does not cover.** The decoder skipped every element it did not recognize and
+  the encoder wrote only what the model held, so opening a MuseScore score
+  here and saving it erased fret diagrams, figured bass, excerpts, `<Order>`,
+  `<Synthesizer>`, `<StringData>`, chord stem directions, note playback
+  `<Events>`, and most of `<Style>`. It did so silently, and no test could see
+  it: the 2-pass idempotency gate compares pass 1 with pass 2, and what was
+  dropped on read is already absent from pass 1.
+
+  Each MSCX decoder now declares the child tags it consumes and hands the rest
+  to the model as `PreservedXML`, which the encoder writes back after its own
+  output. A `<voice>` child keeps its position in the stream as the new
+  `VoiceElement.preserved` case, because a `<Symbol>` or `<FiguredBass>`
+  between two chords means "attached at that tick". Capturing only the
+  *unconsumed* children is what makes this safe under editing: nothing the
+  model represents is ever in a bag, so a preserved copy cannot resurrect
+  content an edit removed.
+
+  Measured over the committed fixtures, the `parent/child` element pairs lost
+  on a round trip fall from 248 to 82, and the remainder are allowlisted with
+  a stated reason in the new preservation gate.
+
+  **Preserved markup is source fidelity, not a semantic guarantee.** An edit
+  can leave a preserved `<Excerpt>` describing the part layout of the original
+  score. Hosts that would rather not carry it can encode with
+  `MSCXEncoderOptions.emitPreservedMarkup` set to `false`, or call
+  `Score.strippingPreservedMarkup()`.
+
+  Two fixes fell out of the work. `<Arpeggio>` was decoded into
+  `Chord.arpeggio` and then never written, so arpeggios and their
+  `<timeStretch>` / `<userLen1>` vanished on every save; the encoder now emits
+  them. And a `.mscz` whose style lives in `score_style.mss` keeps that file's
+  unmodeled style keys when its inline `<Style>` is written back.
+
+  See `docs/development/mscx-preserved-markup.md`.
+
 - **The metrics table measures the text face too, and is served under a new
   name.** Through SMFT v3 the table carried Bravura alone, so on Android and in
   the browser every non-SMuFL face — Edwin, which is what MuseScore's
