@@ -112,6 +112,8 @@ enum GenFontMetrics {
         candidates: ClosedRange<UInt32>,
         keepBlanks: Bool,
         minimumGlyphs: Int,
+        weight: FontWeight = .regular,
+        recordName: String? = nil,
     ) -> MeasuredFace {
         let ct = CTFontCreateWithName(face as CFString, referenceSize, nil)
         let resolved = CTFontCopyFamilyName(ct) as String
@@ -123,7 +125,7 @@ enum GenFontMetrics {
             )
         }
         let provider = AppleFontMetricsProvider()
-        let font = LayoutFont(face: face, pointSize: referenceSize)
+        let font = LayoutFont(face: face, pointSize: referenceSize, weight: weight)
 
         var entries: [Entry] = []
         entries.reserveCapacity(2048)
@@ -177,7 +179,7 @@ enum GenFontMetrics {
             )
         }
         return MeasuredFace(
-            name: face,
+            name: recordName ?? face,
             ascent: Double(provider.ascent(font: font)),
             descent: Double(provider.descent(font: font)),
             leading: Double(provider.leading(font: font)),
@@ -208,6 +210,23 @@ enum GenFontMetrics {
                 candidates: textRange,
                 keepBlanks: true,
                 minimumGlyphs: 500,
+            ),
+            // The bold text face. MuseScore's own defaults set tempo marks, rehearsal marks and
+            // instrument-change text bold, and a rehearsal mark's frame is sized from the measured
+            // text — so without this record the browser draws bold letters inside a box measured at
+            // regular weight, exactly as Android did before the same record was added there.
+            //
+            // Recorded under `"Edwin-Bold"` because that is the name
+            // `FontMetricsTable.face(for:)` resolves a bold `LayoutFont` through; the family stays
+            // `Edwin`, and `AppleFontMetricsProvider` asks CoreText for its bold member (or lets it
+            // synthesize one, which is what the Android producer measures).
+            measure(
+                face: edwinFamilyName,
+                candidates: textRange,
+                keepBlanks: true,
+                minimumGlyphs: 500,
+                weight: .bold,
+                recordName: "\(edwinFamilyName)-Bold",
             ),
         ]
     }

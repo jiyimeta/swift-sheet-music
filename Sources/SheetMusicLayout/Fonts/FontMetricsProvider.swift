@@ -26,6 +26,17 @@ public struct LayoutFont: Hashable, Sendable {
 public enum FontWeight: Sendable, Hashable {
     case regular
     case semibold
+    /// MuseScore's `FontStyle::Bold`, which `TextStyleType.museScoreDefault` sets on tempo marks,
+    /// rehearsal marks and instrument-change text.
+    ///
+    /// Measuring at this weight is not cosmetic. A rehearsal mark's frame is sized from the measured
+    /// text, so drawing bold glyphs inside a box measured at regular weight puts the letters through
+    /// the right-hand edge — which is what a renderer does the moment it can draw bold and the
+    /// metrics provider cannot answer for it.
+    ///
+    /// A provider with no bold data for a face answers with the regular face rather than refusing:
+    /// that is the pre-bold behaviour, so an older metrics table degrades to what it always did.
+    case bold
 }
 
 /// Ink-pixel extents of a typeset string. `leftBearing` is the offset

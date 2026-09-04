@@ -92,6 +92,11 @@ extension DrawProgramFlat {
         case 11: return try .italicText(
                 text: string(), x: slots[0], y: slots[1], size: slots[2], fontId: fontID(),
             )
+        // Truncated rather than range-checked: the encoder writes a `UInt8` widened to the record's
+        // `UInt32` integer slot, so the high bytes are always zero, and a stream where they are not
+        // is one this decoder cannot interpret anyway. Refusing it would trade an unknown-but-inert
+        // style bit for a whole page that does not draw.
+        case 12: return .setTextStyle(flags: UInt8(truncatingIfNeeded: integer))
         default: throw DecodeError.unknownOpcode(opcode)
         }
     }
