@@ -95,6 +95,53 @@ public enum MSCZReader {
         return try parseWithDiagnostics(data)
     }
 
+    /// Every archive member that is not `META-INF/container.xml` and not the resolved main `.mscx`,
+    /// in the order the archive stores them.
+    ///
+    /// This is the read side of `MSCZWriter`'s `extraEntries`: a host reads the sidecar it owns,
+    /// edits the score, and writes both back, so the container survives a round trip through code
+    /// that models neither the sidecar nor the auxiliary resources MuseScore itself writes.
+    ///
+    /// `audiosettings.json` is in the result. `parse(_:)` still applies it to the `Score` — the
+    /// entry is returned as well because a host that hands it back preserves MuseScore 4's per-part
+    /// presets, which a read-and-rewrite would otherwise drop.
+    ///
+    /// Pass `excluding` for entries the host regenerates itself rather than carries.
+    public static func extraEntries(
+        in data: Data, excluding: Set<String> = [],
+    ) throws -> [MSCZExtraEntry] {
+        let reader = try openReader(data)
+        let mainPath = try resolveMainPath(in: reader)
+        let reserved: Set<String> = [containerPath, mainPath]
+        // The entry dictionary has no order of its own; the payload offsets recover the archive's.
+        let candidates = reader.entries.values
+            .sorted { ($0.payloadRange?.lowerBound ?? 0) < ($1.payloadRange?.lowerBound ?? 0) }
+            .filter { !reserved.contains($0.path) && !excluding.contains($0.path) }
+
+        var result: [MSCZExtraEntry] = []
+        result.reserveCapacity(candidates.count)
+        for entry in candidates {
+            let data: Data
+            do {
+                data = try reader.read(entry)
+            } catch let error as ZipError {
+                throw SheetMusicError.corruptedContainer(
+                    ScoreFault(
+                        code: error.faultCode,
+                        message: "failed to extract \(entry.path): \(error)",
+                        location: entry.path,
+                    ),
+                )
+            }
+            result.append(
+                MSCZExtraEntry(path: entry.path, data: data, compression: entry.method),
+            )
+        }
+        return result
+    }
+
+    private static let containerPath = "META-INF/container.xml"
+
     private static func openReader(_ data: Data) throws -> ZipReader {
         do {
             return try ZipReader(data: data)

@@ -7,6 +7,37 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **An `.mscz` can carry entries this library does not model, and hand them
+  back on the next read.** `MSCZWriter` wrote exactly two entries and
+  `MSCZReader` dropped everything else, so a host whose score file keeps a
+  sidecar beside the `.mscx` — annotations, per-score playback preferences,
+  ink — had no way to write one, and a read-and-rewrite erased what was
+  already there, `audiosettings.json` included.
+
+  The four `write` overloads that take a main file name now take
+  `extraEntries: [MSCZExtraEntry]` as well, appended after
+  `META-INF/container.xml` and the main `.mscx` in the order given, each with
+  its own compression method (`.stored` for bytes that are already
+  compressed). `MSCZReader.extraEntries(in:excluding:)` returns every entry
+  that is neither of those two, in archive order, so a host round-trips its
+  own container by handing the list straight back. `audiosettings.json` is in
+  that list: `parse(_:)` still applies it to the `Score`, and a host that
+  passes it back through now preserves MuseScore 4's per-part presets instead
+  of silently dropping them.
+
+  A path is rejected before a byte is written when it is empty, absolute,
+  contains a `..` segment, names `META-INF/container.xml` or the main entry,
+  or repeats an earlier one — each with its own `mscz.extraEntry.*` fault
+  code. Nested paths are allowed; the main entry's no-slash rule is unchanged,
+  because that one governs `container.xml`.
+
+  This library knows nothing about what a host stores. MuseScore addresses
+  archive members by name and opens such a container, but its own writer has
+  no pass-through, so a container whose sidecar must survive a save in
+  MuseScore should not be named `.mscz`.
+
 ## [2.5.0] - 2026-09-04
 
 ### Added
