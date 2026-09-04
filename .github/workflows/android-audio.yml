@@ -85,19 +85,32 @@ jobs:
           -p .build/checkouts/swift-java
           :SwiftKitCore:publishToMavenLocal
 
+      # All three modules, not just the audio one. :SheetMusicComposeAndroid is
+      # DOWNSTREAM of :SheetMusicAudioAndroid, so naming only the latter left the
+      # renderer — the module that decodes the draw program and paints it —
+      # neither built nor tested on any push. Its `ScoreBandsTest` ran only at
+      # release-tag time, in the publish workflow, which is not a gate.
       - name: Run Kotlin unit tests
         working-directory: Android
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.WIRELET_PAT }}
-        run: ./gradlew :SheetMusicAudioAndroid:testDebugUnitTest --info
+        run: >-
+          ./gradlew
+          :SheetMusicAndroid:testDebugUnitTest
+          :SheetMusicAudioAndroid:testDebugUnitTest
+          :SheetMusicComposeAndroid:testDebugUnitTest
+          --info
 
-      - name: Assemble release AAR
+      - name: Assemble release AARs
         working-directory: Android
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.WIRELET_PAT }}
-        run: ./gradlew :SheetMusicAudioAndroid:assembleRelease
+        run: >-
+          ./gradlew
+          :SheetMusicAudioAndroid:assembleRelease
+          :SheetMusicComposeAndroid:assembleRelease
 
       - name: Upload test reports on failure
         if: failure()
@@ -105,7 +118,9 @@ jobs:
         with:
           name: kotlin-test-reports
           path: |
+            Android/SheetMusicAndroid/build/reports/tests/
             Android/SheetMusicAudioAndroid/build/reports/tests/
+            Android/SheetMusicComposeAndroid/build/reports/tests/
 
       - name: Upload AAR artifact
         uses: actions/upload-artifact@v4
@@ -113,3 +128,46 @@ jobs:
           name: SheetMusicAudioAndroid-aar
           path: Android/SheetMusicAudioAndroid/build/outputs/aar/*.aar
           retention-days: 30
+
+      # Everything that can only be answered on a device.
+      #
+      # Three test classes have existed for a while and never run anywhere:
+      # `FontMetricsBuilderTest` pins the runtime-measured font-metrics table —
+      # the one thing that can engrave WRONG on Android without failing
+      # anything, because nothing on the host exercises `Paint` — and
+      # `EditSessionReplayTest` / `EditSessionReplayParityTest` replay the
+      # host-recorded edit chains through a second, separately-linked image of
+      # the engine, which is the claim the whole Android editing design rests
+      # on. `docs/edit-commands.md` recorded the parity one as "the one
+      # outstanding verification for this project".
+      #
+      # In THIS job rather than a Linux one with KVM, despite the acceleration
+      # Linux would bring: the wirelet Gradle plugin shells out to `swift run`,
+      # so any job that compiles Kotlin needs the Swift toolchain and the
+      # resolved SwiftPM checkout that only this job has. Splitting would mean
+      # installing Swift on Linux and resolving the package a second time to
+      # save emulator minutes on a job that already paid for the cross-compile.
+      #
+      # `arch: arm64-v8a` because the macOS runners are Apple silicon and the
+      # emulator is only usable there with a matching image (HVF); an x86_64
+      # image would fall back to full emulation and time out.
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.WIRELET_PAT }}
+        with:
+          api-level: 35
+          arch: arm64-v8a
+          target: google_apis
+          disable-animations: true
+          script: >-
+            ./Android/gradlew -p Android
+            :SheetMusicAndroid:connectedDebugAndroidTest
+
+      - name: Upload instrumented test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-test-reports
+          path: Android/SheetMusicAndroid/build/reports/androidTests/
