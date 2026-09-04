@@ -725,10 +725,10 @@ class AndroidPlaybackEngineTest {
     }
 
     @Test
-    fun `setMasterVolume propagates to oboeStream`() = runTest {
+    fun `setMasterGain propagates to oboeStream`() = runTest {
         // OboeStream in tests is a no-op subclass; just verify no crash.
         val engine = preparedEngine()
-        engine.setMasterVolume(0.5f)
+        engine.setMasterGain(0.5f)
         // No assertion needed beyond no exception — OboeStream.setMasterVolume is a field write.
     }
 

@@ -131,7 +131,7 @@ fun MixerPanel(viewModel: AudioViewModel, modifier: Modifier = Modifier) {
                     value = masterVolume,
                     onValueChange = { v ->
                         masterVolume = v
-                        viewModel.engine.value?.setMasterVolume(v)
+                        viewModel.engine.value?.setMasterGain(v)
                     },
                     valueRange = 0f..1f,
                     modifier = Modifier.weight(1f)

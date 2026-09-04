@@ -12,6 +12,8 @@ import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.InstrumentParams
 import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
+import io.github.jiyimeta.sheetmusic.audio.model.MasterOutputStage
+import io.github.jiyimeta.sheetmusic.audio.model.MixLevel
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
@@ -88,7 +90,11 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class AndroidPlaybackEngine internal constructor(
     private val context: Context?,
-    private val soundfontResolver: SoundfontResolver,
+    /**
+     * A `var` so [reloadSoundfont] can replace it. Everything that reads it does so inside
+     * [prepare], under [prepareMutex], so a swap can never land mid-load.
+     */
+    private var soundfontResolver: SoundfontResolver,
     private val metronomeClickProvider: MetronomeClickProvider? = null,
     private val jniBridge: JniBridge,
     private val synthFactory: (Int) -> SynthDriver,
@@ -461,6 +467,26 @@ class AndroidPlaybackEngine internal constructor(
     private var bodyMetronomeSmf: ByteArray = ByteArray(0)
 
     @Volatile private var masterVolume: Float = 1.0f
+
+    /**
+     * Master output stage and level handler, held here as well as on the stream because [prepare]
+     * builds a NEW [OboeStream] every time — a host that set either once would otherwise silently
+     * lose it the next time a score is adopted.
+     */
+    @Volatile private var masterOutputStage: MasterOutputStage = MasterOutputStage.NONE
+
+    @Volatile private var levelHandler: ((MixLevel) -> Unit)? = null
+
+    private val _isPreparingSoundfont = MutableStateFlow(false)
+
+    /**
+     * True while [prepare] or [reloadSoundfont] is loading SoundFont data.
+     *
+     * A large SF2 takes visible time to load, and until this flow existed a host had no way to tell
+     * "still loading" from "loaded and silent" — so the only honest UI was no UI. Mirrors Apple's
+     * `PlaybackEngine.isPreparingSoundfont`.
+     */
+    val isPreparingSoundfont: StateFlow<Boolean> = _isPreparingSoundfont.asStateFlow()
     @Volatile private var pendingRate: Float = 1.0f
     @Volatile private var masterTuningCents: Double = 0.0
 
@@ -496,6 +522,44 @@ class AndroidPlaybackEngine internal constructor(
      * @throws AudioBackendException.TooManyStaves if the score has more than 16 staves.
      */
     suspend fun prepare(scoreHandle: Long) = prepareMutex.withLock {
+        _isPreparingSoundfont.value = true
+        try {
+            prepareLocked(scoreHandle)
+        } finally {
+            // In a `finally` because the flag's whole job is telling a host whether to show a
+            // spinner: leaving it stuck true after a failed prepare (a missing SF2, an invalid
+            // handle) would leave that spinner up forever, which is a worse failure than the one
+            // that caused it.
+            _isPreparingSoundfont.value = false
+        }
+    }
+
+    /**
+     * Swap the SoundFont source and reload the current score's instruments with it.
+     *
+     * The resolver used to be fixed at construction, so changing SoundFont meant tearing the engine
+     * down and building a new one — losing the transport position, the loop, and every mixer
+     * setting the user had made. Mirrors Apple's `PlaybackEngine.reloadSoundfont(resolver:)`.
+     *
+     * A no-op before the first [prepare]: with no score adopted there is nothing to reload, and the
+     * new resolver is simply the one the next [prepare] will use.
+     *
+     * Reloading rebuilds the synth, so it stops playback — a running player holding voices from the
+     * old bank cannot be handed a new one mid-note. The caller re-starts.
+     */
+    suspend fun reloadSoundfont(resolver: SoundfontResolver) = prepareMutex.withLock {
+        soundfontResolver = resolver
+        val handle = scoreHandle
+        if (handle == 0L) return@withLock
+        _isPreparingSoundfont.value = true
+        try {
+            prepareLocked(handle)
+        } finally {
+            _isPreparingSoundfont.value = false
+        }
+    }
+
+    private suspend fun prepareLocked(scoreHandle: Long) =
         withContext(Dispatchers.IO) {
             _loopRange.value = null
             transportLoop = null
@@ -639,6 +703,13 @@ class AndroidPlaybackEngine internal constructor(
 
             // Wire the OboeStream producer: mix the staff synth + metronome.
             val oboe = oboeFactory().also { it.open() }
+            // Re-apply the master settings this engine holds. `prepare` builds a new stream each
+            // time, so a host that set the gain, the output stage or a level meter once would
+            // otherwise lose all three the next time a score is adopted — silently, and only
+            // audibly on the next score.
+            oboe.setMasterVolume(masterVolume)
+            oboe.setMasterOutputStage(masterOutputStage)
+            levelHandler?.let { oboe.startLevelMonitoring(it) }
             oboe.setProducer { frameCount, left, right ->
                 val eng = this@AndroidPlaybackEngine.fluidSynthEngine
                 if (eng == null) {
@@ -692,7 +763,6 @@ class AndroidPlaybackEngine internal constructor(
             scoreTickIntent = 0L
             _state.value = PlaybackState.PREPARED
         }
-    }
 
     // ── Playback controls ────────────────────────────────────────────
 
@@ -1230,6 +1300,74 @@ class AndroidPlaybackEngine internal constructor(
     @Volatile
     private var previewSilentAtNanos: Long = 0L
 
+    /**
+     * The sustained preview note currently held, as `(staffIndex, channel, pitch)`, or `null`.
+     *
+     * Only one at a time, matching Apple's `activeSustainedPreview`: the note shares the staff's own
+     * sequencer channel, so two held notes on one staff would fight over it.
+     */
+    private var sustainedPreview: Triple<Int, Int, Int>? = null
+
+    /**
+     * Start a **sustained** preview note on [flatStaffIndex]'s own MIDI channel — the mixer-selected
+     * program and the synth's global tuning, exactly like [playPreview], but held until
+     * [previewNoteOff] or a superseding [previewNoteOn].
+     *
+     * This is what a note-input UI needs and [playPreview] cannot give it: a key held down should
+     * sound for as long as it is held, not for a fixed 300 ms. The engine has had the capability all
+     * along — [FluidSynthEngine.previewNoteOn] is what [playPreview] itself calls — it was simply
+     * never public.
+     *
+     * Intended for use while stopped or paused (the caller gates this); a held note shares the
+     * staff's channel and is not meant to overlap live playback, so this is a no-op while playing or
+     * exporting. Resumes a parked output stream and re-parks it on the matching note-off, the same
+     * way [playPreview] does — without that the note would be queued for a stream nobody is pulling
+     * from, and sound like nothing at all.
+     */
+    fun previewNoteOn(pitch: Int, onStaff: Int, velocity: Int = 96) {
+        if (_state.value == PlaybackState.EXPORTING || _state.value == PlaybackState.PLAYING) return
+        val engine = fluidSynthEngine ?: return
+        val liveChannel = staffLiveChannel.getOrElse(onStaff) { onStaff }
+
+        // A pending fixed-duration audition must not be cut by this note's own start, and must not
+        // pause the stream underneath a held note. Silencing it through the shared policy is what
+        // transfers the stream hold rather than double-counting it.
+        val silenced = jniBridge.previewPolicySilence(previewPolicyHandle)
+        if (silenced >= 0) {
+            engine.previewNoteOff((silenced shr 8).toInt(), (silenced and 0xFF).toInt())
+        }
+
+        // Only one sustained note at a time — cut the previous one first.
+        sustainedPreview?.let { (_, channel, heldPitch) -> engine.previewNoteOff(channel, heldPitch) }
+        sustainedPreview = null
+
+        // The hold is taken BEFORE the note sounds, and released by the matching note-off. A
+        // `playPreview` arriving during the hold takes its own, so the stream stays up for both.
+        previewStreamHolders.incrementAndGet()
+        oboeStream?.play()
+
+        engine.previewNoteOn(liveChannel, pitch, velocity)
+        sustainedPreview = Triple(onStaff, liveChannel, pitch)
+    }
+
+    /**
+     * Stop the sustained preview note for [pitch]. A no-op unless it is the note currently held —
+     * so a stale note-off from a key released after a superseding press cannot silence the newer
+     * note.
+     *
+     * Releases the stream hold [previewNoteOn] took and re-parks the output stream when nothing
+     * else is holding it and playback is not running.
+     */
+    fun previewNoteOff(pitch: Int) {
+        val held = sustainedPreview ?: return
+        if (held.third != pitch) return
+        sustainedPreview = null
+        fluidSynthEngine?.previewNoteOff(held.second, pitch)
+        if (previewStreamHolders.decrementAndGet() == 0 && _state.value != PlaybackState.PLAYING) {
+            oboeStream?.stop()
+        }
+    }
+
     /** Clears the current score cursor without affecting playback state. */
     fun clearCursor() { _currentCursor.value = null }
 
@@ -1253,12 +1391,68 @@ class AndroidPlaybackEngine internal constructor(
     // ── Mixer ────────────────────────────────────────────────────────
 
     /**
-     * Sets the master output volume (range 0..1).
-     * Propagates to [OboeStream.setMasterVolume].
+     * Sets the master output gain. Propagates to [OboeStream.setMasterVolume].
+     *
+     * **Not capped at 1.0**, matching Apple's `PlaybackEngine.setMasterGain`. How loud playback
+     * should be depends on the SoundFont's own output level and on what the host is trying to sound
+     * like, neither of which this engine can judge — a host calibrating a quiet bank against a
+     * louder reference can legitimately need more than unity, and being refused leaves it with no
+     * recourse. What a large boost does past full scale is [setMasterOutputStage]'s business: by
+     * default nothing, so the gain reaches the output device as given.
+     *
+     * Negative values are clamped to zero.
      */
+    fun setMasterGain(gain: Float) {
+        val clamped = gain.coerceAtLeast(0f)
+        masterVolume = clamped
+        oboeStream?.setMasterVolume(clamped)
+    }
+
+    /**
+     * Sets the master output volume.
+     *
+     * Kept as the name every existing host already calls, now delegating to [setMasterGain]. The
+     * rename matters because the old name promised a 0..1 volume control and the new one does not
+     * cap: what a host passes has not changed meaning, but what it is *allowed* to pass has.
+     */
+    @Deprecated(
+        "Renamed: values above 1.0 are now allowed, which 'volume' misdescribes.",
+        ReplaceWith("setMasterGain(volume)"),
+    )
     fun setMasterVolume(volume: Float) {
-        masterVolume = volume
-        oboeStream?.setMasterVolume(volume)
+        setMasterGain(volume)
+    }
+
+    /**
+     * Chooses what — if anything — shapes the mix once [setMasterGain] has pushed it past full
+     * scale. Idempotent, persists across [prepare], and safe to call during playback.
+     *
+     * See [MasterOutputStage]; note that `PEAK_LIMITER` behaves as `NONE` here and says why.
+     */
+    fun setMasterOutputStage(stage: MasterOutputStage) {
+        masterOutputStage = stage
+        oboeStream?.setMasterOutputStage(stage)
+    }
+
+    /**
+     * Starts reporting the mix's level, so a host can show a meter — or measure how much headroom is
+     * left before [setMasterGain] pushes the mix past full scale.
+     *
+     * [handler] receives one [MixLevel] per written buffer, post-gain and pre-shaping. It is called
+     * on the audio writer thread, **not** the main thread: hop before touching UI, and do not block
+     * or the audio stalls. Buffers arrive only while audio is flowing.
+     *
+     * Starting again replaces the previous handler. Survives [prepare], which rebuilds the stream.
+     */
+    fun startLevelMonitoring(handler: (MixLevel) -> Unit) {
+        levelHandler = handler
+        oboeStream?.startLevelMonitoring(handler)
+    }
+
+    /** Stops reporting levels. A no-op when not monitoring. */
+    fun stopLevelMonitoring() {
+        levelHandler = null
+        oboeStream?.stopLevelMonitoring()
     }
 
     /**
