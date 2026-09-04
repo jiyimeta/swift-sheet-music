@@ -23,4 +23,9 @@ public enum ScoreBridge {
     public static func loadScore(bytes: Data) throws -> Score {
         try ScoreLoader.loadScore(bytes: bytes)
     }
+
+    /// See ``ScoreLoader/loadScoreWithDiagnostics(bytes:sourceFilename:)``.
+    public static func loadScoreWithDiagnostics(bytes: Data) throws -> ScoreLoader.LoadedScore {
+        try ScoreLoader.loadScoreWithDiagnostics(bytes: bytes)
+    }
 }

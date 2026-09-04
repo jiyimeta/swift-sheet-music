@@ -22,6 +22,22 @@ object SheetMusicJNI {
     }
 
     /**
+     * [nativeLoadScore] plus the two things it throws away: the stable dotted
+     * fault code for a failure, and the parser's non-fatal diagnostics for a
+     * success. Returns a `ScoreLoadResultWire` payload; decode via
+     * [ScoreLoadResult.load], which wraps this call.
+     *
+     * A non-zero `scoreHandle` in the result must be released with
+     * [nativeReleaseScore], exactly as [nativeLoadScore]'s return value must.
+     */
+    fun nativeLoadScoreWithDiagnostics(bytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeLoadScoreWithDiagnostics(
+            SwiftData.fromByteArray(bytes, arena), arena,
+        ).toByteArray()
+    }
+
+    /**
      * Parse a MuseScore-exported vector PDF (3.x/4.x) into a score via the
      * Foundation-only pure-Swift PDF reader. Returns 0 on parse failure.
      */
@@ -35,15 +51,43 @@ object SheetMusicJNI {
     }
 
     /**
-     * Length-prefixed UTF-8 blob holding `(workTitle, composer)` from the
-     * score's metaTags. Wire format:
-     * `[titleLen:I32 LE][titleBytes][composerLen:I32 LE][composerBytes]`.
-     * Missing tags come back as zero-length strings; an unknown handle
-     * returns an empty array. Decode via [ScoreMetadata.decode].
+     * `ScoreMetadataWire` payload: `workTitle`, `composer`, and every entry of
+     * the score's `metaTags` dictionary, key-sorted. Missing tags come back as
+     * zero-length strings; an unknown handle returns an empty array. Decode via
+     * [ScoreMetadata.fetch], which wraps this call.
      */
     fun nativeScoreMetadata(handle: Long): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeScoreMetadata(handle, arena).toByteArray()
+    }
+
+    /**
+     * Serialize the score behind [scoreHandle] into `.mscx` or `.mscz` bytes —
+     * the counterpart [nativeLoadScore] never had.
+     *
+     * @param format 0 = `.mscx` (plain XML), 1 = `.mscz` (ZIP container).
+     * @param targetVersion 0 for the encoder's default, 3 for the
+     *   MuseScore 3 compatibility writer, 4 for MuseScore 4. Any other
+     *   value is treated as 0.
+     * @param emitPreservedMarkup 0 drops source XML the model does not
+     *   represent; anything else keeps it. Preserved markup is source
+     *   fidelity, not a semantic guarantee — an edited score can carry a
+     *   stale `<Excerpt>` — so a host preparing a file for distribution
+     *   passes 0.
+     *
+     * Returns an empty array for an unknown handle, an unknown format, or an
+     * encoding failure.
+     */
+    fun nativeEncodeScore(
+        scoreHandle: Long,
+        format: Int,
+        targetVersion: Int,
+        emitPreservedMarkup: Int,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEncodeScore(
+            scoreHandle, format, targetVersion, emitPreservedMarkup, arena,
+        ).toByteArray()
     }
 
     /**
@@ -470,6 +514,32 @@ object SheetMusicJNI {
             activeVoice,
             SwiftData.fromByteArray(optionsBytes, arena),
             arena,
+        ).toByteArray()
+    }
+
+    /**
+     * Marquee (rubber-band) selection: every chord / rest whose layout box intersects the rectangle
+     * ([xMm], [yMm], [widthMm], [heightMm]; document/mm, the same space [nativeEditingHitTest] takes
+     * its point in) within the cached layout of [scoreHandle].
+     *
+     * Returns a `ScoreItemIDListWire` payload — the ids in query order (systems top-to-bottom, then
+     * event columns left-to-right), full-score addressed exactly like [nativeEditingHitTest]'s
+     * single hit, so the result can be fed straight to [nativeEncodeDrawProgram] or an edit intent.
+     *
+     * An empty array means "no answer": the handle is unknown or no layout is cached. A rect that
+     * covers nothing comes back as a *decodable payload with zero items* — a host that cannot tell
+     * the two apart will keep showing a stale selection for a released handle.
+     */
+    fun nativeItemIDsInRect(
+        scoreHandle: Long,
+        xMm: Double,
+        yMm: Double,
+        widthMm: Double,
+        heightMm: Double,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeItemIDsInRect(
+            scoreHandle, xMm, yMm, widthMm, heightMm, arena,
         ).toByteArray()
     }
 
