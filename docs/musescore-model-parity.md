@@ -16,8 +16,8 @@ MuseScoreの`ElementType` enumを背骨にして全件洗い出した記録。�
 
 **出荷済みMuseScoreに対する穴が2層、未リリースのMuseScore 5に対する断層が1つ。**
 
-1. **要素そのものが存在しない（MISSING）: 25件**（調査時点。`ORNAMENT`をmodel化したので
-   2026-09-04時点では24件——§4.6） — fret diagram、figured bass、capo、
+1. **要素そのものが存在しない（MISSING）: 25件**（調査時点。`ORNAMENT`と`FINGERING`を
+   model化したので2026-09-04時点では23件——§4.6・§4.2） — fret diagram、figured bass、capo、
    string tunings、harp pedal diagram、fingering、sticking、expression、symbol、image、
    HBox / TBox / FBox、spacer、staff type change、linked parts（excerpt）など。
    MSCX decoderは未知elementを黙って捨てる（`MSCXDecoder+Voice.swift:329`）ので、
@@ -366,7 +366,7 @@ TABをまともに扱うなら`StringData`が起点。これが無いと`FRET_DI
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
 | `EXPRESSION` | `twrite.cpp:1343` | なし | 表情記号text。dynamicとは別element |
-| `FINGERING` | `types/types.h:121` | なし | 運指番号。note添付 |
+| ~~`FINGERING`~~ | `types/types.h:121` | **`Fingering`**（2026-09-04実装） | 下の追記を参照 |
 | `STICKING` | `dom/sticking.h:35` | なし | 打楽器のR/L |
 | `FIGURED_BASS`＋`FIGURED_BASS_ITEM` | `dom/figuredbass.h:91` | なし | 数字付低音。prefix / digit / suffix / continuationの構造 |
 | `PLAYTECH_ANNOTATION` | `dom/playtechannotation.h:35` | なし | 奏法指定（pizz.等）とplayback反映 |
@@ -374,6 +374,26 @@ TABをまともに扱うなら`StringData`が起点。これが無いと`FRET_DI
 | `PLAY_COUNT_TEXT` | `twrite.cpp:2743`（MSC 5.00） | なし | 反復回数表示 |
 | `STAVE_SHARING_LABEL` | `dom/stavesharinglabel.h:27`（MSC 5.00） | なし | staff共有label |
 | `TRIPLET_FEEL` | `dom/tripletfeel.h:28` | なし | ssmの`Swing`とは別概念。typed feel + 生成text |
+
+**［2026-09-04 追記］`FINGERING`はmodel化した。** `SheetMusicCore`の`Fingering`と
+`Note.fingerings`、decoder / encoderは`MSCXDecoder+Fingering.swift` /
+`MSCXEncoder+Fingering.swift`、fixtureは`Tests/SheetMusicTests/Resources/own/fingerings.mscx`。
+noteに複数付く（左手運指と弦番号の同居は普通のguitar記譜）ので配列。
+
+判断が要ったのは`<style>`の扱い。上流ではこれは**text style**
+（`fingering` / `guitar_fingering_lh` / `guitar_fingering_rh` / `string_number`）だが、
+この要素に限っては「2」が指なのか手なのか弦なのかを決めるのがstyleなので、
+ssmの`TextStyleType`に足すのではなく`Fingering.Role`として要素のroleにした。
+`TextStyleType`の行はfontとplacementのdefaultを抱えており、そこは§7.3のstyle作業の領分。
+familyの外のstyleは`.other`で verbatim に保持する。
+
+残っている制約は2つ。`<placement>` / `<offset>` / font overrideはpreserved markup
+（`ChordArticulation`・`ChordOrnament`と同じ扱い）。`<text>`の中のinline markup
+（`<text><font size="8"/>2</text>`）はplain textに潰れる——§7.1の横断的なgapそのもので、
+`StaffText`が既に持っている制約と同じ。testで固定してある。
+
+`STICKING`と`EXPRESSION`は同じtext annotationだがnote添付ではなくvoice streamの
+annotationなので、`VoiceElement`にcaseを足す作業になる。`FINGERING`より一段広い。
 
 ### 4.3 記号・画像
 
@@ -616,9 +636,16 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
 2. **横断的な4つ**（§7）— TextContent、ElementProperties拡張、style、時間軸map。
    個別要素のPARTIALの大半がここに帰着する。
 3. **単独で追加できるMISSING** — ~~`ORNAMENT`~~（2026-09-04完了、§4.6の追記）、
+   ~~`FINGERING`~~（2026-09-04完了、§4.2の追記）、
    `StringData`+`FRET_DIAGRAM`+`STRING_TUNINGS`+`CAPO`、
-   `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`、`FINGERING`/`STICKING`/`EXPRESSION`。
+   `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`、`STICKING`/`EXPRESSION`。
    互いに独立なので並列に進められる。
+
+   実装して分かったこの層の境目: **noteやchordに直接ぶら下がる要素は単発で入る**
+   （`ORNAMENT`・`FINGERING`がそうだった）。**voice streamに並ぶ要素は`VoiceElement`に
+   caseを足す話になり、fingerprint・layout・wasm / Android bridgeのswitchまで届く**
+   （`STICKING`・`EXPRESSION`・`FIGURED_BASS`・voice stream上の`SYMBOL`）。
+   同じ「単独で追加できる」でも作業量が一段違うので、分けて見積もること。
 4. **構造変更を伴うもの** — box family（`MeasureBase`相当の並びが要る）、
    `STAFFTYPE_CHANGE`（staffの時間軸）、そして最後に**excerpt / linked parts**。
 

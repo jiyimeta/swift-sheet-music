@@ -305,6 +305,14 @@ struct ChordOrnamentEncodeTests {
         #expect(node.first("subtype")?.text == "ornamentMordent")
     }
 
+    @Test func v3TargetKeepsVisibilityWhichIsNotOrnamentOnlyState() {
+        var ornament = ChordOrnament(kind: .trill)
+        ornament.elementProperties.visible = false
+        let node = ornament.encode(options: MSCXEncoderOptions(targetVersion: .v3))
+        #expect(node.children.map(\.name) == ["subtype", "visible"])
+        #expect(node.first("visible")?.text == "0")
+    }
+
     @Test func chordEncodesOrnamentsAfterArticulationsAndBeforeNotes() throws {
         let chord = Chord(
             duration: .quarter,

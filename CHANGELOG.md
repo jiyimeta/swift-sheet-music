@@ -37,6 +37,21 @@ and this project adheres to
   realize an ornament into notes and the engraver does not place its glyph; the
   intervals are modeled so that both have somewhere to read them from.
 
+- **Note fingerings are modeled.** `<Fingering>` was an unrecognized `<Note>`
+  child, so a finger number, a guitar-hand fingering, or a string number
+  reached the model only as an opaque preserved subtree — in scores where it is
+  some of the most common notation on the page.
+
+  `Note.fingerings` holds `Fingering` values, several per note where the
+  notation calls for it. Upstream the four variants are *text styles*, but on
+  this element the style is what says whether "2" means a finger, a hand, or a
+  string, so it is modeled as the element's role; a style outside the family is
+  kept verbatim rather than collapsing to the default.
+
+  `<placement>`, `<offset>`, and font overrides stay in preserved markup, and
+  inline markup inside `<text>` flattens to plain text — the same limitation
+  `StaffText` has. Engraving does not place a fingering glyph yet.
+
 ### Changed
 
 - **Reading a `.mscx` and writing it back no longer deletes what the model

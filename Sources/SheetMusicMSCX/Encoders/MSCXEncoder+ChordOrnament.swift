@@ -77,9 +77,14 @@ extension ChordOrnament {
     /// `<Ornament>` tag, dropping it whole. Writing the MS3 spelling keeps the
     /// symbol; the ornament-only state — intervals, accidentals, cue note —
     /// has nowhere to live in that generation and is genuinely lost.
+    ///
+    /// `<visible>` is not ornament-only state, and MuseScore 3 reads it on an
+    /// articulation, so it comes along.
     private func encodeAsMuseScore3Articulation() -> XMLTreeNode {
-        XMLTreeNode(name: "Articulation", children: [
-            XMLTreeNode(name: "subtype", text: kind.mscxToken),
-        ])
+        XMLTreeNode(
+            name: "Articulation",
+            children: [XMLTreeNode(name: "subtype", text: kind.mscxToken)]
+                + elementProperties.mscxChildren(),
+        )
     }
 }
