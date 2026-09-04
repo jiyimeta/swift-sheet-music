@@ -1,0 +1,22 @@
+# Nested SwiftLint configuration for the Apple example app.
+#
+# The example is held to the repo's rules (it is the surface a host reads
+# to learn the library), with one deliberate exception: the four size
+# rules are off here.
+#
+# Why: the example is a single-window SwiftUI demo whose whole point is
+# to exercise a lot of library surface from one place. `ContentViewMac`
+# is one 2,500-line `View` struct with the toolbar, the key handling and
+# every sidebar toggle in it. Splitting it would make the demo harder to
+# read as a demo — a reader wants one file that shows the whole call
+# sequence — and it ships to nobody. Every other rule stays on: the 16
+# real violations that this directory had (is_disjoint, line_length,
+# for_where, inclusive_language) were fixed rather than silenced.
+#
+# If the example ever grows a second window or a real architecture, drop
+# this file and split the view instead.
+disabled_rules:
+  - closure_body_length
+  - file_length
+  - function_body_length
+  - type_body_length

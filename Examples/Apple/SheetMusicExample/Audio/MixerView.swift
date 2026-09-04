@@ -38,7 +38,12 @@ struct MixerView: View {
 /// reached before any limiting — which is what tells you how much
 /// headroom is left below 0 dBFS. Play the loudest passage with every
 /// staff sounding, then read Hold.
-private struct MasterLevelSection: View {
+///
+/// The name keeps "master": it is the audio-engineering term for the
+/// summed output bus, the same one `PlaybackEngine`'s master gain /
+/// limiter stage carries — and the same reason `MasterTuning` keeps it
+/// in the library.
+private struct MasterLevelSection: View { // swiftlint:disable:this inclusive_language
     let engine: PlaybackEngine
 
     @State private var gain: Float = 1.0

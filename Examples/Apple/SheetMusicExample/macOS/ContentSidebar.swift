@@ -209,7 +209,11 @@
                     }
                     .disabled(score == nil)
                     Text(
-                        "Draws elements with `visible == false` at 50 % opacity (MuseScore #808080 on white). Off = print behaviour (hidden entirely).",
+                        """
+                        Draws elements with `visible == false` at 50 % \
+                        opacity (MuseScore #808080 on white). \
+                        Off = print behaviour (hidden entirely).
+                        """,
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -221,7 +225,12 @@
                     }
                     .disabled(score == nil)
                     Text(
-                        "Hides parts the file marked `<Part><show>0</show>` (MuseScore's \"hide instrument in score\"). Off = draw every staff. This mirrors how a host filters authored-hidden staves.",
+                        """
+                        Hides parts the file marked `<Part><show>0</show>` \
+                        (MuseScore's "hide instrument in score"). \
+                        Off = draw every staff. This mirrors how a host \
+                        filters authored-hidden staves.
+                        """,
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -233,7 +242,12 @@
                     }
                     .disabled(score == nil || layoutMode != .vertical)
                     Text(
-                        "Wraps vertical mode to the score's page content width instead of the window width, so resizing the window scrolls the engraving instead of re-flowing it (`ScoreViewOptions.fixedLayoutWidth`).",
+                        """
+                        Wraps vertical mode to the score's page content \
+                        width instead of the window width, so resizing the \
+                        window scrolls the engraving instead of re-flowing \
+                        it (`ScoreViewOptions.fixedLayoutWidth`).
+                        """,
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
