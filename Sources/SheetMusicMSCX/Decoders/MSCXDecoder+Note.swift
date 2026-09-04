@@ -14,7 +14,8 @@ extension Note {
     /// instrument transposition, so preserving the source spelling
     /// would collide with the generated value.
     private static let consumedNoteChildren: Set = [
-        "Accidental", "Bend", "ChordLine", "Parenthesis", "Spanner", "Tie",
+        "Accidental", "Bend", "ChordLine", "Fingering", "Parenthesis",
+        "Spanner", "Tie",
         "color", "endSpanner", "fret", "head", "parentheses", "pitch", "play",
         "small", "string", "tpc", "tpc2", "veloType", "velocity", "visible",
     ]
@@ -71,6 +72,7 @@ extension Note {
             // `<Staff><StringData>` — the instrument tuning — never reach here.
             fret: (node.first("fret")?.text).flatMap(Int.init),
             string: (node.first("string")?.text).flatMap(Int.init),
+            fingerings: Fingering.decodeAll(inNote: node),
             preservedMarkup: preservedNoteMarkup(in: node),
         )
         note.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)

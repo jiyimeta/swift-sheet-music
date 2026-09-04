@@ -152,6 +152,7 @@ struct FNV1a {
         combine(note.isSmall)
         combine(note.play)
         combine(note.visible)
+        combineOccupied(note.fingerings, tag: 36)
         if let color = note.elementProperties.color {
             combine(31)
             combine(color.red)

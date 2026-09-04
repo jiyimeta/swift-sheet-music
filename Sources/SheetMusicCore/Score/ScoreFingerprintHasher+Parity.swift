@@ -118,6 +118,25 @@ extension FNV1a {
         combine(flag ? 2 : 1)
     }
 
+    /// Note fingerings, BY OCCUPANTS — same rule, same reason, as
+    /// `combineOccupied(_ ornaments:tag:)`.
+    mutating func combineOccupied(_ fingerings: [Fingering], tag: Int) {
+        guard !fingerings.isEmpty else { return }
+        combine(tag)
+        combine(fingerings.count)
+        for fingering in fingerings {
+            combine(fingering)
+        }
+    }
+
+    /// `preservedMarkup` stays out, as it does for `ChordOrnament`: it is
+    /// source fidelity, not model state.
+    mutating func combine(_ fingering: Fingering) {
+        combine(fingering.text)
+        combine(fingering.role.mscxToken)
+        combineOccupied(fingering.elementProperties, visibleTag: 37, colorTag: 38)
+    }
+
     mutating func combine(_ clef: Clef) {
         combine(clef.concertClefType)
         combine(clef.transposingClefType)
