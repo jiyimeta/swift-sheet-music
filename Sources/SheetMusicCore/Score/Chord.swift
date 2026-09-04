@@ -25,6 +25,13 @@ public struct Chord: Sendable, Equatable {
     /// Chord-level articulations (staccato / staccatissimo / tenuto and
     /// round-trip-preserved unknowns). C++: `Chord::_articulations`.
     public var articulations: [ChordArticulation]
+    /// Trills, turns, and mordents attached to this chord. MuseScore 4 writes
+    /// these as `<Ornament>`, a sibling of `<Articulation>` that it split off
+    /// to carry the auxiliary-note intervals; MuseScore 3 wrote the same
+    /// symbols as plain `<Articulation>` elements, and those still decode into
+    /// `articulations` as `.unknown`. C++: `Chord::_articulations` holds both,
+    /// discriminated by `EngravingItem::isOrnament()`.
+    public var ornaments: [ChordOrnament]
     /// Tremolo notation attached to this chord. For two-note tremolo
     /// (`.between`), this value is held by the *start* chord of the
     /// pair; the follower is identified by adjacency in the voice's
@@ -92,6 +99,7 @@ public struct Chord: Sendable, Equatable {
         graceNotesBefore: [GraceChord] = [],
         graceNotesAfter: [GraceChord] = [],
         articulations: [ChordArticulation] = [],
+        ornaments: [ChordOrnament] = [],
         tremolo: Tremolo? = nil,
         chordLines: [ChordLine] = [],
         spanners: [Spanner] = [],
@@ -107,6 +115,7 @@ public struct Chord: Sendable, Equatable {
         self.graceNotesBefore = graceNotesBefore
         self.graceNotesAfter = graceNotesAfter
         self.articulations = articulations
+        self.ornaments = ornaments
         self.tremolo = tremolo
         self.chordLines = chordLines
         self.spanners = spanners

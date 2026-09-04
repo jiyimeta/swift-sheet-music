@@ -130,6 +130,9 @@ private func strippingPreservedMarkup(from source: Chord) -> Chord {
     for spannerIndex in chord.spanners.indices {
         chord.spanners[spannerIndex].preservedMarkup = []
     }
+    for ornamentIndex in chord.ornaments.indices {
+        chord.ornaments[ornamentIndex].preservedMarkup = []
+    }
     stripPreservedMarkup(from: &chord.graceNotesBefore)
     stripPreservedMarkup(from: &chord.graceNotesAfter)
     return chord

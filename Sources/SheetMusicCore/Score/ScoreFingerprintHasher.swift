@@ -279,6 +279,7 @@ struct FNV1a {
         for articulation in chord.articulations {
             combine(articulation)
         }
+        combineOccupied(chord.ornaments, tag: 33)
         combine(chord.tremolo)
         combine(chord.chordLines.count)
         for chordLine in chord.chordLines {
