@@ -7,6 +7,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `ScoreViewOptions.fixedLayoutWidth` pins the wrap width of vertical-scroll
+  mode so the engraving stops re-flowing when its container resizes — a
+  window resize scrolls or zooms instead of re-wrapping every system.
+  Default `nil` keeps existing behavior, which follows the container width.
+
 ### Changed
 
 - **The metrics table measures the text face too, and is served under a new
@@ -75,6 +82,29 @@ and this project adheres to
   registers the repo's `Edwin-Roman.otf` to make that comparison honest:
   `CTFontCreateWithName` answers an unregistered family with the system font, so
   the suite had been measuring Helvetica while calling it Edwin.
+
+### Fixed
+
+- `PagedScoreView` was reverting seven caller options to their defaults —
+  `includeTitleFrame`, `breakIndicatorVisibility`, `graceNoteMag`,
+  `smallNoteMag`, `showsInvisibleElements`, `measureNumbers` and
+  `lyricsVisible` — because it rebuilt `ScoreViewOptions` field by field
+  instead of copying the caller's value. **This is a user-visible behavior
+  change on upgrade**: any host that set one of those options and used
+  paged mode was silently getting the default instead. `PagedScoreView` now
+  copies the caller's options and only forces `wrapToViewWidth` on.
+- Playback follows a change of audio output. `AVAudioEngine` stops itself when
+  the I/O configuration changes — the user picks a different output device on a
+  Mac, headphones come out on iOS — and nothing observed that, so the score went
+  silent while `PlaybackEngine.state` still reported `.playing`. The engine now
+  rebuilds its graph on the new route, keeping the cursor, the transport (playing
+  stays playing, paused stays paused) and every mixer strip. Offline exports,
+  which render on their own engine, are untouched.
+- An automatic graph rebuild that fails is no longer silent: the error lands in
+  the new `PlaybackEngine.lastGraphRestartError` and the transport reports
+  `.stopped` instead of an inaudible `.playing`. This also covers the SoundFont
+  hot-swap (`reloadSoundfont(resolver:)`), whose failure was previously
+  unobservable by design.
 
 ## [2.4.1] - 2026-09-04
 

@@ -3,9 +3,14 @@ import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
 
-/// A single system rendered in its own Canvas. Used by `ScoreView`
-/// inside a `LazyVStack` so only visible systems are drawn — the
-/// biggest performance win for long scores during scrolling.
+/// A single system rendered in its own SwiftUI `Canvas`.
+///
+/// **Currently instantiated nowhere.** `ScoreView` renders both of
+/// its modes as `SystemLayerView` CALayer trees; this type is the
+/// SwiftUI-`Canvas` rendering of the same thing, kept as the
+/// reference implementation next to the `ScoreCanvasDrawing`
+/// routines it shares with `PagedScoreView`, `PDFPageView` and
+/// `TitleFrameView` — which are very much alive.
 @available(macOS 15.0, *)
 struct SystemCanvas: View {
     let system: LayoutSystem

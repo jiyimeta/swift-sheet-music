@@ -31,9 +31,30 @@
 
         var body: some View {
             GeometryReader { geo in
-                let width = geo.size.width - 32
+                // A fixed layout width is the whole point of the
+                // option: it must NOT be reduced by the window, and
+                // the `.task(id:)` below must not re-run when the
+                // window resizes. Falling back to the viewport width
+                // keeps the default behavior identical.
+                let width = options.fixedLayoutWidth
+                    ?? (geo.size.width - 32)
                 ScrollViewReader { proxy in
-                    ScrollView(.vertical) {
+                    // A fixed layout width can exceed the window, so the
+                    // horizontal axis is needed to reach the right edge.
+                    // But enabling it unconditionally also makes
+                    // `autoScrollVerticalMac`'s `UnitPoint(x: 0.5, …)`
+                    // anchor (AutoScroll.swift:297) live: with both axes
+                    // scrollable, aligning the center of a ~1 pt-wide
+                    // anchor view against the viewport center resets the
+                    // horizontal offset to the leading edge on every
+                    // playback auto-scroll. So the horizontal axis is
+                    // added only in fixed-width mode, where reaching the
+                    // right edge matters more, and the default path keeps
+                    // the exact scrolling behavior it had before.
+                    ScrollView(
+                        options.fixedLayoutWidth == nil
+                            ? .vertical : [.vertical, .horizontal],
+                    ) {
                         if let doc = verticalDoc {
                             ZStack(alignment: .topLeading) {
                                 ScoreView(
@@ -119,7 +140,9 @@
     /// layout. Width and `scoreVersion` together capture every input
     /// that should trigger a re-layout — staffSize / systemGap come
     /// from the static `ScoreViewOptions` so they don't vary at
-    /// runtime.
+    /// runtime. When `options.fixedLayoutWidth` is set, `width` is
+    /// that value rather than the viewport's, which is what makes a
+    /// window resize a no-op.
     struct VerticalLayoutKey: Hashable {
         let width: CGFloat
         let scoreVersion: UUID

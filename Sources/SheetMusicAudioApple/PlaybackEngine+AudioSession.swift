@@ -1,22 +1,6 @@
 @preconcurrency import AVFoundation
 import Foundation
 
-/// Owns a block-based `NotificationCenter` observer token and unregisters it on dealloc.
-///
-/// `PlaybackEngine` could hold the token directly, but then it would have to unregister from its own `deinit` — which
-/// is `nonisolated` and so cannot read a `var` stored property on a `@MainActor` type (an `isolated deinit` would need
-/// iOS 18; this package deploys to iOS 17). Parking the token in its own, unisolated object moves the removal into
-/// *that* object's deinit, which the engine releasing it triggers all the same.
-final class AudioSessionInterruptionObserver {
-    var token: (any NSObjectProtocol)?
-
-    deinit {
-        if let token {
-            NotificationCenter.default.removeObserver(token)
-        }
-    }
-}
-
 extension PlaybackEngine {
     /// How the engine treats the process-wide `AVAudioSession`.
     ///
@@ -58,6 +42,11 @@ extension PlaybackEngine {
     /// Registered for every policy, `.hostManaged` included: the invalid `state` is engine-internal, and a host that
     /// owns its session is just as exposed to it. A host that also pauses on `.began` costs nothing — `pause()` is
     /// idempotent.
+    ///
+    /// There is no macOS counterpart *in this file*, and none is missing: macOS has no `AVAudioSession`, so what
+    /// plays the equivalent role there — the engine losing its output from under a running transport — arrives as
+    /// `AVAudioEngineConfigurationChange`. See `PlaybackEngine+ConfigurationChange`, which is registered on every
+    /// platform including this one.
     func startObservingAudioSessionInterruptions() {
         #if os(iOS) || os(tvOS) || os(watchOS)
             interruptionObserver.token = NotificationCenter.default.addObserver(
