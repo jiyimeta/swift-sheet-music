@@ -80,13 +80,6 @@ object FontMetricsBuilder {
     private const val BRAVURA_FACE = "Bravura"
     private const val EDWIN_FACE = "Edwin"
 
-    /**
-     * The bold text face's record name. `"<face>-Bold"` is the convention
-     * `FontMetricsTable.face(for:)` resolves a bold `LayoutFont` through, so
-     * this string and that lookup move together.
-     */
-    private const val EDWIN_BOLD_FACE = "Edwin-Bold"
-
     private data class Entry(
         val cp: Int,
         val advance: Float,
@@ -140,26 +133,23 @@ object FontMetricsBuilder {
                 keepBlanks = true,
             )
         }.getOrNull()?.let { faces += it }
-        // The bold text face, measured with the SAME synthesis the renderer paints with
-        // (`Paint.isFakeBoldText`), not a separate bold font file. MuseScore's own defaults set
-        // tempo marks, rehearsal marks and instrument-change text bold, and a rehearsal mark's frame
-        // is sized from the measured text — so a table with no bold record puts bold letters through
-        // the right-hand edge of a box measured at regular weight.
+        // NO BOLD FACE RECORD, and the reason is measured rather than assumed.
         //
-        // Same `runCatching` as the regular face and for the same reason: Edwin is optional, and a
-        // host that ships only Bravura must not crash. A missing bold record simply resolves back to
-        // the regular one (`FontMetricsTable.face(for:)`), which is the pre-bold behaviour.
-        runCatching {
-            measure(
-                assets,
-                face = EDWIN_BOLD_FACE,
-                assetPath = "fonts/Edwin-Roman.otf",
-                first = TEXT_START,
-                last = TEXT_END,
-                keepBlanks = true,
-                fakeBold = true,
-            )
-        }.getOrNull()?.let { faces += it }
+        // `Paint.isFakeBoldText` is what this library's renderer paints bold text with, since Edwin
+        // ships as a single Roman face. The obvious companion — measure the same file with
+        // `isFakeBoldText = true` and store it as `"Edwin-Bold"` — was written, run on a device, and
+        // produced an advance for 'A' of 721.9961 against the regular face's 721.9961. Skia's
+        // synthetic bold thickens strokes; `getTextWidths` reports the face's own advances either
+        // way.
+        //
+        // So a bold record would be a byte-for-byte duplicate of the regular one, and
+        // `FontMetricsTable.face(for:)`'s fallback already answers a bold request with exactly those
+        // numbers. More importantly the numbers are RIGHT: `drawText` advances by the same amounts
+        // it measures, so a rehearsal-mark frame sized from the regular face fits the bold text
+        // drawn inside it.
+        //
+        // The lookup convention stays — a host that ships a real `Edwin-Bold.otf` and measures THAT
+        // would produce a record worth having — but nothing here should write a synthetic one.
         return encode(faces)
     }
 
@@ -177,7 +167,6 @@ object FontMetricsBuilder {
         first: Int,
         last: Int,
         keepBlanks: Boolean,
-        fakeBold: Boolean = false,
     ): Face {
         // Which codepoints this face actually has comes from the file's own
         // `cmap`, NOT from `Paint`. Nothing in `Paint` can answer it: measured
@@ -197,11 +186,6 @@ object FontMetricsBuilder {
             typeface = tf
             textSize = REFERENCE_SIZE.toFloat()
             isAntiAlias = true
-            // Algorithmic emboldening, the same knob `ScoreCanvas` sets when it paints a
-            // `setTextStyle` bold run. Measuring the synthesis rather than a real bold font file is
-            // the point: what the table reports has to be what the renderer draws, and Edwin ships
-            // as a single Roman face here.
-            isFakeBoldText = fakeBold
         }
         // `Paint.FontMetrics` is y-down: ascent is negative (above the
         // baseline), descent positive. The Swift side wants both as positive

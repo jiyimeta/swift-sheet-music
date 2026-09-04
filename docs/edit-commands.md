@@ -228,7 +228,20 @@ intention:
   outside this reader's stated scope.) A permanent version of this
   gate, always-on over the in-tree fixtures and opt-in over an external
   corpus, lands separately.
-- **Not run:** the Kotlin `EditSessionReplayParityTest`. It is
-  device-only instrumentation, and the chain has grown to 92 steps with
-  87 step assets that test has never consumed. Running it on a device
-  is the one outstanding verification for this project.
+- **Not run, at the close:** the Kotlin `EditSessionReplayParityTest`. It
+  is device-only instrumentation, and the chain had grown to 92 steps
+  with 87 step assets that test had never consumed. Running it on a
+  device was the one outstanding verification for this project.
+
+### Run, 2026-09-04
+
+It passes. `:SheetMusicAndroid:connectedDebugAndroidTest` on an API 35
+arm64 emulator: 5 tests, 0 failures, both `replayMatchesHostGoldens`
+methods among them — the original chain and the 92-step parity one, each
+relayed step by step from Kotlin across JNI into a second,
+separately-linked image of the engine, with equal fingerprints at every
+step. That is the claim the whole Android editing design rests on, and it
+now has a result rather than an intention.
+
+The instrumented suite is also wired into CI (`.github/workflows/android-audio.yml`),
+so it stays run rather than being re-discovered as unrun later.

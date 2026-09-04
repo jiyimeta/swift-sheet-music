@@ -211,23 +211,17 @@ enum GenFontMetrics {
                 keepBlanks: true,
                 minimumGlyphs: 500,
             ),
-            // The bold text face. MuseScore's own defaults set tempo marks, rehearsal marks and
-            // instrument-change text bold, and a rehearsal mark's frame is sized from the measured
-            // text — so without this record the browser draws bold letters inside a box measured at
-            // regular weight, exactly as Android did before the same record was added there.
+            // NO BOLD RECORD, matching `FontMetricsBuilder` on Android and for the same measured
+            // reason. This repo's Edwin is `Edwin-Roman.otf` — one face, no bold member — so
+            // `CTFontCreateCopyWithSymbolicTraits(..., .boldTrait, ...)` has nothing to resolve to
+            // and the advances come back identical to the regular face's. On the Android side the
+            // equivalent attempt was run on a device and produced 721.9961 for 'A' against the
+            // regular face's 721.9961.
             //
-            // Recorded under `"Edwin-Bold"` because that is the name
-            // `FontMetricsTable.face(for:)` resolves a bold `LayoutFont` through; the family stays
-            // `Edwin`, and `AppleFontMetricsProvider` asks CoreText for its bold member (or lets it
-            // synthesize one, which is what the Android producer measures).
-            measure(
-                face: edwinFamilyName,
-                candidates: textRange,
-                keepBlanks: true,
-                minimumGlyphs: 500,
-                weight: .bold,
-                recordName: "\(edwinFamilyName)-Bold",
-            ),
+            // A record would therefore be a duplicate, and `FontMetricsTable.face(for:)`'s fallback
+            // already answers a bold request with those numbers — correctly, since a synthetic bold
+            // advances by the same amounts it measures. The `"<face>-Bold"` convention stays for a
+            // host that ships a real bold file and measures THAT.
         ]
     }
 

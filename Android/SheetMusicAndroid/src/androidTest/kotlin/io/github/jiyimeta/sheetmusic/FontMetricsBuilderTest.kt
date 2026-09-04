@@ -119,6 +119,21 @@ class FontMetricsBuilderTest {
         assertEquals("Edwin 'A' advance", EDWIN_A_ADVANCE, a.advance, METRIC_TOLERANCE)
         assertTrue("Edwin 'A' should be inked", a.w > 0 && a.h > 0)
 
+        // Synthetic bold does not change advances on Android, and the bridge relies on it.
+        //
+        // MuseScore's role defaults set tempo marks, rehearsal marks and instrument-change text
+        // bold, and `ScoreCanvas` paints them with `Paint.isFakeBoldText` because Edwin ships here
+        // as a single Roman face. A rehearsal mark's frame is sized from the metrics table, so the
+        // question is whether that box still fits the bold text drawn inside it — and the answer is
+        // yes only because Skia's emboldening thickens strokes without widening advances.
+        //
+        // Measured, not assumed: an `"Edwin-Bold"` face record was built with `isFakeBoldText` and
+        // this test reported 721.9961 for 'A' against the regular face's 721.9961. The record was
+        // dropped as a byte-for-byte duplicate, and this assertion is what stops it coming back —
+        // if a future Android release DOES widen synthetic bold, the frame will start clipping and
+        // this is the only place that would say so.
+        assertEquals("synthetic bold must not change advances", a.advance, boldAdvanceOfA(assets), METRIC_TOLERANCE)
+
         // A space is stored for its advance and must claim no ink, or every trailing space pads a
         // rehearsal-mark frame.
         val space = requireNotNull(edwin.entries[0x20]) { "Edwin has no space" }
@@ -164,6 +179,23 @@ class FontMetricsBuilderTest {
     }
 
     /** Mirrors `FontMetricsTable.decode`, hand-written field-for-field the same way. */
+    /**
+     * Edwin's advance for 'A' measured with `isFakeBoldText` — the same knob `ScoreCanvas` sets to
+     * paint a bold run. Built here rather than read from the table, because the whole point is that
+     * the table has no bold record to read.
+     */
+    private fun boldAdvanceOfA(assets: android.content.res.AssetManager): Float {
+        val paint = Paint().apply {
+            typeface = Typeface.createFromAsset(assets, "fonts/Edwin-Roman.otf")
+            textSize = REFERENCE_SIZE.toFloat()
+            isAntiAlias = true
+            isFakeBoldText = true
+        }
+        val widths = FloatArray(1)
+        paint.getTextWidths("A", widths)
+        return widths[0]
+    }
+
     private fun decodeFaces(bytes: ByteArray): List<Face> {
         val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         assertEquals("magic", 0x53_4D_46_54, buf.int)
