@@ -39,7 +39,7 @@ public enum MSCZWriter {
             try writer.add(path: mainFileName, data: mscxData, method: .deflate)
             for entry in extraEntries {
                 try writer.add(
-                    path: entry.path, data: entry.data, method: entry.compression,
+                    path: entry.path, data: entry.data, method: entry.compression.zipMethod,
                 )
             }
         } catch let error as ZipError {

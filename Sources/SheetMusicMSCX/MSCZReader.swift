@@ -134,7 +134,11 @@ public enum MSCZReader {
                 )
             }
             result.append(
-                MSCZExtraEntry(path: entry.path, data: data, compression: entry.method),
+                MSCZExtraEntry(
+                    path: entry.path,
+                    data: data,
+                    compression: MSCZExtraEntry.Compression(entry.method),
+                ),
             )
         }
         return result
