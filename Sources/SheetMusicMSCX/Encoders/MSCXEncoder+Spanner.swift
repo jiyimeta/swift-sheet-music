@@ -22,6 +22,7 @@ extension Spanner {
         } else {
             children.append(XMLTreeNode(name: "prev"))
         }
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(
             name: "Spanner",
             attributes: ["type": rawType],
@@ -171,13 +172,15 @@ extension Spanner {
     /// keys "this is a begin side" off the presence of `<next>`, so eliding
     /// it would make the slur vanish on the next read.
     func encodeChordAnchoredBegin(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        XMLTreeNode(
+        var children = [
+            payloadElement(options: options),
+            nextLocationElement() ?? XMLTreeNode(name: "next"),
+        ]
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        return XMLTreeNode(
             name: "Spanner",
             attributes: ["type": rawType],
-            children: [
-                payloadElement(options: options),
-                nextLocationElement() ?? XMLTreeNode(name: "next"),
-            ],
+            children: children,
         )
     }
 

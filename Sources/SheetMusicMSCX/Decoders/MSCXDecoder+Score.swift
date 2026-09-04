@@ -13,6 +13,16 @@ import SheetMusicXMLTools
 #endif
 
 extension Score {
+    /// Every `<Score>` child this decoder reads. Anything else becomes
+    /// preserved markup — see `PreservedXML`.
+    ///
+    /// `<SpannerMap>` is deliberately absent. The version guard only
+    /// checks whether it exists; no decoder reads its contents, so it
+    /// remains source markup worth preserving for admitted files.
+    private static let consumedScoreChildren: Set = [
+        "Division", "Part", "Staff", "Style", "metaTag", "programVersion",
+    ]
+
     /// Decode one `.mscx` document.
     ///
     /// `styleFileStyle` is the `<Style>` element of a sibling
@@ -133,6 +143,7 @@ extension Score {
             titleFrame: titleFrame,
             style: style,
             source: .museScore(version),
+            preservedMarkup: scoreNode.preservedMarkup(consuming: consumedScoreChildren),
         )
     }
 

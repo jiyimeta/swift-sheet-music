@@ -46,6 +46,7 @@ extension Instrument {
         for chan in channels {
             children.append(chan.encode(options: options))
         }
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(
             name: "Instrument",
             attributes: ["id": id],

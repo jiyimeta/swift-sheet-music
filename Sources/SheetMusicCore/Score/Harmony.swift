@@ -47,6 +47,9 @@ public struct Harmony: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
+
     public init(
         name: String,
         harmonyType: HarmonyType = .standard,
@@ -62,6 +65,7 @@ public struct Harmony: Sendable, Equatable {
         color: ScoreColor? = nil,
         properties: TextProperties = TextProperties(),
         visible: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.name = name
         self.harmonyType = harmonyType
@@ -75,6 +79,7 @@ public struct Harmony: Sendable, Equatable {
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.properties = properties
+        self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible, color: color)
     }
 

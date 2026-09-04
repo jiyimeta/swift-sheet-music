@@ -60,18 +60,7 @@ extension Chord {
         //   engraving/dom/chord.cpp Chord::write — durationType →
         //   StemDirection → ChordLine / Articulation / Tremolo →
         //   Lyrics → Note.
-        // Chord-level `<ChordLine>`s lead the cluster; the ones bound to
-        // a specific note (`noteIndex != nil`) are written inside that
-        // `<Note>` instead — see the `chordLines:` argument below. A
-        // `noteIndex` pointing past the note list (possible when
-        // `ChordNotes` deduped a repeated pitch after decode) demotes to
-        // the chord-level form rather than dropping the element.
-        for line in chordLines where !notes.indices.contains(line.noteIndex ?? -1) {
-            children.append(line.encode(options: options))
-        }
-        for art in articulations {
-            children.append(art.encode(options: options))
-        }
+        children += notationCluster(options: options)
         // Tremolo sits with the ChordLine / Articulation cluster — after
         // articulations and before Lyrics / Note. For two-chord tremolo
         // (`span == .between`) the follower carries `tremolo == nil`
@@ -137,8 +126,21 @@ extension Chord {
                 chordLines: chordLines.filter { $0.noteIndex == noteIndex },
             ))
         }
-        children.append(contentsOf: elementProperties.mscxChildren())
+        appendChordTail(to: &children, options: options)
         return XMLTreeNode(name: "Chord", children: children)
+    }
+
+    /// Append the modeled arpeggio, element properties, and preserved
+    /// markup after the notes, matching MuseScore's Chord child order.
+    private func appendChordTail(
+        to children: inout [XMLTreeNode],
+        options: MSCXEncoderOptions,
+    ) {
+        if let arpeggio {
+            children.append(arpeggio.encode())
+        }
+        children.append(contentsOf: elementProperties.mscxChildren())
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
     }
 
     /// The chord-anchored `<Spanner>` pair sides that belong on this
@@ -167,6 +169,34 @@ extension Chord {
         options: MSCXEncoderOptions,
     ) -> [XMLTreeNode] {
         endMarkers + slurBeginMarkers(options: options)
+    }
+
+    /// The chord-line / articulation / ornament cluster, in MuseScore's order
+    /// (`engraving/dom/chord.cpp Chord::write` — durationType → StemDirection →
+    /// ChordLine / Articulation / Tremolo → Lyrics → Note). `<Tremolo>` closes
+    /// the cluster but is emitted by the caller, which owns the injected-tremolo
+    /// rule for two-chord tremolo.
+    ///
+    /// Chord-level `<ChordLine>`s lead; the ones bound to a specific note
+    /// (`noteIndex != nil`) are written inside that `<Note>` instead. A
+    /// `noteIndex` pointing past the note list — possible when `ChordNotes`
+    /// deduped a repeated pitch after decode — demotes to the chord-level form
+    /// rather than dropping the element.
+    ///
+    /// Ornaments follow the articulations because MuseScore keeps both in one
+    /// `Chord::_articulations` list and writes them in a single pass.
+    private func notationCluster(options: MSCXEncoderOptions) -> [XMLTreeNode] {
+        var cluster: [XMLTreeNode] = []
+        for line in chordLines where !notes.indices.contains(line.noteIndex ?? -1) {
+            cluster.append(line.encode(options: options))
+        }
+        for articulation in articulations {
+            cluster.append(articulation.encode(options: options))
+        }
+        for ornament in ornaments {
+            cluster.append(ornament.encode(options: options))
+        }
+        return cluster
     }
 
     /// The `<notes>` half of an ordinary chord-to-chord tie's
@@ -202,6 +232,7 @@ extension Chord {
         duration.appendDurationXML(to: &children)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "Rest", children: children)
     }
 
@@ -218,6 +249,25 @@ extension Chord {
         duration.appendDurationXML(to: &children, in: measureDuration)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "Rest", children: children)
+    }
+}
+
+extension Arpeggio {
+    /// Build the modeled `<Arpeggio>` payload. Default-valued optional
+    /// properties stay elided, matching MuseScore's writer.
+    func encode() -> XMLTreeNode {
+        var children = [
+            XMLTreeNode(name: "subtype", text: String(subtype)),
+        ]
+        if userLen1 != 0 {
+            children.append(XMLTreeNode(name: "userLen1", text: formatDouble(userLen1)))
+        }
+        if timeStretch != 1 {
+            children.append(XMLTreeNode(name: "timeStretch", text: formatDouble(timeStretch)))
+        }
+        children.append(contentsOf: elementProperties.mscxChildren())
+        return XMLTreeNode(name: "Arpeggio", children: children)
     }
 }

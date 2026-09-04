@@ -3,6 +3,36 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Measure {
+    /// Every `<Measure>` child this decoder reads directly or passes
+    /// to the flat-form voice decoder. Anything else becomes
+    /// preserved markup — see `PreservedXML`.
+    ///
+    /// `LayoutBreak` is deliberately absent. A tag-name set cannot
+    /// distinguish the modeled `line` / `page` / `section` subtypes
+    /// from the unmodeled `nobreak` subtype, so
+    /// `preservedMeasureMarkup(in:)` handles that tag explicitly.
+    private static let consumedMeasureChildren: Set = [
+        "BarLine", "Beam", "Breath", "Chord", "Clef", "Dynamic",
+        "Fermata", "Harmony", "InstrumentChange", "Jump", "KeySig",
+        "Marker", "MeasureRepeat", "RehearsalMark", "RepeatMeasure",
+        "Rest", "Spanner", "StaffText", "SystemText", "Tempo",
+        "TimeSig", "Tuplet", "endRepeat", "endTuplet", "irregular",
+        "location", "measureRepeatCount", "multiMeasureRest", "noOffset",
+        "startRepeat", "stretch", "tick", "voice",
+    ]
+
+    private static let modeledLayoutBreakSubtypes: Set = [
+        "line", "page", "section",
+    ]
+
+    private static let consumedMarkerChildren: Set = [
+        "label", "markerType", "text",
+    ]
+
+    private static let consumedJumpChildren: Set = [
+        "continueAt", "jumpTo", "playRepeats", "playUntil", "text",
+    ]
+
     /// Decoded `Measure` plus any system-level elements lifted out
     /// of its voices during decoding. The caller stamps each
     /// `PositionedSystemElement.originalStaff` with the appropriate
@@ -91,6 +121,7 @@ extension Measure {
         // `<irregular>1</irregular>` — exclude this measure from the
         // running displayed measure number (typical on anacrusis).
         let irregular = node.first("irregular")?.text == "1"
+        let preservedMarkup = preservedMeasureMarkup(in: node)
 
         let measure = Measure(
             voices: voices,
@@ -104,8 +135,27 @@ extension Measure {
             sectionBreak: sectionBreak,
             actualLength: actualLength,
             irregular: irregular,
+            preservedMarkup: preservedMarkup,
         )
         return DecodeResult(measure: measure, systemElements: systemElements)
+    }
+
+    /// Preserve only `<LayoutBreak>` subtypes the model did not
+    /// interpret while keeping their order relative to every other
+    /// unconsumed measure child. `preservedMarkup(consuming:)` first
+    /// applies the shared never-preserved policy; this filter then
+    /// removes the three modeled break subtypes from that ordered
+    /// result.
+    private static func preservedMeasureMarkup(
+        in node: XMLTreeNode,
+    ) -> [PreservedXML] {
+        node.preservedMarkup(consuming: consumedMeasureChildren)
+            .filter { markup in
+                guard markup.name == "LayoutBreak" else { return true }
+                let subtype = markup.children
+                    .first(where: { $0.name == "subtype" })?.text
+                return !modeledLayoutBreakSubtypes.contains(subtype ?? "")
+            }
     }
 
     /// True when this measure carries MS2-style multi-voice content —
@@ -177,6 +227,7 @@ extension Measure {
             // omits `<label>` still targets jumps by that default.
             label: rawLabel.isEmpty ? kind.defaultLabel : rawLabel,
             text: text,
+            preservedMarkup: node.preservedMarkup(consuming: consumedMarkerChildren),
         )
     }
 
@@ -187,6 +238,7 @@ extension Measure {
             continueAt: node.first("continueAt")?.text ?? "",
             playRepeats: node.first("playRepeats")?.text == "1",
             text: node.first("text")?.text ?? "",
+            preservedMarkup: node.preservedMarkup(consuming: consumedJumpChildren),
         )
     }
 }

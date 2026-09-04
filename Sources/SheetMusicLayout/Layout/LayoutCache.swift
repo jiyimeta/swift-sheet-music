@@ -101,6 +101,9 @@ public final class LayoutCache: @unchecked Sendable {
         /// of the cache-hit predicate, so toggling visibility forces a
         /// miss and a fresh route.
         let invisibleElements: [LayoutElement]
+        /// Index of the generated trailing barline in `elements`, or
+        /// `nil` when the source measure contained an explicit barline.
+        let synthesizedEndBarLineIndex: Int?
         let newClef: NotatedClef
         let newKey: Int
     }

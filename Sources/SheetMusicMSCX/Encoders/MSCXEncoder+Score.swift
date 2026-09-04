@@ -41,6 +41,7 @@ extension Score {
             into: &scoreChildren,
             options: options,
         )
+        appendPreservedMarkup(preservedMarkup, to: &scoreChildren, options: options)
 
         let museScoreVersion: String
         // `.v2` is detection-only; MSCXEncoderOptions normalizes it to

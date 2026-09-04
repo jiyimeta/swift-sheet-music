@@ -191,7 +191,17 @@
             </voice>
             """#.utf8))
             let voice = try Voice.decode(node)
-            guard case let .chord(c) = voice.elements.first else {
+            // The `<Beam>` itself now precedes the chord in the stream
+            // as `.preserved` — it is read for `<visible>` AND kept so
+            // its unmodeled `<StemDirection>` survives a round trip
+            // (see `VoiceElement.preserved`). This test is about the
+            // flag on the chord, so find the chord rather than assuming
+            // it is first.
+            let chord = voice.elements.compactMap { element -> Chord? in
+                if case let .chord(c) = element { return c }
+                return nil
+            }.first
+            guard let c = chord else {
                 Issue.record("expected a chord")
                 return
             }

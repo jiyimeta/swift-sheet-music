@@ -3,6 +3,17 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Staff {
+    /// Every declaration-level `<Staff>` child this decoder reads.
+    /// Anything else becomes preserved markup — see `PreservedXML`.
+    private static let consumedStaffChildren: Set = [
+        "StaffType", "bracket", "defaultClef", "defaultConcertClef",
+        "defaultTransposingClef",
+    ]
+
+    /// Every `<StaffType>` child this decoder reads. Its other children
+    /// need their own bag because the decoder consumes the container.
+    private static let consumedStaffTypeChildren: Set = ["lines", "name"]
+
     /// Decodes the `<StaffType>` / `<defaultClef>` / `<bracket>`
     /// portion of an inside-`<Part><Staff>` element. Measures are
     /// added separately during pairing — see
@@ -84,6 +95,10 @@ extension Staff {
             defaultClefType: defaultClef,
             brackets: brackets,
             measures: [],
+            staffTypePreservedMarkup: staffTypeNode?.preservedMarkup(
+                consuming: consumedStaffTypeChildren,
+            ) ?? [],
+            preservedMarkup: node.preservedMarkup(consuming: consumedStaffChildren),
         ))
     }
 }
@@ -141,6 +156,7 @@ struct MSCXStaffPairing {
     var declared: [(mscxID: String?, staff: Staff)]
     /// MuseScore `<Part><show>` — false when `<show>0</show>` hid the part.
     var isVisibleInScore: Bool
+    var preservedMarkup: [PreservedXML]
 }
 
 /// Result of part assembly: the wired-up `[Part]` plus the
@@ -226,6 +242,7 @@ func assembleParts( // swiftlint:disable:this function_body_length
             instrument: dp.instrument,
             staves: assembled,
             isVisibleInScore: dp.isVisibleInScore,
+            preservedMarkup: dp.preservedMarkup,
         ))
     }
 

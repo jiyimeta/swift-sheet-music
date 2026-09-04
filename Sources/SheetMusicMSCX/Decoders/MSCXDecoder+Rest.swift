@@ -6,6 +6,14 @@ import SheetMusicXMLTools
 /// represented as empty `Chord` values, so this returns a `Chord`
 /// with `notes: []` and the parsed duration.
 enum MSCXRestDecoder {
+    /// Every direct `<Rest>` child read by this decoder or by the
+    /// MS2 voice demultiplexer. Rests share `Chord.preservedMarkup`.
+    /// `duration` on a measure rest is encoder-owned informational
+    /// data and is regenerated from the effective measure duration.
+    private static let consumedRestChildren: Set = [
+        "Spanner", "color", "dots", "duration", "durationType", "track", "visible",
+    ]
+
     static func decode(_ node: XMLTreeNode) throws -> Chord {
         guard let durationText = node.first("durationType")?.text else {
             throw SheetMusicError.malformedScore(
@@ -19,7 +27,11 @@ enum MSCXRestDecoder {
         let duration = try duration(
             forDurationType: durationText, node: node,
         )
-        var rest = Chord(duration: duration, notes: [])
+        var rest = Chord(
+            duration: duration,
+            notes: [],
+            preservedMarkup: node.preservedMarkup(consuming: consumedRestChildren),
+        )
         rest.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         // A slur may begin or end on a rest — MuseScore anchors them to any
         // `ChordRest`, and its writer treats `<Rest>` and `<Chord>` through

@@ -25,6 +25,13 @@ public struct Chord: Sendable, Equatable {
     /// Chord-level articulations (staccato / staccatissimo / tenuto and
     /// round-trip-preserved unknowns). C++: `Chord::_articulations`.
     public var articulations: [ChordArticulation]
+    /// Trills, turns, and mordents attached to this chord. MuseScore 4 writes
+    /// these as `<Ornament>`, a sibling of `<Articulation>` that it split off
+    /// to carry the auxiliary-note intervals; MuseScore 3 wrote the same
+    /// symbols as plain `<Articulation>` elements, and those still decode into
+    /// `articulations` as `.unknown`. C++: `Chord::_articulations` holds both,
+    /// discriminated by `EngravingItem::isOrnament()`.
+    public var ornaments: [ChordOrnament]
     /// Tremolo notation attached to this chord. For two-note tremolo
     /// (`.between`), this value is held by the *start* chord of the
     /// pair; the follower is identified by adjacency in the voice's
@@ -81,6 +88,8 @@ public struct Chord: Sendable, Equatable {
     /// The `<Beam>` element's other payloads (`<StemDirection>`, custom
     /// beam fragments) are not modelled.
     public var beamVisible: Bool
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
 
     public init(
         duration: NoteDuration,
@@ -90,12 +99,14 @@ public struct Chord: Sendable, Equatable {
         graceNotesBefore: [GraceChord] = [],
         graceNotesAfter: [GraceChord] = [],
         articulations: [ChordArticulation] = [],
+        ornaments: [ChordOrnament] = [],
         tremolo: Tremolo? = nil,
         chordLines: [ChordLine] = [],
         spanners: [Spanner] = [],
         visible: Bool = true,
         stemVisible: Bool = true,
         beamVisible: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.duration = duration
         self.notes = notes
@@ -104,11 +115,13 @@ public struct Chord: Sendable, Equatable {
         self.graceNotesBefore = graceNotesBefore
         self.graceNotesAfter = graceNotesAfter
         self.articulations = articulations
+        self.ornaments = ornaments
         self.tremolo = tremolo
         self.chordLines = chordLines
         self.spanners = spanners
         self.stemVisible = stemVisible
         self.beamVisible = beamVisible
+        self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }
 }

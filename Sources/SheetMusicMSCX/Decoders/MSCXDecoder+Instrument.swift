@@ -3,6 +3,34 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Instrument {
+    /// Every `<Instrument>` child this decoder reads. Anything else
+    /// becomes preserved markup — see `PreservedXML`.
+    ///
+    /// Two entries look preservable and are not.
+    ///
+    /// `<instrumentId>` genuinely loses information — MuseScore writes
+    /// the `id` ATTRIBUTE as the instrument-template id and the ELEMENT
+    /// as the MusicXML Sound ID, two different values, and this decoder
+    /// collapses them by reading the element only as a fallback. But it
+    /// cannot be recovered through preserved markup, because the
+    /// encoder SYNTHESIZES `<instrumentId>drum.group.set</instrumentId>`
+    /// for a percussion kit: a programmatically built drumset score
+    /// would encode, decode back with that synthesized tag captured as
+    /// preserved markup, and no longer compare equal to itself.
+    /// Recovering the Sound ID needs `Instrument` to model it.
+    ///
+    /// `<InstrumentLabel>` is MuseScore 5's wrapper for `<longName>` /
+    /// `<shortName>`, which are read out of it above and re-emitted in
+    /// MuseScore 4's direct-child form. Preserving the wrapper too
+    /// would write the same names twice and leave the copy stale the
+    /// moment a host renames the instrument.
+    private static let consumedInstrumentChildren: Set = [
+        "Articulation", "Channel", "Drum", "InstrumentLabel", "instrumentId",
+        "longName", "maxPitchA", "maxPitchP", "minPitchA", "minPitchP",
+        "shortName", "trackName", "transposeChromatic", "transposeDiatonic",
+        "useDrumset",
+    ]
+
     static func decode(_ node: XMLTreeNode) throws -> Instrument {
         // Both `<Instrument id="...">` and `<Instrument><instrumentId>...` forms exist;
         // some scores omit both — fall back to "" rather than failing.
@@ -20,6 +48,7 @@ extension Instrument {
         let label = node.first("InstrumentLabel")
         let longName = label?.first("longName")?.text ?? node.first("longName")?.text
         let shortName = label?.first("shortName")?.text ?? node.first("shortName")?.text
+        let preservedMarkup = node.preservedMarkup(consuming: consumedInstrumentChildren)
         // <useDrumset>1</useDrumset> marks the instrument as a percussion kit.
         // The renderer routes drumset parts to GM channel 10 (0-indexed: 9).
         let useDrumset = (node.first("useDrumset")?.text).flatMap { Int($0) } == 1
@@ -61,6 +90,7 @@ extension Instrument {
             // instrument; both default to 0, which `Instrument` reads as non-transposing.
             transposeDiatonic: node.first("transposeDiatonic").flatMap { Int($0.text) } ?? 0,
             transposeChromatic: node.first("transposeChromatic").flatMap { Int($0.text) } ?? 0,
+            preservedMarkup: preservedMarkup,
         )
     }
 }

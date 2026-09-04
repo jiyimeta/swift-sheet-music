@@ -19,9 +19,18 @@ public struct KeySignature: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
-    public init(concertKey: Int, visible: Bool = true, showCourtesy: Bool = true) {
+    /// Source XML children this model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
+
+    public init(
+        concertKey: Int,
+        visible: Bool = true,
+        showCourtesy: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
+    ) {
         self.concertKey = concertKey
         self.showCourtesy = showCourtesy
+        self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }
 }

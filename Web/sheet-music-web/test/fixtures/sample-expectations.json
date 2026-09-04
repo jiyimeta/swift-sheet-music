@@ -1,10 +1,10 @@
 {
   "composer" : "swift-sheet-music",
   "fingerprint" : "-7791214266970701374",
-  "firstPageCommandCount" : 53,
+  "firstPageCommandCount" : 56,
   "firstPageWidthMM" : 210,
-  "flatByteCount" : 3456,
-  "flatDigest" : 1240948737,
+  "flatByteCount" : 3648,
+  "flatDigest" : 680719340,
   "openingQuarterBpm" : 120,
   "pageCount" : 1,
   "partCount" : 1,

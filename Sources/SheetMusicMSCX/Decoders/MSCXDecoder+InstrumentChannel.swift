@@ -3,6 +3,12 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension InstrumentChannel {
+    /// Every `<Channel>` child this decoder reads. Anything else
+    /// becomes preserved markup — see `PreservedXML`.
+    private static let consumedChannelChildren: Set = [
+        "controller", "midiChannel", "midiPort", "program",
+    ]
+
     static func decode(_ node: XMLTreeNode) throws -> InstrumentChannel {
         var channel = InstrumentChannel()
         channel.name = node.attributes["name"]
@@ -41,6 +47,36 @@ extension InstrumentChannel {
             default: break
             }
         }
+        let automaticallyPreserved = node.preservedMarkup(consuming: consumedChannelChildren)
+        channel.preservedMarkup = node.children.compactMap { child -> PreservedXML? in
+            let preserved = PreservedXML(child)
+            if child.name == "controller", shouldPreserveController(child) {
+                return preserved
+            }
+            return automaticallyPreserved.contains(preserved) ? preserved : nil
+        }
         return channel
+    }
+
+    /// A controller is preserved when this decoder cannot represent it,
+    /// or when the encoder would elide its modeled default and thereby
+    /// delete a source child. Non-default controllers represented by the
+    /// channel model are emitted by the encoder and remain consumed.
+    private static func shouldPreserveController(_ node: XMLTreeNode) -> Bool {
+        guard let ctrlText = node.attributes["ctrl"],
+              let ctrl = Int(ctrlText),
+              let valueText = node.attributes["value"],
+              let value = Int(valueText)
+        else { return true }
+        let defaults = InstrumentChannel()
+        switch ctrl {
+        case 0: return true
+        case 7: return value == defaults.volume
+        case 10: return value == defaults.pan
+        case 32: return value == defaults.bank
+        case 91: return value == defaults.reverb
+        case 93: return value == defaults.chorus
+        default: return true
+        }
     }
 }

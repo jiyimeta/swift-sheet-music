@@ -19,14 +19,19 @@ public struct GraceChord: Sendable, Equatable {
     public var graceType: GraceType
     public var duration: NoteDuration
     public var notes: ChordNotes
+    /// Source XML children from the grace `<Chord>` that the reduced
+    /// `GraceChord` model does not represent.
+    public var preservedMarkup: [PreservedXML] = []
 
     public init(
         graceType: GraceType,
         duration: NoteDuration,
         notes: ChordNotes,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.graceType = graceType
         self.duration = duration
         self.notes = notes
+        self.preservedMarkup = preservedMarkup
     }
 }

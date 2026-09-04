@@ -78,6 +78,65 @@ extension FNV1a {
         }
     }
 
+    /// Chord ornaments (`Chord.ornaments`), BY OCCUPANTS for the same reason
+    /// `combineOccupied(_ spanners:tag:)` is: a chord that carries none must
+    /// feed no bytes, or every committed replay golden moves.
+    mutating func combineOccupied(_ ornaments: [ChordOrnament], tag: Int) {
+        guard !ornaments.isEmpty else { return }
+        combine(tag)
+        combine(ornaments.count)
+        for ornament in ornaments {
+            combine(ornament)
+        }
+    }
+
+    /// Every field an edit can change. `preservedMarkup` is deliberately out:
+    /// it is source fidelity, not model state, and no edit command reaches it.
+    mutating func combine(_ ornament: ChordOrnament) {
+        combine(ornament.kind.mscxToken)
+        combine(ornament.intervalAbove?.mscxToken)
+        combine(ornament.intervalBelow?.mscxToken)
+        combine(ornament.showAccidental?.rawValue ?? -1)
+        combine(ornament.showCueNote?.rawValue)
+        combine(ornament.ornamentStyle?.rawValue)
+        combine(ornament.accidentalAbove?.rawValue)
+        combine(ornament.accidentalBelow?.rawValue)
+        combineTristate(ornament.startOnUpperNote)
+        combineTristate(ornament.plays)
+        combineOccupied(ornament.elementProperties, visibleTag: 34, colorTag: 35)
+    }
+
+    /// `nil` / `false` / `true` as `0` / `1` / `2`. A plain `combine(_ flag:)`
+    /// would collapse "absent" onto "false", and these two `Bool?`s mean
+    /// different things: absent is "MuseScore wrote no tag", false is "the
+    /// author turned it off".
+    private mutating func combineTristate(_ flag: Bool?) {
+        guard let flag else {
+            combine(0)
+            return
+        }
+        combine(flag ? 2 : 1)
+    }
+
+    /// Note fingerings, BY OCCUPANTS — same rule, same reason, as
+    /// `combineOccupied(_ ornaments:tag:)`.
+    mutating func combineOccupied(_ fingerings: [Fingering], tag: Int) {
+        guard !fingerings.isEmpty else { return }
+        combine(tag)
+        combine(fingerings.count)
+        for fingering in fingerings {
+            combine(fingering)
+        }
+    }
+
+    /// `preservedMarkup` stays out, as it does for `ChordOrnament`: it is
+    /// source fidelity, not model state.
+    mutating func combine(_ fingering: Fingering) {
+        combine(fingering.text)
+        combine(fingering.role.mscxToken)
+        combineOccupied(fingering.elementProperties, visibleTag: 37, colorTag: 38)
+    }
+
     mutating func combine(_ clef: Clef) {
         combine(clef.concertClefType)
         combine(clef.transposingClefType)

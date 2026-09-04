@@ -14,6 +14,9 @@ public struct Part: Sendable, Equatable {
     /// still present in the model — hosts hide it at display time and can
     /// reveal it). Absent `<show>` or `<show>1</show>` decodes as `true`.
     public var isVisibleInScore: Bool
+    /// Source markup under this element that the model does not
+    /// represent, kept so that read → write does not delete it.
+    public var preservedMarkup: [PreservedXML] = []
 
     public init(
         id: String,
@@ -21,11 +24,13 @@ public struct Part: Sendable, Equatable {
         instrument: Instrument,
         staves: [Staff] = [],
         isVisibleInScore: Bool = true,
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.id = id
         self.trackName = trackName
         self.instrument = instrument
         self.staves = staves
         self.isVisibleInScore = isVisibleInScore
+        self.preservedMarkup = preservedMarkup
     }
 }

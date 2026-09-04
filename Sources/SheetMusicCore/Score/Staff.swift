@@ -35,6 +35,12 @@ public struct Staff: Sendable, Equatable {
     /// themselves before handing the `Score` to the layout engine.
     public var brackets: [BracketItem]
     public var measures: [Measure]
+    /// Source markup inside this staff declaration's `<StaffType>`
+    /// that the model does not represent.
+    public var staffTypePreservedMarkup: [PreservedXML] = []
+    /// Source markup under the staff declaration that the model does
+    /// not represent, kept so that read → write does not delete it.
+    public var preservedMarkup: [PreservedXML] = []
 
     public init(
         staffType: String = "stdNormal",
@@ -43,6 +49,8 @@ public struct Staff: Sendable, Equatable {
         defaultClefType: String? = nil,
         brackets: [BracketItem] = [],
         measures: [Measure] = [],
+        staffTypePreservedMarkup: [PreservedXML] = [],
+        preservedMarkup: [PreservedXML] = [],
     ) {
         self.staffType = staffType
         self.group = group
@@ -50,5 +58,7 @@ public struct Staff: Sendable, Equatable {
         self.defaultClefType = defaultClefType
         self.brackets = brackets
         self.measures = measures
+        self.staffTypePreservedMarkup = staffTypePreservedMarkup
+        self.preservedMarkup = preservedMarkup
     }
 }

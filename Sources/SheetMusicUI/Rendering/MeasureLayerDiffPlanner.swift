@@ -93,15 +93,18 @@ enum MeasureLayerDiffPlanner {
     /// Also compares `BarLineGeometry.staffLineEndX(for:)`: `drawStaves`
     /// (via `StaffRenderer.endX(for:)`) clips the staff lines to
     /// that X, which is derived from the LAST measure's `origin.x` and
-    /// its trailing barline's subtype (`LayoutSystem.trailingBarLine`)
-    /// — a system-level draw input that lives outside every measure
-    /// container, same trap category as `invisibleElements`. Reachable
-    /// in `wrapToViewWidth` mode: `size` stays equal across an edit that
-    /// only changes the last measure's barline subtype (e.g. it becomes
-    /// the new last measure and gains an `end` barline), which would
-    /// otherwise pass this predicate, diff only that measure, and leave
-    /// the staff lines up to ~0.5 sp short of the new barline glyph
-    /// (Task 8 review finding 3).
+    /// `width`, its trailing barline's subtype
+    /// (`LayoutSystem.trailingBarLine`), and its key / time signature
+    /// element origins. An edit that only makes the last measure start
+    /// or stop announcing a courtesy signature is covered by the same
+    /// comparison — a system-level draw input that lives outside every
+    /// measure container, same trap category as `invisibleElements`.
+    /// Reachable in `wrapToViewWidth` mode: `size` stays equal across
+    /// an edit that only changes the last measure's barline subtype
+    /// (e.g. it becomes the new last measure and gains an `end`
+    /// barline), which would otherwise pass this predicate, diff only
+    /// that measure, and leave the staff lines up to ~0.5 sp short of
+    /// the new barline glyph (Task 8 review finding 3).
     static func systemFrameIsUnchanged(
         _ a: LayoutSystem, _ b: LayoutSystem,
     ) -> Bool {

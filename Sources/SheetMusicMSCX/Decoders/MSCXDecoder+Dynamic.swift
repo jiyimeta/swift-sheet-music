@@ -3,6 +3,11 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Dynamic {
+    private static let consumedDynamicChildren: Set = [
+        "bold", "color", "face", "framePadding", "frameType", "italic", "size",
+        "strike", "subtype", "underline", "velocity", "visible",
+    ]
+
     static func decode(_ node: XMLTreeNode) throws -> Dynamic {
         let subtype = node.first("subtype")?.text ?? "mf"
         let velocity: Int
@@ -15,6 +20,7 @@ extension Dynamic {
             subtype: subtype,
             velocity: velocity,
             properties: TextProperties.decode(node),
+            preservedMarkup: node.preservedMarkup(consuming: consumedDynamicChildren),
         )
         dynamic.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return dynamic

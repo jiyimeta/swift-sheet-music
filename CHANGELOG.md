@@ -14,7 +14,86 @@ and this project adheres to
   window resize scrolls or zooms instead of re-wrapping every system.
   Default `nil` keeps existing behavior, which follows the container width.
 
+- **Chord ornaments are modeled.** MuseScore 4 split `Ornament` out of
+  `Articulation` so that a trill, turn, or mordent could carry the state that
+  makes it sound — which scale degree the auxiliary note takes above and below
+  the written note, whether that note draws an accidental, and whether the
+  realization starts on the upper note. This library modeled none of it, and
+  read `<Ornament>` as an unrecognized element.
+
+  `Chord.ornaments` now holds `ChordOrnament` values: the 23 symbols
+  MuseScore's master ornaments palette offers plus an `.unknown` escape for
+  anything outside it, both intervals, the accidental pair, and
+  `ornamentShowAccidental` / `ornamentShowCueNote` / `startOnUpperNote` /
+  `ornamentStyle` / `play`. A `.mscx` round trip is typed rather than opaque,
+  and a v3 encode degrades each ornament to the `<Articulation>` spelling
+  MuseScore 3 understands.
+
+  Three things stay outside the model on purpose. The cue-note `<Chord>` is a
+  value MuseScore recomputes from the parent chord on every layout, so holding
+  it here would go stale the moment that note is edited; `<direction>` and
+  `<placement>` are base `Articulation` properties that `ChordArticulation`
+  does not model either. Both ride through a round trip as preserved markup.
+  MuseScore 3's spelling of an ornament — `<Articulation>` with an `ornament…`
+  SymId — keeps decoding as an articulation, because converting it would change
+  the element shape a round trip produces.
+
+  **Playback and engraving are unchanged.** The MIDI renderer does not yet
+  realize an ornament into notes and the engraver does not place its glyph; the
+  intervals are modeled so that both have somewhere to read them from.
+
+- **Note fingerings are modeled.** `<Fingering>` was an unrecognized `<Note>`
+  child, so a finger number, a guitar-hand fingering, or a string number
+  reached the model only as an opaque preserved subtree — in scores where it is
+  some of the most common notation on the page.
+
+  `Note.fingerings` holds `Fingering` values, several per note where the
+  notation calls for it. Upstream the four variants are *text styles*, but on
+  this element the style is what says whether "2" means a finger, a hand, or a
+  string, so it is modeled as the element's role; a style outside the family is
+  kept verbatim rather than collapsing to the default.
+
+  `<placement>`, `<offset>`, and font overrides stay in preserved markup, and
+  inline markup inside `<text>` flattens to plain text — the same limitation
+  `StaffText` has. Engraving does not place a fingering glyph yet.
+
 ### Changed
+
+- **Reading a `.mscx` and writing it back no longer deletes what the model
+  does not cover.** The decoder skipped every element it did not recognize and
+  the encoder wrote only what the model held, so opening a MuseScore score
+  here and saving it erased fret diagrams, figured bass, excerpts, `<Order>`,
+  `<Synthesizer>`, `<StringData>`, chord stem directions, note playback
+  `<Events>`, and most of `<Style>`. It did so silently, and no test could see
+  it: the 2-pass idempotency gate compares pass 1 with pass 2, and what was
+  dropped on read is already absent from pass 1.
+
+  Each MSCX decoder now declares the child tags it consumes and hands the rest
+  to the model as `PreservedXML`, which the encoder writes back after its own
+  output. A `<voice>` child keeps its position in the stream as the new
+  `VoiceElement.preserved` case, because a `<Symbol>` or `<FiguredBass>`
+  between two chords means "attached at that tick". Capturing only the
+  *unconsumed* children is what makes this safe under editing: nothing the
+  model represents is ever in a bag, so a preserved copy cannot resurrect
+  content an edit removed.
+
+  Measured over the committed fixtures, the `parent/child` element pairs lost
+  on a round trip fall from 248 to 82, and the remainder are allowlisted with
+  a stated reason in the new preservation gate.
+
+  **Preserved markup is source fidelity, not a semantic guarantee.** An edit
+  can leave a preserved `<Excerpt>` describing the part layout of the original
+  score. Hosts that would rather not carry it can encode with
+  `MSCXEncoderOptions.emitPreservedMarkup` set to `false`, or call
+  `Score.strippingPreservedMarkup()`.
+
+  Two fixes fell out of the work. `<Arpeggio>` was decoded into
+  `Chord.arpeggio` and then never written, so arpeggios and their
+  `<timeStretch>` / `<userLen1>` vanished on every save; the encoder now emits
+  them. And a `.mscz` whose style lives in `score_style.mss` keeps that file's
+  unmodeled style keys when its inline `<Style>` is written back.
+
+  See `docs/development/mscx-preserved-markup.md`.
 
 - **The metrics table measures the text face too, and is served under a new
   name.** Through SMFT v3 the table carried Bravura alone, so on Android and in

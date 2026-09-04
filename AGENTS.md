@@ -32,6 +32,9 @@ Muse Group, or Apple's `MusicKit` framework.
   verified build record.
 - `docs/development/mscx-idempotency.md` — the MSCX 2-pass encode gate, what it
   detects that no other test can, and its opt-in corpus sweep.
+- `docs/development/mscx-preserved-markup.md` — how unmodeled MSCX survives a
+  read/write round trip, the consumed-set rule every decoder follows, and the
+  preservation gate's allowlist.
 - `docs/musescore-engraving-reference.md` — recurring findings from the
   upstream MuseScore implementation.
 

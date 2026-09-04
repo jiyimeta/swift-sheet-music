@@ -35,6 +35,7 @@ extension Part {
             children.append(XMLTreeNode(name: "trackName", text: trackName))
         }
         children.append(instrument.encode(options: options))
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(
             name: "Part",
             attributes: ["id": partID],

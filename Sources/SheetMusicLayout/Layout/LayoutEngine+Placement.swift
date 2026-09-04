@@ -21,6 +21,17 @@ struct MelismaContinuation: Equatable {
     let continuesPastMeasure: Bool
 }
 
+/// Cacheable output of one staff's measure-local placement pass.
+struct MeasurePlacement {
+    let elements: [LayoutElement]
+    let invisibleElements: [LayoutElement]
+    let clef: NotatedClef
+    let key: Int
+    /// Index in `elements` of the generated trailing barline. `nil`
+    /// when the source measure contained an explicit barline.
+    let synthesizedEndBarLineIndex: Int?
+}
+
 /// Identifies one lyric syllable across the score — used as the key
 /// for pre-computed per-lyric data (e.g. effective melisma ticks
 /// after following ties forward).
@@ -34,7 +45,8 @@ struct MelismaLyricKey: Hashable {
 
 extension LayoutEngine {
     /// Place elements of a measure in local measure coordinates.
-    /// Returns the placed elements + the updated clef context.
+    /// Returns the placed elements, updated clef / key context, and the
+    /// synthesized trailing barline's index when one was needed.
     ///
     /// Layout strategy: non-timed leading elements (clef / key sig / time
     /// sig) are stacked left-to-right at fixed widths. Timed elements
@@ -64,12 +76,7 @@ extension LayoutEngine {
         incomingMelismas: [MelismaContinuation] = [],
         effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
         systemElements: [PositionedSystemElement] = [],
-    ) -> (
-        elements: [LayoutElement],
-        invisibleElements: [LayoutElement],
-        clef: NotatedClef,
-        key: Int,
-    ) {
+    ) -> MeasurePlacement {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         // Barlines are the one thing here measured against the staff's
         // OWN lines rather than the five-line reference frame
@@ -1228,6 +1235,9 @@ extension LayoutEngine {
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
                     break
+                case .preserved:
+                    // Source-only MSCX markup has no layout behavior.
+                    break
                 case let .locationShift(delta):
                     // Voice-level cursor shift. Adds the location's
                     // fractional delta to `tickCursor` so the next
@@ -1906,7 +1916,9 @@ extension LayoutEngine {
                 false
             }
         }
+        let synthesizedEndBarLineIndex: Int?
         if !hasExplicitBar {
+            synthesizedEndBarLineIndex = out.endIndex
             out.append(.barLine(
                 subtype: endsRepeat
                     ? "end-repeat"
@@ -1917,6 +1929,8 @@ extension LayoutEngine {
                 ),
                 halfHeight: barLineHalfHeight,
             ))
+        } else {
+            synthesizedEndBarLineIndex = nil
         }
         // Melisma rules whose anchor syllable is in an earlier measure. Gated
         // on the same host toggle as the syllables themselves: a rule trailing
@@ -2030,7 +2044,13 @@ extension LayoutEngine {
                 }
             }
         }
-        return (out, invisibleOut, currentClef, currentKey)
+        return MeasurePlacement(
+            elements: out,
+            invisibleElements: invisibleOut,
+            clef: currentClef,
+            key: currentKey,
+            synthesizedEndBarLineIndex: synthesizedEndBarLineIndex,
+        )
     }
 
     /// Decide which notes in a chord need to render on the OPPOSITE

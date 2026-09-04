@@ -174,6 +174,7 @@ enum ScoreSemanticComparison {
         case let .harmony(h): return "harmony(\"\(h.name)\")"
         case let .locationShift(delta):
             return "locationShift(\(delta.numerator)/\(delta.denominator))"
+        case let .preserved(markup): return "preserved(<\(markup.name)>)"
         }
     }
 
@@ -193,6 +194,13 @@ enum ScoreSemanticComparison {
         // `source` is loader-set; MusicXML and MSCX inputs naturally
         // disagree. Clear it so the comparison reflects the notation.
         s.source = .unknown
+        // Preserved markup is verbatim MSCX the model does not
+        // represent (`PreservedXML`). The MusicXML side has no
+        // counterpart and never will, so the MSCX side would always
+        // carry `<Order>`, `<Synthesizer>`, and the rest that the
+        // other side cannot. Strip it for the same reason `style` is
+        // reset: it is not the notation.
+        s = s.strippingPreservedMarkup()
         if options.ignoreEmptyMetaTags {
             s.metaTags = s.metaTags.filter { !$0.value.isEmpty }
         }

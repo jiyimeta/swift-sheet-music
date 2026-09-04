@@ -22,6 +22,15 @@ public struct MSCXEncoderOptions: Sendable {
         }
     }
 
+    /// Whether to write source XML that the model does not represent.
+    ///
+    /// Preserved markup provides source fidelity, not a semantic
+    /// guarantee: editing a score can leave an unmodeled subtree such
+    /// as `<Excerpt>` stale. Keeping it is normally safer than deleting
+    /// it, but a host preparing an edited score for distribution can
+    /// set this to `false` to omit all preserved markup.
+    public var emitPreservedMarkup = true
+
     /// Line-of-fifths shift from the concert notation to the written one for the part currently
     /// being encoded — `Instrument.writtenFifthsOffset`. `0` for a non-transposing part, which is
     /// what every element encoder outside the per-part measure loop sees; the Score encoder makes a
