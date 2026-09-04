@@ -102,3 +102,130 @@ struct ChordOrnamentModelTests {
         #expect(hasher.value == before)
     }
 }
+
+/// `<Chord>` fragments, not whole scores: `Chord.decode` is the unit under
+/// test, and the fixture-level round trip is the preservation gate's job.
+private func parseChord(_ inner: String) throws -> Chord {
+    let root = try XMLTreeParser.parse(Data("<Chord>\(inner)</Chord>".utf8))
+    return try Chord.decode(root)
+}
+
+@Suite("ChordOrnament decoding")
+struct ChordOrnamentDecodeTests {
+    @Test func decodesBareTrill() throws {
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Ornament><subtype>ornamentTrill</subtype></Ornament>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        #expect(chord.ornaments == [ChordOrnament(kind: .trill)])
+        #expect(chord.articulations.isEmpty)
+    }
+
+    @Test func decodesIntervalsAccidentalsAndFlags() throws {
+        let chord = try parseChord("""
+        <durationType>half</durationType>
+        <Ornament>
+          <Accidental><subtype>accidentalSharp</subtype><placement>above</placement></Accidental>
+          <Accidental><subtype>accidentalFlat</subtype></Accidental>
+          <intervalAbove>second,major</intervalAbove>
+          <intervalBelow>third,minor</intervalBelow>
+          <ornamentShowAccidental>2</ornamentShowAccidental>
+          <ornamentShowCueNote>on</ornamentShowCueNote>
+          <startOnUpperNote>1</startOnUpperNote>
+          <subtype>ornamentTurn</subtype>
+          <play>0</play>
+          <ornamentStyle>baroque</ornamentStyle>
+        </Ornament>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        let ornament = try #require(chord.ornaments.first)
+        #expect(ornament.kind == .turn)
+        #expect(ornament.intervalAbove == .init(step: .second, quality: .major))
+        #expect(ornament.intervalBelow == .init(step: .third, quality: .minor))
+        #expect(ornament.showAccidental == .always)
+        #expect(ornament.showCueNote == .on)
+        #expect(ornament.startOnUpperNote == true)
+        #expect(ornament.ornamentStyle == .baroque)
+        #expect(ornament.plays == false)
+        #expect(ornament.accidentalAbove == .sharp)
+        #expect(ornament.accidentalBelow == .flat)
+    }
+
+    @Test func absentTagsStayNilRatherThanTakingADefault() throws {
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Ornament><subtype>ornamentMordent</subtype></Ornament>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        let ornament = try #require(chord.ornaments.first)
+        #expect(ornament.intervalAbove == nil)
+        #expect(ornament.intervalBelow == nil)
+        #expect(ornament.showAccidental == nil)
+        #expect(ornament.showCueNote == nil)
+        #expect(ornament.startOnUpperNote == nil)
+        #expect(ornament.ornamentStyle == nil)
+        #expect(ornament.plays == nil)
+    }
+
+    @Test func decodesSeveralOrnamentsInDocumentOrder() throws {
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Ornament><subtype>ornamentTurn</subtype></Ornament>
+        <Ornament><subtype>ornamentMordent</subtype></Ornament>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        #expect(chord.ornaments.map(\.kind) == [.turn, .mordent])
+    }
+
+    @Test func keepsUnknownSubtypeAndUnmodeledChildren() throws {
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Ornament>
+          <Chord><durationType>eighth</durationType>
+                 <Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
+          <subtype>ornamentNotAThing</subtype>
+          <placement>below</placement>
+        </Ornament>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        let ornament = try #require(chord.ornaments.first)
+        #expect(ornament.kind == .unknown(subtype: "ornamentNotAThing"))
+        #expect(ornament.preservedMarkup.map(\.name) == ["Chord", "placement"])
+    }
+
+    @Test func ornamentIsNotAlsoPreservedOnTheChord() throws {
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Ornament><subtype>ornamentTrill</subtype></Ornament>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        #expect(!chord.preservedMarkup.map(\.name).contains("Ornament"))
+    }
+
+    @Test func museScore3OrnamentArticulationsAreStillArticulations() throws {
+        // MuseScore 3 wrote ornaments as <Articulation> with an ornament SymId.
+        // Converting them here would change the element shape a round trip
+        // produces; compat migration is a separate concern from parity.
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Articulation><subtype>ornamentTrill</subtype></Articulation>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        #expect(chord.ornaments.isEmpty)
+        #expect(chord.articulations == [
+            ChordArticulation(kind: .unknown(subtype: "ornamentTrill")),
+        ])
+    }
+
+    @Test func hiddenOrnamentKeepsItsVisibility() throws {
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Ornament><subtype>ornamentTrill</subtype><visible>0</visible></Ornament>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        let ornament = try #require(chord.ornaments.first)
+        #expect(ornament.elementProperties.visible == false)
+        #expect(ornament.preservedMarkup.isEmpty)
+    }
+}

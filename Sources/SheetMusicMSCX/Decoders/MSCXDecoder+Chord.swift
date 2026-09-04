@@ -8,7 +8,7 @@ extension Chord {
     /// is called. Anything else becomes preserved markup.
     private static let consumedChordChildren: Set = [
         "Arpeggio", "Articulation", "ChordLine", "Lyrics",
-        "Note", "NoteParenGroup", "Spanner", "Stem", "Tremolo",
+        "Note", "NoteParenGroup", "Ornament", "Spanner", "Stem", "Tremolo",
         "TremoloSingleChord", "TremoloTwoChord", "acciaccatura",
         "appoggiatura", "color", "dots", "durationType", "grace16",
         "grace16after", "grace32", "grace32after", "grace4", "grace8after",
@@ -66,6 +66,7 @@ extension Chord {
             duration: duration, notes: ChordNotes(notes),
             arpeggio: arpeggio, lyrics: decodeLyrics(node),
             articulations: articulations,
+            ornaments: ChordOrnament.decodeAll(inChord: node),
             tremolo: tremolo,
             chordLines: ChordLine.decodeAll(inChord: node),
             stemVisible: stemVisible,
