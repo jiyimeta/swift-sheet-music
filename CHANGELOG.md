@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-09-04
+
 ### Added
 
 - `ScoreViewOptions.fixedLayoutWidth` pins the wrap width of vertical-scroll
