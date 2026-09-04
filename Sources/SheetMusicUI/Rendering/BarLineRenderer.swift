@@ -17,6 +17,9 @@ enum BarLineRenderer {
     ) {
         let top = CGPoint(x: origin.x, y: origin.y - halfHeight)
         let bot = CGPoint(x: origin.x, y: origin.y + halfHeight)
+        let sp = metrics.sp
+        let thin = sp * BarLineGeometry.thinThicknessSp
+        let thick = sp * BarLineGeometry.thickThicknessSp
         func line(dx: CGFloat, width: CGFloat) {
             var p = Path()
             p.move(to: CGPoint(x: top.x + dx, y: top.y))
@@ -25,31 +28,31 @@ enum BarLineRenderer {
         }
         switch subtype {
         case "double":
-            line(dx: -metrics.sp * 0.3, width: metrics.sp * 0.15)
-            line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.15)
+            line(dx: -sp * BarLineGeometry.doubleStrokeDxSp, width: thin)
+            line(dx: sp * BarLineGeometry.doubleStrokeDxSp, width: thin)
         case "end", "final":
-            line(dx: 0, width: metrics.sp * 0.15)
-            line(dx: +metrics.sp * 0.4, width: metrics.sp * 0.4)
+            line(dx: 0, width: thin)
+            line(dx: sp * BarLineGeometry.endThickStrokeDxSp, width: thick)
         case "start-repeat":
-            line(dx: 0, width: metrics.sp * 0.4)
-            line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.15)
+            line(dx: 0, width: thick)
+            line(dx: sp * BarLineGeometry.repeatSecondStrokeDxSp, width: thin)
             drawRepeatDots(
                 context: &context,
                 origin: origin,
-                xOffset: metrics.sp * 0.6,
+                xOffset: sp * BarLineGeometry.repeatDotDxSp,
                 metrics: metrics,
             )
         case "end-repeat":
             drawRepeatDots(
                 context: &context,
                 origin: origin,
-                xOffset: -metrics.sp * 0.6,
+                xOffset: -sp * BarLineGeometry.repeatDotDxSp,
                 metrics: metrics,
             )
-            line(dx: 0, width: metrics.sp * 0.15)
-            line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.4)
+            line(dx: 0, width: thin)
+            line(dx: sp * BarLineGeometry.repeatSecondStrokeDxSp, width: thick)
         default:
-            line(dx: 0, width: metrics.sp * 0.15)
+            line(dx: 0, width: thin)
         }
     }
 
@@ -67,7 +70,7 @@ enum BarLineRenderer {
         xOffset: CGFloat,
         metrics: StaffMetrics,
     ) {
-        let dotSize: CGFloat = metrics.sp * 0.3
+        let dotSize = metrics.sp * BarLineGeometry.repeatDotDiameterSp
         context.fill(
             Path(ellipseIn: CGRect(
                 x: origin.x + xOffset - dotSize / 2,

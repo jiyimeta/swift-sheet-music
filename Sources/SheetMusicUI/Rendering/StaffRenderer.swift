@@ -5,10 +5,10 @@ import SwiftUI
 
 @available(macOS 15.0, *)
 enum StaffRenderer {
-    /// Right edge (in system-local coords) for the staff lines.
-    /// Forwards to the shared `BarLineGeometry.staffLineEndX` so the
-    /// Apple renderer and the Android bridge agree on where the staff
-    /// terminates.
+    /// Right edge (in system-local coords) for the staff lines: the
+    /// terminal barline at a plain end, or the measure edge after a
+    /// trailing courtesy announcement. Forwards to the shared geometry
+    /// so the Apple renderer and Android bridge agree.
     static func endX(for system: LayoutSystem) -> CGFloat {
         BarLineGeometry.staffLineEndX(for: system)
     }

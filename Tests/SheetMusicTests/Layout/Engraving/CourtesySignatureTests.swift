@@ -443,4 +443,179 @@ import Testing
             #expect(courtesy.time?.numerator == 3)
         }
     }
+
+    // MARK: - Staff-line extent
+
+    /// The staff lines' right edge at an announcing system boundary. A
+    /// separate extension so the suite's body stays inside the repository's
+    /// `type_body_length` budget; Swift Testing collects `@Test` functions
+    /// from extensions just as it does from the type body.
+    extension CourtesySignatureLayoutTests {
+        @Test("a courtesy key uses a double synthesized end barline")
+        func courtesyKeyUsesDoubleEndBarLine() throws {
+            let doc = layout(Self.score())
+            let sys = try system(doc, containing: 1)
+            let m1 = try measure(doc, 1)
+            let barX = barLineX(m1)
+            #expect(sys.trailingBarLine?.subtype == "double")
+            #expect(m1.elements.contains { element in
+                guard case let .barLine(subtype, origin, _) = element
+                else { return false }
+                return origin.x == barX && subtype == "double"
+            })
+        }
+
+        @Test("a time-only courtesy keeps a single end barline")
+        func timeOnlyCourtesyKeepsSingleEndBarLine() throws {
+            let doc = layout(
+                Self.score(
+                    firstKey: 0,
+                    secondKey: 0,
+                    timeChange: (3, 4),
+                ),
+            )
+            let sys = try system(doc, containing: 1)
+            let m1 = try measure(doc, 1)
+            let barX = barLineX(m1)
+            let trailingKeys = keySignatures(m1).filter {
+                $0.origin.x > barX
+            }
+            let trailingTimes = timeSignatures(m1).filter {
+                $0.origin.x > barX
+            }
+            #expect(trailingKeys.isEmpty)
+            #expect(trailingTimes.count == 1)
+            #expect(sys.trailingBarLine?.subtype == nil)
+        }
+
+        @Test("a mid-system key change keeps a single preceding barline")
+        func midSystemKeyChangeKeepsSinglePrecedingBarLine() throws {
+            let doc = layout(
+                Self.score(breakAfterM1: false), width: 2400,
+            )
+            #expect(doc.systems.count == 1)
+            let m1 = try measure(doc, 1)
+            let barX = barLineX(m1)
+            var foundRightmostBar = false
+            var rightmostSubtype: String?
+            for element in m1.elements {
+                guard case let .barLine(subtype, origin, _) = element,
+                      origin.x == barX else { continue }
+                foundRightmostBar = true
+                rightmostSubtype = subtype
+            }
+            #expect(foundRightmostBar)
+            #expect(rightmostSubtype == nil)
+        }
+
+        @Test(
+            "staff lines cover each trailing courtesy signature",
+            arguments: [
+                (-2, (3, 4) as (Int, Int)?, 900 as CGFloat, 2),
+                (-6, nil as (Int, Int)?, 200 as CGFloat, 1),
+            ],
+        )
+        func staffLinesCoverTrailingCourtesySignatures(
+            secondKey: Int,
+            timeChange: (Int, Int)?,
+            width: CGFloat,
+            expectedAnnouncements: Int,
+        ) throws {
+            let doc = layout(
+                Self.score(
+                    firstKey: 0,
+                    secondKey: secondKey,
+                    timeChange: timeChange,
+                ),
+                width: width,
+            )
+            let sys = try system(doc, containing: 1)
+            let m1 = try measure(doc, 1)
+            let barX = barLineX(m1)
+            let bar = try #require(sys.trailingBarLine)
+            let barEnd = bar.x + BarLineGeometry.rightExtent(
+                subtype: bar.subtype, sp: sys.sp,
+            )
+            let endX = BarLineGeometry.staffLineEndX(for: sys)
+            var announced = 0
+            var maxInkRight = -CGFloat.infinity
+            for element in m1.elements {
+                let originX: CGFloat
+                switch element {
+                case let .keySignature(_, _, _, _, origin),
+                     let .timeSignature(_, _, origin):
+                    originX = origin.x
+                default:
+                    continue
+                }
+                guard originX > barX else { continue }
+                let ink = try #require(inkSpan(of: element, sp: sys.sp))
+                announced += 1
+                maxInkRight = max(maxInkRight, m1.origin.x + ink.right)
+                #expect(endX >= m1.origin.x + ink.right)
+            }
+            #expect(announced == expectedAnnouncements)
+            // The band closes with one trailing gap after its last column, so
+            // the staff lines stop exactly `sp * 0.5` past the rightmost glyph's
+            // ink. Pinning that distance — rather than restating
+            // `staffLineEndX`'s own formula — is what would catch a mis-sized
+            // reservation.
+            #expect(abs(endX - maxInkRight - sys.sp * 0.5) < 0.0001)
+            #expect(endX > barEnd)
+        }
+
+        @Test("a plain system end keeps the terminal-barline clip")
+        func plainSystemEndKeepsTerminalBarLineClip() throws {
+            let doc = layout(Self.score(showCourtesy: false))
+            let sys = try system(doc, containing: 1)
+            let m1 = try measure(doc, 1)
+            #expect(sys.measures.last?.measureIndex == m1.measureIndex)
+            let bar = try #require(sys.trailingBarLine)
+            // Suppressing the announcement also guards that the synthesized
+            // end barline is not upgraded to a courtesy-key double.
+            #expect(bar.subtype == nil)
+            let endX = BarLineGeometry.staffLineEndX(for: sys)
+            let expected = bar.x + BarLineGeometry.rightExtent(
+                subtype: bar.subtype, sp: sys.sp,
+            )
+            #expect(endX == expected)
+            #expect(endX < sys.size.width)
+        }
+
+        @Test("one staff-line end covers every staff's announcement")
+        func sharedStaffLineEndCoversAllStaves() throws {
+            let doc = layout(Self.score(clefTypes: ["G", "F"]))
+            let sys = try system(doc, containing: 1)
+            let m1 = try measure(doc, 1)
+            let barX = barLineX(m1)
+            let endX = BarLineGeometry.staffLineEndX(for: sys)
+            var announced = 0
+            var maxInkRight = -CGFloat.infinity
+            var staffYs: Set<CGFloat> = []
+            for element in m1.elements {
+                let origin: CGPoint
+                switch element {
+                case let .keySignature(_, _, _, _, value),
+                     let .timeSignature(_, _, value):
+                    origin = value
+                default:
+                    continue
+                }
+                guard origin.x > barX else { continue }
+                let ink = try #require(inkSpan(of: element, sp: sys.sp))
+                announced += 1
+                staffYs.insert(origin.y)
+                maxInkRight = max(maxInkRight, m1.origin.x + ink.right)
+                #expect(endX >= m1.origin.x + ink.right)
+            }
+            // The band closes with one trailing gap after its last column, so
+            // the staff lines stop exactly `sp * 0.5` past the rightmost glyph's
+            // ink. Pinning that distance — rather than restating
+            // `staffLineEndX`'s own formula — is what would catch a mis-sized
+            // reservation.
+            #expect(abs(endX - maxInkRight - sys.sp * 0.5) < 0.0001)
+            #expect(announced == 4)
+            #expect(staffYs.count == 2)
+        }
+    }
 #endif

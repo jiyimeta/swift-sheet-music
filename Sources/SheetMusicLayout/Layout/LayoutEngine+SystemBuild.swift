@@ -227,6 +227,7 @@ extension LayoutEngine {
             } ?? false
             var perStaff: [Int: [LayoutElement]] = [:]
             var perStaffInvisible: [Int: [LayoutElement]] = [:]
+            var synthesizedEndBarLineIndices: [Int: Int] = [:]
             for (staffIdx, staff) in staves.enumerated() {
                 guard measureIdx < staff.measures.count else { continue }
                 let m = staff.measures[measureIdx]
@@ -289,6 +290,7 @@ extension LayoutEngine {
                 )
                 let els: [LayoutElement]
                 let invisibleEls: [LayoutElement]
+                let synthesizedEndBarLineIndex: Int?
                 let newClef: NotatedClef
                 let newKey: Int
                 if let cached = context.cache?
@@ -297,6 +299,8 @@ extension LayoutEngine {
                 {
                     els = cached.elements
                     invisibleEls = cached.invisibleElements
+                    synthesizedEndBarLineIndex = cached
+                        .synthesizedEndBarLineIndex
                     newClef = cached.newClef
                     newKey = cached.newKey
                     context.cache?.placementHits += 1
@@ -327,6 +331,8 @@ extension LayoutEngine {
                     )
                     els = result.elements
                     invisibleEls = result.invisibleElements
+                    synthesizedEndBarLineIndex = result
+                        .synthesizedEndBarLineIndex
                     newClef = result.clef
                     newKey = result.key
                     context.cache?.placementMisses += 1
@@ -336,6 +342,7 @@ extension LayoutEngine {
                                 inputs: placementInputs,
                                 elements: els,
                                 invisibleElements: invisibleEls,
+                                synthesizedEndBarLineIndex: synthesizedEndBarLineIndex,
                                 newClef: newClef,
                                 newKey: newKey,
                             )
@@ -345,6 +352,10 @@ extension LayoutEngine {
                 clefs[staffIdx] = newClef
                 keys[staffIdx] = newKey
                 perStaff[staffIdx] = els
+                if let synthesizedEndBarLineIndex {
+                    synthesizedEndBarLineIndices[staffIdx] =
+                        synthesizedEndBarLineIndex
+                }
                 if !invisibleEls.isEmpty {
                     perStaffInvisible[staffIdx] = invisibleEls
                 }
@@ -363,6 +374,18 @@ extension LayoutEngine {
                 for staffIdx in staves.indices
                     where perStaff[staffIdx] != nil
                 {
+                    if !courtesy.keys.isEmpty,
+                       let index = synthesizedEndBarLineIndices[staffIdx],
+                       let element = perStaff[staffIdx]?[index],
+                       case let .barLine(subtype, origin, halfHeight) = element,
+                       subtype == nil
+                    {
+                        perStaff[staffIdx]?[index] = .barLine(
+                            subtype: "double",
+                            origin: origin,
+                            halfHeight: halfHeight,
+                        )
+                    }
                     perStaff[staffIdx, default: []].append(
                         contentsOf: courtesyElements(
                             courtesy,
@@ -851,12 +874,19 @@ extension LayoutEngine {
                 }
                 // Same precedence the per-measure path uses: an explicit
                 // `<BarLine>` wins, then the `<endRepeat>` flag, then the
-                // score-final "end".
+                // score-final "end", then the courtesy-key double.
                 if barSubtype == nil, runEndsRepeat {
                     barSubtype = "end-repeat"
                 }
                 if barSubtype == nil, isLastMeasureOfScore {
                     barSubtype = "end"
+                }
+                if barSubtype == nil,
+                   um.measureIdx == announcingMeasureIdx,
+                   let courtesy = trailingCourtesy,
+                   !courtesy.keys.isEmpty
+                {
+                    barSubtype = "double"
                 }
 
                 // Emit one H-bar + one barline per staff.

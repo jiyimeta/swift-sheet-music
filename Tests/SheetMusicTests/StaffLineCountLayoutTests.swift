@@ -172,20 +172,22 @@
             /// The Android bridge is the one renderer whose output is
             /// inspectable as data, so it stands in for all three here.
             ///
-            /// Five-line baseline: 5 staff lines + 2 barlines (the left
-            /// system line and the terminal barline) + 1 stem = 8 strokes.
-            /// Nothing but the staff lines changes when `lineCount` drops
-            /// to 3, so the three-line render must be exactly 2 fewer.
+            /// Five-line baseline: 5 staff lines + 1 stem + the left
+            /// system line + the terminal barline, which is the score's
+            /// last and therefore an `end` — two strokes, thin then
+            /// thick — for 9 in total. Nothing but the staff lines
+            /// changes when `lineCount` drops to 3, so the three-line
+            /// render must be exactly 2 fewer.
             /// Both absolutes are asserted, not just the delta: a renderer
-            /// that still hardcodes five lines produces 8 in both cases, so
+            /// that still hardcodes five lines produces 9 in both cases, so
             /// the delta alone would pass on a fixture whose other strokes
             /// happened to differ by 2.
             @Test("The bridge strokes one line per drawn staff line")
             func bridgeStrokesEachDrawnStaffLine() throws {
                 guard #available(macOS 15.0, *) else { return }
-                #expect(try bridgeStrokeCount(lineCount: 5) == 8)
-                #expect(try bridgeStrokeCount(lineCount: 3) == 6)
-                #expect(try bridgeStrokeCount(lineCount: 1) == 4)
+                #expect(try bridgeStrokeCount(lineCount: 5) == 9)
+                #expect(try bridgeStrokeCount(lineCount: 3) == 7)
+                #expect(try bridgeStrokeCount(lineCount: 1) == 5)
             }
 
             // MARK: - Barline span

@@ -150,6 +150,9 @@ extension ScoreLayerBuilder {
     ) {
         let topY = origin.y - halfHeight
         let botY = origin.y + halfHeight
+        let sp = metrics.sp
+        let thin = sp * BarLineGeometry.thinThicknessSp
+        let thick = sp * BarLineGeometry.thickThicknessSp
         func line(dx: CGFloat, width: CGFloat) {
             let path = CGMutablePath()
             path.move(to: CGPoint(x: origin.x + dx, y: topY))
@@ -160,27 +163,29 @@ extension ScoreLayerBuilder {
         }
         switch subtype {
         case "double":
-            line(dx: -metrics.sp * 0.3, width: metrics.sp * 0.15)
-            line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.15)
+            line(dx: -sp * BarLineGeometry.doubleStrokeDxSp, width: thin)
+            line(dx: sp * BarLineGeometry.doubleStrokeDxSp, width: thin)
         case "end", "final":
-            line(dx: 0, width: metrics.sp * 0.15)
-            line(dx: +metrics.sp * 0.4, width: metrics.sp * 0.4)
+            line(dx: 0, width: thin)
+            line(dx: sp * BarLineGeometry.endThickStrokeDxSp, width: thick)
         case "start-repeat":
-            line(dx: 0, width: metrics.sp * 0.4)
-            line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.15)
+            line(dx: 0, width: thick)
+            line(dx: sp * BarLineGeometry.repeatSecondStrokeDxSp, width: thin)
             drawRepeatDots(
-                origin: origin, xOffset: metrics.sp * 0.6,
+                origin: origin,
+                xOffset: sp * BarLineGeometry.repeatDotDxSp,
                 metrics: metrics, height: height, into: parent,
             )
         case "end-repeat":
             drawRepeatDots(
-                origin: origin, xOffset: -metrics.sp * 0.6,
+                origin: origin,
+                xOffset: -sp * BarLineGeometry.repeatDotDxSp,
                 metrics: metrics, height: height, into: parent,
             )
-            line(dx: 0, width: metrics.sp * 0.15)
-            line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.4)
+            line(dx: 0, width: thin)
+            line(dx: sp * BarLineGeometry.repeatSecondStrokeDxSp, width: thick)
         default:
-            line(dx: 0, width: metrics.sp * 0.15)
+            line(dx: 0, width: thin)
         }
     }
 
@@ -189,7 +194,7 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        let dotSize = metrics.sp * 0.3
+        let dotSize = metrics.sp * BarLineGeometry.repeatDotDiameterSp
         let half = dotSize / 2
         let top = CGRect(
             x: origin.x + xOffset - half,
