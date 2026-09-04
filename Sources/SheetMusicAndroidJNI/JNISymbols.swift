@@ -49,15 +49,16 @@ public func nativeReleaseScore(handle: Int64) {
 
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicJNI.nativeScoreMetadata(...)` call site. Returns an empty
-/// `Data` when the score handle is unknown. The wire format is
-/// `i32 titleByteLen + UTF-8 + i32 composerByteLen + UTF-8` per
-/// `ScoreMetadataWire`'s @WireFormat encoding.
+/// `Data` when the score handle is unknown. The payload is
+/// `ScoreMetadataWire`'s @WireFormat encoding: `title`, `composer`, and every
+/// entry of `Score.metaTags` key-sorted.
+///
+/// The whole dictionary rather than the two strings, because the two strings are not what a
+/// score states — `copyright`, `lyricist`, `arranger`, `source` and the rest are equally
+/// present in the file and an Apple host reads them straight off `Score.metaTags`.
 public func nativeScoreMetadata(scoreHandle: Int64) -> Data {
     guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
-    return ScoreMetadataWire(
-        title: score.metaTags["workTitle"] ?? "",
-        composer: score.metaTags["composer"] ?? "",
-    ).encodeToData()
+    return ScoreMetadataWire(score: score).encodeToData()
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin

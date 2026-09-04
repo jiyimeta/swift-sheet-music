@@ -131,9 +131,26 @@ internal fun DrawScope.drawCommands(
     var dashOnPx = 0f
     var dashOffPx = 0f
     var rotationSaveCount = -1
+    // `SetTextStyle`'s bitmask, applied to every subsequent Text / Glyph. Each page starts neutral,
+    // which is why this is a local rather than anything the caller carries between pages.
+    var textStyleFlags: UByte = DrawCommand.TextStyleFlag.NONE
     val glyphPaint = Paint().apply {
         isAntiAlias = true
         color = currentArgb
+    }
+
+    /**
+     * Apply the active style to [glyphPaint] before a text draw.
+     *
+     * `isFakeBoldText` rather than a bold typeface: this library ships Edwin as a single Roman face,
+     * and `FontMetricsBuilder` measures its `Edwin-Bold` record with the same synthesis — so what
+     * the metrics table reports is what lands on the canvas. A rehearsal mark's frame is sized from
+     * that measurement, so the two have to agree.
+     */
+    fun applyTextStyle() {
+        glyphPaint.isFakeBoldText = (textStyleFlags and DrawCommand.TextStyleFlag.BOLD) != 0u.toUByte()
+        glyphPaint.textSkewX =
+            if ((textStyleFlags and DrawCommand.TextStyleFlag.ITALIC) != 0u.toUByte()) ITALIC_SKEW else 0f
     }
     for (cmd in commands) {
         when (cmd) {
@@ -194,11 +211,14 @@ internal fun DrawScope.drawCommands(
                 glyphPaint.typeface = if (cmd.fontId == FontID.SMUFL) smufl else text
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
+                applyTextStyle()
                 drawIntoCanvas { canvas ->
                     canvas.nativeCanvas.drawText(
                         cmd.text, cmd.x.toFloat() * pxPerMM, cmd.y.toFloat() * pxPerMM, glyphPaint,
                     )
                 }
+                glyphPaint.isFakeBoldText = false
+                glyphPaint.textSkewX = 0f
             }
             is DrawCommand.StretchedGlyph -> {
                 glyphPaint.typeface = if (cmd.fontId == FontID.SMUFL) smufl else text
@@ -257,7 +277,7 @@ internal fun DrawScope.drawCommands(
                 glyphPaint.typeface = if (cmd.fontId == FontID.SMUFL) smufl else text
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
-                glyphPaint.textSkewX = -0.25f
+                glyphPaint.textSkewX = ITALIC_SKEW
                 drawIntoCanvas { canvas ->
                     canvas.nativeCanvas.drawText(
                         cmd.text, cmd.x.toFloat() * pxPerMM, cmd.y.toFloat() * pxPerMM, glyphPaint,
@@ -265,6 +285,16 @@ internal fun DrawScope.drawCommands(
                 }
                 glyphPaint.textSkewX = 0f
             }
+            is DrawCommand.SetTextStyle -> {
+                textStyleFlags = cmd.flags
+            }
         }
     }
 }
+
+/**
+ * Synthetic-italic slant, in x-per-y. `-0.25` is Android's own conventional value for oblique text
+ * and matches what the superseded `ItalicText` command always used, so switching to the state
+ * command did not change how a tuplet digit or a glissando label leans.
+ */
+private const val ITALIC_SKEW = -0.25f

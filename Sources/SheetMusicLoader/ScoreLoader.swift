@@ -19,6 +19,22 @@ import SheetMusicMusicXML
 /// Deliberately static and Foundation-only: it is linked into each image that needs it — including several separate
 /// `.so`s in one Android process — and carries no state for those copies to disagree about.
 public enum ScoreLoader {
+    /// A parsed score together with the parser's non-fatal findings.
+    ///
+    /// Deliberately not `MSCXParseResult`: that type belongs to one format's parser, and naming it
+    /// here would make every caller of the dispatcher import `SheetMusicMSCX` to spell the return
+    /// type of a function that also handles MusicXML and MIDI.
+    public struct LoadedScore: Sendable {
+        public let score: Score
+        /// Empty for every format but MuseScore's, which is the only one with a diagnostic channel.
+        public let diagnostics: [ScoreDiagnostic]
+
+        public init(score: Score, diagnostics: [ScoreDiagnostic]) {
+            self.score = score
+            self.diagnostics = diagnostics
+        }
+    }
+
     /// What [sniff](sniff(_:)) concluded the payload is.
     ///
     /// `mscz` covers every ZIP container, `.mscz` and `.mxl` alike: the two are told apart by trying to parse, not by
@@ -72,15 +88,40 @@ public enum ScoreLoader {
     /// - Throws: `SheetMusicError` from the underlying parser, or `SheetMusicError.malformedScore` when the payload
     ///   matches no known format.
     public static func loadScore(bytes: Data, sourceFilename: String? = nil) throws -> Score {
+        try loadScoreWithDiagnostics(bytes: bytes, sourceFilename: sourceFilename).score
+    }
+
+    /// [loadScore](loadScore(bytes:sourceFilename:)) plus whatever the parser had to say about the
+    /// payload on the way through.
+    ///
+    /// The diagnostic channel is where the parser's *embellishment* policy surfaces: an unknown
+    /// tremolo subtype or an unrepresentable ornament is dropped so the rest of the score still
+    /// loads, and this is the only way a host finds out it happened (see ARCHITECTURE.md's "Parser
+    /// policy"). A host that silently discards these is choosing not to tell its user that part of
+    /// their file did not survive the trip.
+    ///
+    /// Only MuseScore payloads produce diagnostics today. MusicXML has no equivalent channel and
+    /// the MIDI importer none either, so both answer with an empty array rather than a lie — the
+    /// same asymmetry ARCHITECTURE.md records.
+    ///
+    /// This is the *one* switch over `SniffedFormat`; `loadScore` is a projection of it. A second
+    /// spelling of the format table is what this whole target exists to prevent, and "the
+    /// diagnostics variant forgot the format someone just added" is exactly the silent drift the
+    /// type's own doc comment warns about.
+    public static func loadScoreWithDiagnostics(
+        bytes: Data, sourceFilename: String? = nil,
+    ) throws -> LoadedScore {
         switch sniff(bytes) {
         case .mscx:
-            return try MSCXParser.parse(bytes)
+            let result = try MSCXParser.parseWithDiagnostics(bytes)
+            return LoadedScore(score: result.score, diagnostics: result.diagnostics)
         case .mscz:
             // A ZIP container is either `.mscz` or `.mxl`, and the magic cannot tell them apart. MuseScore first
             // because it is overwhelmingly the common case; the MXL path is the fallback rather than a peer so a
             // genuine `.mscz` never pays for the second attempt.
             do {
-                return try MSCZReader.parse(bytes)
+                let result = try MSCZReader.parseWithDiagnostics(bytes)
+                return LoadedScore(score: result.score, diagnostics: result.diagnostics)
             } catch let error as SheetMusicError where error.isMuseScoreDocumentFault {
                 // The container did yield a `<museScore>` document and the
                 // MuseScore reader is the one that has an opinion about it.
@@ -89,12 +130,15 @@ public enum ScoreLoader {
                 // MusicXML problem in a MuseScore file.
                 throw error
             } catch {
-                return try MusicXMLParser.parse(mxlData: bytes)
+                return try LoadedScore(score: MusicXMLParser.parse(mxlData: bytes), diagnostics: [])
             }
         case .musicXML:
-            return try MusicXMLParser.parse(bytes)
+            return try LoadedScore(score: MusicXMLParser.parse(bytes), diagnostics: [])
         case .midi:
-            return try MidiImporter.parse(bytes, options: .init(), sourceFilename: sourceFilename)
+            let score = try MidiImporter.parse(
+                bytes, options: .init(), sourceFilename: sourceFilename,
+            )
+            return LoadedScore(score: score, diagnostics: [])
         case .unknown:
             throw SheetMusicError.malformedScore(
                 ScoreFault(

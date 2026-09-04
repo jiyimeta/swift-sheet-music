@@ -66,6 +66,15 @@ import SheetMusicLayout
 /// does a codepoint the face does not carry — Edwin has no CJK at all, so a
 /// Japanese lyric is still measured by the stub's 1 em-per-ideograph estimate.
 ///
+/// **Weights are faces.** A bold `LayoutFont` resolves the record named
+/// `"<face>-Bold"` and falls back to the plain one — see `face(for:)`. Both
+/// producers now write `"Edwin-Bold"` beside `"Edwin"`, measured with the same
+/// synthesis their renderer paints with (`Paint.isFakeBoldText` on Android,
+/// CoreText's `.boldTrait` for the browser). This needed NO version bump: faces
+/// are a name-keyed dictionary, so a v4 table written before the convention
+/// existed simply has no bold record and answers with the regular one, which is
+/// what every consumer got when nothing could ask for bold at all.
+///
 /// The layout is a flat byte cursor. It is NOT `@WireFormat`/protobuf framing:
 /// the producers hand-write the bytes, so `decode` hand-parses them to match.
 /// (A brief `@WireFormat` migration decoded this with the macro, which
@@ -108,6 +117,24 @@ package struct FontMetricsTable {
     /// not carry it and the caller should fall back to the stub.
     func face(named name: String) -> Face? {
         faces[name.lowercased()]
+    }
+
+    /// The measured face for a whole `LayoutFont`, honouring its weight.
+    ///
+    /// A bold request resolves `"<face>-Bold"` first and falls back to the regular record. That
+    /// convention needs no version bump: faces are a name-keyed dictionary, so a producer that
+    /// measures the bold face simply writes one more record, and a table written before this
+    /// existed answers exactly as it always did — regular metrics for a bold request, which is what
+    /// every consumer got when nothing could ask for bold in the first place.
+    ///
+    /// `.semibold` deliberately does not get its own record. Its one caller is the lyric row
+    /// (`LayoutEngine+Lyrics`) measuring the *system* font, which no table carries anyway, so a
+    /// `"-Semibold"` record would be written by every producer and read by nobody.
+    func face(for font: LayoutFont) -> Face? {
+        if font.weight == .bold, let bold = faces["\(font.face.lowercased())-bold"] {
+            return bold
+        }
+        return face(named: font.face)
     }
 
     enum DecodeError: Error, Equatable {
@@ -265,21 +292,21 @@ private struct FontMetricsTableProvider: FontMetricsProvider {
     }
 
     func ascent(font: LayoutFont) -> CGFloat {
-        guard let face = table.face(named: font.face) else {
+        guard let face = table.face(for: font) else {
             return stub.ascent(font: font)
         }
         return CGFloat(face.ascent * scale(font))
     }
 
     func descent(font: LayoutFont) -> CGFloat {
-        guard let face = table.face(named: font.face) else {
+        guard let face = table.face(for: font) else {
             return stub.descent(font: font)
         }
         return CGFloat(face.descent * scale(font))
     }
 
     func leading(font: LayoutFont) -> CGFloat {
-        guard let face = table.face(named: font.face) else {
+        guard let face = table.face(for: font) else {
             return stub.leading(font: font)
         }
         return CGFloat(face.leading * scale(font))
@@ -288,7 +315,7 @@ private struct FontMetricsTableProvider: FontMetricsProvider {
     func glyphPathBoundingBox(
         font: LayoutFont, codepoint: UInt16,
     ) -> CGRect? {
-        guard let face = table.face(named: font.face),
+        guard let face = table.face(for: font),
               let entry = face.entries[UInt32(codepoint)]
         else {
             return stub.glyphPathBoundingBox(font: font, codepoint: codepoint)
@@ -305,7 +332,7 @@ private struct FontMetricsTableProvider: FontMetricsProvider {
     func typographicWidth(
         text: String, font: LayoutFont,
     ) -> CGFloat {
-        guard let face = table.face(named: font.face), !text.isEmpty else {
+        guard let face = table.face(for: font), !text.isEmpty else {
             return stub.typographicWidth(text: text, font: font)
         }
         let s = scale(font)
@@ -321,7 +348,7 @@ private struct FontMetricsTableProvider: FontMetricsProvider {
     }
 
     func inkBounds(text: String, font: LayoutFont) -> InkBounds {
-        guard let face = table.face(named: font.face), !text.isEmpty else {
+        guard let face = table.face(for: font), !text.isEmpty else {
             return stub.inkBounds(text: text, font: font)
         }
         let s = scale(font)

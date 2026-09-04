@@ -112,6 +112,8 @@ enum GenFontMetrics {
         candidates: ClosedRange<UInt32>,
         keepBlanks: Bool,
         minimumGlyphs: Int,
+        weight: FontWeight = .regular,
+        recordName: String? = nil,
     ) -> MeasuredFace {
         let ct = CTFontCreateWithName(face as CFString, referenceSize, nil)
         let resolved = CTFontCopyFamilyName(ct) as String
@@ -123,7 +125,7 @@ enum GenFontMetrics {
             )
         }
         let provider = AppleFontMetricsProvider()
-        let font = LayoutFont(face: face, pointSize: referenceSize)
+        let font = LayoutFont(face: face, pointSize: referenceSize, weight: weight)
 
         var entries: [Entry] = []
         entries.reserveCapacity(2048)
@@ -177,7 +179,7 @@ enum GenFontMetrics {
             )
         }
         return MeasuredFace(
-            name: face,
+            name: recordName ?? face,
             ascent: Double(provider.ascent(font: font)),
             descent: Double(provider.descent(font: font)),
             leading: Double(provider.leading(font: font)),
@@ -209,6 +211,17 @@ enum GenFontMetrics {
                 keepBlanks: true,
                 minimumGlyphs: 500,
             ),
+            // NO BOLD RECORD, matching `FontMetricsBuilder` on Android and for the same measured
+            // reason. This repo's Edwin is `Edwin-Roman.otf` — one face, no bold member — so
+            // `CTFontCreateCopyWithSymbolicTraits(..., .boldTrait, ...)` has nothing to resolve to
+            // and the advances come back identical to the regular face's. On the Android side the
+            // equivalent attempt was run on a device and produced 721.9961 for 'A' against the
+            // regular face's 721.9961.
+            //
+            // A record would therefore be a duplicate, and `FontMetricsTable.face(for:)`'s fallback
+            // already answers a bold request with those numbers — correctly, since a synthetic bold
+            // advances by the same amounts it measures. The `"<face>-Bold"` convention stays for a
+            // host that ships a real bold file and measures THAT.
         ]
     }
 

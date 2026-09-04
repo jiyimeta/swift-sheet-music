@@ -47,6 +47,7 @@ export function splitIntoBands(
   let argb = INITIAL_ARGB;
   let dashOnMM = 0;
   let dashOffMM = 0;
+  let textStyleFlags = 0;
   let pathOpen = false;
   let rotation: Extract<DrawCommand, { kind: "setRotation" }> | null = null;
 
@@ -54,6 +55,13 @@ export function splitIntoBands(
     buffer = [{ kind: "setColor", argb }];
     if (dashOnMM !== 0 || dashOffMM !== 0) {
       buffer.push({ kind: "setDash", onMM: dashOnMM, offMM: dashOffMM });
+    }
+    // Restated for the same reason colour and dash are: the band cut happens
+    // BEFORE a command is appended, so it can land between a `setTextStyle` and
+    // the text it styles, and the second band would then draw a bold rehearsal
+    // mark at regular weight inside a frame sized for bold.
+    if (textStyleFlags !== 0) {
+      buffer.push({ kind: "setTextStyle", flags: textStyleFlags });
     }
     minY = Number.POSITIVE_INFINITY;
     maxY = Number.NEGATIVE_INFINITY;
@@ -78,6 +86,9 @@ export function splitIntoBands(
       case "setDash":
         dashOnMM = command.onMM;
         dashOffMM = command.offMM;
+        break;
+      case "setTextStyle":
+        textStyleFlags = command.flags;
         break;
       case "setRotation":
         rotation = command.radians !== 0 ? command : null;
@@ -177,10 +188,12 @@ function boxMM(command: DrawCommand): Box | null {
         command.rightEdgeX,
         command.bottomY,
       );
+    // State commands paint nothing themselves, so they contribute no box.
     case "stroke":
     case "setColor":
     case "setDash":
     case "setRotation":
+    case "setTextStyle":
       return null;
   }
 }

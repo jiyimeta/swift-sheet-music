@@ -43,6 +43,24 @@ public enum TextRoleStyle {
         }
     }
 
+    /// MuseScore's font style — bold / italic / underline / strike — for `style`.
+    ///
+    /// A named accessor rather than reaching for `style.museScoreDefault.style` at each call site,
+    /// for the same reason `fontSize(for:sp:)` exists beside `TextStyleDefaults.size`: the two
+    /// renderers must resolve a role's *whole* appearance through one function, or one of them ends
+    /// up honouring the size and not the weight. That is exactly what happened — the Apple renderer
+    /// applied `.bold` through `ResolvedTextStyle` while the bridge emitted plain text, so a tempo
+    /// mark and a rehearsal mark rendered at the right size in the wrong weight on every other
+    /// platform.
+    public static func fontStyle(for style: TextStyleType) -> FontStyleSet {
+        style.museScoreDefault.style
+    }
+
+    /// `fontStyle(for:)` for a layout `TextMarkKind`.
+    public static func fontStyle(for kind: LayoutElement.TextMarkKind) -> FontStyleSet {
+        fontStyle(for: style(for: kind))
+    }
+
     /// Convenience: pick the `TextStyleType` that matches a layout
     /// `TextMarkKind`. Returns nil for kinds without a corresponding
     /// MuseScore text role.

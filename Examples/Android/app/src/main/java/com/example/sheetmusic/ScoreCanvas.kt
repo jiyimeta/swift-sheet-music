@@ -104,9 +104,25 @@ private fun DrawScope.drawPage(
     var dashOnPx = 0f
     var dashOffPx = 0f
     var rotationSaveCount = -1
+    // `SetTextStyle`'s bitmask, applied to every subsequent Text / Glyph.
+    var textStyleFlags: UByte = DrawCommand.TextStyleFlag.NONE
     val glyphPaint = Paint().apply {
         isAntiAlias = true
         color = currentArgb
+    }
+
+    // `isFakeBoldText` rather than a bold typeface: this app ships Edwin as a
+    // single Roman face, and FontMetricsBuilder measures its `Edwin-Bold`
+    // record with the same synthesis, so what was measured is what is painted.
+    fun applyTextStyle() {
+        glyphPaint.isFakeBoldText =
+            (textStyleFlags and DrawCommand.TextStyleFlag.BOLD) != 0u.toUByte()
+        glyphPaint.textSkewX =
+            if ((textStyleFlags and DrawCommand.TextStyleFlag.ITALIC) != 0u.toUByte()) {
+                -0.25f
+            } else {
+                0f
+            }
     }
     for (cmd in page.commands) {
         when (cmd) {
@@ -176,6 +192,7 @@ private fun DrawScope.drawPage(
                     if (cmd.fontId == FontID.SMUFL) bravura else edwin
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
+                applyTextStyle()
                 drawIntoCanvas { canvas ->
                     canvas.nativeCanvas.drawText(
                         cmd.text,
@@ -184,6 +201,8 @@ private fun DrawScope.drawPage(
                         glyphPaint
                     )
                 }
+                glyphPaint.isFakeBoldText = false
+                glyphPaint.textSkewX = 0f
             }
             is DrawCommand.StretchedGlyph -> {
                 glyphPaint.typeface =
@@ -254,6 +273,9 @@ private fun DrawScope.drawPage(
                     )
                 }
                 glyphPaint.textSkewX = 0f
+            }
+            is DrawCommand.SetTextStyle -> {
+                textStyleFlags = cmd.flags
             }
         }
     }
