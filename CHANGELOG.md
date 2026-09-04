@@ -7,7 +7,127 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **The Android bridge can write a score, name a failure, and select a range.**
+  Three capabilities the Swift side had all along and the JNI surface never
+  exposed, so an Android host could reach less of this library than the library
+  could do.
+
+  `nativeLoadScore` had no counterpart: a host could open a score, lay it out,
+  play it and edit it through `nativeApplyEditIntent`, and then had nowhere to
+  put the result. `ScoreEncodeBridge` / `nativeEncodeScore` /
+  `ScoreHandle.encodeToMscx()` write `.mscx` and `.mscz`, with the
+  MS3-compatibility target and the `emitPreservedMarkup` escape hatch an Apple
+  host already had.
+
+  `nativeLoadScore` also answers `0` for every failure — a corrupt ZIP, an
+  unrecognized format and a structurally invalid `<Measure>` are one answer,
+  where an Apple host gets a `ScoreFault` whose dotted `code` is a localization
+  key. `ScoreHandle.loadWithDiagnostics` returns that code and, just as
+  importantly, the parser's non-fatal diagnostics: the parsers are permissive by
+  design, so an unknown ornament is *dropped* and the score loads anyway, and
+  this was the only thing standing between a host and telling its user that part
+  of their file did not survive the trip. `ScoreLoader.loadScore` is now a
+  projection of a new `loadScoreWithDiagnostics`, so there is still exactly one
+  switch over `SniffedFormat`.
+
+  `nativeItemIDsInRect` exposes `ScoreHitTester.itemIDs(in:)` — the marquee query
+  the Apple example drags a rubber band with, which has always cross-compiled and
+  had no entry point, leaving Android hosts able to select one item at a time.
+
+- **Android and browser hosts can reach the rest of `ScoreViewOptions`.**
+  `LayoutOptionsWire` carried five of twelve knobs and `LayoutBridge` hard-coded
+  the rest: the measure-number policy was pinned to `.systemStart`, the
+  multi-measure-rest threshold to 2, the system gap to `staffSize × 1.25`, the
+  two glyph magnifications were unreachable, and the three-way
+  `LayoutBreakPolicy` was flattened into a boolean that could not express
+  `.ignoreSystemBreaks` at all. Eight appended fields, each defaulting to what
+  the bridge hard-coded.
+
+- **`ScorePdfExporter` on Android.** PDF export was Apple-only, so a host could
+  engrave a score and not hand the user a printable page, while the PDF
+  *importer* had shipped on Android all along. It replays the same draw program
+  the screen renders into `PdfDocument`, one page per `EncodablePage`, with
+  glyphs staying vector — and reuses the screen renderer through
+  `CanvasDrawScope` rather than interpreting the command list a second time.
+
+- **`AndroidPlaybackEngine` gains master gain above unity, a master output
+  stage, a level meter, held preview notes, and a SoundFont swap.**
+  `setMasterGain` replaces a `setMasterVolume` that clamped to 0…1, leaving a
+  host with no way to calibrate a quiet SoundFont; `setMasterOutputStage`
+  chooses what happens past full scale (`SoftClip` is a port of the Swift curve);
+  `startLevelMonitoring` reports peak and RMS post-gain and pre-shaping;
+  `previewNoteOn` / `previewNoteOff` sound a note for as long as it is held,
+  which a note-input UI needs and the fixed-duration `playPreview` cannot give
+  it; and `reloadSoundfont` swaps the bank without tearing the engine down and
+  losing the transport position, the loop and every mixer setting.
+
+- **`Score.metaTags` reaches Android whole.** `ScoreMetadataWire` carried
+  `workTitle` and `composer` alone, so a host could not show a copyright line, an
+  arranger or a lyricist the file plainly states. The map is carried key-sorted,
+  because `Dictionary` iteration order is seeded per process and an unsorted
+  encode would make the same score produce different bytes on every run.
+
+- **`Android/SheetMusicComposeAndroid/README.md`** — the module is published and
+  named in the root README's artifact table and was the only one of the three
+  AARs without a README of its own.
+
 ### Changed
+
+- **Score text is drawn at its real weight everywhere, not only on Apple
+  (`DrawProgram` v7).** MuseScore's role defaults set tempo marks, rehearsal
+  marks and instrument-change text bold, and jazz chord symbols, free-form
+  dynamics and glissando labels italic. The Apple renderer applied all of it
+  through `ResolvedTextStyle`; the draw program had no way to say "bold", so
+  every other renderer over the same layout drew regular upright text.
+
+  v7 appends `setTextStyle(flags:)` — a state opcode beside `setColor` /
+  `setDash` / `setRotation`, carrying a bitmask so a third trait costs no wire
+  change. `italicText` said the same thing in a second way for two call sites and
+  is superseded: still decoded, no longer emitted.
+
+  Three renderers consume this program, not two: the Compose module, the
+  browser's `@jiyimeta/sheet-music-web`, and the Examples app's fork of the
+  Compose one. All three decode the opcode, apply bold and italic, and restate an
+  active style at each band boundary — the browser's flat decoder throws on an
+  unknown opcode, so a stream with bold text would otherwise have failed to draw
+  a page at all rather than drawing it in the wrong weight.
+
+  The metrics move with it, and that is why this is one change rather than two: a
+  rehearsal mark's frame is sized from the measured text, so a renderer that can
+  draw bold fed by a table that can only measure regular puts the letters through
+  the right-hand edge of their own box — strictly worse than the consistent
+  regular-weight rendering it replaces. `FontWeight` gains `.bold`,
+  `FontMetricsTable` resolves it through a `"<face>-Bold"` record — and **neither
+  producer writes one**, which is a measured result rather than an omission.
+  Building that record on Android with `Paint.isFakeBoldText` (the emboldening
+  the renderer paints with, since Edwin ships as one Roman face) and running it
+  on a device reported an advance for 'A' of 721.9961 against the regular face's
+  721.9961: Skia's synthetic bold thickens strokes without widening advances, and
+  CoreText has no bold member to resolve either. The record would be a duplicate,
+  and the fallback's numbers are the correct ones — `drawText` advances by the
+  amounts it measures, so a rehearsal-mark frame sized from the regular face fits
+  the bold text inside it. `FontMetricsBuilderTest` now pins that equality, so if
+  a future Android release does widen synthetic bold, the one place that would
+  notice says so. **No SMFT version bump** either way: faces are a name-keyed
+  dictionary, and the convention is there for a host that ships a real bold file.
+
+- **CI runs all three Android modules' unit tests.** The workflow named
+  `:SheetMusicAudioAndroid` alone, and `:SheetMusicComposeAndroid` is downstream
+  of it — so the module that decodes the draw program and paints it was neither
+  built nor tested on any push, and its one test ran only at release-tag time in
+  the publish workflow, which is not a gate. The same job now also runs the
+  instrumented tests on an emulator, which is the first time
+  `FontMetricsBuilderTest`, `EditSessionReplayTest` and
+  `EditSessionReplayParityTest` have run anywhere.
+
+  They pass. On an API 35 arm64 emulator: 5 tests, 0 failures, both
+  `replayMatchesHostGoldens` methods among them — the original edit chain and the
+  frozen 92-step parity one, each relayed step by step from Kotlin across JNI
+  into a second, separately-linked image of the engine, with equal fingerprints
+  at every step. `docs/edit-commands.md` recorded that run as "the one
+  outstanding verification for this project"; it now records the result.
 
 - **Reading a `.mscx` and writing it back no longer deletes what the model
   does not cover.** The decoder skipped every element it did not recognize and

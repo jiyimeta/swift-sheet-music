@@ -64,13 +64,36 @@ export type DrawCommand =
   | { kind: "setRotation"; radians: number; pivotX: number; pivotY: number }
   | { kind: "setDash"; onMM: number; offMM: number }
   | {
+      /**
+       * Superseded by `setTextStyle` and no longer emitted by the bridge.
+       * Still decoded so a stream that carries it renders.
+       */
       kind: "italicText";
       text: string;
       x: number;
       y: number;
       size: number;
       fontId: FontId;
+    }
+  | {
+      /**
+       * Font style for every subsequent `text` and `glyph`, until the next
+       * `setTextStyle`. A state command like `setColor` / `setDash` /
+       * `setRotation`.
+       *
+       * `flags` is a bitmask: bit 0 bold, bit 1 italic. MuseScore's own role
+       * defaults set tempo marks, rehearsal marks and instrument-change text
+       * bold; before this opcode the wire could not say so, and this renderer
+       * drew them at regular weight while the Apple one drew them bold.
+       */
+      kind: "setTextStyle";
+      flags: number;
     };
+
+/** Bit positions in a `setTextStyle` mask. Mirrors Swift's `DrawCommand.TextStyleFlag`. */
+export const TEXT_STYLE_BOLD = 1;
+/** @see TEXT_STYLE_BOLD */
+export const TEXT_STYLE_ITALIC = 2;
 
 export interface DrawProgramPage {
   /** Page width in document millimetres. */
@@ -272,6 +295,13 @@ function readCommand(cursor: Cursor, strings: readonly string[]): DrawCommand {
         size: s[2]!,
         fontId: asFontId(fontIdRaw),
       };
+    case 12:
+      // Masked rather than range-checked: the encoder widens a u8 into the
+      // record's u32 integer slot, so the high bytes are always zero, and a
+      // stream where they are not is one this decoder cannot interpret anyway.
+      // Refusing it would trade an unknown-but-inert style bit for a whole page
+      // that does not draw.
+      return { kind: "setTextStyle", flags: integer & 0xff };
     default:
       throw new Error(`draw program: unknown opcode ${opcode}`);
   }
