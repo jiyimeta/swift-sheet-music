@@ -98,9 +98,9 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         for system in layout.systems {
             let sysOriginX = Double(system.origin.x)
             let sysOriginY = Double(system.origin.y)
-            // Stop the staff lines at the rightmost stroke of the system
-            // terminal barline so the staff doesn't trail past it through
-            // the per-measure gutter.
+            // Clip at the terminal barline on a plain system end, or span
+            // through the trailing announcement band when it carries
+            // courtesy signatures.
             let endX = Double(BarLineGeometry.staffLineEndX(for: system))
 
             // ── 1. Staff lines ──────────────────────────────────────────────
@@ -393,22 +393,88 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .barLine(_, origin, halfHeightPt):
+        case let .barLine(subtype, origin, halfHeightPt):
             // Barline origin sits at the middle of its own stroke, and
             // the engine hands over the half-height so the span follows
             // the staff's line count (4 sp tall on five lines, 2 sp on
             // three, and 4 sp centered on the line for one). Width =
             // 0.15 sp (the thin-stroke engraving default).
-            // Subtype-specific extras (double, end, repeat dots) are a
-            // follow-up.
             let halfHeight = Double(halfHeightPt)
-            let bx = (mox + Double(origin.x)) * ptToMM
-            let byMid = (moy + Double(origin.y)) * ptToMM
-            out.append(.moveTo(x: bx, y: byMid - halfHeight * ptToMM))
-            out.append(.lineTo(x: bx, y: byMid + halfHeight * ptToMM))
-            out.append(.stroke(
-                width: Double(BarLineGeometry.thinThicknessSp) * sp * ptToMM,
-            ))
+            let barCenterXPt = mox + Double(origin.x)
+            let barCenterYPt = moy + Double(origin.y)
+            let bx = barCenterXPt * ptToMM
+            let byMid = barCenterYPt * ptToMM
+            let thinWidth = Double(BarLineGeometry.thinThicknessSp)
+            let thickWidth = Double(BarLineGeometry.thickThicknessSp)
+            let doubleDx = Double(BarLineGeometry.doubleStrokeDxSp)
+            let endThickDx = Double(BarLineGeometry.endThickStrokeDxSp)
+            let repeatSecondDx = Double(
+                BarLineGeometry.repeatSecondStrokeDxSp,
+            )
+            let repeatDotDx = Double(BarLineGeometry.repeatDotDxSp)
+            let repeatDotCodepoint: UInt32 = 0xE044
+            // U+E044 has 0.4 sp natural ink at a 4 sp em. Scale its em
+            // so the ink matches the 0.3 sp circles Apple draws.
+            let repeatDotGlyphSize = sp * 4 * Double(
+                BarLineGeometry.repeatDotDiameterSp
+                    / BarLineGeometry.bravuraRepeatDotInkSp,
+            )
+            let strokes: [(dxSp: Double, widthSp: Double)]
+            let repeatDots: (dxSp: Double, beforeStrokes: Bool)?
+            switch subtype {
+            case "double":
+                strokes = [(-doubleDx, thinWidth), (doubleDx, thinWidth)]
+                repeatDots = nil
+            case "end", "final":
+                strokes = [(0, thinWidth), (endThickDx, thickWidth)]
+                repeatDots = nil
+            case "start-repeat":
+                strokes = [(0, thickWidth), (repeatSecondDx, thinWidth)]
+                repeatDots = (repeatDotDx, false)
+            case "end-repeat":
+                strokes = [(0, thinWidth), (repeatSecondDx, thickWidth)]
+                repeatDots = (-repeatDotDx, true)
+            default:
+                strokes = [(0, thinWidth)]
+                repeatDots = nil
+            }
+
+            func repeatDotCommands(dxSp: Double) -> [DrawCommand] {
+                var commands: [DrawCommand] = []
+                // Geometry names each dot by its visual center, while
+                // `.glyph` takes a baseline-leading font origin. Route the
+                // centers through the shared anchor conversion at the
+                // scaled em size above.
+                for dySp in [-0.5, 0.5] {
+                    emitCenterAnchoredGlyph(
+                        codepoint: repeatDotCodepoint,
+                        cxPt: barCenterXPt + dxSp * sp,
+                        cyPt: barCenterYPt + dySp * sp,
+                        sizePt: repeatDotGlyphSize,
+                        into: &commands,
+                    )
+                }
+                return commands
+            }
+
+            if let repeatDots, repeatDots.beforeStrokes {
+                out.append(contentsOf: repeatDotCommands(
+                    dxSp: repeatDots.dxSp,
+                ))
+            }
+            for stroke in strokes {
+                let x = bx + stroke.dxSp * sp * ptToMM
+                out.append(.moveTo(x: x, y: byMid - halfHeight * ptToMM))
+                out.append(.lineTo(x: x, y: byMid + halfHeight * ptToMM))
+                out.append(.stroke(
+                    width: stroke.widthSp * sp * ptToMM,
+                ))
+            }
+            if let repeatDots, !repeatDots.beforeStrokes {
+                out.append(contentsOf: repeatDotCommands(
+                    dxSp: repeatDots.dxSp,
+                ))
+            }
 
         case let .ledgerLine(from, to, thickness):
             // `LedgerLinePass` owns the geometry (it is the only place
