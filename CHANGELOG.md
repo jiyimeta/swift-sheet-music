@@ -114,15 +114,25 @@ and this project adheres to
   lacks falls through *per scalar* — Edwin has no CJK at all, so a Japanese
   lyric keeps the stub's 1 em per ideograph.
 
-  **Breaking for hosts.** The browser asset is now
-  `assets/sheet-music.smft`, not `assets/bravura.smft` — a host fetching the
-  old name gets a 404 rather than a quietly stale table, and a v3 table still
-  makes `installSMuFLMetrics` return `false`. `BravuraMetricsBuilder` is now
-  `FontMetricsBuilder`, with the same `buildTable(assets:)` shape. Android
-  hosts should serve `fonts/Edwin-Roman.otf` from the same `AssetManager` as
-  `fonts/Bravura.otf` to get the text face; it is optional, and a host without
-  it keeps the pre-v4 text estimates rather than failing.
-  `installSMuFLMetrics` and `nativeInstallSMuFLMetrics` keep their names.
+  **Renamed, but not breaking — both old names keep working through 2.x.**
+  The browser asset is now `assets/sheet-music.smft`, and
+  `BravuraMetricsBuilder` is now `FontMetricsBuilder` (same
+  `buildTable(assets:)` shape), because neither is Bravura-only any more.
+  A host on the old names is not broken by this release:
+  `assets/bravura.smft` still ships, as a byte copy of the new table that
+  `preflight.sh` pins equal, and `BravuraMetricsBuilder` remains as a
+  deprecated object forwarding to `FontMetricsBuilder`. **Both shims are
+  removed in 3.0.0** — move to the new names when you upgrade, not when
+  they disappear. Nothing changed on the Swift side: the table type was
+  never public API.
+
+  A v3 table does make `installSMuFLMetrics` return `false`, so a host
+  pinning its own pre-2.5.0 copy of the table must ship the new one.
+  Android hosts should serve `fonts/Edwin-Roman.otf` from the same
+  `AssetManager` as `fonts/Bravura.otf` to get the text face; it is
+  optional, and a host without it keeps the pre-v4 text estimates rather
+  than failing. `installSMuFLMetrics` and `nativeInstallSMuFLMetrics` keep
+  their names.
 
   **Text WIDTHS still differ between Apple and the other two platforms, by up
   to 0.1 em.** `AppleFontMetricsProvider` measures through `CTLine`, which
@@ -163,6 +173,34 @@ and this project adheres to
   the suite had been measuring Helvetica while calling it Edwin.
 
 ### Fixed
+
+- **A system that announces the next system's key or time change engraved
+  the announcement outside the staff.** `staffLineEndX` clipped the staff
+  lines to the terminal barline while `courtesyElements` placed the glyphs
+  past it, so the accidentals and numerals floated in blank space. The
+  lines now span the reserved band to the measure's right edge whenever an
+  announcement is present, which is what MuseScore does
+  (`TLayout::layoutStaffLines` lays out the whole measure, announce
+  segments included).
+
+  That boundary also takes a double barline now, but only before a **key**
+  signature: MuseScore's `keySigCourtesyBarlineMode` defaults to
+  `DOUBLE_BEFORE_COURTESY` while `timeSigCourtesyBarlineMode` is
+  `ALWAYS_SINGLE`, so a time-signature announcement stays single, and a
+  synthesized barline is never upgraded mid-system, over an explicit
+  barline, or over a repeat end. Checked against MuseScore v4.6.4, the
+  release this project targets.
+
+- **Android and the browser drew every barline as one thin line.** The
+  portable bridge discarded the barline subtype, so final, repeat and
+  double barlines were indistinguishable from a normal one. Each subtype
+  now renders with the offsets the Apple renderers use, shared through
+  `BarLineGeometry`, and repeat dots draw as SMuFL `repeatDot` glyphs
+  because `DrawCommand` has no arbitrary-path fill. One known difference
+  remains: the bridge scales its dot to the 0.3 sp the Apple renderers
+  already filled rather than Bravura's natural 0.4 sp ink — unifying on
+  the SMuFL size would move every Apple repeat barline, so it is a
+  follow-up rather than part of this fix.
 
 - `PagedScoreView` was reverting seven caller options to their defaults —
   `includeTitleFrame`, `breakIndicatorVisibility`, `graceNoteMag`,
