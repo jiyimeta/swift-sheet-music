@@ -16,7 +16,8 @@ MuseScoreの`ElementType` enumを背骨にして全件洗い出した記録。�
 
 **出荷済みMuseScoreに対する穴が2層、未リリースのMuseScore 5に対する断層が1つ。**
 
-1. **要素そのものが存在しない（MISSING）: 25件** — fret diagram、figured bass、capo、
+1. **要素そのものが存在しない（MISSING）: 25件**（調査時点。`ORNAMENT`と`FINGERING`を
+   model化したので2026-09-04時点では23件——§4.6・§4.2） — fret diagram、figured bass、capo、
    string tunings、harp pedal diagram、fingering、sticking、expression、symbol、image、
    HBox / TBox / FBox、spacer、staff type change、linked parts（excerpt）など。
    MSCX decoderは未知elementを黙って捨てる（`MSCXDecoder+Voice.swift:329`）ので、
@@ -365,7 +366,7 @@ TABをまともに扱うなら`StringData`が起点。これが無いと`FRET_DI
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
 | `EXPRESSION` | `twrite.cpp:1343` | なし | 表情記号text。dynamicとは別element |
-| `FINGERING` | `types/types.h:121` | なし | 運指番号。note添付 |
+| ~~`FINGERING`~~ | `types/types.h:121` | **`Fingering`**（2026-09-04実装） | 下の追記を参照 |
 | `STICKING` | `dom/sticking.h:35` | なし | 打楽器のR/L |
 | `FIGURED_BASS`＋`FIGURED_BASS_ITEM` | `dom/figuredbass.h:91` | なし | 数字付低音。prefix / digit / suffix / continuationの構造 |
 | `PLAYTECH_ANNOTATION` | `dom/playtechannotation.h:35` | なし | 奏法指定（pizz.等）とplayback反映 |
@@ -373,6 +374,26 @@ TABをまともに扱うなら`StringData`が起点。これが無いと`FRET_DI
 | `PLAY_COUNT_TEXT` | `twrite.cpp:2743`（MSC 5.00） | なし | 反復回数表示 |
 | `STAVE_SHARING_LABEL` | `dom/stavesharinglabel.h:27`（MSC 5.00） | なし | staff共有label |
 | `TRIPLET_FEEL` | `dom/tripletfeel.h:28` | なし | ssmの`Swing`とは別概念。typed feel + 生成text |
+
+**［2026-09-04 追記］`FINGERING`はmodel化した。** `SheetMusicCore`の`Fingering`と
+`Note.fingerings`、decoder / encoderは`MSCXDecoder+Fingering.swift` /
+`MSCXEncoder+Fingering.swift`、fixtureは`Tests/SheetMusicTests/Resources/own/fingerings.mscx`。
+noteに複数付く（左手運指と弦番号の同居は普通のguitar記譜）ので配列。
+
+判断が要ったのは`<style>`の扱い。上流ではこれは**text style**
+（`fingering` / `guitar_fingering_lh` / `guitar_fingering_rh` / `string_number`）だが、
+この要素に限っては「2」が指なのか手なのか弦なのかを決めるのがstyleなので、
+ssmの`TextStyleType`に足すのではなく`Fingering.Role`として要素のroleにした。
+`TextStyleType`の行はfontとplacementのdefaultを抱えており、そこは§7.3のstyle作業の領分。
+familyの外のstyleは`.other`で verbatim に保持する。
+
+残っている制約は2つ。`<placement>` / `<offset>` / font overrideはpreserved markup
+（`ChordArticulation`・`ChordOrnament`と同じ扱い）。`<text>`の中のinline markup
+（`<text><font size="8"/>2</text>`）はplain textに潰れる——§7.1の横断的なgapそのもので、
+`StaffText`が既に持っている制約と同じ。testで固定してある。
+
+`STICKING`と`EXPRESSION`は同じtext annotationだがnote添付ではなくvoice streamの
+annotationなので、`VoiceElement`にcaseを足す作業になる。`FINGERING`より一段広い。
 
 ### 4.3 記号・画像
 
@@ -425,14 +446,36 @@ link graph）を作る話で、value type設計そのものへの追加になる
 
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
-| `ORNAMENT` | `dom/ornament.h:29` | なし | MuseScore 4で`Articulation`から分離したornament。interval / accidental / cue note / playback。chord decoderは`<Articulation>`しか見ない（`MSCXDecoder+Chord.swift:31`） |
+| ~~`ORNAMENT`~~ | `dom/ornament.h:29` | **`ChordOrnament`**（2026-09-04実装） | 下の追記を参照 |
 | `AMBITUS` | `dom/ambitus.h:38` | なし | 音域表示 |
 | `MMREST_RANGE` | `dom/mmrestrange.h:34` | なし | 多小節休符の範囲label |
 | `DEAD_SLAPPED` | `dom/deadslapped.h:34` | なし | rest添付のdead slap |
 | `CHORD_BRACKET` | `dom/chordbracket.h:29` | なし | chord bracket |
 
-`ORNAMENT`が実質的に一番効く。trill / turn / mordentのplayback intervalとaccidentalが
-MuseScore 4以降ここに載っているため、無いと装飾音のMIDI再現ができない。
+**［2026-09-04 追記］`ORNAMENT`はmodel化した。** `SheetMusicCore`の`ChordOrnament`と
+`Chord.ornaments`、decoderは`MSCXDecoder+ChordOrnament.swift`、encoderは
+`MSCXEncoder+ChordOrnament.swift`。fixtureは`Tests/SheetMusicTests/Resources/own/ornaments.mscx`。
+持っているのは23種のpalette symbol（+ `.unknown`）、`intervalAbove` / `intervalBelow`、
+above / belowのaccidental、`ornamentShowAccidental` / `ornamentShowCueNote` /
+`startOnUpperNote` / `ornamentStyle` / `play`。
+
+意図的に持っていないものが3つあり、いずれもpreserved markupで往復する:
+
+- **cue noteの`<Chord>`** — `Ornament::computeNotesAboveAndBelow`（`dom/ornament.cpp:253`）が
+  親chordのtop noteからlayoutのたびに再計算する派生値。modelに置くと、下のnoteを編集した
+  瞬間にstaleになる値をmodelが抱えることになる。
+- **`<direction>` / `<placement>`** — ornament固有ではなく`Articulation` / `EngravingItem`の
+  base property。`ChordArticulation`も持っていないので揃えた。
+- **MuseScore 3形式の変換** — MS3は同じsymbolを`<Articulation><subtype>ornamentTrill</subtype>`
+  として書く。これは今まで通り`ChordArticulation.unknown`にdecodeする。`ChordOrnament`に
+  寄せるとround-tripのelement形が変わり（`Chord/Articulation`が`Chord/Ornament`になる）、
+  gateに嘘のlossが出る。compat変換はparityとは別問題。testで固定してある。
+
+**残っているのはplaybackとlayout。** intervalとaccidentalはmodelにあるが、
+`MidiRenderer`はornamentを音に展開しないし、engravingもglyphを置かない。
+これは「単独で追加できるMISSING」の外側——`LayoutElement`はwasm / Android bridgeにも
+mirrorされるので、それぞれ別sliceになる。intervalをmodelに入れたのは、
+その2つが読む先を用意するため。
 
 ---
 
@@ -592,9 +635,17 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    round-trip lossを止める。MISSING 25件の実害の大半がこれで消える。
 2. **横断的な4つ**（§7）— TextContent、ElementProperties拡張、style、時間軸map。
    個別要素のPARTIALの大半がここに帰着する。
-3. **単独で追加できるMISSING** — `ORNAMENT`、`StringData`+`FRET_DIAGRAM`+`STRING_TUNINGS`+`CAPO`、
-   `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`、`FINGERING`/`STICKING`/`EXPRESSION`。
+3. **単独で追加できるMISSING** — ~~`ORNAMENT`~~（2026-09-04完了、§4.6の追記）、
+   ~~`FINGERING`~~（2026-09-04完了、§4.2の追記）、
+   `StringData`+`FRET_DIAGRAM`+`STRING_TUNINGS`+`CAPO`、
+   `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`、`STICKING`/`EXPRESSION`。
    互いに独立なので並列に進められる。
+
+   実装して分かったこの層の境目: **noteやchordに直接ぶら下がる要素は単発で入る**
+   （`ORNAMENT`・`FINGERING`がそうだった）。**voice streamに並ぶ要素は`VoiceElement`に
+   caseを足す話になり、fingerprint・layout・wasm / Android bridgeのswitchまで届く**
+   （`STICKING`・`EXPRESSION`・`FIGURED_BASS`・voice stream上の`SYMBOL`）。
+   同じ「単独で追加できる」でも作業量が一段違うので、分けて見積もること。
 4. **構造変更を伴うもの** — box family（`MeasureBase`相当の並びが要る）、
    `STAFFTYPE_CHANGE`（staffの時間軸）、そして最後に**excerpt / linked parts**。
 

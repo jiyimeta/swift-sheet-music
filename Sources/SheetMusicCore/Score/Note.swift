@@ -79,6 +79,11 @@ public struct Note: Sendable, Equatable {
     /// not rendered). C++: `Note::fret()` / `Note::string()`.
     public var fret: Int?
     public var string: Int?
+    /// Finger numbers, guitar-hand fingerings, and string numbers attached to
+    /// this note. MuseScore keeps them in the note's `el()` list and writes
+    /// them as `<Fingering>` children, several per note where the notation
+    /// calls for it. C++: `mu::engraving::Fingering`.
+    public var fingerings: [Fingering]
     /// Base element properties shared with every engravable element.
     /// Carries `<visible>` and `<color>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
@@ -112,6 +117,7 @@ public struct Note: Sendable, Equatable {
         velocityType: NoteVelocityType = .user,
         fret: Int? = nil,
         string: Int? = nil,
+        fingerings: [Fingering] = [],
         visible: Bool = true,
         preservedMarkup: [PreservedXML] = [],
     ) {
@@ -134,6 +140,7 @@ public struct Note: Sendable, Equatable {
         self.velocityType = velocityType
         self.fret = fret
         self.string = string
+        self.fingerings = fingerings
         self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }

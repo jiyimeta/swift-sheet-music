@@ -60,18 +60,7 @@ extension Chord {
         //   engraving/dom/chord.cpp Chord::write — durationType →
         //   StemDirection → ChordLine / Articulation / Tremolo →
         //   Lyrics → Note.
-        // Chord-level `<ChordLine>`s lead the cluster; the ones bound to
-        // a specific note (`noteIndex != nil`) are written inside that
-        // `<Note>` instead — see the `chordLines:` argument below. A
-        // `noteIndex` pointing past the note list (possible when
-        // `ChordNotes` deduped a repeated pitch after decode) demotes to
-        // the chord-level form rather than dropping the element.
-        for line in chordLines where !notes.indices.contains(line.noteIndex ?? -1) {
-            children.append(line.encode(options: options))
-        }
-        for art in articulations {
-            children.append(art.encode(options: options))
-        }
+        children += notationCluster(options: options)
         // Tremolo sits with the ChordLine / Articulation cluster — after
         // articulations and before Lyrics / Note. For two-chord tremolo
         // (`span == .between`) the follower carries `tremolo == nil`
@@ -180,6 +169,34 @@ extension Chord {
         options: MSCXEncoderOptions,
     ) -> [XMLTreeNode] {
         endMarkers + slurBeginMarkers(options: options)
+    }
+
+    /// The chord-line / articulation / ornament cluster, in MuseScore's order
+    /// (`engraving/dom/chord.cpp Chord::write` — durationType → StemDirection →
+    /// ChordLine / Articulation / Tremolo → Lyrics → Note). `<Tremolo>` closes
+    /// the cluster but is emitted by the caller, which owns the injected-tremolo
+    /// rule for two-chord tremolo.
+    ///
+    /// Chord-level `<ChordLine>`s lead; the ones bound to a specific note
+    /// (`noteIndex != nil`) are written inside that `<Note>` instead. A
+    /// `noteIndex` pointing past the note list — possible when `ChordNotes`
+    /// deduped a repeated pitch after decode — demotes to the chord-level form
+    /// rather than dropping the element.
+    ///
+    /// Ornaments follow the articulations because MuseScore keeps both in one
+    /// `Chord::_articulations` list and writes them in a single pass.
+    private func notationCluster(options: MSCXEncoderOptions) -> [XMLTreeNode] {
+        var cluster: [XMLTreeNode] = []
+        for line in chordLines where !notes.indices.contains(line.noteIndex ?? -1) {
+            cluster.append(line.encode(options: options))
+        }
+        for articulation in articulations {
+            cluster.append(articulation.encode(options: options))
+        }
+        for ornament in ornaments {
+            cluster.append(ornament.encode(options: options))
+        }
+        return cluster
     }
 
     /// The `<notes>` half of an ordinary chord-to-chord tie's

@@ -34,6 +34,14 @@ extension Note {
         if let legacyBend {
             children.append(legacyBend.encode())
         }
+        // `<Fingering>` is another `el()` item, so it belongs in the same slot
+        // as the legacy `<Bend>`: after `<Accidental>` and before the tie
+        // spanners (`TWrite::write(const Note*, …)`, the `writeItems(item->el())`
+        // call at `rw/write/twrite.cpp:2462`). Order among el() items is the
+        // order they were added, which for a decoded score is source order.
+        for fingering in fingerings {
+            children.append(fingering.encode(options: options))
+        }
         if tieForward != nil {
             children.append(tieSpanner(
                 side: "next", endpoint: tieForwardEndpoint,
