@@ -342,6 +342,32 @@ struct ChordOrnamentEncodeTests {
         #expect(reDecoded.ornaments == decoded.ornaments)
     }
 
+    /// The preservation gate skips a fixture it cannot parse
+    /// (`guard let score = try? MSCXParser.parse(source) else { continue }`),
+    /// so a gate pass alone would not prove `ornaments.mscx` is being read.
+    /// This is what pins that it is, and what it decodes to.
+    @Test func fixtureDecodesEveryOrnamentItCarries() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("ornaments"))
+        let chords = score.parts[0].staves[0].measures
+            .flatMap { $0.voices[0].elements }
+            .compactMap { element -> Chord? in
+                guard case let .chord(chord) = element else { return nil }
+                return chord
+            }
+        #expect(chords.flatMap(\.ornaments).map(\.kind) == [
+            .trill, .turn, .mordent, .pinceCouperin,
+            .turnInverted, .unknown(subtype: "ornamentNotInThisLibrary"),
+        ])
+        let turn = try #require(chords[1].ornaments.first)
+        #expect(turn.accidentalAbove == .sharp)
+        #expect(turn.accidentalBelow == .flat)
+        #expect(turn.intervalAbove == .init(step: .third, quality: .major))
+        #expect(turn.showAccidental == .always)
+        #expect(chords[2].ornaments[0].elementProperties.visible == false)
+        #expect(chords[4].ornaments[0].preservedMarkup.map(\.name) == ["Chord"])
+        #expect(chords[5].ornaments[0].preservedMarkup.map(\.name) == ["direction"])
+    }
+
     @Test func roundTripsTheCueNoteChordThroughPreservedMarkup() throws {
         let decoded = try parseChord("""
         <durationType>quarter</durationType>
