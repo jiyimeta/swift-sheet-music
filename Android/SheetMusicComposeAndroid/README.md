@@ -127,7 +127,7 @@ ABI support is whatever `sheet-music-android` supports:
 |-------------|--------|
 | arm64-v8a   | Supported (primary) |
 | x86_64      | Supported (emulator) |
-| armv7       | Not supported |
+| armeabi-v7a | Buildable, opt-in — see [`../SheetMusicAndroid/README.md`](../SheetMusicAndroid/README.md#abi-matrix) |
 
 Minimum SDK: 28 (Android 9).
 

@@ -158,9 +158,27 @@ Compose integration.
 |-------------|--------|
 | arm64-v8a   | Supported (primary) |
 | x86_64      | Supported (emulator) |
-| armv7       | Not supported |
+| armeabi-v7a | Buildable, opt-in — not in the published AAR |
 
 Minimum SDK: 28 (Android 9).
+
+`armeabi-v7a` builds and stages: the Swift Android SDK carries the
+`armv7-unknown-linux-android28` triple and a `swift-armv7` runtime, the
+NDK has the matching sysroot, and both native dependencies of the audio
+module (FluidSynth, Oboe) ship the ABI. It is not in the default build
+because a third full cross-compile of the package costs roughly a third
+more wall clock on every local build and every CI run, for an ABI whose
+share of API-28-and-later devices is small and shrinking.
+
+To produce it:
+
+```bash
+SHEET_MUSIC_ANDROID_ABIS=arm64-v8a,x86_64,armeabi-v7a Scripts/android-build-libs.sh
+```
+
+The published AAR carries the two default ABIs, so a consumer who needs
+32-bit ARM builds the natives themselves rather than expecting them in
+the artifact.
 
 ## License
 
