@@ -518,6 +518,29 @@ object SheetMusicJNI {
     }
 
     /**
+     * The sticky-header pane for a horizontal continuous view: the clef, key
+     * signature, time signature and instrument name in force at [scrollXMm],
+     * frozen so a reader who has scrolled past bar 1 can still see what key and
+     * metre they are in.
+     *
+     * Returns a **one-page draw program** in exactly the format
+     * [nativeComputeLayout] returns, so a host decodes and paints it with the
+     * renderer it already has — there is no second drawing path, and a change to
+     * how a clef is drawn reaches the pane for free.
+     *
+     * [scrollXMm] is the viewport's left edge in document millimetres, the same
+     * space [nativeEditingHitTest] and [nativeItemIDsInRect] take. Scrolling
+     * past the last measure clamps to it rather than emptying the pane.
+     *
+     * Returns an empty array when the handle is unknown, no layout is cached, or
+     * the score has no measures to freeze.
+     */
+    fun nativeStickyHeaderProgram(scoreHandle: Long, scrollXMm: Double): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeStickyHeaderProgram(scoreHandle, scrollXMm, arena).toByteArray()
+    }
+
+    /**
      * Marquee (rubber-band) selection: every chord / rest whose layout box intersects the rectangle
      * ([xMm], [yMm], [widthMm], [heightMm]; document/mm, the same space [nativeEditingHitTest] takes
      * its point in) within the cached layout of [scoreHandle].

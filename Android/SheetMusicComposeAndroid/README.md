@@ -82,6 +82,34 @@ in force where it starts (colour, dash, text style), so it draws correctly
 without replaying what came before it. Give each band its own layer and an
 off-screen band is rejected once, by its bounds.
 
+### Continuous view: the sticky header
+
+A reader who has scrolled past bar 1 of a horizontal layout cannot see what key
+and metre they are in. `StickyHeaderPane` is MuseScore's answer — the current
+clef, key signature, time signature and instrument name, frozen at the
+viewport's left edge and drawn at half opacity to say they are a restatement:
+
+```kotlin
+Box {
+    ScorePage(page = program.pages[0], fontProvider = fonts, pxPerMM = pxPerMM)
+    StickyHeaderPane(
+        scoreHandle = handle.raw,
+        documentScrollXMm = scrollOffsetPx / pxPerMM,
+        pxPerMM = pxPerMM,
+        fontProvider = fonts,
+        modifier = Modifier.align(Alignment.TopStart),
+    )
+}
+```
+
+The pane is engraved by the Swift layout engine and arrives as an ordinary
+one-page draw program, so it is painted by the same renderer the score is. It
+re-engraves only when the scroll position crosses into another millimetre, so a
+smooth scroll costs one JNI round trip per bar rather than one per frame.
+
+Lay the score out in horizontal mode (`layoutMode = 1`) — the pane exists for
+that mode, and in page mode the header is already on screen.
+
 ### Playback overlays
 
 `PlaybackCursorOverlay` and `LoopHighlightOverlay` take the same
