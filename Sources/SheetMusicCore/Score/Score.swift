@@ -60,6 +60,7 @@ public struct Score: Sendable, Equatable {
         for partIndex in stripped.parts.indices {
             stripped.parts[partIndex].preservedMarkup = []
             stripped.parts[partIndex].instrument.preservedMarkup = []
+            stripped.parts[partIndex].instrument.stringData?.preservedMarkup = []
             for channelIndex in stripped.parts[partIndex].instrument.channels.indices {
                 stripped.parts[partIndex].instrument.channels[channelIndex].preservedMarkup = []
             }

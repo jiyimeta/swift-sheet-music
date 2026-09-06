@@ -40,6 +40,14 @@ extension Instrument {
             ))
         }
         appendDrumset(into: &children)
+        // Match MuseScore's writer: `<StringData>` follows playback properties
+        // and precedes `<MidiAction>` / `<Articulation>` / `<Channel>`
+        // (`rw/write/twrite.cpp:2025`). It previously rode in preserved markup
+        // at the end of `<Instrument>`; this moves rather than loses it, and the
+        // preservation gate compares parent/child counts rather than positions.
+        if let stringData {
+            children.append(stringData.encode(options: options))
+        }
         for art in articulations {
             children.append(art.encode())
         }

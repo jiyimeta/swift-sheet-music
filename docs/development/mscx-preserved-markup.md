@@ -166,8 +166,9 @@ difference. Run both gates after any change to `Sources/SheetMusicMSCX/`.
 
 - **Attributes.** Only elements are preserved. An unconsumed *attribute* on an
   otherwise-modeled element is still dropped. MSCX uses attributes sparingly
-  (`version`, `id`, `name`, `len`) and those are all consumed, so this has not
-  bitten yet.
+  (`version`, `id`, `name`, `len`, and `open` / `useFlat` on
+  `<StringData><string>`) and those are all consumed, so this has not bitten
+  yet.
 - **`<Staff>` body ordering.** `<VBox>` / `<HBox>` / `<TBox>` sit as siblings of
   `<Measure>`, where order is meaning, and the model has no `MeasureBase`-style
   sequence to hold them. Out of scope here; see
