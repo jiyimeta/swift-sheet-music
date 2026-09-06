@@ -34,6 +34,17 @@ extension VoiceElement {
 }
 
 extension Score {
+    /// Running tick from the start of `id`'s staff to the element's onset, or `nil` when the path does not resolve.
+    func absoluteTick(of id: VoiceElementID) -> Int? {
+        guard let position = onset(of: id), let staff = self[id.staff] else { return nil }
+        let durations = staff.measures.effectiveMeasureDurations()
+        guard durations.indices.contains(id.measureIndex) else { return nil }
+        let precedingTicks = durations[..<id.measureIndex].reduce(0) {
+            $0 + $1.ticks(division: division)
+        }
+        return precedingTicks + position.tick
+    }
+
     /// Onset of the element at `id`: the running tick of its voice at that slot — the resolved durations of the
     /// chords before it plus any `.locationShift` jogs among them. `nil` when the path does not resolve.
     func onset(of id: VoiceElementID) -> ScoreTickPosition? {

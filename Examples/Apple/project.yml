@@ -80,6 +80,12 @@ targets:
     sources:
       - path: SheetMusicExample
         excludes:
+          # Mirrors the iOS target excluding `macOS`. Every file under
+          # `iOS/` is wrapped in `#if !os(macOS)`, so compiling them here
+          # only ever produced empty objects — but Swift still requires
+          # unique filenames within a target, so `iOS/EngravedTextField`
+          # and `macOS/EngravedTextField` collided as soon as both existed.
+          - iOS
           - Sounds
           - Resources/Fonts
           - Resources/Fixtures

@@ -61,6 +61,7 @@ own substantive logic.
 | `DeleteVoiceElement` | Backspace / forward Delete | sugar |
 | `SetTie` | `+` | sugar |
 | `SetLyrics` | ⌘L (inline TextField) | sugar |
+| `SetLyric` | not in the example — driven by `LyricInputPlanner` | sugar |
 | `SetChordDuration` | 1..7 (chord selected) | — |
 | `SetRestDuration` | 1..7 (rest selected) | — |
 | `ReplaceVoiceElement` | primitive (used by note-input letter keys) | primitive |

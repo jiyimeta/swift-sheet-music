@@ -118,6 +118,14 @@ public struct EditRefusal: Sendable, Hashable {
         /// `.emptyStaffText` states for staff text, under its own name so a host's copy can say which field was
         /// empty.
         case emptyChordSymbol
+        /// A negative verse cannot address a lyric row: verse numbers are zero-based array indices.
+        /// `SetLyric` refuses rather than let an invalid index reach the chord's lyrics array, under its own name
+        /// so a host can distinguish a bad verse selector from a missing chord.
+        case invalidVerse(Int)
+        /// A lyric whose text is empty (or whitespace only) is not a syllable — it would engrave as nothing.
+        /// `SetLyric` refuses rather than write one; removing a syllable is spelled `lyric: nil`. The refusal has
+        /// its own name so a host's copy can identify the lyric field rather than report generic empty input.
+        case emptyLyricText
         /// A notation payload whose partner is named by ADJACENCY has no partner to name. `SetTremolo` with
         /// `.between` needs the next timed element of the voice to be a chord — a rest, a bar line or the end of
         /// the measure leaves the pair half-written, and a `.between` with no follower decodes back as no tremolo
@@ -226,6 +234,10 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.emptyStaffText"
         case .emptyChordSymbol:
             "edit.emptyChordSymbol"
+        case .invalidVerse:
+            "edit.invalidVerse"
+        case .emptyLyricText:
+            "edit.emptyLyricText"
         case .noNextChord:
             "edit.noNextChord"
         case .chordTooSmall:
@@ -316,6 +328,10 @@ public struct EditRefusal: Sendable, Hashable {
             "staff text is empty"
         case .emptyChordSymbol:
             "chord symbol text is empty"
+        case let .invalidVerse(verse):
+            "lyric verse must be zero or greater (got \(verse))"
+        case .emptyLyricText:
+            "lyric text is empty"
         case let .noNextChord(location):
             "no following chord after \(location)"
         case let .chordTooSmall(location, noteCount):

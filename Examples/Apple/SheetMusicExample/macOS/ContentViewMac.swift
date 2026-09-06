@@ -85,16 +85,23 @@
         /// Pre-computed layout for horizontal mode (one long system at
         /// natural content width). Rebuilt on mode / score changes.
         @State private var horizontalDoc: LayoutDocument?
+        /// The screen-only score used to build `horizontalDoc`. During text
+        /// entry it includes the pending command applied to a value copy;
+        /// exports continue to read the committed `score` below.
+        @State private var horizontalScreenScore: Score?
+        /// Invalidates the AppKit-hosted score even when a pending keystroke
+        /// changes glyph content without changing the document size.
+        @State private var horizontalContentVersion = UUID()
+        @State private var renderedTextEntryPreview: ScoreTextEntryPreviewIdentity?
         /// Reused across `adoptEditedScore` calls so `LayoutEngine.layout`
         /// can skip per-measure work for measures unchanged by the edit.
         /// Reset on every `adoptLoadedScore` (a fresh score has no cache
         /// continuity with the previous one).
         @State private var layoutCache = LayoutCache()
-        /// When non-nil, the lyric editor TextField is shown anchored to
-        /// the chord at this location. Set by ⌘L on a selected note,
-        /// cleared on submit / cancel.
-        @State private var lyricEditTarget: VoiceElementID?
-        @State private var lyricEditText = ""
+        /// The two inline editors share one overlay. Their `begin`
+        /// overloads end the other session before taking focus.
+        @State private var lyricSession = LyricInputSession()
+        @State private var textSession = TextInputSession()
         /// Internal clipboard for ⌘C / ⌘X / ⌘V. Holds whatever
         /// `VoiceElement` was last copied — chord or rest typically.
         /// Not synced with the system pasteboard: the score model isn't
@@ -108,7 +115,7 @@
         /// step. Mutually exclusive with `voiceElementClipboard`: a
         /// fresh copy populates one and clears the other.
         @State private var voiceRangeClipboard: RangePayload?
-        @FocusState private var lyricEditFocused: Bool
+        @FocusState private var textEntryFocused: Bool
         /// Per-measure clef / key / time / part-label state. Cached so
         /// the sticky header doesn't recompute it on every body re-eval
         /// (an O(measures × staves) walk that adds up during pinch /
@@ -236,6 +243,13 @@
                 : transposed.filtered(hidingStaves: hidden)
         }
 
+        private var textEntryPreviewIdentity: ScoreTextEntryPreviewIdentity? {
+            ScoreTextEntryPreview.identity(
+                lyricSession: lyricSession,
+                textSession: textSession,
+            )
+        }
+
         /// The score a **file** export should serialize: the loaded score with the active transpose applied, so a
         /// saved `.mscx` / `.mscz` / `.mid` is in the key on screen rather than the authored one. Without this the
         /// transpose is a view-only effect and every export silently reverts to the original key.
@@ -247,8 +261,10 @@
             score.map { $0.transposed(bySemitones: transposeSemitones) }
         }
 
-        /// The score a **PDF** export should engrave: exactly what the detail view is showing, hidden staves and all.
-        /// A PDF is a rendering rather than a save, so it goes through the full display transform.
+        /// The committed score a **PDF** export should engrave, with the
+        /// detail view's display transform and hidden-staff policy. Pending
+        /// inline text is composed only by the horizontal screen-layout path
+        /// and deliberately never reaches this value.
         private var scoreForPDFExport: Score? {
             score.map(laidOut)
         }
@@ -322,6 +338,7 @@
                     selectedSoundfontID: $selectedSoundfontID,
                     onLoadBundled: loadBundled,
                     onLoadHarmonyBasic: loadHarmonyBasic,
+                    onLoadLyricsBasic: loadLyricsBasic,
                     onOpenFile: showOpenPanel,
                     onImportPDF: showPDFImportPanel,
                     onTogglePlayback: togglePlayback,
@@ -382,6 +399,9 @@
             }
             .onChange(of: honorAuthoredHiding) { _, _ in
                 rebuildLayoutsForOptionsChange()
+            }
+            .onChange(of: textEntryPreviewIdentity) { _, _ in
+                rebuildHorizontalTextEntryPreview()
             }
             .onChange(of: isMetronomeEnabled) { _, newValue in
                 playbackEngine.setMuted(forChannel: .metronome, to: !newValue)
@@ -795,19 +815,67 @@
             keyMonitor = NSEvent.addLocalMonitorForEvents(
                 matching: .keyDown,
             ) { event in
-                // Space (keyCode 49). Inside the lyric editor it
-                // advances to the next chord's syllable; otherwise it
-                // toggles playback. The editor takes priority so the
-                // user can type lyrics rapidly without leaving keyboard
-                // focus.
+                // Space (keyCode 49). An inline input session commits
+                // and advances; otherwise it toggles playback.
                 if event.keyCode == 49,
                    !event.isARepeat,
-                   event.modifierFlags
-                       .intersection([.command, .control, .option])
-                       .isEmpty
+                   event.modifierFlags.isDisjoint(
+                       with: [.command, .control, .option],
+                   )
                 {
-                    if lyricEditTarget != nil {
-                        advanceLyricToNextChord()
+                    if let controller = inputController,
+                       lyricSession.isActive
+                    {
+                        if event.modifierFlags.contains(.shift) {
+                            lyricSession.movePrevious(
+                                controller: controller,
+                            )
+                            syncSelectionToLyricCursor()
+                            if let cursor = lyricSession.cursor {
+                                scrollToAffectedMeasure(
+                                    measureIndex: cursor.location.measureIndex,
+                                )
+                            }
+                        } else {
+                            do {
+                                let affected = try lyricSession.commit(
+                                    .word,
+                                    controller: controller,
+                                    undoManager: undoManager,
+                                )
+                                adoptEditedScore(controller.score)
+                                syncSelectionToLyricCursor()
+                                if let affected {
+                                    scrollToAffectedMeasure(
+                                        measureIndex: affected.measureIndex,
+                                    )
+                                }
+                            } catch {
+                                errorMessage = exampleErrorDescription(error)
+                            }
+                        }
+                        textEntryFocused = lyricSession.isActive
+                        return nil
+                    }
+                    if let controller = inputController,
+                       textSession.isActive
+                    {
+                        do {
+                            let affected = try textSession.commit(
+                                advance: true,
+                                controller: controller,
+                                undoManager: undoManager,
+                            )
+                            adoptEditedScore(controller.score)
+                            if let affected {
+                                scrollToAffectedMeasure(
+                                    measureIndex: affected.measureIndex,
+                                )
+                            }
+                        } catch {
+                            errorMessage = exampleErrorDescription(error)
+                        }
+                        textEntryFocused = textSession.isActive
                         return nil
                     }
                     togglePlayback()
@@ -816,16 +884,16 @@
                 // Bare `L` toggles a playback loop over the current
                 // range selection. ⌘L (handled below) opens the lyric
                 // editor, so we filter to no-modifier presses. While
-                // the lyric editor is up we let the keystroke through
+                // an inline editor is up we let the keystroke through
                 // so the user can type the letter.
                 if !event.isARepeat,
-                   event.modifierFlags
-                       .intersection(
-                           [.command, .control, .option, .shift],
-                       ).isEmpty,
-                       let chars = event.charactersIgnoringModifiers,
-                       chars.first?.lowercased() == "l",
-                       lyricEditTarget == nil
+                   event.modifierFlags.isDisjoint(
+                       with: [.command, .control, .option, .shift],
+                   ),
+                   let chars = event.charactersIgnoringModifiers,
+                   chars.first?.lowercased() == "l",
+                   !lyricSession.isActive,
+                   !textSession.isActive
                 {
                     toggleLoopForSelection()
                     return nil
@@ -861,7 +929,54 @@
                    let chars = event.charactersIgnoringModifiers,
                    chars.first?.lowercased() == "l"
                 {
-                    if openLyricEditorForSelection() {
+                    if case let .single(.note(noteID)) = selection,
+                       let controller = inputController
+                    {
+                        lyricSession.begin(
+                            at: VoiceElementID(noteID),
+                            verse: 0,
+                            controller: controller,
+                            ending: textSession,
+                        )
+                        syncSelectionToLyricCursor()
+                        textEntryFocused = true
+                        return nil
+                    }
+                }
+                // Text-entry shortcuts all accept a selected note or rest.
+                // With no timed selection the event is left untouched so
+                // normal macOS menu handling can still see it.
+                if event.modifierFlags.contains(.command),
+                   !event.isARepeat,
+                   event.modifierFlags.isDisjoint(
+                       with: [.control, .option],
+                   ),
+                   let chars = event.charactersIgnoringModifiers,
+                   let key = chars.first?.lowercased()
+                {
+                    let kind: TextInputPlanner.Kind? = switch key {
+                    case "t": event.modifierFlags.contains(.shift)
+                        ? .systemText : .staffText
+                    case "k" where !event.modifierFlags.contains(.shift):
+                        .chordSymbol
+                    case "m" where !event.modifierFlags.contains(.shift):
+                        .rehearsalMark
+                    default: nil
+                    }
+                    if let kind {
+                        guard let anchor = selectedVoiceElementID(),
+                              let controller = inputController
+                        else {
+                            errorMessage = "Select a note or rest before entering text."
+                            return event
+                        }
+                        textSession.begin(
+                            kind: kind,
+                            at: anchor,
+                            controller: controller,
+                            ending: lyricSession,
+                        )
+                        textEntryFocused = true
                         return nil
                     }
                 }
@@ -871,10 +986,11 @@
                 // refuses if the destination's duration doesn't match.
                 if event.modifierFlags.contains(.command),
                    !event.isARepeat,
-                   event.modifierFlags
-                       .intersection([.option, .control]).isEmpty,
-                       let chars = event.charactersIgnoringModifiers,
-                       let key = chars.first?.lowercased()
+                   event.modifierFlags.isDisjoint(
+                       with: [.option, .control],
+                   ),
+                   let chars = event.charactersIgnoringModifiers,
+                   let key = chars.first?.lowercased()
                 {
                     switch key {
                     case "c":
@@ -891,10 +1007,11 @@
                 // Matches MuseScore's macOS shortcut.
                 if event.modifierFlags.contains(.command),
                    !event.isARepeat,
-                   event.modifierFlags
-                       .intersection([.control, .option, .shift]).isEmpty,
-                       let chars = event.charactersIgnoringModifiers,
-                       let ratio = Self.tupletRatio(forCharacter: chars.first)
+                   event.modifierFlags.isDisjoint(
+                       with: [.control, .option, .shift],
+                   ),
+                   let chars = event.charactersIgnoringModifiers,
+                   let ratio = Self.tupletRatio(forCharacter: chars.first)
                 {
                     if applyCreateTuplet(
                         actualNotes: ratio.actual,
@@ -903,7 +1020,81 @@
                         return nil
                     }
                 }
-                if let controller = inputController, controller.isInputModeOn {
+                // Lyric navigation takes priority over note-input arrows.
+                if lyricSession.isActive,
+                   let controller = inputController,
+                   !event.isARepeat
+                {
+                    if event.keyCode == 125 || event.keyCode == 126 {
+                        lyricSession.moveVerse(
+                            event.keyCode == 125 ? .next : .previous,
+                            controller: controller,
+                        )
+                        syncSelectionToLyricCursor()
+                        textEntryFocused = true
+                        return nil
+                    }
+                    if event.keyCode == 36 {
+                        do {
+                            let affected = try lyricSession.commit(
+                                .none,
+                                controller: controller,
+                                undoManager: undoManager,
+                            )
+                            adoptEditedScore(controller.score)
+                            if let affected {
+                                scrollToAffectedMeasure(
+                                    measureIndex: affected.measureIndex,
+                                )
+                            }
+                        } catch {
+                            errorMessage = exampleErrorDescription(error)
+                        }
+                        lyricSession.end()
+                        textEntryFocused = false
+                        return nil
+                    }
+                    if event.keyCode == 53 {
+                        lyricSession.end()
+                        textEntryFocused = false
+                        return nil
+                    }
+                    if event.modifierFlags.isDisjoint(
+                        with: [.command, .control, .option],
+                    ),
+                        let character = event.characters?.first,
+                        character == "-" || character == "_"
+                    {
+                        let terminator: LyricInputPlanner.Terminator =
+                            character == "-" ? .syllable : .melisma
+                        do {
+                            let affected = try lyricSession.commit(
+                                terminator,
+                                controller: controller,
+                                undoManager: undoManager,
+                            )
+                            adoptEditedScore(controller.score)
+                            syncSelectionToLyricCursor()
+                            if let affected {
+                                scrollToAffectedMeasure(
+                                    measureIndex: affected.measureIndex,
+                                )
+                            }
+                        } catch {
+                            errorMessage = exampleErrorDescription(error)
+                        }
+                        textEntryFocused = lyricSession.isActive
+                        return nil
+                    }
+                }
+                // Note input must not fire while an inline text field has
+                // the caret: the monitor runs ahead of the responder
+                // chain, so an unguarded `handleInputModeKey` would turn
+                // the `a` of a typed syllable into an A natural instead
+                // of letting the TextField have it.
+                if let controller = inputController, controller.isInputModeOn,
+                   !lyricSession.isActive, !textSession.isActive
+                {
                     if handleInputModeKey(event, controller: controller) {
                         return nil
                     }
@@ -1180,146 +1371,6 @@
                 errorMessage = exampleErrorDescription(error)
             }
             return true
-        }
-
-        /// Build the in-document overlay shown when the lyric editor is
-        /// open. Returns nil when no chord is being edited; otherwise a
-        /// small TextField positioned (in document coords) at the chord's
-        /// stem X / lyric-line Y, so it scrolls + magnifies along with
-        /// the staff. Mirrors MuseScore's inline lyric input.
-        private func inlineLyricEditorOverlay(
-            document: LayoutDocument,
-        ) -> AnyView? {
-            guard let target = lyricEditTarget,
-                  let stemOrigin = document.chordStemOrigin(at: target),
-                  let lyricY = document.lyricLineY(at: target)
-            else { return nil }
-            // Match the rendered lyric: same system-font size as
-            // `ScoreCanvas`'s `drawLyricText` (sp × 2.2), centered both
-            // horizontally and vertically on the chord stem X / lyric
-            // line Y so the field sits exactly where the rendered
-            // syllable would.
-            let sp = document.metrics.sp
-            let lyricFontSize = sp * 2.2
-            let fieldWidth: CGFloat = sp * 12
-            return AnyView(
-                TextField("", text: $lyricEditText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: lyricFontSize, weight: .regular))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.primary)
-                    .frame(width: fieldWidth)
-                    .padding(.horizontal, 2)
-                    .background(Color.white)
-                    // Force light-mode resolution so the text colour
-                    // (`.primary`) lands on black against the forced
-                    // white background regardless of system theme —
-                    // matches the lyric glyph colour the renderer
-                    // uses on a light score canvas.
-                    .colorScheme(.light)
-                    .focused($lyricEditFocused)
-                    .onSubmit { submitLyricEdit() }
-                    .onExitCommand { closeLyricEditor() }
-                    .position(x: stemOrigin.x, y: lyricY),
-            )
-        }
-
-        /// Populate the lyric-editor state from the currently-selected
-        /// note (if any) and surface the TextField overlay. Returns
-        /// `true` when the lyric editor was opened so the caller can
-        /// suppress the originating event.
-        @discardableResult
-        private func openLyricEditorForSelection() -> Bool {
-            let chordID: VoiceElementID
-            switch selection {
-            case let .single(.note(noteID)):
-                chordID = VoiceElementID(noteID)
-            default:
-                return false
-            }
-            guard let controller = inputController,
-                  case let .chord(chord) = controller.score[chordID]
-            else {
-                return false
-            }
-            lyricEditText = chord.lyrics.first?.text ?? ""
-            lyricEditTarget = chordID
-            lyricEditFocused = true
-            return true
-        }
-
-        /// Commit the editor's current text to the target chord via
-        /// `SetLyrics`. Empty text clears the lyric. Returns `true` on
-        /// successful apply (caller can then advance / close).
-        @discardableResult
-        private func applyLyricEdit() -> Bool {
-            guard let target = lyricEditTarget,
-                  let controller = inputController else { return false }
-            let newLyrics: [Lyric] = lyricEditText.isEmpty
-                ? []
-                : [Lyric(text: lyricEditText)]
-            do {
-                try controller.apply(
-                    SetLyrics(at: target, lyrics: newLyrics),
-                    undoManager: undoManager,
-                )
-                adoptEditedScore(controller.score)
-                errorMessage = lyricEditText.isEmpty
-                    ? "Lyric cleared"
-                    : "Lyric set"
-                return true
-            } catch {
-                errorMessage = exampleErrorDescription(error)
-                return false
-            }
-        }
-
-        /// Apply current text and close the editor (Enter / OK).
-        private func submitLyricEdit() {
-            applyLyricEdit()
-            closeLyricEditor()
-        }
-
-        /// Apply current text, then move the editor to the next chord
-        /// in the same voice (Space key flow). Closes the editor when
-        /// no further chord exists in the staff.
-        private func advanceLyricToNextChord() {
-            guard let current = lyricEditTarget,
-                  let controller = inputController
-            else {
-                closeLyricEditor()
-                return
-            }
-            applyLyricEdit()
-            guard let next = controller.score.nextChord(after: current),
-                  case let .chord(chord) = controller.score[next]
-            else {
-                closeLyricEditor()
-                return
-            }
-            // Pre-fill with any existing first-verse lyric and re-focus.
-            lyricEditText = chord.lyrics.first?.text ?? ""
-            lyricEditTarget = next
-            lyricEditFocused = true
-            // Selection follows the editor so other shortcuts (⌘L,
-            // arrow-shift, Delete) target the same chord.
-            if let firstNote = chord.notes.first {
-                selection = .single(.note(NoteID(
-                    staff: next.staff,
-                    measureIndex: next.measureIndex,
-                    voiceIndex: next.voiceIndex,
-                    elementIndex: next.elementIndex,
-                    noteIndexInChord: 0,
-                )))
-                _ = firstNote
-            }
-            scrollToAffectedMeasure(measureIndex: next.measureIndex)
-        }
-
-        private func closeLyricEditor() {
-            lyricEditTarget = nil
-            lyricEditText = ""
-            lyricEditFocused = false
         }
 
         /// Add a new note (Shift+letter mapping → pitch in input
@@ -2387,6 +2438,26 @@
             return tick
         }
 
+        /// Keep the score selection on the chord the lyric caret sits on, so
+        /// ⌘L, Delete and the arrow shortcuts all target what the user is
+        /// typing into. The pre-session lyric editor did this inline on every
+        /// advance; the session-based flow has to do it at each caret move.
+        private func syncSelectionToLyricCursor() {
+            guard let cursor = lyricSession.cursor,
+                  let controller = inputController,
+                  case let .chord(chord) = controller.score[cursor.location],
+                  !chord.notes.isEmpty
+            else { return }
+            let location = cursor.location
+            selection = .single(.note(NoteID(
+                staff: location.staff,
+                measureIndex: location.measureIndex,
+                voiceIndex: location.voiceIndex,
+                elementIndex: location.elementIndex,
+                noteIndexInChord: 0,
+            )))
+        }
+
         /// Re-anchor the selection on the first chord/rest produced by
         /// a paste so subsequent edits land where the user is looking.
         private func anchorSelectionAfterPaste(
@@ -2829,8 +2900,9 @@
                 // reliably; a SwiftUI-only implementation fought
                 // ScrollPosition's asynchronous updates.
                 if let doc = horizontalDoc {
+                    let screenScore = horizontalScreenScore ?? score
                     HorizontalScoreContainer(
-                        score: score,
+                        score: screenScore,
                         document: doc,
                         measureContexts: horizontalContexts,
                         magnification: $magnification,
@@ -2859,12 +2931,49 @@
                                 pendingScroll: $pendingHorizontalScroll,
                             )
                         },
-                        contentVersion: AnyHashable(scoreVersion),
-                        inDocumentOverlay: inlineLyricEditorOverlay(
-                            document: doc,
+                        contentVersion: AnyHashable(
+                            horizontalContentVersion,
                         ),
-                        inDocumentOverlayKey: lyricEditTarget
-                            .map { AnyHashable($0) },
+                        inDocumentOverlay: {
+                            guard lyricSession.isActive || textSession.isActive,
+                                  let controller = inputController
+                            else { return nil }
+                            return AnyView(ScoreTextEntryOverlayHost(
+                                document: doc,
+                                lyricSession: lyricSession,
+                                textSession: textSession,
+                                controller: controller,
+                                undoManager: undoManager,
+                                focus: $textEntryFocused,
+                                onApplied: { edited, affected in
+                                    adoptEditedScore(edited)
+                                    if let affected {
+                                        scrollToAffectedMeasure(
+                                            measureIndex: affected.measureIndex,
+                                        )
+                                    }
+                                },
+                                onError: { error in
+                                    errorMessage = exampleErrorDescription(error)
+                                },
+                            ))
+                        }(),
+                        inDocumentOverlayKey: {
+                            if let cursor = lyricSession.cursor {
+                                return AnyHashable(
+                                    ScoreTextEntryOverlayIdentity.lyric(cursor),
+                                )
+                            }
+                            if let anchor = textSession.anchor {
+                                return AnyHashable(
+                                    ScoreTextEntryOverlayIdentity.text(
+                                        kind: textSession.kind.overlayIdentity,
+                                        anchor: anchor,
+                                    ),
+                                )
+                            }
+                            return nil
+                        }(),
                         onViewportSizeChange: { size in
                             horizontalViewportSize = size
                         },
@@ -3117,6 +3226,17 @@
             }
         }
 
+        private func loadLyricsBasic() {
+            do {
+                let loaded = try ScoreLoader.loadLyricsBasic()
+                adoptLoadedScore(
+                    loaded, sourceName: "lyrics-basic.mscx",
+                )
+            } catch {
+                errorMessage = "Failed: \(exampleErrorDescription(error))"
+            }
+        }
+
         /// User-triggered "Open…" via NSOpenPanel. Reads the file at
         /// `url` (any of the formats `ScoreFileType` recognises),
         /// adopts it as the active score.
@@ -3146,17 +3266,14 @@
             // natural content width), so there's no reason to defer
             // it to a .task — and an if-let gated Group can fail
             // to trigger .task(id:) when it starts empty.
-            let hOpts = horizontalOptions
             // New score → drop the old cache; per-measure entries from
             // a previous score have no validity here.
             layoutCache = LayoutCache()
-            horizontalDoc = LayoutEngine.layout(
-                score: laidOut(loaded), options: hOpts,
-                availableWidth: LayoutEngine.naturalContentWidth(
-                    score: laidOut(loaded), options: hOpts,
-                ),
-                cache: layoutCache,
-            )
+            lyricSession.end()
+            textSession.end()
+            horizontalDoc = nil
+            horizontalScreenScore = nil
+            rebuildHorizontalScreenLayout(for: loaded)
             horizontalContexts = LayoutEngine.measureContexts(
                 for: laidOut(loaded),
             )
@@ -3218,16 +3335,7 @@
             // Without this, cache hits return stale entries computed under
             // the previous policy.
             layoutCache = LayoutCache()
-            let hOpts = horizontalOptions
-            let availableWidth = horizontalDoc?.size.width
-                ?? LayoutEngine.naturalContentWidth(
-                    score: laidOut(score), options: hOpts,
-                )
-            horizontalDoc = LayoutEngine.layout(
-                score: laidOut(score), options: hOpts,
-                availableWidth: availableWidth,
-                cache: layoutCache,
-            )
+            rebuildHorizontalScreenLayout(for: score)
             scoreVersion = UUID()
         }
 
@@ -3242,27 +3350,69 @@
         ///     pass — saving the full-score `naturalContentWidth` walk.
         private func adoptEditedScore(_ edited: Score) {
             let t0 = Date()
-            let hOpts = horizontalOptions
-            // Reuse the previously-laid-out total width as the
-            // `availableWidth` input. For a single-note edit this is
-            // within a glyph's width of the true natural content width,
-            // and the layout engine renormalises systems internally —
-            // saves a full-score width walk.
-            let availableWidth = horizontalDoc?.size.width
-                ?? LayoutEngine.naturalContentWidth(
-                    score: laidOut(edited), options: hOpts,
-                )
-            let tLayoutStart = Date()
-            horizontalDoc = LayoutEngine.layout(
-                score: laidOut(edited), options: hOpts,
-                availableWidth: availableWidth,
-                cache: layoutCache,
-            )
-            let layoutMs = Date().timeIntervalSince(tLayoutStart) * 1000
+            let layoutMs = rebuildHorizontalScreenLayout(for: edited)
             verticalDoc = nil
             pdfLayout = nil
             score = edited
             scoreVersion = UUID()
+            reportEditTiming(startedAt: t0, layoutMs: layoutMs)
+        }
+
+        /// Rebuilds only the interactive horizontal document when pending
+        /// text changes. This must stay separate from `laidOut(_:)`, which
+        /// `scoreForPDFExport` also calls: preview text is screen-only and
+        /// must never reach PDF or file export.
+        private func rebuildHorizontalTextEntryPreview() {
+            guard layoutMode == .horizontal,
+                  let committed = inputController?.score,
+                  textEntryPreviewIdentity != renderedTextEntryPreview
+            else { return }
+            let t0 = Date()
+            let layoutMs = rebuildHorizontalScreenLayout(for: committed)
+            reportEditTiming(startedAt: t0, layoutMs: layoutMs)
+        }
+
+        /// Applies the active session's pending command to a value copy and
+        /// lays that copy out through the same cache used for committed edits.
+        @discardableResult
+        private func rebuildHorizontalScreenLayout(
+            for committed: Score,
+        ) -> Double {
+            let preview = ScoreTextEntryPreview.compose(
+                committed: committed,
+                lyricSession: lyricSession,
+                textSession: textSession,
+            )
+            let screenScore = laidOut(preview)
+            let hOpts = horizontalOptions
+            // Reuse the previously-laid-out total width. The cache rejects
+            // the edited measure but retains every unchanged measure, which
+            // keeps per-keystroke preview viable on large scores.
+            let availableWidth = horizontalDoc?.size.width
+                ?? LayoutEngine.naturalContentWidth(
+                    score: screenScore, options: hOpts,
+                )
+            let tLayoutStart = Date()
+            let document = LayoutEngine.layout(
+                score: screenScore,
+                options: hOpts,
+                availableWidth: availableWidth,
+                cache: layoutCache,
+            )
+            let layoutMs = Date().timeIntervalSince(tLayoutStart) * 1000
+            horizontalScreenScore = screenScore
+            horizontalDoc = document
+            horizontalContentVersion = UUID()
+            renderedTextEntryPreview = textEntryPreviewIdentity
+            return layoutMs
+        }
+
+        /// Keep the existing edit timing probe for both committed edits and
+        /// per-keystroke preview layouts.
+        private func reportEditTiming(
+            startedAt t0: Date,
+            layoutMs: Double,
+        ) {
             let stateDoneMs = Date().timeIntervalSince(t0) * 1000
             // Schedule probes at three milestones:
             //   - tick:  next runloop iteration (~SwiftUI commit done)

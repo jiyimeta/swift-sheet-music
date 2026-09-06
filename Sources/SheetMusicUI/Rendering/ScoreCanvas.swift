@@ -316,7 +316,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .textMark(.lyrics(lyricColor), text, p):
+        case let .textMark(.lyrics(lyricColor, _, _), text, p):
             TextMarkRenderer.drawLyric(
                 context: &context, text: text,
                 origin: shift(p),
