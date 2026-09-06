@@ -50,46 +50,6 @@ extension FNV1a {
         }
     }
 
-    /// `visible == false` and a set `color` are the occupants; a default `ElementProperties` feeds nothing.
-    mutating func combineOccupied(_ properties: ElementProperties, visibleTag: Int, colorTag: Int) {
-        if !properties.visible { combine(visibleTag) }
-        if let color = properties.color {
-            combine(colorTag)
-            combine(color.red)
-            combine(color.green)
-            combine(color.blue)
-            combine(color.alpha)
-        }
-    }
-
-    /// Chord-anchored spanner begins (`Chord.spanners` — slurs, in practice), BY OCCUPANTS: an empty array feeds
-    /// nothing, so every chord in a score without slurs hashes exactly as it did before this walk existed, which
-    /// is what keeps the committed replay goldens byte-identical (`ScoreFingerprintTests
-    /// .defaultsHashUnchanged`). A count byte would have been the obvious spelling and would have moved them all.
-    ///
-    /// Closes the blind spot `ScoreFingerprint.swift` names and spec §2.5's group-1 amendment assigns to group 6:
-    /// without it a `SetSlur` / `RemoveSpanner` pair is invisible to every golden.
-    mutating func combineOccupied(_ spanners: [Spanner], tag: Int) {
-        guard !spanners.isEmpty else { return }
-        combine(tag)
-        combine(spanners.count)
-        for spanner in spanners {
-            combine(spanner)
-        }
-    }
-
-    /// Chord ornaments (`Chord.ornaments`), BY OCCUPANTS for the same reason
-    /// `combineOccupied(_ spanners:tag:)` is: a chord that carries none must
-    /// feed no bytes, or every committed replay golden moves.
-    mutating func combineOccupied(_ ornaments: [ChordOrnament], tag: Int) {
-        guard !ornaments.isEmpty else { return }
-        combine(tag)
-        combine(ornaments.count)
-        for ornament in ornaments {
-            combine(ornament)
-        }
-    }
-
     /// Every field an edit can change. `preservedMarkup` is deliberately out:
     /// it is source fidelity, not model state, and no edit command reaches it.
     mutating func combine(_ ornament: ChordOrnament) {
@@ -110,23 +70,12 @@ extension FNV1a {
     /// would collapse "absent" onto "false", and these two `Bool?`s mean
     /// different things: absent is "MuseScore wrote no tag", false is "the
     /// author turned it off".
-    private mutating func combineTristate(_ flag: Bool?) {
+    mutating func combineTristate(_ flag: Bool?) {
         guard let flag else {
             combine(0)
             return
         }
         combine(flag ? 2 : 1)
-    }
-
-    /// Note fingerings, BY OCCUPANTS — same rule, same reason, as
-    /// `combineOccupied(_ ornaments:tag:)`.
-    mutating func combineOccupied(_ fingerings: [Fingering], tag: Int) {
-        guard !fingerings.isEmpty else { return }
-        combine(tag)
-        combine(fingerings.count)
-        for fingering in fingerings {
-            combine(fingering)
-        }
     }
 
     /// `preservedMarkup` stays out, as it does for `ChordOrnament`: it is
@@ -137,17 +86,6 @@ extension FNV1a {
         combineOccupied(fingering.elementProperties, visibleTag: 37, colorTag: 38)
     }
 
-    /// Note-attached engraving symbols, BY OCCUPANTS: an empty array feeds no
-    /// bytes, so scores without them retain their committed replay fingerprint.
-    mutating func combineOccupied(_ symbols: [EngravingSymbol], tag: Int) {
-        guard !symbols.isEmpty else { return }
-        combine(tag)
-        combine(symbols.count)
-        for symbol in symbols {
-            combine(symbol)
-        }
-    }
-
     /// Every modeled symbol field an edit can change. `preservedMarkup` stays
     /// out because it is source fidelity rather than model state.
     mutating func combine(_ symbol: EngravingSymbol) {
@@ -156,17 +94,6 @@ extension FNV1a {
         combinePresence(symbol.size)
         combinePresence(symbol.angle)
         combineOccupied(symbol.elementProperties, visibleTag: 47, colorTag: 48)
-    }
-
-    /// A chord bracket, BY OCCUPANTS: an absent bracket feeds no bytes, so
-    /// every score without one keeps its committed replay fingerprint.
-    mutating func combineOccupied(_ bracket: ChordBracket?, tag: Int) {
-        guard let bracket else { return }
-        combine(tag)
-        combinePresence(bracket.hookLength)
-        combine(bracket.hookPosition?.rawValue)
-        combineTristate(bracket.isRightSide)
-        combineOccupied(bracket.elementProperties, visibleTag: 44, colorTag: 45)
     }
 
     /// Every case that carries *timing* — i.e. anything that changes how much tick budget an element occupies, or
@@ -361,7 +288,7 @@ extension FNV1a {
 
     /// Explicit 0/1 presence byte for an unbounded `Int?` — the `combine(_ fraction:)` / `combine(_ address:)`
     /// rule, restated for the TPCs and velocities above, whose `-1` is a real value.
-    private mutating func combinePresence(_ value: Int?) {
+    mutating func combinePresence(_ value: Int?) {
         guard let value else {
             combine(0)
             return
@@ -372,7 +299,7 @@ extension FNV1a {
 
     /// Explicit 0/1 presence byte for a `Double?`, keeping an absent hook
     /// length distinct from every possible IEEE 754 bit pattern.
-    private mutating func combinePresence(_ value: Double?) {
+    mutating func combinePresence(_ value: Double?) {
         guard let value else {
             combine(0)
             return
