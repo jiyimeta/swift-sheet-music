@@ -65,6 +65,7 @@ public struct FrameText: Sendable, Equatable, Hashable {
 
     public var style: Style
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// Optional explicit (x, y) offset from MuseScore's `<offset>`
     /// element. Stored in millimetres — MuseScore's read path (see
     /// `read460/tread.cpp` `case P_TYPE::POINT`) interprets the
@@ -91,9 +92,11 @@ public struct FrameText: Sendable, Equatable, Hashable {
         offsetMm: CGPoint? = nil,
         fontSize: Double? = nil,
         align: TextAlign? = nil,
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.style = style
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.offsetMm = offsetMm
         self.fontSize = fontSize
         self.align = align

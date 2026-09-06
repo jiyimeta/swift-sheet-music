@@ -22,10 +22,12 @@ extension ExpressionText {
     /// `<snapToDynamics>` and delegates the rest to `TRead::read(TextBase*)`
     /// (`rw/read460/tread.cpp:804`).
     static func decode(_ node: XMLTreeNode) -> ExpressionText {
+        let textNode = node.first("text")
         var expression = ExpressionText(
-            text: node.first("text").map(StaffText.plainText(of:)) ?? "",
+            text: textNode.map(StaffText.plainText(of:)) ?? "",
             snapToDynamics: node.first("snapToDynamics").map { $0.text != "0" },
             preservedMarkup: node.preservedMarkup(consuming: consumedChildren),
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
         expression.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return expression

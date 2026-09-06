@@ -35,6 +35,7 @@ public enum Syllabic: Sendable, Equatable {
 /// the chord beginning at `anchor.tick + ticks` (`LayoutEngine+Placement`).
 public struct Lyric: Sendable, Equatable {
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     public var syllabic: Syllabic
     /// Melisma length in MIDI ticks at the score's division. Zero means
     /// no melisma; any positive value targets the chord beginning at
@@ -69,8 +70,10 @@ public struct Lyric: Sendable, Equatable {
         properties: TextProperties = TextProperties(),
         visible: Bool = true,
         preservedMarkup: [PreservedXML] = [],
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.syllabic = syllabic
         self.ticks = ticks
         self.verse = verse

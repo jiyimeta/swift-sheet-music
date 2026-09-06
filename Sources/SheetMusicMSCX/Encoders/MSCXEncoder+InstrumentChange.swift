@@ -25,7 +25,11 @@ extension InstrumentChange {
         }
         children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
-        children.append(XMLTreeNode(name: "text", text: text))
+        children.append(encodeText(
+            text,
+            preservedTextMarkup: preservedTextMarkup,
+            options: options,
+        ))
         children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "InstrumentChange", children: children)
     }

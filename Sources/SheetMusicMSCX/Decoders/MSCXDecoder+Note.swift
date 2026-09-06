@@ -350,6 +350,7 @@ extension Note {
     /// `<subtype>` (0=STRAIGHT, 1=WAVY). Older mscx used `<easeIn>`/`<easeOut>`.
     /// Unknown or missing fields fall back to MuseScore's defaults.
     private static func decodeGlissando(_ node: XMLTreeNode) -> Glissando {
+        let textNode = node.first("text")
         let style = node.first("glissandoStyle")
             .flatMap { parseGlissandoStyle($0.text) } ?? .chromatic
         let easeIn = node.first("easeInSpin")?.text
@@ -369,6 +370,7 @@ extension Note {
             easeIn: Int(easeIn) ?? 0,
             easeOut: Int(easeOut) ?? 0,
             text: decodeGlissandoText(node, visualType: visualType),
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
     }
 
@@ -385,7 +387,7 @@ extension Note {
         guard let textNode = node.first("text") else {
             return visualType == .straight ? "gliss." : nil
         }
-        let raw = textNode.text ?? ""
+        let raw = StaffText.plainText(of: textNode)
         return raw.isEmpty ? nil : raw
     }
 

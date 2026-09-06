@@ -32,6 +32,7 @@ extension Capo {
             else { return nil }
             return number
         })
+        let textNode = node.first("text")
         var capo = Capo(
             isActive: node.first("active").map { $0.text != "0" } ?? true,
             // Absence takes `Capo::propertyDefault` (1), while a present but
@@ -42,8 +43,9 @@ extension Capo {
                 .flatMap { Int($0.text) }
                 .map(TransposeMode.init(mscxOrdinal:)),
             ignoredStrings: ignoredStrings,
-            text: node.first("text").map(StaffText.plainText(of:)) ?? "",
+            text: textNode.map(StaffText.plainText(of:)) ?? "",
             preservedMarkup: node.preservedMarkup(consuming: consumedChildren),
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
         capo.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return capo

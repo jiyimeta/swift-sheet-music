@@ -8,9 +8,9 @@ import SheetMusicFoundation
 /// C++: `mu::engraving::StaffTextBase` / `StaffText` / `SystemText`.
 public struct StaffText: Sendable, Equatable {
     /// Plain-text content. Inline HTML formatting (e.g. `<font>`)
-    /// from the source is stripped during decode; visual styling
-    /// other than color is not yet preserved.
+    /// remains available separately as opaque preserved markup.
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// Author-supplied X offset relative to the default placement,
     /// in spatium units. Sugar over `elementProperties.offset`.
     public var offsetX: Double {
@@ -66,8 +66,10 @@ public struct StaffText: Sendable, Equatable {
         isSystemText: Bool = false,
         properties: TextProperties = TextProperties(),
         visible: Bool = true,
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.isSystemText = isSystemText
         self.properties = properties
         let offset: ScoreOffset? = if offsetX == 0 && offsetY == 0 {

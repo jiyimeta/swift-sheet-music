@@ -1058,7 +1058,7 @@ preserved markup。`<subtype>`はMuseScoreのwriterがchord bracketには書か�
 stem directionすらmodelしておらず、この形の型が1つも無かったため。2人目の利用者が出たら
 共有型に昇格させる。
 
-### 4.6.1 grace chordはmodel化した子要素を落とす（構造的な穴）
+### 4.6.2 grace chordはmodel化した子要素を落とす（構造的な穴）
 
 `CHORD_BRACKET`の実装中に見つかった、この節より広い問題。
 
@@ -1383,6 +1383,80 @@ border / fill / line spacingを足せば揃う。
 
 影響を受けるのは`LYRICS`・`DYNAMIC`・`STAFF_TEXT`・`SYSTEM_TEXT`・`HARMONY`・
 `REHEARSAL_MARK`・`MARKER`・`JUMP`・`TEMPO_TEXT`・frame text — つまりtext系全部。
+
+#### 7.1.1 ［2026-09-06 訂正］上の3段落は3箇所で誤っている
+
+着手前に実コードを確認して分かったこと。3件とも、この文書の他の箇所と同じ形の誤り——
+**上流のdata構造から推論していて、file上の書かれ方とssmの実際のcodeを見ていない。**
+
+**1. `TEMPO_TEXT`は移行対象ではない。`<text>`が往復値ではなく派生値だから。**
+`MSCXEncoder+Tempo.swift:46-70`は`beatsPerSecond` / `beatNote` / `beatDots`から
+`<sym>metNoteQuarterUp</sym>`と`<b> = 120</b>`を**生成している**。decoderはglyphを読み戻さず、
+printed numberだけ拾う——`MSCXDecoder+Tempo.swift:19-25`が
+「version-dependentなnote glyphをtextからparseするのではなく」と明示している。
+`TextContent`に移行すると、生成元（`beatsPerSecond`）と`TextContent`のどちらが正なのかが
+決まらなくなる。
+
+**判定基準:「encoder側が*その値を*modelから組み立てているなら派生値」。**
+15箇所すべてに当てて、該当は`Tempo`だけだった。偽陽性が2件あり、どちらも
+「その要素が何かを生成しているか」で切ると引っかかる——`MSCXEncoder+Capo.swift:42`は
+`transposeMode`と`<string no=><apply>`をmodelから組み立てているが`<text>`はstored、
+`MSCXEncoder+StringTunings.swift:29`も`visibleStrings`を`joined`で作るが`<text>`はstored。
+**要素単位ではなく値単位で切ること。**
+
+同じ形はMuseScore側にもある。`<FiguredBass>`のitem形式では、readerが末尾で
+`b->setXmlText(normalizedText)`（`v4.6.5:read460/tread.cpp:1440`）と再生成するので、
+file上の`<text>`は読み込み時に捨てられる。**「text系」は移行対象として一枚岩ではなく、
+`<text>`を往復する要素と生成する要素に分かれる。**
+
+**2. `TextRun`のtreeという最小形は、実fileのmarkupを表現できない。**
+committed fixtureに入っている`<b>`はすべてこの形:
+
+```xml
+<text><b></b><font face="ScoreText"/><b><font face="FreeSerif"/> = 180</b></text>
+```
+（`testVoltaTemp.mscx:189`, `repeat53.mscx:124`, `testArpeggio.mscx:161`, `repeat52.mscx:124`）
+
+**空の`<b></b>`と、子を持たない`<font face=…/>`。** これはnested styled runのtreeではなく、
+**以降のstyleを変える状態機械**である。MuseScore 2/3期のtempo markingで、
+metronome glyphは`<sym>`ではなく**ScoreText fontの1文字**として書かれている。
+`[TextRun]`で最初からmodel化しようとすると、この形を「入れ子のstyle」として誤読する。
+
+**3. flattenしているのはdecoderだけではない。serializerも同じ消去をしている。**
+`XMLTreeParser.swift:18`が自分でそう書いている——
+「child positionsを消し、要素が閉じるとき1度trimする」。
+そして`XMLTreeSerializer.swift:31-37`は`node.text`を**全childの前に1度だけ**書き、
+childがあるときはindentと改行まで足す。つまり`a<b>B</b>c`は往復で`c`の位置を失うだけでなく、
+**元のsourceに無かったwhitespaceが入る。** 直すべき箇所は2つあって、1つではない。
+
+**4.（誤りではないが見積もりに効く）decode側には共有helperがあるが、encode側には無い。**
+decodeは`StaffText.plainText(of:)`（`MSCXDecoder+StaffText.swift:34`）を複数のdecoderが使う。
+encodeは**14ファイル15箇所**が`XMLTreeNode(name: "text", …)`をinlineで組み立てている。
+「decoder 1つを差し替えれば全要素に効く」はdecode側にしか当たらない。
+
+**5.（実装して分かった）decode側の共有helperは、全員が使っているわけではない。**
+`plainText(of:)`は**再帰**（自分のcharacter data + 子孫のflatten）だが、
+`Marker` / `Jump` / `Lyric` / `FrameText`は**その要素自身のcharacter dataしか読まない**。
+`<text><sym>coda</sym></text>`は`StaffText`にとって`"coda"`、`Marker`にとって`""`である。
+`FrameText`はさらに独自で、文字列レベルの`stripInlineMarkup`を通していた。
+
+**この差は暗黙で、encoderが「markupのflatten結果 == modelのtext」で再出力を判定した瞬間に
+契約に変わる。** 全decoderが同じ規約でflattenしていることを要求してしまうので、
+そうでないMarkerでは`<sym>`が永久に戻らない。実装中に実際にこれが起きて、
+4つのdecoderが再帰flattenに書き換えられ、MusicXML importのsemantic比較
+（`phase2_jumpMarker_semanticEquivalence`の`testCodaHBox`）が落ちて発覚した。
+
+**対処は「decoderが自分のflatten結果を渡す」**——`PreservedTextMarkup.derivedText`。
+規約が呼び出し側に閉じるので、どのdecoderも導出を変えずに済む。
+**一般則として、共有helperの存在は共通規約の存在を意味しない。** helperの戻り値を
+別の場所の判定に使うときは、全呼び出し元がそれを使っているかを確認すること。
+
+**この訂正が測れる形:** preservation gateのallowlistに`"b/font"` / `"text/b"` /
+`"text/font"` / `"text/sym"`が載っており、理由文が「§7.1の作業で消す」と自称している
+（`MSCXPreservationGateTests.swift:65, 184`）。ただし前3つはfixture上**Tempo markingにしか
+出現しない**ので、この節の作業では消えない。消えるのは`"text/sym"`だけで、その根拠は
+`repeat53.mscx:203`の`<Marker><text><sym>segno</sym></text>`——Markerの`<text>`はstored
+なので、markupを戻せば復活する。
 
 ### 7.2 element base property
 
