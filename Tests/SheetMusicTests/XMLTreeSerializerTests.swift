@@ -77,4 +77,78 @@ struct XMLTreeSerializerTests {
         let reparsed = try XMLTreeParser.parse(bytes)
         #expect(reparsed == original)
     }
+
+    @Test("serializes mixed content inline without changing whitespace")
+    func serializesMixedContentInline() throws {
+        let source = "<text> a&amp;<b><i>B</i></b> c<sym>segno</sym> </text>"
+        let original = try XMLTreeParser.parse(
+            Data(source.utf8),
+            preservingMixedContentIn: ["text"],
+        )
+
+        let encoded = serialize(original)
+
+        #expect(encoded == "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\(source)\n")
+    }
+
+    @Test("mixed content preserves character and element interleaving")
+    func mixedContentPreservesInterleaving() throws {
+        let original = try XMLTreeParser.parse(
+            Data("<text>a<b>B</b>c</text>".utf8),
+            preservingMixedContentIn: ["text"],
+        )
+
+        let encoded = serialize(original)
+
+        #expect(encoded.contains("<text>a<b>B</b>c</text>"))
+        #expect(!encoded.contains("<text>ac<b>B</b></text>"))
+        #expect(!encoded.contains("<b>B</b>ac"))
+    }
+
+    @Test("mixed content preservation inherits through nested markup")
+    func nestedMixedContentPreservesInterleaving() throws {
+        let source = "<text>a<b>B<i>C</i>D</b>e</text>"
+        let original = try XMLTreeParser.parse(
+            Data(source.utf8),
+            preservingMixedContentIn: ["text"],
+        )
+
+        let bytes = XMLTreeSerializer.serialize(original)
+        let encoded = String(data: bytes, encoding: .utf8) ?? ""
+        let reparsed = try XMLTreeParser.parse(
+            bytes,
+            preservingMixedContentIn: ["text"],
+        )
+
+        #expect(encoded == "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\(source)\n")
+        #expect(reparsed == original)
+    }
+
+    @Test("parser round-trips its inline mixed-content output")
+    func mixedContentRoundTripsViaParser() throws {
+        let original = try XMLTreeParser.parse(
+            Data("<text> a &amp; <b><i>B&lt;</i></b> tail </text>".utf8),
+            preservingMixedContentIn: ["text"],
+        )
+
+        let bytes = XMLTreeSerializer.serialize(original)
+        let reparsed = try XMLTreeParser.parse(
+            bytes,
+            preservingMixedContentIn: ["text"],
+        )
+
+        #expect(reparsed == original)
+    }
+
+    @Test("empty mixed content self-closes without swallowing significant space")
+    func emptyMixedContentAndSignificantSpace() throws {
+        let empty = XMLTreeNode(name: "text", mixedContent: [])
+        let spaced = try XMLTreeParser.parse(
+            Data("<text> </text>".utf8),
+            preservingMixedContentIn: ["text"],
+        )
+
+        #expect(serialize(empty).contains("<text/>"))
+        #expect(serialize(spaced).contains("<text> </text>"))
+    }
 }

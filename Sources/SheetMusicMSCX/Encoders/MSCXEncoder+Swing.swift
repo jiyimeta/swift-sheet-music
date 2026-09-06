@@ -9,9 +9,13 @@ extension Swing {
     /// `MSCXEncoder+StaffText`. The element name flips between
     /// `StaffText` and `SystemText` based on `isSystemText` so the
     /// parser routes it back through the same swing path.
-    func encode() -> XMLTreeNode {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = [
-            XMLTreeNode(name: "text", text: text),
+            encodeText(
+                text,
+                preservedTextMarkup: preservedTextMarkup,
+                options: options,
+            ),
         ]
         children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)

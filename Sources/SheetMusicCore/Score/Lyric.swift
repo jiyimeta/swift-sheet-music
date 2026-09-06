@@ -36,6 +36,7 @@ public enum Syllabic: Sendable, Equatable {
 /// horizontal line.
 public struct Lyric: Sendable, Equatable {
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     public var syllabic: Syllabic
     /// Duration of the syllable in MIDI ticks at the score's
     /// division. A value greater than the anchor chord's duration
@@ -70,8 +71,10 @@ public struct Lyric: Sendable, Equatable {
         properties: TextProperties = TextProperties(),
         visible: Bool = true,
         preservedMarkup: [PreservedXML] = [],
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.syllabic = syllabic
         self.ticks = ticks
         self.verse = verse

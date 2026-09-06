@@ -45,9 +45,9 @@ extension ScoreFrame {
 
 extension FrameText {
     static func decode(_ node: XMLTreeNode) -> FrameText? {
-        let raw = node.first("text")?.text ?? ""
-        let stripped = stripInlineMarkup(raw)
-        guard !stripped.isEmpty else { return nil }
+        let textNode = node.first("text")
+        let text = textNode.map(StaffText.plainText(of:)) ?? ""
+        guard !text.isEmpty else { return nil }
         let style = (node.first("style")?.text)
             .flatMap(decodeStyle(_:)) ?? .other
         var offsetMm: CGPoint?
@@ -64,8 +64,9 @@ extension FrameText {
         let align = (node.first("align")?.text)
             .flatMap(TextAlign.init(mscxString:))
         return FrameText(
-            style: style, text: stripped,
+            style: style, text: text,
             offsetMm: offsetMm, fontSize: fontSize, align: align,
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
     }
 }
@@ -85,19 +86,4 @@ private func decodeStyle(_ raw: String) -> FrameText.Style? {
     case "lyricist", "poet": return .lyricist
     default: return nil
     }
-}
-
-/// Drop the inline `<b>` / `<i>` / `<font …>` tags MuseScore emits
-/// inside `<text>` so callers see plain text. A future revision can
-/// expose a structured representation if styling matters; for now
-/// the renderer treats title-block text as plain.
-private func stripInlineMarkup(_ s: String) -> String {
-    var result = ""
-    var inTag = false
-    for char in s {
-        if char == "<" { inTag = true; continue }
-        if char == ">" { inTag = false; continue }
-        if !inTag { result.append(char) }
-    }
-    return result.trimmingWhitespaceAndNewlines()
 }

@@ -20,9 +20,11 @@ extension Sticking {
     /// C++: `TRead::read(Sticking*, ...)` delegates to `TRead::read(TextBase*)`
     /// (`rw/read460/tread.cpp:906`).
     static func decode(_ node: XMLTreeNode) -> Sticking {
+        let textNode = node.first("text")
         var sticking = Sticking(
-            text: node.first("text").map(StaffText.plainText(of:)) ?? "",
+            text: textNode.map(StaffText.plainText(of:)) ?? "",
             preservedMarkup: node.preservedMarkup(consuming: consumedChildren),
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
         sticking.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return sticking

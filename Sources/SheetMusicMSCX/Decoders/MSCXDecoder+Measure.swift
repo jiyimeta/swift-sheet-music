@@ -219,7 +219,8 @@ extension Measure {
         let markerType = node.first("markerType")?.text ?? ""
         let kind = Marker.Kind(rawValue: markerType) ?? .other
         let rawLabel = node.first("label")?.text ?? ""
-        let text = node.first("text")?.text ?? ""
+        let textNode = node.first("text")
+        let text = textNode.map(StaffText.plainText(of:)) ?? ""
         return Marker(
             kind: kind,
             // MuseScore instantiates markers with the type's default
@@ -228,17 +229,20 @@ extension Measure {
             label: rawLabel.isEmpty ? kind.defaultLabel : rawLabel,
             text: text,
             preservedMarkup: node.preservedMarkup(consuming: consumedMarkerChildren),
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
     }
 
     private static func decodeJump(_ node: XMLTreeNode) -> Jump {
-        Jump(
+        let textNode = node.first("text")
+        return Jump(
             jumpTo: node.first("jumpTo")?.text ?? "",
             playUntil: node.first("playUntil")?.text ?? "",
             continueAt: node.first("continueAt")?.text ?? "",
             playRepeats: node.first("playRepeats")?.text == "1",
-            text: node.first("text")?.text ?? "",
+            text: textNode.map(StaffText.plainText(of:)) ?? "",
             preservedMarkup: node.preservedMarkup(consuming: consumedJumpChildren),
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
     }
 }

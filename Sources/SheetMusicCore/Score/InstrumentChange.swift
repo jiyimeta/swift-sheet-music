@@ -21,6 +21,7 @@ public struct InstrumentChange: Sendable, Equatable {
     public var instrument: Instrument?
     /// Engraved instruction text, e.g. "アコーディオン に".
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// MuseScore's `<init>` flag. Written by the editing layer only,
     /// when the user actually picked an instrument in the dialog
     /// (`notation/internal/notationinteraction.cpp:2264`). No engraving
@@ -81,8 +82,10 @@ public struct InstrumentChange: Sendable, Equatable {
         isUserInitialized: Bool = false,
         properties: TextProperties = TextProperties(),
         visible: Bool = true,
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.instrument = instrument
         self.isUserInitialized = isUserInitialized
         self.properties = properties

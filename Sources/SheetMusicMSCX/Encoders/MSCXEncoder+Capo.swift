@@ -39,7 +39,11 @@ extension Capo {
                 children: [XMLTreeNode(name: "apply", text: "0")],
             ))
         }
-        children.append(XMLTreeNode(name: "text", text: text))
+        children.append(encodeText(
+            text,
+            preservedTextMarkup: preservedTextMarkup,
+            options: options,
+        ))
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "Capo", children: children)

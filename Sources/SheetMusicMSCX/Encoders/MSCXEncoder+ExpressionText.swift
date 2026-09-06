@@ -29,7 +29,11 @@ extension ExpressionText {
                 name: "snapToDynamics", text: snapToDynamics ? "1" : "0",
             ))
         }
-        children.append(XMLTreeNode(name: "text", text: text))
+        children.append(encodeText(
+            text,
+            preservedTextMarkup: preservedTextMarkup,
+            options: options,
+        ))
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         children += elementProperties.mscxTrailingChildren()

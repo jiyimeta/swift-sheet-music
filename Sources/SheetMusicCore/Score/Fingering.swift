@@ -11,12 +11,13 @@ import SheetMusicFoundation
 /// **Content, not presentation.** `text` and `role` are what a reader of the
 /// score needs; per-element font overrides stay in `preservedMarkup`, while
 /// the shared base owns `<offset>` and `<placement>` through
-/// `elementProperties`. Inline markup inside `<text>` — MuseScore
-/// writes things like `<text><font size="8"/>2</text>` — flattens to its plain
-/// text, the cross-cutting limitation `StaffText` already has.
+/// `elementProperties`. Inline markup inside `<text>` — MuseScore writes things
+/// like `<text><font size="8"/>2</text>` — is carried opaquely beside its
+/// flattened plain text.
 public struct Fingering: Sendable, Equatable {
     /// The `<text>` payload, flattened to plain text.
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// Which of the four fingering-family text styles this is. MuseScore
     /// persists it as `<style>`, and omits the tag for a plain fingering.
     public var role: Role
@@ -32,8 +33,10 @@ public struct Fingering: Sendable, Equatable {
         role: Role = .fingering,
         elementProperties: ElementProperties = .default,
         preservedMarkup: [PreservedXML] = [],
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.role = role
         self.elementProperties = elementProperties
         self.preservedMarkup = preservedMarkup
