@@ -9,8 +9,8 @@ import SheetMusicFoundation
 /// array and why `role` is part of the value rather than the collection's key.
 ///
 /// **Content, not presentation.** `text` and `role` are what a reader of the
-/// score needs; `<placement>` and per-element font overrides stay in
-/// `preservedMarkup`, while the shared base owns `<offset>` through
+/// score needs; per-element font overrides stay in `preservedMarkup`, while
+/// the shared base owns `<offset>` and `<placement>` through
 /// `elementProperties`. Inline markup inside `<text>` — MuseScore
 /// writes things like `<text><font size="8"/>2</text>` — flattens to its plain
 /// text, the cross-cutting limitation `StaffText` already has.
@@ -23,8 +23,8 @@ public struct Fingering: Sendable, Equatable {
     /// Base element properties shared with every engravable element, including
     /// the spatium-unit `<offset>`.
     public var elementProperties: ElementProperties
-    /// Source XML children this model does not represent — `<placement>` and
-    /// font overrides.
+    /// Source XML children this model does not represent, including font
+    /// overrides.
     public var preservedMarkup: [PreservedXML]
 
     public init(

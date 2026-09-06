@@ -2,12 +2,25 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 extension ElementProperties {
-    /// Reads the base element properties (`<visible>`, `<color>`, `<offset>`, …)
-    /// from an element node. Missing `<visible>` defaults to visible;
-    /// missing `<color>` (or malformed attributes) leaves color nil, and a
-    /// missing `<offset>` leaves offset nil. A present offset keeps its tag
+    /// Reads the base element properties (`<visible>`, `<color>`, `<offset>`,
+    /// `<placement>`, …) from an element node. Missing `<visible>` defaults to
+    /// visible; missing `<color>` (or malformed attributes), `<offset>`, and
+    /// `<placement>` leave their fields nil. A present offset keeps its tag
     /// identity even when either coordinate falls back to zero.
     init(decodingMSCXChildrenOf node: XMLTreeNode) {
+        // The return type is spelled out because a multi-statement closure
+        // gives the type checker nothing to infer `U` from.
+        let placement = node.first("placement").flatMap { placementNode -> Placement? in
+            guard let placement = Placement(rawValue: placementNode.text) else {
+                mscxDecoderWarn(
+                    code: "mscx.element.unknownPlacement",
+                    message: "Unknown placement '\(placementNode.text)'; keeping the styled side",
+                    location: "\(node.name)/placement",
+                )
+                return nil
+            }
+            return placement
+        }
         self.init(
             visible: (node.first("visible")?.text ?? "1") != "0",
             color: node.first("color").flatMap(StaffText.decodeColor(_:)),
@@ -17,13 +30,14 @@ extension ElementProperties {
                     y: offsetNode.attributes["y"].flatMap(Double.init) ?? 0,
                 )
             },
+            placement: placement,
         )
     }
 
-    /// Emits `<offset>` whenever it was present and `<visible>0</visible>`
-    /// only when hidden (the default — visible — omits the tag). Neither is a
-    /// styled text property, so both can use the ordinary element-property
-    /// position without an ordering constraint.
+    /// Emits `<offset>` and `<placement>` whenever they were present and
+    /// `<visible>0</visible>` only when hidden (the default — visible — omits
+    /// the tag). None is a styled text property, so all can use the ordinary
+    /// element-property position without an ordering constraint.
     func mscxChildren() -> [XMLTreeNode] {
         var out: [XMLTreeNode] = []
         if let offset {
@@ -36,6 +50,9 @@ extension ElementProperties {
             ))
         }
         if !visible { out.append(XMLTreeNode(name: "visible", text: "0")) }
+        if let placement {
+            out.append(XMLTreeNode(name: "placement", text: placement.rawValue))
+        }
         return out
     }
 

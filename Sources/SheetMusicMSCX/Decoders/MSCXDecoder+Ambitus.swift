@@ -7,16 +7,16 @@ extension Ambitus {
     /// are wrappers around nested `<Accidental>` elements; `Accidental` itself
     /// is not a direct child and must not be consumed here.
     ///
-    /// `color`, `offset`, and `visible` are consumed because
-    /// `ElementProperties(decodingMSCXChildrenOf:)` reads all three. A tag in
+    /// `color`, `offset`, `placement`, and `visible` are consumed because
+    /// `ElementProperties(decodingMSCXChildrenOf:)` reads all four. A tag in
     /// this set is excluded from preserved markup, so it may only be listed
-    /// once something actually reads it. `<placement>` belongs here only when
-    /// the parallel shared-`ElementProperties` change starts decoding it, not
-    /// before.
+    /// once something actually reads it — `placement` was held back until the
+    /// shared decoder learned it, which is the commit this line arrived in.
     private static let consumedChildren: Set = [
         "head", "headType", "mirror", "hasLine", "lineWidth",
         "topPitch", "topTpc", "bottomPitch", "bottomTpc",
-        "topAccidental", "bottomAccidental", "color", "offset", "visible",
+        "topAccidental", "bottomAccidental", "color", "offset", "placement",
+        "visible",
     ]
 
     /// Decode one `<Ambitus>`.

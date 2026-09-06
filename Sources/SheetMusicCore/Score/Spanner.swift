@@ -20,13 +20,7 @@ public struct Spanner: Sendable, Equatable {
         case other
     }
 
-    /// Which side of the staff an element sits on.
-    /// C++: `mu::engraving::PlacementV`; MSCX tokens "above" / "below"
-    /// (`typesconv.cpp:2183-2184`).
-    public enum Placement: String, Sendable, Equatable {
-        case above
-        case below
-    }
+    public typealias Placement = SheetMusicCore.Placement
 
     public var kind: Kind
     public var rawType: String // original "type" attribute
@@ -52,7 +46,8 @@ public struct Spanner: Sendable, Equatable {
     }
 
     /// Base element properties shared with every engravable element.
-    /// Carries `<visible>` and `<color>`; see `ElementProperties`.
+    /// Carries `<visible>`, `<color>`, `<offset>`, and `<placement>`; see
+    /// `ElementProperties`.
     public var elementProperties: ElementProperties
     /// MuseScore `<visible>0</visible>` flag. When false the spanner
     /// is hidden — layout omits it entirely (no glyphs, no reserved
@@ -70,12 +65,12 @@ public struct Spanner: Sendable, Equatable {
     /// default. `nil` = "use whatever this spanner kind defaults to".
     /// C++: `mu::engraving::TextLineBase::beginText`.
     public var beginText: String?
-    /// MuseScore `<placement>` — an author override of the side of the
-    /// staff this spanner sits on. `nil` means "use the styled side for
-    /// this kind / subtype", which is what MuseScore's absence of the
-    /// element means: it writes the tag only once the property stops
-    /// being styled (`TWrite::writeItemProperties`, twrite.cpp:578).
-    public var placement: Placement?
+    /// MuseScore `<placement>` sugar over `elementProperties.placement`.
+    /// See the shared field for absent-tag and styled-side semantics.
+    public var placement: Placement? {
+        get { elementProperties.placement }
+        set { elementProperties.placement = newValue }
+    }
 
     public var hairpin: HairpinPayload?
     /// MuseScore `<Ottava><subtype>8va</subtype></Ottava>` payload.
@@ -113,9 +108,10 @@ public struct Spanner: Sendable, Equatable {
         self.nextMeasuresOffset = nextMeasuresOffset
         self.nextFractionsOffset = nextFractionsOffset
         self.voltaEndings = voltaEndings
-        elementProperties = ElementProperties(visible: visible)
+        elementProperties = ElementProperties(
+            visible: visible, placement: placement,
+        )
         self.beginText = beginText
-        self.placement = placement
         self.hairpin = hairpin
         self.ottava = ottava
         self.vibrato = vibrato

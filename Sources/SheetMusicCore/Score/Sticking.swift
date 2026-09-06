@@ -5,8 +5,8 @@ import SheetMusicFoundation
 /// stored as a segment annotation.
 ///
 /// **Content, not presentation.** `text` is the annotation's modeled payload;
-/// `<style>`, `<placement>`, and font overrides stay in `preservedMarkup`;
-/// the shared base owns `<offset>` through `elementProperties`. Inline markup
+/// `<style>` and font overrides stay in `preservedMarkup`; the shared base owns
+/// `<offset>` and `<placement>` through `elementProperties`. Inline markup
 /// inside `<text>` flattens to plain text, the
 /// cross-cutting limitation described by the parity document's §7.1
 /// text-content work. `<color>` is decoded into `elementProperties` but not
@@ -26,7 +26,7 @@ public struct Sticking: Sendable, Equatable {
     }
 
     /// Source XML children this model does not represent, including text
-    /// presentation and placement properties.
+    /// presentation properties.
     public var preservedMarkup: [PreservedXML]
 
     public init(

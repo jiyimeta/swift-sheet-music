@@ -27,10 +27,7 @@ extension Spanner {
         let nextFractions = nextLocation?.first("fractions")
             .flatMap { Fraction(mscxString: $0.text) }
 
-        var hairpin: Spanner.HairpinPayload?
-        if kind == .hairpin, let hp = node.first("HairPin") {
-            hairpin = decodeHairpin(hp)
-        }
+        let hairpin = kind == .hairpin ? node.first("HairPin").map(decodeHairpin) : nil
 
         var ottava: Spanner.OttavaPayload?
         if kind == .ottava, let ot = node.first("Ottava") {
@@ -60,15 +57,16 @@ extension Spanner {
             trill = decodeTrill(tr)
         }
 
-        return Spanner(
+        let elementProperties = decodeElementProperties(node, payloadName: raw)
+        var spanner = Spanner(
             kind: kind,
             rawType: raw,
             nextMeasuresOffset: nextMeasures,
             nextFractionsOffset: nextFractions,
             voltaEndings: voltaEndings,
-            visible: decodeVisible(node),
+            visible: elementProperties.visible,
             beginText: decodeBeginText(node),
-            placement: decodePlacement(node),
+            placement: elementProperties.placement,
             hairpin: hairpin,
             ottava: ottava,
             vibrato: vibrato,
@@ -77,6 +75,8 @@ extension Spanner {
                 consuming: consumedSpannerChildren.union([raw]),
             ),
         )
+        spanner.elementProperties = elementProperties
+        return spanner
     }
 
     /// `<beginText>` lives on the subtype payload child, not on the
@@ -95,29 +95,19 @@ extension Spanner {
         return nil
     }
 
-    /// `<placement>` is a generic element property and, like
-    /// `<beginText>`, rides on the payload child. MuseScore emits it
-    /// only once the user has flipped the element off its styled side,
-    /// so an absent element means "inherit the style" — represented
-    /// here as `nil`, NOT as a guessed default. An unrecognized token
-    /// is treated the same way, since the styled side is a safer
-    /// fallback than picking one arbitrarily.
-    private static func decodePlacement(
+    /// Base properties ride on the payload child (`<Volta>`, `<Slur>`, …),
+    /// while a wrapper-level `<visible>0</visible>` is also accepted for
+    /// compatibility. The end-side `<prev>` marker has no payload and uses
+    /// the same visibility rule as before.
+    private static func decodeElementProperties(
         _ node: XMLTreeNode,
-    ) -> Spanner.Placement? {
-        for child in node.children
-            where child.name != "next" && child.name != "prev"
-        {
-            guard let text = child.first("placement")?.text else { continue }
-            if let placement = Spanner.Placement(rawValue: text) {
-                return placement
-            }
-            mscxDecoderWarn(
-                code: "mscx.spanner.unknownPlacement",
-                message: "Unknown placement '\(text)'; keeping the styled side",
-            )
-        }
-        return nil
+        payloadName: String,
+    ) -> ElementProperties {
+        let payload = node.first(payloadName)
+        var properties = payload.map(ElementProperties.init(decodingMSCXChildrenOf:))
+            ?? .default
+        properties.visible = decodeVisible(node)
+        return properties
     }
 
     /// Decode a `<Trill>` payload. MuseScore omits `<subtype>` for the

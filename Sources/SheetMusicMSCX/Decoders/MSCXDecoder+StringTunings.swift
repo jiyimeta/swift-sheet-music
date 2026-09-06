@@ -3,9 +3,9 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension StringTunings {
-    /// Every direct `<StringTunings>` child this decoder reads. `<style>`,
-    /// `<placement>`, font overrides, and `StaffTextBase` channel and swing
-    /// properties are not modeled and become preserved markup.
+    /// Every direct `<StringTunings>` child this decoder reads. `<style>`, font
+    /// overrides, and `StaffTextBase` channel and swing properties are not
+    /// modeled and become preserved markup.
     ///
     /// `color`, `visible` and `offset` are consumed because
     /// `ElementProperties(decodingMSCXChildrenOf:)` reads all three. A tag in
@@ -14,7 +14,7 @@ extension StringTunings {
     /// model nor the bag and is dropped. `offset` was deliberately held back
     /// until the parity doc's §7.2 work landed; that is this commit.
     private static let consumedChildren: Set = [
-        "preset", "visibleStrings", "StringData", "text", "color", "offset",
+        "preset", "visibleStrings", "StringData", "text", "color", "offset", "placement",
         "visible",
     ]
 

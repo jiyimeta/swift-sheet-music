@@ -11,10 +11,10 @@ import SheetMusicFoundation
 /// `StaffText` / `SystemText`. The MSCX tag stays `<Expression>`.
 ///
 /// **Content, not presentation.** `text` and `snapToDynamics` are modeled;
-/// `<style>`, `<placement>`, font overrides,
-/// `<voiceAssignment>`, `<direction>`, and `<centerBetweenStaves>` stay in
-/// `preservedMarkup`; the shared base owns `<offset>` through
-/// `elementProperties`. Inline markup inside `<text>` flattens to plain text,
+/// `<style>`, font overrides, `<voiceAssignment>`, `<direction>`, and
+/// `<centerBetweenStaves>` stay in `preservedMarkup`; the shared base owns
+/// `<offset>` and `<placement>` through `elementProperties`. Inline markup
+/// inside `<text>` flattens to plain text,
 /// the cross-cutting limitation described by the parity document's §7.1
 /// text-content work. `<color>` is decoded into `elementProperties` but not
 /// re-emitted — the decode-only gap documented by `ElementProperties+MSCX`,

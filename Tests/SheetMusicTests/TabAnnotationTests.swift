@@ -283,7 +283,7 @@ struct TabAnnotationMSCXTests {
         #expect(tunings.visibleStrings.isEmpty)
     }
 
-    @Test func preservesTextBaseAndStaffTextBaseTagsInSourceOrder() throws {
+    @Test func modelsPlacementAndPreservesUnmodeledTextBaseTagsInSourceOrder() throws {
         let elements = try tabVoiceElements("""
         <Capo>
           <placement>above</placement>
@@ -296,7 +296,8 @@ struct TabAnnotationMSCXTests {
             Issue.record("expected capo annotation")
             return
         }
-        #expect(capo.preservedMarkup.map(\.name) == ["placement", "style", "channelSwitch"])
+        #expect(capo.elementProperties.placement == .above)
+        #expect(capo.preservedMarkup.map(\.name) == ["style", "channelSwitch"])
     }
 
     @Test func encodesCanonicalChildShapesAndSortedIgnoredStrings() throws {
@@ -386,7 +387,8 @@ struct TabAnnotationFixtureTests {
         #expect(!lastCapo.generatesText)
         #expect(lastCapo.transposeMode == nil)
         #expect(lastCapo.ignoredStrings == [0, 5])
-        #expect(lastCapo.preservedMarkup.map(\.name) == ["placement"])
+        #expect(lastCapo.elementProperties.placement == .above)
+        #expect(lastCapo.preservedMarkup.isEmpty)
 
         let instrumentTuning = try #require(part.instrument.stringData)
         #expect(instrumentTuning.frets == 19)
