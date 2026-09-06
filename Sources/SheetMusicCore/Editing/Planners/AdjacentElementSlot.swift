@@ -25,12 +25,12 @@ enum AdjacentElementSlot {
         case after
     }
 
-    /// Dynamics, fermatas, harmonies, sticking, expression text, capos, string tunings, figured bass, symbols, and
-    /// spanner begins: what MuseScore writes as a segment's annotations.
+    /// Dynamics, fermatas, harmonies, sticking, expression text, capos, string tunings, figured bass, symbols,
+    /// fret diagrams, and spanner begins: what MuseScore writes as a segment's annotations.
     static func isAnnotation(_ element: VoiceElement) -> Bool {
         switch element {
         case .dynamic, .fermata, .harmony, .sticking, .expression, .capo, .stringTunings, .figuredBass, .symbol,
-             .spanner: true
+             .fretDiagram, .spanner: true
         default: false
         }
     }

@@ -325,6 +325,8 @@ extension Voice {
                 appendVoiceElement(.symbol(
                     EngravingSymbol.decode(child, location: "voice/Symbol"),
                 ))
+            case "FretDiagram":
+                appendVoiceElement(.fretDiagram(FretDiagram.decode(child)))
             case "RehearsalMark":
                 try lifted(.rehearsalMark(
                     RehearsalMark.decode(child),

@@ -64,6 +64,7 @@ public struct SetElementVisible: EditCommand {
         case let .ambitus(ambitus): ambitus.visible
         case let .figuredBass(figuredBass): figuredBass.visible
         case let .symbol(symbol): symbol.visible
+        case let .fretDiagram(diagram): diagram.visible
         case .measureRepeat, .locationShift, .preserved: nil
         }
     }
@@ -121,6 +122,9 @@ public struct SetElementVisible: EditCommand {
         case var .symbol(symbol):
             symbol.visible = visible
             return .symbol(symbol)
+        case var .fretDiagram(diagram):
+            diagram.visible = visible
+            return .fretDiagram(diagram)
         case .measureRepeat, .locationShift, .preserved:
             return nil
         }

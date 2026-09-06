@@ -50,6 +50,9 @@ public enum VoiceElement: Sendable, Equatable {
     /// type lives in `Note.symbols`. MuseScore always uses a ChordRest segment,
     /// never a time-tick segment (`rw/read460/measureread.cpp:465`).
     case symbol(EngravingSymbol)
+    /// A chord diagram stored as a segment annotation at the current tick.
+    /// Occupies no tick budget.
+    case fretDiagram(FretDiagram)
     /// A `<voice>` child this library does not model, kept at its
     /// position in the stream. Unlike container-level
     /// `preservedMarkup` bags, a voice child's position is its

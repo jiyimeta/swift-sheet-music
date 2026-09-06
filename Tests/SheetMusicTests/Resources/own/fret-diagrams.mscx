@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="guitar-steel">
+        <longName>Guitar</longName>
+        <trackName>Guitar</trackName>
+        <Channel>
+          <controller ctrl="0" value="0"/>
+          <controller ctrl="32" value="0"/>
+          <program value="25"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <FretDiagram>
+            <minDistance>0.5</minDistance>
+            <fretOffset>0</fretOffset>
+            <frets>5</frets>
+            <strings>6</strings>
+            <showNut>1</showNut>
+            <mag>1</mag>
+            <orientation>0</orientation>
+            <Harmony>
+              <harmonyType>0</harmonyType>
+              <harmonyInfo>
+                <name>C</name>
+                <root>14</root>
+              </harmonyInfo>
+            </Harmony>
+            <fretDiagram>
+              <string no="0"><marker>cross</marker></string>
+              <string no="1"><dot fret="1">normal</dot></string>
+              <string no="2"><dot fret="3">square</dot></string>
+              <string no="3"><dot fret="2">normal</dot></string>
+              <barre start="1" end="5">1</barre>
+            </fretDiagram>
+            <string no="0"><marker>88</marker></string>
+            <string no="1"><dot>1</dot></string>
+            <string no="2"><dot>3</dot></string>
+            <string no="3"><dot>2</dot></string>
+            <barre>1</barre>
+          </FretDiagram>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note>
+          </Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <FretDiagram>
+            <frets>4</frets>
+            <strings>6</strings>
+            <showNut>0</showNut>
+            <fretDiagram>
+              <string no="0"><marker>circle</marker></string>
+              <string no="2"><dot fret="2">triangle</dot></string>
+              <string no="4"><dot fret="3">cross</dot></string>
+            </fretDiagram>
+            <string no="0"><marker>79</marker></string>
+            <string no="2"><dot>2</dot></string>
+            <string no="4"><dot>3</dot></string>
+          </FretDiagram>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note><pitch>67</pitch><tpc>15</tpc></Note>
+          </Chord>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

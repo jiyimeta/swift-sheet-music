@@ -347,7 +347,8 @@ extension MidiRenderer {
         // produce no MIDI events. A capo changes sounding pitch upstream, but
         // this library does not apply it yet.
         case .clef, .barLine, .spanner, .measureRepeat, .harmony,
-             .sticking, .expression, .capo, .stringTunings, .ambitus, .figuredBass, .symbol, .preserved:
+             .sticking, .expression, .capo, .stringTunings, .ambitus, .figuredBass, .symbol, .fretDiagram,
+             .preserved:
             return
         case let .locationShift(delta):
             // Voice cursor shift: applies the location's fractional

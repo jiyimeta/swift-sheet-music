@@ -114,7 +114,8 @@ extension FNV1a {
     /// parity project (spec 2026-09-02 §2.5): the `combine(_ clef:)` / `combine(_ barLine:)` /
     /// `combine(_ dynamic:)` / `combine(_ fermata:)` / `combine(_ breath:)` / `combine(_ harmony:)` /
     /// `combine(_ sticking:)` / `combine(_ expression:)` / `combine(_ capo:)` / `combine(_ tunings:)` /
-    /// `combine(_ ambitus:)` / `combine(_ figuredBass:)` / `combine(_ symbol:)` / `combine(_ spanner:)` /
+    /// `combine(_ ambitus:)` / `combine(_ figuredBass:)` / `combine(_ symbol:)` /
+    /// `combine(_ fretDiagram:)` / `combine(_ spanner:)` /
     /// `combine(_ repeat:)` overloads below are what this switch calls into.
     ///
     /// This switch lives here rather than in `ScoreFingerprintHasher.swift` because every overload it
@@ -184,6 +185,9 @@ extension FNV1a {
         case let .symbol(symbol):
             combine(18)
             combine(symbol)
+        case let .fretDiagram(diagram):
+            combine(19)
+            combine(diagram)
         case .preserved:
             // Source-only XML is outside the semantic edit fingerprint.
             break
@@ -307,6 +311,40 @@ extension FNV1a {
         combinePresence(item.digit)
         combinePresence(item.suffix?.mscxOrdinal)
         combinePresence(item.continuationLine?.mscxOrdinal)
+    }
+
+    /// Every modeled chord-diagram field. A default diagram feeds no bytes,
+    /// preserving the occupants rule for values that carry no content.
+    mutating func combine(_ diagram: FretDiagram) {
+        let hasProperties = !diagram.elementProperties.visible
+            || diagram.elementProperties.color != nil
+        guard diagram.stringCount != 6 || diagram.fretCount != 5
+            || !diagram.strings.isEmpty || diagram.barre != nil
+            || diagram.harmony != nil || hasProperties
+        else { return }
+        combine(diagram.stringCount)
+        combine(diagram.fretCount)
+        combine(diagram.strings.count)
+        for string in diagram.strings {
+            combine(string.index)
+            combine(string.marker?.mscxToken)
+            combine(string.dots.count)
+            for dot in string.dots {
+                combine(dot.fret)
+                combine(dot.kind.mscxToken)
+            }
+        }
+        combine(diagram.barre != nil)
+        if let barre = diagram.barre {
+            combine(barre.startString)
+            combine(barre.endString)
+            combine(barre.fret)
+        }
+        combine(diagram.harmony != nil)
+        if let harmony = diagram.harmony {
+            combine(harmony)
+        }
+        combineOccupied(diagram.elementProperties, visibleTag: 58, colorTag: 59)
     }
 
     mutating func combine(_ repeat: MeasureRepeat) {
