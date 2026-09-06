@@ -11,14 +11,29 @@ extension Measure {
     /// distinguish the modeled `line` / `page` / `section` subtypes
     /// from the unmodeled `nobreak` subtype, so
     /// `preservedMeasureMarkup(in:)` handles that tag explicitly.
+    ///
+    /// `stretch` and `noOffset` are absent for a plainer reason: nothing
+    /// reads them. They were listed here, which took them out of the
+    /// preserved-markup bag without putting them anywhere else, so a
+    /// user stretch and a measure-number offset were silently deleted on
+    /// save. **Consuming a tag the model does not store is strictly
+    /// worse than not consuming it** — the bag is what would otherwise
+    /// have carried it. They still have to be skipped when bucketing an
+    /// MS2 flat-form measure into voices, which `decodeMS2FlatVoices`
+    /// does from its own list.
+    ///
+    /// `multiMeasureRest` stays. It marks a measure MuseScore
+    /// synthesizes from the ones it replaces, and the staff decoder
+    /// drops that whole measure (`isMultiMeasureRestContainer`) because
+    /// MuseScore regenerates it from the style flag.
     private static let consumedMeasureChildren: Set = [
         "BarLine", "Beam", "Breath", "Chord", "Clef", "Dynamic",
         "Fermata", "Harmony", "InstrumentChange", "Jump", "KeySig",
         "Marker", "MeasureRepeat", "RehearsalMark", "RepeatMeasure",
         "Rest", "Spanner", "StaffText", "SystemText", "Tempo",
         "TimeSig", "Tuplet", "endRepeat", "endTuplet", "irregular",
-        "location", "measureRepeatCount", "multiMeasureRest", "noOffset",
-        "startRepeat", "stretch", "tick", "voice",
+        "location", "measureRepeatCount", "multiMeasureRest",
+        "startRepeat", "tick", "voice",
     ]
 
     private static let modeledLayoutBreakSubtypes: Set = [
