@@ -1058,7 +1058,7 @@ preserved markup。`<subtype>`はMuseScoreのwriterがchord bracketには書か�
 stem directionすらmodelしておらず、この形の型が1つも無かったため。2人目の利用者が出たら
 共有型に昇格させる。
 
-### 4.6.1 grace chordはmodel化した子要素を落とす（構造的な穴）
+### 4.6.2 grace chordはmodel化した子要素を落とす（構造的な穴）
 
 `CHORD_BRACKET`の実装中に見つかった、この節より広い問題。
 
@@ -1127,7 +1127,7 @@ fieldだけでは足りず、**encoderがそのtagを書いているかまで見
 1段目で止めると`<tpc2>`を損失と誤判定する（§5.3の下の追記）。
 そしてconsumed setに入れた時点でpreserved markupの対象から外れるので、
 **「model化しないまま consumed set に足す」と、それまで往復していたものがその瞬間から失われる**。
-§4.6.1のgrace chordの穴と同じ向きの罠が、tag levelにもある。
+§4.6.2のgrace chordの穴と同じ向きの罠が、tag levelにもある。
 
 **［2026-09-06 追記］3つ目を全decoderで洗い出したところ、2件の実損失が出た。**
 `<Measure><stretch>`（user stretch）と`<Measure><noOffset>`（measure number offset）が
@@ -1663,6 +1663,47 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
 
 **MSC 5.00の`<SpannerMap>` + EID対応はこの列に入れない。** `v5.0.0-alpha` tagが立った時点で
 着手する（§3.6・§3.7）。1を先に済ませておけば、対応が入る前でもMS5 fileはデータ欠損しない。
+
+### 8.1 次のmajorまで着手できないもの——未使用の`Hashable`
+
+**parity work中に足した`public enum`のうち6つが、誰も使わない`Hashable`に適合している。**
+
+| 型 | 追加slice |
+|---|---|
+| `Capo.TransposeMode` | CAPO / STRING_TUNINGS |
+| `Ambitus.NoteHeadType`、`Ambitus.Mirror` | AMBITUS |
+| `FiguredBassItem.{Modifier, Parenthesis, ContinuationLine}` | FIGURED_BASS |
+
+全参照を確認した結果、**Set・Dictionary key・`.hashValue`・`hash(into:)`は0件**で、
+使われているのは`==`だけ。親の`Capo` / `Ambitus` / `FiguredBass` / `FiguredBassItem`は
+いずれも`Sendable, Equatable`のみなので、**親の合成が要求してもいない**。
+
+**6件とも associated valueを持つ**（未知の序数を保持する`.other(rawValue: Int)`）ことが、
+ここでは効いている。associated valueが無いenumはEquatable / Hashableを**宣言しなくても
+暗黙に得る**ので、`Hashable`と書いても新しいcodeは生まれない。**書いたことでcodeが生まれるのは、
+payloadを持つこの6件のほうだけ。** `Score/`にはpayloadなしのenumが多数あり、
+そちらの`Hashable`表記はこの項目の対象ではない。
+
+**コストは「witness thunk 3本」では済まない。** name sectionを残した
+`.build/wasm32-unknown-wasip1/release/sheet-music-wasm.wasm`を読むと、
+`Ambitus.Mirror` 1つにつき——`hash(into:)`本体、`hashValue` getter、
+witness thunk 3本、base conformance descriptor、そして
+**stdlib genericの特殊化2本**（`$sSHsE13_rawHashValue…Tgq5`、
+`$ss10_hashValue3for…Tg5`）。**1 enumあたり約8関数、6つで約48関数、呼ぶ側がゼロ。**
+
+**それでも今は外せない。** `CHANGELOG.md`冒頭がSemVer遵守を宣言していて、
+現在は**2.4.1**。`public enum`からprotocol conformanceを外すのは
+**major bumpを要するbreaking change**で、consumerが誰かは判定基準にならない。
+**3.0を切るときの候補**としてここに置く。
+
+**この項目をsize対策の文脈に置かないこと。** wasm ceilingとは独立に立つ話で、
+逆も真——**仮にdist側で0 byteだったとしても、外す理由は変わらない**。
+ceiling側の議論に相乗りさせると、ceilingの形式が変わった時点でこの項目ごと消える。
+
+*（distでの実効byte数は未測定。ceilingが測っている
+`Web/sheet-music-web/dist/sheet-music-wasm.wasm`はname sectionが落ちていて、
+型名だけがreflection metadataとして残る。**symbol文字列が無いことは、codeが無いことを
+意味しない**ので、`strings`では判定できない。before/afterのbuild 1回で出る。）*
 
 ---
 
