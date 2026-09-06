@@ -9,6 +9,76 @@ and this project adheres to
 
 ### Added
 
+- **Common time, cut time and the two cut signs are drawn, written and
+  editable.** MuseScore's `<subtype>` on a `<TimeSig>` — the C, the ¢ and the
+  two rarer slashed cut signs — rode through this library as preserved markup:
+  it round-tripped, but nothing modeled it, nothing drew it, and no edit could
+  write one.
+
+  `TimeSignature.symbol` models it as `TimeSignatureSymbol`, whose raw values
+  ARE MuseScore's `TimeSigType` integers. It decides only how the signature is
+  DRAWN: `numerator` and `denominator` remain the sole authority for how long a
+  bar is — the same split `TimeSig::sig()` / `TimeSig::timeSigType()` keeps
+  upstream — so playback, re-barring and beam grouping never read it.
+
+  MSCX decodes and encodes `<subtype>`, written first and only when it is not
+  `NORMAL`, exactly where `TWrite::write(const TimeSig*, …)` writes it; a
+  numeric signature's bytes are unchanged, and an unrecognized value falls back
+  to the numbers with a `mscx.timeSig.unknownSubtype` diagnostic. MusicXML
+  reads `<time symbol="common" | "cut">`, and the PDF importer keeps the symbol
+  it already detected instead of flattening a C into a 4 over a 4.
+
+  All three renderers — the SwiftUI `Canvas`, the `CALayer` builder and the
+  portable bridge Android and the browser read — pick their glyph through
+  `TimeSignatureLayout.symbolCodepoint` and place it with `symbolDy`, so they
+  cannot disagree; the end-of-system courtesy announces the symbol rather than
+  the numbers it stands for. No wire-format version bump was needed, because
+  the bridge emits glyph runs.
+
+  `.setTimeSignature` carries the symbol rather than gaining an intent of its
+  own — `<subtype>` is a property of the one `TimeSig` element, and a separate
+  intent would make placing a C two undo steps, the second of which re-barred
+  nothing. A symbol paired with a meter it does not stand for is refused as
+  `.timeSignatureSymbolMismatch`; the parser stays permissive, since that rule
+  governs what may be WRITTEN. `SetTimeSignatureIntentWire` gains a fourth
+  field, which is why `step-16.bin` and the web replay fixture move.
+
+- **Chord diagrams are modeled.** `<FretDiagram>` reached the model only as
+  preserved markup. It now decodes into `VoiceElement.fretDiagram`, carrying
+  the string markers and dots, the barre, the nested `<Harmony>` and the
+  diagram's dimensions. Marker and dot tokens follow `Fingering.Role` — a
+  closed enum with an `.other` escape that keeps an unrecognized token, which
+  is better than upstream, where an unknown name collapses to a default and is
+  lost.
+
+  The encoder's element order is load-bearing and is pinned by a test:
+  MuseScore's reader sets `haveReadNew` when it meets `<fretDiagram>` and skips
+  every later child (`read460/tread.cpp:802-807`), and `<Harmony>` is read in
+  that same loop — so anything emitted after `<fretDiagram>` would be discarded
+  without a diagnostic, and neither existing gate can see it. The old
+  compatibility block rides in preserved markup rather than being regenerated:
+  MuseScore writes it after `<fretDiagram>` and never reads it back.
+
+- **`SheetMusicZip` is a library product, so a host can write a container that
+  is not an `.mscz`.** `MSCZWriter` always writes `META-INF/container.xml` and
+  a main `.mscx`, which is the wrong shape for a host container built around a
+  PDF-backed score that has no `.mscx` at all. `ZipWriter`, `ZipReader` and
+  `ZipCompressionMethod` have been public since they were written; only their
+  reachability changes, and the alternative was a second zip implementation in
+  the consumer.
+
+- **Any interval, not just a third and an octave.**
+  `IntervalPlanner.note(_:above:keySig:)` takes the interval NUMBER with its
+  sign and is now the one implementation of `Score::addInterval`'s rule;
+  `AddIntervalToSelection` calls it too, so the range command and a client's
+  single-note path cannot drift. A whole number of octaves keeps the
+  reference's own spelling instead of re-reading the key (MuseScore's
+  `useOctaveRule`), because an octave above a C♯ is a C♯, not the C the
+  signature spells. `AddIntervalToSelection` also accepts a TENTH: MuseScore
+  offers 1…10 (its `Alt+0` is the tenth, not the octave), and refusing ±10 made
+  one of its ten rows unreachable over a range for no reason the engine could
+  give.
+
 - **An `.mscz` can carry entries this library does not model, and hand them
   back on the next read.** `MSCZWriter` wrote exactly two entries and
   `MSCZReader` dropped everything else, so a host whose score file keeps a
@@ -414,6 +484,69 @@ and this project adheres to
   AARs without a README of its own.
 
 ### Fixed
+
+- **The title block stays sharp at any zoom, and no longer draws a black
+  hairline down its trailing edge.** `TitleFrameView` was still the SwiftUI
+  `Canvas` every renderer used to be, and a `Canvas` rasterises once at its
+  layout size — so magnifying the page magnified that bitmap while the
+  engraving under it stayed crisp. It is a `CAShapeLayer` tree now, built from
+  the same glyph outlines and re-rendered at whatever scale the host ends up
+  at, which is the move `SystemLayerView` made for the systems and nobody had
+  made for the title block.
+
+  The PDF exporter keeps drawing through `TitleFrameRenderer` — a
+  `GraphicsContext` writing into a PDF is resolution-independent already — and
+  the two now share `placedLines`, so every decision about WHERE a line goes is
+  made once and screen and export cannot drift apart.
+
+  The white paper comes from the host view's own backing layer rather than a
+  filled rect, which retires the hairline: the old canvas was declared
+  `opaque: true` and filled the width it was ASKED for rather than the size it
+  was laid out at, so a rounding step's worth of pixels stayed black down the
+  frame's trailing edge.
+
+- **A pause leaves nothing sounding, so the next preview is alone.**
+  `SwiftySynthBackend.pause()` only cleared `isPlaying`. Stopping the transport
+  stops event dispatch, so the note-offs belonging to whatever was sounding at
+  that instant never arrived and those voices stayed in their sustain segment
+  for as long as the backend existed. Parking the `AVAudioEngine` right
+  afterwards hid it the way a freeze-frame hides motion: `playPreview` un-parks
+  the graph to sound a single note, and the frozen chord came back with it, and
+  `renderCountIn`'s "a note left ringing decays naturally" was false for a
+  voice that was never released.
+
+  `SwiftySynthPausedVoiceTests` measures it without hardware or ears — render
+  two seconds, pause, render five more offline. Before this the final slice
+  still peaked at 0.024 against 0.111 while playing; after it, silence. What it
+  costs: a note held across a pause no longer resumes ringing when playback
+  resumes, because the sequencer does not re-articulate it — which is what
+  MuseScore and every DAW do with a pause. The AU path had the identical hole,
+  and since `AVAudioSequencer.stop()` is Apple's, the engine sends All Sound
+  Off across its attached units instead.
+
+- **The selection range box measures the time it covers, not the ink it is
+  drawn with.** Both horizontal edges came straight off notehead origins. The
+  right edge stopped at the last selected notehead's own x, so the box ended in
+  the middle of the note it was supposed to contain; it now runs to just before
+  the next onset column, or to the measure's closing barline when the selection
+  ends the bar. The left edge started at the ink even when the ink is centered,
+  so a box around a whole-measure rest began halfway through a bar it covers
+  whole; a `.measure` rest now contributes the bar's first beat.
+
+  Both edges read `LayoutMeasure.tickColumns`, the cross-staff tick→x map
+  placement already produces, so "the next onset" means the next segment
+  boundary anywhere in the system. Both are floored by what the old measurement
+  produced, so the box can only grow — a notehead nudged right of its own
+  column can never pull an edge in past the glyph it is drawn around.
+
+- **A letter key added to a chord lands above it, not below.**
+  `NoteInputPlanner.pitch(forLetter:above:)` and
+  `MeasureAccidentals.LetterOctave` split the octave choice into the two
+  questions it always was: a letter writing at the caret wants the octave
+  nearest what was just played, while a letter stacking onto a chord wants the
+  lowest one above what is already there. MuseScore branches on exactly this
+  (`resolveNoteInputParams`), and answering both with "nearest" put the note
+  below as often as above — A added to a chord topped by C3 came out A2.
 
 - **`Score.strippingPreservedMarkup()` now reaches the system lane.** It walked
   `blocks` and `parts` and stopped there, so `Score.systemMeasures` — where the
