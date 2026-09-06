@@ -218,12 +218,16 @@ struct AmbitusMSCXTests {
         #expect(unknown.topAccidental == nil)
     }
 
-    @Test func preservesPlacementMarkup() throws {
+    /// `<placement>` was preserved markup when this suite was written; the
+    /// shared `ElementProperties` now owns it, so the bag is empty and the
+    /// value is typed. Same input, same guarantee, different owner.
+    @Test func modelsPlacementOnTheSharedBaseInsteadOfPreservingIt() throws {
         let value = try #require(try ambitusValue(ambitusVoiceElements("""
         <Ambitus><topPitch>60</topPitch><topTpc>14</topTpc>
         <bottomPitch>48</bottomPitch><bottomTpc>14</bottomTpc><placement>above</placement></Ambitus>
         """).first))
-        #expect(value.preservedMarkup.map(\.name) == ["placement"])
+        #expect(value.preservedMarkup.isEmpty)
+        #expect(value.elementProperties.placement == .above)
     }
 
     @Test func encodesCanonicalChildOrderAndOrdinalMirror() {
@@ -343,7 +347,13 @@ struct AmbitusFixtureTests {
         #expect(ambitus.lineWidth == nil)
         #expect(ambitus.topAccidental == .sharp)
         #expect(ambitus.bottomAccidental == .flat)
-        #expect(ambitus.elementProperties == .default)
-        #expect(ambitus.preservedMarkup.map(\.name) == ["placement"])
+        // The fixture's `<placement>` used to land in the bag; the shared
+        // `ElementProperties` owns it now, so the bag is empty and the rest of
+        // the base properties are still at their defaults.
+        #expect(ambitus.elementProperties.placement == .above)
+        #expect(ambitus.elementProperties.visible)
+        #expect(ambitus.elementProperties.color == nil)
+        #expect(ambitus.elementProperties.offset == nil)
+        #expect(ambitus.preservedMarkup.isEmpty)
     }
 }

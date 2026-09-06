@@ -5,10 +5,10 @@ import SheetMusicXMLTools
 extension ChordBracket {
     /// Every direct `<ChordBracket>` child this decoder reads. The inherited
     /// `Arpeggio` properties and anything else become preserved markup;
-    /// the base `<offset>` is owned by `ElementProperties`.
+    /// the base `<offset>` and `<placement>` are owned by `ElementProperties`.
     private static let consumedChildren: Set = [
         "bracketHookLen", "bracketHookPos", "bracketRightSide",
-        "color", "offset", "visible",
+        "color", "offset", "placement", "visible",
     ]
 
     /// Decode the first direct `<ChordBracket>` child of a `<Chord>`.

@@ -3,14 +3,14 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Sticking {
-    /// Every direct `<Sticking>` child this decoder reads. `<style>`,
-    /// `<placement>`, and font overrides are not modeled and become preserved
-    /// markup. The base `<offset>` is owned by `ElementProperties`.
+    /// Every direct `<Sticking>` child this decoder reads. `<style>` and font
+    /// overrides are not modeled and become preserved markup. The base
+    /// `<offset>` and `<placement>` are owned by `ElementProperties`.
     ///
     /// `color` and `visible` are consumed because
     /// `ElementProperties(decodingMSCXChildrenOf:)` reads them.
     private static let consumedChildren: Set = [
-        "text", "color", "offset", "visible",
+        "text", "color", "offset", "placement", "visible",
     ]
 
     /// Decode one `<Sticking>`.

@@ -4,7 +4,7 @@ import SheetMusicXMLTools
 
 extension BarLine {
     private static let consumedBarLineChildren: Set = [
-        "color", "offset", "subtype", "visible",
+        "color", "offset", "placement", "subtype", "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> BarLine {

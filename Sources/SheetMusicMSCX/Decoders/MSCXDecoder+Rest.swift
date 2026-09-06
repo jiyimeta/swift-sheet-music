@@ -11,7 +11,7 @@ enum MSCXRestDecoder {
     /// `duration` on a measure rest is encoder-owned informational
     /// data and is regenerated from the effective measure duration.
     private static let consumedRestChildren: Set = [
-        "Spanner", "color", "dots", "duration", "durationType", "offset", "track", "visible",
+        "Spanner", "color", "dots", "duration", "durationType", "offset", "placement", "track", "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> Chord {

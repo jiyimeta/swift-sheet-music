@@ -38,7 +38,8 @@ import SheetMusicFoundation
 /// appears only through `TRead::readProperties(BSymbol*, …)`
 /// (`tread.cpp:2346`) — nested inside a `<Symbol>`, an `<FSymbol>`, or an
 /// `<Image>` — so it remains preserved markup with every other unmodeled child.
-/// The shared base owns `<offset>` through `elementProperties`.
+/// The shared base owns `<offset>` and `<placement>` through
+/// `elementProperties`.
 public struct EngravingSymbol: Sendable, Equatable {
     /// The SMuFL SymId name. `<name>`; an absent or empty tag decodes as `""`.
     public var name: String

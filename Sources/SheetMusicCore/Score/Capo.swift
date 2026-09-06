@@ -16,10 +16,10 @@ import SheetMusicFoundation
 /// omit it because `.playbackOnly` equals the property default.
 ///
 /// **Content, not presentation.** The capo parameters and `text` are modeled;
-/// `<style>`, `<placement>`, `<offset>`, font overrides, and the
-/// `StaffTextBase` channel and swing tags stay in `preservedMarkup`. Inline
-/// markup inside `<text>` flattens to plain text, the cross-cutting limitation
-/// described by the parity document's §7.1 text-content work.
+/// `<style>`, font overrides, and the `StaffTextBase` channel and swing tags
+/// stay in `preservedMarkup`; the shared base owns `<offset>` and `<placement>`.
+/// Inline markup inside `<text>` flattens to plain text, the cross-cutting
+/// limitation described by the parity document's §7.1 text-content work.
 public struct Capo: Sendable, Equatable {
     /// `<active>`. Defaults to `true` when absent.
     public var isActive: Bool
@@ -43,7 +43,7 @@ public struct Capo: Sendable, Equatable {
     }
 
     /// Source XML children this model does not represent, including text
-    /// presentation, placement, channel, and swing properties.
+    /// presentation, channel, and swing properties.
     public var preservedMarkup: [PreservedXML]
 
     public init(

@@ -22,8 +22,8 @@ import SheetMusicFoundation
 /// The three bracket-specific properties are modeled. The inherited
 /// `Arpeggio` tags — `<userLen1>`, `<userLen2>`, `<span>`, `<play>`, and
 /// `<timeStretch>` — remain in `preservedMarkup`, matching how
-/// `ChordOrnament` handles inherited `<direction>` and `<placement>`.
-/// The shared base owns `<offset>` through `elementProperties`. `<subtype>` is
+/// `ChordOrnament` handles inherited `<direction>`. The shared base owns
+/// `<offset>` and `<placement>` through `elementProperties`. `<subtype>` is
 /// neither modeled nor emitted because
 /// `TWrite::write(const ChordBracket*, …)` never writes one
 /// (`rw/write/twrite.cpp:747`).

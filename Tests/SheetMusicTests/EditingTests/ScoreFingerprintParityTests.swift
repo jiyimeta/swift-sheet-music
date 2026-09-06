@@ -122,4 +122,17 @@ struct ScoreFingerprintParityTests {
         score[Self.slot] = .chord(chord)
         #expect(score.stableFingerprint == before)
     }
+
+    @Test("element placement stays out of the fingerprint")
+    func elementPlacementIsDisplayTrivia() {
+        let plain = EditingFixtures.chordAtIndex1()
+        var placed = plain
+        guard case var .chord(chord) = placed[Self.slot] else {
+            Issue.record("expected a chord")
+            return
+        }
+        chord.elementProperties.placement = Placement.above
+        placed[Self.slot] = .chord(chord)
+        #expect(placed.stableFingerprint == plain.stableFingerprint)
+    }
 }

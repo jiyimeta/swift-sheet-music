@@ -24,17 +24,26 @@ public struct ElementProperties: Sendable, Equatable, Codable {
     /// parameters is indistinguishable from no offset and stores `nil`.
     public var offset: ScoreOffset?
 
+    /// Author override for which side of the staff the element sits on.
+    /// `nil` means the MSCX `<placement>` child was absent, so the element uses
+    /// its styled or algorithmic side. MuseScore writes this tag only after
+    /// the property stops being styled (`TWrite::writeItemProperties`,
+    /// `twrite.cpp:578`).
+    public var placement: Placement?
+
     // Reserved extension points (NOT implemented in this work):
-    //   public var autoplace / placement   // behavioral
+    //   public var autoplace   // behavioral
 
     public init(
         visible: Bool = true,
         color: ScoreColor? = nil,
         offset: ScoreOffset? = nil,
+        placement: Placement? = nil,
     ) {
         self.visible = visible
         self.color = color
         self.offset = offset
+        self.placement = placement
     }
 
     public static let `default` = ElementProperties()

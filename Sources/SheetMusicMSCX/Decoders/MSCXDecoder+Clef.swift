@@ -4,7 +4,7 @@ import SheetMusicXMLTools
 
 extension Clef {
     private static let consumedClefChildren: Set = [
-        "color", "concertClefType", "offset", "transposingClefType", "visible",
+        "color", "concertClefType", "offset", "placement", "transposingClefType", "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> Clef {

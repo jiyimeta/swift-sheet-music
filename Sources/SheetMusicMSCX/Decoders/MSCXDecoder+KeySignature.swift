@@ -13,7 +13,7 @@ extension KeySignature {
     /// encoder then chooses the target-version spelling.
     private static let consumedKeySignatureChildren: Set = [
         "accidental", "actualKey", "color", "concertKey", "custom", "mode",
-        "offset", "showCourtesySig", "visible",
+        "offset", "placement", "showCourtesySig", "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> KeySignature {
