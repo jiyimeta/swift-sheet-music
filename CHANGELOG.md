@@ -9,6 +9,34 @@ and this project adheres to
 
 ### Added
 
+- **Lyrics and score text can be typed, not only read.** `SetLyric` writes one
+  syllable at one verse on one chord, taking scalars rather than a `Lyric` so
+  it can own the invariant that a chord's `lyrics` array is indexed by verse:
+  it pads intervening verses, trims trailing empties, and preserves each
+  existing lyric's properties and preserved markup. Its inverse is a snapshot
+  of the whole array, so undo restores verses the command never named.
+
+  Two stateless planners turn keystrokes into commands.
+  `LyricInputPlanner` implements MuseScore's three syllabic transition tables
+  for Space, hyphen and underscore, plus a rule for a syllable typed next to
+  an existing one — `.end` after a `.begin` or `.middle` neighbour, otherwise
+  `.single` — which replaces the transient empty object MuseScore uses to
+  reach the same result. `TextInputPlanner` does the same for staff text,
+  system text, chord symbols and rehearsal marks. Neither holds state, so a
+  host can drive them from a caret, a test, or a replayed intent.
+
+  A lyric layout mark now carries its verse and its anchor, which is what
+  lets a caret sit on the engraved origin instead of near it. That identity
+  also fixes a pre-existing bug: system-wide lyric alignment keyed on the
+  minimum Y across the system, so a verse-2 mark was pulled onto the verse-1
+  line whenever the first staff of a system had no verse 1.
+
+  The macOS and iOS example apps both grow an inline editor built on this.
+  It engraves a screen-only score — committed score plus the pending command,
+  through the normal engraving pass — so a rehearsal mark's frame, staff-text
+  avoidance and alignment are identical before and after commit rather than
+  approximately so.
+
 - **Inline MuseScore text markup now survives MSCX round trips.** Text-bearing
   score values keep their existing plain `text` while carrying the original
   `<text>` subtree opaquely, including interleaved character data and `<b>`,
