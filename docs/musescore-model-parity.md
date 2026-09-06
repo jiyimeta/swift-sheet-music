@@ -730,6 +730,20 @@ C++の`displayText` / `normalizedText`はread-onlyな派生propertyでreaderに�
 `segment->add(el)`する。**`AMBITUS`は逆**（独自の`SegmentType::Ambitus`）なので、
 隣の要素の答えを写さずに毎回上流を見ること。
 
+#### §7.1完了後に確認し直すこと
+
+**`<FiguredBass>`のtext形式は、§7.1が入っても`<text>`内のinline markupを往復しない。**
+§7.1が足すのは`preservedTextMarkup`——`<text>`の中身を保持するbag——だが、
+`FiguredBass`はそれを持っていない。`MSCXEncoder+FiguredBass.swift`は
+inlineで`<text>`を組み立てる箇所として残る。
+
+**effectは狭い。** item形式は`<text>`をそもそも書かないので、影響を受けるのは
+**MuseScoreがparseできなかったfigure**だけ。§7.1の`Text/style`と同じ扱いで、
+「§7.1が終われば消える」ではなく「§7.1のscope外の別のgap」として残る。
+
+§7.1が完了した時点でここを読み直し、`preservedTextMarkup`をこの要素にも足すか、
+足さない理由を書くこと。
+
 ### 4.3 記号・画像
 
 | MuseScore | 定義 | ssm | 影響 |
