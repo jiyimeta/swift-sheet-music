@@ -7,7 +7,7 @@ import SheetMusicFoundation
 ///
 /// - **Measure flags and element properties are fed BY OCCUPANTS.** A field contributes bytes only when it holds a
 ///   non-default value, and always as a unique non-zero tag (21 and up, so no tag can be mistaken for a
-///   `VoiceElement` case tag 0…16 or for a presence byte) followed by its value. The tag is what keeps
+///   `VoiceElement` case tag 0…17 or for a presence byte) followed by its value. The tag is what keeps
 ///   `endRepeatCount = 2` and `measureRepeatCount = 2` apart; the fixed-arity prefix of each measure block is what
 ///   keeps "flag on measure 3" and "flag on measure 4" apart.
 /// - **The marker `VoiceElement` cases are fed their content UNCONDITIONALLY.** A clef has no default type to be
@@ -114,13 +114,13 @@ extension FNV1a {
     /// parity project (spec 2026-09-02 §2.5): the `combine(_ clef:)` / `combine(_ barLine:)` /
     /// `combine(_ dynamic:)` / `combine(_ fermata:)` / `combine(_ breath:)` / `combine(_ harmony:)` /
     /// `combine(_ sticking:)` / `combine(_ expression:)` / `combine(_ capo:)` / `combine(_ tunings:)` /
-    /// `combine(_ ambitus:)` / `combine(_ spanner:)` / `combine(_ repeat:)` overloads below are what this switch
-    /// calls into.
+    /// `combine(_ ambitus:)` / `combine(_ figuredBass:)` / `combine(_ spanner:)` / `combine(_ repeat:)` overloads
+    /// below are what this switch calls into.
     ///
     /// This switch lives here rather than in `ScoreFingerprintHasher.swift` because every overload it
     /// dispatches to is in this file, and because that one was at the `file_length` limit — a new
     /// `VoiceElement` case cost two lines there and none here.
-    mutating func combine(_ element: VoiceElement) {
+    mutating func combine(_ element: VoiceElement) { // swiftlint:disable:this function_body_length
         switch element {
         case let .chord(chord):
             combine(0)
@@ -178,6 +178,9 @@ extension FNV1a {
         case let .ambitus(ambitus):
             combine(16)
             combine(ambitus)
+        case let .figuredBass(figuredBass):
+            combine(17)
+            combine(figuredBass)
         case .preserved:
             // Source-only XML is outside the semantic edit fingerprint.
             break
@@ -279,6 +282,28 @@ extension FNV1a {
         combine(ambitus.topAccidental)
         combine(ambitus.bottomAccidental)
         combineOccupied(ambitus.elementProperties, visibleTag: 53, colorTag: 54)
+    }
+
+    /// Every modeled figured-bass field an edit can change. Source-fidelity
+    /// markup stays out of the semantic fingerprint.
+    mutating func combine(_ figuredBass: FiguredBass) {
+        combine(figuredBass.isOnNote)
+        combine(figuredBass.ticks)
+        combine(figuredBass.text)
+        combineOccupied(figuredBass.items, tag: 55)
+        combineOccupied(figuredBass.elementProperties, visibleTag: 56, colorTag: 57)
+    }
+
+    mutating func combine(_ item: FiguredBassItem) {
+        combine(item.bracket0.mscxOrdinal)
+        combine(item.bracket1.mscxOrdinal)
+        combine(item.bracket2.mscxOrdinal)
+        combine(item.bracket3.mscxOrdinal)
+        combine(item.bracket4.mscxOrdinal)
+        combinePresence(item.prefix?.mscxOrdinal)
+        combinePresence(item.digit)
+        combinePresence(item.suffix?.mscxOrdinal)
+        combinePresence(item.continuationLine?.mscxOrdinal)
     }
 
     mutating func combine(_ repeat: MeasureRepeat) {

@@ -111,6 +111,39 @@ and this project adheres to
   inline markup inside `<text>` flattens to plain text — the same limitation
   `StaffText` has. Engraving does not place a fingering glyph yet.
 
+- **Figured bass is modeled.** `<FiguredBass>` is the thoroughbass notation a
+  continuo part carries under the staff — stacked figures, each optionally with
+  an accidental before or after it, brackets around any part of it, and a
+  continuation line. It reached the model only as an opaque preserved subtree.
+
+  `VoiceElement.figuredBass(FiguredBass)` carries the figures as
+  `FiguredBassItem` values, the tick span, and whether the group sits on a note
+  or between notes.
+
+  **The element writes itself two mutually exclusive ways, and which one is a
+  property of the data, not the file version.** MuseScore parses the typed text
+  into figures; when that parse fails it writes the raw text instead. Both forms
+  are modeled — `items` when the file used figures, `text` when it did not — and
+  the encoder branches the way MuseScore does. When figures are present the
+  reader regenerates the text from them and discards whatever the file said, so
+  this library does the same: `text` is authoritative only when `items` is
+  empty. It is the one field in this parity work that is a stored value or a
+  derived one depending on the data.
+
+  **An absent `<onNote>` means true, not false.** MuseScore writes the tag only
+  when the value is false, so the ordinary case — figures attached to a note —
+  is written with no tag at all. Defaulting to false would silently move every
+  such figure between the notes. This is the same class of trap as `Capo`'s
+  fret position but the opposite in its details: there the C++ member
+  initializer was the misleading answer, here it is the correct one. What
+  settles it in both cases is the writer's omission condition, which is the only
+  place that always says what an absent tag means.
+
+  Text-style children survive as preserved markup rather than being consumed:
+  the figure form emits `<size>`, `<align>` and friends as direct children, so
+  a score with an edited figured-bass style keeps them. **Nothing engraves a
+  figured bass yet** — this is round-trip fidelity only.
+
 - **The ambitus is modeled.** `<Ambitus>` is the range indicator a choral or
   early-music part carries at its start — the highest and lowest note the part
   ever reaches, drawn as two noteheads joined by a line. It sits in the voice

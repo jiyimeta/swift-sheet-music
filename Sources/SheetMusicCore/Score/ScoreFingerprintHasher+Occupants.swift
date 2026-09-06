@@ -73,4 +73,16 @@ extension FNV1a {
         combineTristate(bracket.isRightSide)
         combineOccupied(bracket.elementProperties, visibleTag: 44, colorTag: 45)
     }
+
+    /// Figured-bass items, BY OCCUPANTS: an empty item representation feeds
+    /// nothing, keeping it distinct from the raw-text payload by the parent
+    /// fingerprint fields without introducing an empty-list marker.
+    mutating func combineOccupied(_ items: [FiguredBassItem], tag: Int) {
+        guard !items.isEmpty else { return }
+        combine(tag)
+        combine(items.count)
+        for item in items {
+            combine(item)
+        }
+    }
 }

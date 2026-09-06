@@ -42,11 +42,14 @@ public enum VoiceElement: Sendable, Equatable {
     /// The staff's range indicator, attached at the current tick. Occupies no
     /// tick budget.
     case ambitus(Ambitus)
+    /// A thoroughbass figure stored as a segment annotation at the current
+    /// tick. Occupies no tick budget.
+    case figuredBass(FiguredBass)
     /// A `<voice>` child this library does not model, kept at its
     /// position in the stream. Unlike container-level
     /// `preservedMarkup` bags, a voice child's position is its
-    /// meaning: a `<Symbol>` or `<FiguredBass>` between two chords
-    /// attaches at that tick. No layout, MIDI, or playback pass reads
+    /// meaning: a `<Symbol>` between two chords attaches at that tick. No
+    /// layout, MIDI, or playback pass reads
     /// the preserved subtree.
     ///
     /// Occupies no tick budget: both `tickCount` overloads return
