@@ -116,6 +116,13 @@ public protocol SynthBackend: AnyObject {
 
     /// Transport control. `currentTick` is the SMF-tick clock the cursor timer
     /// polls; `seek` and loop-wrap both move the transport in tick space.
+    ///
+    /// **`pause()` must leave nothing sounding.** Stopping the transport stops event dispatch, so the note-offs
+    /// belonging to whatever was sounding at that instant never arrive and those voices stay in their sustain
+    /// segment — and the host parks the `AVAudioEngine` right afterwards, which freezes them there rather than
+    /// letting them release. They are still at full amplitude the next time anything starts the graph, which is
+    /// usually `playPreview` resuming it for a single note: the paused chord then comes back under the preview.
+    /// A backend ends its own voices on `pause()` for the same reason it does on `stop()`.
     func play()
     func pause()
     func stop()
