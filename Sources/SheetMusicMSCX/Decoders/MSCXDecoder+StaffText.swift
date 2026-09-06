@@ -39,14 +39,25 @@ extension StaffText {
 
     /// Capture a marked-up `<text>` subtree without allocating for the common
     /// plain-character case.
+    ///
+    /// `derivedText` is the caller's own flattening of the same node. The
+    /// encoder re-emits this markup only while the model still holds that
+    /// string, so an edit drops stale formatting; passing it in keeps each
+    /// decoder's flattening convention intact instead of imposing one.
+    /// The common case: the caller flattened with `plainText(of:)`.
+    static func preservedTextMarkup(of node: XMLTreeNode) -> PreservedTextMarkup? {
+        preservedTextMarkup(of: node, derivedText: plainText(of: node))
+    }
+
     static func preservedTextMarkup(
-        of node: XMLTreeNode,
+        of node: XMLTreeNode, derivedText: String,
     ) -> PreservedTextMarkup? {
         guard !node.children.isEmpty, let mixedContent = node.mixedContent else {
             return nil
         }
         return PreservedTextMarkup(
             content: mixedContent.map(preservedContent(_:)),
+            derivedText: derivedText,
         )
     }
 

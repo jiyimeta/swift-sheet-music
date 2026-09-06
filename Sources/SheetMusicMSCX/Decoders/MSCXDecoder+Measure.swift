@@ -220,7 +220,11 @@ extension Measure {
         let kind = Marker.Kind(rawValue: markerType) ?? .other
         let rawLabel = node.first("label")?.text ?? ""
         let textNode = node.first("text")
-        let text = textNode.map(StaffText.plainText(of:)) ?? ""
+        // Only this element's own character data, not its descendants'.
+        // `<text><sym>coda</sym></text>` has no plain text, and flattening
+        // the SymId spelling into it would put "coda" where MuseScore has a
+        // glyph. `PreservedTextMarkup` carries the sym so it still round-trips.
+        let text = textNode?.text ?? ""
         return Marker(
             kind: kind,
             // MuseScore instantiates markers with the type's default
@@ -229,20 +233,26 @@ extension Measure {
             label: rawLabel.isEmpty ? kind.defaultLabel : rawLabel,
             text: text,
             preservedMarkup: node.preservedMarkup(consuming: consumedMarkerChildren),
-            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
+            preservedTextMarkup: textNode.flatMap {
+                StaffText.preservedTextMarkup(of: $0, derivedText: text)
+            },
         )
     }
 
     private static func decodeJump(_ node: XMLTreeNode) -> Jump {
         let textNode = node.first("text")
+        // Own character data only, like `decodeMarker` above.
+        let text = textNode?.text ?? ""
         return Jump(
             jumpTo: node.first("jumpTo")?.text ?? "",
             playUntil: node.first("playUntil")?.text ?? "",
             continueAt: node.first("continueAt")?.text ?? "",
             playRepeats: node.first("playRepeats")?.text == "1",
-            text: textNode.map(StaffText.plainText(of:)) ?? "",
+            text: text,
             preservedMarkup: node.preservedMarkup(consuming: consumedJumpChildren),
-            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
+            preservedTextMarkup: textNode.flatMap {
+                StaffText.preservedTextMarkup(of: $0, derivedText: text)
+            },
         )
     }
 }

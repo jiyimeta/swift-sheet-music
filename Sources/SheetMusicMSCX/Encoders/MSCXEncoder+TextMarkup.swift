@@ -10,7 +10,7 @@ func encodeText(
 ) -> XMLTreeNode {
     guard options.emitPreservedMarkup,
           let preservedTextMarkup,
-          preservedTextMarkup.plainText == text
+          preservedTextMarkup.derivedText == text
     else {
         return XMLTreeNode(name: "text", text: text)
     }

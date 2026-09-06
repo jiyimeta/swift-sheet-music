@@ -36,8 +36,22 @@ public struct PreservedTextMarkup: Sendable, Equatable, Hashable {
 
     public let content: [ContentItem]
 
-    public init(content: [ContentItem]) {
+    /// The plain text the decoder derived from this markup, recorded so the
+    /// encoder can tell whether the model's text has moved since.
+    ///
+    /// It is supplied by the decoder rather than computed here because the
+    /// decoders do not all flatten the same way: `StaffText` concatenates
+    /// descendants, `Marker` reads only the `<text>` element's own character
+    /// data, so `<text><sym>coda</sym></text>` is "coda" to one and "" to the
+    /// other. Comparing against one global flattening would force every
+    /// element onto the same convention — which is a modeling change, and a
+    /// wrong one for `Marker`, whose plain text upstream is the glyph, not the
+    /// SymId spelling.
+    public let derivedText: String
+
+    public init(content: [ContentItem], derivedText: String) {
         self.content = content
+        self.derivedText = derivedText
     }
 
     /// The legacy decoder's flattening: trimmed direct character data first,
