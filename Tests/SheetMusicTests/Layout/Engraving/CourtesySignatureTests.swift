@@ -139,7 +139,7 @@ import Testing
             _ m: LayoutMeasure,
         ) -> [(numerator: Int, denominator: Int, origin: CGPoint)] {
             m.elements.compactMap { element in
-                guard case let .timeSignature(n, d, origin) = element
+                guard case let .timeSignature(n, d, _, origin) = element
                 else { return nil }
                 return (n, d, origin)
             }
@@ -370,7 +370,7 @@ import Testing
                 let stride = KeySignatureSteps.advance(sp: sp)
                     * CGFloat(count - 1)
                 return (origin.x - half, origin.x + stride + half)
-            case let .timeSignature(numerator, denominator, origin):
+            case let .timeSignature(numerator, denominator, _, origin):
                 let digits = max(
                     String(numerator).count, String(denominator).count,
                 )
@@ -418,7 +418,7 @@ import Testing
                 glyphCount: 2, sp: metrics.sp,
             )
             let timeInk = TimeSignatureLayout.inkWidth(
-                numerator: 3, denominator: 4, sp: metrics.sp,
+                numerator: 3, denominator: 4, symbol: .numeric, sp: metrics.sp,
             )
             #expect(
                 abs(courtesy.width - (gap + keyInk + gap + timeInk + gap))
@@ -543,7 +543,7 @@ import Testing
                 let originX: CGFloat
                 switch element {
                 case let .keySignature(_, _, _, _, origin),
-                     let .timeSignature(_, _, origin):
+                     let .timeSignature(_, _, _, origin):
                     originX = origin.x
                 default:
                     continue
@@ -596,7 +596,7 @@ import Testing
                 let origin: CGPoint
                 switch element {
                 case let .keySignature(_, _, _, _, value),
-                     let .timeSignature(_, _, value):
+                     let .timeSignature(_, _, _, value):
                     origin = value
                 default:
                     continue

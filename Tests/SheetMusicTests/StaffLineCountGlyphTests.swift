@@ -292,7 +292,7 @@
             for element in measure.elements {
                 switch element {
                 case let .clef(_, p, _): clefY = clefY ?? p.y
-                case let .timeSignature(_, _, p): timeSigY = timeSigY ?? p.y
+                case let .timeSignature(_, _, _, p): timeSigY = timeSigY ?? p.y
                 default: continue
                 }
             }

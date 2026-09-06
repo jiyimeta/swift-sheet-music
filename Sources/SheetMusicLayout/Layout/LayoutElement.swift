@@ -57,7 +57,16 @@ public enum LayoutElement: Sendable, Equatable {
         sharps: Int, flats: Int, clef: NotatedClef,
         naturals: [Int] = [], origin: CGPoint,
     )
-    case timeSignature(numerator: Int, denominator: Int, origin: CGPoint)
+    /// `symbol` decides the SHAPE: `.numeric` is the two numbers
+    /// stacked around `origin`, anything else is one glyph centered on
+    /// it (`TimeSignatureLayout.symbolCodepoint`). `numerator` and
+    /// `denominator` ride along either way — the meter is what they say
+    /// even when the page draws a C — so a renderer that has no glyph
+    /// for a symbol can still fall back to the numbers.
+    case timeSignature(
+        numerator: Int, denominator: Int,
+        symbol: TimeSignatureSymbol = .numeric, origin: CGPoint,
+    )
     /// `origin.y` is the vertical center of the barline's stroke — for
     /// a staff with more than one line that is the staff's own center,
     /// midway between its top and bottom lines. `halfHeight` is the

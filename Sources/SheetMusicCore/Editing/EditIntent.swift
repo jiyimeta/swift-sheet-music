@@ -127,7 +127,16 @@ public enum EditIntent: Sendable, Equatable {
     /// whole, with the score untouched, when the new barring would split a tuplet
     /// (`.rebarWouldSplitTuplet`) or slide a repeat sign off the barline it marks
     /// (`.rebarWouldDisplaceBarlineMarker`): a re-bar is one edit, so it either lands or it does not.
-    case setTimeSignature(measureIndex: Int, numerator: Int, denominator: Int)
+    ///
+    /// `symbol` says how the declaration is DRAWN — the numbers, or the C / ¢ that stands for them. It rides
+    /// on this intent rather than on one of its own because a symbol is not a second edit: MuseScore's
+    /// `<subtype>` is a property of the one `TimeSig` element, and splitting it out would make placing a C two
+    /// undo steps, the second of which re-barred nothing. A symbol paired with a meter it does not stand for is
+    /// refused as `.timeSignatureSymbolMismatch`.
+    case setTimeSignature(
+        measureIndex: Int, numerator: Int, denominator: Int,
+        symbol: TimeSignatureSymbol = .numeric,
+    )
 
     /// Remove the explicit time change at `measureIndex`, re-barring its span back to the meter that was in force
     /// before it. Refused with `.cannotRemoveInitialSignature` at measure 0; plans to nothing when no explicit

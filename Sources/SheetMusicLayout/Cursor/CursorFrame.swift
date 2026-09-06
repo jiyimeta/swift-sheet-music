@@ -332,7 +332,7 @@ extension LayoutDocument {
             case let .keySignature(sharps, flats, _, naturals, origin):
                 let glyphs = CGFloat(max(sharps, flats, naturals.count))
                 rightEdge = max(rightEdge, origin.x + sp * (glyphs + 1.5))
-            case let .timeSignature(_, _, origin):
+            case let .timeSignature(_, _, _, origin):
                 rightEdge = max(rightEdge, origin.x + sp * 3.5)
             default:
                 break

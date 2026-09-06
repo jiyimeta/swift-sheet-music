@@ -325,6 +325,7 @@ struct FNV1a {
             combine(2)
             combine(time.numerator)
             combine(time.denominator)
+            combineOccupied(time.symbol, tag: 39)
             combine(time.showCourtesy)
             combine(time.visible)
         case let .clef(clef):

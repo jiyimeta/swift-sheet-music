@@ -76,7 +76,7 @@ own substantive logic.
 | `MovePart` | not in the example — driven by a host app's instruments sheet | — |
 | `SetKeySignature` | not in the example — driven by a host app's signature sheet | — |
 | `RemoveKeySignature` | not in the example — driven by a host app's signature sheet | — |
-| `SetTimeSignature` | not in the example — driven by a host app's signature sheet | — |
+| `SetTimeSignature` | not in the example — driven by a host app's signature sheet; carries the `TimeSignatureSymbol` (C / ¢ / the two cut signs) alongside the meter | — |
 | `RemoveTimeSignature` | not in the example — driven by a host app's signature sheet | — |
 | `SetStaffDefaultClef` | not in the example — driven by a host app's clef picker | — |
 | `SetRehearsalMark` | menu command (system lane) — set / rename a bar's mark | — |

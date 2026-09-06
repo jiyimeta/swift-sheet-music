@@ -91,10 +91,27 @@ extension ScoreLayerBuilder {
 
     static func drawTimeSignature(
         numerator: Int, denominator: Int,
+        symbol: TimeSignatureSymbol,
         origin: CGPoint, metrics: StaffMetrics,
         height: CGFloat,
         into parent: CALayer,
     ) {
+        // A symbol is ONE glyph on the staff middle, replacing both rows.
+        if let glyph = SMuFLGlyph.timeSigSymbol(symbol) {
+            if let layer = glyphLayer(
+                glyph,
+                at: CGPoint(
+                    x: origin.x,
+                    y: origin.y
+                        + TimeSignatureLayout.symbolDy(sp: metrics.sp),
+                ),
+                size: metrics.glyphFontSize,
+                height: height,
+            ) {
+                parent.addSublayer(layer)
+            }
+            return
+        }
         let numStr = String(numerator)
         let denStr = String(denominator)
         let digitAdvance = metrics.sp * 1.4

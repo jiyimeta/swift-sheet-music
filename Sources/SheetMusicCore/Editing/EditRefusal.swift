@@ -73,6 +73,15 @@ public struct EditRefusal: Sendable, Hashable {
         /// powers of two a note duration exists for. `SetTimeSignature` refuses rather than re-bar a region at a
         /// length nothing can engrave. A host's picker never produces these; a command built directly can.
         case invalidTimeSignatureValue(numerator: Int, denominator: Int)
+        /// A meter was paired with a symbol that does not stand for it — a C over bars that are not four
+        /// quarters long, a ¢ over bars that are not two halves. The numbers are writable and the symbol is
+        /// real; it is the PAIR that means nothing, so `SetTimeSignature` refuses rather than engrave a
+        /// signature whose glyph contradicts the bar length it declares. `TimeSignatureSymbol.conventionalMeter`
+        /// is the pairing each symbol expects. A score read from a file keeps such a pair — the parser preserves
+        /// what it was given; this refusal is only about WRITING one.
+        case timeSignatureSymbolMismatch(
+            symbol: TimeSignatureSymbol, numerator: Int, denominator: Int,
+        )
         /// A rehearsal mark whose text is empty (or whitespace only) is not a mark — it would engrave as a bare
         /// frame with nothing in it. `SetRehearsalMark` refuses rather than write one. A host's sheet disables its
         /// confirm button on an empty field, so this is what a command built directly answers, the same role
@@ -204,6 +213,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.rebarWouldDisplaceBarlineMarker"
         case .invalidTimeSignatureValue:
             "edit.invalidTimeSignatureValue"
+        case .timeSignatureSymbolMismatch:
+            "edit.timeSignatureSymbolMismatch"
         case .emptyRehearsalMarkText:
             "edit.emptyRehearsalMarkText"
         case .voiceAlreadyExists:
@@ -294,6 +305,8 @@ public struct EditRefusal: Sendable, Hashable {
             "re-barring would displace the barline marker on measure \(measureIndex)"
         case let .invalidTimeSignatureValue(numerator, denominator):
             "unwritable time signature \(numerator)/\(denominator)"
+        case let .timeSignatureSymbolMismatch(symbol, numerator, denominator):
+            "time signature symbol \(symbol) does not stand for \(numerator)/\(denominator)"
         case .emptyRehearsalMarkText:
             "rehearsal mark text is empty"
         case let .voiceAlreadyExists(staff, measureIndex, voiceIndex):

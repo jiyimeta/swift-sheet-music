@@ -27,6 +27,9 @@ extension LayoutEngine {
     struct CourtesyTimeSignature: Equatable, Sendable {
         let numerator: Int
         let denominator: Int
+        /// Announced in the same shape the change itself is drawn in: a
+        /// system ending before a cut-time bar announces the ¢, not "2/2".
+        let symbol: TimeSignatureSymbol
     }
 
     /// Everything the trailing edge of one system announces: what to
@@ -130,6 +133,7 @@ extension LayoutEngine {
                         time = CourtesyTimeSignature(
                             numerator: sig.numerator,
                             denominator: sig.denominator,
+                            symbol: sig.symbol,
                         )
                     default:
                         continue
@@ -174,6 +178,7 @@ extension LayoutEngine {
                     let candidate = CourtesyTimeSignature(
                         numerator: sig.numerator,
                         denominator: sig.denominator,
+                        symbol: sig.symbol,
                     )
                     guard candidate != priorTime else { break }
                     courtesyTime = candidate
@@ -222,14 +227,20 @@ extension LayoutEngine {
             TimeSignatureLayout.inkWidth(
                 numerator: $0.numerator,
                 denominator: $0.denominator,
+                symbol: $0.symbol,
                 sp: metrics.sp,
             )
         } ?? 0
+        // Half a glyph inside its column's left edge, because every
+        // renderer centers a time-signature glyph on its stride — and a
+        // symbol's glyph is not a digit's.
+        let timeGlyphWidth = (time?.symbol ?? .numeric) == .numeric
+            ? TimeSignatureLayout.digitWidth(sp: metrics.sp)
+            : TimeSignatureLayout.symbolWidth(sp: metrics.sp)
         // Columns left to right, each preceded by a gap; the trailing pad
         // closes the band. A key-only or time-only announcement simply
         // drops the column it doesn't have, and with it that column's
-        // gap. Each column's anchor sits half a glyph inside its left
-        // edge because both renderers center a glyph on its stride.
+        // gap.
         let timeColumnStart = keyInk > 0 ? gap + keyInk + gap : gap
         let lastColumnEnd = timeInk > 0
             ? timeColumnStart + timeInk
@@ -239,8 +250,7 @@ extension LayoutEngine {
             time: time,
             keyOriginDx: gap
                 + KeySignatureSteps.glyphWidth(sp: metrics.sp) / 2,
-            timeOriginDx: timeColumnStart
-                + TimeSignatureLayout.digitWidth(sp: metrics.sp) / 2,
+            timeOriginDx: timeColumnStart + timeGlyphWidth / 2,
             width: lastColumnEnd + gap,
         )
     }
@@ -288,6 +298,7 @@ extension LayoutEngine {
             out.append(.timeSignature(
                 numerator: time.numerator,
                 denominator: time.denominator,
+                symbol: time.symbol,
                 origin: CGPoint(
                     x: contentWidth + courtesy.timeOriginDx,
                     y: staffMidY

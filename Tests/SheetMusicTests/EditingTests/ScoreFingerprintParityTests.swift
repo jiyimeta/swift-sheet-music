@@ -74,6 +74,26 @@ struct ScoreFingerprintParityTests {
         #expect(score.stableFingerprint == before)
     }
 
+    /// The symbol is fed BY OCCUPANTS: `.numeric` must leave the hash exactly where it was — that is what
+    /// keeps every committed golden byte-identical — while any other symbol must move it, or a mirror that
+    /// applied the meter without the C would agree with one that applied both.
+    @Test("a time signature symbol moves the fingerprint, and .numeric leaves it alone")
+    func timeSignatureSymbolIsCovered() {
+        var score = EditingFixtures.fourQuarterRests()
+        let before = score.stableFingerprint
+        var seen: Set<Int64> = [before]
+        for symbol in TimeSignatureSymbol.allCases where symbol != .numeric {
+            score.parts[0].staves[0].measures[0].voices[0].elements[0] =
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4, symbol: symbol))
+            let hash = score.stableFingerprint
+            #expect(!seen.contains(hash), "\(symbol) must hash unlike every symbol before it")
+            seen.insert(hash)
+        }
+        score.parts[0].staves[0].measures[0].voices[0].elements[0] =
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4))
+        #expect(score.stableFingerprint == before)
+    }
+
     @Test("a flag on measure 0 and the same flag on measure 1 hash differently")
     func flagsArePositional() {
         var a = EditingFixtures.twoMeasuresOfQuarterRests(key: 0)
