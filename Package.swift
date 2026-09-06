@@ -681,7 +681,7 @@ let packageDependencies: [Package.Dependency] = [
     // exactly: one `import Foundation` upstream is worth ~10 MB brotli here.
     .package(
         url: "https://github.com/swiftwasm/JavaScriptKit.git",
-        exact: "0.57.1",
+        exact: "0.58.0",
     ),
 ]
 
