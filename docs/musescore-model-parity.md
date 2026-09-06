@@ -357,8 +357,8 @@ git -C <musescore> log --format=%ad --date=format:%Y-%m --since=<6か月前> \
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
 | `FRET_DIAGRAM` | `dom/fret.h:137` | なし | chord diagramが丸ごと消える。string / fret / dot / barre / marker / 埋め込みharmony |
-| `STRING_TUNINGS` | `dom/stringtunings.h:49` | なし | preset・表示弦・tuning dataが消える |
-| `CAPO` | `types/types.h:1368`（`CapoParams`） | なし | capo位置・除外弦・transpose modeが消える。playback pitchに影響 |
+| ~~`STRING_TUNINGS`~~ | `dom/stringtunings.h:49` | **`StringTunings`**（2026-09-06実装） | 下の追記を参照 |
+| ~~`CAPO`~~ | `types/types.h:1368`（`CapoParams`） | **`Capo`**（2026-09-06実装） | 下の追記を参照 |
 | ~~`StringData`（Instrument配下）~~ | `dom/stringdata.h:42` | **`StringData`**（2026-09-04実装） | 下の追記を参照 |
 | `TAB_DURATION_SYMBOL` | `dom/tabdurationsymbol.h:40` | なし | TABのduration表示 |
 | `TREMOLOBAR` | `dom/tremolobar.h:37` | なし | whammy barのpitch curve。ssmの`Tremolo`は別物（beam tremolo） |
@@ -412,6 +412,84 @@ encoderを変えることではなく、この判断を書いた`allowedLosses` 
 `StringData::convertPitch` / `getPitch`相当のport（5弦banjoの特例と`CapoParams`のpitch offsetを
 含む）が要り、別sliceにした。`FRET_DIAGRAM` / `STRING_TUNINGS` / `CAPO`も未実装のままだが、
 これらが乗る起点はこれで埋まった。
+
+**［2026-09-06 追記］`CAPO`と`STRING_TUNINGS`もmodel化した。** `SheetMusicCore`の`Capo`と
+`StringTunings`、`VoiceElement`の`.capo` / `.stringTunings`、decoder / encoderは
+`MSCXDecoder+Capo.swift` / `MSCXEncoder+Capo.swift`（`StringTunings`も同名の対）、fixtureは
+`Tests/SheetMusicTests/Resources/own/tab-annotations.mscx`。
+
+**`SystemElement`ではなく`VoiceElement`に置いた。** どちらも`StaffTextBase`派生なので
+`StaffText`（ssmではlift済み）に引きずられそうになるが、上流のflagは
+`ElementFlag::MOVABLE | ElementFlag::ON_STAFF`だけで**system flagを持たない**
+（`capo.cpp:37`、`stringtunings.cpp:47`）。`SystemElement`の存在理由は「staffを隠しても残る」
+ことだが、guitar staffを隠したらそのcapoも一緒に消えるのが正しい。上流のflagとscopeの両方が
+staff側を指している。
+
+`<StringTunings>`は`<preset>`・`<visibleStrings>`（**カンマ区切りのint列**、
+`typesconv.cpp:132`の`sl.join(u",")`）・省略可能な`<StringData>`。`<StringData>`は
+上の`StringData`をそのまま再利用しており、**同じ型が`<Instrument>`配下とここの2箇所に出る**。
+`<visibleStrings>`は空でも無条件に書かれるので、model側も常に出す。
+
+`<Capo>`は`<active>` / `<fretPosition>` / `<generateText>`と、除外弦を表す
+`<string no="N"><apply>0</apply></string>`の列。除外弦は上流が`std::unordered_set`で、
+writerが`std::set`に移してから書くので昇順。modelも`Set<Int>`にして、encodeと
+fingerprintの両方でsortする。
+
+**`<transposeMode>`だけはMuseScore 4.7のpropertyで、4.60には存在しない。**
+`v4.6.5`の`dom/property.h`にあるCAPO系Pidは`CAPO_FRET_POSITION` /
+`CAPO_IGNORED_STRINGS` / `CAPO_GENERATE_TEXT`の3つだけで、`CAPO_TRANSPOSE_MODE`は無い
+（`git log -S CAPO_TRANSPOSE_MODE`→`2ad8dd61a8`、`git tag --contains`の初出が`v4.7.0`）。
+4.6のwriterは書かず、readerは`xml.unknown()`に落として捨てる。
+だからmodelは`TransposeMode?`にして、**tagが無ければ書かない**——
+`version="4.60"`を名乗るfileに4.7のtagを毎回混ぜないためで、
+`ExpressionText.snapToDynamics`と同じ「nil = tagが無い」形。値は書かれるときは
+**enumの序数（int）**（5.0-devの`property.cpp:489`が`P_TYPE::INT`）。
+
+これは§4.6の`ChordBracket`が踏んだ罠と同じもので、**element単位ではなくproperty単位で
+起きた**版。`rw/read460/`は4.60–4.99のreader moduleなので、そこに枝があることは
+4.6にあることを意味しない。要素だけでなく**その要素のpropertyについても**
+release tagで確認する必要がある。
+
+`<Capo>` / `<StringTunings>`という要素自体の境界は**MuseScore 4.1**。
+`rw/read400/tread.cpp`にはどちらのreaderも無く（"Capo"のhitは`FretDiagram`の
+`setCapo(fretId)`という別物）、両方を持つ最初のreaderは`rw/read410/`。
+
+#### 4.1.1 タグが無いときの意味は`propertyDefault`が決める
+
+**この2件で一番危なかったのはここ。** `writeProperty`は「default値と異なるときだけ書く」
+（`twrite.cpp:395-397`のコメントが契約を明記している）。その「default」は
+`propertyDefault()`の戻り値であって、**C++のmember initializerではない**。`Capo`はこの2つが
+食い違っている:
+
+| property | `CapoParams`のfield initializer | `Capo::propertyDefault`（`capo.cpp:72`） |
+|---|---|---|
+| `active` | `false`（`types/types.h:1377`） | **`true`** |
+| `fretPosition` | `0`（`types/types.h:1375`） | **`1`** |
+| `generateText` | （structに無い。`capo.h:56`が`true`） | **`true`** |
+
+つまり「**activeでfret 1のcapo**」——capoの最も普通の状態——が書かれたfileには
+`<active>`も`<fretPosition>`も**存在しない**。ここでfield initializer側をdecodeのdefaultに
+使うと、active な capo が inactive として読まれる。`CAPO`はplayback pitchに影響するので、
+**診断も出さずに音が変わる**。
+
+ssmは`propertyDefault`側（true / 1 / true）をdecodeのdefaultにしている。
+encodeではこの3つを**default一致でも無条件に書く**——省略判定を再現すると同じ罠を
+encoder側でも踏むし、readerはどちらでも読むので、書く方が安全でidempotentになる。
+
+**tagが「無い」ときの挙動はtestで固定すること。** ここは一度落とし穴になった:
+最初のtestは`<fretPosition>2</fretPosition>`を明示していて`isActive`しか見ていなかったので、
+decoderの`?? 1`を`?? 0`に書き換えても全gateが緑のままだった。**この節が主張している当のものが
+testで守られていなかった。** いまは子要素ゼロの`<Capo/>`をdecodeして全defaultを突き合わせ、
+decode→encode→decodeのidempotencyまで見ている。
+
+**absentとunparseableも区別する。** `<fretPosition>abc</fretPosition>`は上流の
+`readInt()`が0を返し、`capo.cpp:150`が0を「capo無し」として扱う。tagが無いとき（=1）と
+同じにしてはいけない。
+
+**scalar propertyをmodel化するときは毎回この検算をすること。** `writeProperty`を通る
+property全部に当てはまる。model側が`Bool?` / `Int?`で「タグが無い」を表現できるなら
+（`ExpressionText.snapToDynamics`がそう）この問題は起きないが、非optionalで持つなら
+`propertyDefault`を読みに行くしかない。
 
 ### 4.2 text annotation系
 
@@ -909,6 +987,79 @@ ssmの`ElementProperties`は`visible`と`color`の2つだけ（`ElementPropertie
 さらにこのbagを持っていないmodel型がある: `Score` / `Part` / `Staff` / `Measure` / `Voice` /
 `Instrument` / `Tuplet` / `Marker` / `Jump` / `MeasureRepeat` / `GraceChord`。
 
+**［2026-09-06 追記］`offset`と`color`を入れた。** `ElementProperties.offset: ScoreOffset?`と、
+`color`のencode。`ScoreOffset`はspatium単位の2 Double値型で、`CGPoint`を使っていない——
+portable targetは`SheetMusicFoundation`だけをimportする規約（AGENTS.md）があり、
+`FrameText.offsetMm`がその例外を`#if canImport(CoreGraphics)`で1箇所だけ引き受けている。
+あれはmm単位の絶対offset（`P_TYPE::POINT`のABS型、`value * DPMM`）で、**spatiumの`<offset>`とは
+別物なので統合していない**。
+
+#### 7.2.1 共有base propertyを1つ足すと、decoder全部に波及する
+
+見積もりを2回外したので書いておく。
+
+`<offset>`を持つmodel型は6つ（`RehearsalMark` / `Harmony` / `Tempo` / `Swing` /
+`InstrumentChange` / `StaffText`）で、MSCX側は12 fileだった。しかし
+`ElementProperties(decodingMSCXChildrenOf:)`は**24 decoderが共有**しているので、そこで
+`<offset>`を読み始めると6型だけでなく全要素が`elementProperties.offset`を持つ。
+preserved bagを持つdecoderのconsumed setに`"offset"`を足さないと、**modelとpreservedの
+二重所有**になり`preservedNamesNeverCollide`が落ちる。実際には+14 file、計49 fileになった。
+
+`<color>`も同じで、encoderが自前で書いていたのは5つだが、`mscxChildren()`を呼ぶ
+**27箇所すべて**にtrailing呼び出しが要る（呼ばない要素はcolorが書かれないまま残るため）。
+23 encoder file。2段合わせて66 fileになった。
+
+**consumed setに足すのは、読む側が実装されたのと同じcommitで。** consumed setは
+「preserved markupから除外する」宣言なので、まだ誰も読まないtagを先に入れると、
+そのtagは**modelにもbagにも入らず消える**。並行レーンが先回りで`"offset"`を入れていて、
+merge前に往復から落ちる状態になっていた。
+
+#### 7.2.2 `<color>`は`<style>`の後に書く（上流とわざと違える）
+
+`Pid::COLOR`はstyled text property（`style/textstyle.cpp:37`ほか、各text styleに
+`Color → Pid::COLOR`の行がある）。`<style>`を読むと`setProperty(Pid::TEXT_STYLE, …)`が
+`TextBase::initTextStyleType(tid)`の**1引数版**（`dom/textbase.cpp:3078`）を呼び、
+
+```cpp
+setTextStyleType(tid);
+for (const auto& p : *textStyle(tid)) {
+    setProperty(getTextPID(p.pid), styleValue(p.pid, p.sid));
+}
+```
+
+と**無条件に上書き**する（2引数版`:3026`には`getProperty == propertyDefault`のガードが
+あるが、property setter経路はそちらを通らない）。つまり**`<style>`より前に読まれた`<color>`は
+潰される**。
+
+そしてMuseScoreのwriter自身が`writeItemProperties`（`<color>`、`twrite.cpp:1361`）→
+`Pid::TEXT_STYLE`（`<style>`、`:1362`）の順で書く。**上流は自分のreaderが潰す順序で書いている。**
+同じ形の問題は`TempoText`の`symbolSize`について`read460/tread.cpp:627`に
+「4.6.0-4.6.2で順序が逆だった」と回避コメント付きで残っているが、colorは未修正。
+
+**ssmは`<color>`を最後（preserved markupの後）に出す。** readerはper-tag dispatchなので
+後置でも正しく読まれ、**MuseScore自身よりauthor intentに忠実になる**。byte順を上流に
+合わせると、author の色を落とす動作まで再現することになる。
+これはこのpackageが「gate以外の理由で」上流の出力形とわざと違える唯一の箇所。
+
+順序制約が実際に効くのは`Harmony` / `Sticking` / `ExpressionText` / `Fingering`の4つだけ
+（bagを持ち、そこに未modelの`<style>`が入りうる型）。`StaffText` / `Tempo` / `Swing` /
+`InstrumentChange` / `RehearsalMark`は**bagを持っていない**ので`<style>`は今日すでに
+捨てられており、位置は無意味——これは§7.3のstyle作業に残る別の穴。
+**規則は全要素に一律適用した。** 要素ごとの表にすると次の人が毎回導出し直すことになり、
+非TextBase要素では位置が無害なだけなので。
+
+固定しているのは`ElementColorMSCXWriteBackTests`の「`<style>`→`<color>`の順で出る」という
+assertion。これが無いと、後のrefactorで上流と同じバグが黙って戻る。**実際に
+`MSCXEncoder+Sticking.swift`で`mscxTrailingChildren()`をpreserved markupの前に移して
+確かめた**——`["text", "color", "style"]`になって赤くなる。doc に「testで固定済み」と
+書くなら、その1行を壊して赤くなるかを一度見ること。緑のままなら固定できていない。
+
+**`Pid::STAFF_COLOR`もXML tag名が`"color"`。** `property.cpp:310`、`Pid::COLOR`
+（`:63`）とは別のPidなのに同じ綴りで書かれる。いまは`Staff`が`elementProperties`を
+持たないので顕在化していないが、**tag名だけではpropertyを同定できない**ということなので、
+§7.3のstyle作業や`Staff`にbagを持たせる作業で効く。consumed setは tag 名で引くので、
+`<Staff>`のdecoderが`"color"`をconsumeし始めた時点で共有基底の`<color>`と区別がつかなくなる。
+
 ### 7.3 style
 
 `Sid`は2050個（`style/styledef.h:50-2276`）、`ScoreStyle`は10 property
@@ -948,7 +1099,8 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    個別要素のPARTIALの大半がここに帰着する。
 3. **単独で追加できるMISSING** — ~~`ORNAMENT`~~（2026-09-04完了、§4.6の追記）、
    ~~`FINGERING`~~（2026-09-04完了、§4.2の追記）、
-   ~~`StringData`~~（2026-09-04完了、§4.1の追記）+`FRET_DIAGRAM`+`STRING_TUNINGS`+`CAPO`、
+   ~~`StringData`~~+~~`STRING_TUNINGS`~~+~~`CAPO`~~（§4.1の追記。前者は2026-09-04、
+   後2者は2026-09-06）+`FRET_DIAGRAM`、
    ~~`STICKING`/`EXPRESSION`~~（2026-09-04完了、§4.2の追記）、
    `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`。
    互いに独立なので並列に進められる。

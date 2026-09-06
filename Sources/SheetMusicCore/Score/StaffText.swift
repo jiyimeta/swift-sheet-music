@@ -12,11 +12,26 @@ public struct StaffText: Sendable, Equatable {
     /// other than color is not yet preserved.
     public var text: String
     /// Author-supplied X offset relative to the default placement,
-    /// in spatium units.
-    public var offsetX: Double
+    /// in spatium units. Sugar over `elementProperties.offset`.
+    public var offsetX: Double {
+        get { elementProperties.offset?.x ?? 0 }
+        set {
+            let y = elementProperties.offset?.y ?? 0
+            elementProperties.offset = ScoreOffset(x: newValue, y: y)
+        }
+    }
+
     /// Author-supplied Y offset relative to the default placement,
-    /// in spatium units (positive = down).
-    public var offsetY: Double
+    /// in spatium units (positive = down). Sugar over
+    /// `elementProperties.offset`.
+    public var offsetY: Double {
+        get { elementProperties.offset?.y ?? 0 }
+        set {
+            let x = elementProperties.offset?.x ?? 0
+            elementProperties.offset = ScoreOffset(x: x, y: newValue)
+        }
+    }
+
     /// Author-supplied color (RGBA 0..255). Nil = inherit the
     /// default text color. Sugar over `elementProperties.color` —
     /// the single source of truth shared with every engravable element.
@@ -34,7 +49,7 @@ public struct StaffText: Sendable, Equatable {
     /// `staffText` / `systemText` row of `TextStyleDefaults`.
     public var properties: TextProperties
     /// Base element properties shared with every engravable element.
-    /// Carries `<visible>` and `<color>`; see `ElementProperties`.
+    /// Carries `<visible>`, `<color>`, and `<offset>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
     /// MuseScore `<visible>0</visible>` flag. Sugar over
     /// `elementProperties.visible`. Playback / MIDI is unaffected.
@@ -53,11 +68,16 @@ public struct StaffText: Sendable, Equatable {
         visible: Bool = true,
     ) {
         self.text = text
-        self.offsetX = offsetX
-        self.offsetY = offsetY
         self.isSystemText = isSystemText
         self.properties = properties
-        elementProperties = ElementProperties(visible: visible, color: color)
+        let offset: ScoreOffset? = if offsetX == 0 && offsetY == 0 {
+            nil
+        } else {
+            ScoreOffset(x: offsetX, y: offsetY)
+        }
+        elementProperties = ElementProperties(
+            visible: visible, color: color, offset: offset,
+        )
     }
 
     /// The `TextStyleType` row this element inherits from. Picks

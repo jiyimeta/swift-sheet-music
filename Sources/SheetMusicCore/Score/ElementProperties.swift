@@ -17,13 +17,24 @@ public struct ElementProperties: Sendable, Equatable, Codable {
     /// noteheads, rests, lyrics, etc. — wherever a renderer honors it.
     public var color: ScoreColor?
 
+    /// Author-supplied engraving offset in spatium units. `nil` means the
+    /// MSCX `<offset>` child was absent; an explicit zero tag decoded from a
+    /// file is represented by `ScoreOffset(x: 0, y: 0)`. Swift construction
+    /// through an element's zero-valued `offsetX` / `offsetY` initializer
+    /// parameters is indistinguishable from no offset and stores `nil`.
+    public var offset: ScoreOffset?
+
     // Reserved extension points (NOT implemented in this work):
-    //   public var offset: ...             // <offset>
     //   public var autoplace / placement   // behavioral
 
-    public init(visible: Bool = true, color: ScoreColor? = nil) {
+    public init(
+        visible: Bool = true,
+        color: ScoreColor? = nil,
+        offset: ScoreOffset? = nil,
+    ) {
         self.visible = visible
         self.color = color
+        self.offset = offset
     }
 
     public static let `default` = ElementProperties()

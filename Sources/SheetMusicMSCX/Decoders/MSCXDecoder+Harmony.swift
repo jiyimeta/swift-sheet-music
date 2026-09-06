@@ -59,8 +59,6 @@ extension Harmony {
         let rightParen = hasChild("rightParen")
         let play = decodePlay(node.first("play")?.text)
         let color = node.first("color").flatMap(StaffText.decodeColor(_:))
-        let offset = node.first("offset")
-            .map(StaffText.decodeOffset(_:)) ?? (0, 0)
         let properties = TextProperties.decode(node)
         var harmony = Harmony(
             name: name,
@@ -72,8 +70,6 @@ extension Harmony {
             leftParen: leftParen,
             rightParen: rightParen,
             play: play,
-            offsetX: offset.0,
-            offsetY: offset.1,
             color: color,
             properties: properties,
             preservedMarkup: node.preservedMarkup(consuming: consumedHarmonyChildren),

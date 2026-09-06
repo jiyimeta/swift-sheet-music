@@ -192,7 +192,7 @@ struct VoiceAnnotationMSCXTests {
         #expect(sticking.preservedMarkup.map(\.name) == ["style"])
     }
 
-    @Test func keepsPlacementAndOffsetInSourceOrder() throws {
+    @Test func keepsPlacementAsPreservedMarkupAndModelsOffset() throws {
         let elements = try voiceElements(betweenChords("""
         <Expression>
           <text>dolce</text>
@@ -205,11 +205,10 @@ struct VoiceAnnotationMSCXTests {
             Issue.record("expected expression annotation")
             return
         }
-        #expect(expression.preservedMarkup.map(\.name) == ["placement", "offset"])
+        #expect(expression.preservedMarkup.map(\.name) == ["placement"])
         let placement = try #require(expression.preservedMarkup.first)
-        let offset = try #require(expression.preservedMarkup.last)
         #expect(placement.text == "above")
-        #expect(offset.attributes == ["x": "0", "y": "1"])
+        #expect(expression.elementProperties.offset == ScoreOffset(x: 0, y: 1))
     }
 
     /// MuseScore 4.4+ writes an `Expression`'s vertical side as `<direction>`,
@@ -297,7 +296,7 @@ struct VoiceAnnotationMSCXTests {
     @Test func strippingPreservedMarkupClearsBothAnnotationBags() throws {
         let score = try voiceScore(betweenChords("""
         <Sticking><text>R</text><placement>below</placement></Sticking>
-        <Expression><text>dolce</text><offset x="0" y="1"/></Expression>
+        <Expression><text>dolce</text><placement>above</placement><offset x="0" y="1"/></Expression>
         """))
         let original = firstVoiceElements(in: score)
         try #require(original.count == 4)
@@ -309,6 +308,8 @@ struct VoiceAnnotationMSCXTests {
         }
         #expect(!originalSticking.preservedMarkup.isEmpty)
         #expect(!originalExpression.preservedMarkup.isEmpty)
+        #expect(originalExpression.preservedMarkup.map(\.name) == ["placement"])
+        #expect(originalExpression.elementProperties.offset == ScoreOffset(x: 0, y: 1))
 
         let stripped = firstVoiceElements(in: score.strippingPreservedMarkup())
         guard case let .sticking(sticking) = stripped[1],
@@ -319,6 +320,7 @@ struct VoiceAnnotationMSCXTests {
         }
         #expect(sticking.preservedMarkup.isEmpty)
         #expect(expression.preservedMarkup.isEmpty)
+        #expect(expression.elementProperties.offset == ScoreOffset(x: 0, y: 1))
     }
 }
 
@@ -362,10 +364,8 @@ struct VoiceAnnotationFixtureTests {
         #expect(dolce.snapToDynamics == nil)
         #expect(espressivo.text == "espressivo")
         #expect(espressivo.snapToDynamics == false)
-        #expect(espressivo.preservedMarkup.map(\.name) == ["offset"])
-        let offset = try #require(espressivo.preservedMarkup.first)
-        #expect(offset.attributes["x"] == "0")
-        #expect(offset.attributes["y"] == "2.5")
+        #expect(espressivo.preservedMarkup.isEmpty)
+        #expect(espressivo.elementProperties.offset == ScoreOffset(x: 0, y: 2.5))
 
         let third = staff.measures[2].voices[0].elements
         try #require(third.count == 2)

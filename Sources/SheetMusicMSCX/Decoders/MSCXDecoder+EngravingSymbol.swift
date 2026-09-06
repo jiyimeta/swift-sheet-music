@@ -14,9 +14,10 @@ extension EngravingSymbol {
     /// input shape and make the preservation gate report a false loss. This is
     /// the same parity decision that leaves MuseScore 3 ornament-shaped
     /// `<Articulation>` values as `ChordArticulation.unknown`.
+    /// The base `<offset>` is owned by `ElementProperties`, not preserved here.
     private static let consumedChildren: Set = [
         "name", "font", "symbolsSize", "symbolAngle",
-        "color", "visible",
+        "color", "offset", "visible",
     ]
 
     /// Decode direct `<Symbol>` children of a `<Note>` in document order,

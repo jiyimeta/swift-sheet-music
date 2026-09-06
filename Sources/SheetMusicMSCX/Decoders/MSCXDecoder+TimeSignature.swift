@@ -4,7 +4,7 @@ import SheetMusicXMLTools
 
 extension TimeSignature {
     private static let consumedTimeSignatureChildren: Set = [
-        "color", "showCourtesySig", "sigD", "sigN", "visible",
+        "color", "offset", "showCourtesySig", "sigD", "sigN", "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> TimeSignature {

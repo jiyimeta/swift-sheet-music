@@ -51,6 +51,7 @@ extension Breath {
             ))
         }
         children.append(contentsOf: elementProperties.mscxChildren())
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Breath", children: children)
     }
 

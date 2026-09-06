@@ -5,7 +5,7 @@ import SheetMusicXMLTools
 extension Dynamic {
     private static let consumedDynamicChildren: Set = [
         "bold", "color", "face", "framePadding", "frameType", "italic", "size",
-        "strike", "subtype", "underline", "velocity", "visible",
+        "offset", "strike", "subtype", "underline", "velocity", "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> Dynamic {

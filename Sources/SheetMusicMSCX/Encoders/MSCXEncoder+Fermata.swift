@@ -19,6 +19,7 @@ extension Fermata {
             ))
         }
         children.append(contentsOf: elementProperties.mscxChildren())
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Fermata", children: children)
     }
 

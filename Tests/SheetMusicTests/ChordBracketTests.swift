@@ -139,7 +139,7 @@ struct ChordBracketDecodeTests {
         #expect(chord.bracket?.hookPosition == nil)
     }
 
-    @Test func keepsArpeggioPropertiesAndUnknownChildrenAsPreservedMarkup() throws {
+    @Test func keepsArpeggioPropertiesAsPreservedMarkupAndModelsOffset() throws {
         let chord = try parseBracketChord("""
         <durationType>quarter</durationType>
         <Note><pitch>60</pitch><tpc>14</tpc></Note>
@@ -159,8 +159,8 @@ struct ChordBracketDecodeTests {
             PreservedXML(name: "span", text: "2"),
             PreservedXML(name: "play", text: "0"),
             PreservedXML(name: "timeStretch", text: "1.5"),
-            PreservedXML(name: "offset", attributes: ["x": "0", "y": "1"]),
         ])
+        #expect(bracket.elementProperties.offset == ScoreOffset(x: 0, y: 1))
     }
 
     @Test func bracketIsNotAlsoPreservedOnTheChord() throws {

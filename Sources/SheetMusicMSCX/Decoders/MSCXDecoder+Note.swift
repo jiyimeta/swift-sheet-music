@@ -15,7 +15,7 @@ extension Note {
     private static let consumedNoteChildren: Set = [
         "Accidental", "Bend", "ChordLine", "Fingering", "Parenthesis", "Symbol",
         "Spanner", "Tie",
-        "color", "endSpanner", "fret", "head", "parentheses", "pitch", "play",
+        "color", "endSpanner", "fret", "head", "offset", "parentheses", "pitch", "play",
         "small", "string", "tpc", "tpc2", "veloType", "velocity", "visible",
     ]
 

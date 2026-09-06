@@ -275,6 +275,10 @@ extension Voice {
             return sticking.encode(options: options)
         case let .expression(expression):
             return expression.encode(options: options)
+        case let .capo(capo):
+            return capo.encode(options: options)
+        case let .stringTunings(tunings):
+            return tunings.encode(options: options)
         case let .preserved(markup):
             return XMLTreeNode(preserved: markup)
         case let .measureRepeat(measureRepeat):

@@ -177,6 +177,10 @@ private func strippingPreservedMarkup(from element: VoiceElement) -> VoiceElemen
     if case var .harmony(value) = element { value.preservedMarkup = []; return .harmony(value) }
     if case var .sticking(value) = element { value.preservedMarkup = []; return .sticking(value) }
     if case var .expression(value) = element { value.preservedMarkup = []; return .expression(value) }
+    if case var .capo(value) = element { value.preservedMarkup = []; return .capo(value) }
+    if case var .stringTunings(value) = element {
+        value.preservedMarkup = []; value.stringData?.preservedMarkup = []; return .stringTunings(value)
+    }
     return element
 }
 
