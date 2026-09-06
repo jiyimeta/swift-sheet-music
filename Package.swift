@@ -64,6 +64,10 @@ var products: [Product] = [
     // cross-compiling consumer can use the importer — `PDFImporter.parseUsingSwiftReader`,
     // `parseWithGeometryUsingSwiftReader`, `summaryUsingSwiftReader` — without dragging Apple frameworks in.
     .library(name: "SheetMusicPDF", targets: ["SheetMusicPDF"]),
+    // Exported for a host that must write a zip which is not an `.mscz` and so has no `.mscx` to hand
+    // `MSCZWriter` — folino's `.folino` container takes that shape for a PDF-backed score. `ZipWriter`,
+    // `ZipReader` and `ZipCompressionMethod` have been public all along; only their reachability changes.
+    .library(name: "SheetMusicZip", targets: ["SheetMusicZip"]),
 ]
 
 var targets: [Target] = [
