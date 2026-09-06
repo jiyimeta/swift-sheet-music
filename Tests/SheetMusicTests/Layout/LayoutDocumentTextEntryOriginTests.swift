@@ -5,6 +5,19 @@ import SheetMusicCore
 @testable import SheetMusicLayout
 import Testing
 
+#if !canImport(CoreGraphics)
+    /// Off Apple there is no one `CGPoint`: `SheetMusicCore` declares a shim
+    /// (`Score/CGCompat+WASI.swift`) and so does `SheetMusicLayout`
+    /// (`Fonts/CGTypes+Android.swift`), and this file imports both modules, so
+    /// the bare name is ambiguous. Anchor to the Layout definition, which is
+    /// what `LayoutDocument` element origins are. Same fix, same reason, as the
+    /// bridge targets — see `SheetMusicBridgeCore/LayoutBridge.swift`.
+    ///
+    /// The `canImport` guard above only decides whether CoreGraphics is
+    /// imported; it does not disambiguate a name, so it cannot cover this.
+    private typealias CGPoint = SheetMusicLayout.CGPoint
+#endif
+
 @Suite("LayoutDocument text-entry origins")
 struct LayoutDocumentTextEntryOriginTests {
     private let _installFontMetrics = TestSupport.installFontMetrics
