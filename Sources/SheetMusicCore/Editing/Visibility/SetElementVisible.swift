@@ -4,8 +4,9 @@ import SheetMusicFoundation
 /// its `elementProperties.visible`. Playback is unaffected (`ElementProperties.visible` doc).
 ///
 /// Every `VoiceElement` case that carries `ElementProperties` is accepted: chord (a rest is a chord), clef,
-/// barline, key and time signature, dynamic, fermata, breath, spanner, harmony. A measure repeat, location shift,
-/// and preserved source node carry none and are refused as `.wrongElementKind(expected: .engravable)`.
+/// barline, key and time signature, dynamic, fermata, breath, spanner, harmony, sticking, and expression. A
+/// measure repeat, location shift, and preserved source node carry none and are refused as
+/// `.wrongElementKind(expected: .engravable)`.
 ///
 /// On a chord this is the model's whole-chord switch (`Chord.visible`, what the layout reads as `chordFullyHidden`).
 /// MuseScore has no such flag — `Chord::getProperty(Pid::VISIBLE)` is always true and `V` on a chord fans out to
@@ -56,6 +57,8 @@ public struct SetElementVisible: EditCommand {
         case let .breath(breath): breath.visible
         case let .spanner(spanner): spanner.visible
         case let .harmony(harmony): harmony.visible
+        case let .sticking(sticking): sticking.visible
+        case let .expression(expression): expression.visible
         case .measureRepeat, .locationShift, .preserved: nil
         }
     }
@@ -92,6 +95,12 @@ public struct SetElementVisible: EditCommand {
         case var .harmony(harmony):
             harmony.visible = visible
             return .harmony(harmony)
+        case var .sticking(sticking):
+            sticking.visible = visible
+            return .sticking(sticking)
+        case var .expression(expression):
+            expression.visible = visible
+            return .expression(expression)
         case .measureRepeat, .locationShift, .preserved:
             return nil
         }

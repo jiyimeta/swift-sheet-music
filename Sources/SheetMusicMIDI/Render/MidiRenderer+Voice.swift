@@ -343,7 +343,9 @@ extension MidiRenderer {
                 )
                 events.append(TimedMidiEvent(tick: localTick, event: .meta(meta)))
             }
-        case .clef, .barLine, .spanner, .measureRepeat, .harmony, .preserved:
+        // Text annotations are modeled but produce no MIDI events.
+        case .clef, .barLine, .spanner, .measureRepeat, .harmony,
+             .sticking, .expression, .preserved:
             return
         case let .locationShift(delta):
             // Voice cursor shift: applies the location's fractional

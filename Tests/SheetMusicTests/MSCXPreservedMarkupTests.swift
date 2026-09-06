@@ -352,6 +352,8 @@ extension MSCXPreservedMarkupTests {
             .dynamic(Dynamic(subtype: "mf", velocity: 80, preservedMarkup: [marker])),
             .spanner(spanner),
             .harmony(Harmony(name: "C", preservedMarkup: [marker])),
+            .sticking(Sticking(text: "R", preservedMarkup: [marker])),
+            .expression(ExpressionText(text: "dolce", preservedMarkup: [marker])),
         ]
         score.parts[0].staves[0].measures[0] = measure
     }
@@ -369,6 +371,8 @@ extension MSCXPreservedMarkupTests {
             if case let .dynamic(value) = element { result += value.preservedMarkup }
             if case let .spanner(value) = element { result += value.preservedMarkup }
             if case let .harmony(value) = element { result += value.preservedMarkup }
+            if case let .sticking(value) = element { result += value.preservedMarkup }
+            if case let .expression(value) = element { result += value.preservedMarkup }
         }
         return result
     }
@@ -528,6 +532,12 @@ extension MSCXPreservedMarkupTests {
             expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
         }
         if case let .spanner(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .sticking(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .expression(value) = element {
             expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
         }
     }

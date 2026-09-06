@@ -292,25 +292,21 @@ struct FNV1a {
         combineOccupied(chord.elementProperties, visibleTag: 29, colorTag: 30)
     }
 
-    /// Every case that carries *timing* — i.e. anything that changes how much tick budget an element occupies, or
-    /// where the cursor lands afterward — is listed explicitly. `.chord` carries its own duration (rests are chords
-    /// with no notes, per `VoiceElement`'s doc comment) and `.locationShift` carries a tick-offset delta that moves
-    /// the cursor for whatever attaches next; both must be distinguishable from each other and from the non-timed
-    /// markers below, or two scores that differ only in a rest's length or a cursor jog could hash equally.
+    /// Every case carrying *timing* — anything changing an element's tick budget or the cursor afterward — is
+    /// explicit. `.chord` carries its duration (rests are chords with no notes), while `.locationShift` carries the
+    /// tick-offset delta for whatever attaches next. They must be distinguishable from each other and the markers
+    /// below, or two scores differing only in a rest's length or a cursor jog could hash equally.
     ///
-    /// `.keySignature` and `.timeSignature` occupy no tick budget either, but they DO carry content M3's signature
-    /// commands write — the whole point of `.setKeySignature` / `.setTimeSignature` is to change what a bar
-    /// declares — so both are fed their own fields rather than a tag. Without that, changing the key of a bar of
-    /// rests (nothing to re-spell) would move nothing this walk can see, and a mirror that failed to apply the same
-    /// change would still agree. `showCourtesy` and `visible` ride along because the replace path in
-    /// `SetKeySignature` does not preserve them.
+    /// `.keySignature` and `.timeSignature` occupy no tick budget either, but carry content M3's signature commands
+    /// write. Both feed their fields rather than a tag, or changing the key of a bar of rests (nothing to re-spell)
+    /// would move nothing this walk can see, and a mirror that missed the same change would still agree.
+    /// `showCourtesy` and `visible` ride along because `SetKeySignature`'s replace path does not preserve them.
     ///
-    /// The remaining cases occupy no tick budget of their own — they are markers attached at the current cursor
-    /// position — but they now feed their own identity rather than a bare discriminant tag, per the edit-command
-    /// parity project (spec 2026-09-02 §2.5): see `ScoreFingerprintHasher+Parity.swift` for the
-    /// `combine(_ clef:)` / `combine(_ barLine:)` / `combine(_ dynamic:)` / `combine(_ fermata:)` /
-    /// `combine(_ breath:)` / `combine(_ harmony:)` / `combine(_ spanner:)` / `combine(_ repeat:)` overloads this
-    /// switch calls into.
+    /// The remaining cases are markers attached at the current cursor. They feed their identity rather than a bare
+    /// tag, per the edit-command parity project (spec 2026-09-02 §2.5). `ScoreFingerprintHasher+Parity.swift` owns
+    /// `combine(_ clef:)`, `combine(_ barLine:)`, `combine(_ dynamic:)`, `combine(_ fermata:)`,
+    /// `combine(_ breath:)`, `combine(_ harmony:)`, `combine(_ sticking:)`, `combine(_ expression:)`,
+    /// `combine(_ spanner:)`, and `combine(_ repeat:)`, which this switch calls.
     mutating func combine(_ element: VoiceElement) {
         switch element {
         case let .chord(chord):
@@ -354,6 +350,12 @@ struct FNV1a {
         case let .locationShift(delta):
             combine(11)
             combine(delta)
+        case let .sticking(sticking):
+            combine(12)
+            combine(sticking)
+        case let .expression(expression):
+            combine(13)
+            combine(expression)
         case .preserved:
             // Source-only XML is outside the semantic edit fingerprint.
             break

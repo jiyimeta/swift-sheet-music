@@ -7,13 +7,13 @@ import SheetMusicFoundation
 ///
 /// - **Measure flags and element properties are fed BY OCCUPANTS.** A field contributes bytes only when it holds a
 ///   non-default value, and always as a unique non-zero tag (21 and up, so no tag can be mistaken for a
-///   `VoiceElement` case tag 0…11 or for a presence byte) followed by its value. The tag is what keeps
+///   `VoiceElement` case tag 0…13 or for a presence byte) followed by its value. The tag is what keeps
 ///   `endRepeatCount = 2` and `measureRepeatCount = 2` apart; the fixed-arity prefix of each measure block is what
 ///   keeps "flag on measure 3" and "flag on measure 4" apart.
 /// - **The marker `VoiceElement` cases are fed their content UNCONDITIONALLY.** A clef has no default type to be
 ///   absent from, so `combine(_ element:)` now feeds the identity of a clef, barline, dynamic, fermata, breath,
-///   harmony, spanner and measure repeat rather than a bare case tag. Still byte-free for the existing chain,
-///   whose fixture holds none of those elements.
+///   harmony, sticking, expression, spanner and measure repeat rather than a bare case tag. Still byte-free for
+///   the existing chain, whose fixture holds none of those elements.
 extension FNV1a {
     mutating func combineFlags(_ measure: Measure) {
         if measure.lineBreak { combine(21) }
@@ -179,6 +179,17 @@ extension FNV1a {
         combinePresence(harmony.rootTpc)
         combinePresence(harmony.bassTpc)
         combine(harmony.visible)
+    }
+
+    mutating func combine(_ sticking: Sticking) {
+        combine(sticking.text)
+        combineOccupied(sticking.elementProperties, visibleTag: 39, colorTag: 40)
+    }
+
+    mutating func combine(_ expression: ExpressionText) {
+        combine(expression.text)
+        combinePresence(expression.snapToDynamics.map { $0 ? 1 : 0 })
+        combineOccupied(expression.elementProperties, visibleTag: 41, colorTag: 42)
     }
 
     mutating func combine(_ repeat: MeasureRepeat) {

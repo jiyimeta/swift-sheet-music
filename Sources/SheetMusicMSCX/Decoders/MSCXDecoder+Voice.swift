@@ -298,6 +298,10 @@ extension Voice {
                 }
             case "Harmony":
                 try appendVoiceElement(.harmony(Harmony.decode(child)))
+            case "Sticking":
+                appendVoiceElement(.sticking(Sticking.decode(child)))
+            case "Expression":
+                appendVoiceElement(.expression(ExpressionText.decode(child)))
             case "RehearsalMark":
                 try lifted(.rehearsalMark(
                     RehearsalMark.decode(child),

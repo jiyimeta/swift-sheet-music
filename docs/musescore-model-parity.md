@@ -365,9 +365,9 @@ TABをまともに扱うなら`StringData`が起点。これが無いと`FRET_DI
 
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
-| `EXPRESSION` | `twrite.cpp:1343` | なし | 表情記号text。dynamicとは別element |
+| ~~`EXPRESSION`~~ | `twrite.cpp:1343` | **`ExpressionText`**（2026-09-04実装） | 下の追記を参照 |
 | ~~`FINGERING`~~ | `types/types.h:121` | **`Fingering`**（2026-09-04実装） | 下の追記を参照 |
-| `STICKING` | `dom/sticking.h:35` | なし | 打楽器のR/L |
+| ~~`STICKING`~~ | `dom/sticking.h:34` | **`Sticking`**（2026-09-04実装） | 下の追記を参照 |
 | `FIGURED_BASS`＋`FIGURED_BASS_ITEM` | `dom/figuredbass.h:91` | なし | 数字付低音。prefix / digit / suffix / continuationの構造 |
 | `PLAYTECH_ANNOTATION` | `dom/playtechannotation.h:35` | なし | 奏法指定（pizz.等）とplayback反映 |
 | `SOUND_FLAG` | `twrite.cpp:3273` | なし | StaffTextの子。preset・奏法・全staff適用 |
@@ -394,6 +394,114 @@ familyの外のstyleは`.other`で verbatim に保持する。
 
 `STICKING`と`EXPRESSION`は同じtext annotationだがnote添付ではなくvoice streamの
 annotationなので、`VoiceElement`にcaseを足す作業になる。`FINGERING`より一段広い。
+
+**［2026-09-04 追記］`STICKING`と`EXPRESSION`もmodel化した。** `SheetMusicCore`の
+`Sticking`と`ExpressionText`、`VoiceElement`の`.sticking` / `.expression`、
+decoder / encoderは`MSCXDecoder+Sticking.swift` / `MSCXEncoder+Sticking.swift` と
+`MSCXDecoder+ExpressionText.swift` / `MSCXEncoder+ExpressionText.swift`（file名はtagではなく
+model型に揃えてある）、fixtureは
+`Tests/SheetMusicTests/Resources/own/voice-annotations.mscx`。
+
+上流ではどちらもsegment annotationで、`<voice>`の中にそのtickのchord / restの**手前**に
+書かれる（`twrite.cpp:3672`の`segment->annotations()`ループがelement本体より先）。
+`Harmony`と同じ位置であり、note添付の`Fingering`と違って`VoiceElement`にcaseが要るのはこのため。
+
+`Sticking`は裸の`TextBase`（`twrite.cpp:3175`、readerは`tread.cpp:906`で
+`TRead::read(TextBase*)`に丸投げ）なのでmodeled payloadは`<text>`だけ。`Expression`は
+それに`<snapToDynamics>`が1つ付く（`tread.cpp:804`）。これは**styled property**
+（`expression.cpp:36`が`Sid::snapToDynamics`と対応付けている）なので、**UNSTYLEDかつ
+style値と異なるときにしか書かれない**（`xmlwriter.cpp`が`val == def`をskipするので、
+style値と同じ上書きは書かれず再読込でstyledに戻る）。だからmodelは`Bool?`で、
+nilは「tagが無い = styleに従う」を意味する。
+
+`<style>`はmodelしていない。`Fingering`ではstyleが「2」の意味（指 / 手 / 弦）を決めるので
+roleとしてmodelしたが、この2つのstyleはただのtext styleなので§7.3の領分。preserved markup送り。
+`<placement>` / `<offset>` / font override、および`Expression`が
+`hasVoiceAssignmentProperties()`で書く`<voiceAssignment>` / `<direction>` /
+`<centerBetweenStaves>`も同じ。`<text>`のinline markupがplain textに潰れる制約（§7.1）も
+同じで、testで固定してある。
+
+model側の型名が`Expression`ではなく**`ExpressionText`**なのは、`SheetMusicFoundation`が
+`FoundationEssentials`（無ければ`Foundation`）を`@_exported import`しており、Predicate APIの
+`Expression<each Input, Output>`とambiguousになるため。`SheetMusicFoundation`をimportする
+portable target全部で起きる——**実際にbuildで踏んだ**。`StaffText` / `SystemText`の命名にも揃う。
+MSCXのtag名は`<Expression>`のまま。
+
+**engravingは入れていない。** `LayoutElement`にcaseを足していないので、layoutは幅も位置も
+与えないし、MIDIは何も出さない。MSCXのround-tripだけが対象。
+
+残る制約が2つある。どちらもtestでは赤にならないので、ここに書いておく。
+
+- **`<Expression>`はMuseScore 4.1以降のtagで、v3 targetでencodeすると落ちる。**
+  4.0と3.x全部はexpression markを`expression` text styleの`<StaffText>`として書いており、
+  MuseScoreはMSC 410未満のfileを読み込み時に変換する（`rw/compat/compatutils.cpp:173`が
+  threshold、変換本体は`:381` `replaceOldWithNewExpressions`）。**根拠はMuseScore 3.6.2側の
+  readerに`<Expression>`分岐が無いこと**であって、ssm側の`rw/read302`ではない——
+  `rw/read302`はmeasure readerを自前で持たず`read400`の`StaffRead::readStaff`に委譲するので、
+  MuseScore 4 / 5は`version="3.02"`のfile中の`<Expression>`も読む（`read400` / `read410` /
+  `read460`のいずれもtagを持つ）。
+  ssmは**逆変換をしない**——`<StaffText>`に落とすと読み戻したときに`StaffText`になり、
+  `ExpressionText`に戻らないので、preservation gateに嘘のlossが出る。§4.6の
+  「MS3形式は変換しない」と同じ判断。v3で`<MeasureRepeat>`が黙って落ちる
+  （3.6.2は`<RepeatMeasure>`しか読まない）のと同じ既知の穴。
+  `<Sticking>`は**MuseScore 3.3以降**が読む（3.2以前はunknownとして落とす）ので、
+  この encoder が出すどのtargetでも問題にならない。
+
+  この2つのversion境界は**release tagを直接見て**確定させた（`git show v4.1.0:…` に
+  `"Expression"` あり / `v4.0.2` に無し、`v3.3` の `libmscore/measure.cpp` に `"Sticking"`
+  あり / `v3.2.3` に無し、`v4.6.5` の `read460/measureread.cpp` と `write/twrite.cpp` は
+  両方を持つ）。**`rw/read460/` に枝があることを「4.6にある」の根拠にしてはいけない** ——
+  read460は4.60–4.99のreader *module* で、4.7が足した要素の枝も含む。同様に`rw/read302`は
+  measure readerを自前で持たず`read400`に委譲するので、そこに無いことも根拠にならない。
+- **`<color>`はdecodeされるがencodeで書き戻されない。** `ElementProperties+MSCX.swift`が
+  「colorはdecode専用」と明記しているとおりで、consumed setに`color`が入っている以上
+  preserved markupにも回らない。`Fingering`・`ChordOrnament`と同じ挙動。
+  consumed setのruleとしてはこれが正しく（decoderが読む以上preservedにも置くとedit後に
+  stale copyが残る）、直すには§7.2の`ElementProperties`側の移行が要る。
+  **committed fixtureに`<color>`を入れていないので、preservation gateはこのlossを測っていない。**
+  そしてその移行をするときは順序に注意が要る: MuseScoreの`<style>`はresetで
+  （`TextBase::setProperty(TEXT_STYLE)`→`initTextStyleType`がtext style属性を全部上書きする。
+  MuseScore自身が4.6.0–4.6.2でこれを踏んでいる——`rw/read460/tread.cpp:625`）、
+  `<color>`をpreservedな`<style>`より**前**に書くとMuseScore側で握り潰される。
+
+### 4.2.1 voice streamに並ぶ要素の実測コスト
+
+`VoiceElement`にcaseを足したときに実際に壊れたexhaustive switchは
+**`Sources` 7箇所 + `Tests` 1箇所**（probe buildで列挙）。
+
+| 場所 | 内容 |
+|---|---|
+| `SetElementVisible.swift`（`visibility(of:)`と`setting(_:visible:)`の2つ） | `visible`を持つので対応させた |
+| `ScoreFingerprintHasher.swift` | `VoiceElement` case tag 12 / 13、`elementProperties`のoccupant tag 39–42。occupant tagが21始まりなのはcase tagと衝突させないため |
+| `LayoutEngine+Placement.swift` | no-op arm |
+| `LayoutEngine+Spacing.swift` | no-op arm（幅を取らない） |
+| `MidiRenderer+Voice.swift` | no-op arm |
+| `MSCXEncoder+Voice+Emit.swift` | encoder dispatch |
+| `Tests/.../Helpers/ScoreSemanticComparison.swift` | 差分表示の`shortDesc` |
+
+このうち**no-op armで済んだのは3つ**（Placement / Spacing / MidiRenderer）。残り5つは
+実際の値を返す必要がある。判断が要ったのはfingerprintのtag割り当てと、
+`SetElementVisible`をこの2要素に対応させるかどうかの2点。
+
+**ただしこの数え方には見えない範囲がある。** compiler が壊すのは exhaustive switch だけで、
+`if case`の連鎖と`default:`を持つswitchは**新しいcaseを黙って素通しする**。この slice で
+review が見つけた実バグ3件は全部そちら側だった:
+
+| 場所 | 形 | 症状 |
+|---|---|---|
+| `Score.swift`の`strippingPreservedMarkup(from: VoiceElement)` | `if case`連鎖 | 新caseのbagがclearされない |
+| `AdjacentElementSlot.isAnnotation` | `default: false` | segment annotationとして扱われず、`SetDynamic`が既存のdynamicを置換せず二重に挿す |
+| `MSCXPreservedMarkupTests.expectNoVoiceElementNameCollisions` | `if case`連鎖 | consumed set のdrift検出から新decoderが外れる |
+
+**`VoiceElement`にcaseを足したら、compilerが黙っている箇所をgrepで別途洗うこと。**
+`FIGURED_BASS`やvoice stream上の`SYMBOL`を見積もるときは、exhaustive switch 8箇所に
+この3箇所を足した数が実際のコスト。
+
+着手前の見積もりは「`.harmony`をgrepすると13箇所以上出る」だったが、その大半は
+`LayoutElement.harmony`側（Placement / Spacing / Translate / YBounds / Skyline /
+`ScoreCanvas` / `LayoutBridge`）で、**`LayoutElement`にcaseを足さない限りそこには届かない。**
+engravingを別sliceに切るなら、voice stream要素のmodel化コストはnote添付要素の2倍程度で、
+事前見積もりより小さい。逆に言うと、この層の本当のコストはmodelではなくengravingの側にある。
 
 ### 4.3 記号・画像
 
@@ -638,7 +746,8 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
 3. **単独で追加できるMISSING** — ~~`ORNAMENT`~~（2026-09-04完了、§4.6の追記）、
    ~~`FINGERING`~~（2026-09-04完了、§4.2の追記）、
    `StringData`+`FRET_DIAGRAM`+`STRING_TUNINGS`+`CAPO`、
-   `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`、`STICKING`/`EXPRESSION`。
+   ~~`STICKING`/`EXPRESSION`~~（2026-09-04完了、§4.2の追記）、
+   `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`。
    互いに独立なので並列に進められる。
 
    実装して分かったこの層の境目: **noteやchordに直接ぶら下がる要素は単発で入る**
@@ -646,6 +755,7 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    caseを足す話になり、fingerprint・layout・wasm / Android bridgeのswitchまで届く**
    （`STICKING`・`EXPRESSION`・`FIGURED_BASS`・voice stream上の`SYMBOL`）。
    同じ「単独で追加できる」でも作業量が一段違うので、分けて見積もること。
+   実測値は§4.2.1。
 4. **構造変更を伴うもの** — box family（`MeasureBase`相当の並びが要る）、
    `STAFFTYPE_CHANGE`（staffの時間軸）、そして最後に**excerpt / linked parts**。
 

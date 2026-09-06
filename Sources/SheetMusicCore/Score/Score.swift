@@ -114,6 +114,8 @@ private func strippingPreservedMarkup(from element: VoiceElement) -> VoiceElemen
     if case var .dynamic(value) = element { value.preservedMarkup = []; return .dynamic(value) }
     if case var .spanner(value) = element { value.preservedMarkup = []; return .spanner(value) }
     if case var .harmony(value) = element { value.preservedMarkup = []; return .harmony(value) }
+    if case var .sticking(value) = element { value.preservedMarkup = []; return .sticking(value) }
+    if case var .expression(value) = element { value.preservedMarkup = []; return .expression(value) }
     return element
 }
 
