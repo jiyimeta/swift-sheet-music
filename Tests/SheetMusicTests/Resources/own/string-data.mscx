@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="banjo">
+        <longName>Banjo</longName>
+        <trackName>Banjo</trackName>
+        <StringData>
+          <frets>19</frets>
+          <string open="1">67</string>
+          <string>50</string>
+          <string>55</string>
+          <string>59</string>
+          <string useFlat="1">62</string>
+        </StringData>
+        <Channel>
+          <controller ctrl="0" value="0"/>
+          <controller ctrl="32" value="0"/>
+          <program value="105"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <TimeSig>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+          </TimeSig>
+          <Chord>
+            <durationType>half</durationType>
+            <Note>
+              <pitch>67</pitch>
+              <tpc>15</tpc>
+            </Note>
+          </Chord>
+          <Chord>
+            <durationType>half</durationType>
+            <Note>
+              <pitch>59</pitch>
+              <tpc>19</tpc>
+            </Note>
+          </Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note>
+              <pitch>55</pitch>
+              <tpc>15</tpc>
+            </Note>
+          </Chord>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

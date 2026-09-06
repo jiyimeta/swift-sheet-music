@@ -73,6 +73,10 @@ struct MSCXPreservedMarkupTests {
         #expect(showFrames != nil)
     }
 
+    /// `<StringData>` reaches the output through `Instrument.stringData` now
+    /// rather than through a preserved bag (`StringDataTests`); it is still
+    /// asserted here because this test's subject is that a `<Part>` survives
+    /// intact, and `<clef>` beside it is genuinely preserved markup.
     @Test("<StringData> and <Instrument><clef> survive decode → encode")
     func partLevelMarkupSurvives() throws {
         let source = try MSCXFixtureLoader.mscxData("guitarbend_simple")
@@ -431,6 +435,15 @@ extension MSCXPreservedMarkupTests {
                 permitted: permittedInstrumentCollisions,
                 context: instrumentContext,
             )
+            if let stringData = part.instrument.stringData,
+               let writtenStringData = writtenInstrument.first("StringData")
+            {
+                expectNoNameCollision(
+                    stringData.preservedMarkup,
+                    writtenChildren: writtenStringData.children,
+                    context: "\(instrumentContext)/<StringData>",
+                )
+            }
             for (channelIndex, channelPair) in zip(
                 part.instrument.channels,
                 writtenInstrument.all("Channel"),

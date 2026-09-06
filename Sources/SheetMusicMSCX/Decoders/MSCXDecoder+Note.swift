@@ -76,7 +76,7 @@ extension Note {
             velocityType: velocityType,
             // Tablature position. `first` looks only at direct children of
             // `<Note>`, so the similarly-named `<string>` elements in
-            // `<Staff><StringData>` — the instrument tuning — never reach here.
+            // `<Instrument><StringData>` — the instrument tuning — never reach here.
             fret: (node.first("fret")?.text).flatMap(Int.init),
             string: (node.first("string")?.text).flatMap(Int.init),
             fingerings: Fingering.decodeAll(inNote: node),

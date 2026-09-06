@@ -359,7 +359,7 @@ git -C <musescore> log --format=%ad --date=format:%Y-%m --since=<6か月前> \
 | `FRET_DIAGRAM` | `dom/fret.h:137` | なし | chord diagramが丸ごと消える。string / fret / dot / barre / marker / 埋め込みharmony |
 | `STRING_TUNINGS` | `dom/stringtunings.h:49` | なし | preset・表示弦・tuning dataが消える |
 | `CAPO` | `types/types.h:1368`（`CapoParams`） | なし | capo位置・除外弦・transpose modeが消える。playback pitchに影響 |
-| `StringData`（Instrument配下） | `dom/stringdata.h:42` | なし | TAB楽器のtuningを持てない。`Note.string`/`fret`は保持するが、検証も再計算もできない（`MSCXDecoder+Note.swift:51`に「never reach here」の注釈あり） |
+| ~~`StringData`（Instrument配下）~~ | `dom/stringdata.h:42` | **`StringData`**（2026-09-04実装） | 下の追記を参照 |
 | `TAB_DURATION_SYMBOL` | `dom/tabdurationsymbol.h:40` | なし | TABのduration表示 |
 | `TREMOLOBAR` | `dom/tremolobar.h:37` | なし | whammy barのpitch curve。ssmの`Tremolo`は別物（beam tremolo） |
 | `GUITAR_BEND_TEXT` | `twrite.cpp:1609` | なし | bend labelのuser編集 |
@@ -367,6 +367,51 @@ git -C <musescore> log --format=%ad --date=format:%Y-%m --since=<6か月前> \
 
 TABをまともに扱うなら`StringData`が起点。これが無いと`FRET_DIAGRAM`も`STRING_TUNINGS`も
 単体では意味を持ちにくい。
+
+**［2026-09-04 追記］`StringData`はmodel化した。** `SheetMusicCore`の`StringData` /
+`InstrumentString`と`Instrument.stringData`、decoder / encoderは`MSCXDecoder+StringData.swift` /
+`MSCXEncoder+StringData.swift`、fixtureは`Tests/SheetMusicTests/Resources/own/string-data.mscx`。
+
+形式は`<frets>`1つと`<string>`の列だけで、`<string>`のpitchはtext、`open` / `useFlat`は
+attribute（readerは`read460/tread.cpp:4195`、writerは`write/twrite.cpp:3185`）。
+MuseScore 2の綴りである`<Tablature>`もdecoderは受けるが、encoderは常に`<StringData>`を書く。
+consumed setには両方を入れてある——preserved markupのlegacy綴りruleそのもの。
+
+`<string>`は**位置が意味を持つ**。`Note.string`はこのlistへのindexなので、読めない
+`<string>`は捨てずにpitch 0で枠を残す——1本落とすと以降の弦が全部繰り上がる。上流も同じで、
+`tread.cpp:4203-4208`は`push_back`を無条件に行い、`readInt()`が0を返す。
+
+意図的な乖離は3つある。`instrString::startFret`は上流でもserializeされず、
+読み込み時に`configBanjo5thString()`が導出する値なので、fidelity modelには置き場所が無い。
+`frets`はfileに書かれた値のまま保つ——上流のreaderは`isFiveStringBanjo()`が真になると
+`frets`を24に上書きするが、ここでの仕事は読んだfileをそのまま返すことなので正規化しない。
+fixtureにMuseScore自身の5弦banjo tuning（`share/instruments/instruments.xml`の
+`<frets>19</frets>`＋67 / 50 / 55 / 59 / 62）を入れてあるのはそのためで、この判断はtestで固定されている。
+`open` / `useFlat`はどちらもuserがstring propertiesで立てるflagなので、fixtureでは手で付けた。
+3つ目は**空のtuningの扱い**。`TWrite`は`StringData::isNull()`（frets 0かつ弦0本、
+`stringdata.cpp:74-77`）のとき`<StringData>`自体を書かないので、MuseScoreは`<StringData/>`を
+読んで保存すると要素ごと消す。ssmは`StringData()`としてdecodeし、
+`<StringData><frets>0</frets></StringData>`で書き戻す。MuseScoreは同じnull tuningとして
+読み直すので実害は無く、逆に上流に合わせて省略すると preservation gate が
+`Instrument/StringData`を本物のlossとして報告してしまう。要素が無い場合（`stringData == nil`）は
+何も書かない。
+
+`<Tablature>`の正規化は**preservation gate上はlossになる**。MuseScore自身のwriterが
+`<StringData>`しか書かない（`twrite.cpp:3187`）ので正規化が正しいが、実在のMuseScore 2 scoreを
+通すと`Instrument/Tablature`が`Instrument/StringData`に変わる。committed fixtureに
+`<Tablature>`は1件も無いのでgateは緑で、opt-inのcorpus sweepで初めて出る。そのときの答えは
+encoderを変えることではなく、この判断を書いた`allowedLosses` entryを足すこと。
+
+出力位置は変わった。これまで`<StringData>`はpreserved markupとして`<Instrument>`の末尾
+（`<Channel>`の後ろ）に出ていたが、model化でMuseScore自身のwriterと同じ位置——
+`<Articulation>` / `<Channel>`の前——に移った。preservation gateは`parent/child`の
+出現数だけを見るのでmoveはlossにならない。
+
+**まだ「検証も再計算もできる」ようにはなっていない。** このsliceはtuningを保持するところまでで、
+`Note.string` / `Note.fret`をtuningと突き合わせる処理は入っていない。それには
+`StringData::convertPitch` / `getPitch`相当のport（5弦banjoの特例と`CapoParams`のpitch offsetを
+含む）が要り、別sliceにした。`FRET_DIAGRAM` / `STRING_TUNINGS` / `CAPO`も未実装のままだが、
+これらが乗る起点はこれで埋まった。
 
 ### 4.2 text annotation系
 
@@ -744,7 +789,7 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    個別要素のPARTIALの大半がここに帰着する。
 3. **単独で追加できるMISSING** — ~~`ORNAMENT`~~（2026-09-04完了、§4.6の追記）、
    ~~`FINGERING`~~（2026-09-04完了、§4.2の追記）、
-   `StringData`+`FRET_DIAGRAM`+`STRING_TUNINGS`+`CAPO`、
+   ~~`StringData`~~（2026-09-04完了、§4.1の追記）+`FRET_DIAGRAM`+`STRING_TUNINGS`+`CAPO`、
    `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`、`STICKING`/`EXPRESSION`。
    互いに独立なので並列に進められる。
 
@@ -763,6 +808,12 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    ——あれは`LayoutElement.harmony`側の話で、`LayoutElement`にcaseを足さない限り無関係。
    engravingを別sliceに切る前提なら、voice stream要素のmodel化はnote添付要素の2倍程度で
    見積もってよい。内訳は§4.2.1。
+
+   **その2段の下にもう1段ある。`<Instrument>`配下のようにscore構造の外側にぶら下がる要素は、
+   `VoiceElement`にもfingerprintにも触れずに終わる。** `Instrument`は
+   `ScoreFingerprintHasher`が歩いていないので、`StringData`ではoccupants方式の
+   hasher追加すら要らなかった。全部で3段——instrument / part配下、note・chord添付、
+   voice stream。
 
    **fingerprintのoccupant tagはレーンをまたいで一意にすること。** 別worktreeで並行実装すると
    双方が「未使用の次の番号」として同じ値を選ぶ。実際に2026-09-05に衝突した。

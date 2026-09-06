@@ -65,6 +65,33 @@ and this project adheres to
   inline markup inside `<text>` flattens to plain text — the same limitation
   `StaffText` has. Engraving does not place a fingering glyph yet.
 
+- **Fretted-instrument tuning is modeled.** `<StringData>` is what tells a
+  reader which pitch each string of a guitar, bass, or banjo is tuned to, and
+  how many frets it has. This library kept `Note.string` and `Note.fret` but
+  had nowhere to read the tuning from, so a tablature position was a pair of
+  numbers with nothing to interpret them against.
+
+  `Instrument.stringData` now holds a `StringData`: the fret count and one
+  `InstrumentString` per string, in file order, each carrying MuseScore's
+  `open` and `useFlat` flags. MuseScore 2's `<Tablature>` spelling decodes to
+  the same value and is written back out as `<StringData>`.
+
+  Three upstream behaviors are deliberately not reproduced, because this
+  value's job is to give back the file it read: `instrString::startFret` is
+  derived at load time upstream and never serialized, so it is absent here;
+  the fret count is kept as written rather than being overwritten with 24 the
+  way MuseScore's reader does for a five-string banjo; and an empty tuning is
+  written back rather than dropped, which is what MuseScore does with one.
+
+  The list of strings is positional — `Note.string` is an index into it — so a
+  `<string>` whose pitch will not parse keeps its slot at pitch 0 rather than
+  disappearing and renumbering every string after it.
+
+  **Nothing converts a pitch to a string and fret yet.** The tuning is modeled
+  so that validating or recomputing a tablature position has somewhere to read
+  from; the conversion itself, along with capo handling, fret diagrams, and
+  string tunings, is still missing. See `docs/musescore-model-parity.md` §4.1.
+
 - **The Android bridge can write a score, name a failure, and select a range.**
   Three capabilities the Swift side had all along and the JNI surface never
   exposed, so an Android host could reach less of this library than the library
