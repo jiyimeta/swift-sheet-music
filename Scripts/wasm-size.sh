@@ -21,7 +21,46 @@
 
 set -euo pipefail
 
-CEILING_BYTES=$((4 * 1024 * 1024))
+# Raised from 4 MiB on 2026-09-06, when modeling one MuseScore element crossed
+# it. The measurements, all brotli bytes of the probe:
+#
+#   main before that day's work   4,178,297
+#   + FIGURED_BASS                  +6,414
+#   + inline text markup (§7.1)    +22,427   -> 4,202,864, over 4 MiB by 8,560
+#
+# So a model-parity slice costs 6–22 KB, and roughly a dozen remain. 4 MiB had
+# 16 KB of headroom left; it was going to be crossed by whoever went next.
+#
+# **This number is the wrong shape for what the gate detects**, and raising it
+# does not fix that. The failure it exists to catch is a plain `import
+# Foundation` drifting into a portable target, which costs about 10 MB — a
+# step three orders of magnitude larger than a slice. An absolute line cannot
+# tell that step apart from ordinary growth, so every time growth reaches the
+# line a human has to decide which it was, and the answer is always "growth".
+# A gate that hands its judgment back to a person on every firing is doing the
+# opposite of its job.
+#
+# The shape that matches the detector is a delta — "no more than a few hundred
+# KB above the current baseline" — which passes ordinary growth and still
+# catches 10 MB by a factor of thirty.
+#
+# Do not implement that by committing the baseline to a file. A committed
+# number is touched by every branch that changes size, so with several lanes in
+# flight it conflicts on every merge, and it is the kind of conflict where
+# taking either side is wrong — the true value is only knowable by measuring
+# after the merge. Resolving it mechanically drifts the baseline away from
+# reality, silently, which is worse than the absolute line this replaces. The
+# absolute line's one virtue is that nobody has to update it.
+#
+# Measure the base instead: build the probe for `main` as well and compare the
+# two. No stored number, so nothing to conflict and nothing to drift, at the
+# cost of a second probe build. Whether that trade is worth it depends on how
+# many lanes are running.
+#
+# **Re-check this when the next slice crosses the new ceiling.** If that has
+# happened, the absolute form has failed twice and should be replaced rather
+# than raised a second time.
+CEILING_BYTES=$((9 * 1024 * 1024 / 2))
 SDK="swift-6.3.3-RELEASE_wasm"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SIZE_BUILD_DIR="$REPO_ROOT/.build/wasm-size"

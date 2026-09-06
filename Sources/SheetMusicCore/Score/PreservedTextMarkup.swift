@@ -5,9 +5,15 @@ import SheetMusicFoundation
 /// This preserves XML structure for read → write fidelity only. Inline tags
 /// such as `<font>` are state changes rather than necessarily being wrappers,
 /// so no semantic text-run model is inferred from them.
-/// `Hashable` because `FrameText` is, and a hand-written `hash(into:)` that
-/// skipped this field would have to be revisited every time the struct grows
-/// one — the kind of maintenance that silently goes stale.
+/// `Hashable` so that `FrameText`, which carries one and is itself `Hashable`,
+/// keeps a synthesized hash.
+///
+/// Dropping it was measured, because this type landed in the same commit that
+/// pushed the WebAssembly probe past its ceiling: synthesizing `Hashable`
+/// across this recursive trio costs **1,146 brotli bytes**, against an overrun
+/// of 8,560. It was not the cause and removing it does not fix anything, so
+/// the conformance stays and the ceiling moved instead. Recorded because the
+/// next person looking for bytes here should not have to re-measure it.
 public struct PreservedTextMarkup: Sendable, Equatable, Hashable {
     public enum ContentItem: Sendable, Equatable, Hashable {
         case characters(String)
