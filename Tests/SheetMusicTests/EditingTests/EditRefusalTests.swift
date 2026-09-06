@@ -98,6 +98,8 @@ struct EditRefusalTests {
             .invalidInterval(steps: 0),
             .emptyStaffText,
             .emptyChordSymbol,
+            .invalidVerse(-1),
+            .emptyLyricText,
             .noNextChord(at: voiceID),
             .chordTooSmall(at: voiceID, noteCount: 1),
             .notDottable(at: voiceID),

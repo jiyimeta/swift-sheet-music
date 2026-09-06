@@ -464,25 +464,23 @@ extension LayoutEngine {
         // adjacent measures don't). This post-pass enforces the
         // system-wide max.
         for staffIdx in 0 ..< staves.count {
-            // For each measure on this staff, the lowest Y among
-            // its lyric elements is verse 0's Y (the
-            // `maxLyricCenterYInMeasure` ratchet inside
-            // `placeMeasureElements` gives all chords in the
-            // measure the same Y base).
+            // A verse-0 mark identifies each measure's lyric base.
+            // The old minimum-Y premise was wrong when a measure
+            // carried only a higher verse, so such a measure does not
+            // contribute a base or get shifted by this pass.
             var measureVerse0Y: [Int: CGFloat] = [:]
             for (mIdx, m) in untranslated.enumerated() {
                 guard let els = m.perStaffElements[staffIdx]
                 else { continue }
-                var minY = CGFloat.infinity
                 for el in els {
-                    if case let .textMark(.lyrics, _, p) = el,
-                       p.y < minY
+                    if case let .textMark(
+                        .lyrics(_, verse, _), _, p,
+                    ) = el,
+                        verse == 0
                     {
-                        minY = p.y
+                        measureVerse0Y[mIdx] = p.y
+                        break
                     }
-                }
-                if minY != .infinity {
-                    measureVerse0Y[mIdx] = minY
                 }
             }
             guard let systemTargetY = measureVerse0Y.values.max()
@@ -705,7 +703,8 @@ extension LayoutEngine {
             let basePad: CGFloat = metrics.sp * 2.5
             let lyricsEstimate: CGFloat = maxLyricsVerses > 0
                 ? metrics.sp * 1.5
-                + CGFloat(maxLyricsVerses) * metrics.sp * 1.7
+                + CGFloat(maxLyricsVerses) * metrics.sp
+                * lyricVerseStrideInSpatiums
                 : 0
             let southExtent: CGFloat = staffMaxY[idx].isFinite
                 ? max(0, staffMaxY[idx] - staffBottomLocals[idx])
