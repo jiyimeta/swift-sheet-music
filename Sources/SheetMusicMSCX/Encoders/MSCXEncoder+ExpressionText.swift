@@ -32,6 +32,7 @@ extension ExpressionText {
         children.append(XMLTreeNode(name: "text", text: text))
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Expression", children: children)
     }
 }

@@ -7,10 +7,14 @@ extension ChordBracket {
     /// `MSCXDecoder+ChordBracket`.
     ///
     /// Child order follows `TWrite::write(const ChordBracket*, …)`
-    /// (`rw/write/twrite.cpp:747`): bracket-specific properties, inherited
+    /// (`rw/write/twrite.cpp:747`): bracket-specific properties, ordinary
     /// element properties, then the unmodeled `Arpeggio` properties restored
-    /// from preserved markup. The shared writer never emits `<subtype>` for a
-    /// chord bracket.
+    /// from preserved markup. The trailing `<color>` deliberately follows all
+    /// of them; see `ElementProperties.mscxTrailingChildren()`. The shared
+    /// writer never emits `<subtype>` for a chord bracket. `<offset>` arrives
+    /// through `mscxChildren()`, so its position matches
+    /// `TWrite::writeProperties(const Arpeggio*)`
+    /// (`rw/write/twrite.cpp:764`), which writes item properties first.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let hookLength {
@@ -30,6 +34,7 @@ extension ChordBracket {
         }
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "ChordBracket", children: children)
     }
 }

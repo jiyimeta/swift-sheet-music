@@ -12,13 +12,9 @@ extension StaffText {
         let text = node.first("text")
             .map(plainText(of:)) ?? ""
         let color = node.first("color").flatMap(decodeColor(_:))
-        let offset = node.first("offset")
-            .map(decodeOffset(_:)) ?? (0, 0)
         let props = TextProperties.decode(node)
         var staffText = StaffText(
             text: text,
-            offsetX: offset.0,
-            offsetY: offset.1,
             color: color,
             isSystemText: isSystemText,
             properties: props,
@@ -54,14 +50,5 @@ extension StaffText {
         else { return nil }
         let a = attrs["a"].flatMap(Int.init) ?? 255
         return ScoreColor(red: r, green: g, blue: b, alpha: a)
-    }
-
-    static func decodeOffset(
-        _ node: XMLTreeNode,
-    ) -> (Double, Double) {
-        let attrs = node.attributes
-        let x = attrs["x"].flatMap(Double.init) ?? 0
-        let y = attrs["y"].flatMap(Double.init) ?? 0
-        return (x, y)
     }
 }

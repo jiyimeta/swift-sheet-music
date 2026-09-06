@@ -11,8 +11,6 @@ extension RehearsalMark {
     static func decode(_ node: XMLTreeNode) throws -> RehearsalMark {
         let text = node.first("text").map(plainText(of:)) ?? ""
         let color = node.first("color").flatMap(decodeColor(_:))
-        let offset = node.first("offset")
-            .map(decodeOffset(_:)) ?? (0, 0)
         var props = TextProperties.decode(node)
         // RehearsalMark's per-element `frame` field already covers
         // `<frameType>`; lift it out of `properties` so callers can
@@ -22,8 +20,6 @@ extension RehearsalMark {
         props.frameType = nil
         var mark = RehearsalMark(
             text: text,
-            offsetX: offset.0,
-            offsetY: offset.1,
             color: color,
             frame: frame,
             properties: props,
@@ -55,14 +51,5 @@ extension RehearsalMark {
         else { return nil }
         let a = attrs["a"].flatMap(Int.init) ?? 255
         return ScoreColor(red: r, green: g, blue: b, alpha: a)
-    }
-
-    private static func decodeOffset(
-        _ node: XMLTreeNode,
-    ) -> (Double, Double) {
-        let attrs = node.attributes
-        let x = attrs["x"].flatMap(Double.init) ?? 0
-        let y = attrs["y"].flatMap(Double.init) ?? 0
-        return (x, y)
     }
 }

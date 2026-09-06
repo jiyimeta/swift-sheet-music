@@ -37,6 +37,7 @@ extension KeySignature {
         }
         children.append(contentsOf: elementProperties.mscxChildren())
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "KeySig", children: children)
     }
 }

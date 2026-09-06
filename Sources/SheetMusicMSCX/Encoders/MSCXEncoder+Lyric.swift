@@ -8,9 +8,10 @@ extension Lyric {
     /// non-zero verse, `<syllabic>` for non-default placement,
     /// `<ticks>` for melismas, optional `<linkedMain/>` (v3 only —
     /// MuseScore 3 marks every score-graph element with this flag),
-    /// per-element font/frame overrides via `TextProperties.appendXML`,
-    /// then the syllable's `<text>` payload last (MS3 reader expects
-    /// text after the metadata children).
+    /// per-element font/frame overrides via `TextProperties.appendXML`, then
+    /// the syllable's `<text>` payload after the metadata children (as the MS3
+    /// reader expects). Preserved markup and the universal trailing `<color>`
+    /// follow it.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if verse != 0 {
@@ -31,6 +32,7 @@ extension Lyric {
         properties.appendXML(to: &children)
         children.append(XMLTreeNode(name: "text", text: text))
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Lyrics", children: children)
     }
 
