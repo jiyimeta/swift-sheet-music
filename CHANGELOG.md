@@ -125,6 +125,21 @@ and this project adheres to
   inline markup inside `<text>` flattens to plain text — the same limitation
   `StaffText` has. Engraving does not place a fingering glyph yet.
 
+- **A `<Symbol>` attached to a segment is modeled.** MuseScore lets a score
+  carry an arbitrary SMuFL glyph anywhere, and uses it as the escape hatch for
+  notation it has no element for. The note-attached form shipped a day earlier
+  as `Note.symbols`; the form that sits in the voice stream on its own reached
+  the model only as an opaque preserved subtree. It is now
+  `VoiceElement.symbol(EngravingSymbol)`.
+
+  **No new model type.** Both positions decode into the same `EngravingSymbol`,
+  which keeps an unrecognized glyph name verbatim rather than resolving it —
+  MuseScore itself would rewrite an unknown name to `noSym` on its next save, so
+  a round trip through this library preserves more than a round trip through
+  MuseScore.
+
+  **Nothing engraves or sounds one yet** — this is round-trip fidelity only.
+
 - **Figured bass is modeled.** `<FiguredBass>` is the thoroughbass notation a
   continuo part carries under the staff — stacked figures, each optionally with
   an accidental before or after it, brackets around any part of it, and a

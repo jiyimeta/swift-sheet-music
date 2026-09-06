@@ -251,6 +251,7 @@ private func strippingPreservedMarkup(from element: VoiceElement) -> VoiceElemen
         }
         return .figuredBass(value)
     }
+    if case var .symbol(value) = element { value.preservedMarkup = []; return .symbol(value) }
     return element
 }
 

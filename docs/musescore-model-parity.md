@@ -801,6 +801,46 @@ encoderで1つ注意がある。`TWrite::writeProperties(const BSymbol*)`（`twr
 **leaf childrenを先に、base element propertyを後に**書く。`ChordBracket`の`Arpeggio`基底
 （`twrite.cpp:764`）は逆順なので、**この2要素はencoderのtail順が意図的に違う**。
 
+**［2026-09-06 追記］annotation位置の`SYMBOL`もmodel化した。**
+`VoiceElement.symbol(EngravingSymbol)`。**新しいmodel型は作っていない**——note添付分と
+同じ`EngravingSymbol`をそのまま使う。`EngravingSymbol.swift`のdoc commentが
+最初から「The annotation-position form belongs to a separate parallel slice and will
+reuse this same type」と予告していたとおり。fingerprintの`combine(_ symbol:)`も
+occupant tag 47/48ごと再利用しているので、**この slice が足した tag は
+`VoiceElement` case tag 18 の1つだけ**。
+
+**上流で1点、隣の要素と違う。** `<Symbol>`はannotation branchの中に
+**自分専用の分岐**を持っている（`measureread.cpp:465`）。`Sticking` / `Capo` /
+`StringTunings` / `FiguredBass` / `HarpPedalDiagram`などは1つの共有分岐にまとまっていて、
+そこは`allowTimeAnchor()`で`getChordRestOrTimeTickSegment`と
+`getSegment(SegmentType::ChordRest, …)`を選び分ける。**`<Symbol>`は常に後者**で、
+time-tick segmentには載らない。どちらも`segment->add(el)`なのでannotationであることは
+同じ（`AdjacentElementSlot.isAnnotation`はtrue）。
+
+#### 「まだmodel化されていない要素」をtest fixtureに使うと、3回壊れる
+
+`MSCXPreservedMarkupTests.unknownVoiceChildKeepsPosition`は
+「unmodeledなvoice childがstream中の位置を保つ」ことを見るtestで、
+その"unmodeledな要素"として**実在のMuseScore要素**を使っていた。
+
+| 時期 | 使っていた要素 | 壊れた理由 |
+|---|---|---|
+| 〜2026-09-05 | `<FiguredBass>` | FIGURED_BASSをmodel化 |
+| 2026-09-05〜06 | `<Symbol>` | このsliceでmodel化 |
+
+**2回とも、model化した側が気づいて差し替えている。** つまりこのtestは
+**parity workが進むたびに壊れる**設計で、しかも**壊れ方がcompile errorではなくtest失敗**
+なので、model化する人がこのfileを開くまで見えない。
+
+3度目を`<HarpPedalDiagram>`にするのは、**次にそれをmodel化する人に同じ作業を予約する**だけ。
+testのtitle自身が「an **unknown** voice child」と言っているとおり、
+**特定の要素であることはこのtestの主張ではない**ので、
+`<UnmodeledElement>`——MuseScoreが決して書かないtag——に差し替えた。
+
+**実要素での往復はpreservation gateが見ている**ので、失うcoverageは無い。
+一般化すると、**「まだ実装されていないこと」を前提に書いたtestは、実装が進むと壊れる。
+前提が要件でないなら、前提のほうを合成物にすること。**
+
 ### 4.4 frame / layout container
 
 | MuseScore | 定義 | ssm | 影響 |
@@ -1142,7 +1182,7 @@ fieldだけでは足りず、**encoderがそのtagを書いているかまで見
 1段目で止めると`<tpc2>`を損失と誤判定する（§5.3の下の追記）。
 そしてconsumed setに入れた時点でpreserved markupの対象から外れるので、
 **「model化しないまま consumed set に足す」と、それまで往復していたものがその瞬間から失われる**。
-§4.6.1のgrace chordの穴と同じ向きの罠が、tag levelにもある。
+§4.6.2のgrace chordの穴と同じ向きの罠が、tag levelにもある。
 
 **［2026-09-06 追記］3つ目を全decoderで洗い出したところ、2件の実損失が出た。**
 `<Measure><stretch>`（user stretch）と`<Measure><noOffset>`（measure number offset）が
@@ -1666,7 +1706,7 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    後2者は2026-09-06）+`FRET_DIAGRAM`、
    ~~`STICKING`/`EXPRESSION`~~（2026-09-04完了、§4.2の追記）、
    ~~`FIGURED_BASS`~~（2026-09-06完了、§4.2の追記）、
-   `FSYMBOL`、**annotation位置の**`SYMBOL`。
+   `FSYMBOL`、~~**annotation位置の**`SYMBOL`~~（2026-09-06完了、§4.3の追記）。
 
    **［2026-09-06 訂正］この行は2件古かった。** `SYMBOL`は**note添付分が
    2026-09-05にmodel化済み**（`EngravingSymbol`、§4.3の追記）で、残っているのは
@@ -1790,6 +1830,47 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
 
 **MSC 5.00の`<SpannerMap>` + EID対応はこの列に入れない。** `v5.0.0-alpha` tagが立った時点で
 着手する（§3.6・§3.7）。1を先に済ませておけば、対応が入る前でもMS5 fileはデータ欠損しない。
+
+### 8.1 次のmajorまで着手できないもの——未使用の`Hashable`
+
+**parity work中に足した`public enum`のうち6つが、誰も使わない`Hashable`に適合している。**
+
+| 型 | 追加slice |
+|---|---|
+| `Capo.TransposeMode` | CAPO / STRING_TUNINGS |
+| `Ambitus.NoteHeadType`、`Ambitus.Mirror` | AMBITUS |
+| `FiguredBassItem.{Modifier, Parenthesis, ContinuationLine}` | FIGURED_BASS |
+
+全参照を確認した結果、**Set・Dictionary key・`.hashValue`・`hash(into:)`は0件**で、
+使われているのは`==`だけ。親の`Capo` / `Ambitus` / `FiguredBass` / `FiguredBassItem`は
+いずれも`Sendable, Equatable`のみなので、**親の合成が要求してもいない**。
+
+**6件とも associated valueを持つ**（未知の序数を保持する`.other(rawValue: Int)`）ことが、
+ここでは効いている。associated valueが無いenumはEquatable / Hashableを**宣言しなくても
+暗黙に得る**ので、`Hashable`と書いても新しいcodeは生まれない。**書いたことでcodeが生まれるのは、
+payloadを持つこの6件のほうだけ。** `Score/`にはpayloadなしのenumが多数あり、
+そちらの`Hashable`表記はこの項目の対象ではない。
+
+**コストは「witness thunk 3本」では済まない。** name sectionを残した
+`.build/wasm32-unknown-wasip1/release/sheet-music-wasm.wasm`を読むと、
+`Ambitus.Mirror` 1つにつき——`hash(into:)`本体、`hashValue` getter、
+witness thunk 3本、base conformance descriptor、そして
+**stdlib genericの特殊化2本**（`$sSHsE13_rawHashValue…Tgq5`、
+`$ss10_hashValue3for…Tg5`）。**1 enumあたり約8関数、6つで約48関数、呼ぶ側がゼロ。**
+
+**それでも今は外せない。** `CHANGELOG.md`冒頭がSemVer遵守を宣言していて、
+現在は**2.4.1**。`public enum`からprotocol conformanceを外すのは
+**major bumpを要するbreaking change**で、consumerが誰かは判定基準にならない。
+**3.0を切るときの候補**としてここに置く。
+
+**この項目をsize対策の文脈に置かないこと。** wasm ceilingとは独立に立つ話で、
+逆も真——**仮にdist側で0 byteだったとしても、外す理由は変わらない**。
+ceiling側の議論に相乗りさせると、ceilingの形式が変わった時点でこの項目ごと消える。
+
+*（distでの実効byte数は未測定。ceilingが測っている
+`Web/sheet-music-web/dist/sheet-music-wasm.wasm`はname sectionが落ちていて、
+型名だけがreflection metadataとして残る。**symbol文字列が無いことは、codeが無いことを
+意味しない**ので、`strings`では判定できない。before/afterのbuild 1回で出る。）*
 
 ---
 
