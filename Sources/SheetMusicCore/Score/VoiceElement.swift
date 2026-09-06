@@ -33,6 +33,12 @@ public enum VoiceElement: Sendable, Equatable {
     /// An expression segment annotation attached at the current tick. Occupies
     /// no tick budget.
     case expression(ExpressionText)
+    /// A staff-bound capo segment annotation attached at the current tick.
+    /// Occupies no tick budget.
+    case capo(Capo)
+    /// A staff-bound string-tunings segment annotation attached at the current
+    /// tick. Occupies no tick budget.
+    case stringTunings(StringTunings)
     /// A `<voice>` child this library does not model, kept at its
     /// position in the stream. Unlike container-level
     /// `preservedMarkup` bags, a voice child's position is its

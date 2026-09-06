@@ -1235,10 +1235,10 @@ extension LayoutEngine {
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
                     break
-                case .sticking, .expression, .preserved:
-                    // Sticking and expression are modeled annotations but do
-                    // not have an engraving pass yet. Source-only preserved
-                    // markup likewise has no layout behavior.
+                case .sticking, .expression, .capo, .stringTunings, .preserved:
+                    // These modeled annotations do not have an engraving pass
+                    // yet. Source-only preserved markup likewise has no layout
+                    // behavior.
                     break
                 case let .locationShift(delta):
                     // Voice-level cursor shift. Adds the location's

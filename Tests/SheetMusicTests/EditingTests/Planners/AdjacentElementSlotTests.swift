@@ -39,11 +39,13 @@ struct AdjacentElementSlotTests {
         #expect(AdjacentElementSlot.run(.after, of: 5, in: elements) == 6 ..< 6)
     }
 
-    @Test("sticking and expression text stay inside an annotation run")
+    @Test("voice annotations stay inside an annotation run")
     func voiceTextAnnotationRuns() {
         let annotations: [VoiceElement] = [
             .sticking(Sticking(text: "R")),
             .expression(ExpressionText(text: "dolce")),
+            .capo(Capo(text: "")),
+            .stringTunings(StringTunings()),
         ]
         for annotation in annotations {
             let elements = [Self.dynamic, annotation, Self.chord]

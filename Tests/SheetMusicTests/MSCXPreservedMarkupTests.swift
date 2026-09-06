@@ -358,6 +358,12 @@ extension MSCXPreservedMarkupTests {
             .harmony(Harmony(name: "C", preservedMarkup: [marker])),
             .sticking(Sticking(text: "R", preservedMarkup: [marker])),
             .expression(ExpressionText(text: "dolce", preservedMarkup: [marker])),
+            .capo(Capo(text: "Capo 2", preservedMarkup: [marker])),
+            .stringTunings(StringTunings(
+                preset: "Drop D",
+                stringData: StringData(preservedMarkup: [marker]),
+                preservedMarkup: [marker],
+            )),
         ]
         score.parts[0].staves[0].measures[0] = measure
     }
@@ -377,6 +383,11 @@ extension MSCXPreservedMarkupTests {
             if case let .harmony(value) = element { result += value.preservedMarkup }
             if case let .sticking(value) = element { result += value.preservedMarkup }
             if case let .expression(value) = element { result += value.preservedMarkup }
+            if case let .capo(value) = element { result += value.preservedMarkup }
+            if case let .stringTunings(value) = element {
+                result += value.preservedMarkup
+                result += value.stringData?.preservedMarkup ?? []
+            }
         }
         return result
     }
@@ -551,6 +562,12 @@ extension MSCXPreservedMarkupTests {
             expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
         }
         if case let .expression(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .capo(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .stringTunings(value) = element {
             expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
         }
     }

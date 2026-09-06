@@ -357,8 +357,8 @@ git -C <musescore> log --format=%ad --date=format:%Y-%m --since=<6か月前> \
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
 | `FRET_DIAGRAM` | `dom/fret.h:137` | なし | chord diagramが丸ごと消える。string / fret / dot / barre / marker / 埋め込みharmony |
-| `STRING_TUNINGS` | `dom/stringtunings.h:49` | なし | preset・表示弦・tuning dataが消える |
-| `CAPO` | `types/types.h:1368`（`CapoParams`） | なし | capo位置・除外弦・transpose modeが消える。playback pitchに影響 |
+| ~~`STRING_TUNINGS`~~ | `dom/stringtunings.h:49` | **`StringTunings`**（2026-09-06実装） | 下の追記を参照 |
+| ~~`CAPO`~~ | `types/types.h:1368`（`CapoParams`） | **`Capo`**（2026-09-06実装） | 下の追記を参照 |
 | ~~`StringData`（Instrument配下）~~ | `dom/stringdata.h:42` | **`StringData`**（2026-09-04実装） | 下の追記を参照 |
 | `TAB_DURATION_SYMBOL` | `dom/tabdurationsymbol.h:40` | なし | TABのduration表示 |
 | `TREMOLOBAR` | `dom/tremolobar.h:37` | なし | whammy barのpitch curve。ssmの`Tremolo`は別物（beam tremolo） |
@@ -412,6 +412,84 @@ encoderを変えることではなく、この判断を書いた`allowedLosses` 
 `StringData::convertPitch` / `getPitch`相当のport（5弦banjoの特例と`CapoParams`のpitch offsetを
 含む）が要り、別sliceにした。`FRET_DIAGRAM` / `STRING_TUNINGS` / `CAPO`も未実装のままだが、
 これらが乗る起点はこれで埋まった。
+
+**［2026-09-06 追記］`CAPO`と`STRING_TUNINGS`もmodel化した。** `SheetMusicCore`の`Capo`と
+`StringTunings`、`VoiceElement`の`.capo` / `.stringTunings`、decoder / encoderは
+`MSCXDecoder+Capo.swift` / `MSCXEncoder+Capo.swift`（`StringTunings`も同名の対）、fixtureは
+`Tests/SheetMusicTests/Resources/own/tab-annotations.mscx`。
+
+**`SystemElement`ではなく`VoiceElement`に置いた。** どちらも`StaffTextBase`派生なので
+`StaffText`（ssmではlift済み）に引きずられそうになるが、上流のflagは
+`ElementFlag::MOVABLE | ElementFlag::ON_STAFF`だけで**system flagを持たない**
+（`capo.cpp:37`、`stringtunings.cpp:47`）。`SystemElement`の存在理由は「staffを隠しても残る」
+ことだが、guitar staffを隠したらそのcapoも一緒に消えるのが正しい。上流のflagとscopeの両方が
+staff側を指している。
+
+`<StringTunings>`は`<preset>`・`<visibleStrings>`（**カンマ区切りのint列**、
+`typesconv.cpp:132`の`sl.join(u",")`）・省略可能な`<StringData>`。`<StringData>`は
+上の`StringData`をそのまま再利用しており、**同じ型が`<Instrument>`配下とここの2箇所に出る**。
+`<visibleStrings>`は空でも無条件に書かれるので、model側も常に出す。
+
+`<Capo>`は`<active>` / `<fretPosition>` / `<generateText>`と、除外弦を表す
+`<string no="N"><apply>0</apply></string>`の列。除外弦は上流が`std::unordered_set`で、
+writerが`std::set`に移してから書くので昇順。modelも`Set<Int>`にして、encodeと
+fingerprintの両方でsortする。
+
+**`<transposeMode>`だけはMuseScore 4.7のpropertyで、4.60には存在しない。**
+`v4.6.5`の`dom/property.h`にあるCAPO系Pidは`CAPO_FRET_POSITION` /
+`CAPO_IGNORED_STRINGS` / `CAPO_GENERATE_TEXT`の3つだけで、`CAPO_TRANSPOSE_MODE`は無い
+（`git log -S CAPO_TRANSPOSE_MODE`→`2ad8dd61a8`、`git tag --contains`の初出が`v4.7.0`）。
+4.6のwriterは書かず、readerは`xml.unknown()`に落として捨てる。
+だからmodelは`TransposeMode?`にして、**tagが無ければ書かない**——
+`version="4.60"`を名乗るfileに4.7のtagを毎回混ぜないためで、
+`ExpressionText.snapToDynamics`と同じ「nil = tagが無い」形。値は書かれるときは
+**enumの序数（int）**（5.0-devの`property.cpp:489`が`P_TYPE::INT`）。
+
+これは§4.6の`ChordBracket`が踏んだ罠と同じもので、**element単位ではなくproperty単位で
+起きた**版。`rw/read460/`は4.60–4.99のreader moduleなので、そこに枝があることは
+4.6にあることを意味しない。要素だけでなく**その要素のpropertyについても**
+release tagで確認する必要がある。
+
+`<Capo>` / `<StringTunings>`という要素自体の境界は**MuseScore 4.1**。
+`rw/read400/tread.cpp`にはどちらのreaderも無く（"Capo"のhitは`FretDiagram`の
+`setCapo(fretId)`という別物）、両方を持つ最初のreaderは`rw/read410/`。
+
+#### 4.1.1 タグが無いときの意味は`propertyDefault`が決める
+
+**この2件で一番危なかったのはここ。** `writeProperty`は「default値と異なるときだけ書く」
+（`twrite.cpp:395-397`のコメントが契約を明記している）。その「default」は
+`propertyDefault()`の戻り値であって、**C++のmember initializerではない**。`Capo`はこの2つが
+食い違っている:
+
+| property | `CapoParams`のfield initializer | `Capo::propertyDefault`（`capo.cpp:72`） |
+|---|---|---|
+| `active` | `false`（`types/types.h:1377`） | **`true`** |
+| `fretPosition` | `0`（`types/types.h:1375`） | **`1`** |
+| `generateText` | （structに無い。`capo.h:56`が`true`） | **`true`** |
+
+つまり「**activeでfret 1のcapo**」——capoの最も普通の状態——が書かれたfileには
+`<active>`も`<fretPosition>`も**存在しない**。ここでfield initializer側をdecodeのdefaultに
+使うと、active な capo が inactive として読まれる。`CAPO`はplayback pitchに影響するので、
+**診断も出さずに音が変わる**。
+
+ssmは`propertyDefault`側（true / 1 / true）をdecodeのdefaultにしている。
+encodeではこの3つを**default一致でも無条件に書く**——省略判定を再現すると同じ罠を
+encoder側でも踏むし、readerはどちらでも読むので、書く方が安全でidempotentになる。
+
+**tagが「無い」ときの挙動はtestで固定すること。** ここは一度落とし穴になった:
+最初のtestは`<fretPosition>2</fretPosition>`を明示していて`isActive`しか見ていなかったので、
+decoderの`?? 1`を`?? 0`に書き換えても全gateが緑のままだった。**この節が主張している当のものが
+testで守られていなかった。** いまは子要素ゼロの`<Capo/>`をdecodeして全defaultを突き合わせ、
+decode→encode→decodeのidempotencyまで見ている。
+
+**absentとunparseableも区別する。** `<fretPosition>abc</fretPosition>`は上流の
+`readInt()`が0を返し、`capo.cpp:150`が0を「capo無し」として扱う。tagが無いとき（=1）と
+同じにしてはいけない。
+
+**scalar propertyをmodel化するときは毎回この検算をすること。** `writeProperty`を通る
+property全部に当てはまる。model側が`Bool?` / `Int?`で「タグが無い」を表現できるなら
+（`ExpressionText.snapToDynamics`がそう）この問題は起きないが、非optionalで持つなら
+`propertyDefault`を読みに行くしかない。
 
 ### 4.2 text annotation系
 
@@ -897,7 +975,8 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    個別要素のPARTIALの大半がここに帰着する。
 3. **単独で追加できるMISSING** — ~~`ORNAMENT`~~（2026-09-04完了、§4.6の追記）、
    ~~`FINGERING`~~（2026-09-04完了、§4.2の追記）、
-   ~~`StringData`~~（2026-09-04完了、§4.1の追記）+`FRET_DIAGRAM`+`STRING_TUNINGS`+`CAPO`、
+   ~~`StringData`~~+~~`STRING_TUNINGS`~~+~~`CAPO`~~（§4.1の追記。前者は2026-09-04、
+   後2者は2026-09-06）+`FRET_DIAGRAM`、
    ~~`STICKING`/`EXPRESSION`~~（2026-09-04完了、§4.2の追記）、
    `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`。
    互いに独立なので並列に進められる。

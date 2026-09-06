@@ -7,7 +7,7 @@ import SheetMusicFoundation
 ///
 /// - **Measure flags and element properties are fed BY OCCUPANTS.** A field contributes bytes only when it holds a
 ///   non-default value, and always as a unique non-zero tag (21 and up, so no tag can be mistaken for a
-///   `VoiceElement` case tag 0…13 or for a presence byte) followed by its value. The tag is what keeps
+///   `VoiceElement` case tag 0…15 or for a presence byte) followed by its value. The tag is what keeps
 ///   `endRepeatCount = 2` and `measureRepeatCount = 2` apart; the fixed-arity prefix of each measure block is what
 ///   keeps "flag on measure 3" and "flag on measure 4" apart.
 /// - **The marker `VoiceElement` cases are fed their content UNCONDITIONALLY.** A clef has no default type to be
@@ -186,8 +186,8 @@ extension FNV1a {
     /// position — but they now feed their own identity rather than a bare discriminant tag, per the edit-command
     /// parity project (spec 2026-09-02 §2.5): the `combine(_ clef:)` / `combine(_ barLine:)` /
     /// `combine(_ dynamic:)` / `combine(_ fermata:)` / `combine(_ breath:)` / `combine(_ harmony:)` /
-    /// `combine(_ sticking:)` / `combine(_ expression:)` / `combine(_ spanner:)` / `combine(_ repeat:)`
-    /// overloads below are what this switch calls into.
+    /// `combine(_ sticking:)` / `combine(_ expression:)` / `combine(_ capo:)` / `combine(_ tunings:)` /
+    /// `combine(_ spanner:)` / `combine(_ repeat:)` overloads below are what this switch calls into.
     ///
     /// This switch lives here rather than in `ScoreFingerprintHasher.swift` because every overload it
     /// dispatches to is in this file, and because that one was at the `file_length` limit — a new
@@ -241,6 +241,12 @@ extension FNV1a {
         case let .expression(expression):
             combine(13)
             combine(expression)
+        case let .capo(capo):
+            combine(14)
+            combine(capo)
+        case let .stringTunings(tunings):
+            combine(15)
+            combine(tunings)
         case .preserved:
             // Source-only XML is outside the semantic edit fingerprint.
             break
@@ -300,6 +306,31 @@ extension FNV1a {
         combine(expression.text)
         combinePresence(expression.snapToDynamics.map { $0 ? 1 : 0 })
         combineOccupied(expression.elementProperties, visibleTag: 41, colorTag: 42)
+    }
+
+    mutating func combine(_ capo: Capo) {
+        combine(capo.isActive)
+        combine(capo.fretPosition)
+        combine(capo.generatesText)
+        combinePresence(capo.transposeMode?.mscxOrdinal)
+        combine(capo.ignoredStrings.count)
+        for string in capo.ignoredStrings.sorted() {
+            combine(string)
+        }
+        combine(capo.text)
+        combineOccupied(capo.elementProperties, visibleTag: 49, colorTag: 50)
+    }
+
+    mutating func combine(_ tunings: StringTunings) {
+        combine(tunings.preset)
+        combine(tunings.visibleStrings.count)
+        for string in tunings.visibleStrings {
+            combine(string)
+        }
+        // `StringData` is deliberately omitted, matching `Instrument`: this
+        // is a semantic-edit fingerprint rather than a fidelity hash.
+        combine(tunings.text)
+        combineOccupied(tunings.elementProperties, visibleTag: 51, colorTag: 52)
     }
 
     mutating func combine(_ repeat: MeasureRepeat) {
