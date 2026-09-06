@@ -337,6 +337,36 @@ and this project adheres to
   named in the root README's artifact table and was the only one of the three
   AARs without a README of its own.
 
+### Fixed
+
+- **`Score.strippingPreservedMarkup()` now reaches the system lane.** It walked
+  `blocks` and `parts` and stopped there, so `Score.systemMeasures` — where the
+  decoder lifts tempo marks, rehearsal marks, staff text, swing directives and
+  instrument changes — was never visited, and a score stripped for comparison
+  still carried source-only XML. Only `.instrumentChange` reaches a bag (on the
+  `Instrument` it swaps in, and below that its `StringData` and channels), which
+  is why it took a mid-score instrument change to expose. The per-instrument
+  clearing is now one helper shared with the `parts` walk instead of three
+  repeated lines.
+
+- **A fingering on a grace note kept its preserved markup.** The chord and
+  grace-chord walks each expanded `Note` themselves and had drifted: the grace
+  side cleared `symbols` but not `fingerings`. Both now call one `Note` helper,
+  so attaching a new child to `Note` is a one-place edit.
+
+- **The strip walk is now covered by a gate that does not need a maintained
+  list.** Each existing test names the bags it checks, which only proves the
+  author remembered their own type — the two bugs above are what that misses. A
+  new test reflects over every committed fixture's stripped `Score` and fails on
+  any preserved-markup property left non-empty anywhere in it, reporting the
+  path, and asserts the corpus had markup to begin with so an all-empty corpus
+  cannot pass it vacuously. It matches a property by name — any label holding
+  both "preserved" and "markup" — rather than by type, so a second kind of bag
+  added later is covered rather than invisible to the gate meant to find bags.
+  Its limit is the corpus, not the list: a shape no fixture contains — a
+  fingering on a grace note, as it happens — still needs a test of its own, and
+  has one.
+
 ### Changed
 
 - **Score text is drawn at its real weight everywhere, not only on Apple
