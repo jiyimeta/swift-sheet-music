@@ -15,15 +15,30 @@ import SheetMusicFoundation
 public enum MeasureAccidentals {
     // MARK: - What a letter key writes
 
-    /// Pitch and spelling for `letter` written at `location`, with `reference` (the previous note) choosing the
-    /// octave: the nearest octave of that letter, spelled with whatever alteration is in force on the staff line it
-    /// lands on.
+    /// Which octave of a letter a key writes, given the note it is measured against.
+    ///
+    /// The two are different questions, not settings on one. A letter key writing at the caret means "the nearest
+    /// one to what I just played"; a letter key stacking onto a chord means "above what is already there" —
+    /// MuseScore's own split (`Score::resolveNoteInputParams` branches on `addFlag` for exactly this).
+    public enum LetterOctave: Sendable {
+        /// The octave nearest the reference, preferring the higher on a tie. A caret letter key.
+        case nearest
+        /// The lowest octave strictly above the reference. A chord-add letter key.
+        case above
+    }
+
+    /// Pitch and spelling for `letter` written at `location`, with `reference` (the previous note, or the chord
+    /// being added to) choosing the octave per `octaveRule`, spelled with whatever alteration is in force on the
+    /// staff line it lands on.
     ///
     /// The octave search runs against the letter's KEY spelling — the pitch a reader would expect for it — so that
     /// "nearest to the last note" means nearest as heard, then the bar's own accidental (if any) respells it.
+    /// `.above` measures against that same key spelling, matching MuseScore, which strips the reference's own
+    /// alteration before choosing.
     public static func plannedPitch(
         forLetter letter: Character,
         nearestTo reference: Int?,
+        octaveRule: LetterOctave = .nearest,
         at location: VoiceElementID,
         in score: Score,
     ) -> (pitch: Int, tpc: Int)? {
@@ -31,9 +46,18 @@ public enum MeasureAccidentals {
         let keySig = score.activeKey(staff: location.staff, measureIndex: location.measureIndex)
         let letterIndex = letterIndex(forTpc: natural.tpc)
         let keyAlteration = keyAlteration(forLetter: letterIndex, keySig: keySig)
-        guard let nearestNatural = NoteInputPlanner.pitch(
-            forLetter: letter, nearestTo: reference.map { $0 - keyAlteration },
-        ) else { return nil }
+        let searchReference = reference.map { $0 - keyAlteration }
+        let chosen: (pitch: Int, tpc: Int)?
+        switch octaveRule {
+        case .nearest:
+            chosen = NoteInputPlanner.pitch(forLetter: letter, nearestTo: searchReference)
+        case .above:
+            // `.above` has nothing to be above without a reference, so it falls back to the nearest rule's own
+            // no-reference answer (the letter in octave 4) rather than refusing the key.
+            chosen = searchReference.flatMap { NoteInputPlanner.pitch(forLetter: letter, above: $0) }
+                ?? NoteInputPlanner.pitch(forLetter: letter, nearestTo: searchReference)
+        }
+        guard let nearestNatural = chosen else { return nil }
         let octave = nearestNatural.pitch / 12 - 1
         let alteration = alteration(
             inForceOn: Line(letter: letterIndex, octave: octave), before: location, in: score, keySig: keySig,
@@ -67,16 +91,22 @@ public enum MeasureAccidentals {
     public static func plannedConcertPitch(
         forWrittenLetter letter: Character,
         nearestTo concertReference: Int?,
+        octaveRule: LetterOctave = .nearest,
         at location: VoiceElementID,
         in score: Score,
     ) -> (pitch: Int, tpc: Int)? {
         let crossing = score.writtenSpaceCrossing(staff: location.staff, measureIndex: location.measureIndex)
         guard !crossing.isIdentity else {
-            return plannedPitch(forLetter: letter, nearestTo: concertReference, at: location, in: score)
+            return plannedPitch(
+                forLetter: letter, nearestTo: concertReference, octaveRule: octaveRule, at: location, in: score,
+            )
         }
+        // A staff's transposition is one interval applied to every note, so it preserves order: the highest concert
+        // pitch in a chord is also its highest written one, and `.above` means the same thing on either side.
         guard let planned = plannedPitch(
             forLetter: letter,
             nearestTo: concertReference.map(crossing.writtenPitch),
+            octaveRule: octaveRule,
             at: location,
             in: score.writtenPitchView(),
         ) else { return nil }
