@@ -3,14 +3,15 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension ExpressionText {
-    /// Every direct `<Expression>` child this decoder reads. `<style>`,
-    /// `<placement>`, `<offset>`, font overrides, and voice-assignment
-    /// properties are not modeled and become preserved markup.
+    /// Every direct `<Expression>` child this decoder reads. `<style>`, font
+    /// overrides, and voice-assignment properties are not modeled and become
+    /// preserved markup. The base `<offset>` and `<placement>` are owned by
+    /// `ElementProperties`.
     ///
     /// `color` and `visible` are consumed because
     /// `ElementProperties(decodingMSCXChildrenOf:)` reads them.
     private static let consumedChildren: Set = [
-        "text", "snapToDynamics", "color", "visible",
+        "text", "snapToDynamics", "color", "offset", "placement", "visible",
     ]
 
     /// Decode one `<Expression>`.

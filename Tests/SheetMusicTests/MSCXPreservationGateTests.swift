@@ -65,8 +65,6 @@ enum MSCXPreservation {
     private static let textContentReason =
         "by design: text style and inline markup remain for the TextContent parity work "
             + "(spec §6; parity doc §7.1)."
-    private static let staffBodyBoxReason =
-        "by design: top-level staff body boxes and their ordering are outside this spec (spec §3.5)."
     private static let soundIDReason =
         "genuinely lost, and not fixable by preserving it: MuseScore's <Instrument id> attribute "
             + "(template id) and <instrumentId> element (MusicXML Sound ID) hold different values, "
@@ -83,6 +81,14 @@ enum MSCXPreservation {
         "by design: MuseScore 5's <InstrumentLabel> wrapper holds <longName> / <shortName>, which "
             + "are modeled and re-emitted in MuseScore 4's direct-child form. Preserving the "
             + "wrapper too would duplicate modeled data and go stale on the first rename."
+    private static let defaultClefDialectReason =
+        "by design, and the same shape as keySignatureDialectReason: MuseScore writes the "
+            + "staff's default clef as <defaultClef>, or as <defaultConcertClef> / "
+            + "<defaultTransposingClef>, or as both halves of the pair. "
+            + "MSCXDecoder+Staff.swift collapses all three spellings into one defaultClefType "
+            + "and the encoder writes <defaultClef>. Preserving the pair alongside it would "
+            + "emit three tags where MuseScore wrote two, and the copies would contradict the "
+            + "modeled value the moment a host changed the clef."
     private static let keySignatureDialectReason =
         "by design, and not a preservation gap: MSCXDecoder+KeySignature.swift consumes "
             + "<concertKey>, falls back to <accidental>, and uses <mode> in its custom-key "
@@ -179,14 +185,12 @@ enum MSCXPreservation {
         allow([
             "Chord/TremoloSingleChord", "TremoloSingleChord/subtype",
         ], because: tremoloReason, into: &result)
+        // `Text/style` used to sit here too. The only fixture that lost it was
+        // a `<TBox>`, whose whole subtree is now carried as preserved markup —
+        // so it comes back, and the entry would be stale.
         allow([
-            "Text/style", "b/font", "text/b", "text/font", "text/sym",
+            "b/font", "text/b", "text/font", "text/sym",
         ], because: textContentReason, into: &result)
-        allow([
-            "HBox/width", "Staff/HBox", "Staff/TBox", "TBox/Text", "TBox/bottomGap",
-            "TBox/bottomMargin", "TBox/height", "TBox/leftMargin", "TBox/rightMargin", "TBox/topGap",
-            "TBox/topMargin", "Text/text", "VBox/bottomGap",
-        ], because: staffBodyBoxReason, into: &result)
         allow([
             "Instrument/instrumentId",
         ], because: soundIDReason, into: &result)
@@ -196,6 +200,9 @@ enum MSCXPreservation {
         allow([
             "Instrument/InstrumentLabel", "InstrumentLabel/longName", "InstrumentLabel/shortName",
         ], because: instrumentLabelReason, into: &result)
+        allow([
+            "Staff/defaultConcertClef", "Staff/defaultTransposingClef",
+        ], because: defaultClefDialectReason, into: &result)
         addLeafPermanentLosses(to: &result)
     }
 

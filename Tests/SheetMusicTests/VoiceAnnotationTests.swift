@@ -192,7 +192,7 @@ struct VoiceAnnotationMSCXTests {
         #expect(sticking.preservedMarkup.map(\.name) == ["style"])
     }
 
-    @Test func keepsPlacementAndOffsetInSourceOrder() throws {
+    @Test func modelsPlacementAndOffset() throws {
         let elements = try voiceElements(betweenChords("""
         <Expression>
           <text>dolce</text>
@@ -205,18 +205,16 @@ struct VoiceAnnotationMSCXTests {
             Issue.record("expected expression annotation")
             return
         }
-        #expect(expression.preservedMarkup.map(\.name) == ["placement", "offset"])
-        let placement = try #require(expression.preservedMarkup.first)
-        let offset = try #require(expression.preservedMarkup.last)
-        #expect(placement.text == "above")
-        #expect(offset.attributes == ["x": "0", "y": "1"])
+        #expect(expression.preservedMarkup.isEmpty)
+        #expect(expression.elementProperties.placement == .above)
+        #expect(expression.elementProperties.offset == ScoreOffset(x: 0, y: 1))
     }
 
     /// MuseScore 4.4+ writes an `Expression`'s vertical side as `<direction>`,
     /// not `<placement>`, because `Expression::hasVoiceAssignmentProperties()`
     /// is true and `writeItemProperties` skips `<placement>` for such an item
-    /// (`rw/write/twrite.cpp`). Both spellings occur in real files and both are
-    /// unmodeled, so both must ride through as preserved markup.
+    /// (`rw/write/twrite.cpp`). `<direction>` remains preserved because it is
+    /// a distinct voice-assignment property, not the base placement field.
     @Test func keepsVoiceAssignmentPropertiesAsPreservedMarkup() throws {
         let elements = try voiceElements(betweenChords("""
         <Expression>
@@ -296,8 +294,10 @@ struct VoiceAnnotationMSCXTests {
 
     @Test func strippingPreservedMarkupClearsBothAnnotationBags() throws {
         let score = try voiceScore(betweenChords("""
-        <Sticking><text>R</text><placement>below</placement></Sticking>
-        <Expression><text>dolce</text><offset x="0" y="1"/></Expression>
+        <Sticking><style>sticking</style><text>R</text><placement>below</placement></Sticking>
+        <Expression><style>expression</style><text>dolce</text>
+          <placement>above</placement><offset x="0" y="1"/>
+        </Expression>
         """))
         let original = firstVoiceElements(in: score)
         try #require(original.count == 4)
@@ -307,8 +307,11 @@ struct VoiceAnnotationMSCXTests {
             Issue.record("expected sticking and expression annotations")
             return
         }
-        #expect(!originalSticking.preservedMarkup.isEmpty)
-        #expect(!originalExpression.preservedMarkup.isEmpty)
+        #expect(originalSticking.preservedMarkup.map(\.name) == ["style"])
+        #expect(originalExpression.preservedMarkup.map(\.name) == ["style"])
+        #expect(originalSticking.elementProperties.placement == .below)
+        #expect(originalExpression.elementProperties.placement == .above)
+        #expect(originalExpression.elementProperties.offset == ScoreOffset(x: 0, y: 1))
 
         let stripped = firstVoiceElements(in: score.strippingPreservedMarkup())
         guard case let .sticking(sticking) = stripped[1],
@@ -319,6 +322,9 @@ struct VoiceAnnotationMSCXTests {
         }
         #expect(sticking.preservedMarkup.isEmpty)
         #expect(expression.preservedMarkup.isEmpty)
+        #expect(sticking.elementProperties.placement == .below)
+        #expect(expression.elementProperties.placement == .above)
+        #expect(expression.elementProperties.offset == ScoreOffset(x: 0, y: 1))
     }
 }
 
@@ -346,7 +352,8 @@ struct VoiceAnnotationFixtureTests {
         }
         #expect(right.text == "R")
         #expect(left.text == "L")
-        #expect(left.preservedMarkup.map(\.name) == ["placement"])
+        #expect(left.elementProperties.placement == .below)
+        #expect(left.preservedMarkup.isEmpty)
 
         let second = staff.measures[1].voices[0].elements
         try #require(second.count == 4)
@@ -362,10 +369,8 @@ struct VoiceAnnotationFixtureTests {
         #expect(dolce.snapToDynamics == nil)
         #expect(espressivo.text == "espressivo")
         #expect(espressivo.snapToDynamics == false)
-        #expect(espressivo.preservedMarkup.map(\.name) == ["offset"])
-        let offset = try #require(espressivo.preservedMarkup.first)
-        #expect(offset.attributes["x"] == "0")
-        #expect(offset.attributes["y"] == "2.5")
+        #expect(espressivo.preservedMarkup.isEmpty)
+        #expect(espressivo.elementProperties.offset == ScoreOffset(x: 0, y: 2.5))
 
         let third = staff.measures[2].voices[0].elements
         try #require(third.count == 2)

@@ -9,6 +9,52 @@ and this project adheres to
 
 ### Added
 
+- **Every element carries a placement, not just spanners.** `Placement` is now
+  a top-level type on `ElementProperties`, so an element's side of the staff
+  round-trips wherever MuseScore writes `<placement>` — ornaments, fingerings,
+  sticking, expression marks, capos, ambitus and the rest, which previously
+  kept it only as opaque markup. `Spanner.placement` is unchanged for callers.
+  Placement stays out of `stableFingerprint`, alongside offsets, because it is
+  positioning rather than content.
+
+- **Element offsets are shared, and element colors are written back.**
+  `ElementProperties` gains `offset`, a new `ScoreOffset` value in spatium
+  units, and `color` is no longer decode-only. Six types keep their
+  `offsetX` / `offsetY` as sugar over the shared field, so no call site
+  changes; `nil` now distinguishes an absent `<offset>` from an explicit
+  zero one. Thirteen element kinds that previously dropped one or both
+  properties on a round trip — ornaments, fingerings, sticking, expression
+  marks, chord brackets, engraving symbols and harmonies among them — now
+  preserve them. `<color>` is written after preserved markup so that a
+  `<style>` on the same element cannot reset it on the next read; MuseScore
+  writes the two in the opposite order and loses author color as a result.
+
+- **Frames between systems survive a round trip.** MuseScore lets a score carry
+  frames alongside its measures — a title block, a horizontal gap before a coda,
+  a block of prose, a row of chord diagrams. This library kept exactly one of
+  them: the title frame at the very top. Every other frame, including a vertical
+  frame appearing later in the piece, was dropped the moment a score was opened
+  and saved.
+
+  `Score.blocks` now holds them in document position, each recording the measure
+  index it sits before. `Score.titleFrame` still means what it always meant and
+  is now a view onto the first of those blocks, so nothing that reads it changes.
+
+  Only the vertical frame is typed, because the layout engine draws the title
+  block out of it. Horizontal, text, and fret frames are carried whole instead:
+  nothing in this library lays them out, so nothing needs their fields typed,
+  and a verbatim subtree is a more honest thing to hand back than a half-filled
+  model. Typing them is what a slice that teaches the layout engine about them
+  would do.
+
+  Frames are a property of the score rather than of any one staff — MuseScore
+  writes them under the first staff only — so they live beside the measures
+  rather than inside them, and adding or removing a staff cannot disturb them.
+
+  **Nothing is engraved differently.** The frames are preserved, not drawn; a
+  horizontal frame still occupies no width and a text frame still shows no text.
+  What changes is that opening and saving a score no longer discards them.
+
 - **Note-attached engraving symbols are modeled.** A direct `<Symbol>` child
   of `<Note>` now round-trips as an `EngravingSymbol` in `Note.symbols`,
   including its open-ended SMuFL name, score font, size, angle, visibility,
@@ -64,6 +110,105 @@ and this project adheres to
   `<placement>`, `<offset>`, and font overrides stay in preserved markup, and
   inline markup inside `<text>` flattens to plain text — the same limitation
   `StaffText` has. Engraving does not place a fingering glyph yet.
+
+- **Figured bass is modeled.** `<FiguredBass>` is the thoroughbass notation a
+  continuo part carries under the staff — stacked figures, each optionally with
+  an accidental before or after it, brackets around any part of it, and a
+  continuation line. It reached the model only as an opaque preserved subtree.
+
+  `VoiceElement.figuredBass(FiguredBass)` carries the figures as
+  `FiguredBassItem` values, the tick span, and whether the group sits on a note
+  or between notes.
+
+  **The element writes itself two mutually exclusive ways, and which one is a
+  property of the data, not the file version.** MuseScore parses the typed text
+  into figures; when that parse fails it writes the raw text instead. Both forms
+  are modeled — `items` when the file used figures, `text` when it did not — and
+  the encoder branches the way MuseScore does. When figures are present the
+  reader regenerates the text from them and discards whatever the file said, so
+  this library does the same: `text` is authoritative only when `items` is
+  empty. It is the one field in this parity work that is a stored value or a
+  derived one depending on the data.
+
+  **An absent `<onNote>` means true, not false.** MuseScore writes the tag only
+  when the value is false, so the ordinary case — figures attached to a note —
+  is written with no tag at all. Defaulting to false would silently move every
+  such figure between the notes. This is the same class of trap as `Capo`'s
+  fret position but the opposite in its details: there the C++ member
+  initializer was the misleading answer, here it is the correct one. What
+  settles it in both cases is the writer's omission condition, which is the only
+  place that always says what an absent tag means.
+
+  Text-style children survive as preserved markup rather than being consumed:
+  the figure form emits `<size>`, `<align>` and friends as direct children, so
+  a score with an edited figured-bass style keeps them. **Nothing engraves a
+  figured bass yet** — this is round-trip fidelity only.
+
+- **The ambitus is modeled.** `<Ambitus>` is the range indicator a choral or
+  early-music part carries at its start — the highest and lowest note the part
+  ever reaches, drawn as two noteheads joined by a line. It sits in the voice
+  stream on its own segment, and reached the model only as an opaque preserved
+  subtree.
+
+  `VoiceElement.ambitus(Ambitus)` carries the four pitch and tpc values, the
+  notehead group, notehead type and mirror direction, the connecting line's
+  presence and width, and an optional accidental at each end.
+
+  **The pitches are what the file says, not what the staff implies.** MuseScore
+  derives an ambitus from the music when you ask it to, but its reader calls
+  `setTopPitch(value, applyLogic: false)`, which skips both the tpc derivation
+  and the normalization — it deliberately opts out of its own logic when
+  reading, so the written values are author intent. They round-trip verbatim
+  here, unnormalized and unvalidated.
+
+  **`<head>` is kept as text rather than mapped.** MuseScore 4.6 writes this
+  element's notehead group, notehead type and mirror as integer ordinals, while
+  writing the very same properties as names on a `<Note>` — the difference is
+  per element, not per version, and the ordinal form drops out again in 5.x. The
+  decoder therefore accepts both spellings and the encoder writes the ordinal
+  form 4.6 uses. The notehead group's ~30-value enum is not mapped: this library
+  models noteheads nowhere else as an enum, so the tag's text is carried through
+  unchanged and the semantic mapping is deferred rather than guessed at.
+
+  Everything inside the nested `<Accidental>` beyond its subtype is lost, the
+  same tradeoff `ChordOrnament` already carries. **Nothing draws an ambitus
+  yet** — this is round-trip fidelity only.
+
+- **Capos and string tunings are modeled.** `<Capo>` and `<StringTunings>` are
+  the two fretted-instrument annotations that sit in the voice stream: a capo
+  says which fret the player has clamped and which strings it skips, and a
+  string-tunings mark says what the instrument is retuned to from that point
+  on. Both reached the model only as opaque preserved subtrees.
+
+  `VoiceElement` gains `.capo(Capo)` and `.stringTunings(StringTunings)`. They
+  are voice elements rather than `SystemElement`s because upstream gives them
+  `ElementFlag::ON_STAFF` and no system flag — hiding the guitar staff should
+  take its capo with it, unlike a tempo mark. `StringTunings.stringData` reuses
+  the `StringData` value this release also added under `<Instrument>`, so the
+  same tuning type now serves both places MuseScore writes one.
+
+  **An absent tag on a `<Capo>` does not mean zero.** MuseScore omits a
+  property equal to its `propertyDefault`, and `Capo`'s defaults are `active =
+  true` and `fretPosition = 1` — not the `false` / `0` that its C++ struct's
+  field initializers suggest. So the most ordinary capo in existence, active at
+  fret 1, is written with neither tag present. Decoding those as false and 0
+  would silently turn an active capo inactive, and a capo changes sounding
+  pitch. The decoder follows `propertyDefault`, and keeps an absent tag
+  distinct from an unparseable one — MuseScore's reader turns
+  `<fretPosition>abc</fretPosition>` into 0, which means "no capo", not 1. The
+  encoder writes those three scalars unconditionally so a round trip cannot
+  re-introduce the ambiguity.
+
+  `Capo.transposeMode` is optional rather than a plain value because that tag
+  is a MuseScore **4.7** property while this encoder declares 4.60. `nil` means
+  the source carried none, and none is then written, so a file this library
+  produces never gains a tag its target version does not know. The two elements
+  themselves are 4.1 and later.
+
+  `<style>`, `<placement>`, font overrides and the `StaffTextBase` channel and
+  swing tags stay in preserved markup. **Neither element is engraved or
+  sounded yet** — in particular no capo transposition is applied to playback;
+  this is round-trip fidelity only.
 
 - **Fretted-instrument tuning is modeled.** `<StringData>` is what tells a
   reader which pitch each string of a guitar, bass, or banjo is tuned to, and
@@ -224,6 +369,36 @@ and this project adheres to
 - **`Android/SheetMusicComposeAndroid/README.md`** — the module is published and
   named in the root README's artifact table and was the only one of the three
   AARs without a README of its own.
+
+### Fixed
+
+- **`Score.strippingPreservedMarkup()` now reaches the system lane.** It walked
+  `blocks` and `parts` and stopped there, so `Score.systemMeasures` — where the
+  decoder lifts tempo marks, rehearsal marks, staff text, swing directives and
+  instrument changes — was never visited, and a score stripped for comparison
+  still carried source-only XML. Only `.instrumentChange` reaches a bag (on the
+  `Instrument` it swaps in, and below that its `StringData` and channels), which
+  is why it took a mid-score instrument change to expose. The per-instrument
+  clearing is now one helper shared with the `parts` walk instead of three
+  repeated lines.
+
+- **A fingering on a grace note kept its preserved markup.** The chord and
+  grace-chord walks each expanded `Note` themselves and had drifted: the grace
+  side cleared `symbols` but not `fingerings`. Both now call one `Note` helper,
+  so attaching a new child to `Note` is a one-place edit.
+
+- **The strip walk is now covered by a gate that does not need a maintained
+  list.** Each existing test names the bags it checks, which only proves the
+  author remembered their own type — the two bugs above are what that misses. A
+  new test reflects over every committed fixture's stripped `Score` and fails on
+  any preserved-markup property left non-empty anywhere in it, reporting the
+  path, and asserts the corpus had markup to begin with so an all-empty corpus
+  cannot pass it vacuously. It matches a property by name — any label holding
+  both "preserved" and "markup" — rather than by type, so a second kind of bag
+  added later is covered rather than invisible to the gate meant to find bags.
+  Its limit is the corpus, not the list: a shape no fixture contains — a
+  fingering on a grace note, as it happens — still needs a test of its own, and
+  has one.
 
 ### Changed
 
@@ -393,6 +568,20 @@ and this project adheres to
   registers the repo's `Edwin-Roman.otf` to make that comparison honest:
   `CTFontCreateWithName` answers an unregistered family with the system font, so
   the suite had been measuring Helvetica while calling it Edwin.
+
+### Fixed
+
+- **A measure's manual stretch and its measure-number offset no longer vanish
+  on save.** Both are things an engraver sets by hand — widening one bar to fit
+  a dense passage, nudging a bar number away from a collision — and opening such
+  a score and saving it silently discarded them.
+
+  The cause was in how the reader declares what it understands. Anything it does
+  not claim is carried through untouched, so the way to lose something is to
+  claim it and then not store it. These two were claimed and dropped, and no
+  test could see it: the check that guards against exactly this loss compares
+  what a set of sample scores contains before and after a round trip, and none
+  of those samples happened to use either feature. One that does has been added.
 
 ## [2.4.1] - 2026-09-04
 

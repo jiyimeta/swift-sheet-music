@@ -313,6 +313,14 @@ extension Voice {
                 appendVoiceElement(.sticking(Sticking.decode(child)))
             case "Expression":
                 appendVoiceElement(.expression(ExpressionText.decode(child)))
+            case "Capo":
+                appendVoiceElement(.capo(Capo.decode(child)))
+            case "StringTunings":
+                appendVoiceElement(.stringTunings(StringTunings.decode(child)))
+            case "Ambitus":
+                appendVoiceElement(.ambitus(Ambitus.decode(child)))
+            case "FiguredBass":
+                appendVoiceElement(.figuredBass(FiguredBass.decode(child)))
             case "RehearsalMark":
                 try lifted(.rehearsalMark(
                     RehearsalMark.decode(child),

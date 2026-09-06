@@ -19,9 +19,11 @@ import SheetMusicFoundation
 ///   holding it here would put a value in the model that goes stale the moment
 ///   the note under it is edited. It rides through a round trip in
 ///   `preservedMarkup` instead.
-/// - **`<direction>` and `<placement>`.** Base `Articulation` / `EngravingItem`
-///   properties rather than ornament state; `ChordArticulation` does not model
-///   them either. They round-trip as preserved markup.
+/// - **`<direction>`.** An `Articulation` property rather than ornament state;
+///   `ChordArticulation` does not model it either. It round-trips as preserved
+///   markup.
+/// - **`<offset>` and `<placement>`.** Shared `EngravingItem` state modeled by
+///   `elementProperties`, not ornament-specific state or preserved markup.
 ///
 /// Playback is not wired up: this library's MIDI renderer mirrors MuseScore's
 /// compat SMF export and does not yet realize ornaments into notes. The
@@ -60,7 +62,8 @@ public struct ChordOrnament: Sendable, Equatable {
     /// is `BELOW` (`dom/engravingitem.cpp:1689`), so the below accidental is
     /// written bare.
     public var accidentalBelow: Accidental?
-    /// Base element properties shared with every engravable element.
+    /// Base element properties shared with every engravable element, including
+    /// the spatium-unit `<offset>`.
     public var elementProperties: ElementProperties
     /// Source XML children this model does not represent — the cue-note
     /// `<Chord>` foremost.

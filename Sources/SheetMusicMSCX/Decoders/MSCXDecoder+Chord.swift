@@ -12,7 +12,7 @@ extension Chord {
         "TremoloSingleChord", "TremoloTwoChord", "acciaccatura",
         "appoggiatura", "color", "dots", "durationType", "grace16",
         "grace16after", "grace32", "grace32after", "grace4", "grace8after",
-        "small", "track", "visible",
+        "offset", "placement", "small", "track", "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> Chord {
@@ -83,10 +83,9 @@ extension Chord {
     /// `mscx.slur.propertiesDropped`.
     ///
     /// `placement`, `visible` and `beginText` are MODELED, not elided:
-    /// `Spanner.decode` scans the payload child for all three
-    /// (`MSCXDecoder+Spanner.swift`, `decodePlacement` / `decodeVisible` /
-    /// `decodeBeginText`) and lands them on `Spanner`. Warning on them would
-    /// report a loss that does not happen.
+    /// `Spanner.decode` reads the payload's `ElementProperties`, applies
+    /// `decodeVisible` and `decodeBeginText`, and lands all three on `Spanner`.
+    /// Warning on them would report a loss that does not happen.
     ///
     /// The rest are the allowlist:
     ///
@@ -269,7 +268,7 @@ extension Chord {
     /// `TextProperties.decode`, or `ElementProperties`.
     private static let consumedLyricsChildren: Set = [
         "bold", "color", "face", "framePadding", "frameType", "italic",
-        "no", "size", "strike", "syllabic", "text", "ticks", "underline",
+        "no", "offset", "placement", "size", "strike", "syllabic", "text", "ticks", "underline",
         "visible",
     ]
 

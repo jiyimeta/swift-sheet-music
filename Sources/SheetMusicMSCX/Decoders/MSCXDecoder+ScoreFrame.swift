@@ -20,8 +20,10 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension ScoreFrame {
+    private static let consumedVBoxChildren: Set = ["height", "Text"]
+
     /// Parse a `<VBox>` element. Permissive — unknown children are
-    /// ignored. Default height is 0 if `<height>` is missing /
+    /// preserved. Default height is 0 if `<height>` is missing /
     /// malformed; layout will still allocate at least enough space
     /// for the contained text in that case.
     static func decode(vbox node: XMLTreeNode) -> ScoreFrame {
@@ -29,8 +31,15 @@ extension ScoreFrame {
         if let raw = node.first("height")?.text, let parsed = Double(raw) {
             height = CGFloat(parsed)
         }
+        // `FrameText.decode` returns nil for empty text. `Text` must still be
+        // consumed to avoid duplicating modeled text, so an empty `<Text>` is
+        // a pre-existing loss that this score-block slice does not fix.
         let texts = node.all("Text").compactMap(FrameText.decode(_:))
-        return ScoreFrame(heightSp: height, texts: texts)
+        return ScoreFrame(
+            heightSp: height,
+            texts: texts,
+            preservedMarkup: node.preservedMarkup(consuming: consumedVBoxChildren),
+        )
     }
 }
 

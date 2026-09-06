@@ -36,9 +36,34 @@ struct ElementPropertiesTests {
         #expect(redProps == ElementProperties(color: red))
     }
 
-    @Test func colorRoundTripsThroughCodable() throws {
+    @Test func offsetDefaultsToNil() {
+        #expect(ElementProperties.default.offset == nil)
+        #expect(ElementProperties().offset == nil)
+    }
+
+    @Test func initStoresOffset() {
+        let offset = ScoreOffset(x: 1.25, y: -2.5)
+        #expect(ElementProperties(offset: offset).offset == offset)
+    }
+
+    @Test func offsetParticipatesInEquality() {
+        let offset = ScoreOffset(x: 1.25, y: -2.5)
+        let sameOffset = ScoreOffset(x: 1.25, y: -2.5)
+        #expect(ElementProperties(offset: offset) != ElementProperties())
+        #expect(
+            ElementProperties(offset: offset)
+                != ElementProperties(offset: ScoreOffset(x: 1.25, y: 3.5)),
+        )
+        #expect(ElementProperties(offset: offset) == ElementProperties(offset: sameOffset))
+    }
+
+    @Test func propertiesRoundTripThroughCodable() throws {
         let red = ScoreColor(red: 255, green: 0, blue: 0, alpha: 200)
-        let props = ElementProperties(visible: false, color: red)
+        let props = ElementProperties(
+            visible: false,
+            color: red,
+            offset: ScoreOffset(x: 1.25, y: -2.5),
+        )
         let data = try JSONEncoder().encode(props)
         let decoded = try JSONDecoder().decode(
             ElementProperties.self, from: data,

@@ -5,8 +5,9 @@ import SheetMusicFoundation
 /// stored as a segment annotation.
 ///
 /// **Content, not presentation.** `text` is the annotation's modeled payload;
-/// `<style>`, `<placement>`, `<offset>`, and font overrides stay in
-/// `preservedMarkup`. Inline markup inside `<text>` flattens to plain text, the
+/// `<style>` and font overrides stay in `preservedMarkup`; the shared base owns
+/// `<offset>` and `<placement>` through `elementProperties`. Inline markup
+/// inside `<text>` flattens to plain text, the
 /// cross-cutting limitation described by the parity document's §7.1
 /// text-content work. `<color>` is decoded into `elementProperties` but not
 /// re-emitted — the decode-only gap documented by `ElementProperties+MSCX`,
@@ -15,7 +16,8 @@ import SheetMusicFoundation
 public struct Sticking: Sendable, Equatable {
     /// The `<text>` payload, flattened to plain text.
     public var text: String
-    /// Base element properties shared with every engravable element.
+    /// Base element properties shared with every engravable element, including
+    /// the spatium-unit `<offset>`.
     public var elementProperties: ElementProperties
     /// Sugar over `elementProperties.visible`.
     public var visible: Bool {
@@ -24,7 +26,7 @@ public struct Sticking: Sendable, Equatable {
     }
 
     /// Source XML children this model does not represent, including text
-    /// presentation and placement properties.
+    /// presentation properties.
     public var preservedMarkup: [PreservedXML]
 
     public init(

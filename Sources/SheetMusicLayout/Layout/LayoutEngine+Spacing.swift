@@ -803,13 +803,14 @@ extension LayoutEngine {
                 case let .chord(r):
                     // Empty chord = rest.
                     w += durationWidth(r.duration, metrics: metrics)
-                // Sticking and expression are modeled annotations but do not
-                // have an engraving pass yet, so they reserve no width.
+                // These modeled annotations do not have an engraving pass yet,
+                // so they reserve no width.
                 // `.preserved` is unmodeled source XML and likewise engraves
                 // nothing.
                 case .dynamic, .fermata, .breath,
                      .measureRepeat, .spanner,
-                     .locationShift, .harmony, .sticking, .expression,
+                     .locationShift, .harmony, .sticking, .expression, .capo,
+                     .stringTunings, .ambitus, .figuredBass,
                      .preserved:
                     break
                 }

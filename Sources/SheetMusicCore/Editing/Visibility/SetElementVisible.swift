@@ -4,9 +4,9 @@ import SheetMusicFoundation
 /// its `elementProperties.visible`. Playback is unaffected (`ElementProperties.visible` doc).
 ///
 /// Every `VoiceElement` case that carries `ElementProperties` is accepted: chord (a rest is a chord), clef,
-/// barline, key and time signature, dynamic, fermata, breath, spanner, harmony, sticking, and expression. A
-/// measure repeat, location shift, and preserved source node carry none and are refused as
-/// `.wrongElementKind(expected: .engravable)`.
+/// barline, key and time signature, dynamic, fermata, breath, spanner, harmony, sticking, expression, capo, and
+/// string tunings, ambitus, and figured bass. A measure repeat, location shift, and preserved source node carry
+/// none and are refused as `.wrongElementKind(expected: .engravable)`.
 ///
 /// On a chord this is the model's whole-chord switch (`Chord.visible`, what the layout reads as `chordFullyHidden`).
 /// MuseScore has no such flag — `Chord::getProperty(Pid::VISIBLE)` is always true and `V` on a chord fans out to
@@ -59,6 +59,10 @@ public struct SetElementVisible: EditCommand {
         case let .harmony(harmony): harmony.visible
         case let .sticking(sticking): sticking.visible
         case let .expression(expression): expression.visible
+        case let .capo(capo): capo.visible
+        case let .stringTunings(tunings): tunings.visible
+        case let .ambitus(ambitus): ambitus.visible
+        case let .figuredBass(figuredBass): figuredBass.visible
         case .measureRepeat, .locationShift, .preserved: nil
         }
     }
@@ -101,6 +105,18 @@ public struct SetElementVisible: EditCommand {
         case var .expression(expression):
             expression.visible = visible
             return .expression(expression)
+        case var .capo(capo):
+            capo.visible = visible
+            return .capo(capo)
+        case var .stringTunings(tunings):
+            tunings.visible = visible
+            return .stringTunings(tunings)
+        case var .ambitus(ambitus):
+            ambitus.visible = visible
+            return .ambitus(ambitus)
+        case var .figuredBass(figuredBass):
+            figuredBass.visible = visible
+            return .figuredBass(figuredBass)
         case .measureRepeat, .locationShift, .preserved:
             return nil
         }

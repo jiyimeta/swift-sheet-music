@@ -8,7 +8,7 @@ extension Harmony {
     private static let consumedHarmonyChildren: Set = [
         "base", "baseCase", "bass", "bassCase", "bold", "color", "face",
         "framePadding", "frameType", "harmonyInfo", "harmonyType", "italic",
-        "leftParen", "name", "offset", "play", "rightParen", "root", "rootCase",
+        "leftParen", "name", "offset", "placement", "play", "rightParen", "root", "rootCase",
         "size", "strike", "underline", "visible",
     ]
 
@@ -59,8 +59,6 @@ extension Harmony {
         let rightParen = hasChild("rightParen")
         let play = decodePlay(node.first("play")?.text)
         let color = node.first("color").flatMap(StaffText.decodeColor(_:))
-        let offset = node.first("offset")
-            .map(StaffText.decodeOffset(_:)) ?? (0, 0)
         let properties = TextProperties.decode(node)
         var harmony = Harmony(
             name: name,
@@ -72,8 +70,6 @@ extension Harmony {
             leftParen: leftParen,
             rightParen: rightParen,
             play: play,
-            offsetX: offset.0,
-            offsetY: offset.1,
             color: color,
             properties: properties,
             preservedMarkup: node.preservedMarkup(consuming: consumedHarmonyChildren),

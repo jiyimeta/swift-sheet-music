@@ -22,8 +22,9 @@ import SheetMusicFoundation
 /// The three bracket-specific properties are modeled. The inherited
 /// `Arpeggio` tags — `<userLen1>`, `<userLen2>`, `<span>`, `<play>`, and
 /// `<timeStretch>` — remain in `preservedMarkup`, matching how
-/// `ChordOrnament` handles inherited `<direction>`, `<placement>`, and
-/// `<offset>` properties. `<subtype>` is neither modeled nor emitted because
+/// `ChordOrnament` handles inherited `<direction>`. The shared base owns
+/// `<offset>` and `<placement>` through `elementProperties`. `<subtype>` is
+/// neither modeled nor emitted because
 /// `TWrite::write(const ChordBracket*, …)` never writes one
 /// (`rw/write/twrite.cpp:747`).
 public struct ChordBracket: Sendable, Equatable {
@@ -46,7 +47,8 @@ public struct ChordBracket: Sendable, Equatable {
     /// `<bracketRightSide>`; `nil` means absent.
     /// C++: `Pid::BRACKET_RIGHT_SIDE` (`dom/property.cpp:445`).
     public var isRightSide: Bool?
-    /// Base element properties shared with every engravable element.
+    /// Base element properties shared with every engravable element, including
+    /// the spatium-unit `<offset>`.
     public var elementProperties: ElementProperties
     /// Source XML children this model does not represent — chiefly the
     /// inherited `Arpeggio` properties listed above.

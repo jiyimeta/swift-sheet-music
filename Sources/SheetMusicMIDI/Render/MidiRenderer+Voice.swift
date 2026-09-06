@@ -343,9 +343,11 @@ extension MidiRenderer {
                 )
                 events.append(TimedMidiEvent(tick: localTick, event: .meta(meta)))
             }
-        // Text annotations are modeled but produce no MIDI events.
+        // Text annotations, string tunings, and ambitus range indicators
+        // produce no MIDI events. A capo changes sounding pitch upstream, but
+        // this library does not apply it yet.
         case .clef, .barLine, .spanner, .measureRepeat, .harmony,
-             .sticking, .expression, .preserved:
+             .sticking, .expression, .capo, .stringTunings, .ambitus, .figuredBass, .preserved:
             return
         case let .locationShift(delta):
             // Voice cursor shift: applies the location's fractional

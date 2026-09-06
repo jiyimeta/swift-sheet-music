@@ -137,6 +137,65 @@ preserving them, which is worth saying out loud rather than hiding:
 - `Style/Spatium` — the v4 encoder writes the lowercase spelling; the value
   round-trips.
 
+## What the allowlist is not: a list of known losses
+
+**The allowlist records the losses a committed fixture happens to produce.** The
+gate counts `parent/child` pairs found in the fixtures, so a tag no fixture
+carries contributes no pair — lost or not. A short allowlist therefore means
+"few measured losses", never "few losses".
+
+Both of the gate's tests are fixture-dependent, in opposite directions: one
+fails on a loss with no entry, the other fails on an entry no fixture produces.
+Between them they keep the list exactly equal to what the corpus measures, and
+say nothing about anything outside it.
+
+The gap has a specific shape worth naming. **Consuming a tag is what takes it
+out of the bag**, so the most damaging edit here is also the quietest: adding a
+tag name to a consumed set "because the decoder looks at it" can turn a value
+that used to round-trip into one that does not, and no gate fires unless a
+fixture contains that tag.
+
+### Deciding whether a consumed tag is actually lost takes two steps
+
+A tag lands in one of four states, and **the last two look identical from the
+decoder** — consumed set and model fields alone cannot tell them apart.
+
+| state | in a consumed set | model field | what the encoder does |
+|---|---|---|---|
+| round-trips, not modeled | no | — | the bag writes it back |
+| modeled | yes | yes | writes it from the field |
+| **consumed, regenerated** | yes | **no** | **derives it from other fields** |
+| **consumed, discarded** | yes | **no** | **writes nothing** — a real loss |
+
+So: **step one, find consumed tags with no field behind them; step two, check
+whether the encoder emits that tag anyway.** Stopping after step one reports
+`<tpc2>` and `<actualKey>` as losses, and they are not — the encoder derives
+both from the part's transposition, exactly as `<Tempo><text>` is derived from
+`beatsPerSecond`. Only step two separates a derived value from a deleted one.
+
+Measured on 2026-09-06 by listing every consumed-set entry across
+`Sources/SheetMusicMSCX/Decoders/` and subtracting the tag names present in any
+committed fixture. The residue was large, and putting a representative sample of
+it in front of the gate (`own/consumed-tags.mscx`) turned up two real deletions
+— `<Measure><stretch>` and `<Measure><noOffset>`, a user stretch and a
+measure-number offset, both consumed and read by nobody. They are unconsumed
+now. `ConsumedTagCoverageTests` is the regression.
+
+Three things the same sample showed that were *not* losses, each worth knowing
+before assuming the pattern:
+
+- `<tpc2>` and `<actualKey>` are the "consumed, regenerated" row above — step
+  one flags them and step two clears them.
+- Most of `<Style>`'s long consumed set is backed by `PageChrome` rather than by
+  a field on `ScoreStyle`, so header and footer text survives. Counting fields
+  on the obvious type is not the same as looking for the field.
+- A `<Measure>` carrying `<multiMeasureRest>` is dropped **whole**, deliberately
+  — it is a measure MuseScore synthesizes from the ones it replaces and
+  regenerates from a style flag. Do not put one in a fixture to "cover" it: the
+  gate would then demand `Staff/Measure` in the allowlist, and an entry that
+  broad would mask a real dropped measure anywhere in the corpus. This is the
+  one known case where the pair granularity cannot express the intent.
+
 ## The corpus sweep, opt in
 
 The committed corpus is 43 fixtures and contains no figured bass, no fret

@@ -22,20 +22,32 @@
 /// space and lay text inside it according to per-text style hints
 /// (Title centered, Composer right-aligned, etc.).
 ///
-/// Currently only used for the leading title block. A score can
-/// have multiple frames between systems in MuseScore's data model
-/// (`MeasureBase`), but this minimal port handles only the top
-/// frame and ignores any later ones.
+/// A score can carry multiple frames between systems in MuseScore's
+/// `MeasureBase` stream. `Score.blocks` preserves those positions;
+/// `Score.titleFrame` exposes the leading vertical frame used by layout.
 public struct ScoreFrame: Sendable, Equatable, Hashable {
     /// Height in spatium (sp) units — same scale MuseScore uses
     /// internally. The layout engine multiplies by `sp` to get
     /// points.
     public var heightSp: CGFloat
     public var texts: [FrameText]
+    /// Source children that the typed frame model does not represent.
+    /// This is fidelity, not semantics; no layout or editing pass reads it.
+    public var preservedMarkup: [PreservedXML]
 
-    public init(heightSp: CGFloat, texts: [FrameText]) {
+    public init(
+        heightSp: CGFloat,
+        texts: [FrameText],
+        preservedMarkup: [PreservedXML] = [],
+    ) {
         self.heightSp = heightSp
         self.texts = texts
+        self.preservedMarkup = preservedMarkup
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(heightSp)
+        hasher.combine(texts)
     }
 }
 

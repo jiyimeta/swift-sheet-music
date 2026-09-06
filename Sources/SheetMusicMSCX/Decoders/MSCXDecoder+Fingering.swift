@@ -3,14 +3,14 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Fingering {
-    /// Every direct `<Fingering>` child this decoder reads. `<placement>`,
-    /// `<offset>`, and the per-element font overrides are not modeled and
-    /// become preserved markup.
+    /// Every direct `<Fingering>` child this decoder reads. Per-element font
+    /// overrides are not modeled and become preserved markup. The base
+    /// `<offset>` and `<placement>` are owned by `ElementProperties`.
     ///
     /// `color` is consumed because `ElementProperties(decodingMSCXChildrenOf:)`
     /// reads it, the same arrangement every other decoder here has.
     private static let consumedChildren: Set = [
-        "style", "text", "color", "visible",
+        "style", "text", "color", "offset", "placement", "visible",
     ]
 
     /// The `<Fingering>` children of a `<Note>`, in document order.

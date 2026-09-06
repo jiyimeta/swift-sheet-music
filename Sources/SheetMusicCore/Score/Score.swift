@@ -17,9 +17,47 @@ public struct Score: Sendable, Equatable {
     /// add/remove measures must maintain this alignment.
     public var systemMeasures: [SystemMeasure]
     public var metaTags: [String: String]
+    /// Score-level boxes in their document order among measures.
+    public var blocks: [PositionedScoreBlock]
     /// Title block (`<VBox>` in MuseScore) above the first system,
-    /// when present.
-    public var titleFrame: ScoreFrame?
+    /// when present. This compatibility view reads and writes the
+    /// first leading vertical frame in `blocks`.
+    public var titleFrame: ScoreFrame? {
+        get {
+            for positioned in blocks where positioned.beforeMeasureIndex == 0 {
+                if case let .verticalFrame(frame) = positioned.block {
+                    return frame
+                }
+            }
+            return nil
+        }
+        set {
+            let existingIndex = blocks.firstIndex { positioned in
+                guard positioned.beforeMeasureIndex == 0 else { return false }
+                if case .verticalFrame = positioned.block { return true }
+                return false
+            }
+            if let existingIndex {
+                if let newValue {
+                    blocks[existingIndex].block = .verticalFrame(newValue)
+                } else {
+                    blocks.remove(at: existingIndex)
+                }
+            } else if let newValue {
+                let firstLeadingIndex = blocks.firstIndex {
+                    $0.beforeMeasureIndex == 0
+                } ?? 0
+                blocks.insert(
+                    PositionedScoreBlock(
+                        beforeMeasureIndex: 0,
+                        block: .verticalFrame(newValue),
+                    ),
+                    at: firstLeadingIndex,
+                )
+            }
+        }
+    }
+
     /// Subset of MuseScore's `<Style>` block.
     public var style: ScoreStyle
     /// Records the format this score was loaded from. Defaults to
@@ -36,6 +74,7 @@ public struct Score: Sendable, Equatable {
         systemMeasures: [SystemMeasure] = [],
         metaTags: [String: String] = [:],
         titleFrame: ScoreFrame? = nil,
+        blocks: [PositionedScoreBlock] = [],
         style: ScoreStyle = .museScoreDefaults,
         source: ScoreSource = .unknown,
         preservedMarkup: [PreservedXML] = [],
@@ -44,7 +83,18 @@ public struct Score: Sendable, Equatable {
         self.parts = parts
         self.systemMeasures = systemMeasures
         self.metaTags = metaTags
-        self.titleFrame = titleFrame
+        self.blocks = blocks
+        // The compatibility argument is the title, so when both forms are
+        // supplied it precedes every block already present in the stream.
+        if let titleFrame {
+            self.blocks.insert(
+                PositionedScoreBlock(
+                    beforeMeasureIndex: 0,
+                    block: .verticalFrame(titleFrame),
+                ),
+                at: 0,
+            )
+        }
         self.style = style
         self.source = source
         self.preservedMarkup = preservedMarkup
@@ -57,13 +107,26 @@ public struct Score: Sendable, Equatable {
         var stripped = self
         stripped.preservedMarkup = []
         stripped.style.preservedMarkup = []
+        for blockIndex in stripped.blocks.indices {
+            switch stripped.blocks[blockIndex].block {
+            case var .verticalFrame(frame):
+                frame.preservedMarkup = []
+                stripped.blocks[blockIndex].block = .verticalFrame(frame)
+            case var .opaqueFrame(frame):
+                frame.preservedMarkup = []
+                stripped.blocks[blockIndex].block = .opaqueFrame(frame)
+            }
+        }
+        for measureIndex in stripped.systemMeasures.indices {
+            for elementIndex in stripped.systemMeasures[measureIndex].elements.indices {
+                stripPreservedMarkup(
+                    from: &stripped.systemMeasures[measureIndex].elements[elementIndex].element,
+                )
+            }
+        }
         for partIndex in stripped.parts.indices {
             stripped.parts[partIndex].preservedMarkup = []
-            stripped.parts[partIndex].instrument.preservedMarkup = []
-            stripped.parts[partIndex].instrument.stringData?.preservedMarkup = []
-            for channelIndex in stripped.parts[partIndex].instrument.channels.indices {
-                stripped.parts[partIndex].instrument.channels[channelIndex].preservedMarkup = []
-            }
+            stripPreservedMarkup(from: &stripped.parts[partIndex].instrument)
             for staffIndex in stripped.parts[partIndex].staves.indices {
                 stripped.parts[partIndex].staves[staffIndex].staffTypePreservedMarkup = []
                 stripped.parts[partIndex].staves[staffIndex].preservedMarkup = []
@@ -76,6 +139,41 @@ public struct Score: Sendable, Equatable {
             }
         }
         return stripped
+    }
+}
+
+/// Clear the bags reachable from one system element.
+///
+/// Only `.instrumentChange` reaches one: `Tempo`, `RehearsalMark`,
+/// `StaffText` and `Swing` carry no preserved markup of their own,
+/// and neither does `InstrumentChange` — the bags live on the
+/// `Instrument` it swaps in, and below that on its `StringData` and
+/// its channels. A mid-score change to a TAB instrument really does
+/// write `<InstrumentChange><Instrument><StringData>`, so this is a
+/// reachable path and not a theoretical one.
+///
+/// The switch is written over every case rather than as a single
+/// `if case` so that a new `SystemElement` case that does carry a
+/// bag fails to compile here instead of silently keeping its markup.
+private func stripPreservedMarkup(from element: inout SystemElement) {
+    switch element {
+    case var .instrumentChange(change):
+        if var instrument = change.instrument {
+            stripPreservedMarkup(from: &instrument)
+            change.instrument = instrument
+        }
+        element = .instrumentChange(change)
+    case .tempo, .rehearsalMark, .staffText, .swing:
+        break
+    }
+}
+
+/// Clear the bags on one instrument and everything nested in it.
+private func stripPreservedMarkup(from instrument: inout Instrument) {
+    instrument.preservedMarkup = []
+    instrument.stringData?.preservedMarkup = []
+    for channelIndex in instrument.channels.indices {
+        instrument.channels[channelIndex].preservedMarkup = []
     }
 }
 
@@ -117,6 +215,18 @@ private func strippingPreservedMarkup(from element: VoiceElement) -> VoiceElemen
     if case var .harmony(value) = element { value.preservedMarkup = []; return .harmony(value) }
     if case var .sticking(value) = element { value.preservedMarkup = []; return .sticking(value) }
     if case var .expression(value) = element { value.preservedMarkup = []; return .expression(value) }
+    if case var .capo(value) = element { value.preservedMarkup = []; return .capo(value) }
+    if case var .stringTunings(value) = element {
+        value.preservedMarkup = []; value.stringData?.preservedMarkup = []; return .stringTunings(value)
+    }
+    if case var .ambitus(value) = element { value.preservedMarkup = []; return .ambitus(value) }
+    if case var .figuredBass(value) = element {
+        value.preservedMarkup = []
+        for itemIndex in value.items.indices {
+            value.items[itemIndex].preservedMarkup = []
+        }
+        return .figuredBass(value)
+    }
     return element
 }
 
@@ -125,13 +235,7 @@ private func strippingPreservedMarkup(from source: Chord) -> Chord {
     var chord = source
     chord.preservedMarkup = []
     for noteIndex in chord.notes.indices {
-        chord.notes[noteIndex].preservedMarkup = []
-        for fingeringIndex in chord.notes[noteIndex].fingerings.indices {
-            chord.notes[noteIndex].fingerings[fingeringIndex].preservedMarkup = []
-        }
-        for symbolIndex in chord.notes[noteIndex].symbols.indices {
-            chord.notes[noteIndex].symbols[symbolIndex].preservedMarkup = []
-        }
+        stripPreservedMarkup(from: &chord.notes[noteIndex])
     }
     for lyricIndex in chord.lyrics.indices {
         chord.lyrics[lyricIndex].preservedMarkup = []
@@ -153,10 +257,24 @@ private func stripPreservedMarkup(from graces: inout [GraceChord]) {
     for graceIndex in graces.indices {
         graces[graceIndex].preservedMarkup = []
         for noteIndex in graces[graceIndex].notes.indices {
-            graces[graceIndex].notes[noteIndex].preservedMarkup = []
-            for symbolIndex in graces[graceIndex].notes[noteIndex].symbols.indices {
-                graces[graceIndex].notes[noteIndex].symbols[symbolIndex].preservedMarkup = []
-            }
+            stripPreservedMarkup(from: &graces[graceIndex].notes[noteIndex])
         }
+    }
+}
+
+/// Clear one note's bag and the bags on everything attached to it.
+///
+/// Shared by the chord and grace-chord walks. It used to be written
+/// out at both call sites and they had drifted: the grace path cleared
+/// `symbols` but not `fingerings`, so a fingering on a grace note kept
+/// its markup. Attaching a new child to `Note` should mean editing this
+/// one function, not remembering that there are two places.
+private func stripPreservedMarkup(from note: inout Note) {
+    note.preservedMarkup = []
+    for fingeringIndex in note.fingerings.indices {
+        note.fingerings[fingeringIndex].preservedMarkup = []
+    }
+    for symbolIndex in note.symbols.indices {
+        note.symbols[symbolIndex].preservedMarkup = []
     }
 }

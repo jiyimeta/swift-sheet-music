@@ -104,7 +104,7 @@ struct FingeringMSCXTests {
         #expect(note.fingerings.map(\.text) == ["2"])
     }
 
-    @Test func keepsUnmodeledChildrenAsPreservedMarkup() throws {
+    @Test func modelsPlacementAndOffset() throws {
         let note = try parseNote("""
         <Fingering>
           <text>1</text>
@@ -114,7 +114,9 @@ struct FingeringMSCXTests {
         <pitch>60</pitch><tpc>14</tpc>
         """)
         let fingering = try #require(note.fingerings.first)
-        #expect(fingering.preservedMarkup.map(\.name) == ["placement", "offset"])
+        #expect(fingering.preservedMarkup.isEmpty)
+        #expect(fingering.elementProperties.placement == .below)
+        #expect(fingering.elementProperties.offset == ScoreOffset(x: 0, y: 1.5))
     }
 
     @Test func fingeringIsNotAlsoPreservedOnTheNote() throws {

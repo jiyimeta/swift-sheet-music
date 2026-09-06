@@ -7,7 +7,7 @@ import SheetMusicFoundation
 ///
 /// - **Measure flags and element properties are fed BY OCCUPANTS.** A field contributes bytes only when it holds a
 ///   non-default value, and always as a unique non-zero tag (21 and up, so no tag can be mistaken for a
-///   `VoiceElement` case tag 0…13 or for a presence byte) followed by its value. The tag is what keeps
+///   `VoiceElement` case tag 0…17 or for a presence byte) followed by its value. The tag is what keeps
 ///   `endRepeatCount = 2` and `measureRepeatCount = 2` apart; the fixed-arity prefix of each measure block is what
 ///   keeps "flag on measure 3" and "flag on measure 4" apart.
 /// - **The marker `VoiceElement` cases are fed their content UNCONDITIONALLY.** A clef has no default type to be
@@ -50,46 +50,6 @@ extension FNV1a {
         }
     }
 
-    /// `visible == false` and a set `color` are the occupants; a default `ElementProperties` feeds nothing.
-    mutating func combineOccupied(_ properties: ElementProperties, visibleTag: Int, colorTag: Int) {
-        if !properties.visible { combine(visibleTag) }
-        if let color = properties.color {
-            combine(colorTag)
-            combine(color.red)
-            combine(color.green)
-            combine(color.blue)
-            combine(color.alpha)
-        }
-    }
-
-    /// Chord-anchored spanner begins (`Chord.spanners` — slurs, in practice), BY OCCUPANTS: an empty array feeds
-    /// nothing, so every chord in a score without slurs hashes exactly as it did before this walk existed, which
-    /// is what keeps the committed replay goldens byte-identical (`ScoreFingerprintTests
-    /// .defaultsHashUnchanged`). A count byte would have been the obvious spelling and would have moved them all.
-    ///
-    /// Closes the blind spot `ScoreFingerprint.swift` names and spec §2.5's group-1 amendment assigns to group 6:
-    /// without it a `SetSlur` / `RemoveSpanner` pair is invisible to every golden.
-    mutating func combineOccupied(_ spanners: [Spanner], tag: Int) {
-        guard !spanners.isEmpty else { return }
-        combine(tag)
-        combine(spanners.count)
-        for spanner in spanners {
-            combine(spanner)
-        }
-    }
-
-    /// Chord ornaments (`Chord.ornaments`), BY OCCUPANTS for the same reason
-    /// `combineOccupied(_ spanners:tag:)` is: a chord that carries none must
-    /// feed no bytes, or every committed replay golden moves.
-    mutating func combineOccupied(_ ornaments: [ChordOrnament], tag: Int) {
-        guard !ornaments.isEmpty else { return }
-        combine(tag)
-        combine(ornaments.count)
-        for ornament in ornaments {
-            combine(ornament)
-        }
-    }
-
     /// Every field an edit can change. `preservedMarkup` is deliberately out:
     /// it is source fidelity, not model state, and no edit command reaches it.
     mutating func combine(_ ornament: ChordOrnament) {
@@ -110,23 +70,12 @@ extension FNV1a {
     /// would collapse "absent" onto "false", and these two `Bool?`s mean
     /// different things: absent is "MuseScore wrote no tag", false is "the
     /// author turned it off".
-    private mutating func combineTristate(_ flag: Bool?) {
+    mutating func combineTristate(_ flag: Bool?) {
         guard let flag else {
             combine(0)
             return
         }
         combine(flag ? 2 : 1)
-    }
-
-    /// Note fingerings, BY OCCUPANTS — same rule, same reason, as
-    /// `combineOccupied(_ ornaments:tag:)`.
-    mutating func combineOccupied(_ fingerings: [Fingering], tag: Int) {
-        guard !fingerings.isEmpty else { return }
-        combine(tag)
-        combine(fingerings.count)
-        for fingering in fingerings {
-            combine(fingering)
-        }
     }
 
     /// `preservedMarkup` stays out, as it does for `ChordOrnament`: it is
@@ -137,17 +86,6 @@ extension FNV1a {
         combineOccupied(fingering.elementProperties, visibleTag: 37, colorTag: 38)
     }
 
-    /// Note-attached engraving symbols, BY OCCUPANTS: an empty array feeds no
-    /// bytes, so scores without them retain their committed replay fingerprint.
-    mutating func combineOccupied(_ symbols: [EngravingSymbol], tag: Int) {
-        guard !symbols.isEmpty else { return }
-        combine(tag)
-        combine(symbols.count)
-        for symbol in symbols {
-            combine(symbol)
-        }
-    }
-
     /// Every modeled symbol field an edit can change. `preservedMarkup` stays
     /// out because it is source fidelity rather than model state.
     mutating func combine(_ symbol: EngravingSymbol) {
@@ -156,17 +94,6 @@ extension FNV1a {
         combinePresence(symbol.size)
         combinePresence(symbol.angle)
         combineOccupied(symbol.elementProperties, visibleTag: 47, colorTag: 48)
-    }
-
-    /// A chord bracket, BY OCCUPANTS: an absent bracket feeds no bytes, so
-    /// every score without one keeps its committed replay fingerprint.
-    mutating func combineOccupied(_ bracket: ChordBracket?, tag: Int) {
-        guard let bracket else { return }
-        combine(tag)
-        combinePresence(bracket.hookLength)
-        combine(bracket.hookPosition?.rawValue)
-        combineTristate(bracket.isRightSide)
-        combineOccupied(bracket.elementProperties, visibleTag: 44, colorTag: 45)
     }
 
     /// Every case that carries *timing* — i.e. anything that changes how much tick budget an element occupies, or
@@ -186,13 +113,14 @@ extension FNV1a {
     /// position — but they now feed their own identity rather than a bare discriminant tag, per the edit-command
     /// parity project (spec 2026-09-02 §2.5): the `combine(_ clef:)` / `combine(_ barLine:)` /
     /// `combine(_ dynamic:)` / `combine(_ fermata:)` / `combine(_ breath:)` / `combine(_ harmony:)` /
-    /// `combine(_ sticking:)` / `combine(_ expression:)` / `combine(_ spanner:)` / `combine(_ repeat:)`
-    /// overloads below are what this switch calls into.
+    /// `combine(_ sticking:)` / `combine(_ expression:)` / `combine(_ capo:)` / `combine(_ tunings:)` /
+    /// `combine(_ ambitus:)` / `combine(_ figuredBass:)` / `combine(_ spanner:)` / `combine(_ repeat:)` overloads
+    /// below are what this switch calls into.
     ///
     /// This switch lives here rather than in `ScoreFingerprintHasher.swift` because every overload it
     /// dispatches to is in this file, and because that one was at the `file_length` limit — a new
     /// `VoiceElement` case cost two lines there and none here.
-    mutating func combine(_ element: VoiceElement) {
+    mutating func combine(_ element: VoiceElement) { // swiftlint:disable:this function_body_length
         switch element {
         case let .chord(chord):
             combine(0)
@@ -241,6 +169,18 @@ extension FNV1a {
         case let .expression(expression):
             combine(13)
             combine(expression)
+        case let .capo(capo):
+            combine(14)
+            combine(capo)
+        case let .stringTunings(tunings):
+            combine(15)
+            combine(tunings)
+        case let .ambitus(ambitus):
+            combine(16)
+            combine(ambitus)
+        case let .figuredBass(figuredBass):
+            combine(17)
+            combine(figuredBass)
         case .preserved:
             // Source-only XML is outside the semantic edit fingerprint.
             break
@@ -302,6 +242,70 @@ extension FNV1a {
         combineOccupied(expression.elementProperties, visibleTag: 41, colorTag: 42)
     }
 
+    mutating func combine(_ capo: Capo) {
+        combine(capo.isActive)
+        combine(capo.fretPosition)
+        combine(capo.generatesText)
+        combinePresence(capo.transposeMode?.mscxOrdinal)
+        combine(capo.ignoredStrings.count)
+        for string in capo.ignoredStrings.sorted() {
+            combine(string)
+        }
+        combine(capo.text)
+        combineOccupied(capo.elementProperties, visibleTag: 49, colorTag: 50)
+    }
+
+    mutating func combine(_ tunings: StringTunings) {
+        combine(tunings.preset)
+        combine(tunings.visibleStrings.count)
+        for string in tunings.visibleStrings {
+            combine(string)
+        }
+        // `StringData` is deliberately omitted, matching `Instrument`: this
+        // is a semantic-edit fingerprint rather than a fidelity hash.
+        combine(tunings.text)
+        combineOccupied(tunings.elementProperties, visibleTag: 51, colorTag: 52)
+    }
+
+    /// Every modeled ambitus field an edit can change. `preservedMarkup` stays
+    /// out because it is source fidelity rather than model state.
+    mutating func combine(_ ambitus: Ambitus) {
+        combine(ambitus.topPitch)
+        combine(ambitus.topTpc)
+        combine(ambitus.bottomPitch)
+        combine(ambitus.bottomTpc)
+        combine(ambitus.noteHeadGroup)
+        combinePresence(ambitus.noteHeadType?.mscxOrdinal)
+        combinePresence(ambitus.mirror?.mscxOrdinal)
+        combine(ambitus.hasLine)
+        combinePresence(ambitus.lineWidth)
+        combine(ambitus.topAccidental)
+        combine(ambitus.bottomAccidental)
+        combineOccupied(ambitus.elementProperties, visibleTag: 53, colorTag: 54)
+    }
+
+    /// Every modeled figured-bass field an edit can change. Source-fidelity
+    /// markup stays out of the semantic fingerprint.
+    mutating func combine(_ figuredBass: FiguredBass) {
+        combine(figuredBass.isOnNote)
+        combine(figuredBass.ticks)
+        combine(figuredBass.text)
+        combineOccupied(figuredBass.items, tag: 55)
+        combineOccupied(figuredBass.elementProperties, visibleTag: 56, colorTag: 57)
+    }
+
+    mutating func combine(_ item: FiguredBassItem) {
+        combine(item.bracket0.mscxOrdinal)
+        combine(item.bracket1.mscxOrdinal)
+        combine(item.bracket2.mscxOrdinal)
+        combine(item.bracket3.mscxOrdinal)
+        combine(item.bracket4.mscxOrdinal)
+        combinePresence(item.prefix?.mscxOrdinal)
+        combinePresence(item.digit)
+        combinePresence(item.suffix?.mscxOrdinal)
+        combinePresence(item.continuationLine?.mscxOrdinal)
+    }
+
     mutating func combine(_ repeat: MeasureRepeat) {
         combine(`repeat`.numMeasures)
         combine(`repeat`.duration)
@@ -330,7 +334,7 @@ extension FNV1a {
 
     /// Explicit 0/1 presence byte for an unbounded `Int?` — the `combine(_ fraction:)` / `combine(_ address:)`
     /// rule, restated for the TPCs and velocities above, whose `-1` is a real value.
-    private mutating func combinePresence(_ value: Int?) {
+    mutating func combinePresence(_ value: Int?) {
         guard let value else {
             combine(0)
             return
@@ -341,7 +345,7 @@ extension FNV1a {
 
     /// Explicit 0/1 presence byte for a `Double?`, keeping an absent hook
     /// length distinct from every possible IEEE 754 bit pattern.
-    private mutating func combinePresence(_ value: Double?) {
+    mutating func combinePresence(_ value: Double?) {
         guard let value else {
             combine(0)
             return

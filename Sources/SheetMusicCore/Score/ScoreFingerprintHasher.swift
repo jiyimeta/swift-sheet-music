@@ -4,8 +4,10 @@ import SheetMusicFoundation
 ///
 /// Split out of `ScoreFingerprint.swift` when the walk outgrew the file-length budget; the two are one unit and the
 /// contract that governs both — what the walk covers and what it is blind to — is stated over there, on
-/// `Score.stableFingerprint`. Internal rather than `private` only because the type now spans two files: nothing
-/// outside this module may see it.
+/// `Score.stableFingerprint`. Internal rather than `private` only because the type spans several files — this one,
+/// `+Parity`, and `+Occupants` — each of which was split off when the previous one reached the file-length budget:
+/// nothing outside this module may see it. For the same reason the shared helpers those files call
+/// (`combineTristate`, the two `combinePresence` overloads) are internal rather than file-private.
 struct FNV1a {
     private(set) var value: UInt64 = 0xCBF2_9CE4_8422_2325
 
