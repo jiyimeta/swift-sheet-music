@@ -94,7 +94,8 @@ extension LayoutEngine {
         // underline level (baseline + underline offset) rather
         // than the text's vertical center.
         let lyricsY = staffMidY + metrics.sp * 4
-            + CGFloat(continuation.verseIndex) * metrics.sp * 1.7
+            + CGFloat(continuation.verseIndex) * metrics.sp
+            * lyricVerseStrideInSpatiums
             + Self.melismaLineYOffset(sp: metrics.sp)
         // Start at x=0 (the measure's left boundary) for mid-system
         // continuations so the rule visually touches the previous
