@@ -1129,8 +1129,12 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
 
    **fingerprintのoccupant tagはレーンをまたいで一意にすること。** 別worktreeで並行実装すると
    双方が「未使用の次の番号」として同じ値を選ぶ。実際に2026-09-05に衝突した。
-   現在: 33-35 `ChordOrnament`、36-38 `Fingering`、39-42 voice stream annotation、
-   43-45 `ChordBracket`、46-48 `EngravingSymbol`。次は49以降。
+   現在: 0-15 `VoiceElement` case、21-28 measure flag、29-32 chord / note、
+   33-35 `ChordOrnament`、36-38 `Fingering`、39-42 voice stream annotation、
+   43-45 `ChordBracket`、46-48 `EngravingSymbol`、49-50 `Capo`、51-52 `StringTunings`。
+   16-20は未使用だが、過去に割り当てられて削除された番号が古いcommitted goldenと衝突しうるため、
+   再利用してはならない。次の空きtagは53。この表はmergeのたびにstaleになるので、信用せずcodeから
+   数え直すこと。
 
    **どちら側かは要素名では決まらない。親をread460で確認すること。** §4の節見出しは
    上流のelement familyで切ってあり、file上の親子関係とは一致しない。実際に
