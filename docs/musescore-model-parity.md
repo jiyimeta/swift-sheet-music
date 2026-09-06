@@ -124,10 +124,25 @@ modelが持っている情報だけを書く。生XMLのpassthrough保存は無�
 
 したがって以降の§4・§5を読むときは、「MISSING = 消える」ではなく
 **「MISSING = modelとして扱えないが、fileからは消えない」**と読み替えること。
-消えるものは限定され、gateのallowlistに理由付きで列挙されている。主なものは
-`<eid>`（MS5 identity、意図的に捨てる）、`<instrumentId>`（Sound IDがattributeの`id`と
-畳まれている）、`<text>`のinline markup（§7.1のTextContent作業待ち）、
-`<Staff>` body直下のbox（§4.4の構造作業待ち）。
+消えるものは限定され、gateのallowlistに理由付きで列挙されている。
+
+**［2026-09-06 訂正］直前に並べていた4件のうち2件はもう消えていない。**
+`<Staff>` body直下のboxは§4.4の作業で解決済みで、allowlistに**entryが1つも無い**。
+`<text>`のinline markupは§7.1で`"text/sym"`が外れ、残る`"text/b"` / `"text/font"` /
+`"b/font"`は**Tempo markingの中にしか出現しない**（encoderが`<text>`を再生成するため）。
+残っているのは`<eid>`（MS5 identity、bagに入る前に捨てる）と`<instrumentId>`
+（Sound IDがattributeの`id`と畳まれている）。**このリストは§8のリストと同じ理由で腐る**ので、
+読むときはallowlistを直接見ること。
+
+**そしてこの判定区分が最初から当てはまらない領域がある。** §2.4は§4・§5の表を読むための
+規則だが、**全節に適用できるわけではない**:
+
+- **§7.3 style** —— 未modelの`<Style>`子はbagに入るので、`Sid` 2050対10は
+  round-trip lossを一度も意味していない（§7.3.1）
+- **§4.4の`SPACER`** —— 「model は無いが往復する」。§8から外した理由がこれ
+
+どちらも「modelに無い」が「fileから消える」を含意しない例で、**その2つを同一視すると
+残工事を過大に見積もる**。§4・§5の表を読むときの規則を、§7の横断節に持ち込まないこと。
 
 ---
 
