@@ -30,10 +30,12 @@ extension Fingering {
     /// (`rw/write/twrite.cpp:1456`), so `<style>` and `<text>` are all there is
     /// to read.
     static func decode(_ node: XMLTreeNode) -> Fingering {
+        let textNode = node.first("text")
         var fingering = Fingering(
-            text: node.first("text").map(StaffText.plainText(of:)) ?? "",
+            text: textNode.map(StaffText.plainText(of:)) ?? "",
             role: node.first("style").map { Role(mscxToken: $0.text) } ?? .fingering,
             preservedMarkup: node.preservedMarkup(consuming: consumedChildren),
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
         fingering.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return fingering

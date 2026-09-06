@@ -15,6 +15,7 @@ public struct RehearsalMark: Sendable, Equatable {
     public typealias FrameKind = TextFrameType
 
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// Author-supplied X offset relative to the default placement,
     /// in spatium units. Sugar over `elementProperties.offset`.
     public var offsetX: Double {
@@ -68,8 +69,10 @@ public struct RehearsalMark: Sendable, Equatable {
         frame: TextFrameType = .rectangle,
         properties: TextProperties = TextProperties(),
         visible: Bool = true,
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.frame = frame
         self.properties = properties
         let offset: ScoreOffset? = if offsetX == 0 && offsetY == 0 {

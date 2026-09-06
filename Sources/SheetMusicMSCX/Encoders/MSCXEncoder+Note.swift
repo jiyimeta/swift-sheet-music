@@ -64,7 +64,7 @@ extension Note {
             ))
         }
         if let glissando {
-            children.append(glissandoSpanner(glissando))
+            children.append(glissandoSpanner(glissando, options: options))
         }
         appendParentheses(into: &children, targetVersion: options.targetVersion)
         children.append(XMLTreeNode(name: "pitch", text: String(pitch)))
@@ -323,7 +323,10 @@ extension Note {
         }
     }
 
-    private func glissandoSpanner(_ glissando: Glissando) -> XMLTreeNode {
+    private func glissandoSpanner(
+        _ glissando: Glissando,
+        options: MSCXEncoderOptions,
+    ) -> XMLTreeNode {
         // Start-side only — the end note carries no model state, and
         // the decoder ignores `<Spanner type="Glissando">` blocks
         // without a `<Glissando>` payload child.
@@ -331,7 +334,7 @@ extension Note {
             name: "Spanner",
             attributes: ["type": "Glissando"],
             children: [
-                glissando.encode(),
+                glissando.encode(options: options),
                 XMLTreeNode(name: "next"),
             ],
         )

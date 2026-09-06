@@ -9,6 +9,20 @@ and this project adheres to
 
 ### Added
 
+- **Inline MuseScore text markup now survives MSCX round trips.** Text-bearing
+  score values keep their existing plain `text` while carrying the original
+  `<text>` subtree opaquely, including interleaved character data and `<b>`,
+  `<i>`, `<u>`, `<sym>`, and `<font>` elements. The encoder restores that
+  subtree only while its legacy plain-text flattening still equals the modeled
+  text, so an edit automatically drops stale formatting. MuseScore's inline
+  font markup is a state machine rather than a tree of styled runs: an empty
+  `<b></b>` or `<font face="…"/>` changes the style of everything that follows.
+  That shape is deliberately preserved verbatim instead of being assigned
+  premature text-run semantics. Tempo markings remain regenerated from their
+  modeled tempo fields, and `Score.strippingPreservedMarkup()` clears the new
+  markup along with the rest, so a stripped score still carries no source-only
+  XML.
+
 - **Every element carries a placement, not just spanners.** `Placement` is now
   a top-level type on `ElementProperties`, so an element's side of the staff
   round-trips wherever MuseScore writes `<placement>` — ornaments, fingerings,

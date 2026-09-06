@@ -21,25 +21,37 @@ import SheetMusicFoundation
 /// - Comments, processing instructions and the DOCTYPE are skipped silently.
 public enum XMLTreeParser {
     /// Parse the given XML bytes into a single root `XMLTreeNode`.
-    public static func parse(_ data: Data) throws -> XMLTreeNode {
+    public static func parse(
+        _ data: Data,
+        preservingMixedContentIn names: Set<String> = [],
+    ) throws -> XMLTreeNode {
         let bytes = [UInt8](data)
         var scanner = XMLScanner(bytes)
         do {
             if let bad = XMLScanner.firstInvalidUTF8(in: bytes) {
                 throw scanner.error("input is not valid UTF-8", at: bad)
             }
-            return try parseDocument(&scanner)
+            return try parseDocument(
+                &scanner,
+                preservingMixedContentIn: names,
+            )
         } catch let error as XMLSyntaxError {
             throw SheetMusicError.invalidXML(underlying: error)
         }
     }
 
-    private static func parseDocument(_ scanner: inout XMLScanner) throws -> XMLTreeNode {
+    private static func parseDocument(
+        _ scanner: inout XMLScanner,
+        preservingMixedContentIn names: Set<String>,
+    ) throws -> XMLTreeNode {
         try skipProlog(&scanner)
         guard scanner.peek() == UInt8(ascii: "<") else {
             throw scanner.error("XML produced no root element")
         }
-        let root = try parseElementTree(&scanner)
+        let root = try parseElementTree(
+            &scanner,
+            preservingMixedContentIn: names,
+        )
         try skipProlog(&scanner)
         guard scanner.isAtEnd else {
             throw scanner.error("unexpected content after the root element")
@@ -68,7 +80,10 @@ public enum XMLTreeParser {
 
     /// Iterative rather than recursive: a deep score must not be able to blow
     /// the stack, which on WebAssembly corrupts memory rather than trapping.
-    private static func parseElementTree(_ scanner: inout XMLScanner) throws -> XMLTreeNode {
+    private static func parseElementTree(
+        _ scanner: inout XMLScanner,
+        preservingMixedContentIn names: Set<String>,
+    ) throws -> XMLTreeNode {
         var stack: [PartialNode] = []
         var finished: XMLTreeNode?
 
@@ -84,14 +99,21 @@ public enum XMLTreeParser {
                     guard !stack.isEmpty else {
                         throw scanner.error("character data outside the root element")
                     }
-                    try scanCDATA(&scanner, into: &stack[stack.count - 1].text)
+                    var characters = ""
+                    try scanCDATA(&scanner, into: &characters)
+                    appendCharacters(characters, to: &stack[stack.count - 1])
                 } else if scanner.matches(Token.piOpen) {
                     try skipProcessingInstruction(&scanner)
                 } else if scanner.matches(Token.endTagOpen) {
                     try closeElement(&scanner, stack: &stack, finished: &finished)
                     if stack.isEmpty { return try require(finished, scanner) }
                 } else {
-                    try openElement(&scanner, stack: &stack, finished: &finished)
+                    try openElement(
+                        &scanner,
+                        stack: &stack,
+                        finished: &finished,
+                        preservingMixedContentIn: names,
+                    )
                     if !stack.isEmpty { continue }
                     return try require(finished, scanner)
                 }
@@ -99,7 +121,9 @@ public enum XMLTreeParser {
                 guard !stack.isEmpty else {
                     throw scanner.error("character data outside the root element")
                 }
-                try scanCharacterData(&scanner, into: &stack[stack.count - 1].text)
+                var characters = ""
+                try scanCharacterData(&scanner, into: &characters)
+                appendCharacters(characters, to: &stack[stack.count - 1])
             }
         }
     }
@@ -111,16 +135,26 @@ public enum XMLTreeParser {
 
     private static func openElement(
         _ scanner: inout XMLScanner, stack: inout [PartialNode], finished: inout XMLTreeNode?,
+        preservingMixedContentIn names: Set<String>,
     ) throws {
         scanner.advance() // <
         let name = try scanner.scanName()
         let (attributes, isSelfClosing) = try scanAttributes(&scanner)
+        let preserving = names.contains(name) || stack.last?.mixedContent != nil
 
         if isSelfClosing {
-            let node = XMLTreeNode(name: name, attributes: attributes)
+            let node = XMLTreeNode(
+                name: name,
+                attributes: attributes,
+                mixedContent: preserving ? [] : nil,
+            )
             attach(node, stack: &stack, finished: &finished)
         } else {
-            stack.append(PartialNode(name: name, attributes: attributes))
+            stack.append(PartialNode(
+                name: name,
+                attributes: attributes,
+                mixedContent: preserving ? [] : nil,
+            ))
         }
     }
 
@@ -149,6 +183,7 @@ public enum XMLTreeParser {
             attributes: open.attributes,
             text: trimmed(open.text),
             children: open.children,
+            mixedContent: open.mixedContent,
         )
         attach(node, stack: &stack, finished: &finished)
     }
@@ -160,7 +195,16 @@ public enum XMLTreeParser {
             finished = node
         } else {
             stack[stack.count - 1].children.append(node)
+            stack[stack.count - 1].mixedContent?.append(.element(node))
         }
+    }
+
+    private static func appendCharacters(
+        _ characters: String,
+        to node: inout PartialNode,
+    ) {
+        node.text += characters
+        node.mixedContent?.append(.characters(characters))
     }
 
     private static func scanAttributes(
@@ -207,6 +251,7 @@ private struct PartialNode {
     let attributes: [String: String]
     var text = ""
     var children: [XMLTreeNode] = []
+    var mixedContent: [XMLContentItem]?
 }
 
 enum Token {

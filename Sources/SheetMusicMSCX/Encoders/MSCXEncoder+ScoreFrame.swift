@@ -22,7 +22,7 @@ extension ScoreFrame {
             ),
         ]
         for text in texts {
-            children.append(text.encode())
+            children.append(text.encode(options: options))
         }
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "VBox", children: children)
@@ -34,7 +34,7 @@ extension FrameText {
     /// `.other` since the decoder maps unknown / missing `<style>` to
     /// `.other`. The `<offset>` element carries `x` / `y` attributes
     /// in millimetres, matching the decoder's read path.
-    func encode() -> XMLTreeNode {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if style != .other {
             children.append(XMLTreeNode(
@@ -61,7 +61,11 @@ extension FrameText {
                 name: "align", text: align.mscxString,
             ))
         }
-        children.append(XMLTreeNode(name: "text", text: text))
+        children.append(encodeText(
+            text,
+            preservedTextMarkup: preservedTextMarkup,
+            options: options,
+        ))
         return XMLTreeNode(name: "Text", children: children)
     }
 }

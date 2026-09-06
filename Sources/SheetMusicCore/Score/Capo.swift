@@ -18,8 +18,8 @@ import SheetMusicFoundation
 /// **Content, not presentation.** The capo parameters and `text` are modeled;
 /// `<style>`, font overrides, and the `StaffTextBase` channel and swing tags
 /// stay in `preservedMarkup`; the shared base owns `<offset>` and `<placement>`.
-/// Inline markup inside `<text>` flattens to plain text, the cross-cutting
-/// limitation described by the parity document's §7.1 text-content work.
+/// Inline markup inside `<text>` is carried opaquely beside the flattened plain
+/// text.
 public struct Capo: Sendable, Equatable {
     /// `<active>`. Defaults to `true` when absent.
     public var isActive: Bool
@@ -34,6 +34,7 @@ public struct Capo: Sendable, Equatable {
     public var ignoredStrings: Set<Int>
     /// The `<text>` payload, flattened to plain text.
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// Base element properties shared with every engravable element.
     public var elementProperties: ElementProperties
     /// Sugar over `elementProperties.visible`.
@@ -55,6 +56,7 @@ public struct Capo: Sendable, Equatable {
         text: String,
         elementProperties: ElementProperties = .default,
         preservedMarkup: [PreservedXML] = [],
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.isActive = isActive
         self.fretPosition = fretPosition
@@ -62,6 +64,7 @@ public struct Capo: Sendable, Equatable {
         self.transposeMode = transposeMode
         self.ignoredStrings = ignoredStrings
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.elementProperties = elementProperties
         self.preservedMarkup = preservedMarkup
     }

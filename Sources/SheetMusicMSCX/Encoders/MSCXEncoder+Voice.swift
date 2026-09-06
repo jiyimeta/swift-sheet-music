@@ -305,9 +305,9 @@ extension Voice {
     ) -> XMLTreeNode {
         switch element {
         case let .tempo(tempo): return tempo.encode()
-        case let .rehearsalMark(rehearsalMark): return rehearsalMark.encode()
-        case let .staffText(staffText): return staffText.encode()
-        case let .swing(swing): return swing.encode()
+        case let .rehearsalMark(rehearsalMark): return rehearsalMark.encode(options: options)
+        case let .staffText(staffText): return staffText.encode(options: options)
+        case let .swing(swing): return swing.encode(options: options)
         case let .instrumentChange(change): return change.encode(options: options)
         }
     }

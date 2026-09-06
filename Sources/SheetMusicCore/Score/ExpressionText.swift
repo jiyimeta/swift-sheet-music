@@ -14,15 +14,15 @@ import SheetMusicFoundation
 /// `<style>`, font overrides, `<voiceAssignment>`, `<direction>`, and
 /// `<centerBetweenStaves>` stay in `preservedMarkup`; the shared base owns
 /// `<offset>` and `<placement>` through `elementProperties`. Inline markup
-/// inside `<text>` flattens to plain text,
-/// the cross-cutting limitation described by the parity document's §7.1
-/// text-content work. `<color>` is decoded into `elementProperties` but not
+/// inside `<text>` is carried opaquely beside the flattened plain text.
+/// `<color>` is decoded into `elementProperties` but not
 /// re-emitted — the decode-only gap documented by `ElementProperties+MSCX`,
 /// shared with `Fingering` and `ChordOrnament`, and closed only by migrating
 /// those encoders to `elementProperties.color`.
 public struct ExpressionText: Sendable, Equatable {
     /// The `<text>` payload, flattened to plain text.
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// `<snapToDynamics>`. `nil` when the tag is absent — MuseScore writes it
     /// only when the value is unstyled, so absent means "follow the style".
     public var snapToDynamics: Bool?
@@ -44,8 +44,10 @@ public struct ExpressionText: Sendable, Equatable {
         snapToDynamics: Bool? = nil,
         elementProperties: ElementProperties = .default,
         preservedMarkup: [PreservedXML] = [],
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.snapToDynamics = snapToDynamics
         self.elementProperties = elementProperties
         self.preservedMarkup = preservedMarkup

@@ -16,6 +16,7 @@ public struct Jump: Sendable, Equatable {
     public var playRepeats: Bool
     /// User-facing display text ("D.C. al Fine", "D.S. al Coda", …).
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// Source XML children this model does not represent.
     public var preservedMarkup: [PreservedXML] = []
 
@@ -26,12 +27,14 @@ public struct Jump: Sendable, Equatable {
         playRepeats: Bool = false,
         text: String = "",
         preservedMarkup: [PreservedXML] = [],
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.jumpTo = jumpTo
         self.playUntil = playUntil
         self.continueAt = continueAt
         self.playRepeats = playRepeats
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.preservedMarkup = preservedMarkup
     }
 }
