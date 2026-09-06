@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-09-07
+
 ### Added
 
 - **Common time, cut time and the two cut signs are drawn, written and
