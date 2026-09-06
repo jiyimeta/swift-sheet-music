@@ -142,7 +142,7 @@ struct MSCXPreservedMarkupTests {
         <Part><Staff id="1"/><Instrument/></Part>
         <Staff id="1"><Measure><voice>
         <Chord><durationType>quarter</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
-        <FiguredBass><ticks>480</ticks></FiguredBass>
+        <Symbol><name>segno</name></Symbol>
         <Chord><durationType>quarter</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
         </voice></Measure></Staff></Score></museScore>
         """
@@ -150,18 +150,18 @@ struct MSCXPreservedMarkupTests {
         let elements = score.parts[0].staves[0].measures[0].voices[0].elements
         guard case let .preserved(kept) = elements[1] else {
             Issue.record(Comment(
-                rawValue: "expected the FiguredBass between the two chords, got \(elements)",
+                rawValue: "expected the Symbol between the two chords, got \(elements)",
             ))
             return
         }
-        #expect(kept.name == "FiguredBass")
+        #expect(kept.name == "Symbol")
 
         let root = try XMLTreeParser.parse(MSCXEncoder.encode(score))
         let voice = try #require(
             root.first("Score")?.all("Staff").last?
                 .first("Measure")?.first("voice"),
         )
-        #expect(voice.children.map(\.name) == ["Chord", "FiguredBass", "Chord"])
+        #expect(voice.children.map(\.name) == ["Chord", "Symbol", "Chord"])
     }
 
     @Test("<LayoutBreak><subtype>nobreak</subtype> survives")
@@ -371,6 +371,10 @@ extension MSCXPreservedMarkupTests {
                 bottomTpc: 14,
                 preservedMarkup: [marker],
             )),
+            .figuredBass(FiguredBass(
+                items: [FiguredBassItem(digit: 6, preservedMarkup: [marker])],
+                preservedMarkup: [marker],
+            )),
         ]
         score.parts[0].staves[0].measures[0] = measure
     }
@@ -396,6 +400,10 @@ extension MSCXPreservedMarkupTests {
                 result += value.stringData?.preservedMarkup ?? []
             }
             if case let .ambitus(value) = element { result += value.preservedMarkup }
+            if case let .figuredBass(value) = element {
+                result += value.preservedMarkup
+                result += value.items.flatMap(\.preservedMarkup)
+            }
         }
         return result
     }
@@ -580,6 +588,16 @@ extension MSCXPreservedMarkupTests {
         }
         if case let .ambitus(value) = element {
             expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .figuredBass(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            for (index, item) in value.items.enumerated() {
+                expectNoNameCollision(
+                    item.preservedMarkup,
+                    writtenChildren: item.encode(options: options).children,
+                    context: "\(context)/<FiguredBassItem>[\(index)]",
+                )
+            }
         }
     }
 

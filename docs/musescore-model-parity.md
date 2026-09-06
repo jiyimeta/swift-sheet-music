@@ -498,7 +498,7 @@ property全部に当てはまる。model側が`Bool?` / `Int?`で「タグが無
 | ~~`EXPRESSION`~~ | `twrite.cpp:1343` | **`ExpressionText`**（2026-09-04実装） | 下の追記を参照 |
 | ~~`FINGERING`~~ | `types/types.h:121` | **`Fingering`**（2026-09-04実装） | 下の追記を参照 |
 | ~~`STICKING`~~ | `dom/sticking.h:34` | **`Sticking`**（2026-09-04実装） | 下の追記を参照 |
-| `FIGURED_BASS`＋`FIGURED_BASS_ITEM` | `dom/figuredbass.h:91` | なし | 数字付低音。prefix / digit / suffix / continuationの構造 |
+| ~~`FIGURED_BASS`＋`FIGURED_BASS_ITEM`~~ | `dom/figuredbass.h:91` | **`FiguredBass` / `FiguredBassItem`**（2026-09-06実装） | 下の追記を参照 |
 | `PLAYTECH_ANNOTATION` | `dom/playtechannotation.h:35` | なし | 奏法指定（pizz.等）とplayback反映 |
 | `SOUND_FLAG` | `twrite.cpp:3273` | なし | StaffTextの子。preset・奏法・全staff適用 |
 | `PLAY_COUNT_TEXT` | `twrite.cpp:2743`（MSC 5.00） | なし | 反復回数表示 |
@@ -599,6 +599,19 @@ MSCXのtag名は`<Expression>`のまま。
 `VoiceElement`にcaseを足したときに実際に壊れたexhaustive switchは
 **`Sources` 7箇所 + `Tests` 1箇所**（probe buildで列挙）。
 
+**［2026-09-06］この数字は4スライスで実測して同一だった。** 「1回測った」と
+「4回測って同じだった」は別の主張なので、測った対象を挙げておく:
+
+| slice | 要素の性質 |
+|---|---|
+| `STICKING` / `EXPRESSION` | `TextBase` のtext annotation |
+| `CAPO` / `STRING_TUNINGS` | `StaffTextBase`。後者は入れ子の`StringData`を持つ |
+| `AMBITUS` | `EngravingItem`（`TextBase`ではない）。入れ子のaccidental 2つ |
+| `FIGURED_BASS` | `TextBase`。入れ子のitem配列 + **data次第の排他分岐** |
+
+基底classも payload の形も違うのに面が動かない。voice stream要素については
+**推定ではなく実測値**として使ってよい。
+
 | 場所 | 内容 |
 |---|---|
 | `SetElementVisible.swift`（`visibility(of:)`と`setting(_:visible:)`の2つ） | `visible`を持つので対応させた |
@@ -632,6 +645,90 @@ review が見つけた実バグ3件は全部そちら側だった:
 `ScoreCanvas` / `LayoutBridge`）で、**`LayoutElement`にcaseを足さない限りそこには届かない。**
 engravingを別sliceに切るなら、voice stream要素のmodel化コストはnote添付要素の2倍程度で、
 事前見積もりより小さい。逆に言うと、この層の本当のコストはmodelではなくengravingの側にある。
+
+**［2026-09-06 追記］`FIGURED_BASS`と`FIGURED_BASS_ITEM`もmodel化した。**
+`SheetMusicCore`の`FiguredBass` / `FiguredBassItem`、`VoiceElement`の`.figuredBass`、
+decoder / encoderは`MSCXDecoder+FiguredBass.swift` / `MSCXEncoder+FiguredBass.swift`。
+
+#### この要素は自分を2通りに書く——versionではなくdataで分岐する
+
+`v4.6.5:twrite.cpp:1292`:
+
+```cpp
+if (item->items().size() < 1) {
+    writeProperties(static_cast<const TextBase*>(item), xml, ctx, true);   // 生<text>
+} else {
+    for (FiguredBassItem* i : item->items()) write(i, xml, ctx);           // <FiguredBassItem>列
+    for (const StyledProperty& spp : *item->styledProperties())
+        writeProperty(item, xml, spp.pid);                                 // <size> / <align> …
+    writeItemProperties(item, xml, ctx);
+}
+```
+
+MuseScoreはtypedなtextをitemにparseし、**parseに失敗したときだけ生textを書く**。
+`ChordOrnament`のMS3 `<Articulation>`形が**versionによる分岐**なのに対し、これは
+**同一version内でdata次第の分岐**。model は両方持ち（`items`と`text`）、encoderは
+`items.isEmpty`で分岐する。**入力がどちらの形かはfileの子要素で分かる**ので、
+decode時に取り違えない（readerも`FiguredBassItem`を明示的に読み、それ以外は
+`TextBase`のpropertiesに落ちる）。
+
+**item形式では`<style>`も`<text>`も出ず、代わりにstyled propertyが直接の子として出る。**
+だから`TextBase`系のtagをconsumed setに入れてはいけない——text styleを編集したスコアで
+`<size>` / `<align>` / `<frameType>`が消える。consumeするのは`onNote` / `ticks` /
+`FiguredBassItem` / `text` と共有基底の4つだけ。
+副産物として、item形式には`<style>`が無いので§7.2の`<color>`順序制約はこの分岐では起きない。
+
+#### `text`は`items`が空のときだけauthor intent
+
+readerの末尾（`v4.6.5:read460/tread.cpp:1440`）:
+
+```cpp
+if (b->items().size() > 0) { b->setXmlText(normalizedText); }   // itemから再生成
+```
+
+item形式ではtextが**読み込み時に再生成され、fileの`<text>`は捨てられる**。§4.6.1で立てた
+判定基準（readerが再計算するなら派生値）をそのまま当てると、**同じfieldがdata次第で
+派生値にもauthor intentにもなる**。両方の言い方が「fieldはどちらか一方」を前提に
+しているので、この要素は例外として明記しておく。
+
+#### `<onNote>`は反転default——そして「`propertyDefault`を読め」は規則ではなかった
+
+`v4.6.5:figuredbass.h:329`が`bool m_onNote = true;`、writerは`if (!item->onNote())`で
+**falseのときだけ書く**。つまり**tagの不在が`true`を意味する**。`false` defaultで
+modelすると、`<onNote>`を持たない大多数のfigured bassが全部「音符間」になり、
+round-tripが黙って壊れる。`<ticks>`も同型（`isNotZero()`のときだけ出る）。
+
+**ここで§4.1.1の書き方が一段浅かったことが分かった。** あそこには「タグが無いときの意味は
+`propertyDefault`が決める」と書いたが:
+
+| 要素 | C++ member initializer | 正解 |
+|---|---|---|
+| `Capo.active` | `false` | **`propertyDefault`の`true`** |
+| `FiguredBass.onNote` | `true` | **member initializerの`true`** |
+
+**片方ずつ当たって片方ずつ外れる。** 「member initializerを読め」も「`propertyDefault`を
+読め」も規則にならない。
+
+**正しくは「writerの省略条件を読め」。** `Capo`は`writeProperty`を使っていて、それは
+`propertyDefault`と比較して省略する。`FiguredBass`は`if (!item->onNote())`と明示的に
+書いてある。**どちらもwriterが「不在が何を意味するか」を言っていて、そこだけが常に
+言っている場所**。`propertyDefault`を見に行くのは、writerが`writeProperty`を使っている
+ときにその条件を解決する手段であって、規則そのものではない。
+
+#### `FiguredBassItem`
+
+`brackets`が**5つのintを属性**で持つ（`<offset x= y=>`と同じ形）。
+`prefix` / `suffix` / `continuationLine`は**序数**で書かれる——§4.6.1の3階層目。
+`Modifier`は none=0 / doubleFlat=1 / flat=2 / natural=3 / sharp=4 / doubleSharp=5 /
+cross=6 / backslash=7 / slash=8、`Parenthesis`は none=0 / roundOpen=1 / roundClosed=2 /
+squareOpen=3 / squareClosed=4、`ContLine`は none=0 / simple=1 / extended=2。
+C++の`displayText` / `normalizedText`はread-onlyな派生propertyでreaderに枝が無いので、
+その種の未知childは`FiguredBassItem.preservedMarkup`に残る。
+
+`AdjacentElementSlot.isAnnotation`は**true**。`figuredbass.h:35`が`Segment`のannotationsに
+格納されると明記していて、`measureread.cpp:490-513`も`Sticking`と同じannotation branchで
+`segment->add(el)`する。**`AMBITUS`は逆**（独自の`SegmentType::Ambitus`）なので、
+隣の要素の答えを写さずに毎回上流を見ること。
 
 ### 4.3 記号・画像
 
@@ -1254,7 +1351,22 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    ~~`StringData`~~+~~`STRING_TUNINGS`~~+~~`CAPO`~~（§4.1の追記。前者は2026-09-04、
    後2者は2026-09-06）+`FRET_DIAGRAM`、
    ~~`STICKING`/`EXPRESSION`~~（2026-09-04完了、§4.2の追記）、
-   `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`。
+   ~~`FIGURED_BASS`~~（2026-09-06完了、§4.2の追記）、
+   `FSYMBOL`、**annotation位置の**`SYMBOL`。
+
+   **［2026-09-06 訂正］この行は2件古かった。** `SYMBOL`は**note添付分が
+   2026-09-05にmodel化済み**（`EngravingSymbol`、§4.3の追記）で、残っているのは
+   annotation位置のものだけ。`SPACER`は**外した**——§4.4の表が「model は無いが往復する」と
+   書いているとおりで、しかも`<Spacer>`という綴りのtagは存在せず（実際は`vspacer` /
+   `vspacerDown`）、ssmは縦方向の手動間隔調整をlayoutしないのでmodel化してもinertなdataになる。
+   **§2.4の「MISSING = fileから消える」が成り立たないので、parityの穴ではない。**
+   消した理由をここに残すのは、§4.4を読んだ人が「§8に無いのは見落としでは」と
+   再調査しないため。
+
+   **この行が古かったことの意味。** §8は「次に何をやるか」を決めるために読まれる節なので、
+   **古いリストはそのまま作業指示になる。** 誰かが`SPACER`を実装しに行って、往復済みだと
+   気づくまで半日使う経路が実在した。§4を更新した人が§8を更新していない、という形で
+   2件とも生まれている——**§4の追記と§8のリストは同じcommitで動かすこと。**
    互いに独立なので並列に進められる。
 
    実装して分かったこの層の境目: **noteやchordに直接ぶら下がる要素は単発で入る**
@@ -1281,27 +1393,44 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
 
    **fingerprintのoccupant tagはレーンをまたいで一意にすること。** 別worktreeで並行実装すると
    双方が「未使用の次の番号」として同じ値を選ぶ。実際に2026-09-05に衝突した。
-   **tagには名前空間が2つある。** `VoiceElement`のcase tagは0から、occupant tagは21から。
-   **occupant tagが21始まりなのは、0-20をcase tag用に空けているから**で、hasherのheaderに
-   そう書いてある（"21 and up, so no tag can be mistaken for a `VoiceElement` case tag"）。
+   **global な採番があるのはoccupant tagだけ。case tagはswitchごとにローカル。**
+   これが正しい問いの立て方で、「次に空いている番号は何か」ではなく
+   **「このtagはどのstreamに属するか」**を先に決める。
 
-   現在: **case tag 0-16**（16は`Ambitus`）、**occupant tag 21-54**
-   ——21-28 measure flag、29-32 chord / note、33-35 `ChordOrnament`、36-38 `Fingering`、
-   39-42 voice stream annotation、43-45 `ChordBracket`、46-48 `EngravingSymbol`、
-   49-50 `Capo`、51-52 `StringTunings`、53-54 `Ambitus`。
-   **次の空きはcase tagなら17、occupant tagなら55。**
+   - **occupant tag（global、21-）** —— `combineOccupied`が親のhashに混ぜるので、
+     どこから来ても一意でなければならない。**レーンをまたいで採番を配る対象はこれだけ。**
+     現在 21-54: 21-28 measure flag、29-32 chord / note、33-35 `ChordOrnament`、
+     36-38 `Fingering`、39-42 voice stream annotation、43-45 `ChordBracket`、
+     46-48 `EngravingSymbol`、49-50 `Capo`、51-52 `StringTunings`、53-54 `Ambitus`。
+     **次の空きは55。**
+   - **case tag（switchごとにローカル、0-）** —— 少なくとも2本ある。
+     `combine(_ element: VoiceElement)`が **0-16**（16が`Ambitus`、次は17）、
+     `combine(_ element: SystemElement)`が **0-4**（`ScoreFingerprintHasher.swift:307`。
+     tempo / rehearsalMark / staffText / swing / instrumentChange、次は5）。
+     **同じ0から始まるが別のstreamなので衝突しない。**
+   - さらに小さいordinalが**switchの数だけ**ある——`combine(_ duration:)`、
+     `combine(_ note:)`、`combine(_ articulation:)`、`combine(_ glissando:)`、
+     `combine(_ lyric:)`、`combine(_ tremolo:)`、`combine(_ chordLine:)`…
+     どれも0から始まる小さい整数を混ぜている。
 
-   **［2026-09-06 訂正］**ここには以前「16-20は過去に割り当てられて削除された番号なので
-   再利用してはならない」と書かれていたが、**誤り**だった。16-20はcase tagの予約領域である。
-   この誤りは有害で、読んだ人が`VoiceElement`にcaseを足すときに「次の空きは53」を取ると、
-   **occupant tagと衝突してheaderが防いでいる当のものが起きる**。
+   occupant tagが**21**始まりなのは、0-20を`VoiceElement`のcase tag用に空けているから
+   （hasherのheaderに"21 and up, so no tag can be mistaken for a `VoiceElement` case tag"）。
 
-   **表はmergeのたびにstaleになるのでcodeから数え直すこと。ただし数えるだけでは足りない。**
-   数えて出るのは`0-16, 21-54`という連続と穴だけで、**穴が何なのかはheaderの規約を
-   読まないと分からない**。この誤りはまさにそこで生まれた——一方が「16-20が空いている」と
-   観測を報告し、もう一方がそれに「削除された番号かもしれない」という解釈を足して規則として
-   固定した。どちらの段も単独では誤っていないが、合成すると誤った規則になる。
-   **観測を規則に変える段で根拠を確認すること。**
+   **［2026-09-06 訂正2回］**この段落は2度直っている。1度目は「16-20は削除された番号なので
+   再利用禁止」という**誤り**の訂正——16-20は`VoiceElement` case tagの予約領域である。
+   2度目は、その訂正が書いた「名前空間は2つ」という言い方が**まだ足りなかった**こと。
+   実際にはcase tagはswitchごとにローカルで、`SystemElement`にcaseを足す人が
+   「次の空きは17」を取ってしまう形になっていた（衝突はしないが、`VoiceElement`の番号である）。
+
+   **数えるだけでは足りず、規約を読むだけでも足りず、その番号を混ぜている呼び出し元まで見ること。**
+   素朴に`combine\([0-9]+\)`をgrepすると`combineFlags`のmeasure flag（21-28）も
+   case tagに見える。表はmergeのたびにstaleになるので数え直す必要があるが、
+   **数え方（`grep -c`は行数、`-o`は出現数）でも結果が変わる**。
+
+   この段落の訂正2回は、どちらも同じ形で生まれている——**観測が解釈を経て規則になる段で、
+   根拠が確認されていない**。1度目は「16-20が空いている」という観測に「削除された番号かも」
+   という解釈が付いた。2度目は「名前空間は2つ」という**訂正そのもの**が、確認した2つだけを
+   数えて書かれた。**訂正は訂正であるがゆえに検証されにくい。**
 
    **optionalをfingerprintに混ぜるときはpresence byteを落とさないこと。** これはtag採番とは
    別の軸——tagは「衝突させない」話、presenceは「情報を落とさない」話。`nil`と「値がordinal 0」は

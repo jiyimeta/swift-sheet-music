@@ -259,8 +259,7 @@ extension Voice {
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,
             )
-        case let .keySignature(key):
-            return key.encode(options: options)
+        case let .keySignature(key): return key.encode(options: options)
         case let .timeSignature(time):
             return time.encode(options: options)
         case let .clef(clef):
@@ -280,6 +279,7 @@ extension Voice {
         case let .stringTunings(tunings):
             return tunings.encode(options: options)
         case let .ambitus(ambitus): return ambitus.encode(options: options)
+        case let .figuredBass(figuredBass): return figuredBass.encode(options: options)
         case let .preserved(markup):
             return XMLTreeNode(preserved: markup)
         case let .measureRepeat(measureRepeat):

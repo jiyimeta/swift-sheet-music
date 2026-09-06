@@ -177,6 +177,8 @@ enum ScoreSemanticComparison {
         case let .capo(c): return "capo(\(c.fretPosition))"
         case let .stringTunings(t): return "stringTunings(\"\(t.preset)\")"
         case let .ambitus(a): return "ambitus(\(a.topPitch)-\(a.bottomPitch))"
+        case let .figuredBass(fb):
+            return fb.items.isEmpty ? "figuredBass(\"\(fb.text)\")" : "figuredBass(\(fb.items.count) items)"
         case let .locationShift(delta):
             return "locationShift(\(delta.numerator)/\(delta.denominator))"
         case let .preserved(markup): return "preserved(<\(markup.name)>)"
