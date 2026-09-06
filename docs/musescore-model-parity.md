@@ -1105,14 +1105,40 @@ mirrorされるので、それぞれ別sliceになる。intervalをmodelに入�
 |---|---|---|
 | **round-tripする / model化されていない** | byteは戻るが、型からは読めない | tagがconsumed setに**無い** |
 | **model化されているが情報を落とす** | 型はあるが、fileの一部を落とす | tagがconsumed setに**有り**、model化もされている |
-| **consumeされて捨てられる** | 型にも無く、bagにも入らない | tagがconsumed setに**有るのに**、対応するfieldが無い |
+| **consumeして再生成する** | fieldは無いが、encoderが他のfieldから導出して書く | consumed setに**有り**、fieldが**無い**が、encoderが書く |
+| **consumeされて捨てられる** | 型にも無く、bagにも入らない | consumed setに**有り**、fieldが**無く**、encoderも書かない |
 
-**3つ目が一番悪く、しかも一番見えにくい。** consumed setに入れた時点でpreserved markupの
-対象から外れるので、**「model化しないまま consumed set に足す」と、それまで往復していたものが
-その瞬間から失われる**。§4.6.1のgrace chordの穴と同じ向きの罠が、tag levelにもある。
+**最後の1つが実損失で、しかも4つ目とdecoderからは見分けがつかない。** consumed setと
+fieldだけでは足りず、**encoderがそのtagを書いているかまで見ないと判定できない**。
+1段目で止めると`<tpc2>`を損失と誤判定する（§5.3の下の追記）。
+そしてconsumed setに入れた時点でpreserved markupの対象から外れるので、
+**「model化しないまま consumed set に足す」と、それまで往復していたものがその瞬間から失われる**。
+§4.6.1のgrace chordの穴と同じ向きの罠が、tag levelにもある。
 
-以下、§5.3は上の3分類で数え直した。**§5.1 / §5.2 / §5.4はまだ数え直していない**——
-それらの記述は初出時のままで、同じ検算を通していない。
+**［2026-09-06 追記］3つ目を全decoderで洗い出したところ、2件の実損失が出た。**
+`<Measure><stretch>`（user stretch）と`<Measure><noOffset>`（measure number offset）が
+consumed setに入っていて誰も読んでいなかった。consumed setから外して往復するようにしてある。
+
+**preservation gateはこれを警告できなかった。** gateはcommitted fixtureの`parent/child`を
+数えるので、**どのfixtureにも入っていないtagの損失は測定対象にすら入らない**。
+つまりallowlistは「既知の損失の一覧」ではなく「fixtureが偶然踏んだ損失の一覧」で、
+allowlistが短いことは損失が少ないことを意味しない。詳細と、この洗い出しで
+**損失ではなかった**もの（`<tpc2>` / `<actualKey>`はencoderが再生成する、`<Style>`の大半は
+`PageChrome`が持っている、`<multiMeasureRest>`を持つmeasureは意図的に丸ごと捨てる）は
+`docs/development/mscx-preserved-markup.md`の「What the allowlist is not」を参照。
+
+**§5.1から§5.4まで全部数え直した。** 結果は節ごとに大きく違い、**分かれ目は
+「その型にbagがあるか」だった**——tag単位の4分類は、その手前の条件が満たされて初めて意味を持つ。
+
+| 節 | 結果 |
+|---|---|
+| §5.1 spanner payload | **大筋が正しい。** payload型（`HairpinPayload`等）にbagが無いのが原因。ただし`LAISSEZ_VIB`は往復する（実測） |
+| §5.2 author intent | **大半が誤り。** `Chord` / `Note`はbagを持つので、consumed setに無い子は往復する |
+| §5.3 構造・signature | 4件中4件が予想と相違（下の追記） |
+| §5.4 instrument / playback | 1行が誤り、残りは未測定（下の追記） |
+
+**検算前の見立て（「§5.1 / §5.2は他より本当にPARTIALである可能性が高い」）は半分当たった。**
+§5.1は当たり、§5.2は外れ。理由は上のとおりで、**要素の性質ではなく型のbagの有無**だった。
 
 ### 5.1 spanner payload
 
@@ -1128,20 +1154,65 @@ mirrorされるので、それぞれ別sliceになる。intervalをmodelに入�
 gap / align）を持つ型がそもそも無いので、**payloadを持っているhairpinやottavaでも
 線種と両端textは落ちる**。
 
+**［2026-09-06 検算］この節は§5.3 / §5.4と違って、大筋が正しい。原因も分かった。**
+
+**`Spanner`はwrapperにbagを持つが、payload型は持たない。**
+`HairpinPayload` / `OttavaPayload` / `VibratoPayload` / `TrillPayload`のどれにも
+`preservedMarkup`が無い（`Sources/SheetMusicCore/Score/Spanner.swift`）。
+`<Spanner>`の未知の子は`Spanner.preservedMarkup`に入るが、
+**modelされた`<HairPin>` / `<Volta>` / `<Glissando>`の内側は、そこに届かない**。
+
+これはpreservation gateが既に測っていて、`spannerPayloadReason`が
+`HairPin/Segment`・`Segment/off2`・`Segment/offset`・`Segment/subtype`・
+`Volta/endHookType`・`Glissando/diagonal`をその理由で許容している——
+reason文が「a payload-level bag would be needed」と正確に書いている。
+**§5.1が「落ちる」と言っているものの大半は、この1つの構造に帰着する。**
+
+§5.4で数えた「bagを持たない14型」の一段下に、**bagを持たない4つのpayload型**がある。
+
 - `SLUR` — direction、line type、style、partial direction、Bézier編集が落ちる
 - `TIE` — `Note.tieForward`/`tieBack`の位置番号のみ。placement / direction / style / 編集済みsegmentなし
 - `GLISSANDO` — `showText`、shift、font / line stylingが落ちる。終点側markerを書かない
 - `GUITAR_BEND` — bend量（quarter tone）、direction、whammy関連が落ちる（decoderがdiagnosticを出す）
-- `LAISSEZ_VIB` / `PARTIAL_TIE` — 専用modelなし。`.other`扱い
+- ~~`LAISSEZ_VIB` / `PARTIAL_TIE` — 専用modelなし。`.other`扱い~~
+  **「専用modelが無い」は正しいが、`LAISSEZ_VIB`は落ちない。**
+  `<LaissezVib>`は`<Note>`の子で、`consumedNoteChildren`に無いので
+  `Note.preservedMarkup`に入って往復する。**しかもこれは実測**——
+  `musicxml/testUnterminatedTies_ref.mscx`が持っていて、`allowedLosses`に
+  対応entryが無いままgateが通っている。`docs/development/mscx-preserved-markup.md`が
+  `<Note><LaissezVib><eid>`を例に挙げているのもこれ。`PARTIAL_TIE`はfixtureに無いので未測定
 
 ### 5.2 note / chordのauthor intent
 
 geometryを導出するのは設計どおりだが、**導出できない作者の意図**まで落ちている。
 
-- 手動stem direction / stem長 / no-stem（`Chord`は`stemVisible`相当のみ）
-- 手動`BeamMode`とbeam fragment（`BeamGrouping`は導出algorithmのみ）
-- `ChordRest.small` / `staffMove`（cross-staff） / `crossMeasure`
-- `Note`の`headScheme` / `fixed`・`fixedLine` / `tuning` / `ghost` / `deadNote` / `dotsHidden`
+**［2026-09-06 検算］この節は§5.1と逆で、大半が誤り。`Chord`と`Note`は両方bagを持つので、
+consumed setに載っていない子は往復する。**
+
+- 手動stem direction / stem長 / no-stem —— **分かれる。**
+  ~~手動stem direction~~ **`StemDirection`は`consumedChordChildren`に無いので往復する。**
+  一方**stem長は落ちる**——`Stem`はconsumed setに有り、`Chord`が持つのは`stemVisible`だけなので、
+  `<Stem>`の中の`<userLen>`は要素ごとconsumeされて消える（§5.3の3分類の3つ目）
+- ~~手動`BeamMode`とbeam fragment~~ **`BeamMode`はconsumed setに無く、往復する。**
+  `BeamGrouping`が導出algorithmしか持たないのは正しいが、それは
+  「modelから読めない」であって「fileから消える」ではない
+- ~~`ChordRest.small` / `staffMove` / `crossMeasure`~~ **`staffMove`と`crossMeasure`は往復する**
+  （どちらもconsumed setに無い）。**`small`だけは落ちる**——`Chord`側のconsumed setに有るのに
+  `Chord`に対応fieldが無い（`Note`側の`small`は`Note.isSmall`があるので往復する）
+- ~~`Note`の`headScheme` / `fixed`・`fixedLine` / `tuning` / `ghost` / `deadNote` / `dotsHidden`~~
+  **6つともconsumed setに無いので往復する。** `consumedNoteChildren`が挙げているのは
+  `Accidental` / `Bend` / `ChordLine` / `Fingering` / `Parenthesis` / `Symbol` / `Spanner` / `Tie` と
+  `color` / `endSpanner` / `fret` / `head` / `offset` / `parentheses` / `pitch` / `placement` /
+  `play` / `small` / `string` / `tpc` / `tpc2` / `veloType` / `velocity` / `visible` だけ
+
+**残りの行（`Tuplet`・`Accidental.small`・`Fermata.play`・`Arpeggio`各種・`Tremolo`・`TDuration`）は
+未検算。** ただし`Tremolo`と`Arpeggio`は§5.4で数えた「bagを持たない型」に入る可能性が高い
+（`MSCXDecoder+Tremolo.swift`は`preservedMarkup`に触れていない）ので、そこは
+`Chord` / `Note`とは別の結論になるはず。
+
+**この節と§5.1の差は、bagの有無がどこにあるかだけ。** `Chord` / `Note`はbagを持つので
+「modelに無い」が「落ちる」を意味しない。`Spanner`のpayload型はbagを持たないので意味する。
+**「PARTIAL」と書く前に、その型にbagがあるかを見ること。**
 - `Tuplet`のbase duration / bracket・number表示mode / direction / 手動端点 / custom text
 - `Accidental.small`、`Fermata.play`、`Arpeggio.span`・`userLen2`・`play`
 - `Tremolo`はr8–r64 / c8–c64のみ。r128 / r256 / buzz rollは非対応（diagnostic有り）
@@ -1200,14 +1271,61 @@ readerが受けるtag集合と、ssm側のconsumed setを突き合わせて数�
 
 ### 5.4 instrument / playback
 
-- `Instrument.id`が内部id・soundId・MusicXML idを1つに潰している（`MSCXDecoder+Instrument.swift:7`）
+**［2026-09-06 検算］§5.3と同じ手法を当てた。1行は誤り、残りは「落ちる」こと自体は
+もっともらしいが、どれも一度も測られていない。**
+
+- `Instrument.id`が内部id・soundId・MusicXML idを1つに潰している（`MSCXDecoder+Instrument.swift`）。
+  **これは正しい。** preservation gateの`Instrument/instrumentId`
+  （`soundIDReason`）が実測でそう言っている——`<instrumentId>`はdrumsetのときencoderが
+  合成するので、preserved markupに逃がすこともできない
+- ~~per-staff clef、trait、singleNoteDynamics、glissandoStyleがInstrumentに無い~~
+  **「modelに無い」は正しいが、「落ちる」は誤り。** `consumedInstrumentChildren`に
+  `clef` / `singleNoteDynamics` / `glissandoStyle` / `trait`のどれも入っていないので、
+  **`Instrument.preservedMarkup`に入って往復する**。`MSCXPreservedMarkupTests`の
+  `partLevelMarkupSurvives`が`<clef>`について実際にそれを固定している
 - channelはprogram / bank / volume / pan / chorus / reverb / port / channelのみ。
-  CC 0 / 7 / 10 / 32 / 91 / 93以外を捨てる（`MSCXDecoder+InstrumentChannel.swift:30`）。
-  名前付きMIDI action list、synth名 / color / user bankが無い
+  **CC 0 / 7 / 10 / 32 / 91 / 93以外は落ちる**——`controller`がconsumed setに入っていて、
+  encoderは6つのfieldから`<controller>`を**合成**するだけなので、任意のCCは戻らない。
+  ただし**これは未測定**: committed fixtureにあるctrlは`0` / `7` / `10` / `32`の4つだけで、
+  **model外のCCを持つfixtureが1つも無い**（`91` / `93`すらない）。§5.3の`Measure/stretch`と
+  同じ形で、gateはこの主張を一度も検査していない
 - drumsetはname / head / line / voice / stem / shortcutのみ。duration別notehead、
-  variant（articulation / tremolo別のpitch差し替え）、panel座標が無い
-- instrument articulationは`descr`が落ちる
-- per-staff clef、trait、singleNoteDynamics、glissandoStyleがInstrumentに無い
+  variant、panel座標が無い。**未測定**（`<Drum>`の未model子要素を持つfixtureが無い）
+- instrument articulationは`descr`が落ちる。**これは他より悪い**——
+  `MSCXDecoder+InstrumentArticulation.swift`は`velocity`と`gateTime`を読むだけで、
+  **consumed setもpreserved markupも持たない**。consumed setを持つ型は「宣言した子だけ」を
+  失うが、**bagを持たない型は読まない子を全部失う**。`<descr>`もfixtureに1件も無いので、
+  やはり未測定
+
+#### bagを持たない型が14ある
+
+上の`InstrumentArticulation`は単独の抜けではない。`Sources/SheetMusicMSCX/Decoders/`で
+`preservedMarkup`に一度も触れていないdecoderを数えると14件ある。
+
+- **corpusに出てくる**: `GuitarBend`、`InstrumentChange`、`MeasureRepeat`、`StaffText`、`Tempo`
+- **corpusに出てこない**: `Breath`、`ChordLine`、`InstrumentArticulation`、`RehearsalMark`、
+  `Swing`、`Tremolo`、`HeadType`、`ElementProperties+MSCX`、`TextProperties`
+
+前者のうち`StaffText` / `Tempo`の損失はgateが実際に捕まえていて、`Text/style`などが
+§7.1のTextContent作業として`allowedLosses`に載っている。**後者は二重に未測定**——
+bagが無いうえにfixtureも無いので、何が落ちているかを言う手段が現状ゼロである。
+
+**§7.1が入ってもこの穴は閉じない。** §7.1が救うのは`<text>`の**中身**（inline markup）で、
+それは要素にbagを与えることとは別である。`<StaffText>`が`<text>`と並べて持つ未model子要素
+——`<style>`が典型——は、**中身用の入れ物ができても行き先が無いまま**になる。
+`allowedLosses`の`Text/style`が§7.1で消えるかどうかは、その作業が
+`<text>`の中身だけを扱うのか要素全体にbagを与えるのかで決まる。
+**2026-09-06時点のmainでは`StaffText`にbagは無い**（`Sources/SheetMusicCore/Score/StaffText.swift`に
+`preservedMarkup`が0 hit）。§7.1完了後にこの行を確認し直すこと。
+
+一般化するとこうなる。**tag単位の「consumedか / fieldがあるか」（上の4分類）の手前に、
+型単位の「そもそも受け皿があるか」がある。** 前者は分類できるが、後者はその分類が
+始まる前の条件で、bagが無い型では4分類そのものが意味を持たない——
+consumed setに載っていない子も等しく落ちるので。
+
+**この節の残りを「落ちる」と書き続けるのは、§5.3で誤りだった書き方と同じ**なので、
+上では「落ちる」と「未測定」を分けてある。埋めるにはfixtureを足すしかない
+（`docs/development/mscx-preserved-markup.md`の「What the allowlist is not」を参照）。
 
 ---
 
