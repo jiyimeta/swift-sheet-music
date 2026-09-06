@@ -19,7 +19,9 @@ and this project adheres to
   `<b></b>` or `<font face="…"/>` changes the style of everything that follows.
   That shape is deliberately preserved verbatim instead of being assigned
   premature text-run semantics. Tempo markings remain regenerated from their
-  modeled tempo fields.
+  modeled tempo fields, and `Score.strippingPreservedMarkup()` clears the new
+  markup along with the rest, so a stripped score still carries no source-only
+  XML.
 
 - **Every element carries a placement, not just spanners.** `Placement` is now
   a top-level type on `ElementProperties`, so an element's side of the staff
