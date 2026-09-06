@@ -1,15 +1,16 @@
 import SheetMusicFoundation
 
-/// Adds a note a diatonic interval above or below every chord in a range — MuseScore's Alt+1…9 (above) and
-/// Shift+Alt+1…9 (below) over a range selection, as one undo step.
+/// Adds a note a diatonic interval above or below every chord in a range — MuseScore's Alt+1…0 (above) and
+/// Shift+Alt+2…0 (below) over a range selection, as one undo step.
 ///
-/// `steps` is the interval number with its sign: `|steps|` = 1 unison, 2 second … 8 octave, 9 ninth. Above is
-/// measured from each chord's highest note, below from its lowest. Unison and octaves keep that note's spelling;
-/// every other interval is spelled in the key in force (`StaffStepPitch.diatonicShift`). A pitch the chord already
+/// `steps` is the interval number with its sign: `|steps|` = 1 unison, 2 second … 8 octave, 9 ninth, 10 tenth —
+/// MuseScore's own range, where `Alt+0` is the TENTH and the octave is `Alt+8` (`shortcuts_mac.xml`). Above is
+/// measured from each chord's highest note, below from its lowest. The spelling rule is
+/// `IntervalPlanner.note(_:above:keySig:)`, shared with the single-note client path. A pitch the chord already
 /// holds — a unison always is one — is skipped, as is a result outside MIDI range; rests and percussion staves are
 /// skipped too. Added notes carry no tie.
 ///
-/// Refused as `.invalidInterval` outside ±1…±9 and as `.targetNotFound` when the range resolves to nothing.
+/// Refused as `.invalidInterval` outside ±1…±10 and as `.targetNotFound` when the range resolves to nothing.
 ///
 /// > Note: This command is sugar over `AddNoteToChord` (× chord) bundled in a `CompositeEditCommand` by
 /// > `RangeEditPlanner`. It exists to give the operation a domain-meaningful name and to own the reference-note and
@@ -39,7 +40,7 @@ public struct AddIntervalToSelection: EditCommand {
     /// session's planner reads as "restating is nil". Validation happens here so a direct `apply` and a planned one
     /// refuse identically.
     func plan(in score: Score) throws -> CompositeEditCommand? {
-        guard (1 ... 9).contains(abs(steps)) else { throw Self.refused(.invalidInterval(steps: steps)) }
+        guard (1 ... 10).contains(abs(steps)) else { throw Self.refused(.invalidInterval(steps: steps)) }
         guard !score.voiceElements(in: range).isEmpty else { throw Self.refused(.targetNotFound(range.start)) }
         return try RangeEditPlanner.plan(over: range, in: score) { target, working in
             guard RangeEditPlanner.isPitched(target.staff, in: working),
@@ -58,14 +59,9 @@ public struct AddIntervalToSelection: EditCommand {
             ? chord.notes.max { $0.pitch < $1.pitch }
             : chord.notes.min { $0.pitch < $1.pitch }
         guard let reference else { return nil }
-        let lineDelta = (abs(steps) - 1) * (steps > 0 ? 1 : -1)
-        let planned: (pitch: Int, tpc: Int)?
-        if lineDelta % 7 == 0 {
-            let pitch = reference.pitch + 12 * (lineDelta / 7)
-            planned = (0 ... 127).contains(pitch) ? (pitch, reference.tpc) : nil
-        } else {
-            planned = StaffStepPitch.diatonicShift(from: reference, bySteps: lineDelta, keySig: keySig)
-        }
+        // The rule itself lives in `IntervalPlanner` so that this and the single-note client path cannot drift —
+        // including the octave case, which keeps the reference's own spelling instead of re-reading the key.
+        let planned = IntervalPlanner.note(steps, above: reference, keySig: keySig)
         guard let planned, !chord.notes.contains(where: { $0.pitch == planned.pitch }) else { return nil }
         return Note(
             pitch: planned.pitch, tpc: planned.tpc,

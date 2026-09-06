@@ -225,9 +225,9 @@ public enum EditIntent: Sendable, Equatable {
     /// range with no pitched note; refused as `.invalidTransposition` past two octaves.
     case transposeRange(over: VoiceElementRange, semitones: Int, respellInKey: Bool)
 
-    /// Add a note `|steps|` diatonic degrees (1 unison … 9 ninth) above (positive) each chord's top note or below
-    /// (negative) its bottom note. A pitch the chord already holds is skipped. Resolves to nothing to apply when no
-    /// chord gains a note; refused as `.invalidInterval` outside ±1…±9.
+    /// Add a note `|steps|` diatonic degrees (1 unison … 8 octave … 10 tenth) above (positive) each chord's top note
+    /// or below (negative) its bottom note. A pitch the chord already holds is skipped. Resolves to nothing to apply
+    /// when no chord gains a note; refused as `.invalidInterval` outside ±1…±10.
     case addIntervalToSelection(over: VoiceElementRange, steps: Int)
 
     /// Turn every chord in `over` into a rest, collapsing each bar-voice left all-rests into one measure rest.
