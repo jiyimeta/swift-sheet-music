@@ -91,7 +91,7 @@ dependencies {
     api("net.volcanomobile.fluidsynth-android:fluidsynth-android:2.4.6")
 
     // Oboe (Apache-2.0) — low-latency PCM output
-    api("com.google.oboe:oboe:1.9.0")
+    api("com.google.oboe:oboe:1.10.0")
 
     api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
