@@ -1586,6 +1586,44 @@ hashされない**。共有`combineOccupied(_ properties:)`が混ぜ始めると
 足す」か、「**未modelのstyle XMLをopaqueに保持してwrite時に戻す**」かの二択。後者なら
 model parityを広げずにround-trip lossだけ止められるので、費用対効果は高い。
 
+#### 7.3.1 ［2026-09-06 訂正］後者は既に入っている。この節は二択が開いているかのように読める
+
+**「未modelのstyle XMLをopaqueに保持する」は優先順1（preserved markup）で実装済み**で、
+2050対10という数字はround-trip lossを一切意味していない。
+
+`MSCXDecoder+Style.swift:56`:
+
+```swift
+let inline = node.preservedMarkup(consuming: consumedStyleChildren)
+```
+
+**consumed setに無い`<Style>`の子は全部bagに入って往復する。** しかも同じ関数は
+`.mscz`の`score_style.mss`側とinline側をtag名でmergeしていて、
+「style fileにしか無いkeyがinline化で消える」という二次的な穴まで塞いである。
+
+**gateで確認できる。** preservation gateの`allowedLosses`に載っている`Style/`は**1件だけ**で、
+それも損失ではない:
+
+```
+"Style/Spatium" — by design: the v4 encoder writes lowercase <spatium>;
+                  the decoded value round-trips.
+```
+
+**綴りの変更であって値の損失ではない。** つまり`<Style>`配下でfileから消えるものは無い。
+`TextStyleType`の21対76も同様で、未modelの`<TextStyle>`は`<Style>`の未model子として
+bagに入る——**§2.4の「MISSING = fileから消える」がstyleには最初から当てはまらない。**
+
+**残っているのは意味論の側だけ。** styleを`ScoreStyle`のfieldとして持たない限り、
+layoutとrendererはそれに反応できないので、**「MuseScoreと同じに見えるか」は解けていない**。
+ただしそれは**fidelityの問題ではなくengravingの問題**で、この文書の§2.4の判定区分とは別の軸。
+費用対効果を論じるべき対象は「どのSidをengravingに繋ぐか」であって、
+「保持するかどうか」ではもう無い。
+
+**この節が古くなった形は§8のリストと同じ。** 書かれた時点では二択が開いていて、
+優先順1がその片方を実装し、**実装した人がこの節を更新しなかった**。
+§7.1・§7.2が完了した今、§7の4つのうち§7.3は「**round-tripは解決済み、engravingは未着手**」
+という状態で、他の3つと同じ列に並べると残工事を過大に見積もる。
+
 ### 7.4 時間軸を持つmap
 
 MuseScoreは`KeyList` / `ClefList` / `StaffTypeList` / `TimeSigMap`をtick keyのmapとして持つ。
