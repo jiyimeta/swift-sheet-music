@@ -321,6 +321,8 @@ extension Voice {
                 appendVoiceElement(.ambitus(Ambitus.decode(child)))
             case "FiguredBass":
                 appendVoiceElement(.figuredBass(FiguredBass.decode(child)))
+            case "FretDiagram":
+                appendVoiceElement(.fretDiagram(FretDiagram.decode(child)))
             case "RehearsalMark":
                 try lifted(.rehearsalMark(
                     RehearsalMark.decode(child),

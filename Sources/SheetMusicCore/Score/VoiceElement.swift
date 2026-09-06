@@ -45,6 +45,9 @@ public enum VoiceElement: Sendable, Equatable {
     /// A thoroughbass figure stored as a segment annotation at the current
     /// tick. Occupies no tick budget.
     case figuredBass(FiguredBass)
+    /// A chord diagram stored as a segment annotation at the current tick.
+    /// Occupies no tick budget.
+    case fretDiagram(FretDiagram)
     /// A `<voice>` child this library does not model, kept at its
     /// position in the stream. Unlike container-level
     /// `preservedMarkup` bags, a voice child's position is its
