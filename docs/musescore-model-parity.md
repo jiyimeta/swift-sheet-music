@@ -1030,12 +1030,18 @@ allowlistが短いことは損失が少ないことを意味しない。詳細�
 `PageChrome`が持っている、`<multiMeasureRest>`を持つmeasureは意図的に丸ごと捨てる）は
 `docs/development/mscx-preserved-markup.md`の「What the allowlist is not」を参照。
 
-以下、§5.3と§5.4は上の分類で数え直した。**§5.1 / §5.2はまだ数え直していない**——
-それらの記述は初出時のままで、同じ検算を通していない。手法も変える必要がある:
-§5.1（spanner payload）と§5.2（author intent）はtagではなく**property単位**の話で、
-consumed setとreaderのtag集合を突き合わせるやり方では片付かない。
-この2節は他より「本当にPARTIAL」である可能性が高い、というのが検算前の見立てだが、
-§5.3と§5.4がどちらも予想を外した以上、当てにはしないこと。
+**§5.1から§5.4まで全部数え直した。** 結果は節ごとに大きく違い、**分かれ目は
+「その型にbagがあるか」だった**——tag単位の4分類は、その手前の条件が満たされて初めて意味を持つ。
+
+| 節 | 結果 |
+|---|---|
+| §5.1 spanner payload | **大筋が正しい。** payload型（`HairpinPayload`等）にbagが無いのが原因。ただし`LAISSEZ_VIB`は往復する（実測） |
+| §5.2 author intent | **大半が誤り。** `Chord` / `Note`はbagを持つので、consumed setに無い子は往復する |
+| §5.3 構造・signature | 4件中4件が予想と相違（下の追記） |
+| §5.4 instrument / playback | 1行が誤り、残りは未測定（下の追記） |
+
+**検算前の見立て（「§5.1 / §5.2は他より本当にPARTIALである可能性が高い」）は半分当たった。**
+§5.1は当たり、§5.2は外れ。理由は上のとおりで、**要素の性質ではなく型のbagの有無**だった。
 
 ### 5.1 spanner payload
 
@@ -1051,20 +1057,65 @@ consumed setとreaderのtag集合を突き合わせるやり方では片付か�
 gap / align）を持つ型がそもそも無いので、**payloadを持っているhairpinやottavaでも
 線種と両端textは落ちる**。
 
+**［2026-09-06 検算］この節は§5.3 / §5.4と違って、大筋が正しい。原因も分かった。**
+
+**`Spanner`はwrapperにbagを持つが、payload型は持たない。**
+`HairpinPayload` / `OttavaPayload` / `VibratoPayload` / `TrillPayload`のどれにも
+`preservedMarkup`が無い（`Sources/SheetMusicCore/Score/Spanner.swift`）。
+`<Spanner>`の未知の子は`Spanner.preservedMarkup`に入るが、
+**modelされた`<HairPin>` / `<Volta>` / `<Glissando>`の内側は、そこに届かない**。
+
+これはpreservation gateが既に測っていて、`spannerPayloadReason`が
+`HairPin/Segment`・`Segment/off2`・`Segment/offset`・`Segment/subtype`・
+`Volta/endHookType`・`Glissando/diagonal`をその理由で許容している——
+reason文が「a payload-level bag would be needed」と正確に書いている。
+**§5.1が「落ちる」と言っているものの大半は、この1つの構造に帰着する。**
+
+§5.4で数えた「bagを持たない14型」の一段下に、**bagを持たない4つのpayload型**がある。
+
 - `SLUR` — direction、line type、style、partial direction、Bézier編集が落ちる
 - `TIE` — `Note.tieForward`/`tieBack`の位置番号のみ。placement / direction / style / 編集済みsegmentなし
 - `GLISSANDO` — `showText`、shift、font / line stylingが落ちる。終点側markerを書かない
 - `GUITAR_BEND` — bend量（quarter tone）、direction、whammy関連が落ちる（decoderがdiagnosticを出す）
-- `LAISSEZ_VIB` / `PARTIAL_TIE` — 専用modelなし。`.other`扱い
+- ~~`LAISSEZ_VIB` / `PARTIAL_TIE` — 専用modelなし。`.other`扱い~~
+  **「専用modelが無い」は正しいが、`LAISSEZ_VIB`は落ちない。**
+  `<LaissezVib>`は`<Note>`の子で、`consumedNoteChildren`に無いので
+  `Note.preservedMarkup`に入って往復する。**しかもこれは実測**——
+  `musicxml/testUnterminatedTies_ref.mscx`が持っていて、`allowedLosses`に
+  対応entryが無いままgateが通っている。`docs/development/mscx-preserved-markup.md`が
+  `<Note><LaissezVib><eid>`を例に挙げているのもこれ。`PARTIAL_TIE`はfixtureに無いので未測定
 
 ### 5.2 note / chordのauthor intent
 
 geometryを導出するのは設計どおりだが、**導出できない作者の意図**まで落ちている。
 
-- 手動stem direction / stem長 / no-stem（`Chord`は`stemVisible`相当のみ）
-- 手動`BeamMode`とbeam fragment（`BeamGrouping`は導出algorithmのみ）
-- `ChordRest.small` / `staffMove`（cross-staff） / `crossMeasure`
-- `Note`の`headScheme` / `fixed`・`fixedLine` / `tuning` / `ghost` / `deadNote` / `dotsHidden`
+**［2026-09-06 検算］この節は§5.1と逆で、大半が誤り。`Chord`と`Note`は両方bagを持つので、
+consumed setに載っていない子は往復する。**
+
+- 手動stem direction / stem長 / no-stem —— **分かれる。**
+  ~~手動stem direction~~ **`StemDirection`は`consumedChordChildren`に無いので往復する。**
+  一方**stem長は落ちる**——`Stem`はconsumed setに有り、`Chord`が持つのは`stemVisible`だけなので、
+  `<Stem>`の中の`<userLen>`は要素ごとconsumeされて消える（§5.3の3分類の3つ目）
+- ~~手動`BeamMode`とbeam fragment~~ **`BeamMode`はconsumed setに無く、往復する。**
+  `BeamGrouping`が導出algorithmしか持たないのは正しいが、それは
+  「modelから読めない」であって「fileから消える」ではない
+- ~~`ChordRest.small` / `staffMove` / `crossMeasure`~~ **`staffMove`と`crossMeasure`は往復する**
+  （どちらもconsumed setに無い）。**`small`だけは落ちる**——`Chord`側のconsumed setに有るのに
+  `Chord`に対応fieldが無い（`Note`側の`small`は`Note.isSmall`があるので往復する）
+- ~~`Note`の`headScheme` / `fixed`・`fixedLine` / `tuning` / `ghost` / `deadNote` / `dotsHidden`~~
+  **6つともconsumed setに無いので往復する。** `consumedNoteChildren`が挙げているのは
+  `Accidental` / `Bend` / `ChordLine` / `Fingering` / `Parenthesis` / `Symbol` / `Spanner` / `Tie` と
+  `color` / `endSpanner` / `fret` / `head` / `offset` / `parentheses` / `pitch` / `placement` /
+  `play` / `small` / `string` / `tpc` / `tpc2` / `veloType` / `velocity` / `visible` だけ
+
+**残りの行（`Tuplet`・`Accidental.small`・`Fermata.play`・`Arpeggio`各種・`Tremolo`・`TDuration`）は
+未検算。** ただし`Tremolo`と`Arpeggio`は§5.4で数えた「bagを持たない型」に入る可能性が高い
+（`MSCXDecoder+Tremolo.swift`は`preservedMarkup`に触れていない）ので、そこは
+`Chord` / `Note`とは別の結論になるはず。
+
+**この節と§5.1の差は、bagの有無がどこにあるかだけ。** `Chord` / `Note`はbagを持つので
+「modelに無い」が「落ちる」を意味しない。`Spanner`のpayload型はbagを持たないので意味する。
+**「PARTIAL」と書く前に、その型にbagがあるかを見ること。**
 - `Tuplet`のbase duration / bracket・number表示mode / direction / 手動端点 / custom text
 - `Accidental.small`、`Fermata.play`、`Arpeggio.span`・`userLen2`・`play`
 - `Tremolo`はr8–r64 / c8–c64のみ。r128 / r256 / buzz rollは非対応（diagnostic有り）
