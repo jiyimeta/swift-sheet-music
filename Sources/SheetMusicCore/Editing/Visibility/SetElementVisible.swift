@@ -4,8 +4,8 @@ import SheetMusicFoundation
 /// its `elementProperties.visible`. Playback is unaffected (`ElementProperties.visible` doc).
 ///
 /// Every `VoiceElement` case that carries `ElementProperties` is accepted: chord (a rest is a chord), clef,
-/// barline, key and time signature, dynamic, fermata, breath, spanner, harmony, sticking, and expression. A
-/// measure repeat, location shift, and preserved source node carry none and are refused as
+/// barline, key and time signature, dynamic, fermata, breath, spanner, harmony, sticking, expression, capo, and
+/// string tunings. A measure repeat, location shift, and preserved source node carry none and are refused as
 /// `.wrongElementKind(expected: .engravable)`.
 ///
 /// On a chord this is the model's whole-chord switch (`Chord.visible`, what the layout reads as `chordFullyHidden`).
@@ -59,6 +59,8 @@ public struct SetElementVisible: EditCommand {
         case let .harmony(harmony): harmony.visible
         case let .sticking(sticking): sticking.visible
         case let .expression(expression): expression.visible
+        case let .capo(capo): capo.visible
+        case let .stringTunings(tunings): tunings.visible
         case .measureRepeat, .locationShift, .preserved: nil
         }
     }
@@ -101,6 +103,12 @@ public struct SetElementVisible: EditCommand {
         case var .expression(expression):
             expression.visible = visible
             return .expression(expression)
+        case var .capo(capo):
+            capo.visible = visible
+            return .capo(capo)
+        case var .stringTunings(tunings):
+            tunings.visible = visible
+            return .stringTunings(tunings)
         case .measureRepeat, .locationShift, .preserved:
             return nil
         }

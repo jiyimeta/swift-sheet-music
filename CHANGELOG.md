@@ -65,6 +65,42 @@ and this project adheres to
   inline markup inside `<text>` flattens to plain text — the same limitation
   `StaffText` has. Engraving does not place a fingering glyph yet.
 
+- **Capos and string tunings are modeled.** `<Capo>` and `<StringTunings>` are
+  the two fretted-instrument annotations that sit in the voice stream: a capo
+  says which fret the player has clamped and which strings it skips, and a
+  string-tunings mark says what the instrument is retuned to from that point
+  on. Both reached the model only as opaque preserved subtrees.
+
+  `VoiceElement` gains `.capo(Capo)` and `.stringTunings(StringTunings)`. They
+  are voice elements rather than `SystemElement`s because upstream gives them
+  `ElementFlag::ON_STAFF` and no system flag — hiding the guitar staff should
+  take its capo with it, unlike a tempo mark. `StringTunings.stringData` reuses
+  the `StringData` value this release also added under `<Instrument>`, so the
+  same tuning type now serves both places MuseScore writes one.
+
+  **An absent tag on a `<Capo>` does not mean zero.** MuseScore omits a
+  property equal to its `propertyDefault`, and `Capo`'s defaults are `active =
+  true` and `fretPosition = 1` — not the `false` / `0` that its C++ struct's
+  field initializers suggest. So the most ordinary capo in existence, active at
+  fret 1, is written with neither tag present. Decoding those as false and 0
+  would silently turn an active capo inactive, and a capo changes sounding
+  pitch. The decoder follows `propertyDefault`, and keeps an absent tag
+  distinct from an unparseable one — MuseScore's reader turns
+  `<fretPosition>abc</fretPosition>` into 0, which means "no capo", not 1. The
+  encoder writes those three scalars unconditionally so a round trip cannot
+  re-introduce the ambiguity.
+
+  `Capo.transposeMode` is optional rather than a plain value because that tag
+  is a MuseScore **4.7** property while this encoder declares 4.60. `nil` means
+  the source carried none, and none is then written, so a file this library
+  produces never gains a tag its target version does not know. The two elements
+  themselves are 4.1 and later.
+
+  `<style>`, `<placement>`, font overrides and the `StaffTextBase` channel and
+  swing tags stay in preserved markup. **Neither element is engraved or
+  sounded yet** — in particular no capo transposition is applied to playback;
+  this is round-trip fidelity only.
+
 - **Fretted-instrument tuning is modeled.** `<StringData>` is what tells a
   reader which pitch each string of a guitar, bass, or banjo is tuned to, and
   how many frets it has. This library kept `Note.string` and `Note.fret` but
