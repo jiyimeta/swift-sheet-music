@@ -28,12 +28,14 @@ extension StringTunings {
         let visibleStrings = node.first("visibleStrings").map { child in
             child.text.split(separator: ",").compactMap { Int($0) }
         } ?? []
+        let textNode = node.first("text")
         var tunings = StringTunings(
             preset: node.first("preset")?.text ?? "",
             visibleStrings: visibleStrings,
             stringData: node.first("StringData").map(StringData.decode(_:)),
-            text: node.first("text").map(StaffText.plainText(of:)) ?? "",
+            text: textNode.map(StaffText.plainText(of:)) ?? "",
             preservedMarkup: node.preservedMarkup(consuming: consumedChildren),
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
         tunings.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return tunings

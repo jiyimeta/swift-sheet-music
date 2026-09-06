@@ -148,7 +148,11 @@ extension Marker {
         var children = [
             XMLTreeNode(name: "markerType", text: kind.rawValue),
             XMLTreeNode(name: "label", text: label),
-            XMLTreeNode(name: "text", text: text),
+            encodeText(
+                text,
+                preservedTextMarkup: preservedTextMarkup,
+                options: options,
+            ),
         ]
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(
@@ -172,7 +176,11 @@ extension Jump {
         if playRepeats {
             children.append(XMLTreeNode(name: "playRepeats", text: "1"))
         }
-        children.append(XMLTreeNode(name: "text", text: text))
+        children.append(encodeText(
+            text,
+            preservedTextMarkup: preservedTextMarkup,
+            options: options,
+        ))
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "Jump", children: children)
     }

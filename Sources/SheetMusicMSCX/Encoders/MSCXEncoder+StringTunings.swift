@@ -26,7 +26,11 @@ extension StringTunings {
         if let stringData {
             children.append(stringData.encode(options: options))
         }
-        children.append(XMLTreeNode(name: "text", text: text))
+        children.append(encodeText(
+            text,
+            preservedTextMarkup: preservedTextMarkup,
+            options: options,
+        ))
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "StringTunings", children: children)

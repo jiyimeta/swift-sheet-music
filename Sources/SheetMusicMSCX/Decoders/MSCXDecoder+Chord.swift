@@ -242,7 +242,10 @@ extension Chord {
         var lyricsMap: [Int: Lyric] = [:]
         for lyricsNode in node.all("Lyrics") {
             let verse = Int(lyricsNode.first("no")?.text ?? "0") ?? 0
-            let text = lyricsNode.first("text")?.text ?? ""
+            let textNode = lyricsNode.first("text")
+            // Own character data only. Reading descendants would fold a
+            // `<sym>`'s SymId spelling into the sung syllable.
+            let text = textNode?.text ?? ""
             let syllabic = (lyricsNode.first("syllabic")?.text)
                 .flatMap(Syllabic.init(mscxValue:)) ?? .single
             let ticks = Int(lyricsNode.first("ticks")?.text ?? "0") ?? 0
@@ -253,6 +256,9 @@ extension Chord {
                 preservedMarkup: lyricsNode.preservedMarkup(
                     consuming: consumedLyricsChildren,
                 ),
+                preservedTextMarkup: textNode.flatMap {
+                    StaffText.preservedTextMarkup(of: $0, derivedText: text)
+                },
             )
             lyric.elementProperties = ElementProperties(decodingMSCXChildrenOf: lyricsNode)
             lyricsMap[verse] = lyric

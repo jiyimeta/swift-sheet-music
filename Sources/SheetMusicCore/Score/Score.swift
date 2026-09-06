@@ -111,6 +111,9 @@ public struct Score: Sendable, Equatable {
             switch stripped.blocks[blockIndex].block {
             case var .verticalFrame(frame):
                 frame.preservedMarkup = []
+                for textIndex in frame.texts.indices {
+                    frame.texts[textIndex].preservedTextMarkup = nil
+                }
                 stripped.blocks[blockIndex].block = .verticalFrame(frame)
             case var .opaqueFrame(frame):
                 frame.preservedMarkup = []
@@ -144,13 +147,13 @@ public struct Score: Sendable, Equatable {
 
 /// Clear the bags reachable from one system element.
 ///
-/// Only `.instrumentChange` reaches one: `Tempo`, `RehearsalMark`,
-/// `StaffText` and `Swing` carry no preserved markup of their own,
-/// and neither does `InstrumentChange` — the bags live on the
-/// `Instrument` it swaps in, and below that on its `StringData` and
-/// its channels. A mid-score change to a TAB instrument really does
-/// write `<InstrumentChange><Instrument><StringData>`, so this is a
-/// reachable path and not a theoretical one.
+/// `.instrumentChange` reaches the `Instrument` it swaps in, and below
+/// that its `StringData` and its channels. A mid-score change to a TAB
+/// instrument really does write
+/// `<InstrumentChange><Instrument><StringData>`, so this is a reachable
+/// path and not a theoretical one. Every case but `.tempo` also carries
+/// inline `<text>` markup; `Tempo` does not, because its `<text>` is
+/// regenerated from the modeled tempo rather than round-tripped.
 ///
 /// The switch is written over every case rather than as a single
 /// `if case` so that a new `SystemElement` case that does carry a
@@ -162,8 +165,18 @@ private func stripPreservedMarkup(from element: inout SystemElement) {
             stripPreservedMarkup(from: &instrument)
             change.instrument = instrument
         }
+        change.preservedTextMarkup = nil
         element = .instrumentChange(change)
-    case .tempo, .rehearsalMark, .staffText, .swing:
+    case var .staffText(text):
+        text.preservedTextMarkup = nil
+        element = .staffText(text)
+    case var .rehearsalMark(mark):
+        mark.preservedTextMarkup = nil
+        element = .rehearsalMark(mark)
+    case var .swing(swing):
+        swing.preservedTextMarkup = nil
+        element = .swing(swing)
+    case .tempo:
         break
     }
 }
@@ -182,9 +195,11 @@ private func stripPreservedMarkup(from measure: inout Measure) {
     measure.preservedMarkup = []
     for markerIndex in measure.markers.indices {
         measure.markers[markerIndex].preservedMarkup = []
+        measure.markers[markerIndex].preservedTextMarkup = nil
     }
     for jumpIndex in measure.jumps.indices {
         measure.jumps[jumpIndex].preservedMarkup = []
+        measure.jumps[jumpIndex].preservedTextMarkup = nil
     }
     for voiceIndex in measure.voices.indices {
         MeasureStructure.removeElements(in: &measure.voices[voiceIndex]) { element in
@@ -213,11 +228,20 @@ private func strippingPreservedMarkup(from element: VoiceElement) -> VoiceElemen
     if case var .dynamic(value) = element { value.preservedMarkup = []; return .dynamic(value) }
     if case var .spanner(value) = element { value.preservedMarkup = []; return .spanner(value) }
     if case var .harmony(value) = element { value.preservedMarkup = []; return .harmony(value) }
-    if case var .sticking(value) = element { value.preservedMarkup = []; return .sticking(value) }
-    if case var .expression(value) = element { value.preservedMarkup = []; return .expression(value) }
-    if case var .capo(value) = element { value.preservedMarkup = []; return .capo(value) }
+    if case var .sticking(value) = element {
+        value.preservedMarkup = []; value.preservedTextMarkup = nil; return .sticking(value)
+    }
+    if case var .expression(value) = element {
+        value.preservedMarkup = []; value.preservedTextMarkup = nil; return .expression(value)
+    }
+    if case var .capo(value) = element {
+        value.preservedMarkup = []; value.preservedTextMarkup = nil; return .capo(value)
+    }
     if case var .stringTunings(value) = element {
-        value.preservedMarkup = []; value.stringData?.preservedMarkup = []; return .stringTunings(value)
+        value.preservedMarkup = []
+        value.preservedTextMarkup = nil
+        value.stringData?.preservedMarkup = []
+        return .stringTunings(value)
     }
     if case var .ambitus(value) = element { value.preservedMarkup = []; return .ambitus(value) }
     if case var .figuredBass(value) = element {
@@ -240,6 +264,7 @@ private func strippingPreservedMarkup(from source: Chord) -> Chord {
     }
     for lyricIndex in chord.lyrics.indices {
         chord.lyrics[lyricIndex].preservedMarkup = []
+        chord.lyrics[lyricIndex].preservedTextMarkup = nil
     }
     for spannerIndex in chord.spanners.indices {
         chord.spanners[spannerIndex].preservedMarkup = []
@@ -272,8 +297,10 @@ private func stripPreservedMarkup(from graces: inout [GraceChord]) {
 /// one function, not remembering that there are two places.
 private func stripPreservedMarkup(from note: inout Note) {
     note.preservedMarkup = []
+    note.glissando?.preservedTextMarkup = nil
     for fingeringIndex in note.fingerings.indices {
         note.fingerings[fingeringIndex].preservedMarkup = []
+        note.fingerings[fingeringIndex].preservedTextMarkup = nil
     }
     for symbolIndex in note.symbols.indices {
         note.symbols[symbolIndex].preservedMarkup = []

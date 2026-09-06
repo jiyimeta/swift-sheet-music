@@ -9,9 +9,13 @@ extension RehearsalMark {
     /// `frame` is folded back into `<frameType>` (decoder strips it
     /// out of `properties` and surfaces it as the dedicated
     /// `frame` field).
-    func encode() -> XMLTreeNode {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = [
-            XMLTreeNode(name: "text", text: text),
+            encodeText(
+                text,
+                preservedTextMarkup: preservedTextMarkup,
+                options: options,
+            ),
         ]
         var props = properties
         // RehearsalMark defaults to a rectangle frame (MuseScore's

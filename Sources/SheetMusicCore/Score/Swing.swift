@@ -24,6 +24,7 @@ public struct Swing: Sendable, Equatable {
     /// Display label. MuseScore writes "Swing" by default; user-edited
     /// labels (e.g. "Shuffle") round-trip through `<text>`.
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// Swing subdivision target. `.off` disables swing from this
     /// point even if the global Style enables it.
     public var unit: SwingUnit
@@ -85,8 +86,10 @@ public struct Swing: Sendable, Equatable {
         color: ScoreColor? = nil,
         properties: TextProperties = TextProperties(),
         visible: Bool = true,
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.unit = unit
         self.ratio = ratio
         self.isSystemText = isSystemText

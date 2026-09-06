@@ -9,9 +9,8 @@ import SheetMusicFoundation
 /// **Content, not presentation.** The preset, visible-string order, optional
 /// tuning data, and `text` are modeled; `<style>`, font overrides, and the
 /// `StaffTextBase` channel and swing tags stay in `preservedMarkup`. The shared
-/// base owns `<offset>` and `<placement>`. Inline markup inside `<text>`
-/// flattens to plain text, the cross-cutting limitation described by the
-/// parity document's §7.1 text-content work.
+/// base owns `<offset>` and `<placement>`. Inline markup inside `<text>` is
+/// carried opaquely beside the flattened plain text.
 public struct StringTunings: Sendable, Equatable {
     /// `<preset>`, or an empty string when absent.
     public var preset: String
@@ -21,6 +20,7 @@ public struct StringTunings: Sendable, Equatable {
     public var stringData: StringData?
     /// The `<text>` payload, flattened to plain text.
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// Base element properties shared with every engravable element.
     public var elementProperties: ElementProperties
     /// Sugar over `elementProperties.visible`.
@@ -40,11 +40,13 @@ public struct StringTunings: Sendable, Equatable {
         text: String = "",
         elementProperties: ElementProperties = .default,
         preservedMarkup: [PreservedXML] = [],
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.preset = preset
         self.visibleStrings = visibleStrings
         self.stringData = stringData
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.elementProperties = elementProperties
         self.preservedMarkup = preservedMarkup
     }

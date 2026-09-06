@@ -20,7 +20,11 @@ extension Sticking {
     /// it as unknown. Every target this encoder emits is at or above that, so
     /// there is no version branch.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children = [XMLTreeNode(name: "text", text: text)]
+        var children = [encodeText(
+            text,
+            preservedTextMarkup: preservedTextMarkup,
+            options: options,
+        )]
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         children += elementProperties.mscxTrailingChildren()
