@@ -17,9 +17,47 @@ public struct Score: Sendable, Equatable {
     /// add/remove measures must maintain this alignment.
     public var systemMeasures: [SystemMeasure]
     public var metaTags: [String: String]
+    /// Score-level boxes in their document order among measures.
+    public var blocks: [PositionedScoreBlock]
     /// Title block (`<VBox>` in MuseScore) above the first system,
-    /// when present.
-    public var titleFrame: ScoreFrame?
+    /// when present. This compatibility view reads and writes the
+    /// first leading vertical frame in `blocks`.
+    public var titleFrame: ScoreFrame? {
+        get {
+            for positioned in blocks where positioned.beforeMeasureIndex == 0 {
+                if case let .verticalFrame(frame) = positioned.block {
+                    return frame
+                }
+            }
+            return nil
+        }
+        set {
+            let existingIndex = blocks.firstIndex { positioned in
+                guard positioned.beforeMeasureIndex == 0 else { return false }
+                if case .verticalFrame = positioned.block { return true }
+                return false
+            }
+            if let existingIndex {
+                if let newValue {
+                    blocks[existingIndex].block = .verticalFrame(newValue)
+                } else {
+                    blocks.remove(at: existingIndex)
+                }
+            } else if let newValue {
+                let firstLeadingIndex = blocks.firstIndex {
+                    $0.beforeMeasureIndex == 0
+                } ?? 0
+                blocks.insert(
+                    PositionedScoreBlock(
+                        beforeMeasureIndex: 0,
+                        block: .verticalFrame(newValue),
+                    ),
+                    at: firstLeadingIndex,
+                )
+            }
+        }
+    }
+
     /// Subset of MuseScore's `<Style>` block.
     public var style: ScoreStyle
     /// Records the format this score was loaded from. Defaults to
@@ -36,6 +74,7 @@ public struct Score: Sendable, Equatable {
         systemMeasures: [SystemMeasure] = [],
         metaTags: [String: String] = [:],
         titleFrame: ScoreFrame? = nil,
+        blocks: [PositionedScoreBlock] = [],
         style: ScoreStyle = .museScoreDefaults,
         source: ScoreSource = .unknown,
         preservedMarkup: [PreservedXML] = [],
@@ -44,7 +83,18 @@ public struct Score: Sendable, Equatable {
         self.parts = parts
         self.systemMeasures = systemMeasures
         self.metaTags = metaTags
-        self.titleFrame = titleFrame
+        self.blocks = blocks
+        // The compatibility argument is the title, so when both forms are
+        // supplied it precedes every block already present in the stream.
+        if let titleFrame {
+            self.blocks.insert(
+                PositionedScoreBlock(
+                    beforeMeasureIndex: 0,
+                    block: .verticalFrame(titleFrame),
+                ),
+                at: 0,
+            )
+        }
         self.style = style
         self.source = source
         self.preservedMarkup = preservedMarkup
@@ -57,6 +107,16 @@ public struct Score: Sendable, Equatable {
         var stripped = self
         stripped.preservedMarkup = []
         stripped.style.preservedMarkup = []
+        for blockIndex in stripped.blocks.indices {
+            switch stripped.blocks[blockIndex].block {
+            case var .verticalFrame(frame):
+                frame.preservedMarkup = []
+                stripped.blocks[blockIndex].block = .verticalFrame(frame)
+            case var .opaqueFrame(frame):
+                frame.preservedMarkup = []
+                stripped.blocks[blockIndex].block = .opaqueFrame(frame)
+            }
+        }
         for partIndex in stripped.parts.indices {
             stripped.parts[partIndex].preservedMarkup = []
             stripped.parts[partIndex].instrument.preservedMarkup = []

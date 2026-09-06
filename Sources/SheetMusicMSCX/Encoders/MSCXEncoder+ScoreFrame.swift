@@ -12,7 +12,9 @@ extension ScoreFrame {
     /// Encode this frame as MuseScore's `<VBox>` element. Mirrors the
     /// shape `MSCXDecoder+ScoreFrame.decode(vbox:)` reads:
     /// `<height>` followed by zero or more `<Text>` blocks.
-    func encodeAsVBox() -> XMLTreeNode {
+    func encodeAsVBox(
+        options: MSCXEncoderOptions = .init(),
+    ) -> XMLTreeNode {
         var children: [XMLTreeNode] = [
             XMLTreeNode(
                 name: "height",
@@ -22,6 +24,7 @@ extension ScoreFrame {
         for text in texts {
             children.append(text.encode())
         }
+        appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         return XMLTreeNode(name: "VBox", children: children)
     }
 }

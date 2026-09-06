@@ -21,6 +21,32 @@ and this project adheres to
   `<style>` on the same element cannot reset it on the next read; MuseScore
   writes the two in the opposite order and loses author color as a result.
 
+- **Frames between systems survive a round trip.** MuseScore lets a score carry
+  frames alongside its measures — a title block, a horizontal gap before a coda,
+  a block of prose, a row of chord diagrams. This library kept exactly one of
+  them: the title frame at the very top. Every other frame, including a vertical
+  frame appearing later in the piece, was dropped the moment a score was opened
+  and saved.
+
+  `Score.blocks` now holds them in document position, each recording the measure
+  index it sits before. `Score.titleFrame` still means what it always meant and
+  is now a view onto the first of those blocks, so nothing that reads it changes.
+
+  Only the vertical frame is typed, because the layout engine draws the title
+  block out of it. Horizontal, text, and fret frames are carried whole instead:
+  nothing in this library lays them out, so nothing needs their fields typed,
+  and a verbatim subtree is a more honest thing to hand back than a half-filled
+  model. Typing them is what a slice that teaches the layout engine about them
+  would do.
+
+  Frames are a property of the score rather than of any one staff — MuseScore
+  writes them under the first staff only — so they live beside the measures
+  rather than inside them, and adding or removing a staff cannot disturb them.
+
+  **Nothing is engraved differently.** The frames are preserved, not drawn; a
+  horizontal frame still occupies no width and a text frame still shows no text.
+  What changes is that opening and saving a score no longer discards them.
+
 - **Note-attached engraving symbols are modeled.** A direct `<Symbol>` child
   of `<Note>` now round-trips as an `EngravingSymbol` in `Note.symbols`,
   including its open-ended SMuFL name, score font, size, angle, visibility,

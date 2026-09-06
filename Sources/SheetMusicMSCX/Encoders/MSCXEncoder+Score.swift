@@ -100,7 +100,7 @@ extension Score {
     }
 
     /// Emit per-staff `<Staff id="N">` measure bodies. The first
-    /// staff of the first part also receives the title `<VBox>`. Each
+    /// staff of the first part also receives all score-level boxes. Each
     /// staff also receives its per-measure effective durations so
     /// `.measure` rests can resolve against the prevailing
     /// TimeSignature × actualLength for that bar.
@@ -109,7 +109,6 @@ extension Score {
         into scoreChildren: inout [XMLTreeNode],
         options: MSCXEncoderOptions,
     ) throws {
-        var titleFrameSlot = titleFrame
         for (partIndex, entry) in allStaffIDs.enumerated() {
             // The written notation is a per-part property, and everything below this point
             // (notes' `<tpc2>`, key signatures' `<accidental>`) needs it. Hand the measure
@@ -128,17 +127,22 @@ extension Score {
             for (staffIndexInPart, pair) in zip(entry.part.staves, entry.ids).enumerated() {
                 let staff = pair.0
                 let id = pair.1
-                let frame = titleFrameSlot
-                titleFrameSlot = nil
                 let address = StaffAddress(
                     partIndex: partIndex,
                     staffIndexInPart: staffIndexInPart,
                 )
                 let perMeasure = perMeasureSystemElements(for: address)
+                // MuseScore's MeasureBase list is walked for every staff, but
+                // non-measures are written only for staff 0
+                // (`rw/write/staffwrite.cpp:42`). They are score-level, so in
+                // this part/staff model only the first staff receives them.
+                let staffBlocks = partIndex == 0 && staffIndexInPart == 0
+                    ? blocks
+                    : []
                 try scoreChildren.append(
                     staff.encodeTopLevel(
                         staffID: id,
-                        titleFrame: frame,
+                        blocks: staffBlocks,
                         systemElementsByMeasure: perMeasure,
                         effectiveMeasureDurations: staff.measures.effectiveMeasureDurations(),
                         options: partOptions,
