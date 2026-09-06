@@ -18,6 +18,15 @@ public enum XMLTreeSerializer {
         _ node: XMLTreeNode, indent depth: Int, into out: inout String,
     ) {
         let pad = String(repeating: "  ", count: depth)
+        if let mixedContent = node.mixedContent {
+            writeMixedContentNode(
+                node,
+                content: mixedContent,
+                pad: pad,
+                into: &out,
+            )
+            return
+        }
         let attrs = renderAttributes(node.attributes)
         let isEmpty = node.text.isEmpty && node.children.isEmpty
         if isEmpty {
@@ -36,6 +45,63 @@ public enum XMLTreeSerializer {
             write(child, indent: depth + 1, into: &out)
         }
         out += "\(pad)</\(node.name)>\n"
+    }
+
+    private static func writeMixedContentNode(
+        _ node: XMLTreeNode,
+        content: [XMLContentItem],
+        pad: String,
+        into out: inout String,
+    ) {
+        let attrs = renderAttributes(node.attributes)
+        guard !content.isEmpty else {
+            out += "\(pad)<\(node.name)\(attrs)/>\n"
+            return
+        }
+        out += "\(pad)<\(node.name)\(attrs)>"
+        writeInline(content, into: &out)
+        out += "</\(node.name)>\n"
+    }
+
+    private static func writeInline(
+        _ content: [XMLContentItem],
+        into out: inout String,
+    ) {
+        for item in content {
+            switch item {
+            case let .characters(characters):
+                out += escapeText(characters)
+            case let .element(element):
+                writeInline(element, into: &out)
+            }
+        }
+    }
+
+    private static func writeInline(
+        _ node: XMLTreeNode,
+        into out: inout String,
+    ) {
+        let attrs = renderAttributes(node.attributes)
+        if let mixedContent = node.mixedContent {
+            guard !mixedContent.isEmpty else {
+                out += "<\(node.name)\(attrs)/>"
+                return
+            }
+            out += "<\(node.name)\(attrs)>"
+            writeInline(mixedContent, into: &out)
+            out += "</\(node.name)>"
+            return
+        }
+        guard !node.text.isEmpty || !node.children.isEmpty else {
+            out += "<\(node.name)\(attrs)/>"
+            return
+        }
+        out += "<\(node.name)\(attrs)>"
+        out += escapeText(node.text)
+        for child in node.children {
+            writeInline(child, into: &out)
+        }
+        out += "</\(node.name)>"
     }
 
     private static func renderAttributes(_ attrs: [String: String]) -> String {

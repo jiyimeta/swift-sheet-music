@@ -52,12 +52,66 @@ extension LayoutBridge {
         return packed == 0xFF00_0000 ? nil : packed
     }
 
+    /// The `setTextStyle` bitmask for a role's MuseScore defaults.
+    ///
+    /// Only bold and italic are carried. `FontStyleSet` also has `underline` and `strike`, but no
+    /// role default in `TextStyleType.museScoreDefault` sets either, and the Apple renderer does not
+    /// draw them either — adding wire bits for a decoration nothing produces would be inventing a
+    /// contract rather than closing a gap. `TextStyleFlag`'s mask has room when one appears.
+    static func styleFlags(for style: TextStyleType) -> UInt8 {
+        let set = TextRoleStyle.fontStyle(for: style)
+        var flags = DrawCommand.TextStyleFlag.none
+        if set.contains(.bold) { flags |= DrawCommand.TextStyleFlag.bold }
+        if set.contains(.italic) { flags |= DrawCommand.TextStyleFlag.italic }
+        return flags
+    }
+
+    /// Run `body` with `flags` active, restoring the neutral style afterwards.
+    ///
+    /// Emits nothing at all for the neutral style, so an unstyled score's program is byte-identical
+    /// to what it was before v7 — which is what makes the golden comparisons in
+    /// `DrawProgramRoundTripTests` still mean something.
+    static func withTextStyle(
+        _ flags: UInt8,
+        into out: inout [DrawCommand],
+        _ body: (inout [DrawCommand]) -> Void,
+    ) {
+        guard flags != DrawCommand.TextStyleFlag.none else {
+            body(&out)
+            return
+        }
+        out.append(.setTextStyle(flags: flags))
+        body(&out)
+        out.append(.setTextStyle(flags: DrawCommand.TextStyleFlag.none))
+    }
+
     /// Emit a text element honoring the role's MuseScore anchor.
     /// Splits the string into Bravura-glyph runs (SMuFL PUA codepoints)
     /// and Edwin-text runs via `MusicTextRuns.runs`, advancing X across
     /// each run. The first run anchors at `originX` (adjusted by anchor
     /// offset using the total width).
+    ///
+    /// The role's bold / italic defaults ride along as a `setTextStyle` pair around the runs. They
+    /// are the reason a tempo mark and a rehearsal mark used to render in regular weight everywhere
+    /// but Apple: the wire had no way to say "bold", so `ResolvedTextStyle`'s answer stopped at the
+    /// Apple renderer's own door.
     static func emitText(
+        text: String,
+        style: TextStyleType,
+        originX: Double,
+        originY: Double,
+        sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        withTextStyle(styleFlags(for: style), into: &out) { out in
+            emitTextRuns(
+                text: text, style: style,
+                originX: originX, originY: originY, sp: sp, into: &out,
+            )
+        }
+    }
+
+    private static func emitTextRuns(
         text: String,
         style: TextStyleType,
         originX: Double,
@@ -72,12 +126,13 @@ extension LayoutBridge {
         // sit proportionate to the text characters.
         let glyphPt = textPt
         let runs = MusicTextRuns.runs(in: text)
+        let weight = measurementWeight(for: style)
         // Total advance across runs so the anchor offset is correct.
         var totalWidth: CGFloat = 0
         let measured: [(run: MusicTextRuns.Run, width: CGFloat)] = runs.map { run in
             let width = FontMetrics.provider.typographicWidth(
                 text: run.text,
-                font: fontFor(run: run, textPt: textPt, glyphPt: glyphPt),
+                font: fontFor(run: run, textPt: textPt, glyphPt: glyphPt, weight: weight),
             )
             totalWidth += width
             return (run, width)
@@ -162,14 +217,27 @@ extension LayoutBridge {
     }
 
     private static func fontFor(
-        run: MusicTextRuns.Run, textPt: CGFloat, glyphPt: CGFloat,
+        run: MusicTextRuns.Run, textPt: CGFloat, glyphPt: CGFloat, weight: FontWeight = .regular,
     ) -> LayoutFont {
         switch run.kind {
         case .musicSymbol:
+            // SMuFL faces have one weight; Bravura has no bold member and MuseScore never asks for
+            // one, so the weight stops at the text runs.
             return LayoutFont(face: "Bravura", pointSize: glyphPt)
         case .text:
-            return LayoutFont(face: "Edwin", pointSize: textPt)
+            return LayoutFont(face: "Edwin", pointSize: textPt, weight: weight)
         }
+    }
+
+    /// The `LayoutFont` weight to measure a role's text runs at.
+    ///
+    /// Measurement has to follow the style, not just the size: `emitText` centers and
+    /// anchor-offsets from the total run width, so measuring a bold tempo mark at regular weight
+    /// slides it left of where it is drawn. Italic is not a weight and CoreText's italic advances
+    /// match the upright ones closely enough that no provider distinguishes them, so only bold
+    /// changes what is asked for here.
+    static func measurementWeight(for style: TextStyleType) -> FontWeight {
+        TextRoleStyle.fontStyle(for: style).contains(.bold) ? .bold : .regular
     }
 
     /// Emit a SMuFL glyph whose position was computed assuming Apple's
@@ -382,8 +450,8 @@ extension LayoutBridge {
         )
         let fontSize = Double(TupletBracketGeometry.labelFontSizeSp) * sp
         // Label — centered Edwin italic, matching Apple's tuplet digits
-        // (`drawTuplet` uses `italic: true`). Emitted via `.italicText`
-        // so the Kotlin renderer slants the glyphs.
+        // (`drawTuplet` uses `italic: true`). Emitted as a `.setTextStyle`-wrapped `.text` since v7;
+        // `.italicText` said the same thing in a second way and is no longer used.
         let labelFont = LayoutFont(
             face: "Edwin", pointSize: CGFloat(fontSize),
         )
@@ -397,13 +465,15 @@ extension LayoutBridge {
         // down by half of (ascent − descent) to vertically center the
         // digit on `labelCenter.y`.
         let baselineY = Double(segments.labelCenter.y) + (ascent - descent) / 2
-        out.append(.italicText(
-            text: text,
-            x: (Double(segments.labelCenter.x) - labelWidth / 2) * ptToMMScale,
-            y: baselineY * ptToMMScale,
-            size: fontSize * ptToMMScale,
-            fontId: .textRoman,
-        ))
+        withTextStyle(DrawCommand.TextStyleFlag.italic, into: &out) { out in
+            out.append(.text(
+                text: text,
+                x: (Double(segments.labelCenter.x) - labelWidth / 2) * ptToMMScale,
+                y: baselineY * ptToMMScale,
+                size: fontSize * ptToMMScale,
+                fontId: .textRoman,
+            ))
+        }
         guard hasBracket else { return }
         let lineWidth = Double(TupletBracketGeometry.lineThicknessSp) * sp
         emitSegment(
@@ -876,13 +946,17 @@ extension LayoutBridge {
             pivotX: Double(world.x) * ptToMMScale,
             pivotY: Double(world.y) * ptToMMScale,
         ))
-        out.append(.italicText(
-            text: text,
-            x: Double(world.x - textWidth / 2) * ptToMMScale,
-            y: Double(world.y - descent) * ptToMMScale,
-            size: Double(fontSize) * ptToMMScale,
-            fontId: .textRoman,
-        ))
+        // `.glissando`'s MuseScore default is italic (`styledef.cpp:1484-1488`), so the style comes
+        // from the role rather than being spelled here — one answer for what a role looks like.
+        withTextStyle(styleFlags(for: .glissando), into: &out) { out in
+            out.append(.text(
+                text: text,
+                x: Double(world.x - textWidth / 2) * ptToMMScale,
+                y: Double(world.y - descent) * ptToMMScale,
+                size: Double(fontSize) * ptToMMScale,
+                fontId: .textRoman,
+            ))
+        }
         out.append(.setRotation(radians: 0, pivotX: 0, pivotY: 0))
     }
 
@@ -908,7 +982,13 @@ extension LayoutBridge {
             for: lh.harmony,
             metrics: StaffMetrics(staffSize: CGFloat(sp) * 4),
         )
-        let textFont = LayoutFont(face: "Edwin", pointSize: textPt)
+        // `.chordSymbolB` — MuseScore's jazz chord-symbol style — is italic, and Apple's
+        // `HarmonyRenderer` applies it through `ResolvedTextStyle.font`. Without this the same score
+        // reads upright here and slanted there.
+        let styleFlags = styleFlags(for: style)
+        let textFont = LayoutFont(
+            face: "Edwin", pointSize: textPt, weight: measurementWeight(for: style),
+        )
         let glyphFont = LayoutFont(
             face: SMuFLFamily.bravura, pointSize: glyphPt,
         )
@@ -926,38 +1006,68 @@ extension LayoutBridge {
         )
         let originX = mox + lh.anchorX
         let originY = moy + lh.y
-        // Apple anchors each run at `.leading` (vertical center,
-        // leading edge). Canvas anchors at baseline, so shift by
-        // `(ascent - descent) / 2` to align the typographic centers.
-        for run in lh.runs {
+        withTextStyle(styleFlags, into: &out) { out in
+            emitHarmonyRuns(
+                lh.runs,
+                originX: originX, originY: originY,
+                text: HarmonyFaceMetrics(
+                    pointSize: Double(textPt),
+                    baselineShift: (textAscent - textDescent) / 2,
+                ),
+                glyph: HarmonyFaceMetrics(
+                    pointSize: Double(glyphPt),
+                    baselineShift: (glyphAscent - glyphDescent) / 2,
+                ),
+                into: &out,
+            )
+        }
+        if argb != nil {
+            out.append(.setColor(argb: 0xFF00_0000))
+        }
+    }
+
+    /// Point size and baseline shift for one of a harmony's two faces.
+    ///
+    /// Apple anchors each run at `.leading` (vertical center, leading edge) while `Canvas.drawText`
+    /// anchors at the baseline, so the shift is `(ascent − descent) / 2` for that face. Paired in a
+    /// struct because the two always travel together, and a run walk taking four loose `Double`s is
+    /// four chances to hand it the text size with the glyph's baseline.
+    struct HarmonyFaceMetrics {
+        let pointSize: Double
+        let baselineShift: Double
+    }
+
+    /// Walk a harmony's pre-laid-out runs.
+    private static func emitHarmonyRuns(
+        _ runs: [HarmonyRun],
+        originX: Double,
+        originY: Double,
+        text textFace: HarmonyFaceMetrics,
+        glyph glyphFace: HarmonyFaceMetrics,
+        into out: inout [DrawCommand],
+    ) {
+        for run in runs {
             let runX = originX + run.x
             switch run.kind {
             case .text:
-                let baselineY = originY
-                    + (textAscent - textDescent) / 2
                 out.append(.text(
                     text: run.content,
                     x: runX * ptToMMScale,
-                    y: baselineY * ptToMMScale,
-                    size: Double(textPt) * ptToMMScale,
+                    y: (originY + textFace.baselineShift) * ptToMMScale,
+                    size: textFace.pointSize * ptToMMScale,
                     fontId: .textRoman,
                 ))
             case let .accidental(acc):
-                let baselineY = originY
-                    + (glyphAscent - glyphDescent) / 2
                 out.append(.glyph(
                     codepoint: acc.codepoint.unicodeScalars.first.map {
                         UInt32($0.value)
                     } ?? 0,
                     x: runX * ptToMMScale,
-                    y: baselineY * ptToMMScale,
-                    size: Double(glyphPt) * ptToMMScale,
+                    y: (originY + glyphFace.baselineShift) * ptToMMScale,
+                    size: glyphFace.pointSize * ptToMMScale,
                     fontId: .smufl,
                 ))
             }
-        }
-        if argb != nil {
-            out.append(.setColor(argb: 0xFF00_0000))
         }
     }
 
@@ -1036,7 +1146,14 @@ extension LayoutBridge {
         let textPt = TextRoleStyle.fontSize(
             for: .rehearsalMark, sp: CGFloat(sp),
         )
-        let font = LayoutFont(face: "Edwin", pointSize: textPt)
+        // Measured at the weight it is DRAWN at. `.rehearsalMark`'s MuseScore default is bold
+        // (`TextStyle.swift`), and the frame below is sized from this measurement — so measuring
+        // regular while drawing bold puts the letters through the right-hand edge of their own box.
+        // That is the failure the weight-aware `FontMetricsTable.face(for:)` lookup exists for.
+        let styleFlags = styleFlags(for: .rehearsalMark)
+        let font = LayoutFont(
+            face: "Edwin", pointSize: textPt, weight: measurementWeight(for: .rehearsalMark),
+        )
         let advance = Double(FontMetrics.provider.typographicWidth(
             text: text, font: font,
         ))
@@ -1049,13 +1166,15 @@ extension LayoutBridge {
         // `origin.y - pad - descent`.
         let textOriginX = originX + pad
         let baselineY = originY - pad - descent
-        out.append(.text(
-            text: text,
-            x: textOriginX * ptToMMScale,
-            y: baselineY * ptToMMScale,
-            size: Double(textPt) * ptToMMScale,
-            fontId: .textRoman,
-        ))
+        withTextStyle(styleFlags, into: &out) { out in
+            out.append(.text(
+                text: text,
+                x: textOriginX * ptToMMScale,
+                y: baselineY * ptToMMScale,
+                size: Double(textPt) * ptToMMScale,
+                fontId: .textRoman,
+            ))
+        }
         let boxRect = RehearsalMarkFrame.boxRect(
             textWidth: CGFloat(textWidth),
             textHeight: CGFloat(textHeight),

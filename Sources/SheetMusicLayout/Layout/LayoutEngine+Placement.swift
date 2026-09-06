@@ -939,6 +939,12 @@ extension LayoutEngine {
                     // `LayoutEngine.layout` then aligns this Y
                     // across measures of the same system.
                     let chordLyricCenterY = voiceMaxLyricCenterY
+                    let lyricAnchor = VoiceElementID(
+                        staff: staffAddress,
+                        measureIndex: measureIndex,
+                        voiceIndex: voiceIdx,
+                        elementIndex: voiceElemIdx,
+                    )
                     for (verseIdx, lyric) in chord.lyrics.enumerated() {
                         // A host that hides lyrics loses the WHOLE row:
                         // syllable, hyphens and melisma rule alike, because
@@ -974,7 +980,8 @@ extension LayoutEngine {
                                 centerX: chordX,
                                 textWidth: textWidth,
                                 lyricsY: chordLyricCenterY
-                                    + CGFloat(verseIdx) * metrics.sp * 1.7,
+                                    + CGFloat(verseIdx) * metrics.sp
+                                    * lyricVerseStrideInSpatiums,
                                 syllabic: lyric.syllabic,
                             )
                             continue
@@ -986,9 +993,14 @@ extension LayoutEngine {
                         // `Sid::lyricsLineHeight = 1.0` × font
                         // height).
                         let lyricsY = chordLyricCenterY
-                            + CGFloat(verseIdx) * metrics.sp * 1.7
+                            + CGFloat(verseIdx) * metrics.sp
+                            * lyricVerseStrideInSpatiums
                         let lyricElement = LayoutElement.textMark(
-                            kind: .lyrics(color: lyric.elementProperties.color),
+                            kind: .lyrics(
+                                color: lyric.elementProperties.color,
+                                verse: verseIdx,
+                                anchor: lyricAnchor,
+                            ),
                             text: lyric.text,
                             origin: CGPoint(x: chordX, y: lyricsY),
                         )
@@ -1236,8 +1248,11 @@ extension LayoutEngine {
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
                     break
-                case .preserved:
-                    // Source-only MSCX markup has no layout behavior.
+                case .sticking, .expression, .capo, .stringTunings, .ambitus, .figuredBass, .symbol,
+                     .fretDiagram, .preserved:
+                    // These modeled annotations do not have an engraving pass
+                    // yet. Source-only preserved markup likewise has no layout
+                    // behavior.
                     break
                 case let .locationShift(delta):
                     // Voice-level cursor shift. Adds the location's

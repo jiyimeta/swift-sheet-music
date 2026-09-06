@@ -5,11 +5,12 @@ import SheetMusicXMLTools
 extension InstrumentChange {
     /// Build the `<InstrumentChange>` element.
     ///
-    /// Child order mirrors MuseScore's own writer
-    /// (`rw/write/twrite.cpp:2128-2137`): the nested `<Instrument>`
-    /// first, then `<init>` only when true, then the `TextBase`
-    /// properties. Emitting them in that order is what lets the fixture
-    /// round-trip through MuseScore Studio unchanged.
+    /// Child order follows MuseScore's own writer
+    /// (`rw/write/twrite.cpp:2128-2137`): the nested `<Instrument>` first, then
+    /// `<init>` only when true, then the `TextBase` properties. The one
+    /// deliberate exception is shared `<color>`, which is emitted last to
+    /// avoid the upstream reader's `<style>` reset; see
+    /// `ElementProperties.mscxTrailingChildren()`.
     ///
     /// The nested `<Instrument>` reuses the part-level encoder verbatim,
     /// so its full payload — every `<Articulation>` block plus
@@ -22,29 +23,14 @@ extension InstrumentChange {
         if isUserInitialized {
             children.append(XMLTreeNode(name: "init", text: "1"))
         }
-        if offsetX != 0 || offsetY != 0 {
-            children.append(XMLTreeNode(
-                name: "offset",
-                attributes: [
-                    "x": formatDouble(offsetX),
-                    "y": formatDouble(offsetY),
-                ],
-            ))
-        }
-        if let color {
-            children.append(XMLTreeNode(
-                name: "color",
-                attributes: [
-                    "r": String(color.red),
-                    "g": String(color.green),
-                    "b": String(color.blue),
-                    "a": String(color.alpha),
-                ],
-            ))
-        }
         children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
-        children.append(XMLTreeNode(name: "text", text: text))
+        children.append(encodeText(
+            text,
+            preservedTextMarkup: preservedTextMarkup,
+            options: options,
+        ))
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "InstrumentChange", children: children)
     }
 }

@@ -24,6 +24,7 @@ public struct Swing: Sendable, Equatable {
     /// Display label. MuseScore writes "Swing" by default; user-edited
     /// labels (e.g. "Shuffle") round-trip through `<text>`.
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// Swing subdivision target. `.off` disables swing from this
     /// point even if the global Style enables it.
     public var unit: SwingUnit
@@ -37,8 +38,26 @@ public struct Swing: Sendable, Equatable {
     /// Mirrors `StaffTextBase::systemFlag()` checked by
     /// `Score::updateSwing`.
     public var isSystemText: Bool
-    public var offsetX: Double
-    public var offsetY: Double
+    /// Author-supplied X offset in spatium units. Sugar over
+    /// `elementProperties.offset`.
+    public var offsetX: Double {
+        get { elementProperties.offset?.x ?? 0 }
+        set {
+            let y = elementProperties.offset?.y ?? 0
+            elementProperties.offset = ScoreOffset(x: newValue, y: y)
+        }
+    }
+
+    /// Author-supplied Y offset in spatium units. Sugar over
+    /// `elementProperties.offset`.
+    public var offsetY: Double {
+        get { elementProperties.offset?.y ?? 0 }
+        set {
+            let x = elementProperties.offset?.x ?? 0
+            elementProperties.offset = ScoreOffset(x: x, y: newValue)
+        }
+    }
+
     /// Author-supplied color. Sugar over `elementProperties.color` —
     /// the single source of truth shared with every engravable element.
     public var color: ScoreColor? {
@@ -48,7 +67,7 @@ public struct Swing: Sendable, Equatable {
 
     public var properties: TextProperties
     /// Base element properties shared with every engravable element.
-    /// Carries `<visible>` and `<color>`; see `ElementProperties`.
+    /// Carries `<visible>`, `<color>`, and `<offset>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
     /// MuseScore `<visible>0</visible>` flag. Sugar over
     /// `elementProperties.visible`. Playback / MIDI is unaffected.
@@ -67,15 +86,22 @@ public struct Swing: Sendable, Equatable {
         color: ScoreColor? = nil,
         properties: TextProperties = TextProperties(),
         visible: Bool = true,
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.unit = unit
         self.ratio = ratio
         self.isSystemText = isSystemText
-        self.offsetX = offsetX
-        self.offsetY = offsetY
         self.properties = properties
-        elementProperties = ElementProperties(visible: visible, color: color)
+        let offset: ScoreOffset? = if offsetX == 0 && offsetY == 0 {
+            nil
+        } else {
+            ScoreOffset(x: offsetX, y: offsetY)
+        }
+        elementProperties = ElementProperties(
+            visible: visible, color: color, offset: offset,
+        )
     }
 
     /// Swing-unit length in MIDI ticks for a given PPQ. Eighth =

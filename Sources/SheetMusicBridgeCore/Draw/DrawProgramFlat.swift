@@ -155,6 +155,8 @@ public enum DrawProgramFlat {
             write(10, [onMM, offMM])
         case let .italicText(text, x, y, size, fontId):
             write(11, [x, y, size], stringIndex: intern(text), fontId: Int32(fontId.rawValue))
+        case let .setTextStyle(flags):
+            write(12, integer: UInt32(flags))
         }
     }
 

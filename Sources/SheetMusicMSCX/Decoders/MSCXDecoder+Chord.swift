@@ -7,12 +7,12 @@ extension Chord {
     /// children interpreted by the voice decoder before this method
     /// is called. Anything else becomes preserved markup.
     private static let consumedChordChildren: Set = [
-        "Arpeggio", "Articulation", "ChordLine", "Lyrics",
+        "Arpeggio", "Articulation", "ChordBracket", "ChordLine", "Lyrics",
         "Note", "NoteParenGroup", "Ornament", "Spanner", "Stem", "Tremolo",
         "TremoloSingleChord", "TremoloTwoChord", "acciaccatura",
         "appoggiatura", "color", "dots", "durationType", "grace16",
         "grace16after", "grace32", "grace32after", "grace4", "grace8after",
-        "small", "track", "visible",
+        "offset", "placement", "small", "track", "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> Chord {
@@ -64,7 +64,8 @@ extension Chord {
 
         var chord = Chord(
             duration: duration, notes: ChordNotes(notes),
-            arpeggio: arpeggio, lyrics: decodeLyrics(node),
+            arpeggio: arpeggio, bracket: ChordBracket.decode(inChord: node),
+            lyrics: decodeLyrics(node),
             articulations: articulations,
             ornaments: ChordOrnament.decodeAll(inChord: node),
             tremolo: tremolo,
@@ -82,10 +83,9 @@ extension Chord {
     /// `mscx.slur.propertiesDropped`.
     ///
     /// `placement`, `visible` and `beginText` are MODELED, not elided:
-    /// `Spanner.decode` scans the payload child for all three
-    /// (`MSCXDecoder+Spanner.swift`, `decodePlacement` / `decodeVisible` /
-    /// `decodeBeginText`) and lands them on `Spanner`. Warning on them would
-    /// report a loss that does not happen.
+    /// `Spanner.decode` reads the payload's `ElementProperties`, applies
+    /// `decodeVisible` and `decodeBeginText`, and lands all three on `Spanner`.
+    /// Warning on them would report a loss that does not happen.
     ///
     /// The rest are the allowlist:
     ///
@@ -242,7 +242,10 @@ extension Chord {
         var lyricsMap: [Int: Lyric] = [:]
         for lyricsNode in node.all("Lyrics") {
             let verse = Int(lyricsNode.first("no")?.text ?? "0") ?? 0
-            let text = lyricsNode.first("text")?.text ?? ""
+            let textNode = lyricsNode.first("text")
+            // Own character data only. Reading descendants would fold a
+            // `<sym>`'s SymId spelling into the sung syllable.
+            let text = textNode?.text ?? ""
             let syllabic = (lyricsNode.first("syllabic")?.text)
                 .flatMap(Syllabic.init(mscxValue:)) ?? .single
             let ticks = Int(lyricsNode.first("ticks")?.text ?? "0") ?? 0
@@ -253,6 +256,9 @@ extension Chord {
                 preservedMarkup: lyricsNode.preservedMarkup(
                     consuming: consumedLyricsChildren,
                 ),
+                preservedTextMarkup: textNode.flatMap {
+                    StaffText.preservedTextMarkup(of: $0, derivedText: text)
+                },
             )
             lyric.elementProperties = ElementProperties(decodingMSCXChildrenOf: lyricsNode)
             lyricsMap[verse] = lyric
@@ -268,7 +274,7 @@ extension Chord {
     /// `TextProperties.decode`, or `ElementProperties`.
     private static let consumedLyricsChildren: Set = [
         "bold", "color", "face", "framePadding", "frameType", "italic",
-        "no", "size", "strike", "syllabic", "text", "ticks", "underline",
+        "no", "offset", "placement", "size", "strike", "syllabic", "text", "ticks", "underline",
         "visible",
     ]
 

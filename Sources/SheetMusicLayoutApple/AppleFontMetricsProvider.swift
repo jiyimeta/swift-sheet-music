@@ -98,6 +98,7 @@ public struct AppleFontMetricsProvider: FontMetricsProvider {
             switch font.weight {
             case .regular: weight = 0
             case .semibold: weight = 0.3 // matches UIFont.Weight.semibold
+            case .bold: weight = 0.4 // matches UIFont.Weight.bold
             }
             let traits: CFDictionary = [
                 kCTFontWeightTrait: weight,
@@ -111,9 +112,22 @@ public struct AppleFontMetricsProvider: FontMetricsProvider {
                 descriptor, font.pointSize, nil,
             )
         }
-        return CTFontCreateWithName(
+        let named = CTFontCreateWithName(
             font.face as CFString, font.pointSize, nil,
         )
+        guard font.weight == .bold else { return named }
+        // Ask CoreText for the bold member of the same family. This is the identical resolution
+        // `ResolvedTextStyle.ctFont` performs for the render path (`.boldTrait`), so what gets
+        // measured here is what gets drawn there — a rehearsal mark's frame is sized from this
+        // measurement and would otherwise be cut for the wrong weight.
+        //
+        // Falls back to `named` when the family has no bold face: CoreText synthesizes the weight at
+        // draw time in that case, and a synthetic bold is close enough to the regular advances that
+        // reporting them beats reporting nothing.
+        let bolded = CTFontCreateCopyWithSymbolicTraits(
+            named, font.pointSize, nil, .boldTrait, .boldTrait,
+        )
+        return bolded ?? named
     }
 
     private func ctLine(text: String, font: LayoutFont) -> CTLine {

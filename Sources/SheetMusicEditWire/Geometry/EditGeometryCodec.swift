@@ -35,6 +35,38 @@ struct SelectionTintWire {
     var items: [ScoreItemIDWire]
 }
 
+/// Codec for an *ordered* list of `ScoreItemID`s — what a marquee (rubber-band) query answers with.
+///
+/// A list rather than `SelectionTintWire`'s set, because `ScoreHitTester.itemIDs(in:)` states its
+/// order as part of its contract: systems top-to-bottom, then `EventColumn.centerX` ascending
+/// within a system. A host extending a selection with the keyboard, or naming "the first thing you
+/// dragged over", needs that order, and a `Set` throws it away.
+///
+/// No color field either, for the same reason the two are separate calls: a marquee answers *what
+/// is in the rect*, and how a host tints the result — if it tints it at all — is a later decision it
+/// makes with `SelectionTintCodec`.
+///
+/// Wire layout (Wirelet's TLV scheme — see `EditIntentCodec.swift`'s doc comment for the
+/// tag-and-varint format this describes):
+/// ```
+/// varint(payloadLength) + payload, where payload is:
+/// tag 1: items  [ScoreItemIDWire] — length-delimited array, in query order.
+/// ```
+public enum ScoreItemIDListCodec {
+    public static func encode(_ ids: [ScoreItemID]) -> Data {
+        ScoreItemIDListWire(items: ids.map(ScoreItemIDWire.init(from:))).encodeToData()
+    }
+
+    public static func decode(_ data: Data) throws -> [ScoreItemID] {
+        try ScoreItemIDListWire(decoding: data).items.map { $0.decoded() }
+    }
+}
+
+@WireFormat
+struct ScoreItemIDListWire {
+    var items: [ScoreItemIDWire]
+}
+
 /// Codec for the editing caret's bounding rect — millimetres throughout, since this wire type only ever
 /// carries a value already converted at the JNI boundary (`nativeEditingCaretFrame`); unlike
 /// `CursorFrameCodec` (unit-agnostic, used for both pt-space host calls and mm-space JNI calls), there is no

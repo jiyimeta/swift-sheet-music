@@ -73,6 +73,10 @@ struct MSCXPreservedMarkupTests {
         #expect(showFrames != nil)
     }
 
+    /// `<StringData>` reaches the output through `Instrument.stringData` now
+    /// rather than through a preserved bag (`StringDataTests`); it is still
+    /// asserted here because this test's subject is that a `<Part>` survives
+    /// intact, and `<clef>` beside it is genuinely preserved markup.
     @Test("<StringData> and <Instrument><clef> survive decode → encode")
     func partLevelMarkupSurvives() throws {
         let source = try MSCXFixtureLoader.mscxData("guitarbend_simple")
@@ -132,13 +136,17 @@ struct MSCXPreservedMarkupTests {
 
     @Test("an unknown voice child keeps its position in the stream")
     func unknownVoiceChildKeepsPosition() throws {
+        // Deliberately not a real MuseScore element. This test is about an
+        // *unknown* child holding its position, not about any particular one.
+        // It previously used <FiguredBass>, then <Symbol>, and broke each time
+        // that element was modeled; a synthetic tag ends that cycle.
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <museScore version="4.60"><Score><Division>480</Division>
         <Part><Staff id="1"/><Instrument/></Part>
         <Staff id="1"><Measure><voice>
         <Chord><durationType>quarter</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
-        <FiguredBass><ticks>480</ticks></FiguredBass>
+        <UnmodeledElement><name>segno</name></UnmodeledElement>
         <Chord><durationType>quarter</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
         </voice></Measure></Staff></Score></museScore>
         """
@@ -146,18 +154,18 @@ struct MSCXPreservedMarkupTests {
         let elements = score.parts[0].staves[0].measures[0].voices[0].elements
         guard case let .preserved(kept) = elements[1] else {
             Issue.record(Comment(
-                rawValue: "expected the FiguredBass between the two chords, got \(elements)",
+                rawValue: "expected the UnmodeledElement between the two chords, got \(elements)",
             ))
             return
         }
-        #expect(kept.name == "FiguredBass")
+        #expect(kept.name == "UnmodeledElement")
 
         let root = try XMLTreeParser.parse(MSCXEncoder.encode(score))
         let voice = try #require(
             root.first("Score")?.all("Staff").last?
                 .first("Measure")?.first("voice"),
         )
-        #expect(voice.children.map(\.name) == ["Chord", "FiguredBass", "Chord"])
+        #expect(voice.children.map(\.name) == ["Chord", "UnmodeledElement", "Chord"])
     }
 
     @Test("<LayoutBreak><subtype>nobreak</subtype> survives")
@@ -258,6 +266,165 @@ struct MSCXPreservedMarkupTests {
         #expect(Self.task6Markup(in: stripped).isEmpty)
     }
 
+    /// `strippingPreservedMarkup()` used to walk `blocks` and `parts`
+    /// and nothing else, so the whole system lane — `Score.systemMeasures`
+    /// — was never visited. The only bag reachable from a `SystemElement`
+    /// is the one on the `Instrument` an `.instrumentChange` swaps in
+    /// (and, below it, its `StringData` and its channels), which is why
+    /// this went unnoticed: it needs a mid-score instrument change to
+    /// show up at all.
+    @Test("strippingPreservedMarkup reaches the system lane")
+    func strippingClearsSystemElementMarkup() throws {
+        let url = try #require(
+            TestResources.url(forResource: "instrument-change", withExtension: "mscx"),
+        )
+        var score = try MSCXParser.parse(Data(contentsOf: url))
+        let marker = PreservedXML(name: "unknown")
+
+        var seeded = 0
+        for measureIndex in score.systemMeasures.indices {
+            for elementIndex in score.systemMeasures[measureIndex].elements.indices {
+                guard case var .instrumentChange(change) =
+                    score.systemMeasures[measureIndex].elements[elementIndex].element,
+                    var instrument = change.instrument
+                else { continue }
+                instrument.preservedMarkup = [marker]
+                for channelIndex in instrument.channels.indices {
+                    instrument.channels[channelIndex].preservedMarkup = [marker]
+                }
+                change.instrument = instrument
+                score.systemMeasures[measureIndex].elements[elementIndex].element =
+                    .instrumentChange(change)
+                seeded += 1
+            }
+        }
+        // Without this the assertions below pass on an empty walk.
+        #expect(seeded > 0, "fixture no longer carries a mid-score instrument change")
+
+        let stripped = score.strippingPreservedMarkup()
+        var remaining = 0
+        for measure in stripped.systemMeasures {
+            for positioned in measure.elements {
+                guard case let .instrumentChange(change) = positioned.element,
+                      let instrument = change.instrument
+                else { continue }
+                remaining += instrument.preservedMarkup.count
+                remaining += instrument.stringData?.preservedMarkup.count ?? 0
+                remaining += instrument.channels.reduce(0) { $0 + $1.preservedMarkup.count }
+            }
+        }
+        #expect(remaining == 0)
+    }
+
+    /// **The walk's completeness gate.** Every test above names the
+    /// bags it checks, so each one only proves that the author
+    /// remembered their own type. `strippingPreservedMarkup()` was
+    /// edited three times on 2026-09-06 by three people adding three
+    /// different element kinds, and none of them asked what the
+    /// function is supposed to reach — which is how the system lane
+    /// stayed unvisited and how the grace-note path kept clearing
+    /// `symbols` but not `fingerings`.
+    ///
+    /// This test asks instead. It reflects over the whole stripped
+    /// `Score` and fails on any `[PreservedXML]` left non-empty
+    /// anywhere in it, so a type added later is covered without anyone
+    /// editing this file — **as long as a fixture puts that type in a
+    /// score.** It replaces a hand-written list of bags with a
+    /// hand-written corpus, which is better but not complete: the
+    /// grace-note fingering fix below is a shape no fixture contains,
+    /// and this sweep passes with or without it. Reach for a targeted
+    /// test whenever the corpus does not exercise the shape.
+    ///
+    /// It sweeps every committed fixture rather than a named list for
+    /// the same reason. A list would be a hand-maintained table of
+    /// what is covered — the very thing this test replaces — one level
+    /// up: someone adding `figured-bass.mscx` would have to remember to
+    /// add it here, and nothing would tell them if they did not.
+    @Test("no preserved markup survives anywhere in a stripped score")
+    func strippingLeavesNoBagAnywhere() {
+        var scoresWithMarkup = 0
+        var leftovers: [String] = []
+        for url in MSCXFixtureLoader.allMSCXURLs() {
+            // Same policy as the preservation gate: a fixture this
+            // reader does not claim to open says nothing either way.
+            guard let data = try? Data(contentsOf: url),
+                  let score = try? MSCXParser.parse(data)
+            else { continue }
+
+            let name = url.lastPathComponent
+            if !Self.nonEmptyPreservedBagPaths(in: score, path: name).isEmpty {
+                scoresWithMarkup += 1
+            }
+            leftovers += Self.nonEmptyPreservedBagPaths(
+                in: score.strippingPreservedMarkup(), path: name,
+            )
+        }
+
+        // Without this, a corpus whose bags all happen to be empty
+        // would pass no matter what the walk does — the same blindness
+        // the preservation gate has toward a tag no fixture contains.
+        #expect(scoresWithMarkup > 0, "no committed fixture carries preserved markup")
+        #expect(leftovers.isEmpty, "not stripped: \(leftovers.sorted().joined(separator: ", "))")
+    }
+
+    /// A fingering on a grace note kept its markup, and the sweep above
+    /// cannot see it: no committed fixture puts a `<Fingering>` on a
+    /// grace note, so the reflective walk never reaches one. That is the
+    /// same blindness the preservation gate has toward a tag no fixture
+    /// contains — the sweep proves the walk covers the corpus, not that
+    /// the corpus covers the model. This test supplies the shape the
+    /// corpus lacks by attaching the fingering itself.
+    @Test("a fingering on a grace note is stripped like one on a full note")
+    func strippingClearsGraceNoteFingerings() throws {
+        var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("grace_after"))
+        let marker = PreservedXML(name: "unknown")
+
+        var seeded = 0
+        for partIndex in score.parts.indices {
+            for staffIndex in score.parts[partIndex].staves.indices {
+                for measureIndex in score.parts[partIndex].staves[staffIndex].measures.indices {
+                    seedGraceFingerings(
+                        marker,
+                        in: &score.parts[partIndex].staves[staffIndex].measures[measureIndex],
+                        count: &seeded,
+                    )
+                }
+            }
+        }
+        #expect(seeded > 0, "grace_after no longer carries a grace chord with notes")
+
+        let leftovers = Self.nonEmptyPreservedBagPaths(in: score.strippingPreservedMarkup())
+        #expect(leftovers.isEmpty, "not stripped: \(leftovers.sorted().joined(separator: ", "))")
+    }
+
+    /// Give every grace note in `measure` a fingering carrying `marker`.
+    private func seedGraceFingerings(
+        _ marker: PreservedXML, in measure: inout Measure, count: inout Int,
+    ) {
+        for voiceIndex in measure.voices.indices {
+            for elementIndex in measure.voices[voiceIndex].elements.indices {
+                guard case var .chord(chord) = measure.voices[voiceIndex].elements[elementIndex]
+                else { continue }
+                seedGraceFingerings(marker, in: &chord.graceNotesBefore, count: &count)
+                seedGraceFingerings(marker, in: &chord.graceNotesAfter, count: &count)
+                measure.voices[voiceIndex].elements[elementIndex] = .chord(chord)
+            }
+        }
+    }
+
+    private func seedGraceFingerings(
+        _ marker: PreservedXML, in graces: inout [GraceChord], count: inout Int,
+    ) {
+        for graceIndex in graces.indices {
+            for noteIndex in graces[graceIndex].notes.indices {
+                graces[graceIndex].notes[noteIndex].fingerings = [
+                    Fingering(text: "1", preservedMarkup: [marker]),
+                ]
+                count += 1
+            }
+        }
+    }
+
     /// A tag that appears both in a node's preserved markup and in
     /// the children the encoder writes means the decoder read it but
     /// its consumed set does not list it. The emit helper quietly
@@ -352,6 +519,25 @@ extension MSCXPreservedMarkupTests {
             .dynamic(Dynamic(subtype: "mf", velocity: 80, preservedMarkup: [marker])),
             .spanner(spanner),
             .harmony(Harmony(name: "C", preservedMarkup: [marker])),
+            .sticking(Sticking(text: "R", preservedMarkup: [marker])),
+            .expression(ExpressionText(text: "dolce", preservedMarkup: [marker])),
+            .capo(Capo(text: "Capo 2", preservedMarkup: [marker])),
+            .stringTunings(StringTunings(
+                preset: "Drop D",
+                stringData: StringData(preservedMarkup: [marker]),
+                preservedMarkup: [marker],
+            )),
+            .ambitus(Ambitus(
+                topPitch: 72,
+                topTpc: 14,
+                bottomPitch: 60,
+                bottomTpc: 14,
+                preservedMarkup: [marker],
+            )),
+            .figuredBass(FiguredBass(
+                items: [FiguredBassItem(digit: 6, preservedMarkup: [marker])],
+                preservedMarkup: [marker],
+            )),
         ]
         score.parts[0].staves[0].measures[0] = measure
     }
@@ -369,6 +555,18 @@ extension MSCXPreservedMarkupTests {
             if case let .dynamic(value) = element { result += value.preservedMarkup }
             if case let .spanner(value) = element { result += value.preservedMarkup }
             if case let .harmony(value) = element { result += value.preservedMarkup }
+            if case let .sticking(value) = element { result += value.preservedMarkup }
+            if case let .expression(value) = element { result += value.preservedMarkup }
+            if case let .capo(value) = element { result += value.preservedMarkup }
+            if case let .stringTunings(value) = element {
+                result += value.preservedMarkup
+                result += value.stringData?.preservedMarkup ?? []
+            }
+            if case let .ambitus(value) = element { result += value.preservedMarkup }
+            if case let .figuredBass(value) = element {
+                result += value.preservedMarkup
+                result += value.items.flatMap(\.preservedMarkup)
+            }
         }
         return result
     }
@@ -431,6 +629,15 @@ extension MSCXPreservedMarkupTests {
                 permitted: permittedInstrumentCollisions,
                 context: instrumentContext,
             )
+            if let stringData = part.instrument.stringData,
+               let writtenStringData = writtenInstrument.first("StringData")
+            {
+                expectNoNameCollision(
+                    stringData.preservedMarkup,
+                    writtenChildren: writtenStringData.children,
+                    context: "\(instrumentContext)/<StringData>",
+                )
+            }
             for (channelIndex, channelPair) in zip(
                 part.instrument.channels,
                 writtenInstrument.all("Channel"),
@@ -530,6 +737,31 @@ extension MSCXPreservedMarkupTests {
         if case let .spanner(value) = element {
             expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
         }
+        if case let .sticking(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .expression(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .capo(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .stringTunings(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .ambitus(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .figuredBass(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            for (index, item) in value.items.enumerated() {
+                expectNoNameCollision(
+                    item.preservedMarkup,
+                    writtenChildren: item.encode(options: options).children,
+                    context: "\(context)/<FiguredBassItem>[\(index)]",
+                )
+            }
+        }
     }
 
     private func expectNoChordNameCollisions(
@@ -611,5 +843,70 @@ extension MSCXPreservedMarkupTests {
                     + "add them to the decoder's consumed set",
             ),
         )
+    }
+}
+
+/// The reflective search the stripping tests run on a whole `Score`.
+///
+/// In an extension because SwiftLint's `type_body_length` is measured per
+/// type body and the suite is already at the ceiling.
+extension MSCXPreservedMarkupTests {
+    /// Reflect over `root` and return a path for every preserved-markup
+    /// property that still holds something.
+    ///
+    /// `Mirror` is used deliberately: a hand-written walk would need the
+    /// same maintenance as the function under test and would go stale in
+    /// the same way.
+    ///
+    /// A property counts by its **name**, not its type: any label
+    /// containing both "preserved" and "markup" — `preservedMarkup`,
+    /// `staffTypePreservedMarkup`, and a `preservedTextMarkup` added
+    /// later. Matching `[PreservedXML]` alone would have been the same
+    /// mistake one level down: a second bag type would be invisible to
+    /// the gate meant to find bags, and the naming convention is the
+    /// thing every such field actually shares. Recursion stops at a
+    /// matched property, since its contents are carried source rather
+    /// than more bags to clear.
+    static func nonEmptyPreservedBagPaths(
+        in root: Any, path: String = "Score", depth: Int = 0,
+    ) -> [String] {
+        // Reached without a label by `VoiceElement.preserved`. Its children
+        // are carried XML, and an arbitrarily deep subtree of it would be
+        // walked for nothing.
+        if root is PreservedXML { return [] }
+        guard depth < 40 else { return ["\(path): reflection depth exceeded"] }
+        var found: [String] = []
+        for (offset, child) in Mirror(reflecting: root).children.enumerated() {
+            // Collection and enum-payload children have no label.
+            let step = child.label.map { ".\($0)" } ?? "[\(offset)]"
+            if isPreservedMarkupLabel(child.label) {
+                if let size = occupancy(of: child.value) {
+                    found.append("\(path)\(step) (\(size))")
+                }
+                continue
+            }
+            found += nonEmptyPreservedBagPaths(
+                in: child.value, path: path + step, depth: depth + 1,
+            )
+        }
+        return found
+    }
+
+    private static func isPreservedMarkupLabel(_ label: String?) -> Bool {
+        guard let label = label?.lowercased() else { return false }
+        return label.contains("preserved") && label.contains("markup")
+    }
+
+    /// How much a preserved-markup property holds, or `nil` when it is
+    /// empty. Written against `Mirror` rather than a concrete type so an
+    /// array, an optional, and a future wrapper all answer.
+    private static func occupancy(of value: Any) -> Int? {
+        let mirror = Mirror(reflecting: value)
+        switch mirror.displayStyle {
+        case .collection, .optional:
+            return mirror.children.isEmpty ? nil : mirror.children.count
+        default:
+            return 1
+        }
     }
 }

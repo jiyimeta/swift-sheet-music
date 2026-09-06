@@ -133,6 +133,23 @@ object FontMetricsBuilder {
                 keepBlanks = true,
             )
         }.getOrNull()?.let { faces += it }
+        // NO BOLD FACE RECORD, and the reason is measured rather than assumed.
+        //
+        // `Paint.isFakeBoldText` is what this library's renderer paints bold text with, since Edwin
+        // ships as a single Roman face. The obvious companion — measure the same file with
+        // `isFakeBoldText = true` and store it as `"Edwin-Bold"` — was written, run on a device, and
+        // produced an advance for 'A' of 721.9961 against the regular face's 721.9961. Skia's
+        // synthetic bold thickens strokes; `getTextWidths` reports the face's own advances either
+        // way.
+        //
+        // So a bold record would be a byte-for-byte duplicate of the regular one, and
+        // `FontMetricsTable.face(for:)`'s fallback already answers a bold request with exactly those
+        // numbers. More importantly the numbers are RIGHT: `drawText` advances by the same amounts
+        // it measures, so a rehearsal-mark frame sized from the regular face fits the bold text
+        // drawn inside it.
+        //
+        // The lookup convention stays — a host that ships a real `Edwin-Bold.otf` and measures THAT
+        // would produce a record worth having — but nothing here should write a synthetic one.
         return encode(faces)
     }
 

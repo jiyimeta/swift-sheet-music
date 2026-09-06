@@ -21,7 +21,10 @@ public enum MSCXParser {
     static func parse(
         _ data: Data, styleFileData: Data?,
     ) throws -> Score {
-        let root = try XMLTreeParser.parse(data)
+        let root = try XMLTreeParser.parse(
+            data,
+            preservingMixedContentIn: ["text"],
+        )
         return try Score.decode(
             root, styleFileStyle: styleFileStyle(styleFileData),
         )

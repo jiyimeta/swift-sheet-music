@@ -7,8 +7,8 @@ extension Harmony {
     /// `<name>`, `<harmonyType>` (0/1/2), `<root>` / `<bass>` (TPC,
     /// omitted when nil), `<rootCase>` / `<bassCase>` (omitted when
     /// `.auto`), self-closing `<leftParen/>` / `<rightParen/>` flags,
-    /// `<play>` (only when false), `<color>`, `<offset>`, and the
-    /// `TextProperties` block.
+    /// `<play>` (only when false), `<offset>`, the `TextProperties` block, and
+    /// a trailing `<color>` that cannot be reset by a later `<style>`.
     ///
     /// **The chord-symbol content moves with the target version.**
     /// MuseScore 4.6 wrapped `<name>` / `<root>` / `<bass>` in a
@@ -45,29 +45,10 @@ extension Harmony {
         if !play {
             children.append(XMLTreeNode(name: "play", text: "0"))
         }
-        if let color {
-            children.append(XMLTreeNode(
-                name: "color",
-                attributes: [
-                    "r": String(color.red),
-                    "g": String(color.green),
-                    "b": String(color.blue),
-                    "a": String(color.alpha),
-                ],
-            ))
-        }
-        if offsetX != 0 || offsetY != 0 {
-            children.append(XMLTreeNode(
-                name: "offset",
-                attributes: [
-                    "x": formatDouble(offsetX),
-                    "y": formatDouble(offsetY),
-                ],
-            ))
-        }
         children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Harmony", children: children)
     }
 

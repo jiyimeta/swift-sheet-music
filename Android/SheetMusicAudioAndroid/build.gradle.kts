@@ -166,6 +166,30 @@ wirelet {
             stripNameSuffix.set("Wire")
             emitModels.set(true)
         }
+        // The edit-intent vocabulary itself.
+        //
+        // This registration used to be deliberately absent, and the note above the "editWire" one
+        // said so: "Intent/ holds the edit-intent schema, which has no Kotlin model classes here and
+        // must not be emitted." That was true while the intent types had no Kotlin counterparts —
+        // emitting codecs that reference models nobody wrote is a build failure, not a feature.
+        //
+        // `emitModels = true` is what changes the answer. The generator now supplies the models as
+        // well as the codecs, so nothing has to be hand-written, and the types the intents reference
+        // from Path/ (MeasureRef, NoteID, StaffAddress, …) resolve to the hand-written classes in
+        // the same modelPackage — exactly the relationship "editWire" already has.
+        //
+        // Why it matters: without this, `nativeApplyEditIntent` could only relay opaque bytes
+        // authored somewhere else, so an Android host could hit-test, place a caret, undo and redo —
+        // and never originate an edit. An Apple host has the whole `EditCommand` set and the browser
+        // has a typed `EditIntent` union; Android was the only one of the three that could not
+        // author one.
+        register("editIntent") {
+            schemaPaths.from(packageRoot.resolve("Sources/SheetMusicEditWire/Intent"))
+            codecPackage.set("io.github.jiyimeta.sheetmusic.audio.serialization")
+            modelPackage.set("io.github.jiyimeta.sheetmusic.audio.model")
+            stripNameSuffix.set("Wire")
+            emitModels.set(true)
+        }
     }
 }
 
@@ -177,10 +201,12 @@ wirelet {
 val generateWireletCodecsMain = tasks.named("generateWireletCodecsMain")
 val generateWireletCodecsEditWire = tasks.named("generateWireletCodecsEditWire")
 val generateWireletCodecsEditGeometry = tasks.named("generateWireletCodecsEditGeometry")
+val generateWireletCodecsEditIntent = tasks.named("generateWireletCodecsEditIntent")
 val wireletCodegenTasks = listOf(
     generateWireletCodecsMain,
     generateWireletCodecsEditWire,
     generateWireletCodecsEditGeometry,
+    generateWireletCodecsEditIntent,
 )
 
 android {

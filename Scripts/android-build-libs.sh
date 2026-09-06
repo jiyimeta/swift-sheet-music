@@ -45,11 +45,22 @@ mkdir -p "$JNI_DIR"
 TARGETS=(
     "aarch64-unknown-linux-android28:arm64-v8a:swift-aarch64:aarch64-linux-android"
     "x86_64-unknown-linux-android28:x86_64:swift-x86_64:x86_64-linux-android"
+    "armv7-unknown-linux-android28:armeabi-v7a:swift-armv7:arm-linux-androideabi"
 )
 
 # Allow restricting to a subset of ABIs for faster local iteration.
 # Comma-separated list of ABI names (e.g. "arm64-v8a", "x86_64",
-# "arm64-v8a,x86_64"). Default is all supported ABIs.
+# "arm64-v8a,x86_64").
+#
+# The DEFAULT is deliberately not "all of TARGETS": armeabi-v7a is opt-in.
+# It builds — the Swift Android SDK carries `armv7-unknown-linux-android28`
+# and a `swift-armv7` runtime, the NDK has the matching sysroot, and both
+# native dependencies (FluidSynth, Oboe) ship the ABI — but adding it to
+# every local build and every CI run costs a third full cross-compile of the
+# package, roughly a third more wall clock, for an ABI whose share of API-28+
+# devices is small and shrinking. Opt in with
+# `SHEET_MUSIC_ANDROID_ABIS=arm64-v8a,x86_64,armeabi-v7a` when producing a
+# release that needs it.
 SHEET_MUSIC_ANDROID_ABIS="${SHEET_MUSIC_ANDROID_ABIS:-arm64-v8a,x86_64}"
 filtered=()
 for entry in "${TARGETS[@]}"; do

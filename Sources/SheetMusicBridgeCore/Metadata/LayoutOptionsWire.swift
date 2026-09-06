@@ -49,6 +49,66 @@ public struct LayoutOptionsWire {
     /// even though the wire itself stayed readable.
     public var showsLyrics: UInt8 = 1
 
+    // MARK: - The rest of ScoreViewOptions
+    //
+    // Everything below reaches `ScoreViewOptions` too, and every one of them defaults to the value
+    // `LayoutBridge` hard-coded before this wire carried it. That is the whole compatibility story:
+    // a host that sends the old blob gets the old layout, byte for byte.
+    //
+    // Each uses a sentinel for "I have no opinion" rather than the engine's literal default, so the
+    // default only ever lives in one place — `ScoreViewOptions` — and a change there is not silently
+    // pinned to an old value by this file.
+
+    /// `0` defers to `honorLayoutBreaks`; `1` = `.honor`, `2` = `.ignoreSystemBreaks`,
+    /// `3` = `.ignoreAll`.
+    ///
+    /// The deferral is why `0` is not `.honor`: `honorLayoutBreaks` is a boolean, and a host that
+    /// sends `honorLayoutBreaks = 0` today means `.ignoreAll`. Making `0` here mean `.honor` would
+    /// silently flip that host's layout the moment this field shipped.
+    ///
+    /// `.ignoreSystemBreaks` — ignore `<LayoutBreak>line` but still honor `page` — had no
+    /// representation at all in the boolean, which is the gap this field closes.
+    public var breakPolicyRaw: UInt8 = 0
+
+    /// Minimum consecutive rest measures before they collapse into one H-bar. Values below `2` are
+    /// treated as `2`, which is also what `LayoutPaginator` does with them, so this clamps in the
+    /// same direction rather than adding a second rule.
+    ///
+    /// Only consulted when `collapseMultiMeasureRests` is `1`.
+    public var multiMeasureRestMinimum: Int32 = 2
+
+    /// `0` = a label at each system head only; `n > 0` = additionally every `n`-th measure.
+    ///
+    /// Additive rather than exclusive, matching `MeasureNumberPolicy.interval`: turning the interval
+    /// up never takes away a label the reader could already see.
+    public var measureNumberInterval: Int32 = 0
+
+    /// Vertical gap between systems in points. `0` keeps the bridge's derived `staffSize * 1.25`.
+    ///
+    /// Derived rather than `ScoreViewOptions`'s own fixed 40 pt because a gap that does not scale
+    /// with the staff looks wrong at both ends of the staff-size range, and Android hosts have had
+    /// the derived one since the first release.
+    public var systemGapPoints: Double = 0
+
+    /// `2` = decide from the layout mode (horizontal off, others on) as the bridge always has;
+    /// `0` = never reserve the title block; `1` = always.
+    public var includeTitleFrameRaw: UInt8 = 2
+
+    /// `0` = draw no break-indicator badges, `1` = page breaks only, `2` = all.
+    ///
+    /// `0` is the default because it is what the bridge hard-coded. NOTE: this reaches
+    /// `ScoreViewOptions` but has no effect on the draw program yet — the badges are an overlay the
+    /// Apple renderer draws over the score (`BreakIndicatorOverlay`), not a `LayoutElement`, so a
+    /// Compose overlay has to exist before a non-zero value here shows anything.
+    public var breakIndicatorVisibilityRaw: UInt8 = 0
+
+    /// Scale factor for grace-note glyphs. `0` keeps `ScoreViewOptions`'s own default.
+    public var graceNoteMag: Double = 0
+
+    /// Scale factor for small / cue noteheads. `0` keeps `ScoreViewOptions`'s own default.
+    public var smallNoteMag: Double = 0
+
+    // swiftlint:disable:next function_default_parameter_at_end
     public init(
         layoutMode: UInt8,
         staffSize: Double,
@@ -59,6 +119,14 @@ public struct LayoutOptionsWire {
         clefOverrides: [ClefOverrideWire],
         transposeSemitones: Int32,
         showsLyrics: UInt8 = 1,
+        breakPolicyRaw: UInt8 = 0,
+        multiMeasureRestMinimum: Int32 = 2,
+        measureNumberInterval: Int32 = 0,
+        systemGapPoints: Double = 0,
+        includeTitleFrameRaw: UInt8 = 2,
+        breakIndicatorVisibilityRaw: UInt8 = 0,
+        graceNoteMag: Double = 0,
+        smallNoteMag: Double = 0,
     ) {
         self.layoutMode = layoutMode
         self.staffSize = staffSize
@@ -69,6 +137,14 @@ public struct LayoutOptionsWire {
         self.clefOverrides = clefOverrides
         self.transposeSemitones = transposeSemitones
         self.showsLyrics = showsLyrics
+        self.breakPolicyRaw = breakPolicyRaw
+        self.multiMeasureRestMinimum = multiMeasureRestMinimum
+        self.measureNumberInterval = measureNumberInterval
+        self.systemGapPoints = systemGapPoints
+        self.includeTitleFrameRaw = includeTitleFrameRaw
+        self.breakIndicatorVisibilityRaw = breakIndicatorVisibilityRaw
+        self.graceNoteMag = graceNoteMag
+        self.smallNoteMag = smallNoteMag
     }
 }
 
@@ -129,6 +205,56 @@ extension LayoutOptionsWire {
     /// so the safe direction for a host that has not been updated is the pre-existing behaviour.
     public var lyricsVisible: Bool {
         showsLyrics != 0
+    }
+
+    /// How to consume authored `<LayoutBreak>` markup.
+    ///
+    /// `breakPolicyRaw == 0` means the host has not spoken, so the older boolean answers — that
+    /// deferral is what keeps a host built before this field from having its layout flipped.
+    public var breakPolicy: LayoutBreakPolicy {
+        switch breakPolicyRaw {
+        case 1: .honor
+        case 2: .ignoreSystemBreaks
+        case 3: .ignoreAll
+        default: honorLayoutBreaks == 1 ? .honor : .ignoreAll
+        }
+    }
+
+    /// Multi-measure-rest collapse policy.
+    public var multiMeasureRestPolicy: MultiMeasureRestPolicy {
+        guard collapseMultiMeasureRests == 1 else { return .disabled }
+        return .collapse(minimumMeasures: max(2, Int(multiMeasureRestMinimum)))
+    }
+
+    /// How often a measure-number label is engraved.
+    public var measureNumberPolicy: MeasureNumberPolicy {
+        measureNumberInterval > 0 ? .interval(every: Int(measureNumberInterval)) : .systemStart
+    }
+
+    /// Which break-indicator badges an overlay should draw.
+    public var breakIndicatorVisibility: BreakIndicatorVisibility {
+        switch breakIndicatorVisibilityRaw {
+        case 1: .pageOnly
+        case 2: .all
+        default: .none
+        }
+    }
+
+    /// Vertical gap between systems in points, falling back to the staff-proportional default.
+    public func systemGap(staffSize: Double) -> Double {
+        systemGapPoints > 0 ? systemGapPoints : staffSize * 1.25
+    }
+
+    /// Whether to reserve the title block, given what the layout mode would have decided.
+    ///
+    /// `2` (the default) is "keep deciding from the mode", so a host that never sets this sees the
+    /// behaviour it always had; `0` and `1` override in each direction.
+    public func includesTitleFrame(modeDefault: Bool) -> Bool {
+        switch includeTitleFrameRaw {
+        case 0: false
+        case 1: true
+        default: modeDefault
+        }
     }
 
     /// Default for the legacy no-options LayoutBridge.compute path + tests.

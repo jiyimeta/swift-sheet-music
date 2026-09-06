@@ -187,7 +187,9 @@ extension ScoreLayerBuilder {
                     }
                 }
             }
-        case let .textMark(.lyrics(lyricColor), text, p):
+        case let .textMark(
+            .lyrics(lyricColor, _, _), text, p,
+        ):
             let style = ResolvedTextStyle.resolve(
                 .lyricsOdd, metrics: metrics,
             )

@@ -130,8 +130,10 @@ extension Chord {
         return XMLTreeNode(name: "Chord", children: children)
     }
 
-    /// Append the modeled arpeggio, element properties, and preserved
-    /// markup after the notes, matching MuseScore's Chord child order.
+    /// Append the modeled arpeggio and chord bracket, element properties, and
+    /// preserved markup after the notes, matching MuseScore's Chord child
+    /// order. Rest encoding deliberately does not call this helper because a
+    /// `<Rest>` cannot carry `<ChordBracket>`.
     private func appendChordTail(
         to children: inout [XMLTreeNode],
         options: MSCXEncoderOptions,
@@ -139,8 +141,12 @@ extension Chord {
         if let arpeggio {
             children.append(arpeggio.encode())
         }
+        if let bracket {
+            children.append(bracket.encode(options: options))
+        }
         children.append(contentsOf: elementProperties.mscxChildren())
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
     }
 
     /// The chord-anchored `<Spanner>` pair sides that belong on this
@@ -233,6 +239,7 @@ extension Chord {
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Rest", children: children)
     }
 
@@ -250,6 +257,7 @@ extension Chord {
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Rest", children: children)
     }
 }
@@ -268,6 +276,7 @@ extension Arpeggio {
             children.append(XMLTreeNode(name: "timeStretch", text: formatDouble(timeStretch)))
         }
         children.append(contentsOf: elementProperties.mscxChildren())
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Arpeggio", children: children)
     }
 }

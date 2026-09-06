@@ -4,18 +4,17 @@ import SheetMusicXMLTools
 
 extension ChordOrnament {
     /// Every direct `<Ornament>` child this decoder reads. Everything else —
-    /// the cue-note `<Chord>`, `<direction>`, `<placement>`, `<offset>` — becomes
-    /// preserved markup.
+    /// the cue-note `<Chord>` and `<direction>` — becomes preserved markup.
+    /// The base `<offset>` and `<placement>` are owned by `ElementProperties`.
     ///
     /// `color` is consumed because `ElementProperties(decodingMSCXChildrenOf:)`
-    /// reads it, following every other decoder in this package. That value is
-    /// currently decode-only (see `ElementProperties.mscxChildren()`), which is
-    /// a gap shared with `<Chord>`, `<Note>`, and the rest rather than one this
-    /// element introduces.
+    /// reads it, following every other decoder in this package. The shared
+    /// trailing writer emits it after preserved markup so a `<style>` cannot
+    /// reset it on the next read.
     private static let consumedChildren: Set = [
         "Accidental", "intervalAbove", "intervalBelow", "ornamentShowAccidental",
         "ornamentShowCueNote", "ornamentStyle", "play", "startOnUpperNote",
-        "subtype", "color", "visible",
+        "subtype", "color", "offset", "placement", "visible",
     ]
 
     /// The `<Ornament>` children of a `<Chord>`, in document order.

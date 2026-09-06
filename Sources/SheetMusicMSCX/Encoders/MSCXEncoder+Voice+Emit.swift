@@ -259,18 +259,20 @@ extension Voice {
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,
             )
-        case let .keySignature(key):
-            return key.encode(options: options)
-        case let .timeSignature(time):
-            return time.encode(options: options)
-        case let .clef(clef):
-            return clef.encode(options: options)
-        case let .dynamic(dynamic):
-            return dynamic.encode(options: options)
-        case let .barLine(barLine):
-            return barLine.encode(options: options)
-        case let .harmony(harmony):
-            return harmony.encode(options: options)
+        case let .keySignature(key): return key.encode(options: options)
+        case let .timeSignature(time): return time.encode(options: options)
+        case let .clef(clef): return clef.encode(options: options)
+        case let .dynamic(dynamic): return dynamic.encode(options: options)
+        case let .barLine(barLine): return barLine.encode(options: options)
+        case let .harmony(harmony): return harmony.encode(options: options)
+        case let .sticking(sticking): return sticking.encode(options: options)
+        case let .expression(expression): return expression.encode(options: options)
+        case let .capo(capo): return capo.encode(options: options)
+        case let .stringTunings(tunings): return tunings.encode(options: options)
+        case let .ambitus(ambitus): return ambitus.encode(options: options)
+        case let .figuredBass(figuredBass): return figuredBass.encode(options: options)
+        case let .symbol(symbol): return symbol.encode(options: options)
+        case let .fretDiagram(diagram): return diagram.encode(options: options)
         case let .preserved(markup):
             return XMLTreeNode(preserved: markup)
         case let .measureRepeat(measureRepeat):
@@ -292,8 +294,7 @@ extension Voice {
                     text: "\(delta.numerator)/\(delta.denominator)",
                 )],
             )
-        case let .spanner(spanner):
-            return spanner.encode(options: options)
+        case let .spanner(spanner): return spanner.encode(options: options)
         }
     }
 }

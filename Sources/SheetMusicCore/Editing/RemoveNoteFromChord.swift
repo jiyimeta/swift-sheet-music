@@ -41,12 +41,18 @@ public struct RemoveNoteFromChord: EditCommand {
         }
         let original = chord
         chord.notes.remove(at: location.noteIndexInChord)
-        // chord-level metadata (lyrics, arpeggio) on a rest is
+        // chord-level metadata (lyrics, arpeggio, bracket) on a rest is
         // unusual, so strip it. The original is preserved in the
         // inverse for undo.
+        //
+        // `bracket` in particular must go: `encodeAsRest` deliberately never
+        // writes `<ChordBracket>` (read460 only accepts it on a `<Chord>`),
+        // but the fingerprint hashes it, so a bracket left on a rest would
+        // change the score's `stableFingerprint` across a save/reload.
         if chord.notes.isEmpty {
             chord.lyrics = []
             chord.arpeggio = nil
+            chord.bracket = nil
         }
         score[veID] = .chord(chord)
         return ReplaceVoiceElement(at: veID, with: .chord(original))

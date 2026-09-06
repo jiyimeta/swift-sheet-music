@@ -56,6 +56,7 @@ fun EncodablePage.splitIntoBands(minBandHeightMM: Double = DEFAULT_BAND_HEIGHT_M
     var argb: UInt = INITIAL_ARGB
     var dashOnMM = 0.0
     var dashOffMM = 0.0
+    var textStyleFlags: UByte = DrawCommand.TextStyleFlag.NONE
     // Structural state: cutting inside either would split geometry across two bands.
     var pathOpen = false
     var rotation: DrawCommand.SetRotation? = null
@@ -64,6 +65,12 @@ fun EncodablePage.splitIntoBands(minBandHeightMM: Double = DEFAULT_BAND_HEIGHT_M
         buffer = ArrayList()
         buffer.add(DrawCommand.SetColor(argb))
         if (dashOnMM != 0.0 || dashOffMM != 0.0) buffer.add(DrawCommand.SetDash(dashOnMM, dashOffMM))
+        // Restated for the same reason colour and dash are: the band cut happens BEFORE a command is
+        // appended, so it can fall between a `SetTextStyle(bold)` and the text it styles. Without
+        // this the second band would draw that text at regular weight.
+        if (textStyleFlags != DrawCommand.TextStyleFlag.NONE) {
+            buffer.add(DrawCommand.SetTextStyle(textStyleFlags))
+        }
         minY = Double.POSITIVE_INFINITY
         maxY = Double.NEGATIVE_INFINITY
     }
@@ -86,6 +93,7 @@ fun EncodablePage.splitIntoBands(minBandHeightMM: Double = DEFAULT_BAND_HEIGHT_M
                 dashOnMM = cmd.onMM
                 dashOffMM = cmd.offMM
             }
+            is DrawCommand.SetTextStyle -> textStyleFlags = cmd.flags
             is DrawCommand.SetRotation -> rotation = if (cmd.radians != 0.0) cmd else null
             is DrawCommand.MoveTo -> pathOpen = true
             is DrawCommand.Stroke -> pathOpen = false
@@ -157,5 +165,8 @@ private fun DrawCommand.boxMM(): Box? = when (this) {
     is DrawCommand.Text -> Box(x, y - 2.0 * size, x + 2.0 * size, y + size)
     is DrawCommand.ItalicText -> Box(x, y - 2.0 * size, x + 2.0 * size, y + size)
     is DrawCommand.StretchedGlyph -> Box(rightEdgeX - fontSize, topY, rightEdgeX, bottomY)
-    is DrawCommand.Stroke, is DrawCommand.SetColor, is DrawCommand.SetDash, is DrawCommand.SetRotation -> null
+    // State commands paint nothing themselves, so they contribute no box.
+    is DrawCommand.Stroke, is DrawCommand.SetColor, is DrawCommand.SetDash,
+    is DrawCommand.SetRotation, is DrawCommand.SetTextStyle,
+    -> null
 }

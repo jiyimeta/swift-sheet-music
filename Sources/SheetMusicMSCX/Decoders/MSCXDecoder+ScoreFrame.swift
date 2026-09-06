@@ -20,8 +20,10 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension ScoreFrame {
+    private static let consumedVBoxChildren: Set = ["height", "Text"]
+
     /// Parse a `<VBox>` element. Permissive — unknown children are
-    /// ignored. Default height is 0 if `<height>` is missing /
+    /// preserved. Default height is 0 if `<height>` is missing /
     /// malformed; layout will still allocate at least enough space
     /// for the contained text in that case.
     static func decode(vbox node: XMLTreeNode) -> ScoreFrame {
@@ -29,15 +31,28 @@ extension ScoreFrame {
         if let raw = node.first("height")?.text, let parsed = Double(raw) {
             height = CGFloat(parsed)
         }
+        // `FrameText.decode` returns nil for empty text. `Text` must still be
+        // consumed to avoid duplicating modeled text, so an empty `<Text>` is
+        // a pre-existing loss that this score-block slice does not fix.
         let texts = node.all("Text").compactMap(FrameText.decode(_:))
-        return ScoreFrame(heightSp: height, texts: texts)
+        return ScoreFrame(
+            heightSp: height,
+            texts: texts,
+            preservedMarkup: node.preservedMarkup(consuming: consumedVBoxChildren),
+        )
     }
 }
 
 extension FrameText {
     static func decode(_ node: XMLTreeNode) -> FrameText? {
-        let raw = node.first("text")?.text ?? ""
-        let stripped = stripInlineMarkup(raw)
+        let textNode = node.first("text")
+        // Deliberately the element's own character data, run through the
+        // string-level stripper below, rather than `plainText(of:)`. Reading
+        // descendants would start admitting a title written entirely inside
+        // `<b>`, which this decoder has always dropped — a real improvement,
+        // but a behaviour change that belongs in its own commit with its own
+        // test, not folded into carrying the markup.
+        let stripped = stripInlineMarkup(textNode?.text ?? "")
         guard !stripped.isEmpty else { return nil }
         let style = (node.first("style")?.text)
             .flatMap(decodeStyle(_:)) ?? .other
@@ -57,8 +72,26 @@ extension FrameText {
         return FrameText(
             style: style, text: stripped,
             offsetMm: offsetMm, fontSize: fontSize, align: align,
+            preservedTextMarkup: textNode.flatMap {
+                StaffText.preservedTextMarkup(of: $0, derivedText: stripped)
+            },
         )
     }
+}
+
+/// Drop the inline `<b>` / `<i>` / `<font …>` tags MuseScore emits
+/// inside `<text>` so callers see plain text. A future revision can
+/// expose a structured representation if styling matters; for now
+/// the renderer treats title-block text as plain.
+private func stripInlineMarkup(_ s: String) -> String {
+    var result = ""
+    var inTag = false
+    for char in s {
+        if char == "<" { inTag = true; continue }
+        if char == ">" { inTag = false; continue }
+        if !inTag { result.append(char) }
+    }
+    return result.trimmingWhitespaceAndNewlines()
 }
 
 /// MuseScore writes the `<style>` value with the engraving enum's
@@ -76,19 +109,4 @@ private func decodeStyle(_ raw: String) -> FrameText.Style? {
     case "lyricist", "poet": return .lyricist
     default: return nil
     }
-}
-
-/// Drop the inline `<b>` / `<i>` / `<font …>` tags MuseScore emits
-/// inside `<text>` so callers see plain text. A future revision can
-/// expose a structured representation if styling matters; for now
-/// the renderer treats title-block text as plain.
-private func stripInlineMarkup(_ s: String) -> String {
-    var result = ""
-    var inTag = false
-    for char in s {
-        if char == "<" { inTag = true; continue }
-        if char == ">" { inTag = false; continue }
-        if !inTag { result.append(char) }
-    }
-    return result.trimmingWhitespaceAndNewlines()
 }

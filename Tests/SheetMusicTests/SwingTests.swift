@@ -42,6 +42,8 @@ struct MSCXSwingTests {
             unit: SwingUnit.eighth,
             ratio: 60,
             isSystemText: true,
+            offsetX: 0.75,
+            offsetY: -1.5,
         )
         let staff = Staff(
             staffType: "stdNormal",
@@ -90,6 +92,9 @@ struct MSCXSwingTests {
         #expect(decoded.ratio == 60)
         #expect(decoded.isSystemText)
         #expect(decoded.text == "Swing")
+        #expect(decoded.offsetX == 0.75)
+        #expect(decoded.offsetY == -1.5)
+        #expect(decoded.elementProperties.offset == ScoreOffset(x: 0.75, y: -1.5))
     }
 
     @Test("16th swing unit serializes with the MuseScore '16th' token")

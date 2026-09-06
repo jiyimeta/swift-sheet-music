@@ -14,11 +14,9 @@ extension Swing {
     static func decode(
         _ node: XMLTreeNode, isSystemText: Bool,
     ) -> Swing {
-        let text = node.first("text")
-            .map(StaffText.plainText(of:)) ?? ""
+        let textNode = node.first("text")
+        let text = textNode.map(StaffText.plainText(of:)) ?? ""
         let color = node.first("color").flatMap(StaffText.decodeColor(_:))
-        let offset = node.first("offset")
-            .map(StaffText.decodeOffset(_:)) ?? (0, 0)
         let props = TextProperties.decode(node)
         // Swing marker child: `<swing unit="eighth|16th|" ratio="60"/>`.
         // Defaults match `StaffTextBase`'s constructor (eighth, 60).
@@ -40,10 +38,9 @@ extension Swing {
             unit: unit,
             ratio: ratio,
             isSystemText: isSystemText,
-            offsetX: offset.0,
-            offsetY: offset.1,
             color: color,
             properties: props,
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
         swing.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return swing

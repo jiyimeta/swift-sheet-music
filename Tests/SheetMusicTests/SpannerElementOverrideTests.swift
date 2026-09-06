@@ -67,7 +67,12 @@ struct SpannerElementOverrideTests {
             "HairPin",
             "<HairPin><subtype>0</subtype><placement>above</placement></HairPin>",
         ))
-        #expect(try Spanner.decode(original.encode()).placement == .above)
+        let encoded = original.encode()
+        #expect(encoded.children.map(\.name) == ["HairPin", "next"])
+        let payload = try #require(encoded.first("HairPin"))
+        #expect(payload.children.map(\.name) == ["placement", "subtype"])
+        #expect(payload.first("placement")?.text == "above")
+        #expect(try Spanner.decode(encoded).placement == .above)
     }
 
     // MARK: - ottava numbersOnly

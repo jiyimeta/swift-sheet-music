@@ -13,7 +13,11 @@
  * the drawing, never the bitmap.
  */
 import type { DrawCommand, DrawProgramPage } from "../draw-program.js";
-import { FontId } from "../draw-program.js";
+import {
+  FontId,
+  TEXT_STYLE_BOLD,
+  TEXT_STYLE_ITALIC,
+} from "../draw-program.js";
 import type { ScoreBand } from "./bands.js";
 import type { ScoreFonts } from "./fonts.js";
 import type { PageTile } from "./tiles.js";
@@ -87,11 +91,43 @@ function drawCommandList(
   let dashOnPx = 0;
   let dashOffPx = 0;
   let rotationOpen = false;
+  let textStyleFlags = 0;
 
   const applyColor = (): void => {
     const css = rgba(currentArgb);
     ctx.fillStyle = css;
     ctx.strokeStyle = css;
+  };
+
+  /**
+   * The CSS font shorthand for a text or glyph draw, honouring the active
+   * `setTextStyle`.
+   *
+   * `bold` reaches Canvas as a real font-weight rather than an emboldening
+   * trick, so the browser picks the family's bold member (or synthesizes one,
+   * which is what the metrics table's `Edwin-Bold` record measures either way).
+   * Italic goes through the shear below instead: the two bundled faces ship
+   * upright only, and a CSS `italic` on a family with no italic member gets a
+   * browser-chosen synthetic slant that differs from the one the layout
+   * measured.
+   */
+  const fontFor = (size: number, fontId: number): string => {
+    const weight = textStyleFlags & TEXT_STYLE_BOLD ? "bold " : "";
+    return `${weight}${size * pxPerMM}px "${faceFor(fontId, fonts)}"`;
+  };
+
+  /** Draw `text` at the baseline, applying the active italic shear if any. */
+  const fillStyledText = (text: string, xPx: number, baselineY: number): void => {
+    if (!(textStyleFlags & TEXT_STYLE_ITALIC)) {
+      ctx.fillText(text, xPx, baselineY);
+      return;
+    }
+    ctx.save();
+    // Shear about the baseline so the glyph's foot stays where the engraver put
+    // it and only the top leans — the same transform `italicText` uses.
+    ctx.transform(1, 0, ITALIC_SHEAR, 1, -ITALIC_SHEAR * baselineY, 0);
+    ctx.fillText(text, xPx, baselineY);
+    ctx.restore();
   };
 
   const paint = (command: DrawCommand): void => {
@@ -129,16 +165,23 @@ function drawCommandList(
         );
         break;
       case "glyph":
-        ctx.font = `${command.size * pxPerMM}px "${faceFor(command.fontId, fonts)}"`;
-        ctx.fillText(
+        ctx.font = fontFor(command.size, command.fontId);
+        fillStyledText(
           String.fromCodePoint(command.codepoint),
           command.x * pxPerMM,
           command.y * pxPerMM,
         );
         break;
       case "text":
-        ctx.font = `${command.size * pxPerMM}px "${faceFor(command.fontId, fonts)}"`;
-        ctx.fillText(command.text, command.x * pxPerMM, command.y * pxPerMM);
+        ctx.font = fontFor(command.size, command.fontId);
+        fillStyledText(
+          command.text,
+          command.x * pxPerMM,
+          command.y * pxPerMM,
+        );
+        break;
+      case "setTextStyle":
+        textStyleFlags = command.flags;
         break;
       case "italicText": {
         ctx.font = `${command.size * pxPerMM}px "${faceFor(command.fontId, fonts)}"`;

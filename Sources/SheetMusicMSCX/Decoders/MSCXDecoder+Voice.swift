@@ -153,11 +153,22 @@ extension Voice {
                             location: "Chord[grace]/Spanner",
                         )
                     }
+                    // `GraceChord` carries no bracket either, and unlike a
+                    // spanner a `<ChordBracket>` is *consumable*: `Chord.decode`
+                    // lifts it out of `inner.preservedMarkup` into
+                    // `inner.bracket`, which this initializer then drops. Put
+                    // the source subtree back so the element still round-trips,
+                    // exactly as it did before `<ChordBracket>` was modeled.
+                    // It lands after the other preserved children rather than
+                    // in document order; MuseScore's reader is order-agnostic
+                    // inside `<Chord>`.
+                    let graceMarkup = inner.preservedMarkup
+                        + child.all("ChordBracket").map(PreservedXML.init)
                     pendingGraces.append(GraceChord(
                         graceType: graceType,
                         duration: inner.duration,
                         notes: inner.notes,
-                        preservedMarkup: inner.preservedMarkup,
+                        preservedMarkup: graceMarkup,
                     ))
                     continue
                 }
@@ -298,6 +309,24 @@ extension Voice {
                 }
             case "Harmony":
                 try appendVoiceElement(.harmony(Harmony.decode(child)))
+            case "Sticking":
+                appendVoiceElement(.sticking(Sticking.decode(child)))
+            case "Expression":
+                appendVoiceElement(.expression(ExpressionText.decode(child)))
+            case "Capo":
+                appendVoiceElement(.capo(Capo.decode(child)))
+            case "StringTunings":
+                appendVoiceElement(.stringTunings(StringTunings.decode(child)))
+            case "Ambitus":
+                appendVoiceElement(.ambitus(Ambitus.decode(child)))
+            case "FiguredBass":
+                appendVoiceElement(.figuredBass(FiguredBass.decode(child)))
+            case "Symbol":
+                appendVoiceElement(.symbol(
+                    EngravingSymbol.decode(child, location: "voice/Symbol"),
+                ))
+            case "FretDiagram":
+                appendVoiceElement(.fretDiagram(FretDiagram.decode(child)))
             case "RehearsalMark":
                 try lifted(.rehearsalMark(
                     RehearsalMark.decode(child),

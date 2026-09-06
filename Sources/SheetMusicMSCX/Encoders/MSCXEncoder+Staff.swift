@@ -55,10 +55,8 @@ extension Staff {
     }
 
     /// Encode the top-level `<Staff id="N">` block carrying measures.
-    /// Pass `titleFrame` to prepend a `<VBox>` ahead of the measures —
-    /// MuseScore stores the title block inside the first top-level
-    /// staff body, so callers should set it only on staff index 0 of
-    /// part index 0.
+    /// Pass score-level `blocks` only for staff index 0 of part index 0;
+    /// they are emitted at their positions in the measure stream.
     ///
     /// `systemElementsByMeasure[i]` (when supplied) is the set of
     /// system elements destined for this staff at measure index `i`.
@@ -75,15 +73,12 @@ extension Staff {
     /// emitting `.measure` rests.
     func encodeTopLevel(
         staffID: String,
-        titleFrame: ScoreFrame? = nil,
+        blocks: [PositionedScoreBlock] = [],
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
         effectiveMeasureDurations: [Fraction] = [],
         options: MSCXEncoderOptions = .init(),
     ) throws -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        if let titleFrame {
-            children.append(titleFrame.encodeAsVBox())
-        }
         // Thread per-voice tie-carry data across measures so a tie
         // that crosses a measure boundary can encode the
         // `<measures>±1</measures>` form (which MuseScore Studio
@@ -92,6 +87,9 @@ extension Staff {
         // MuseScore match the wrong destination chord).
         var carry: [Voice.VoiceTieCarry] = []
         for (measureIndex, measure) in measures.enumerated() {
+            children.append(contentsOf: blocks.lazy
+                .filter { $0.beforeMeasureIndex == measureIndex }
+                .map { $0.block.encode(options: options) })
             let injection: [PositionedSystemElement] =
                 measureIndex < systemElementsByMeasure.count
                     ? systemElementsByMeasure[measureIndex]
@@ -121,6 +119,9 @@ extension Staff {
             children.append(result.node)
             carry = result.carryOutVoiceTieCarries
         }
+        children.append(contentsOf: blocks.lazy
+            .filter { $0.beforeMeasureIndex >= measures.count }
+            .map { $0.block.encode(options: options) })
         return XMLTreeNode(
             name: "Staff",
             attributes: ["id": staffID],

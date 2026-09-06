@@ -42,6 +42,17 @@ extension Note {
         for fingering in fingerings {
             children.append(fingering.encode(options: options))
         }
+        // Note-attached `<Symbol>` is another `el()` item and shares the same
+        // writer slot. Parenthesis glyphs are skipped rather than emitted:
+        // they belong to `Note.parentheses`, which `appendParentheses`
+        // regenerates in the target version's spelling. The decoder already
+        // keeps them out of `symbols`, but `symbols` is a `public var`, and
+        // emitting one from here would make encode→decode non-idempotent —
+        // `decodeParentheses` would read it back as `parentheses`, growing a
+        // pair of brackets the model never had.
+        for symbol in symbols where !Self.parenthesisSymbolNames.contains(symbol.name) {
+            children.append(symbol.encode(options: options))
+        }
         if tieForward != nil {
             children.append(tieSpanner(
                 side: "next", endpoint: tieForwardEndpoint,
@@ -53,7 +64,7 @@ extension Note {
             ))
         }
         if let glissando {
-            children.append(glissandoSpanner(glissando))
+            children.append(glissandoSpanner(glissando, options: options))
         }
         appendParentheses(into: &children, targetVersion: options.targetVersion)
         children.append(XMLTreeNode(name: "pitch", text: String(pitch)))
@@ -102,6 +113,7 @@ extension Note {
         ))
         children.append(contentsOf: elementProperties.mscxChildren())
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Note", children: children)
     }
 
@@ -311,7 +323,10 @@ extension Note {
         }
     }
 
-    private func glissandoSpanner(_ glissando: Glissando) -> XMLTreeNode {
+    private func glissandoSpanner(
+        _ glissando: Glissando,
+        options: MSCXEncoderOptions,
+    ) -> XMLTreeNode {
         // Start-side only — the end note carries no model state, and
         // the decoder ignores `<Spanner type="Glissando">` blocks
         // without a `<Glissando>` payload child.
@@ -319,7 +334,7 @@ extension Note {
             name: "Spanner",
             attributes: ["type": "Glissando"],
             children: [
-                glissando.encode(),
+                glissando.encode(options: options),
                 XMLTreeNode(name: "next"),
             ],
         )

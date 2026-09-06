@@ -22,6 +22,22 @@ object SheetMusicJNI {
     }
 
     /**
+     * [nativeLoadScore] plus the two things it throws away: the stable dotted
+     * fault code for a failure, and the parser's non-fatal diagnostics for a
+     * success. Returns a `ScoreLoadResultWire` payload; decode via
+     * [ScoreLoadResult.load], which wraps this call.
+     *
+     * A non-zero `scoreHandle` in the result must be released with
+     * [nativeReleaseScore], exactly as [nativeLoadScore]'s return value must.
+     */
+    fun nativeLoadScoreWithDiagnostics(bytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeLoadScoreWithDiagnostics(
+            SwiftData.fromByteArray(bytes, arena), arena,
+        ).toByteArray()
+    }
+
+    /**
      * Parse a MuseScore-exported vector PDF (3.x/4.x) into a score via the
      * Foundation-only pure-Swift PDF reader. Returns 0 on parse failure.
      */
@@ -35,15 +51,43 @@ object SheetMusicJNI {
     }
 
     /**
-     * Length-prefixed UTF-8 blob holding `(workTitle, composer)` from the
-     * score's metaTags. Wire format:
-     * `[titleLen:I32 LE][titleBytes][composerLen:I32 LE][composerBytes]`.
-     * Missing tags come back as zero-length strings; an unknown handle
-     * returns an empty array. Decode via [ScoreMetadata.decode].
+     * `ScoreMetadataWire` payload: `workTitle`, `composer`, and every entry of
+     * the score's `metaTags` dictionary, key-sorted. Missing tags come back as
+     * zero-length strings; an unknown handle returns an empty array. Decode via
+     * [ScoreMetadata.fetch], which wraps this call.
      */
     fun nativeScoreMetadata(handle: Long): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeScoreMetadata(handle, arena).toByteArray()
+    }
+
+    /**
+     * Serialize the score behind [scoreHandle] into `.mscx` or `.mscz` bytes —
+     * the counterpart [nativeLoadScore] never had.
+     *
+     * @param format 0 = `.mscx` (plain XML), 1 = `.mscz` (ZIP container).
+     * @param targetVersion 0 for the encoder's default, 3 for the
+     *   MuseScore 3 compatibility writer, 4 for MuseScore 4. Any other
+     *   value is treated as 0.
+     * @param emitPreservedMarkup 0 drops source XML the model does not
+     *   represent; anything else keeps it. Preserved markup is source
+     *   fidelity, not a semantic guarantee — an edited score can carry a
+     *   stale `<Excerpt>` — so a host preparing a file for distribution
+     *   passes 0.
+     *
+     * Returns an empty array for an unknown handle, an unknown format, or an
+     * encoding failure.
+     */
+    fun nativeEncodeScore(
+        scoreHandle: Long,
+        format: Int,
+        targetVersion: Int,
+        emitPreservedMarkup: Int,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEncodeScore(
+            scoreHandle, format, targetVersion, emitPreservedMarkup, arena,
+        ).toByteArray()
     }
 
     /**
@@ -470,6 +514,81 @@ object SheetMusicJNI {
             activeVoice,
             SwiftData.fromByteArray(optionsBytes, arena),
             arena,
+        ).toByteArray()
+    }
+
+    /**
+     * Where to draw the authoring badges that mark measures carrying an
+     * explicit `<LayoutBreak>`.
+     *
+     * `LayoutOptionsWire.breakIndicatorVisibilityRaw` is what asks for these;
+     * this is what answers. Both the visibility and the break policy come from
+     * the cached layout rather than from parameters, so the badges can only
+     * describe the layout actually on screen — a badge drawn from a different
+     * policy than the one that laid the score out points at a break that is not
+     * happening.
+     *
+     * Returns a `BreakIndicatorsWire` payload with each badge's CENTRE in
+     * document millimetres and its kind (0 = line, 1 = page). Draw the badge at
+     * a fixed size: it is an authoring hint about the file, not notation, and
+     * one that shrinks with the staff becomes unreadable exactly when the score
+     * is zoomed out to look at its breaks.
+     *
+     * An empty *list* is the normal answer for a score with no authored breaks
+     * or with the badges turned off; an empty array means no answer at all —
+     * unknown handle, or no cached layout.
+     */
+    fun nativeBreakIndicators(scoreHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeBreakIndicators(scoreHandle, arena).toByteArray()
+    }
+
+    /**
+     * The sticky-header pane for a horizontal continuous view: the clef, key
+     * signature, time signature and instrument name in force at [scrollXMm],
+     * frozen so a reader who has scrolled past bar 1 can still see what key and
+     * metre they are in.
+     *
+     * Returns a **one-page draw program** in exactly the format
+     * [nativeComputeLayout] returns, so a host decodes and paints it with the
+     * renderer it already has — there is no second drawing path, and a change to
+     * how a clef is drawn reaches the pane for free.
+     *
+     * [scrollXMm] is the viewport's left edge in document millimetres, the same
+     * space [nativeEditingHitTest] and [nativeItemIDsInRect] take. Scrolling
+     * past the last measure clamps to it rather than emptying the pane.
+     *
+     * Returns an empty array when the handle is unknown, no layout is cached, or
+     * the score has no measures to freeze.
+     */
+    fun nativeStickyHeaderProgram(scoreHandle: Long, scrollXMm: Double): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeStickyHeaderProgram(scoreHandle, scrollXMm, arena).toByteArray()
+    }
+
+    /**
+     * Marquee (rubber-band) selection: every chord / rest whose layout box intersects the rectangle
+     * ([xMm], [yMm], [widthMm], [heightMm]; document/mm, the same space [nativeEditingHitTest] takes
+     * its point in) within the cached layout of [scoreHandle].
+     *
+     * Returns a `ScoreItemIDListWire` payload — the ids in query order (systems top-to-bottom, then
+     * event columns left-to-right), full-score addressed exactly like [nativeEditingHitTest]'s
+     * single hit, so the result can be fed straight to [nativeEncodeDrawProgram] or an edit intent.
+     *
+     * An empty array means "no answer": the handle is unknown or no layout is cached. A rect that
+     * covers nothing comes back as a *decodable payload with zero items* — a host that cannot tell
+     * the two apart will keep showing a stale selection for a released handle.
+     */
+    fun nativeItemIDsInRect(
+        scoreHandle: Long,
+        xMm: Double,
+        yMm: Double,
+        widthMm: Double,
+        heightMm: Double,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeItemIDsInRect(
+            scoreHandle, xMm, yMm, widthMm, heightMm, arena,
         ).toByteArray()
     }
 

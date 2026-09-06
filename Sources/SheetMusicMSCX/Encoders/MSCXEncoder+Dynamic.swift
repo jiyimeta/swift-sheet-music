@@ -15,6 +15,7 @@ extension Dynamic {
         children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Dynamic", children: children)
     }
 }

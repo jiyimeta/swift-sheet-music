@@ -6,7 +6,8 @@ extension ChordLine {
     /// Encode as a `<ChordLine>` element. Child order mirrors
     /// `TWrite::write(const ChordLine*, …)`:
     /// subtype → straight → wavy → play → lengthX → lengthY →
-    /// item properties → Path.
+    /// ordinary item properties → Path. Shared `<color>` follows as the
+    /// universal trailing property.
     ///
     /// MuseScore's `writeProperty` omits a tag whose value equals the
     /// property default, and `xml.tag(name, value, default)` does the
@@ -50,6 +51,7 @@ extension ChordLine {
                 },
             ))
         }
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "ChordLine", children: children)
     }
 

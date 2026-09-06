@@ -84,4 +84,22 @@ sealed class DrawCommand {
         val size: Double,
         val fontId: FontID,
     ) : DrawCommand()
+
+    /**
+     * Font style for every subsequent [Text] and [Glyph], until the next
+     * [SetTextStyle]. A state command like [SetColor]; [flags] is the bitmask
+     * in [TextStyleFlag].
+     *
+     * Mirrors `DrawCommand.setTextStyle` (wire v7), which supersedes
+     * [ItalicText] — MuseScore's role defaults set tempo marks, rehearsal
+     * marks and instrument-change text bold, and the wire had no way to say so.
+     */
+    data class SetTextStyle(val flags: UByte) : DrawCommand()
+
+    /** Bit positions in [SetTextStyle.flags]. Mirrors Swift's `DrawCommand.TextStyleFlag`. */
+    object TextStyleFlag {
+        const val BOLD: UByte = 1u
+        const val ITALIC: UByte = 2u
+        const val NONE: UByte = 0u
+    }
 }

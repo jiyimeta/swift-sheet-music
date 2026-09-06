@@ -18,6 +18,22 @@ Kotlin under `Android/SheetMusicAudioAndroid/` using FluidSynth and Oboe.
 Supported ABIs are `arm64-v8a` and `x86_64`; the minimum Android API level is
 28.
 
+`armeabi-v7a` is a third, opt-in ABI rather than an unsupported one. It builds —
+the Swift Android SDK carries the `armv7-unknown-linux-android28` triple and a
+`swift-armv7` runtime, the NDK has the matching sysroot at
+`arm-linux-androideabi`, and both native dependencies of the audio module
+(FluidSynth's `.aar` and Oboe) ship the ABI. It stays out of the default because
+a third full cross-compile costs roughly a third more wall clock on every local
+build and every CI run, for an ABI whose share of API-28-and-later devices is
+small and shrinking:
+
+```bash
+SHEET_MUSIC_ANDROID_ABIS=arm64-v8a,x86_64,armeabi-v7a Scripts/android-build-libs.sh
+```
+
+The published AAR carries the two defaults, so a consumer who needs 32-bit ARM
+builds the natives themselves.
+
 ## Prerequisites
 
 Use the open-source swift.org Swift toolchain matching the installed Android

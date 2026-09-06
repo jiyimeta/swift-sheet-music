@@ -4,9 +4,9 @@ import SheetMusicXMLTools
 
 extension Tempo {
     /// Build a `<Tempo>` element. Inverse of `Tempo.decode(_:)`: emits `<tempo>` (beats-per-second), then
-    /// `<followText>1</followText>` and — last, where MuseScore writes it — the engraved marking as `<text>`,
-    /// both only when there is a marking to print; an `<offset x= y=>` element when either coordinate is
-    /// non-zero; `<visible>0</visible>` when hidden; and any per-element `TextProperties` overrides.
+    /// `<followText>1</followText>` and the engraved marking as `<text>`, both only when there is a marking to
+    /// print; a shared `<offset x= y=>` element when present; `<visible>0</visible>` when hidden; any per-element
+    /// `TextProperties` overrides; and the shared `<color>` trailing child last.
     ///
     /// The marking is synthesized on every encode because the model keeps no text (`Tempo` has bps, a beat and
     /// dots, nothing else) and MuseScore 4 shows a `TempoText` only through its text — a `<Tempo>` with `<tempo>`
@@ -20,20 +20,12 @@ extension Tempo {
         if marking != nil {
             children.append(XMLTreeNode(name: "followText", text: "1"))
         }
-        if offsetX != 0 || offsetY != 0 {
-            children.append(XMLTreeNode(
-                name: "offset",
-                attributes: [
-                    "x": formatDouble(offsetX),
-                    "y": formatDouble(offsetY),
-                ],
-            ))
-        }
         children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
         if let marking {
             children.append(marking)
         }
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Tempo", children: children)
     }
 

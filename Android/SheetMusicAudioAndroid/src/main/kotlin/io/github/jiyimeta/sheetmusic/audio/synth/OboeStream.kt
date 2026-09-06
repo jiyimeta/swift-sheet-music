@@ -5,6 +5,9 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTimestamp
 import android.media.AudioTrack
+import io.github.jiyimeta.sheetmusic.audio.model.MasterOutputStage
+import io.github.jiyimeta.sheetmusic.audio.model.MixLevel
+import kotlin.math.sqrt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -102,11 +105,49 @@ internal open class OboeStream(
     private val producer = AtomicReference<Producer?>(null)
 
     @Volatile private var masterVolume: Float = 1.0f
+    @Volatile private var outputStage: MasterOutputStage = MasterOutputStage.NONE
+    @Volatile private var levelHandler: ((MixLevel) -> Unit)? = null
     @Volatile private var running = false
     private var writerScope: CoroutineScope? = null
 
-    /** Updates the master gain applied to every mixed frame (range 0..1). */
-    fun setMasterVolume(value: Float) { masterVolume = value }
+    /**
+     * Updates the master gain applied to every mixed frame.
+     *
+     * Values above `1.0` are allowed and are the point: what a mix needs
+     * depends on the SoundFont's own output level, which this class cannot
+     * judge, and a host calibrating a quiet bank against a louder reference has
+     * no other recourse. What happens to the overshoot is
+     * [setMasterOutputStage]'s business, not this call's — by default nothing,
+     * so the gain reaches the device as given.
+     *
+     * Negative values are clamped to zero; nothing sensible is below silence.
+     */
+    fun setMasterVolume(value: Float) { masterVolume = value.coerceAtLeast(0f) }
+
+    /**
+     * Chooses what — if anything — shapes the mix once [setMasterVolume] has
+     * pushed it past full scale. Safe to call while playing; the change takes
+     * effect on the next buffer.
+     */
+    fun setMasterOutputStage(stage: MasterOutputStage) { outputStage = stage }
+
+    /**
+     * Starts reporting the mix's level, so a host can show a meter or measure
+     * how much headroom is left.
+     *
+     * [handler] receives one [MixLevel] per written buffer, measured
+     * **post-gain and pre-shaping** — the true level the output stage is being
+     * asked to deal with, rather than its already-clamped result. Called on the
+     * writer thread, not the main thread: hop before touching UI, and do not
+     * block, or the audio stalls.
+     *
+     * Starting again replaces the previous handler. Buffers arrive only while
+     * audio is flowing.
+     */
+    fun startLevelMonitoring(handler: (MixLevel) -> Unit) { levelHandler = handler }
+
+    /** Stops reporting levels. A no-op when not monitoring. */
+    fun stopLevelMonitoring() { levelHandler = null }
 
     /**
      * Registers or clears the audio [Producer]. May be called while the
@@ -235,9 +276,40 @@ internal open class OboeStream(
             }
             p.produce(framesPerBuffer, left, right)
             val mv = masterVolume
+            val stage = outputStage
+            val handler = levelHandler
+            // Measured post-gain and PRE-shaping: a meter fed the shaped signal
+            // would show a mix comfortably under the ceiling at the exact moment
+            // the soft clip is working hardest to keep it there, which is the
+            // reading a host most needs to see.
+            var peak = 0f
+            var sumSquares = 0.0
             for (i in 0 until framesPerBuffer) {
-                interleaved[i * 2] = left[i] * mv
-                interleaved[i * 2 + 1] = right[i] * mv
+                val l = left[i] * mv
+                val r = right[i] * mv
+                if (handler != null) {
+                    val magL = if (l < 0f) -l else l
+                    val magR = if (r < 0f) -r else r
+                    if (magL > peak) peak = magL
+                    if (magR > peak) peak = magR
+                    sumSquares += l.toDouble() * l + r.toDouble() * r
+                }
+                // SOFT_CLIP only. PEAK_LIMITER is documented as behaving like
+                // NONE here — see `MasterOutputStage`.
+                if (stage == MasterOutputStage.SOFT_CLIP) {
+                    interleaved[i * 2] = SoftClip.apply(l)
+                    interleaved[i * 2 + 1] = SoftClip.apply(r)
+                } else {
+                    interleaved[i * 2] = l
+                    interleaved[i * 2 + 1] = r
+                }
+            }
+            if (handler != null) {
+                val rms = sqrt(sumSquares / (framesPerBuffer * 2)).toFloat()
+                // Not inside the sample loop and not on a dispatcher: one call
+                // per buffer is cheap, and hopping threads here would let the
+                // reports arrive out of order.
+                handler(MixLevel(peak = peak, rms = rms))
             }
             track?.write(interleaved, 0, interleaved.size, AudioTrack.WRITE_BLOCKING)
         }

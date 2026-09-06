@@ -19,9 +19,14 @@ extension Fingering {
         if let style = role.mscxToken {
             children.append(XMLTreeNode(name: "style", text: style))
         }
-        children.append(XMLTreeNode(name: "text", text: text))
+        children.append(encodeText(
+            text,
+            preservedTextMarkup: preservedTextMarkup,
+            options: options,
+        ))
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Fingering", children: children)
     }
 }

@@ -52,6 +52,7 @@ public struct Marker: Sendable, Equatable {
     /// Display text as rendered (sometimes includes SMuFL glyphs or
     /// translated strings; kept verbatim for round-trip fidelity).
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// Source XML children this model does not represent.
     public var preservedMarkup: [PreservedXML] = []
 
@@ -60,10 +61,12 @@ public struct Marker: Sendable, Equatable {
         label: String = "",
         text: String = "",
         preservedMarkup: [PreservedXML] = [],
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.kind = kind
         self.label = label
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.preservedMarkup = preservedMarkup
     }
 

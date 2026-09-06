@@ -38,19 +38,22 @@ extension LayoutDocument {
         return nil
     }
 
-    /// Y (in document coords) where verse-0 lyrics are drawn for
-    /// the chord at `voiceElementID`. Used to anchor an inline lyric
-    /// editor exactly where the rendered glyph sits.
+    /// Y (in document coords) where `verse` lyrics are drawn for the
+    /// chord at `voiceElementID`. Used to anchor an inline lyric editor
+    /// exactly where the rendered glyph sits.
     ///
     /// Strategy:
-    /// 1. If the chord already has a lyric textMark in the layout,
-    ///    return that mark's `origin.y` — exact match.
-    /// 2. Else fall back to the placement engine's per-system
+    /// 1. Prefer an existing verse-0 lyric mark, whose Y is the exact
+    ///    base shared across the measure.
+    /// 2. If only a higher verse is present, derive the base by removing
+    ///    that mark's indexed verse offset.
+    /// 3. Else fall back to the placement engine's per-system
     ///    baseline: 6 sp below the staff top (staff height = 4 sp,
     ///    plus a 2-sp lyric drop). This matches the un-ratcheted
     ///    `chordLyricCenterY` in `LayoutEngine+Placement`.
     public func lyricLineY(
         at voiceElementID: VoiceElementID,
+        verse: Int,
     ) -> CGFloat? {
         let measureIndex = voiceElementID.measureIndex
         for system in systems {
@@ -61,23 +64,42 @@ extension LayoutDocument {
                     .flatIndex(for: voiceElementID.staff),
                     system.staffOrigins.indices.contains(staffIndex)
                 else { return nil }
-                // Look for an existing lyric mark adjacent to the
-                // chord. The placement engine emits all of a
-                // measure's lyrics at the same Y (within a system),
-                // so any lyric in this measure tells us the
-                // ratcheted lyric line.
+                var higherVerseMark: (y: CGFloat, verse: Int)?
                 for el in measure.elements {
-                    if case let .textMark(.lyrics, _, p) = el {
-                        return system.origin.y
-                            + measure.origin.y + p.y
+                    if case let .textMark(
+                        .lyrics(_, markVerse, _), _, p,
+                    ) = el {
+                        let y = system.origin.y + measure.origin.y + p.y
+                        if markVerse == 0 {
+                            return y + CGFloat(verse) * system.sp
+                                * lyricVerseStrideInSpatiums
+                        }
+                        if higherVerseMark == nil {
+                            higherVerseMark = (y, markVerse)
+                        }
                     }
+                }
+                if let mark = higherVerseMark {
+                    let verseZeroY = mark.y - CGFloat(mark.verse) * system.sp
+                        * lyricVerseStrideInSpatiums
+                    return verseZeroY + CGFloat(verse) * system.sp
+                        * lyricVerseStrideInSpatiums
                 }
                 let staffTop = system.origin.y
                     + system.staffOrigins[staffIndex].y
                 let sp = system.sp
                 return staffTop + sp * 6
+                    + CGFloat(verse) * sp * lyricVerseStrideInSpatiums
             }
         }
         return nil
+    }
+
+    /// Y (in document coords) where verse-0 lyrics are drawn for the
+    /// chord at `voiceElementID`.
+    public func lyricLineY(
+        at voiceElementID: VoiceElementID,
+    ) -> CGFloat? {
+        lyricLineY(at: voiceElementID, verse: 0)
     }
 }

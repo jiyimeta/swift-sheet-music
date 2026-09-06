@@ -62,11 +62,13 @@ enum MSCXPreservation {
             + "mscx.slur.locationDropped diagnostic."
     private static let tremoloReason =
         "by design: unsupported tremolo embellishments are dropped after a diagnostic under the parser policy."
-    private static let textContentReason =
-        "by design: text style and inline markup remain for the TextContent parity work "
-            + "(spec §6; parity doc §7.1)."
-    private static let staffBodyBoxReason =
-        "by design: top-level staff body boxes and their ordering are outside this spec (spec §3.5)."
+    private static let legacyTempoTextReason =
+        "by design: these pairs survive only inside Tempo text, which the encoder regenerates "
+            + "from beatsPerSecond, beatNote, and beatDots rather than round-tripping. MuseScore "
+            + "2/3 writes the metronome glyph as a ScoreText-font character, while this encoder "
+            + "writes a <sym>, so the source and regenerated plain text differ and preservation "
+            + "would decline under the preserve-if-equal rule. Recovering that markup needs a "
+            + "separate Tempo dirty flag."
     private static let soundIDReason =
         "genuinely lost, and not fixable by preserving it: MuseScore's <Instrument id> attribute "
             + "(template id) and <instrumentId> element (MusicXML Sound ID) hold different values, "
@@ -83,6 +85,14 @@ enum MSCXPreservation {
         "by design: MuseScore 5's <InstrumentLabel> wrapper holds <longName> / <shortName>, which "
             + "are modeled and re-emitted in MuseScore 4's direct-child form. Preserving the "
             + "wrapper too would duplicate modeled data and go stale on the first rename."
+    private static let defaultClefDialectReason =
+        "by design, and the same shape as keySignatureDialectReason: MuseScore writes the "
+            + "staff's default clef as <defaultClef>, or as <defaultConcertClef> / "
+            + "<defaultTransposingClef>, or as both halves of the pair. "
+            + "MSCXDecoder+Staff.swift collapses all three spellings into one defaultClefType "
+            + "and the encoder writes <defaultClef>. Preserving the pair alongside it would "
+            + "emit three tags where MuseScore wrote two, and the copies would contradict the "
+            + "modeled value the moment a host changed the clef."
     private static let keySignatureDialectReason =
         "by design, and not a preservation gap: MSCXDecoder+KeySignature.swift consumes "
             + "<concertKey>, falls back to <accidental>, and uses <mode> in its custom-key "
@@ -99,11 +109,22 @@ enum MSCXPreservation {
             + "elides that default; testInitialKeySigThenRepeatToMeas2.mscx pins the canonical "
             + "omission."
     private static let noteParenthesisSymbolReason =
-        "by design, and not a preservation gap in this corpus: every <Note><Symbol> here is a "
-            + "noteheadParenthesisLeft/Right consumed by MSCXDecoder+Note.swift's "
+        "by design, and not a preservation gap in this corpus: every <Note><Symbol> lost here is "
+            + "a noteheadParenthesisLeft/Right consumed by MSCXDecoder+Note.swift's "
             + "decodeParentheses and re-emitted by MSCXEncoder+Note.swift as <parentheses> / "
-            + "<Parenthesis>, as pinned by guitarbend_prebend.mscx. Other Symbol names are now "
-            + "preserved, but no committed fixture exercises that branch."
+            + "<Parenthesis>, as pinned by guitarbend_prebend.mscx. Every other Symbol name is "
+            + "now modeled as EngravingSymbol — in Note.symbols when it hangs off a note, and in "
+            + "VoiceElement.symbol when it sits in the voice stream on its own — and round-trips, "
+            + "which engraving-symbols.mscx and annotation-symbol.mscx pin directly rather than "
+            + "through this gate.\n"
+            + "CAVEAT: this entry keys on the Note/Symbol and Symbol/name paths, not on the "
+            + "glyph name, so it would also absorb a genuine EngravingSymbol loss. Symbol/name "
+            + "names no parent, so since the annotation position was modeled it absorbs a loss "
+            + "there too — the blind spot got wider without this entry changing. The gate "
+            + "cannot narrow it — it sees element paths, not values — so the non-vacuous "
+            + "fixture tests EngravingSymbolEncodeTests.fixtureDecodesEveryEngravingSymbolItCarries "
+            + "and AnnotationSymbolDecodeTests are what actually pin symbol survival. Do not "
+            + "treat a green gate as covering it."
     private static let spannerPayloadReason =
         "genuinely lost under this design: these fields are nested inside a modeled spanner "
             + "payload, and the wrapper-level Spanner preserved-markup bag cannot retain only the "
@@ -173,14 +194,12 @@ enum MSCXPreservation {
         allow([
             "Chord/TremoloSingleChord", "TremoloSingleChord/subtype",
         ], because: tremoloReason, into: &result)
+        // `Text/style` used to sit here too. The only fixture that lost it was
+        // a `<TBox>`, whose whole subtree is now carried as preserved markup —
+        // so it comes back, and the entry would be stale.
         allow([
-            "Text/style", "b/font", "text/b", "text/font", "text/sym",
-        ], because: textContentReason, into: &result)
-        allow([
-            "HBox/width", "Staff/HBox", "Staff/TBox", "TBox/Text", "TBox/bottomGap",
-            "TBox/bottomMargin", "TBox/height", "TBox/leftMargin", "TBox/rightMargin", "TBox/topGap",
-            "TBox/topMargin", "Text/text", "VBox/bottomGap",
-        ], because: staffBodyBoxReason, into: &result)
+            "b/font", "text/b", "text/font",
+        ], because: legacyTempoTextReason, into: &result)
         allow([
             "Instrument/instrumentId",
         ], because: soundIDReason, into: &result)
@@ -190,6 +209,9 @@ enum MSCXPreservation {
         allow([
             "Instrument/InstrumentLabel", "InstrumentLabel/longName", "InstrumentLabel/shortName",
         ], because: instrumentLabelReason, into: &result)
+        allow([
+            "Staff/defaultConcertClef", "Staff/defaultTransposingClef",
+        ], because: defaultClefDialectReason, into: &result)
         addLeafPermanentLosses(to: &result)
     }
 
