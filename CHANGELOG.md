@@ -9,6 +9,14 @@ and this project adheres to
 
 ### Added
 
+- **Every element carries a placement, not just spanners.** `Placement` is now
+  a top-level type on `ElementProperties`, so an element's side of the staff
+  round-trips wherever MuseScore writes `<placement>` — ornaments, fingerings,
+  sticking, expression marks, capos, ambitus and the rest, which previously
+  kept it only as opaque markup. `Spanner.placement` is unchanged for callers.
+  Placement stays out of `stableFingerprint`, alongside offsets, because it is
+  positioning rather than content.
+
 - **Element offsets are shared, and element colors are written back.**
   `ElementProperties` gains `offset`, a new `ScoreOffset` value in spatium
   units, and `color` is no longer decode-only. Six types keep their

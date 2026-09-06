@@ -1187,6 +1187,31 @@ assertion。これが無いと、後のrefactorで上流と同じバグが黙っ
 §7.3のstyle作業や`Staff`にbagを持たせる作業で効く。consumed setは tag 名で引くので、
 `<Staff>`のdecoderが`"color"`をconsumeし始めた時点で共有基底の`<color>`と区別がつかなくなる。
 
+#### 7.2.3 `<placement>`はfingerprintに入れてはいけない
+
+3段目。`<placement>`を共有基底に寄せた（2026-09-06）。`Spanner`だけが持っていたのを
+top-levelの`Placement`にして全要素へ。`Spanner.placement`はsugar、`Spanner.Placement`は
+aliasなので呼び出し側は無変更。
+
+**この段の制約はfingerprintだった。** `<offset>`は順序制約なし、`<color>`は`<style>`の後、
+`<placement>`は**hasherに入れないこと**——段ごとに別の制約が1つずつある。
+
+理由: `<placement>`はspanner以外では preserved markup に落ちていて、**preserved markupは
+hashされない**。共有`combineOccupied(_ properties:)`が混ぜ始めると、placementを持つ要素が
+1つでもあるscore全部のfingerprintが変わり、**committed replay goldenが全滅する**。
+`ScoreFingerprintHasher`が`<offset>`を"display trivia"として除外しているのと同じ分類。
+
+`Spanner.placement`をsugarにすれば既存の`combine(spanner.placement?.rawValue)`は同じ値を
+読んで同じbyteを混ぜるので、**`+Occupants.swift`と`+Parity.swift`を1行も触らずに中立が保てる**。
+「2つのscoreがplacementだけ違っても同じhash」をtestで固定してある。
+
+**未知のtokenは診断して捨てる。** `"placement"`がconsumed setに入った結果、
+`<placement>middle</placement>`のような値はpreserved markupからも外れて消える——
+このsliceより前はbagに落ちて生き延びていたので、**狭い範囲の後退**。`PlacementV`は上流で
+2値、ssmは4.60対象なので露出は手書き入力に限られるが、**testで「意図的な損失」として固定した**。
+既知の損失をtestが説明しているのは構わない。この codebase で繰り返し見つかっているのは
+未知の損失の方。
+
 ### 7.3 style
 
 `Sid`は2050個（`style/styledef.h:50-2276`）、`ScoreStyle`は10 property
