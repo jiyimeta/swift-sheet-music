@@ -37,6 +37,16 @@ set -euo pipefail
 # line reads as that branch being large. Two, from different work, by 8,560 and
 # by 563, reads as the line being in the wrong place.
 #
+# Those two also show that **counting types underestimates a change whose
+# weight is logic.** §7.1 is the type-side example: three small types, but a
+# field added to fourteen existing ones, regenerating fourteen `==` and
+# fourteen memberwise inits, for 22,427. The lyric branch is the branch-side
+# one: three new types, all small, and 14,430 anyway — the weight is three
+# transition tables and a syllable rule, which are `switch` arms. Types emit
+# metadata and witness tables; branches emit plain code, and plain code with
+# few repeats is what brotli compresses worst. Predicting from the type count
+# put that branch in the wrong half of the range.
+#
 # **This number is the wrong shape for what the gate detects**, and raising it
 # does not fix that. The failure it exists to catch is a plain `import
 # Foundation` drifting into a portable target, which costs about 10 MB — a
