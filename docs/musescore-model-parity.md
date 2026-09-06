@@ -936,6 +936,79 @@ ssmの`ElementProperties`は`visible`と`color`の2つだけ（`ElementPropertie
 さらにこのbagを持っていないmodel型がある: `Score` / `Part` / `Staff` / `Measure` / `Voice` /
 `Instrument` / `Tuplet` / `Marker` / `Jump` / `MeasureRepeat` / `GraceChord`。
 
+**［2026-09-06 追記］`offset`と`color`を入れた。** `ElementProperties.offset: ScoreOffset?`と、
+`color`のencode。`ScoreOffset`はspatium単位の2 Double値型で、`CGPoint`を使っていない——
+portable targetは`SheetMusicFoundation`だけをimportする規約（AGENTS.md）があり、
+`FrameText.offsetMm`がその例外を`#if canImport(CoreGraphics)`で1箇所だけ引き受けている。
+あれはmm単位の絶対offset（`P_TYPE::POINT`のABS型、`value * DPMM`）で、**spatiumの`<offset>`とは
+別物なので統合していない**。
+
+#### 7.2.1 共有base propertyを1つ足すと、decoder全部に波及する
+
+見積もりを2回外したので書いておく。
+
+`<offset>`を持つmodel型は6つ（`RehearsalMark` / `Harmony` / `Tempo` / `Swing` /
+`InstrumentChange` / `StaffText`）で、MSCX側は12 fileだった。しかし
+`ElementProperties(decodingMSCXChildrenOf:)`は**24 decoderが共有**しているので、そこで
+`<offset>`を読み始めると6型だけでなく全要素が`elementProperties.offset`を持つ。
+preserved bagを持つdecoderのconsumed setに`"offset"`を足さないと、**modelとpreservedの
+二重所有**になり`preservedNamesNeverCollide`が落ちる。実際には+14 file、計49 fileになった。
+
+`<color>`も同じで、encoderが自前で書いていたのは5つだが、`mscxChildren()`を呼ぶ
+**27箇所すべて**にtrailing呼び出しが要る（呼ばない要素はcolorが書かれないまま残るため）。
+23 encoder file。2段合わせて66 fileになった。
+
+**consumed setに足すのは、読む側が実装されたのと同じcommitで。** consumed setは
+「preserved markupから除外する」宣言なので、まだ誰も読まないtagを先に入れると、
+そのtagは**modelにもbagにも入らず消える**。並行レーンが先回りで`"offset"`を入れていて、
+merge前に往復から落ちる状態になっていた。
+
+#### 7.2.2 `<color>`は`<style>`の後に書く（上流とわざと違える）
+
+`Pid::COLOR`はstyled text property（`style/textstyle.cpp:37`ほか、各text styleに
+`Color → Pid::COLOR`の行がある）。`<style>`を読むと`setProperty(Pid::TEXT_STYLE, …)`が
+`TextBase::initTextStyleType(tid)`の**1引数版**（`dom/textbase.cpp:3078`）を呼び、
+
+```cpp
+setTextStyleType(tid);
+for (const auto& p : *textStyle(tid)) {
+    setProperty(getTextPID(p.pid), styleValue(p.pid, p.sid));
+}
+```
+
+と**無条件に上書き**する（2引数版`:3026`には`getProperty == propertyDefault`のガードが
+あるが、property setter経路はそちらを通らない）。つまり**`<style>`より前に読まれた`<color>`は
+潰される**。
+
+そしてMuseScoreのwriter自身が`writeItemProperties`（`<color>`、`twrite.cpp:1361`）→
+`Pid::TEXT_STYLE`（`<style>`、`:1362`）の順で書く。**上流は自分のreaderが潰す順序で書いている。**
+同じ形の問題は`TempoText`の`symbolSize`について`read460/tread.cpp:627`に
+「4.6.0-4.6.2で順序が逆だった」と回避コメント付きで残っているが、colorは未修正。
+
+**ssmは`<color>`を最後（preserved markupの後）に出す。** readerはper-tag dispatchなので
+後置でも正しく読まれ、**MuseScore自身よりauthor intentに忠実になる**。byte順を上流に
+合わせると、author の色を落とす動作まで再現することになる。
+これはこのpackageが「gate以外の理由で」上流の出力形とわざと違える唯一の箇所。
+
+順序制約が実際に効くのは`Harmony` / `Sticking` / `ExpressionText` / `Fingering`の4つだけ
+（bagを持ち、そこに未modelの`<style>`が入りうる型）。`StaffText` / `Tempo` / `Swing` /
+`InstrumentChange` / `RehearsalMark`は**bagを持っていない**ので`<style>`は今日すでに
+捨てられており、位置は無意味——これは§7.3のstyle作業に残る別の穴。
+**規則は全要素に一律適用した。** 要素ごとの表にすると次の人が毎回導出し直すことになり、
+非TextBase要素では位置が無害なだけなので。
+
+固定しているのは`ElementColorMSCXWriteBackTests`の「`<style>`→`<color>`の順で出る」という
+assertion。これが無いと、後のrefactorで上流と同じバグが黙って戻る。**実際に
+`MSCXEncoder+Sticking.swift`で`mscxTrailingChildren()`をpreserved markupの前に移して
+確かめた**——`["text", "color", "style"]`になって赤くなる。doc に「testで固定済み」と
+書くなら、その1行を壊して赤くなるかを一度見ること。緑のままなら固定できていない。
+
+**`Pid::STAFF_COLOR`もXML tag名が`"color"`。** `property.cpp:310`、`Pid::COLOR`
+（`:63`）とは別のPidなのに同じ綴りで書かれる。いまは`Staff`が`elementProperties`を
+持たないので顕在化していないが、**tag名だけではpropertyを同定できない**ということなので、
+§7.3のstyle作業や`Staff`にbagを持たせる作業で効く。consumed setは tag 名で引くので、
+`<Staff>`のdecoderが`"color"`をconsumeし始めた時点で共有基底の`<color>`と区別がつかなくなる。
+
 ### 7.3 style
 
 `Sid`は2050個（`style/styledef.h:50-2276`）、`ScoreStyle`は10 property

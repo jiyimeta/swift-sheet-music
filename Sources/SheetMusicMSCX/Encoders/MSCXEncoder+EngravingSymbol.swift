@@ -17,11 +17,12 @@ extension EngravingSymbol {
     /// nested `<Symbol>`, `<Image>`, `<FSymbol>` — live, so it goes out before
     /// `mscxChildren()`.
     ///
-    /// The match is not exact: MuseScore's `writeItemProperties` emits
-    /// `<offset>` alongside `<visible>`, whereas here `<offset>` rides in the
-    /// preserved bag in source order and therefore lands with the leaves. The
-    /// reader dispatches per tag (`rw/read460/tread.cpp:2364`), so this is a
-    /// byte-order difference only.
+    /// `<offset>` now arrives through the shared `mscxChildren()` tail. That
+    /// places it after preserved leaf children, matching
+    /// `TWrite::writeProperties(const BSymbol*)` (`twrite.cpp:1930`), which
+    /// writes leaf children before base item properties. `<color>` follows in
+    /// the shared trailing tail, preserving that same leaf-before-base order
+    /// while also protecting color from a preserved `<style>` reset.
     ///
     /// Unlike MuseScore's writer, `<symbolsSize>` and `<symbolAngle>` are
     /// emitted whenever present rather than gated on `scoreFont`: `nil` already
@@ -50,6 +51,7 @@ extension EngravingSymbol {
         }
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         children += elementProperties.mscxChildren()
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Symbol", children: children)
     }
 }

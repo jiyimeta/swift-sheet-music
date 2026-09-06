@@ -9,6 +9,18 @@ and this project adheres to
 
 ### Added
 
+- **Element offsets are shared, and element colors are written back.**
+  `ElementProperties` gains `offset`, a new `ScoreOffset` value in spatium
+  units, and `color` is no longer decode-only. Six types keep their
+  `offsetX` / `offsetY` as sugar over the shared field, so no call site
+  changes; `nil` now distinguishes an absent `<offset>` from an explicit
+  zero one. Thirteen element kinds that previously dropped one or both
+  properties on a round trip — ornaments, fingerings, sticking, expression
+  marks, chord brackets, engraving symbols and harmonies among them — now
+  preserve them. `<color>` is written after preserved markup so that a
+  `<style>` on the same element cannot reset it on the next read; MuseScore
+  writes the two in the opposite order and loses author color as a result.
+
 - **Note-attached engraving symbols are modeled.** A direct `<Symbol>` child
   of `<Note>` now round-trips as an `EngravingSymbol` in `Note.symbols`,
   including its open-ended SMuFL name, score font, size, angle, visibility,

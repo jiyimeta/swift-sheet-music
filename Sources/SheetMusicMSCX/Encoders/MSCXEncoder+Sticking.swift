@@ -12,12 +12,9 @@ extension Sticking {
     /// property read BEFORE `<style>` is discarded. MuseScore tripped over this
     /// itself in 4.6.0–4.6.2 (`rw/read460/tread.cpp:625`).
     ///
-    /// Nothing written here is a text-style property (`<text>` and `<visible>`
-    /// are not), and preserved markup keeps source order, so a preserved
-    /// `<style>` still precedes any preserved font override. **A text-style
-    /// property added here later — `<color>`, once `ElementProperties` stops
-    /// being decode-only — must be emitted AFTER the preserved `<style>`, not
-    /// before it.**
+    /// Preserved markup keeps source order, and the shared trailing writer
+    /// emits `<color>` after that markup. A preserved `<style>` therefore lands
+    /// before `<color>` and cannot reset the author color on the next read.
     ///
     /// `<Sticking>` has been readable since MuseScore 3.3; 3.2 and earlier drop
     /// it as unknown. Every target this encoder emits is at or above that, so
@@ -26,6 +23,7 @@ extension Sticking {
         var children = [XMLTreeNode(name: "text", text: text)]
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Sticking", children: children)
     }
 }

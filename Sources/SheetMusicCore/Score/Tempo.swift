@@ -14,16 +14,32 @@ public struct Tempo: Sendable, Equatable {
     public var beatDots: Int
     /// Author-supplied X offset relative to the default placement,
     /// in spatium units. Applied AFTER autoplace-style stacking.
-    public var offsetX: Double
+    /// Sugar over `elementProperties.offset`.
+    public var offsetX: Double {
+        get { elementProperties.offset?.x ?? 0 }
+        set {
+            let y = elementProperties.offset?.y ?? 0
+            elementProperties.offset = ScoreOffset(x: newValue, y: y)
+        }
+    }
+
     /// Author-supplied Y offset relative to the default placement,
-    /// in spatium units (positive = down).
-    public var offsetY: Double
+    /// in spatium units (positive = down). Sugar over
+    /// `elementProperties.offset`.
+    public var offsetY: Double {
+        get { elementProperties.offset?.y ?? 0 }
+        set {
+            let x = elementProperties.offset?.x ?? 0
+            elementProperties.offset = ScoreOffset(x: x, y: newValue)
+        }
+    }
+
     /// Per-element font overrides on the displayed tempo text.
     /// `nil`-fields inherit from `TextStyleType.tempo`
     /// (Edwin 12 pt bold by default). Has no effect on MIDI output.
     public var properties: TextProperties
     /// Base element properties shared with every engravable element.
-    /// Carries `<visible>` and `<color>`; see `ElementProperties`.
+    /// Carries `<visible>`, `<color>`, and `<offset>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
     /// MuseScore `<visible>0</visible>` flag. When false the tempo
     /// label is hidden — layout drops it (no glyph, no reserved
@@ -44,12 +60,15 @@ public struct Tempo: Sendable, Equatable {
         beatDots: Int = 0,
     ) {
         self.beatsPerSecond = beatsPerSecond
-        self.offsetX = offsetX
-        self.offsetY = offsetY
         self.properties = properties
         self.beatNote = beatNote
         self.beatDots = beatDots
-        elementProperties = ElementProperties(visible: visible)
+        let offset: ScoreOffset? = if offsetX == 0 && offsetY == 0 {
+            nil
+        } else {
+            ScoreOffset(x: offsetX, y: offsetY)
+        }
+        elementProperties = ElementProperties(visible: visible, offset: offset)
     }
 
     /// Microseconds per quarter note for SMF tempo meta event.

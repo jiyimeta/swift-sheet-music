@@ -9,8 +9,9 @@ extension ChordOrnament {
     /// (`rw/write/twrite.cpp:815`) and the `Articulation` properties it
     /// delegates to (`:794`): accidentals, then the ornament's own properties,
     /// then `<subtype>`, `<play>`, and `<ornamentStyle>`. MuseScore's reader
-    /// dispatches these by tag name, so the order is cosmetic — matching it
-    /// keeps a re-saved file diffable against the MuseScore-written original.
+    /// dispatches these by tag name, so the order is cosmetic except for the
+    /// shared trailing `<color>` rule documented on
+    /// `ElementProperties.mscxTrailingChildren()`.
     ///
     /// A `nil` field writes no tag at all, mirroring `writeProperty`, which
     /// skips a property equal to its default. That is what makes a bare
@@ -49,6 +50,7 @@ extension ChordOrnament {
         }
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Ornament", children: children)
     }
 
@@ -84,7 +86,8 @@ extension ChordOrnament {
         XMLTreeNode(
             name: "Articulation",
             children: [XMLTreeNode(name: "subtype", text: kind.mscxToken)]
-                + elementProperties.mscxChildren(),
+                + elementProperties.mscxChildren()
+                + elementProperties.mscxTrailingChildren(),
         )
     }
 }

@@ -28,15 +28,30 @@ public struct InstrumentChange: Sendable, Equatable {
     /// fidelity and never acted upon.
     public var isUserInitialized: Bool
     /// Author-supplied X offset from the default placement, in spatium.
-    public var offsetX: Double
+    /// Sugar over `elementProperties.offset`.
+    public var offsetX: Double {
+        get { elementProperties.offset?.x ?? 0 }
+        set {
+            let y = elementProperties.offset?.y ?? 0
+            elementProperties.offset = ScoreOffset(x: newValue, y: y)
+        }
+    }
+
     /// Author-supplied Y offset from the default placement, in spatium
-    /// (positive = down).
-    public var offsetY: Double
+    /// (positive = down). Sugar over `elementProperties.offset`.
+    public var offsetY: Double {
+        get { elementProperties.offset?.y ?? 0 }
+        set {
+            let x = elementProperties.offset?.x ?? 0
+            elementProperties.offset = ScoreOffset(x: x, y: newValue)
+        }
+    }
+
     /// Per-element font overrides; `nil` fields inherit the
     /// `instrumentChange` row of `TextStyleDefaults`.
     public var properties: TextProperties
     /// Base element properties shared with every engravable element
-    /// (colour + `<visible>`).
+    /// (`<color>`, `<visible>`, and `<offset>`).
     public var elementProperties: ElementProperties
 
     /// Author-supplied colour. Sugar over `elementProperties.color`.
@@ -69,10 +84,15 @@ public struct InstrumentChange: Sendable, Equatable {
     ) {
         self.text = text
         self.instrument = instrument
-        self.offsetX = offsetX
-        self.offsetY = offsetY
         self.isUserInitialized = isUserInitialized
         self.properties = properties
-        elementProperties = ElementProperties(visible: visible, color: color)
+        let offset: ScoreOffset? = if offsetX == 0 && offsetY == 0 {
+            nil
+        } else {
+            ScoreOffset(x: offsetX, y: offsetY)
+        }
+        elementProperties = ElementProperties(
+            visible: visible, color: color, offset: offset,
+        )
     }
 }

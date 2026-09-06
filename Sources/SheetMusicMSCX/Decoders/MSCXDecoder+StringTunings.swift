@@ -7,16 +7,15 @@ extension StringTunings {
     /// `<placement>`, font overrides, and `StaffTextBase` channel and swing
     /// properties are not modeled and become preserved markup.
     ///
-    /// `color` and `visible` are consumed because
-    /// `ElementProperties(decodingMSCXChildrenOf:)` reads them.
-    ///
-    /// `offset` is deliberately NOT here yet. A consumed tag is excluded from
-    /// preserved markup, so listing one the decoder does not actually read
-    /// drops it: `<offset>` would land in neither the model nor the bag. Add
-    /// it in the same commit that teaches `ElementProperties` to read it —
-    /// the parity doc's §7.2 work — and not before.
+    /// `color`, `visible` and `offset` are consumed because
+    /// `ElementProperties(decodingMSCXChildrenOf:)` reads all three. A tag in
+    /// this set is excluded from preserved markup, so it may only be listed
+    /// once something actually reads it — otherwise it lands in neither the
+    /// model nor the bag and is dropped. `offset` was deliberately held back
+    /// until the parity doc's §7.2 work landed; that is this commit.
     private static let consumedChildren: Set = [
-        "preset", "visibleStrings", "StringData", "text", "color", "visible",
+        "preset", "visibleStrings", "StringData", "text", "color", "offset",
+        "visible",
     ]
 
     /// Decode one `<StringTunings>`.

@@ -146,6 +146,7 @@ extension Chord {
         }
         children.append(contentsOf: elementProperties.mscxChildren())
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
     }
 
     /// The chord-anchored `<Spanner>` pair sides that belong on this
@@ -238,6 +239,7 @@ extension Chord {
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Rest", children: children)
     }
 
@@ -255,6 +257,7 @@ extension Chord {
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Rest", children: children)
     }
 }
@@ -273,6 +276,7 @@ extension Arpeggio {
             children.append(XMLTreeNode(name: "timeStretch", text: formatDouble(timeStretch)))
         }
         children.append(contentsOf: elementProperties.mscxChildren())
+        children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Arpeggio", children: children)
     }
 }
