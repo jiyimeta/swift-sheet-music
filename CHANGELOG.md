@@ -9,6 +9,19 @@ and this project adheres to
 
 ### Added
 
+- **Note-attached engraving symbols are modeled.** A direct `<Symbol>` child
+  of `<Note>` now round-trips as an `EngravingSymbol` in `Note.symbols`,
+  including its open-ended SMuFL name, score font, size, angle, visibility,
+  and nested or future content through preserved markup. The legacy
+  notehead-parenthesis glyph names remain owned exclusively by
+  `Note.parentheses`, so they are not emitted twice.
+
+- **Chord brackets are modeled.** MuseScore's `<ChordBracket>` now round-trips
+  as `Chord.bracket`, including its hook length, hook direction, right-side
+  flag, visibility, and unmodeled inherited `Arpeggio` properties through
+  preserved markup. The element remains chord-only and is never written on a
+  rest.
+
 - **Chord ornaments are modeled.** MuseScore 4 split `Ornament` out of
   `Articulation` so that a trill, turn, or mordent could carry the state that
   makes it sound — which scale degree the auxiliary note takes above and below

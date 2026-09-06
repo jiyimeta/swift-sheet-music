@@ -42,6 +42,17 @@ extension Note {
         for fingering in fingerings {
             children.append(fingering.encode(options: options))
         }
+        // Note-attached `<Symbol>` is another `el()` item and shares the same
+        // writer slot. Parenthesis glyphs are skipped rather than emitted:
+        // they belong to `Note.parentheses`, which `appendParentheses`
+        // regenerates in the target version's spelling. The decoder already
+        // keeps them out of `symbols`, but `symbols` is a `public var`, and
+        // emitting one from here would make encode→decode non-idempotent —
+        // `decodeParentheses` would read it back as `parentheses`, growing a
+        // pair of brackets the model never had.
+        for symbol in symbols where !Self.parenthesisSymbolNames.contains(symbol.name) {
+            children.append(symbol.encode(options: options))
+        }
         if tieForward != nil {
             children.append(tieSpanner(
                 side: "next", endpoint: tieForwardEndpoint,

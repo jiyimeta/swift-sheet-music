@@ -153,6 +153,7 @@ struct FNV1a {
         combine(note.play)
         combine(note.visible)
         combineOccupied(note.fingerings, tag: 36)
+        combineOccupied(note.symbols, tag: 46)
         if let color = note.elementProperties.color {
             combine(31)
             combine(color.red)
@@ -281,6 +282,7 @@ struct FNV1a {
             combine(articulation)
         }
         combineOccupied(chord.ornaments, tag: 33)
+        combineOccupied(chord.bracket, tag: 43)
         combine(chord.tremolo)
         combine(chord.chordLines.count)
         for chordLine in chord.chordLines {

@@ -126,6 +126,9 @@ private func strippingPreservedMarkup(from source: Chord) -> Chord {
         for fingeringIndex in chord.notes[noteIndex].fingerings.indices {
             chord.notes[noteIndex].fingerings[fingeringIndex].preservedMarkup = []
         }
+        for symbolIndex in chord.notes[noteIndex].symbols.indices {
+            chord.notes[noteIndex].symbols[symbolIndex].preservedMarkup = []
+        }
     }
     for lyricIndex in chord.lyrics.indices {
         chord.lyrics[lyricIndex].preservedMarkup = []
@@ -136,6 +139,7 @@ private func strippingPreservedMarkup(from source: Chord) -> Chord {
     for ornamentIndex in chord.ornaments.indices {
         chord.ornaments[ornamentIndex].preservedMarkup = []
     }
+    chord.bracket?.preservedMarkup = []
     stripPreservedMarkup(from: &chord.graceNotesBefore)
     stripPreservedMarkup(from: &chord.graceNotesAfter)
     return chord
@@ -147,6 +151,9 @@ private func stripPreservedMarkup(from graces: inout [GraceChord]) {
         graces[graceIndex].preservedMarkup = []
         for noteIndex in graces[graceIndex].notes.indices {
             graces[graceIndex].notes[noteIndex].preservedMarkup = []
+            for symbolIndex in graces[graceIndex].notes[noteIndex].symbols.indices {
+                graces[graceIndex].notes[noteIndex].symbols[symbolIndex].preservedMarkup = []
+            }
         }
     }
 }
