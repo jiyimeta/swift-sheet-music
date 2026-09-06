@@ -271,6 +271,10 @@ extension Voice {
             return barLine.encode(options: options)
         case let .harmony(harmony):
             return harmony.encode(options: options)
+        case let .sticking(sticking):
+            return sticking.encode(options: options)
+        case let .expression(expression):
+            return expression.encode(options: options)
         case let .preserved(markup):
             return XMLTreeNode(preserved: markup)
         case let .measureRepeat(measureRepeat):

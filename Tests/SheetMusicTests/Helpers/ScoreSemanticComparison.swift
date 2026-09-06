@@ -172,6 +172,8 @@ enum ScoreSemanticComparison {
         case let .fermata(f): return "fermata(\(f.subtype))"
         case let .breath(b): return "breath(\(b.kind))"
         case let .harmony(h): return "harmony(\"\(h.name)\")"
+        case let .sticking(s): return "sticking(\"\(s.text)\")"
+        case let .expression(e): return "expression(\"\(e.text)\")"
         case let .locationShift(delta):
             return "locationShift(\(delta.numerator)/\(delta.denominator))"
         case let .preserved(markup): return "preserved(<\(markup.name)>)"

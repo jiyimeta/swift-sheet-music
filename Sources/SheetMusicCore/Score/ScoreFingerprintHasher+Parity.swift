@@ -7,13 +7,13 @@ import SheetMusicFoundation
 ///
 /// - **Measure flags and element properties are fed BY OCCUPANTS.** A field contributes bytes only when it holds a
 ///   non-default value, and always as a unique non-zero tag (21 and up, so no tag can be mistaken for a
-///   `VoiceElement` case tag 0…11 or for a presence byte) followed by its value. The tag is what keeps
+///   `VoiceElement` case tag 0…13 or for a presence byte) followed by its value. The tag is what keeps
 ///   `endRepeatCount = 2` and `measureRepeatCount = 2` apart; the fixed-arity prefix of each measure block is what
 ///   keeps "flag on measure 3" and "flag on measure 4" apart.
 /// - **The marker `VoiceElement` cases are fed their content UNCONDITIONALLY.** A clef has no default type to be
 ///   absent from, so `combine(_ element:)` now feeds the identity of a clef, barline, dynamic, fermata, breath,
-///   harmony, spanner and measure repeat rather than a bare case tag. Still byte-free for the existing chain,
-///   whose fixture holds none of those elements.
+///   harmony, sticking, expression, spanner and measure repeat rather than a bare case tag. Still byte-free for
+///   the existing chain, whose fixture holds none of those elements.
 extension FNV1a {
     mutating func combineFlags(_ measure: Measure) {
         if measure.lineBreak { combine(21) }
@@ -169,6 +169,84 @@ extension FNV1a {
         combineOccupied(bracket.elementProperties, visibleTag: 44, colorTag: 45)
     }
 
+    /// Every case that carries *timing* — i.e. anything that changes how much tick budget an element occupies, or
+    /// where the cursor lands afterward — is listed explicitly. `.chord` carries its own duration (rests are chords
+    /// with no notes, per `VoiceElement`'s doc comment) and `.locationShift` carries a tick-offset delta that moves
+    /// the cursor for whatever attaches next; both must be distinguishable from each other and from the non-timed
+    /// markers below, or two scores that differ only in a rest's length or a cursor jog could hash equally.
+    ///
+    /// `.keySignature` and `.timeSignature` occupy no tick budget either, but they DO carry content M3's signature
+    /// commands write — the whole point of `.setKeySignature` / `.setTimeSignature` is to change what a bar
+    /// declares — so both are fed their own fields rather than a tag. Without that, changing the key of a bar of
+    /// rests (nothing to re-spell) would move nothing this walk can see, and a mirror that failed to apply the same
+    /// change would still agree. `showCourtesy` and `visible` ride along because the replace path in
+    /// `SetKeySignature` does not preserve them.
+    ///
+    /// The remaining cases occupy no tick budget of their own — they are markers attached at the current cursor
+    /// position — but they now feed their own identity rather than a bare discriminant tag, per the edit-command
+    /// parity project (spec 2026-09-02 §2.5): the `combine(_ clef:)` / `combine(_ barLine:)` /
+    /// `combine(_ dynamic:)` / `combine(_ fermata:)` / `combine(_ breath:)` / `combine(_ harmony:)` /
+    /// `combine(_ sticking:)` / `combine(_ expression:)` / `combine(_ spanner:)` / `combine(_ repeat:)`
+    /// overloads below are what this switch calls into.
+    ///
+    /// This switch lives here rather than in `ScoreFingerprintHasher.swift` because every overload it
+    /// dispatches to is in this file, and because that one was at the `file_length` limit — a new
+    /// `VoiceElement` case cost two lines there and none here.
+    mutating func combine(_ element: VoiceElement) {
+        switch element {
+        case let .chord(chord):
+            combine(0)
+            combine(chord)
+        case let .keySignature(key):
+            combine(1)
+            combine(key.concertKey)
+            combine(key.showCourtesy)
+            combine(key.visible)
+        case let .timeSignature(time):
+            combine(2)
+            combine(time.numerator)
+            combine(time.denominator)
+            combine(time.showCourtesy)
+            combine(time.visible)
+        case let .clef(clef):
+            combine(3)
+            combine(clef)
+        case let .barLine(barLine):
+            combine(4)
+            combine(barLine)
+        case let .dynamic(dynamic):
+            combine(5)
+            combine(dynamic)
+        case let .spanner(spanner):
+            combine(6)
+            combine(spanner)
+        case let .measureRepeat(`repeat`):
+            combine(7)
+            combine(`repeat`)
+        case let .fermata(fermata):
+            combine(8)
+            combine(fermata)
+        case let .breath(breath):
+            combine(9)
+            combine(breath)
+        case let .harmony(harmony):
+            combine(10)
+            combine(harmony)
+        case let .locationShift(delta):
+            combine(11)
+            combine(delta)
+        case let .sticking(sticking):
+            combine(12)
+            combine(sticking)
+        case let .expression(expression):
+            combine(13)
+            combine(expression)
+        case .preserved:
+            // Source-only XML is outside the semantic edit fingerprint.
+            break
+        }
+    }
+
     mutating func combine(_ clef: Clef) {
         combine(clef.concertClefType)
         combine(clef.transposingClefType)
@@ -211,6 +289,17 @@ extension FNV1a {
         combinePresence(harmony.rootTpc)
         combinePresence(harmony.bassTpc)
         combine(harmony.visible)
+    }
+
+    mutating func combine(_ sticking: Sticking) {
+        combine(sticking.text)
+        combineOccupied(sticking.elementProperties, visibleTag: 39, colorTag: 40)
+    }
+
+    mutating func combine(_ expression: ExpressionText) {
+        combine(expression.text)
+        combinePresence(expression.snapToDynamics.map { $0 ? 1 : 0 })
+        combineOccupied(expression.elementProperties, visibleTag: 41, colorTag: 42)
     }
 
     mutating func combine(_ repeat: MeasureRepeat) {

@@ -92,6 +92,37 @@ and this project adheres to
   from; the conversion itself, along with capo handling, fret diagrams, and
   string tunings, is still missing. See `docs/musescore-model-parity.md` §4.1.
 
+- **Sticking and expression marks are modeled.** `<Sticking>` and
+  `<Expression>` are MuseScore's drum R/L indications and its expressive text
+  (`dolce`, `espressivo`) — a segment annotation each, written into the voice
+  stream ahead of the chord they sit on. Both reached the model only as opaque
+  preserved subtrees.
+
+  `VoiceElement` gains `.sticking(Sticking)` and `.expression(ExpressionText)`,
+  so both now keep their position in the voice stream as modeled values rather
+  than as source XML. `ExpressionText` carries `snapToDynamics` as `Bool?`,
+  because MuseScore writes that tag only when it is unstyled and differs from
+  the style's value — an absent tag means "follow the style", which is not the
+  same as `false`. `SetElementVisible` accepts both, and the edit planner now
+  counts them as part of a segment's annotation run, so setting a dynamic on a
+  chord that also carries a sticking replaces the existing dynamic instead of
+  adding a second one.
+
+  The Swift type is `ExpressionText`, not `Expression`, because `Foundation`'s
+  Predicate API already defines `Expression` and this library re-exports
+  `Foundation` from `SheetMusicFoundation`. The MSCX tag is unchanged.
+
+  `<style>`, `<placement>`, `<offset>`, font overrides, and the voice-assignment
+  properties stay in preserved markup — unlike `Fingering`, whose style says
+  what the number means, a style on these two is ordinary text styling.
+  Inline markup inside `<text>` flattens to plain text, the limitation
+  `StaffText` has. Two version notes: `<Expression>` is a MuseScore 4.1 element,
+  so a v3-target encode emits something MuseScore 3 drops, and it is not
+  down-converted to the expression-styled `<StaffText>` that MuseScore 3 wrote,
+  because reading that back would produce a `StaffText`. **Engraving and
+  playback are unchanged** — neither mark is laid out or sounded; this is
+  round-trip fidelity only.
+
 - **The Android bridge can write a score, name a failure, and select a range.**
   Three capabilities the Swift side had all along and the JNI surface never
   exposed, so an Android host could reach less of this library than the library

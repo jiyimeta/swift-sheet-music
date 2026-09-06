@@ -27,6 +27,12 @@ public enum VoiceElement: Sendable, Equatable {
     case fermata(Fermata)
     case breath(Breath)
     case harmony(Harmony)
+    /// A sticking segment annotation attached at the current tick. Occupies no
+    /// tick budget.
+    case sticking(Sticking)
+    /// An expression segment annotation attached at the current tick. Occupies
+    /// no tick budget.
+    case expression(ExpressionText)
     /// A `<voice>` child this library does not model, kept at its
     /// position in the stream. Unlike container-level
     /// `preservedMarkup` bags, a voice child's position is its
