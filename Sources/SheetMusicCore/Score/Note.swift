@@ -84,6 +84,11 @@ public struct Note: Sendable, Equatable {
     /// them as `<Fingering>` children, several per note where the notation
     /// calls for it. C++: `mu::engraving::Fingering`.
     public var fingerings: [Fingering]
+    /// SMuFL glyphs attached directly to this note. Several are kept in source
+    /// order. Notehead-parenthesis glyphs remain represented exclusively by
+    /// `parentheses` and are never duplicated here.
+    /// C++: `mu::engraving::Symbol`, in the note's `el()` list.
+    public var symbols: [EngravingSymbol]
     /// Base element properties shared with every engravable element.
     /// Carries `<visible>` and `<color>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
@@ -118,6 +123,7 @@ public struct Note: Sendable, Equatable {
         fret: Int? = nil,
         string: Int? = nil,
         fingerings: [Fingering] = [],
+        symbols: [EngravingSymbol] = [],
         visible: Bool = true,
         preservedMarkup: [PreservedXML] = [],
     ) {
@@ -141,6 +147,7 @@ public struct Note: Sendable, Equatable {
         self.fret = fret
         self.string = string
         self.fingerings = fingerings
+        self.symbols = symbols
         self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)
     }

@@ -38,6 +38,491 @@ and this project adheres to
   no pass-through, so a container whose sidecar must survive a save in
   MuseScore should not be named `.mscz`.
 
+- **Lyrics and score text can be typed, not only read.** `SetLyric` writes one
+  syllable at one verse on one chord, taking scalars rather than a `Lyric` so
+  it can own the invariant that a chord's `lyrics` array is indexed by verse:
+  it pads intervening verses, trims trailing empties, and preserves each
+  existing lyric's properties and preserved markup. Its inverse is a snapshot
+  of the whole array, so undo restores verses the command never named.
+
+  Two stateless planners turn keystrokes into commands.
+  `LyricInputPlanner` implements MuseScore's three syllabic transition tables
+  for Space, hyphen and underscore, plus a rule for a syllable typed next to
+  an existing one — `.end` after a `.begin` or `.middle` neighbour, otherwise
+  `.single` — which replaces the transient empty object MuseScore uses to
+  reach the same result. `TextInputPlanner` does the same for staff text,
+  system text, chord symbols and rehearsal marks. Neither holds state, so a
+  host can drive them from a caret, a test, or a replayed intent.
+
+  A lyric layout mark now carries its verse and its anchor, which is what
+  lets a caret sit on the engraved origin instead of near it. That identity
+  also fixes a pre-existing bug: system-wide lyric alignment keyed on the
+  minimum Y across the system, so a verse-2 mark was pulled onto the verse-1
+  line whenever the first staff of a system had no verse 1.
+
+  The macOS and iOS example apps both grow an inline editor built on this.
+  It engraves a screen-only score — committed score plus the pending command,
+  through the normal engraving pass — so a rehearsal mark's frame, staff-text
+  avoidance and alignment are identical before and after commit rather than
+  approximately so.
+
+- **Inline MuseScore text markup now survives MSCX round trips.** Text-bearing
+  score values keep their existing plain `text` while carrying the original
+  `<text>` subtree opaquely, including interleaved character data and `<b>`,
+  `<i>`, `<u>`, `<sym>`, and `<font>` elements. The encoder restores that
+  subtree only while its legacy plain-text flattening still equals the modeled
+  text, so an edit automatically drops stale formatting. MuseScore's inline
+  font markup is a state machine rather than a tree of styled runs: an empty
+  `<b></b>` or `<font face="…"/>` changes the style of everything that follows.
+  That shape is deliberately preserved verbatim instead of being assigned
+  premature text-run semantics. Tempo markings remain regenerated from their
+  modeled tempo fields, and `Score.strippingPreservedMarkup()` clears the new
+  markup along with the rest, so a stripped score still carries no source-only
+  XML.
+
+- **Every element carries a placement, not just spanners.** `Placement` is now
+  a top-level type on `ElementProperties`, so an element's side of the staff
+  round-trips wherever MuseScore writes `<placement>` — ornaments, fingerings,
+  sticking, expression marks, capos, ambitus and the rest, which previously
+  kept it only as opaque markup. `Spanner.placement` is unchanged for callers.
+  Placement stays out of `stableFingerprint`, alongside offsets, because it is
+  positioning rather than content.
+
+- **Element offsets are shared, and element colors are written back.**
+  `ElementProperties` gains `offset`, a new `ScoreOffset` value in spatium
+  units, and `color` is no longer decode-only. Six types keep their
+  `offsetX` / `offsetY` as sugar over the shared field, so no call site
+  changes; `nil` now distinguishes an absent `<offset>` from an explicit
+  zero one. Thirteen element kinds that previously dropped one or both
+  properties on a round trip — ornaments, fingerings, sticking, expression
+  marks, chord brackets, engraving symbols and harmonies among them — now
+  preserve them. `<color>` is written after preserved markup so that a
+  `<style>` on the same element cannot reset it on the next read; MuseScore
+  writes the two in the opposite order and loses author color as a result.
+
+- **Frames between systems survive a round trip.** MuseScore lets a score carry
+  frames alongside its measures — a title block, a horizontal gap before a coda,
+  a block of prose, a row of chord diagrams. This library kept exactly one of
+  them: the title frame at the very top. Every other frame, including a vertical
+  frame appearing later in the piece, was dropped the moment a score was opened
+  and saved.
+
+  `Score.blocks` now holds them in document position, each recording the measure
+  index it sits before. `Score.titleFrame` still means what it always meant and
+  is now a view onto the first of those blocks, so nothing that reads it changes.
+
+  Only the vertical frame is typed, because the layout engine draws the title
+  block out of it. Horizontal, text, and fret frames are carried whole instead:
+  nothing in this library lays them out, so nothing needs their fields typed,
+  and a verbatim subtree is a more honest thing to hand back than a half-filled
+  model. Typing them is what a slice that teaches the layout engine about them
+  would do.
+
+  Frames are a property of the score rather than of any one staff — MuseScore
+  writes them under the first staff only — so they live beside the measures
+  rather than inside them, and adding or removing a staff cannot disturb them.
+
+  **Nothing is engraved differently.** The frames are preserved, not drawn; a
+  horizontal frame still occupies no width and a text frame still shows no text.
+  What changes is that opening and saving a score no longer discards them.
+
+- **Note-attached engraving symbols are modeled.** A direct `<Symbol>` child
+  of `<Note>` now round-trips as an `EngravingSymbol` in `Note.symbols`,
+  including its open-ended SMuFL name, score font, size, angle, visibility,
+  and nested or future content through preserved markup. The legacy
+  notehead-parenthesis glyph names remain owned exclusively by
+  `Note.parentheses`, so they are not emitted twice.
+
+- **Chord brackets are modeled.** MuseScore's `<ChordBracket>` now round-trips
+  as `Chord.bracket`, including its hook length, hook direction, right-side
+  flag, visibility, and unmodeled inherited `Arpeggio` properties through
+  preserved markup. The element remains chord-only and is never written on a
+  rest.
+
+- **A `<Symbol>` attached to a segment is modeled.** MuseScore lets a score
+  carry an arbitrary SMuFL glyph anywhere, and uses it as the escape hatch for
+  notation it has no element for. The note-attached form shipped a day earlier
+  as `Note.symbols`; the form that sits in the voice stream on its own reached
+  the model only as an opaque preserved subtree. It is now
+  `VoiceElement.symbol(EngravingSymbol)`.
+
+  **No new model type.** Both positions decode into the same `EngravingSymbol`,
+  which keeps an unrecognized glyph name verbatim rather than resolving it —
+  MuseScore itself would rewrite an unknown name to `noSym` on its next save, so
+  a round trip through this library preserves more than a round trip through
+  MuseScore.
+
+  **Nothing engraves or sounds one yet** — this is round-trip fidelity only.
+
+- **Figured bass is modeled.** `<FiguredBass>` is the thoroughbass notation a
+  continuo part carries under the staff — stacked figures, each optionally with
+  an accidental before or after it, brackets around any part of it, and a
+  continuation line. It reached the model only as an opaque preserved subtree.
+
+  `VoiceElement.figuredBass(FiguredBass)` carries the figures as
+  `FiguredBassItem` values, the tick span, and whether the group sits on a note
+  or between notes.
+
+  **The element writes itself two mutually exclusive ways, and which one is a
+  property of the data, not the file version.** MuseScore parses the typed text
+  into figures; when that parse fails it writes the raw text instead. Both forms
+  are modeled — `items` when the file used figures, `text` when it did not — and
+  the encoder branches the way MuseScore does. When figures are present the
+  reader regenerates the text from them and discards whatever the file said, so
+  this library does the same: `text` is authoritative only when `items` is
+  empty. It is the one field in this parity work that is a stored value or a
+  derived one depending on the data.
+
+  **An absent `<onNote>` means true, not false.** MuseScore writes the tag only
+  when the value is false, so the ordinary case — figures attached to a note —
+  is written with no tag at all. Defaulting to false would silently move every
+  such figure between the notes. This is the same class of trap as `Capo`'s
+  fret position but the opposite in its details: there the C++ member
+  initializer was the misleading answer, here it is the correct one. What
+  settles it in both cases is the writer's omission condition, which is the only
+  place that always says what an absent tag means.
+
+  Text-style children survive as preserved markup rather than being consumed:
+  the figure form emits `<size>`, `<align>` and friends as direct children, so
+  a score with an edited figured-bass style keeps them. **Nothing engraves a
+  figured bass yet** — this is round-trip fidelity only.
+
+- **The ambitus is modeled.** `<Ambitus>` is the range indicator a choral or
+  early-music part carries at its start — the highest and lowest note the part
+  ever reaches, drawn as two noteheads joined by a line. It sits in the voice
+  stream on its own segment, and reached the model only as an opaque preserved
+  subtree.
+
+  `VoiceElement.ambitus(Ambitus)` carries the four pitch and tpc values, the
+  notehead group, notehead type and mirror direction, the connecting line's
+  presence and width, and an optional accidental at each end.
+
+  **The pitches are what the file says, not what the staff implies.** MuseScore
+  derives an ambitus from the music when you ask it to, but its reader calls
+  `setTopPitch(value, applyLogic: false)`, which skips both the tpc derivation
+  and the normalization — it deliberately opts out of its own logic when
+  reading, so the written values are author intent. They round-trip verbatim
+  here, unnormalized and unvalidated.
+
+  **`<head>` is kept as text rather than mapped.** MuseScore 4.6 writes this
+  element's notehead group, notehead type and mirror as integer ordinals, while
+  writing the very same properties as names on a `<Note>` — the difference is
+  per element, not per version, and the ordinal form drops out again in 5.x. The
+  decoder therefore accepts both spellings and the encoder writes the ordinal
+  form 4.6 uses. The notehead group's ~30-value enum is not mapped: this library
+  models noteheads nowhere else as an enum, so the tag's text is carried through
+  unchanged and the semantic mapping is deferred rather than guessed at.
+
+  Everything inside the nested `<Accidental>` beyond its subtype is lost, the
+  same tradeoff `ChordOrnament` already carries. **Nothing draws an ambitus
+  yet** — this is round-trip fidelity only.
+
+- **Capos and string tunings are modeled.** `<Capo>` and `<StringTunings>` are
+  the two fretted-instrument annotations that sit in the voice stream: a capo
+  says which fret the player has clamped and which strings it skips, and a
+  string-tunings mark says what the instrument is retuned to from that point
+  on. Both reached the model only as opaque preserved subtrees.
+
+  `VoiceElement` gains `.capo(Capo)` and `.stringTunings(StringTunings)`. They
+  are voice elements rather than `SystemElement`s because upstream gives them
+  `ElementFlag::ON_STAFF` and no system flag — hiding the guitar staff should
+  take its capo with it, unlike a tempo mark. `StringTunings.stringData` reuses
+  the `StringData` value this release also added under `<Instrument>`, so the
+  same tuning type now serves both places MuseScore writes one.
+
+  **An absent tag on a `<Capo>` does not mean zero.** MuseScore omits a
+  property equal to its `propertyDefault`, and `Capo`'s defaults are `active =
+  true` and `fretPosition = 1` — not the `false` / `0` that its C++ struct's
+  field initializers suggest. So the most ordinary capo in existence, active at
+  fret 1, is written with neither tag present. Decoding those as false and 0
+  would silently turn an active capo inactive, and a capo changes sounding
+  pitch. The decoder follows `propertyDefault`, and keeps an absent tag
+  distinct from an unparseable one — MuseScore's reader turns
+  `<fretPosition>abc</fretPosition>` into 0, which means "no capo", not 1. The
+  encoder writes those three scalars unconditionally so a round trip cannot
+  re-introduce the ambiguity.
+
+  `Capo.transposeMode` is optional rather than a plain value because that tag
+  is a MuseScore **4.7** property while this encoder declares 4.60. `nil` means
+  the source carried none, and none is then written, so a file this library
+  produces never gains a tag its target version does not know. The two elements
+  themselves are 4.1 and later.
+
+  `<style>`, `<placement>`, font overrides and the `StaffTextBase` channel and
+  swing tags stay in preserved markup. **Neither element is engraved or
+  sounded yet** — in particular no capo transposition is applied to playback;
+  this is round-trip fidelity only.
+
+- **Fretted-instrument tuning is modeled.** `<StringData>` is what tells a
+  reader which pitch each string of a guitar, bass, or banjo is tuned to, and
+  how many frets it has. This library kept `Note.string` and `Note.fret` but
+  had nowhere to read the tuning from, so a tablature position was a pair of
+  numbers with nothing to interpret them against.
+
+  `Instrument.stringData` now holds a `StringData`: the fret count and one
+  `InstrumentString` per string, in file order, each carrying MuseScore's
+  `open` and `useFlat` flags. MuseScore 2's `<Tablature>` spelling decodes to
+  the same value and is written back out as `<StringData>`.
+
+  Three upstream behaviors are deliberately not reproduced, because this
+  value's job is to give back the file it read: `instrString::startFret` is
+  derived at load time upstream and never serialized, so it is absent here;
+  the fret count is kept as written rather than being overwritten with 24 the
+  way MuseScore's reader does for a five-string banjo; and an empty tuning is
+  written back rather than dropped, which is what MuseScore does with one.
+
+  The list of strings is positional — `Note.string` is an index into it — so a
+  `<string>` whose pitch will not parse keeps its slot at pitch 0 rather than
+  disappearing and renumbering every string after it.
+
+  **Nothing converts a pitch to a string and fret yet.** The tuning is modeled
+  so that validating or recomputing a tablature position has somewhere to read
+  from; the conversion itself, along with capo handling, fret diagrams, and
+  string tunings, is still missing. See `docs/musescore-model-parity.md` §4.1.
+
+- **Sticking and expression marks are modeled.** `<Sticking>` and
+  `<Expression>` are MuseScore's drum R/L indications and its expressive text
+  (`dolce`, `espressivo`) — a segment annotation each, written into the voice
+  stream ahead of the chord they sit on. Both reached the model only as opaque
+  preserved subtrees.
+
+  `VoiceElement` gains `.sticking(Sticking)` and `.expression(ExpressionText)`,
+  so both now keep their position in the voice stream as modeled values rather
+  than as source XML. `ExpressionText` carries `snapToDynamics` as `Bool?`,
+  because MuseScore writes that tag only when it is unstyled and differs from
+  the style's value — an absent tag means "follow the style", which is not the
+  same as `false`. `SetElementVisible` accepts both, and the edit planner now
+  counts them as part of a segment's annotation run, so setting a dynamic on a
+  chord that also carries a sticking replaces the existing dynamic instead of
+  adding a second one.
+
+  The Swift type is `ExpressionText`, not `Expression`, because `Foundation`'s
+  Predicate API already defines `Expression` and this library re-exports
+  `Foundation` from `SheetMusicFoundation`. The MSCX tag is unchanged.
+
+  `<style>`, `<placement>`, `<offset>`, font overrides, and the voice-assignment
+  properties stay in preserved markup — unlike `Fingering`, whose style says
+  what the number means, a style on these two is ordinary text styling.
+  Inline markup inside `<text>` flattens to plain text, the limitation
+  `StaffText` has. Two version notes: `<Expression>` is a MuseScore 4.1 element,
+  so a v3-target encode emits something MuseScore 3 drops, and it is not
+  down-converted to the expression-styled `<StaffText>` that MuseScore 3 wrote,
+  because reading that back would produce a `StaffText`. **Engraving and
+  playback are unchanged** — neither mark is laid out or sounded; this is
+  round-trip fidelity only.
+
+- **The Android bridge can write a score, name a failure, and select a range.**
+  Three capabilities the Swift side had all along and the JNI surface never
+  exposed, so an Android host could reach less of this library than the library
+  could do.
+
+  `nativeLoadScore` had no counterpart: a host could open a score, lay it out,
+  play it and edit it through `nativeApplyEditIntent`, and then had nowhere to
+  put the result. `ScoreEncodeBridge` / `nativeEncodeScore` /
+  `ScoreHandle.encodeToMscx()` write `.mscx` and `.mscz`, with the
+  MS3-compatibility target and the `emitPreservedMarkup` escape hatch an Apple
+  host already had.
+
+  `nativeLoadScore` also answers `0` for every failure — a corrupt ZIP, an
+  unrecognized format and a structurally invalid `<Measure>` are one answer,
+  where an Apple host gets a `ScoreFault` whose dotted `code` is a localization
+  key. `ScoreHandle.loadWithDiagnostics` returns that code and, just as
+  importantly, the parser's non-fatal diagnostics: the parsers are permissive by
+  design, so an unknown ornament is *dropped* and the score loads anyway, and
+  this was the only thing standing between a host and telling its user that part
+  of their file did not survive the trip. `ScoreLoader.loadScore` is now a
+  projection of a new `loadScoreWithDiagnostics`, so there is still exactly one
+  switch over `SniffedFormat`.
+
+  `nativeItemIDsInRect` exposes `ScoreHitTester.itemIDs(in:)` — the marquee query
+  the Apple example drags a rubber band with, which has always cross-compiled and
+  had no entry point, leaving Android hosts able to select one item at a time.
+
+- **Android and browser hosts can reach the rest of `ScoreViewOptions`.**
+  `LayoutOptionsWire` carried five of twelve knobs and `LayoutBridge` hard-coded
+  the rest: the measure-number policy was pinned to `.systemStart`, the
+  multi-measure-rest threshold to 2, the system gap to `staffSize × 1.25`, the
+  two glyph magnifications were unreachable, and the three-way
+  `LayoutBreakPolicy` was flattened into a boolean that could not express
+  `.ignoreSystemBreaks` at all. Eight appended fields, each defaulting to what
+  the bridge hard-coded.
+
+- **`ScorePdfExporter` on Android.** PDF export was Apple-only, so a host could
+  engrave a score and not hand the user a printable page, while the PDF
+  *importer* had shipped on Android all along. It replays the same draw program
+  the screen renders into `PdfDocument`, one page per `EncodablePage`, with
+  glyphs staying vector — and reuses the screen renderer through
+  `CanvasDrawScope` rather than interpreting the command list a second time.
+
+- **`AndroidPlaybackEngine` gains master gain above unity, a master output
+  stage, a level meter, held preview notes, and a SoundFont swap.**
+  `setMasterGain` replaces a `setMasterVolume` that clamped to 0…1, leaving a
+  host with no way to calibrate a quiet SoundFont; `setMasterOutputStage`
+  chooses what happens past full scale (`SoftClip` is a port of the Swift curve);
+  `startLevelMonitoring` reports peak and RMS post-gain and pre-shaping;
+  `previewNoteOn` / `previewNoteOff` sound a note for as long as it is held,
+  which a note-input UI needs and the fixed-duration `playPreview` cannot give
+  it; and `reloadSoundfont` swaps the bank without tearing the engine down and
+  losing the transport position, the loop and every mixer setting.
+
+- **`Score.metaTags` reaches Android whole.** `ScoreMetadataWire` carried
+  `workTitle` and `composer` alone, so a host could not show a copyright line, an
+  arranger or a lyricist the file plainly states. The map is carried key-sorted,
+  because `Dictionary` iteration order is seeded per process and an unsorted
+  encode would make the same score produce different bytes on every run.
+
+- **Break indicators reach non-Apple hosts.** `nativeBreakIndicators` /
+  `BreakIndicatorOverlay` mark the measures carrying an explicit `<LayoutBreak>`,
+  which `LayoutOptionsWire.breakIndicatorVisibilityRaw` could ask for and nothing
+  answered. The rule for which measure earns a badge moved out of the SwiftUI
+  overlay into `SheetMusicLayout.BreakIndicators` so both renderers read one
+  spelling: a badge that appears on one platform and not the other — or on a
+  measure whose break the current `LayoutBreakPolicy` is ignoring — is a lie
+  about the file. The policy therefore gates before the visibility does.
+
+- **The continuous-view sticky header reaches non-Apple hosts.**
+  `nativeStickyHeaderProgram` / `StickyHeaderPane` freeze the current clef, key
+  signature, time signature and instrument name at a horizontal view's left edge,
+  so a reader scrolled past bar 1 can still see what key and metre they are in.
+  `SheetMusicUI.StickyHeaderView` has done this on Apple; no other host could,
+  because the pane is a *synthesized* system rather than a slice of the score and
+  nothing bridged the synthesis. The synthesis itself
+  (`LayoutEngine.stickyHeaderSystem`) was already portable, so the pane comes
+  back as an ordinary one-page draw program — one renderer, and a change to how a
+  clef is drawn reaches the pane for free.
+
+- **Kotlin can author an edit intent, not just relay one.** The wirelet
+  registration for `SheetMusicEditWire/Intent` was deliberately absent, so
+  `nativeApplyEditIntent` could only take bytes produced elsewhere: an Android
+  host could hit-test, place a caret, apply, undo and redo, and never originate
+  an edit, while an Apple host had the whole `EditCommand` set and the browser a
+  typed `EditIntent` union. `emitModels` generates the models as well as the
+  codecs, which is what makes the registration possible. Proven against Swift's
+  own bytes rather than against itself: the 87 committed edit-replay step assets
+  all decode and re-encode byte-identically through the generated codec.
+
+- **`armeabi-v7a` is an opt-in ABI rather than an unsupported one.** Three
+  READMEs said "not supported"; measured, the Swift Android SDK carries the
+  triple and runtime, the NDK has the sysroot, and both native dependencies of
+  the audio module ship the ABI. `SHEET_MUSIC_ANDROID_ABIS=…,armeabi-v7a
+  Scripts/android-build-libs.sh` links and stages it. It stays out of the default
+  because a third full cross-compile costs a third more wall clock on every
+  build, for a shrinking share of API-28-and-later devices.
+
+- **`Android/SheetMusicComposeAndroid/README.md`** — the module is published and
+  named in the root README's artifact table and was the only one of the three
+  AARs without a README of its own.
+
+### Fixed
+
+- **`Score.strippingPreservedMarkup()` now reaches the system lane.** It walked
+  `blocks` and `parts` and stopped there, so `Score.systemMeasures` — where the
+  decoder lifts tempo marks, rehearsal marks, staff text, swing directives and
+  instrument changes — was never visited, and a score stripped for comparison
+  still carried source-only XML. Only `.instrumentChange` reaches a bag (on the
+  `Instrument` it swaps in, and below that its `StringData` and channels), which
+  is why it took a mid-score instrument change to expose. The per-instrument
+  clearing is now one helper shared with the `parts` walk instead of three
+  repeated lines.
+
+- **A fingering on a grace note kept its preserved markup.** The chord and
+  grace-chord walks each expanded `Note` themselves and had drifted: the grace
+  side cleared `symbols` but not `fingerings`. Both now call one `Note` helper,
+  so attaching a new child to `Note` is a one-place edit.
+
+- **The strip walk is now covered by a gate that does not need a maintained
+  list.** Each existing test names the bags it checks, which only proves the
+  author remembered their own type — the two bugs above are what that misses. A
+  new test reflects over every committed fixture's stripped `Score` and fails on
+  any preserved-markup property left non-empty anywhere in it, reporting the
+  path, and asserts the corpus had markup to begin with so an all-empty corpus
+  cannot pass it vacuously. It matches a property by name — any label holding
+  both "preserved" and "markup" — rather than by type, so a second kind of bag
+  added later is covered rather than invisible to the gate meant to find bags.
+  Its limit is the corpus, not the list: a shape no fixture contains — a
+  fingering on a grace note, as it happens — still needs a test of its own, and
+  has one.
+
+- **A measure's manual stretch and its measure-number offset no longer vanish
+  on save.** Both are things an engraver sets by hand — widening one bar to fit
+  a dense passage, nudging a bar number away from a collision — and opening such
+  a score and saving it silently discarded them.
+
+  The cause was in how the reader declares what it understands. Anything it does
+  not claim is carried through untouched, so the way to lose something is to
+  claim it and then not store it. These two were claimed and dropped, and no
+  test could see it: the check that guards against exactly this loss compares
+  what a set of sample scores contains before and after a round trip, and none
+  of those samples happened to use either feature. One that does has been added.
+
+
+### Changed
+
+- **Score text is drawn at its real weight everywhere, not only on Apple
+  (`DrawProgram` v7).** MuseScore's role defaults set tempo marks, rehearsal
+  marks and instrument-change text bold, and jazz chord symbols, free-form
+  dynamics and glissando labels italic. The Apple renderer applied all of it
+  through `ResolvedTextStyle`; the draw program had no way to say "bold", so
+  every other renderer over the same layout drew regular upright text.
+
+  v7 appends `setTextStyle(flags:)` — a state opcode beside `setColor` /
+  `setDash` / `setRotation`, carrying a bitmask so a third trait costs no wire
+  change. `italicText` said the same thing in a second way for two call sites and
+  is superseded: still decoded, no longer emitted.
+
+  Three renderers consume this program, not two: the Compose module, the
+  browser's `@jiyimeta/sheet-music-web`, and the Examples app's fork of the
+  Compose one. All three decode the opcode, apply bold and italic, and restate an
+  active style at each band boundary — the browser's flat decoder throws on an
+  unknown opcode, so a stream with bold text would otherwise have failed to draw
+  a page at all rather than drawing it in the wrong weight.
+
+  The metrics move with it, and that is why this is one change rather than two: a
+  rehearsal mark's frame is sized from the measured text, so a renderer that can
+  draw bold fed by a table that can only measure regular puts the letters through
+  the right-hand edge of their own box — strictly worse than the consistent
+  regular-weight rendering it replaces. `FontWeight` gains `.bold`,
+  `FontMetricsTable` resolves it through a `"<face>-Bold"` record — and **neither
+  producer writes one**, which is a measured result rather than an omission.
+  Building that record on Android with `Paint.isFakeBoldText` (the emboldening
+  the renderer paints with, since Edwin ships as one Roman face) and running it
+  on a device reported an advance for 'A' of 721.9961 against the regular face's
+  721.9961: Skia's synthetic bold thickens strokes without widening advances, and
+  CoreText has no bold member to resolve either. The record would be a duplicate,
+  and the fallback's numbers are the correct ones — `drawText` advances by the
+  amounts it measures, so a rehearsal-mark frame sized from the regular face fits
+  the bold text inside it. `FontMetricsBuilderTest` now pins that equality, so if
+  a future Android release does widen synthetic bold, the one place that would
+  notice says so. **No SMFT version bump** either way: faces are a name-keyed
+  dictionary, and the convention is there for a host that ships a real bold file.
+
+- **CI runs all three Android modules' unit tests.** The workflow named
+  `:SheetMusicAudioAndroid` alone, and `:SheetMusicComposeAndroid` is downstream
+  of it — so the module that decodes the draw program and paints it was neither
+  built nor tested on any push, and its one test ran only at release-tag time in
+  the publish workflow, which is not a gate. The same job now also runs the
+  instrumented tests on an emulator, which is the first time
+  `FontMetricsBuilderTest`, `EditSessionReplayTest` and
+  `EditSessionReplayParityTest` have run anywhere.
+
+  They pass. On an API 35 arm64 emulator: 5 tests, 0 failures, both
+  `replayMatchesHostGoldens` methods among them — the original edit chain and the
+  frozen 92-step parity one, each relayed step by step from Kotlin across JNI
+  into a second, separately-linked image of the engine, with equal fingerprints
+  at every step. `docs/edit-commands.md` recorded that run as "the one
+  outstanding verification for this project"; it now records the result.
+
+  `ScoreCanvasGoldenTest` joins them, and it is the first thing anywhere that
+  looks at what the Android renderer actually draws: it engraves a score, paints
+  page 0 into a `Bitmap` through the same `drawCommands` the screen uses, and
+  compares it to a committed PNG. The Swift suite asserts on the draw *program*
+  and the Kotlin unit tests on band arithmetic; neither can see a glyph that
+  stopped drawing or a paint state that leaked past its `setColor`. Its fixture
+  carries a bold tempo mark and a framed bold rehearsal mark on purpose — a
+  golden taken from a score with no styling would match another picture of a
+  score with no styling while the style path silently broke.
+
+
 ## [2.5.0] - 2026-09-04
 
 ### Added

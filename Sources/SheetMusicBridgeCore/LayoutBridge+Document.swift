@@ -147,9 +147,8 @@ extension LayoutBridge {
         case .page:
             let mmToPt = 72.0 / 25.4
             let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
-            let breakPolicy: LayoutBreakPolicy = optionsWire.honorLayoutBreaks == 1 ? .honor : .ignoreAll
             let ranges = LayoutPaginator.paginate(
-                systems: document.systems, pageHeight: pageHeightPt, policy: breakPolicy,
+                systems: document.systems, pageHeight: pageHeightPt, policy: optionsWire.breakPolicy,
             )
             return ranges.map { range in
                 // Lift each page's first system to y ≈ 0. The first page keeps
@@ -181,27 +180,35 @@ extension LayoutBridge {
     }
 
     /// Build the `ScoreViewOptions` for one layout pass from the wire options.
-    /// `wrap` / `title` vary per mode (horizontal disables both); the break /
-    /// multi-measure-rest / invisible toggles come straight from the blob.
+    ///
+    /// `wrap` varies per mode (horizontal never wraps) and `title` is the mode's *suggestion*, which
+    /// `includesTitleFrame(modeDefault:)` lets the host override. Everything else now comes from the
+    /// blob; the values this function used to hard-code — the system gap, the multi-measure-rest
+    /// threshold, the measure-number policy, the two glyph magnifications, the break-indicator
+    /// visibility — are the wire's defaults, so an unchanged host gets an unchanged layout.
     private static func scoreViewOptions(
         from optionsWire: LayoutOptionsWire,
         wrap: Bool,
         title: Bool,
     ) -> ScoreViewOptions {
         let staffSize = CGFloat(optionsWire.staffSize)
-        let breakPolicy: LayoutBreakPolicy = optionsWire.honorLayoutBreaks == 1 ? .honor : .ignoreAll
-        let mmrPolicy: MultiMeasureRestPolicy = optionsWire.collapseMultiMeasureRests == 1
-            ? .collapse(minimumMeasures: 2) : .disabled
-        return ScoreViewOptions(
+        var options = ScoreViewOptions(
             staffSize: staffSize,
-            systemGap: staffSize * 1.25,
+            systemGap: CGFloat(optionsWire.systemGap(staffSize: optionsWire.staffSize)),
             wrapToViewWidth: wrap,
-            includeTitleFrame: title,
-            breakPolicy: breakPolicy,
-            breakIndicatorVisibility: .none,
-            multiMeasureRest: mmrPolicy,
+            includeTitleFrame: optionsWire.includesTitleFrame(modeDefault: title),
+            breakPolicy: optionsWire.breakPolicy,
+            breakIndicatorVisibility: optionsWire.breakIndicatorVisibility,
+            multiMeasureRest: optionsWire.multiMeasureRestPolicy,
             showsInvisibleElements: optionsWire.showsInvisibleElements == 1,
+            measureNumbers: optionsWire.measureNumberPolicy,
             lyricsVisible: optionsWire.lyricsVisible,
         )
+        // Assigned after construction rather than passed in, so `0` keeps whatever
+        // `ScoreViewOptions` itself defaults to. Naming the literal here would pin the engine's
+        // default in a second place and let the two drift.
+        if optionsWire.graceNoteMag > 0 { options.graceNoteMag = CGFloat(optionsWire.graceNoteMag) }
+        if optionsWire.smallNoteMag > 0 { options.smallNoteMag = CGFloat(optionsWire.smallNoteMag) }
+        return options
     }
 }

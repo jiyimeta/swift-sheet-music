@@ -4,6 +4,10 @@
 #endif
 import SheetMusicCore
 
+/// Distance between adjacent lyric verse rows, in spatiums.
+/// `LayoutEngine+Placement` uses this when emitting each indexed verse.
+let lyricVerseStrideInSpatiums: CGFloat = 1.7
+
 /// Stem direction for notes / beams.
 public enum StemDirection: Sendable, Equatable { case up, down }
 
@@ -370,10 +374,17 @@ public enum LayoutElement: Sendable, Equatable {
         case dynamic
         case tempo
         /// Lyric syllable. Carries the author-supplied color
-        /// (`<Lyrics><color>`) from `Lyric.elementProperties.color`;
-        /// `nil` = default ink. Dynamics / tempo inherit their style
-        /// color and don't carry a per-element override here.
-        case lyrics(color: ScoreColor? = nil)
+        /// (`<Lyrics><color>`) from `Lyric.elementProperties.color`
+        /// and the lyric-array index used as its verse. `anchor`
+        /// identifies the chord that owns the syllable so render-only
+        /// consumers can address it without mutating the score model.
+        /// `nil` color = default ink. Dynamics / tempo inherit their
+        /// style color and don't carry a per-element override here.
+        case lyrics(
+            color: ScoreColor? = nil,
+            verse: Int = 0,
+            anchor: VoiceElementID? = nil,
+        )
     }
 }
 

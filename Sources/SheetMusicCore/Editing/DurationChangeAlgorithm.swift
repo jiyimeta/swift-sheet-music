@@ -289,6 +289,7 @@ public enum DurationChangeAlgorithm {
                 duration: dur,
                 notes: notes,
                 arpeggio: isFirst ? src.arpeggio : nil,
+                bracket: isFirst ? src.bracket : nil,
                 lyrics: isFirst ? src.lyrics : [],
             )))
         }

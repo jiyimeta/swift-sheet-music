@@ -33,19 +33,17 @@ extension InstrumentChange {
                 location: node.first("text").map(StaffText.plainText(of:)),
             )
         }
-        let text = node.first("text").map(StaffText.plainText(of:)) ?? ""
+        let textNode = node.first("text")
+        let text = textNode.map(StaffText.plainText(of:)) ?? ""
         let color = node.first("color").flatMap(StaffText.decodeColor(_:))
-        let offset = node.first("offset")
-            .map(StaffText.decodeOffset(_:)) ?? (0, 0)
         let isInit = (node.first("init")?.text).map { $0 != "0" } ?? false
         var change = InstrumentChange(
             text: text,
             instrument: instrument,
-            offsetX: offset.0,
-            offsetY: offset.1,
             color: color,
             isUserInitialized: isInit,
             properties: TextProperties.decode(node),
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
         change.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return change

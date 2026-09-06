@@ -24,11 +24,14 @@ extension Instrument {
     /// MuseScore 4's direct-child form. Preserving the wrapper too
     /// would write the same names twice and leave the copy stale the
     /// moment a host renames the instrument.
+    ///
+    /// `<Tablature>` is MuseScore 2's spelling for `<StringData>`. Both are
+    /// consumed, and the encoder re-emits the typed value as `<StringData>`.
     private static let consumedInstrumentChildren: Set = [
         "Articulation", "Channel", "Drum", "InstrumentLabel", "instrumentId",
         "longName", "maxPitchA", "maxPitchP", "minPitchA", "minPitchP",
-        "shortName", "trackName", "transposeChromatic", "transposeDiatonic",
-        "useDrumset",
+        "shortName", "StringData", "Tablature", "trackName", "transposeChromatic",
+        "transposeDiatonic", "useDrumset",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> Instrument {
@@ -86,6 +89,7 @@ extension Instrument {
             channels: channels,
             useDrumset: useDrumset,
             drumset: drumset,
+            stringData: StringData.decode(inInstrument: node),
             // `<transposeDiatonic>` / `<transposeChromatic>` are omitted for a concert-pitch
             // instrument; both default to 0, which `Instrument` reads as non-transposing.
             transposeDiatonic: node.first("transposeDiatonic").flatMap { Int($0.text) } ?? 0,

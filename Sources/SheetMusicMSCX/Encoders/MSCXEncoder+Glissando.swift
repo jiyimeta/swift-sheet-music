@@ -8,7 +8,7 @@ extension Glissando {
     /// `TWrite::write(const Glissando*, …)` — uppercase style token,
     /// `easeInSpin` / `easeOutSpin` integers, `subtype` 0/1 for
     /// straight/wavy, optional `<text>`.
-    func encode() -> XMLTreeNode {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = [
             XMLTreeNode(
                 name: "subtype",
@@ -19,7 +19,11 @@ extension Glissando {
             XMLTreeNode(name: "easeOutSpin", text: String(easeOut)),
         ]
         if let text, !text.isEmpty {
-            children.append(XMLTreeNode(name: "text", text: text))
+            children.append(encodeText(
+                text,
+                preservedTextMarkup: preservedTextMarkup,
+                options: options,
+            ))
         }
         return XMLTreeNode(name: "Glissando", children: children)
     }

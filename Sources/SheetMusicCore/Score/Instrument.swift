@@ -26,6 +26,9 @@ public struct Instrument: Sendable, Equatable {
     /// The layout engine reads only the lines, through `drumLineMap`; the heads and voices are what the MSCX
     /// encoder needs and what drum note entry writes.
     public var drumset: [Int: DrumsetEntry]
+    /// `<StringData>` — the fretted-instrument tuning. `nil` when the
+    /// instrument declares none, which is every non-TAB instrument.
+    public var stringData: StringData?
     /// Source markup under this element that the model does not
     /// represent, kept so that read → write does not delete it.
     public var preservedMarkup: [PreservedXML] = []
@@ -95,6 +98,7 @@ public struct Instrument: Sendable, Equatable {
         useDrumset: Bool = false,
         drumLineMap: [Int: Int] = [:],
         drumset: [Int: DrumsetEntry] = [:],
+        stringData: StringData? = nil,
         transposeDiatonic: Int = 0,
         transposeChromatic: Int = 0,
         preservedMarkup: [PreservedXML] = [],
@@ -119,6 +123,7 @@ public struct Instrument: Sendable, Equatable {
                 result[pair.key] = GMDrumset.entry(forPitch: pair.key, line: pair.value)
             }
         }
+        self.stringData = stringData
         self.transposeDiatonic = transposeDiatonic
         self.transposeChromatic = transposeChromatic
         self.preservedMarkup = preservedMarkup

@@ -61,4 +61,49 @@ extension Score {
         }
         return nil
     }
+
+    /// Walk backward in the same staff + voice from `voiceElementID` and return the previous sounding chord.
+    /// Crosses measure boundaries automatically and skips rests and every non-chord element.
+    public func previousChord(before voiceElementID: VoiceElementID) -> VoiceElementID? {
+        let staffAddr = voiceElementID.staff
+        let voiceIndex = voiceElementID.voiceIndex
+        guard let staffValue = self[staffAddr],
+              staffValue.measures.indices.contains(voiceElementID.measureIndex)
+        else { return nil }
+        let measures = staffValue.measures
+
+        let currentVoices = measures[voiceElementID.measureIndex].voices
+        if currentVoices.indices.contains(voiceIndex) {
+            let elements = currentVoices[voiceIndex].elements
+            let end = min(max(voiceElementID.elementIndex, 0), elements.count)
+            for index in elements[..<end].indices.reversed() {
+                if case let .chord(chord) = elements[index], !chord.notes.isEmpty {
+                    return VoiceElementID(
+                        staff: staffAddr,
+                        measureIndex: voiceElementID.measureIndex,
+                        voiceIndex: voiceIndex,
+                        elementIndex: index,
+                    )
+                }
+            }
+        }
+
+        guard voiceElementID.measureIndex > 0 else { return nil }
+        for measureIndex in stride(from: voiceElementID.measureIndex - 1, through: 0, by: -1) {
+            let voices = measures[measureIndex].voices
+            guard voices.indices.contains(voiceIndex) else { continue }
+            let elements = voices[voiceIndex].elements
+            for index in elements.indices.reversed() {
+                if case let .chord(chord) = elements[index], !chord.notes.isEmpty {
+                    return VoiceElementID(
+                        staff: staffAddr,
+                        measureIndex: measureIndex,
+                        voiceIndex: voiceIndex,
+                        elementIndex: index,
+                    )
+                }
+            }
+        }
+        return nil
+    }
 }

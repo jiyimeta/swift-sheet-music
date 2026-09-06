@@ -99,6 +99,56 @@ class ScoreBandsTest {
     }
 
     @Test
+    fun `each band restates an active text style`() {
+        // The band cut happens BEFORE a command is appended, so it can land between a
+        // SetTextStyle(bold) and the text it styles. Without the restated prefix the second band
+        // would draw a bold tempo mark or rehearsal mark at regular weight — and its frame, which
+        // the Swift side sized from bold metrics, would no longer fit the letters inside it.
+        val commands = buildList {
+            add(DrawCommand.SetTextStyle(DrawCommand.TextStyleFlag.BOLD))
+            repeat(40) { add(rect(it * 10.0)) }
+        }
+        val bands = EncodablePage(210.0, 2000.0, commands).splitIntoBands(80.0)
+        assertTrue("expected a split", bands.size > 1)
+        bands.forEach { band ->
+            val style = band.commands.filterIsInstance<DrawCommand.SetTextStyle>().first()
+            assertEquals(DrawCommand.TextStyleFlag.BOLD, style.flags)
+        }
+    }
+
+    @Test
+    fun `the neutral text style is not restated`() {
+        // Restating the neutral style would put a SetTextStyle(0) at the head of every band of every
+        // unstyled score — pure noise in the common case, and it would make the banded command
+        // stream differ from the flat one for a program that carries no styling at all.
+        val commands = (0 until 40).map { rect(it * 10.0) }
+        val bands = EncodablePage(210.0, 2000.0, commands).splitIntoBands(80.0)
+        assertTrue("expected a split", bands.size > 1)
+        bands.forEach { band ->
+            assertTrue(
+                "unstyled band carries a style prefix",
+                band.commands.none { it is DrawCommand.SetTextStyle },
+            )
+        }
+    }
+
+    @Test
+    fun `a state command contributes no vertical extent`() {
+        // SetTextStyle paints nothing, so it must not widen a band's painted extent — a band whose
+        // bounds grew for a state command would over-report its height and the host would size a
+        // layer larger than the ink in it.
+        val plain = EncodablePage(210.0, 2000.0, listOf(rect(10.0))).splitIntoBands(80.0)
+        val styled = EncodablePage(
+            210.0,
+            2000.0,
+            listOf(DrawCommand.SetTextStyle(DrawCommand.TextStyleFlag.BOLD), rect(10.0)),
+        ).splitIntoBands(80.0)
+        assertEquals(plain.size, styled.size)
+        assertEquals(plain[0].topMM, styled[0].topMM, 1e-9)
+        assertEquals(plain[0].heightMM, styled[0].heightMM, 1e-9)
+    }
+
+    @Test
     fun `a path under construction is never split across bands`() {
         // One very tall path: its MoveTo..Stroke run alone exceeds the band height, so a naive splitter
         // would cut inside it and strand the tail in a band with no MoveTo.

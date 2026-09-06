@@ -10,6 +10,10 @@ public struct Chord: Sendable, Equatable {
     public var notes: ChordNotes
     /// Optional arpeggio that spreads the chord's notes in time.
     public var arpeggio: Arpeggio?
+    /// Optional vertical bracket attached directly to this chord. MuseScore
+    /// models it as an `Arpeggio` subclass, but writes distinct
+    /// `<ChordBracket>` bracket-specific properties and no subtype.
+    public var bracket: ChordBracket?
     /// Lyrics syllable(s) attached to this chord, one per verse line.
     /// Most scores use a single verse (index 0). C++: `mu::engraving::Lyrics`.
     public var lyrics: [Lyric]
@@ -95,6 +99,7 @@ public struct Chord: Sendable, Equatable {
         duration: NoteDuration,
         notes: ChordNotes,
         arpeggio: Arpeggio? = nil,
+        bracket: ChordBracket? = nil,
         lyrics: [Lyric] = [],
         graceNotesBefore: [GraceChord] = [],
         graceNotesAfter: [GraceChord] = [],
@@ -111,6 +116,7 @@ public struct Chord: Sendable, Equatable {
         self.duration = duration
         self.notes = notes
         self.arpeggio = arpeggio
+        self.bracket = bracket
         self.lyrics = lyrics
         self.graceNotesBefore = graceNotesBefore
         self.graceNotesAfter = graceNotesAfter

@@ -74,8 +74,11 @@ sealed class DrawCommand {
     ) : DrawCommand()
     /**
      * Italic text run — same payload as [Text], but the renderer slants the
-     * glyphs. Tuplet digits and rehearsal marks, which MuseScore sets in
-     * italic, use this.
+     * glyphs.
+     *
+     * SUPERSEDED by [SetTextStyle] in wire v7 and no longer emitted. Kept so
+     * the discriminators after it do not move and so this renderer keeps
+     * handling any stream that still carries it.
      */
     data class ItalicText(
         val text: String,
@@ -84,4 +87,28 @@ sealed class DrawCommand {
         val size: Double,
         val fontId: FontID,
     ) : DrawCommand()
+
+    /**
+     * Font style for every subsequent [Text] and [Glyph], until the next
+     * [SetTextStyle]. A state command like [SetColor] / [SetDash] /
+     * [SetRotation]: set the style, draw, then `SetTextStyle(0u)`.
+     *
+     * [flags] is a bitmask — see [TextStyleFlag] — rather than two booleans,
+     * so a third trait costs no wire change.
+     *
+     * MuseScore's own role defaults set tempo marks, rehearsal marks and
+     * instrument-change text bold. Before this command the wire could not say
+     * so, and this renderer drew them in regular weight while the Apple one
+     * drew them bold.
+     */
+    data class SetTextStyle(val flags: UByte) : DrawCommand()
+
+    /** Bit positions in [SetTextStyle.flags]. Mirrors Swift's `DrawCommand.TextStyleFlag`. */
+    object TextStyleFlag {
+        const val BOLD: UByte = 1u
+        const val ITALIC: UByte = 2u
+
+        /** The neutral style — what each page starts in, and what a styled run restores. */
+        const val NONE: UByte = 0u
+    }
 }

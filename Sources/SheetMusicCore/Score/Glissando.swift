@@ -35,6 +35,7 @@ public struct Glissando: Sendable, Equatable {
     public var easeOut: Int
     /// Optional label drawn along the glissando line (e.g. "gliss.").
     public var text: String?
+    public var preservedTextMarkup: PreservedTextMarkup?
 
     public init(
         style: Style = .chromatic,
@@ -42,11 +43,13 @@ public struct Glissando: Sendable, Equatable {
         easeIn: Int = 0,
         easeOut: Int = 0,
         text: String? = nil,
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.style = style
         self.visualType = visualType
         self.easeIn = easeIn
         self.easeOut = easeOut
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
     }
 }

@@ -42,6 +42,7 @@
 
         let onLoadBundled: () -> Void
         let onLoadHarmonyBasic: () -> Void
+        let onLoadLyricsBasic: () -> Void
         let onOpenFile: () -> Void
         let onImportPDF: () -> Void
         let onTogglePlayback: () -> Void
@@ -61,6 +62,10 @@
                     Button(
                         "Load harmony-basic.mscx",
                         action: onLoadHarmonyBasic,
+                    )
+                    Button(
+                        "Load lyrics-basic.mscx",
+                        action: onLoadLyricsBasic,
                     )
                 }
                 Section("Open") {

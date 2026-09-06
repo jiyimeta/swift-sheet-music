@@ -14,12 +14,70 @@ class ScoreHandle internal constructor(val raw: Long) : AutoCloseable {
 
     protected fun finalize() { close() }
 
+    /** Score-level metadata, or `null` for a released handle. */
+    fun metadata(): ScoreMetadata? = ScoreMetadata.fetch(raw)
+
+    /**
+     * Serialize this score back out.
+     *
+     * Returns `null` when encoding failed — which, for a handle this object
+     * still considers open, means the score holds something the encoder cannot
+     * represent rather than anything the caller did wrong.
+     *
+     * @param format which container to write.
+     * @param targetVersion which MuseScore wire form to write. [MuseScoreTarget.DEFAULT]
+     *   leaves the choice to the encoder.
+     * @param emitPreservedMarkup keep the source XML this library's model does
+     *   not represent (fret diagrams, figured bass, `<Excerpt>`, most of
+     *   `<Style>`). Keeping it is normally right — dropping it deletes what the
+     *   author wrote — but preserved markup is source fidelity rather than a
+     *   semantic guarantee, so an edited score can carry a subtree describing
+     *   the score as it was. Pass `false` when preparing an edited score for
+     *   distribution.
+     */
+    fun encode(
+        format: ScoreFormat,
+        targetVersion: MuseScoreTarget = MuseScoreTarget.DEFAULT,
+        emitPreservedMarkup: Boolean = true,
+    ): ByteArray? {
+        val bytes = SheetMusicJNI.nativeEncodeScore(
+            raw,
+            format.wireValue,
+            targetVersion.wireValue,
+            if (emitPreservedMarkup) 1 else 0,
+        )
+        return if (bytes.isEmpty()) null else bytes
+    }
+
+    /** Shorthand for [encode] with [ScoreFormat.MSCX]. */
+    fun encodeToMscx(
+        targetVersion: MuseScoreTarget = MuseScoreTarget.DEFAULT,
+        emitPreservedMarkup: Boolean = true,
+    ): ByteArray? = encode(ScoreFormat.MSCX, targetVersion, emitPreservedMarkup)
+
+    /** Shorthand for [encode] with [ScoreFormat.MSCZ]. */
+    fun encodeToMscz(
+        targetVersion: MuseScoreTarget = MuseScoreTarget.DEFAULT,
+        emitPreservedMarkup: Boolean = true,
+    ): ByteArray? = encode(ScoreFormat.MSCZ, targetVersion, emitPreservedMarkup)
+
     companion object {
-        /** Returns null if Swift parsing failed. */
+        /**
+         * Returns null if Swift parsing failed.
+         *
+         * `null` is the whole answer: a corrupt ZIP, an unrecognized format and
+         * a structurally invalid measure all arrive here identically, and a
+         * score that parsed after silently losing an ornament is
+         * indistinguishable from one that came through whole. Use
+         * [loadWithDiagnostics] when either matters.
+         */
         fun load(bytes: ByteArray): ScoreHandle? {
             val raw = SheetMusicJNI.nativeLoadScore(bytes)
             return if (raw == 0L) null else ScoreHandle(raw)
         }
+
+        /** [load], plus why it failed and what the parser dropped. */
+        fun loadWithDiagnostics(bytes: ByteArray): ScoreLoadResult = ScoreLoadResult.load(bytes)
 
         /** Parse a MuseScore-exported PDF. Returns null if parsing failed. */
         fun loadFromPDF(bytes: ByteArray): ScoreHandle? {
@@ -27,6 +85,33 @@ class ScoreHandle internal constructor(val raw: Long) : AutoCloseable {
             return if (raw == 0L) null else ScoreHandle(raw)
         }
     }
+}
+
+/**
+ * A container [ScoreHandle.encode] can write. Mirrors Swift's
+ * `ScoreEncodeBridge.Format`; [wireValue] is the JNI contract, so it is
+ * assigned explicitly and never reordered.
+ *
+ * MusicXML is absent on purpose: this package imports it and does not write it.
+ */
+enum class ScoreFormat(internal val wireValue: Int, val fileExtension: String, val mimeType: String) {
+    /** Plain MuseScore XML. */
+    MSCX(0, "mscx", "application/xml"),
+
+    /** ZIP container holding `META-INF/container.xml` and `score.mscx`. */
+    MSCZ(1, "mscz", "application/zip"),
+}
+
+/** Which MuseScore wire form [ScoreHandle.encode] targets. */
+enum class MuseScoreTarget(internal val wireValue: Int) {
+    /** Whatever this library writes by default — currently MuseScore 4. */
+    DEFAULT(0),
+
+    /** The MuseScore 3 compatibility writer, for files a 3.x install must open. */
+    MUSESCORE_3(3),
+
+    /** MuseScore 4. */
+    MUSESCORE_4(4),
 }
 
 /** One best-effort diagnostic from the PDF importer. */

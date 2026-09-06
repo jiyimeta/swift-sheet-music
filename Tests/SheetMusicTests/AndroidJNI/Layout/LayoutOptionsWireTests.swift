@@ -18,6 +18,14 @@
                 clefOverrides: [ClefOverrideWire(partIndex: 0, staffIndexInPart: 1, rawType: "F8va")],
                 transposeSemitones: -3,
                 showsLyrics: 0,
+                breakPolicyRaw: 2,
+                multiMeasureRestMinimum: 5,
+                measureNumberInterval: 4,
+                systemGapPoints: 41.5,
+                includeTitleFrameRaw: 1,
+                breakIndicatorVisibilityRaw: 2,
+                graceNoteMag: 0.55,
+                smallNoteMag: 0.65,
             )
             let decoded = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(decoded.staffSize == 18.5)
@@ -30,6 +38,15 @@
             // fixture that set both to their default would not tell a dropped
             // tag from a defaulted one.
             #expect(decoded.lyricsVisible == false)
+            // Every appended field, each set away from its own default for the same reason.
+            #expect(decoded.breakPolicyRaw == 2)
+            #expect(decoded.multiMeasureRestMinimum == 5)
+            #expect(decoded.measureNumberInterval == 4)
+            #expect(decoded.systemGapPoints == 41.5)
+            #expect(decoded.includeTitleFrameRaw == 1)
+            #expect(decoded.breakIndicatorVisibilityRaw == 2)
+            #expect(decoded.graceNoteMag == 0.55)
+            #expect(decoded.smallNoteMag == 0.65)
         }
 
         /// The NOTATION half of the transpose clamp. It must match the two audio clamps

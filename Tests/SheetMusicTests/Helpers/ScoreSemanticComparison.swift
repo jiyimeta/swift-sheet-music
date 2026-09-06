@@ -172,6 +172,16 @@ enum ScoreSemanticComparison {
         case let .fermata(f): return "fermata(\(f.subtype))"
         case let .breath(b): return "breath(\(b.kind))"
         case let .harmony(h): return "harmony(\"\(h.name)\")"
+        case let .sticking(s): return "sticking(\"\(s.text)\")"
+        case let .expression(e): return "expression(\"\(e.text)\")"
+        case let .capo(c): return "capo(\(c.fretPosition))"
+        case let .stringTunings(t): return "stringTunings(\"\(t.preset)\")"
+        case let .ambitus(a): return "ambitus(\(a.topPitch)-\(a.bottomPitch))"
+        case let .figuredBass(fb):
+            return fb.items.isEmpty ? "figuredBass(\"\(fb.text)\")" : "figuredBass(\(fb.items.count) items)"
+        case let .symbol(s): return "symbol(\"\(s.name)\")"
+        case let .fretDiagram(diagram):
+            return "fretDiagram(\(diagram.strings.count) strings)"
         case let .locationShift(delta):
             return "locationShift(\(delta.numerator)/\(delta.denominator))"
         case let .preserved(markup): return "preserved(<\(markup.name)>)"
@@ -182,10 +192,14 @@ enum ScoreSemanticComparison {
     /// comparison across MusicXML / MSCX producers.
     static func normalize(_ score: Score, options: Options = .init()) -> Score {
         var s = score
-        // Title block (`<VBox>` in MSCX) has no MusicXML equivalent
-        // — drop it from both sides so the comparison stays focused
-        // on the notation itself.
-        s.titleFrame = nil
+        // Frames — the title block (`<VBox>`) and the horizontal, text, and
+        // fret frames beside it — are page furniture with no MusicXML
+        // equivalent, so drop them from both sides and keep the comparison on
+        // the notation itself. Clearing `blocks` is what does it now that
+        // `titleFrame` is a view onto the leading vertical frame: setting that
+        // alone would leave a mid-score `<HBox>` on the MSCX side, which the
+        // MusicXML side can never produce.
+        s.blocks = []
         // `<Style>` block (page geometry, spatium, header/footer chrome)
         // and `<LayoutBreak>` markers are MSCX-only page-layout metadata —
         // the MusicXML decoder doesn't translate them. Reset to defaults

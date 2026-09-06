@@ -36,35 +36,20 @@ extension Spanner {
     /// kinds are emitted as empty placeholders, since the only fields
     /// the decoder recovers from them are positional.
     private func payloadElement(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        // `<beginText>` and `<placement>` are element properties and
-        // ride on the payload child for every line-shaped spanner.
-        // Both are emitted only when authored, mirroring MuseScore's
-        // "write when no longer styled" rule.
+        // `<beginText>` and the shared element properties ride on the payload
+        // child for every line-shaped spanner. Authored `<placement>` is
+        // emitted from `ElementProperties` under MuseScore's "write when no
+        // longer styled" rule.
         let beginTextNode: [XMLTreeNode] = beginText.map {
             [XMLTreeNode(name: "beginText", text: $0)]
         } ?? []
-        let placementNode: [XMLTreeNode] = placement.map {
-            [XMLTreeNode(name: "placement", text: $0.rawValue)]
-        } ?? []
-        // `<visible>0</visible>`, which `decodeVisible` reads off this same
-        // payload child. Unreachable from `encode(options:)` — that one only
-        // builds a payload when `visible` is true, because a voice-level end
-        // side *is* the invisible case — so this exists for the
-        // chord-anchored begin side, where `visible` means what it says and
-        // dropping it would silently un-hide a hidden slur.
-        //
-        // Before `<placement>`, matching MuseScore's property order
-        // (`TWrite::writeItemProperties`, `rw/write/twrite.cpp:572-580`,
-        // writes `Pid::VISIBLE` ahead of `Pid::PLACEMENT`).
-        let visibleNode: [XMLTreeNode] = visible
-            ? []
-            : [XMLTreeNode(name: "visible", text: "0")]
-        let leading = beginTextNode + visibleNode + placementNode
+        let leading = beginTextNode + elementProperties.mscxChildren()
+        let trailing = elementProperties.mscxTrailingChildren()
         if kind == .volta, !voltaEndings.isEmpty {
             let endingsText = voltaEndings.map(String.init).joined(separator: ", ")
             return XMLTreeNode(name: rawType, children: leading + [
                 XMLTreeNode(name: "endings", text: endingsText),
-            ])
+            ] + trailing)
         }
         if kind == .hairpin, let hairpin {
             var children: [XMLTreeNode] = leading + [
@@ -79,6 +64,7 @@ extension Spanner {
                     text: hairpin.veloChangeMethod.rawValue,
                 ))
             }
+            children += trailing
             return XMLTreeNode(name: rawType, children: children)
         }
         if kind == .ottava, let ottava {
@@ -90,9 +76,10 @@ extension Spanner {
                     name: "numbersOnly", text: numbersOnly ? "1" : "0",
                 ))
             }
+            children += trailing
             return XMLTreeNode(name: rawType, children: children)
         }
-        return XMLTreeNode(name: rawType, children: leading)
+        return XMLTreeNode(name: rawType, children: leading + trailing)
     }
 
     /// `<next><location>…</location></next>`. Returns nil when both

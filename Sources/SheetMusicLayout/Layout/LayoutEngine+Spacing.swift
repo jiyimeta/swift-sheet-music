@@ -803,12 +803,15 @@ extension LayoutEngine {
                 case let .chord(r):
                     // Empty chord = rest.
                     w += durationWidth(r.duration, metrics: metrics)
-                // `.preserved` is verbatim source XML this library does
-                // not model; it engraves nothing and so reserves no
-                // width, like the other non-glyph elements here.
+                // These modeled annotations do not have an engraving pass yet,
+                // so they reserve no width.
+                // `.preserved` is unmodeled source XML and likewise engraves
+                // nothing.
                 case .dynamic, .fermata, .breath,
                      .measureRepeat, .spanner,
-                     .locationShift, .harmony, .preserved:
+                     .locationShift, .harmony, .sticking, .expression, .capo,
+                     .stringTunings, .ambitus, .figuredBass, .symbol, .fretDiagram,
+                     .preserved:
                     break
                 }
             }

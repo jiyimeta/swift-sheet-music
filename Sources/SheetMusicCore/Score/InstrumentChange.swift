@@ -21,6 +21,7 @@ public struct InstrumentChange: Sendable, Equatable {
     public var instrument: Instrument?
     /// Engraved instruction text, e.g. "アコーディオン に".
     public var text: String
+    public var preservedTextMarkup: PreservedTextMarkup?
     /// MuseScore's `<init>` flag. Written by the editing layer only,
     /// when the user actually picked an instrument in the dialog
     /// (`notation/internal/notationinteraction.cpp:2264`). No engraving
@@ -28,15 +29,30 @@ public struct InstrumentChange: Sendable, Equatable {
     /// fidelity and never acted upon.
     public var isUserInitialized: Bool
     /// Author-supplied X offset from the default placement, in spatium.
-    public var offsetX: Double
+    /// Sugar over `elementProperties.offset`.
+    public var offsetX: Double {
+        get { elementProperties.offset?.x ?? 0 }
+        set {
+            let y = elementProperties.offset?.y ?? 0
+            elementProperties.offset = ScoreOffset(x: newValue, y: y)
+        }
+    }
+
     /// Author-supplied Y offset from the default placement, in spatium
-    /// (positive = down).
-    public var offsetY: Double
+    /// (positive = down). Sugar over `elementProperties.offset`.
+    public var offsetY: Double {
+        get { elementProperties.offset?.y ?? 0 }
+        set {
+            let x = elementProperties.offset?.x ?? 0
+            elementProperties.offset = ScoreOffset(x: x, y: newValue)
+        }
+    }
+
     /// Per-element font overrides; `nil` fields inherit the
     /// `instrumentChange` row of `TextStyleDefaults`.
     public var properties: TextProperties
     /// Base element properties shared with every engravable element
-    /// (colour + `<visible>`).
+    /// (`<color>`, `<visible>`, and `<offset>`).
     public var elementProperties: ElementProperties
 
     /// Author-supplied colour. Sugar over `elementProperties.color`.
@@ -66,13 +82,20 @@ public struct InstrumentChange: Sendable, Equatable {
         isUserInitialized: Bool = false,
         properties: TextProperties = TextProperties(),
         visible: Bool = true,
+        preservedTextMarkup: PreservedTextMarkup? = nil,
     ) {
         self.text = text
+        self.preservedTextMarkup = preservedTextMarkup
         self.instrument = instrument
-        self.offsetX = offsetX
-        self.offsetY = offsetY
         self.isUserInitialized = isUserInitialized
         self.properties = properties
-        elementProperties = ElementProperties(visible: visible, color: color)
+        let offset: ScoreOffset? = if offsetX == 0 && offsetY == 0 {
+            nil
+        } else {
+            ScoreOffset(x: offsetX, y: offsetY)
+        }
+        elementProperties = ElementProperties(
+            visible: visible, color: color, offset: offset,
+        )
     }
 }

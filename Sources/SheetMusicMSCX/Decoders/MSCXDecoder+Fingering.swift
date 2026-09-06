@@ -3,14 +3,14 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Fingering {
-    /// Every direct `<Fingering>` child this decoder reads. `<placement>`,
-    /// `<offset>`, and the per-element font overrides are not modeled and
-    /// become preserved markup.
+    /// Every direct `<Fingering>` child this decoder reads. Per-element font
+    /// overrides are not modeled and become preserved markup. The base
+    /// `<offset>` and `<placement>` are owned by `ElementProperties`.
     ///
     /// `color` is consumed because `ElementProperties(decodingMSCXChildrenOf:)`
     /// reads it, the same arrangement every other decoder here has.
     private static let consumedChildren: Set = [
-        "style", "text", "color", "visible",
+        "style", "text", "color", "offset", "placement", "visible",
     ]
 
     /// The `<Fingering>` children of a `<Note>`, in document order.
@@ -30,10 +30,12 @@ extension Fingering {
     /// (`rw/write/twrite.cpp:1456`), so `<style>` and `<text>` are all there is
     /// to read.
     static func decode(_ node: XMLTreeNode) -> Fingering {
+        let textNode = node.first("text")
         var fingering = Fingering(
-            text: node.first("text").map(StaffText.plainText(of:)) ?? "",
+            text: textNode.map(StaffText.plainText(of:)) ?? "",
             role: node.first("style").map { Role(mscxToken: $0.text) } ?? .fingering,
             preservedMarkup: node.preservedMarkup(consuming: consumedChildren),
+            preservedTextMarkup: textNode.flatMap(StaffText.preservedTextMarkup(of:)),
         )
         fingering.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return fingering

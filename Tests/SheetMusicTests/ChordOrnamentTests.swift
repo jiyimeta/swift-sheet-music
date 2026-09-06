@@ -178,7 +178,7 @@ struct ChordOrnamentDecodeTests {
         #expect(chord.ornaments.map(\.kind) == [.turn, .mordent])
     }
 
-    @Test func keepsUnknownSubtypeAndUnmodeledChildren() throws {
+    @Test func keepsUnknownSubtypeAndCueNoteWhileModelingPlacement() throws {
         let chord = try parseChord("""
         <durationType>quarter</durationType>
         <Ornament>
@@ -191,7 +191,8 @@ struct ChordOrnamentDecodeTests {
         """)
         let ornament = try #require(chord.ornaments.first)
         #expect(ornament.kind == .unknown(subtype: "ornamentNotAThing"))
-        #expect(ornament.preservedMarkup.map(\.name) == ["Chord", "placement"])
+        #expect(ornament.elementProperties.placement == .below)
+        #expect(ornament.preservedMarkup.map(\.name) == ["Chord"])
     }
 
     @Test func ornamentIsNotAlsoPreservedOnTheChord() throws {

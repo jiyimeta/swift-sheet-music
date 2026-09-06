@@ -194,9 +194,13 @@ extension LayoutEngine {
             CGPoint(x: p.x, y: p.y + dy)
         }
         switch element {
-        case let .textMark(.lyrics(color), text, p):
+        case let .textMark(.lyrics(color, verse, anchor), text, p):
             return .textMark(
-                kind: .lyrics(color: color), text: text, origin: bump(p),
+                kind: .lyrics(
+                    color: color, verse: verse, anchor: anchor,
+                ),
+                text: text,
+                origin: bump(p),
             )
         case let .lyricHyphen(from, to):
             return .lyricHyphen(

@@ -39,6 +39,20 @@ struct AdjacentElementSlotTests {
         #expect(AdjacentElementSlot.run(.after, of: 5, in: elements) == 6 ..< 6)
     }
 
+    @Test("voice annotations stay inside an annotation run")
+    func voiceTextAnnotationRuns() {
+        let annotations: [VoiceElement] = [
+            .sticking(Sticking(text: "R")),
+            .expression(ExpressionText(text: "dolce")),
+            .capo(Capo(text: "")),
+            .stringTunings(StringTunings()),
+        ]
+        for annotation in annotations {
+            let elements = [Self.dynamic, annotation, Self.chord]
+            #expect(AdjacentElementSlot.run(.before, of: 2, in: elements) == 0 ..< 2)
+        }
+    }
+
     @Test("find picks the matching element out of the run, and nothing outside it")
     func find() {
         let score = Self.dressedScore()

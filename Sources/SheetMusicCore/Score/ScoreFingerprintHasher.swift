@@ -4,8 +4,10 @@ import SheetMusicFoundation
 ///
 /// Split out of `ScoreFingerprint.swift` when the walk outgrew the file-length budget; the two are one unit and the
 /// contract that governs both — what the walk covers and what it is blind to — is stated over there, on
-/// `Score.stableFingerprint`. Internal rather than `private` only because the type now spans two files: nothing
-/// outside this module may see it.
+/// `Score.stableFingerprint`. Internal rather than `private` only because the type spans several files — this one,
+/// `+Parity`, and `+Occupants` — each of which was split off when the previous one reached the file-length budget:
+/// nothing outside this module may see it. For the same reason the shared helpers those files call
+/// (`combineTristate`, the two `combinePresence` overloads) are internal rather than file-private.
 struct FNV1a {
     private(set) var value: UInt64 = 0xCBF2_9CE4_8422_2325
 
@@ -153,6 +155,7 @@ struct FNV1a {
         combine(note.play)
         combine(note.visible)
         combineOccupied(note.fingerings, tag: 36)
+        combineOccupied(note.symbols, tag: 46)
         if let color = note.elementProperties.color {
             combine(31)
             combine(color.red)
@@ -281,6 +284,7 @@ struct FNV1a {
             combine(articulation)
         }
         combineOccupied(chord.ornaments, tag: 33)
+        combineOccupied(chord.bracket, tag: 43)
         combine(chord.tremolo)
         combine(chord.chordLines.count)
         for chordLine in chord.chordLines {
@@ -290,75 +294,6 @@ struct FNV1a {
         combine(chord.beamVisible)
         combineOccupied(chord.spanners, tag: 32)
         combineOccupied(chord.elementProperties, visibleTag: 29, colorTag: 30)
-    }
-
-    /// Every case that carries *timing* — i.e. anything that changes how much tick budget an element occupies, or
-    /// where the cursor lands afterward — is listed explicitly. `.chord` carries its own duration (rests are chords
-    /// with no notes, per `VoiceElement`'s doc comment) and `.locationShift` carries a tick-offset delta that moves
-    /// the cursor for whatever attaches next; both must be distinguishable from each other and from the non-timed
-    /// markers below, or two scores that differ only in a rest's length or a cursor jog could hash equally.
-    ///
-    /// `.keySignature` and `.timeSignature` occupy no tick budget either, but they DO carry content M3's signature
-    /// commands write — the whole point of `.setKeySignature` / `.setTimeSignature` is to change what a bar
-    /// declares — so both are fed their own fields rather than a tag. Without that, changing the key of a bar of
-    /// rests (nothing to re-spell) would move nothing this walk can see, and a mirror that failed to apply the same
-    /// change would still agree. `showCourtesy` and `visible` ride along because the replace path in
-    /// `SetKeySignature` does not preserve them.
-    ///
-    /// The remaining cases occupy no tick budget of their own — they are markers attached at the current cursor
-    /// position — but they now feed their own identity rather than a bare discriminant tag, per the edit-command
-    /// parity project (spec 2026-09-02 §2.5): see `ScoreFingerprintHasher+Parity.swift` for the
-    /// `combine(_ clef:)` / `combine(_ barLine:)` / `combine(_ dynamic:)` / `combine(_ fermata:)` /
-    /// `combine(_ breath:)` / `combine(_ harmony:)` / `combine(_ spanner:)` / `combine(_ repeat:)` overloads this
-    /// switch calls into.
-    mutating func combine(_ element: VoiceElement) {
-        switch element {
-        case let .chord(chord):
-            combine(0)
-            combine(chord)
-        case let .keySignature(key):
-            combine(1)
-            combine(key.concertKey)
-            combine(key.showCourtesy)
-            combine(key.visible)
-        case let .timeSignature(time):
-            combine(2)
-            combine(time.numerator)
-            combine(time.denominator)
-            combineOccupied(time.symbol, tag: 39)
-            combine(time.showCourtesy)
-            combine(time.visible)
-        case let .clef(clef):
-            combine(3)
-            combine(clef)
-        case let .barLine(barLine):
-            combine(4)
-            combine(barLine)
-        case let .dynamic(dynamic):
-            combine(5)
-            combine(dynamic)
-        case let .spanner(spanner):
-            combine(6)
-            combine(spanner)
-        case let .measureRepeat(`repeat`):
-            combine(7)
-            combine(`repeat`)
-        case let .fermata(fermata):
-            combine(8)
-            combine(fermata)
-        case let .breath(breath):
-            combine(9)
-            combine(breath)
-        case let .harmony(harmony):
-            combine(10)
-            combine(harmony)
-        case let .locationShift(delta):
-            combine(11)
-            combine(delta)
-        case .preserved:
-            // Source-only XML is outside the semantic edit fingerprint.
-            break
-        }
     }
 
     /// Unlike `combine(_ element: VoiceElement)`'s marker cases, every case here is fed the fields that give the
