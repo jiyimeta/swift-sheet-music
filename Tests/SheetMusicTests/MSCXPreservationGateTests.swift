@@ -65,8 +65,6 @@ enum MSCXPreservation {
     private static let textContentReason =
         "by design: text style and inline markup remain for the TextContent parity work "
             + "(spec §6; parity doc §7.1)."
-    private static let staffBodyBoxReason =
-        "by design: top-level staff body boxes and their ordering are outside this spec (spec §3.5)."
     private static let soundIDReason =
         "genuinely lost, and not fixable by preserving it: MuseScore's <Instrument id> attribute "
             + "(template id) and <instrumentId> element (MusicXML Sound ID) hold different values, "
@@ -179,14 +177,12 @@ enum MSCXPreservation {
         allow([
             "Chord/TremoloSingleChord", "TremoloSingleChord/subtype",
         ], because: tremoloReason, into: &result)
+        // `Text/style` used to sit here too. The only fixture that lost it was
+        // a `<TBox>`, whose whole subtree is now carried as preserved markup —
+        // so it comes back, and the entry would be stale.
         allow([
-            "Text/style", "b/font", "text/b", "text/font", "text/sym",
+            "b/font", "text/b", "text/font", "text/sym",
         ], because: textContentReason, into: &result)
-        allow([
-            "HBox/width", "Staff/HBox", "Staff/TBox", "TBox/Text", "TBox/bottomGap",
-            "TBox/bottomMargin", "TBox/height", "TBox/leftMargin", "TBox/rightMargin", "TBox/topGap",
-            "TBox/topMargin", "Text/text", "VBox/bottomGap",
-        ], because: staffBodyBoxReason, into: &result)
         allow([
             "Instrument/instrumentId",
         ], because: soundIDReason, into: &result)

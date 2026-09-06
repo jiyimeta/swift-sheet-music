@@ -107,17 +107,10 @@ extension Score {
             }
         }
 
-        // VBox under the first top-level Staff (= first Part's first Staff).
-        var titleFrame: ScoreFrame?
-        if let firstStaff = scoreNode.first("Staff") {
-            for child in firstStaff.children {
-                if child.name == "VBox" {
-                    titleFrame = ScoreFrame.decode(vbox: child)
-                    break
-                }
-                if child.name == "Measure" { break }
-            }
-        }
+        // Boxes are score-level MeasureBase entries. MuseScore writes them
+        // only in the first top-level Staff body, interleaved with measures.
+        let blocks = scoreNode.first("Staff")
+            .map(PositionedScoreBlock.decodeAll(inTopLevelStaff:)) ?? []
 
         // The container's `score_style.mss` (when present) is the base
         // the score's own `<Style>` overrides — MuseScore reads them in
@@ -140,7 +133,7 @@ extension Score {
             parts: parts,
             systemMeasures: resolvedSystemMeasures,
             metaTags: metaTags,
-            titleFrame: titleFrame,
+            blocks: blocks,
             style: style,
             source: .museScore(version),
             preservedMarkup: scoreNode.preservedMarkup(consuming: consumedScoreChildren),

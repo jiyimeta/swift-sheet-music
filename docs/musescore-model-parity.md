@@ -601,18 +601,69 @@ encoderで1つ注意がある。`TWrite::writeProperties(const BSymbol*)`（`twr
 
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
-| `HBOX` | `dom/box.h:35` | なし | 水平frame全般 |
-| `TBOX` | `dom/box.h:245` | なし | text frame |
-| `FBOX` | `dom/box.h:182` | なし | fret diagram frame |
-| `SPACER` | `dom/spacer.h:35` | なし | UP / DOWN / FIXEDの手動間隔調整 |
-| `SYSTEM_DIVIDER` | `dom/systemdivider.h:32` | なし | system間の区切り記号 |
+| MuseScore | file上の親 | 定義 | ssm | 影響 |
+|---|---|---|---|---|
+| ~~`HBOX`~~ | `<Staff>` | `dom/box.h:35` | **`ScoreBlock.opaqueFrame`**（2026-09-06実装） | 下の追記を参照 |
+| ~~`TBOX`~~ | `<Staff>` | `dom/box.h:245` | 同上 | 同上 |
+| ~~`FBOX`~~ | `<Staff>` | `dom/box.h:182` | 同上 | 同上 |
+| ~~`VBOX`（曲の途中）~~ | `<Staff>` | `dom/box.h` | **`ScoreBlock.verticalFrame`**（2026-09-06実装） | 同上 |
+| `SPACER` | **`<Measure>`** | `dom/spacer.h:35` | **model は無いが往復する** | 下の追記を参照 |
+| `SYSTEM_DIVIDER` | **`<Measure>`** | `dom/systemdivider.h:32` | 同上 | 同上 |
 
-VBoxだけは`ScoreFrame`として部分的に存在するが、**先頭measureより前の1つ目のtitle frameのみ**
-（`MSCXDecoder+Score.swift:78`）。曲の途中に挟まるVBox、nested frame、margin / gap / auto-sizeは無い。
+**［2026-09-06 追記］この節は3箇所間違っていた。**
 
-MuseScoreは`MeasureBase`のlinked listとしてmeasureとboxを同列に並べるが、ssmは
-`Score.parts[].staves[].measures`という配列で、boxの居場所が構造的にない。ここは
-`Score.measureBases: [ScoreBlock]`のような並び替えが要るので、単発の追加では済まない。
+**1. boxはper-staffではなくscore-levelだった。** 上流のstaff writerが
+`if (m->isMeasure() || staffIdx == 0)`（`rw/write/staffwrite.cpp:42`）で、
+**measureでないもの＝boxは staffIdx == 0 のときだけ書く**。fixtureでも観測できる——
+`Tests/SheetMusicTests/Resources/musicxml/testCodaHBox_ref.mscx`はstaff 1が
+`<VBox>`→measure×5→`<HBox>`→measure×3→`<HBox>`→measure×4で、**staff 2はmeasure×12のみ**。
+
+したがってここに書いてあった「`Score.measureBases: [ScoreBlock]`のような並び替えが要る」は
+**不要**だった。measureはper-staff、boxはscore-levelという上流の非対称をそのまま写せばよく、
+`Score.parts[].staves[].measures`は無変更のまま、score直下に
+`blocks: [PositionedScoreBlock]`（`beforeMeasureIndex` + block）という**疎な列**を1本足して済んだ。
+`Score.systemMeasures`と同じ形なので、新しい構造原理も持ち込んでいない。
+1つの配列に畳む案を採らなかったのは、「全staff共通のbox」と「このstaffだけのmeasure」を
+同じ型に同居させることになるから。設計の全文は
+`docs/superpowers/specs/2026-09-06-box-family-structure-design.md`。
+
+**2. `SPACER` / `SYSTEM_DIVIDER`はboxと同じ塊ではない。** 両方`<Measure>`の子で
+（`rw/read460/measureread.cpp:134-167`）、`MeasureBase`の兄弟ではない。しかもspacerは
+`measure->mstaves()[staffIdx]->vspacerDown()`と**staffごとに**読まれる——boxがscore-levelなのと
+ちょうど逆向き。そして`consumedMeasureChildren`（`MSCXDecoder+Measure.swift`）にこれらのtagは
+1つも入っていないので、**`Measure.preservedMarkup`に入って既に往復している**。
+構造変更とは無関係で、model化しても得るものが無い。
+
+**そして`<Spacer>`というtagは存在しない。** 実際の綴りは`vspacer` / `vspacerDown` /
+`vspacerFixed` / `vspacerUp`の4つ。この表の「MuseScore」列は`ElementType` enumから起こしてあり、
+**file formatから起こしていない**——だから「enumに名前はあるが、その綴りのtagはfileに無い」行が
+生まれる。§8の「親をread460で確認すること」はこの列の読み方そのものへの注意でもある。
+（確認済みの誤りは4例: §4.6の4件、§4.3の`<Symbol>`の親、§4.1の`StringData`の親、ここ。）
+
+**3. VBoxは「部分的に存在する」より狭かった。** decoderは最初の`<Staff>`を走査して
+**`<Measure>`に当たった時点でbreak**していた（`MSCXDecoder+Score.swift`）ので、
+曲の途中のVBoxは最初から見ていない。いまは`blocks`が全部拾う。
+
+**実装の形。** `ScoreBlock`は2 case。`.verticalFrame(ScoreFrame)`は`<VBox>`——`LayoutEngine`が
+title blockを描くのでtypedのまま。`.opaqueFrame(OpaqueFrame)`は`<HBox>` / `<TBox>` / `<FBox>`で、
+kindと子要素まるごとのpreserved markupだけを持つ。4種に別々の型を与えなかったのは、
+`readProperties(Box*)`（`rw/read460/tread.cpp:2166`）が`height` / `width` / gap 2種 /
+margin 4種 / `boxAutoSize` / `Text` / `Symbol` / `Image` / `FretDiagram`を**4種で共有**していて、
+固有なのはHBoxの`createSystemHeader`、FBoxのfret frame 6件、TBoxの単一`Text`だけだから。
+そしてssm側ではVBox以外を描くものが無い——**型を付けても読む人がいない**。
+layoutを教えるsliceが来たときに型を起こすのが順序として正しい。
+
+`ScoreFrame`にも`preservedMarkup`を足した。title VBoxの`bottomGap`などが
+「bagが無いせいで」落ちていたのはこれで直る。
+
+`fingerprint`は無変更。`ScoreFingerprintHasher`は`titleFrame`も`ScoreFrame`も歩いていない
+（両fileに0 hit）ので、`blocks`も同じ扱いにした。§8の3段構造でいえばframeも
+「score構造の外側」側に落ちる——measure列に位置は持つが、`VoiceElement`にもstaffにも属さない。
+
+**残っているもの。** engravingは別slice。modelには入ったが`LayoutEngine`はHBoxの水平空白も
+TBoxのtextも置かない。ただし**現状はboxを丸ごと捨てている**ので、model化してlayoutが無視しても
+今より悪くはならない。空の`<Text>`が`FrameText.decode`で`nil`になって落ちる既存経路も残っている
+（§7.1のTextContent作業の領分）。
 
 ### 4.5 staff / part構造
 
@@ -936,8 +987,15 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    **MSCXに読み書きが存在しない**（parity対象外）だった。§4.6の訂正を参照。
    `SYMBOL`も同様に、note添付だけが単発で、annotation位置のものは`VoiceElement`側
    （§4.3の追記）。
-4. **構造変更を伴うもの** — box family（`MeasureBase`相当の並びが要る）、
+4. **構造変更を伴うもの** — ~~box family~~（2026-09-06完了、§4.4の追記）、
    `STAFFTYPE_CHANGE`（staffの時間軸）、そして最後に**excerpt / linked parts**。
+
+   **box familyは「構造変更が要る」という見立て自体が誤りだった**（§4.4の追記1）。
+   `MeasureBase`相当の並びは要らず、score直下の疎な列1本で足りた。ここに置いていたのは
+   「MuseScoreがlinked listで持っているから、ssmも同じ形が要る」という推論だが、
+   **上流のdata構造ではなくfile上の書かれ方を見るべきだった**——writerが
+   `staffIdx == 0`でしかboxを書かない時点で、boxはscore-levelだと分かる。
+   この列の残り2つ（`STAFFTYPE_CHANGE`、excerpt）も、着手前に同じ確認をすること。
 
 **MSC 5.00の`<SpannerMap>` + EID対応はこの列に入れない。** `v5.0.0-alpha` tagが立った時点で
 着手する（§3.6・§3.7）。1を先に済ませておけば、対応が入る前でもMS5 fileはデータ欠損しない。
