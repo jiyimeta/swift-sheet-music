@@ -999,6 +999,24 @@ mirrorされるので、それぞれ別sliceになる。intervalをmodelに入�
 
 件数が多いので影響の大きい順に。全件は各sliceの調査記録に依るが、代表を挙げる。
 
+**［2026-09-06 検算］「PARTIAL」の1語に3つの別状態が畳み込まれていた。**
+§2.4の訂正（preserved markupの導入でMISSING = round-trip消失が成り立たなくなった）が、
+この節の各論に降りていない。§4で6例出たのと同じ問題が、ここでは**別の形**で出ている——
+§4は「file上の位置を間違えていた」、§5は「失われるかどうかを間違えていた」。
+
+| 状態 | 意味 | 分水嶺 |
+|---|---|---|
+| **round-tripする / model化されていない** | byteは戻るが、型からは読めない | tagがconsumed setに**無い** |
+| **model化されているが情報を落とす** | 型はあるが、fileの一部を落とす | tagがconsumed setに**有り**、model化もされている |
+| **consumeされて捨てられる** | 型にも無く、bagにも入らない | tagがconsumed setに**有るのに**、対応するfieldが無い |
+
+**3つ目が一番悪く、しかも一番見えにくい。** consumed setに入れた時点でpreserved markupの
+対象から外れるので、**「model化しないまま consumed set に足す」と、それまで往復していたものが
+その瞬間から失われる**。§4.6.1のgrace chordの穴と同じ向きの罠が、tag levelにもある。
+
+以下、§5.3は上の3分類で数え直した。**§5.1 / §5.2 / §5.4はまだ数え直していない**——
+それらの記述は初出時のままで、同じ検算を通していない。
+
 ### 5.1 spanner payload
 
 `Spanner.Kind`（`Spanner.swift:8`）は`volta` / `slur` / `hairpin` / `pedal` / `ottava` /
@@ -1034,17 +1052,54 @@ geometryを導出するのは設計どおりだが、**導出できない作者�
 
 ### 5.3 構造・signature
 
-- `BAR_LINE` — subtypeがtyped enumでなく生string。`spanStaff` / `spanFrom` / `spanTo`なし
-- `TIMESIG` — `TimeSigType`（common / alla breve等）、text numerator / denominator、
-  local stretch、beam group、括弧が落ちる。integer numerator / denominatorのみ
-- `KEYSIG` — concert fifthsのみ。actual / transposing keyの区別、mode、custom key signature、
-  `forInstrumentChange`が落ちる
-- `LAYOUT_BREAK` — line / page / sectionの3 boolのみ。`NOBREAK`、pause、
-  startWithLongNames、startWithMeasureOne、first system indentが落ちる
-- `MEASURE` — noBreak、mm rest count、user stretch、measure number override / mode、
-  per-staffのvisibility / stemless / hide-if-emptyが落ちる
+**［2026-09-06 検算］以下の4件は`git show v4.6.5:src/engraving/rw/read460/tread.cpp`の
+readerが受けるtag集合と、ssm側のconsumed setを突き合わせて数え直した。**
+初出時の記述は取り消し線で残す。`MEASURE`も同じ方法で部分的に確認した。
+
+| 要素 | 4.6.5のreaderが受けるtag |
+|---|---|
+| `BarLine` | `subtype` `span` `spanFromOffset` `spanToOffset` `Articulation` `Symbol` `Image` `point` `play` |
+| `TimeSig` | `sigN` `sigD` `subtype` `showCourtesySig` `stretchN` `stretchD` `textN` `textD` `Groups` `isCourtesy` ＋ 旧形式の`den` `nom1`–`nom4` |
+| `KeySig` | `concertKey` `accidental`(旧) `actualKey` `custom` `mode` `subtype` `CustDef` `forInstrumentChange` `showCourtesySig` `isCourtesy` |
+| `LayoutBreak` | `subtype` `pause` `startWithLongNames` `startWithMeasureOne` `firstSystemIndentation` |
+
+- `BAR_LINE` — subtypeがtyped enumでなく生string。
+  ~~`spanStaff` / `spanFrom` / `spanTo`なし~~ **その綴りのtagは存在しない。**
+  実際は`span` / `spanFromOffset` / `spanToOffset`で、**3つともconsumed setに無いので往復する**。
+  `Articulation` / `Symbol` / `Image` / `point` / `play`も同じ。
+  **落ちているのはsubtypeのtyped化だけ**——生stringとして往復はする。
+- `TIMESIG` — integer numerator / denominatorのみ、は正しい。ただし
+  ~~`TimeSigType`、text numerator / denominator、local stretch、beam group、括弧が落ちる~~
+  **`subtype`（`TimeSigType`）・`textN` / `textD`・`stretchN` / `stretchD`・`Groups`は
+  consumed setに無いので往復する。**「括弧」に相当するtagは4.6.5のreaderに存在しない。
+  つまりcommon timeとcut timeは**fileからは消えないが、`TimeSignature`からは読めない**。
+  1つ目の分類。
+- `KEYSIG` — concert fifthsのみ、は正しい。内訳は3分類に分かれる:
+  - **往復する（consumed setに無い）**: `CustDef`、`subtype`、`isCourtesy`、
+    そしてcustom key signatureの実体である`KeySym`子要素。
+    ~~custom key signatureが落ちる~~ **定義そのものは残る**。
+    ~~`forInstrumentChange`が落ちる~~ **往復する**
+  - **consumeされて捨てられる**: `mode`、`custom`。decoderのdoc commentが理由を書いている
+    （`custom` / `mode`はcustom key signatureのfallback判定に使い、fifthsを0に倒す）。
+    **意図的な決定であって漏れではないが、bagにも入らないので本当に失われる**
+  - `actualKey`はencoderが楽器のtranspositionから生成し直すので、作者が書いた値は残らない
+- `LAYOUT_BREAK` — ~~`NOBREAK`が落ちる~~ **往復する。**
+  ssmのdecoderはtag名ではなく**subtype単位**で判定していて（`MSCXDecoder+Measure.swift`の
+  `modeledLayoutBreakSubtypes`、「A tag-name set cannot …」のcommentがその理由）、
+  model化していないsubtypeの`<LayoutBreak>`は要素ごとbagに入る。
+  一方**`pause` / `startWithLongNames` / `startWithMeasureOne` / `firstSystemIndentation`は
+  落ちる**——これらはline / page / sectionという**model化済みsubtypeの子**なので、
+  親要素ごとconsumeされて一緒に消える。落ちる条件が「property単位」ではなく
+  「親のsubtypeがmodel化されているかどうか」である点が、初出時の記述では読み取れない。
+- `MEASURE` — ~~per-staffのvisibility / stemless / hide-if-emptyが落ちる~~
+  **`visible` / `stemless` / `hideIfEmpty`はconsumed setに無いので往復する。**
+  `measureNumberMode`も同じ。**落ちるのは`stretch`（user stretch）・`multiMeasureRest`
+  （mm rest count）・`noOffset`（measure number offset）で、3つともconsumed setに有るのに
+  `Measure`に対応fieldが無い**——3つ目の分類そのもの。
+  「noBreak」は上の`LAYOUT_BREAK`のとおり往復する。
 - `STAFF` — 時間軸を持つStaffType / Clef / Key listが無い。visibility / cutaway /
   hideWhenEmpty / barline span / per-voice playbackが落ちる
+  **（この行は未検算。`<Staff>`宣言側のconsumed setと突き合わせていない）**
 
 ### 5.4 instrument / playback
 
