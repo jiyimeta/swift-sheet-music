@@ -498,7 +498,7 @@ property全部に当てはまる。model側が`Bool?` / `Int?`で「タグが無
 | ~~`EXPRESSION`~~ | `twrite.cpp:1343` | **`ExpressionText`**（2026-09-04実装） | 下の追記を参照 |
 | ~~`FINGERING`~~ | `types/types.h:121` | **`Fingering`**（2026-09-04実装） | 下の追記を参照 |
 | ~~`STICKING`~~ | `dom/sticking.h:34` | **`Sticking`**（2026-09-04実装） | 下の追記を参照 |
-| `FIGURED_BASS`＋`FIGURED_BASS_ITEM` | `dom/figuredbass.h:91` | なし | 数字付低音。prefix / digit / suffix / continuationの構造 |
+| ~~`FIGURED_BASS`＋`FIGURED_BASS_ITEM`~~ | `dom/figuredbass.h:91` | **`FiguredBass` / `FiguredBassItem`**（2026-09-06実装） | 下の追記を参照 |
 | `PLAYTECH_ANNOTATION` | `dom/playtechannotation.h:35` | なし | 奏法指定（pizz.等）とplayback反映 |
 | `SOUND_FLAG` | `twrite.cpp:3273` | なし | StaffTextの子。preset・奏法・全staff適用 |
 | `PLAY_COUNT_TEXT` | `twrite.cpp:2743`（MSC 5.00） | なし | 反復回数表示 |
@@ -599,6 +599,19 @@ MSCXのtag名は`<Expression>`のまま。
 `VoiceElement`にcaseを足したときに実際に壊れたexhaustive switchは
 **`Sources` 7箇所 + `Tests` 1箇所**（probe buildで列挙）。
 
+**［2026-09-06］この数字は4スライスで実測して同一だった。** 「1回測った」と
+「4回測って同じだった」は別の主張なので、測った対象を挙げておく:
+
+| slice | 要素の性質 |
+|---|---|
+| `STICKING` / `EXPRESSION` | `TextBase` のtext annotation |
+| `CAPO` / `STRING_TUNINGS` | `StaffTextBase`。後者は入れ子の`StringData`を持つ |
+| `AMBITUS` | `EngravingItem`（`TextBase`ではない）。入れ子のaccidental 2つ |
+| `FIGURED_BASS` | `TextBase`。入れ子のitem配列 + **data次第の排他分岐** |
+
+基底classも payload の形も違うのに面が動かない。voice stream要素については
+**推定ではなく実測値**として使ってよい。
+
 | 場所 | 内容 |
 |---|---|
 | `SetElementVisible.swift`（`visibility(of:)`と`setting(_:visible:)`の2つ） | `visible`を持つので対応させた |
@@ -632,6 +645,90 @@ review が見つけた実バグ3件は全部そちら側だった:
 `ScoreCanvas` / `LayoutBridge`）で、**`LayoutElement`にcaseを足さない限りそこには届かない。**
 engravingを別sliceに切るなら、voice stream要素のmodel化コストはnote添付要素の2倍程度で、
 事前見積もりより小さい。逆に言うと、この層の本当のコストはmodelではなくengravingの側にある。
+
+**［2026-09-06 追記］`FIGURED_BASS`と`FIGURED_BASS_ITEM`もmodel化した。**
+`SheetMusicCore`の`FiguredBass` / `FiguredBassItem`、`VoiceElement`の`.figuredBass`、
+decoder / encoderは`MSCXDecoder+FiguredBass.swift` / `MSCXEncoder+FiguredBass.swift`。
+
+#### この要素は自分を2通りに書く——versionではなくdataで分岐する
+
+`v4.6.5:twrite.cpp:1292`:
+
+```cpp
+if (item->items().size() < 1) {
+    writeProperties(static_cast<const TextBase*>(item), xml, ctx, true);   // 生<text>
+} else {
+    for (FiguredBassItem* i : item->items()) write(i, xml, ctx);           // <FiguredBassItem>列
+    for (const StyledProperty& spp : *item->styledProperties())
+        writeProperty(item, xml, spp.pid);                                 // <size> / <align> …
+    writeItemProperties(item, xml, ctx);
+}
+```
+
+MuseScoreはtypedなtextをitemにparseし、**parseに失敗したときだけ生textを書く**。
+`ChordOrnament`のMS3 `<Articulation>`形が**versionによる分岐**なのに対し、これは
+**同一version内でdata次第の分岐**。model は両方持ち（`items`と`text`）、encoderは
+`items.isEmpty`で分岐する。**入力がどちらの形かはfileの子要素で分かる**ので、
+decode時に取り違えない（readerも`FiguredBassItem`を明示的に読み、それ以外は
+`TextBase`のpropertiesに落ちる）。
+
+**item形式では`<style>`も`<text>`も出ず、代わりにstyled propertyが直接の子として出る。**
+だから`TextBase`系のtagをconsumed setに入れてはいけない——text styleを編集したスコアで
+`<size>` / `<align>` / `<frameType>`が消える。consumeするのは`onNote` / `ticks` /
+`FiguredBassItem` / `text` と共有基底の4つだけ。
+副産物として、item形式には`<style>`が無いので§7.2の`<color>`順序制約はこの分岐では起きない。
+
+#### `text`は`items`が空のときだけauthor intent
+
+readerの末尾（`v4.6.5:read460/tread.cpp:1440`）:
+
+```cpp
+if (b->items().size() > 0) { b->setXmlText(normalizedText); }   // itemから再生成
+```
+
+item形式ではtextが**読み込み時に再生成され、fileの`<text>`は捨てられる**。§4.6.1で立てた
+判定基準（readerが再計算するなら派生値）をそのまま当てると、**同じfieldがdata次第で
+派生値にもauthor intentにもなる**。両方の言い方が「fieldはどちらか一方」を前提に
+しているので、この要素は例外として明記しておく。
+
+#### `<onNote>`は反転default——そして「`propertyDefault`を読め」は規則ではなかった
+
+`v4.6.5:figuredbass.h:329`が`bool m_onNote = true;`、writerは`if (!item->onNote())`で
+**falseのときだけ書く**。つまり**tagの不在が`true`を意味する**。`false` defaultで
+modelすると、`<onNote>`を持たない大多数のfigured bassが全部「音符間」になり、
+round-tripが黙って壊れる。`<ticks>`も同型（`isNotZero()`のときだけ出る）。
+
+**ここで§4.1.1の書き方が一段浅かったことが分かった。** あそこには「タグが無いときの意味は
+`propertyDefault`が決める」と書いたが:
+
+| 要素 | C++ member initializer | 正解 |
+|---|---|---|
+| `Capo.active` | `false` | **`propertyDefault`の`true`** |
+| `FiguredBass.onNote` | `true` | **member initializerの`true`** |
+
+**片方ずつ当たって片方ずつ外れる。** 「member initializerを読め」も「`propertyDefault`を
+読め」も規則にならない。
+
+**正しくは「writerの省略条件を読め」。** `Capo`は`writeProperty`を使っていて、それは
+`propertyDefault`と比較して省略する。`FiguredBass`は`if (!item->onNote())`と明示的に
+書いてある。**どちらもwriterが「不在が何を意味するか」を言っていて、そこだけが常に
+言っている場所**。`propertyDefault`を見に行くのは、writerが`writeProperty`を使っている
+ときにその条件を解決する手段であって、規則そのものではない。
+
+#### `FiguredBassItem`
+
+`brackets`が**5つのintを属性**で持つ（`<offset x= y=>`と同じ形）。
+`prefix` / `suffix` / `continuationLine`は**序数**で書かれる——§4.6.1の3階層目。
+`Modifier`は none=0 / doubleFlat=1 / flat=2 / natural=3 / sharp=4 / doubleSharp=5 /
+cross=6 / backslash=7 / slash=8、`Parenthesis`は none=0 / roundOpen=1 / roundClosed=2 /
+squareOpen=3 / squareClosed=4、`ContLine`は none=0 / simple=1 / extended=2。
+C++の`displayText` / `normalizedText`はread-onlyな派生propertyでreaderに枝が無いので、
+その種の未知childは`FiguredBassItem.preservedMarkup`に残る。
+
+`AdjacentElementSlot.isAnnotation`は**true**。`figuredbass.h:35`が`Segment`のannotationsに
+格納されると明記していて、`measureread.cpp:490-513`も`Sticking`と同じannotation branchで
+`segment->add(el)`する。**`AMBITUS`は逆**（独自の`SegmentType::Ambitus`）なので、
+隣の要素の答えを写さずに毎回上流を見ること。
 
 ### 4.3 記号・画像
 
@@ -1008,14 +1105,40 @@ mirrorされるので、それぞれ別sliceになる。intervalをmodelに入�
 |---|---|---|
 | **round-tripする / model化されていない** | byteは戻るが、型からは読めない | tagがconsumed setに**無い** |
 | **model化されているが情報を落とす** | 型はあるが、fileの一部を落とす | tagがconsumed setに**有り**、model化もされている |
-| **consumeされて捨てられる** | 型にも無く、bagにも入らない | tagがconsumed setに**有るのに**、対応するfieldが無い |
+| **consumeして再生成する** | fieldは無いが、encoderが他のfieldから導出して書く | consumed setに**有り**、fieldが**無い**が、encoderが書く |
+| **consumeされて捨てられる** | 型にも無く、bagにも入らない | consumed setに**有り**、fieldが**無く**、encoderも書かない |
 
-**3つ目が一番悪く、しかも一番見えにくい。** consumed setに入れた時点でpreserved markupの
-対象から外れるので、**「model化しないまま consumed set に足す」と、それまで往復していたものが
-その瞬間から失われる**。§4.6.1のgrace chordの穴と同じ向きの罠が、tag levelにもある。
+**最後の1つが実損失で、しかも4つ目とdecoderからは見分けがつかない。** consumed setと
+fieldだけでは足りず、**encoderがそのtagを書いているかまで見ないと判定できない**。
+1段目で止めると`<tpc2>`を損失と誤判定する（§5.3の下の追記）。
+そしてconsumed setに入れた時点でpreserved markupの対象から外れるので、
+**「model化しないまま consumed set に足す」と、それまで往復していたものがその瞬間から失われる**。
+§4.6.1のgrace chordの穴と同じ向きの罠が、tag levelにもある。
 
-以下、§5.3は上の3分類で数え直した。**§5.1 / §5.2 / §5.4はまだ数え直していない**——
-それらの記述は初出時のままで、同じ検算を通していない。
+**［2026-09-06 追記］3つ目を全decoderで洗い出したところ、2件の実損失が出た。**
+`<Measure><stretch>`（user stretch）と`<Measure><noOffset>`（measure number offset）が
+consumed setに入っていて誰も読んでいなかった。consumed setから外して往復するようにしてある。
+
+**preservation gateはこれを警告できなかった。** gateはcommitted fixtureの`parent/child`を
+数えるので、**どのfixtureにも入っていないtagの損失は測定対象にすら入らない**。
+つまりallowlistは「既知の損失の一覧」ではなく「fixtureが偶然踏んだ損失の一覧」で、
+allowlistが短いことは損失が少ないことを意味しない。詳細と、この洗い出しで
+**損失ではなかった**もの（`<tpc2>` / `<actualKey>`はencoderが再生成する、`<Style>`の大半は
+`PageChrome`が持っている、`<multiMeasureRest>`を持つmeasureは意図的に丸ごと捨てる）は
+`docs/development/mscx-preserved-markup.md`の「What the allowlist is not」を参照。
+
+**§5.1から§5.4まで全部数え直した。** 結果は節ごとに大きく違い、**分かれ目は
+「その型にbagがあるか」だった**——tag単位の4分類は、その手前の条件が満たされて初めて意味を持つ。
+
+| 節 | 結果 |
+|---|---|
+| §5.1 spanner payload | **大筋が正しい。** payload型（`HairpinPayload`等）にbagが無いのが原因。ただし`LAISSEZ_VIB`は往復する（実測） |
+| §5.2 author intent | **大半が誤り。** `Chord` / `Note`はbagを持つので、consumed setに無い子は往復する |
+| §5.3 構造・signature | 4件中4件が予想と相違（下の追記） |
+| §5.4 instrument / playback | 1行が誤り、残りは未測定（下の追記） |
+
+**検算前の見立て（「§5.1 / §5.2は他より本当にPARTIALである可能性が高い」）は半分当たった。**
+§5.1は当たり、§5.2は外れ。理由は上のとおりで、**要素の性質ではなく型のbagの有無**だった。
 
 ### 5.1 spanner payload
 
@@ -1031,20 +1154,65 @@ mirrorされるので、それぞれ別sliceになる。intervalをmodelに入�
 gap / align）を持つ型がそもそも無いので、**payloadを持っているhairpinやottavaでも
 線種と両端textは落ちる**。
 
+**［2026-09-06 検算］この節は§5.3 / §5.4と違って、大筋が正しい。原因も分かった。**
+
+**`Spanner`はwrapperにbagを持つが、payload型は持たない。**
+`HairpinPayload` / `OttavaPayload` / `VibratoPayload` / `TrillPayload`のどれにも
+`preservedMarkup`が無い（`Sources/SheetMusicCore/Score/Spanner.swift`）。
+`<Spanner>`の未知の子は`Spanner.preservedMarkup`に入るが、
+**modelされた`<HairPin>` / `<Volta>` / `<Glissando>`の内側は、そこに届かない**。
+
+これはpreservation gateが既に測っていて、`spannerPayloadReason`が
+`HairPin/Segment`・`Segment/off2`・`Segment/offset`・`Segment/subtype`・
+`Volta/endHookType`・`Glissando/diagonal`をその理由で許容している——
+reason文が「a payload-level bag would be needed」と正確に書いている。
+**§5.1が「落ちる」と言っているものの大半は、この1つの構造に帰着する。**
+
+§5.4で数えた「bagを持たない14型」の一段下に、**bagを持たない4つのpayload型**がある。
+
 - `SLUR` — direction、line type、style、partial direction、Bézier編集が落ちる
 - `TIE` — `Note.tieForward`/`tieBack`の位置番号のみ。placement / direction / style / 編集済みsegmentなし
 - `GLISSANDO` — `showText`、shift、font / line stylingが落ちる。終点側markerを書かない
 - `GUITAR_BEND` — bend量（quarter tone）、direction、whammy関連が落ちる（decoderがdiagnosticを出す）
-- `LAISSEZ_VIB` / `PARTIAL_TIE` — 専用modelなし。`.other`扱い
+- ~~`LAISSEZ_VIB` / `PARTIAL_TIE` — 専用modelなし。`.other`扱い~~
+  **「専用modelが無い」は正しいが、`LAISSEZ_VIB`は落ちない。**
+  `<LaissezVib>`は`<Note>`の子で、`consumedNoteChildren`に無いので
+  `Note.preservedMarkup`に入って往復する。**しかもこれは実測**——
+  `musicxml/testUnterminatedTies_ref.mscx`が持っていて、`allowedLosses`に
+  対応entryが無いままgateが通っている。`docs/development/mscx-preserved-markup.md`が
+  `<Note><LaissezVib><eid>`を例に挙げているのもこれ。`PARTIAL_TIE`はfixtureに無いので未測定
 
 ### 5.2 note / chordのauthor intent
 
 geometryを導出するのは設計どおりだが、**導出できない作者の意図**まで落ちている。
 
-- 手動stem direction / stem長 / no-stem（`Chord`は`stemVisible`相当のみ）
-- 手動`BeamMode`とbeam fragment（`BeamGrouping`は導出algorithmのみ）
-- `ChordRest.small` / `staffMove`（cross-staff） / `crossMeasure`
-- `Note`の`headScheme` / `fixed`・`fixedLine` / `tuning` / `ghost` / `deadNote` / `dotsHidden`
+**［2026-09-06 検算］この節は§5.1と逆で、大半が誤り。`Chord`と`Note`は両方bagを持つので、
+consumed setに載っていない子は往復する。**
+
+- 手動stem direction / stem長 / no-stem —— **分かれる。**
+  ~~手動stem direction~~ **`StemDirection`は`consumedChordChildren`に無いので往復する。**
+  一方**stem長は落ちる**——`Stem`はconsumed setに有り、`Chord`が持つのは`stemVisible`だけなので、
+  `<Stem>`の中の`<userLen>`は要素ごとconsumeされて消える（§5.3の3分類の3つ目）
+- ~~手動`BeamMode`とbeam fragment~~ **`BeamMode`はconsumed setに無く、往復する。**
+  `BeamGrouping`が導出algorithmしか持たないのは正しいが、それは
+  「modelから読めない」であって「fileから消える」ではない
+- ~~`ChordRest.small` / `staffMove` / `crossMeasure`~~ **`staffMove`と`crossMeasure`は往復する**
+  （どちらもconsumed setに無い）。**`small`だけは落ちる**——`Chord`側のconsumed setに有るのに
+  `Chord`に対応fieldが無い（`Note`側の`small`は`Note.isSmall`があるので往復する）
+- ~~`Note`の`headScheme` / `fixed`・`fixedLine` / `tuning` / `ghost` / `deadNote` / `dotsHidden`~~
+  **6つともconsumed setに無いので往復する。** `consumedNoteChildren`が挙げているのは
+  `Accidental` / `Bend` / `ChordLine` / `Fingering` / `Parenthesis` / `Symbol` / `Spanner` / `Tie` と
+  `color` / `endSpanner` / `fret` / `head` / `offset` / `parentheses` / `pitch` / `placement` /
+  `play` / `small` / `string` / `tpc` / `tpc2` / `veloType` / `velocity` / `visible` だけ
+
+**残りの行（`Tuplet`・`Accidental.small`・`Fermata.play`・`Arpeggio`各種・`Tremolo`・`TDuration`）は
+未検算。** ただし`Tremolo`と`Arpeggio`は§5.4で数えた「bagを持たない型」に入る可能性が高い
+（`MSCXDecoder+Tremolo.swift`は`preservedMarkup`に触れていない）ので、そこは
+`Chord` / `Note`とは別の結論になるはず。
+
+**この節と§5.1の差は、bagの有無がどこにあるかだけ。** `Chord` / `Note`はbagを持つので
+「modelに無い」が「落ちる」を意味しない。`Spanner`のpayload型はbagを持たないので意味する。
+**「PARTIAL」と書く前に、その型にbagがあるかを見ること。**
 - `Tuplet`のbase duration / bracket・number表示mode / direction / 手動端点 / custom text
 - `Accidental.small`、`Fermata.play`、`Arpeggio.span`・`userLen2`・`play`
 - `Tremolo`はr8–r64 / c8–c64のみ。r128 / r256 / buzz rollは非対応（diagnostic有り）
@@ -1103,14 +1271,61 @@ readerが受けるtag集合と、ssm側のconsumed setを突き合わせて数�
 
 ### 5.4 instrument / playback
 
-- `Instrument.id`が内部id・soundId・MusicXML idを1つに潰している（`MSCXDecoder+Instrument.swift:7`）
+**［2026-09-06 検算］§5.3と同じ手法を当てた。1行は誤り、残りは「落ちる」こと自体は
+もっともらしいが、どれも一度も測られていない。**
+
+- `Instrument.id`が内部id・soundId・MusicXML idを1つに潰している（`MSCXDecoder+Instrument.swift`）。
+  **これは正しい。** preservation gateの`Instrument/instrumentId`
+  （`soundIDReason`）が実測でそう言っている——`<instrumentId>`はdrumsetのときencoderが
+  合成するので、preserved markupに逃がすこともできない
+- ~~per-staff clef、trait、singleNoteDynamics、glissandoStyleがInstrumentに無い~~
+  **「modelに無い」は正しいが、「落ちる」は誤り。** `consumedInstrumentChildren`に
+  `clef` / `singleNoteDynamics` / `glissandoStyle` / `trait`のどれも入っていないので、
+  **`Instrument.preservedMarkup`に入って往復する**。`MSCXPreservedMarkupTests`の
+  `partLevelMarkupSurvives`が`<clef>`について実際にそれを固定している
 - channelはprogram / bank / volume / pan / chorus / reverb / port / channelのみ。
-  CC 0 / 7 / 10 / 32 / 91 / 93以外を捨てる（`MSCXDecoder+InstrumentChannel.swift:30`）。
-  名前付きMIDI action list、synth名 / color / user bankが無い
+  **CC 0 / 7 / 10 / 32 / 91 / 93以外は落ちる**——`controller`がconsumed setに入っていて、
+  encoderは6つのfieldから`<controller>`を**合成**するだけなので、任意のCCは戻らない。
+  ただし**これは未測定**: committed fixtureにあるctrlは`0` / `7` / `10` / `32`の4つだけで、
+  **model外のCCを持つfixtureが1つも無い**（`91` / `93`すらない）。§5.3の`Measure/stretch`と
+  同じ形で、gateはこの主張を一度も検査していない
 - drumsetはname / head / line / voice / stem / shortcutのみ。duration別notehead、
-  variant（articulation / tremolo別のpitch差し替え）、panel座標が無い
-- instrument articulationは`descr`が落ちる
-- per-staff clef、trait、singleNoteDynamics、glissandoStyleがInstrumentに無い
+  variant、panel座標が無い。**未測定**（`<Drum>`の未model子要素を持つfixtureが無い）
+- instrument articulationは`descr`が落ちる。**これは他より悪い**——
+  `MSCXDecoder+InstrumentArticulation.swift`は`velocity`と`gateTime`を読むだけで、
+  **consumed setもpreserved markupも持たない**。consumed setを持つ型は「宣言した子だけ」を
+  失うが、**bagを持たない型は読まない子を全部失う**。`<descr>`もfixtureに1件も無いので、
+  やはり未測定
+
+#### bagを持たない型が14ある
+
+上の`InstrumentArticulation`は単独の抜けではない。`Sources/SheetMusicMSCX/Decoders/`で
+`preservedMarkup`に一度も触れていないdecoderを数えると14件ある。
+
+- **corpusに出てくる**: `GuitarBend`、`InstrumentChange`、`MeasureRepeat`、`StaffText`、`Tempo`
+- **corpusに出てこない**: `Breath`、`ChordLine`、`InstrumentArticulation`、`RehearsalMark`、
+  `Swing`、`Tremolo`、`HeadType`、`ElementProperties+MSCX`、`TextProperties`
+
+前者のうち`StaffText` / `Tempo`の損失はgateが実際に捕まえていて、`Text/style`などが
+§7.1のTextContent作業として`allowedLosses`に載っている。**後者は二重に未測定**——
+bagが無いうえにfixtureも無いので、何が落ちているかを言う手段が現状ゼロである。
+
+**§7.1が入ってもこの穴は閉じない。** §7.1が救うのは`<text>`の**中身**（inline markup）で、
+それは要素にbagを与えることとは別である。`<StaffText>`が`<text>`と並べて持つ未model子要素
+——`<style>`が典型——は、**中身用の入れ物ができても行き先が無いまま**になる。
+`allowedLosses`の`Text/style`が§7.1で消えるかどうかは、その作業が
+`<text>`の中身だけを扱うのか要素全体にbagを与えるのかで決まる。
+**2026-09-06時点のmainでは`StaffText`にbagは無い**（`Sources/SheetMusicCore/Score/StaffText.swift`に
+`preservedMarkup`が0 hit）。§7.1完了後にこの行を確認し直すこと。
+
+一般化するとこうなる。**tag単位の「consumedか / fieldがあるか」（上の4分類）の手前に、
+型単位の「そもそも受け皿があるか」がある。** 前者は分類できるが、後者はその分類が
+始まる前の条件で、bagが無い型では4分類そのものが意味を持たない——
+consumed setに載っていない子も等しく落ちるので。
+
+**この節の残りを「落ちる」と書き続けるのは、§5.3で誤りだった書き方と同じ**なので、
+上では「落ちる」と「未測定」を分けてある。埋めるにはfixtureを足すしかない
+（`docs/development/mscx-preserved-markup.md`の「What the allowlist is not」を参照）。
 
 ---
 
@@ -1383,7 +1598,22 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    ~~`StringData`~~+~~`STRING_TUNINGS`~~+~~`CAPO`~~（§4.1の追記。前者は2026-09-04、
    後2者は2026-09-06）+`FRET_DIAGRAM`、
    ~~`STICKING`/`EXPRESSION`~~（2026-09-04完了、§4.2の追記）、
-   `FIGURED_BASS`、`SYMBOL`/`FSYMBOL`、`SPACER`。
+   ~~`FIGURED_BASS`~~（2026-09-06完了、§4.2の追記）、
+   `FSYMBOL`、**annotation位置の**`SYMBOL`。
+
+   **［2026-09-06 訂正］この行は2件古かった。** `SYMBOL`は**note添付分が
+   2026-09-05にmodel化済み**（`EngravingSymbol`、§4.3の追記）で、残っているのは
+   annotation位置のものだけ。`SPACER`は**外した**——§4.4の表が「model は無いが往復する」と
+   書いているとおりで、しかも`<Spacer>`という綴りのtagは存在せず（実際は`vspacer` /
+   `vspacerDown`）、ssmは縦方向の手動間隔調整をlayoutしないのでmodel化してもinertなdataになる。
+   **§2.4の「MISSING = fileから消える」が成り立たないので、parityの穴ではない。**
+   消した理由をここに残すのは、§4.4を読んだ人が「§8に無いのは見落としでは」と
+   再調査しないため。
+
+   **この行が古かったことの意味。** §8は「次に何をやるか」を決めるために読まれる節なので、
+   **古いリストはそのまま作業指示になる。** 誰かが`SPACER`を実装しに行って、往復済みだと
+   気づくまで半日使う経路が実在した。§4を更新した人が§8を更新していない、という形で
+   2件とも生まれている——**§4の追記と§8のリストは同じcommitで動かすこと。**
    互いに独立なので並列に進められる。
 
    実装して分かったこの層の境目: **noteやchordに直接ぶら下がる要素は単発で入る**
@@ -1410,27 +1640,44 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
 
    **fingerprintのoccupant tagはレーンをまたいで一意にすること。** 別worktreeで並行実装すると
    双方が「未使用の次の番号」として同じ値を選ぶ。実際に2026-09-05に衝突した。
-   **tagには名前空間が2つある。** `VoiceElement`のcase tagは0から、occupant tagは21から。
-   **occupant tagが21始まりなのは、0-20をcase tag用に空けているから**で、hasherのheaderに
-   そう書いてある（"21 and up, so no tag can be mistaken for a `VoiceElement` case tag"）。
+   **global な採番があるのはoccupant tagだけ。case tagはswitchごとにローカル。**
+   これが正しい問いの立て方で、「次に空いている番号は何か」ではなく
+   **「このtagはどのstreamに属するか」**を先に決める。
 
-   現在: **case tag 0-16**（16は`Ambitus`）、**occupant tag 21-54**
-   ——21-28 measure flag、29-32 chord / note、33-35 `ChordOrnament`、36-38 `Fingering`、
-   39-42 voice stream annotation、43-45 `ChordBracket`、46-48 `EngravingSymbol`、
-   49-50 `Capo`、51-52 `StringTunings`、53-54 `Ambitus`。
-   **次の空きはcase tagなら17、occupant tagなら55。**
+   - **occupant tag（global、21-）** —— `combineOccupied`が親のhashに混ぜるので、
+     どこから来ても一意でなければならない。**レーンをまたいで採番を配る対象はこれだけ。**
+     現在 21-54: 21-28 measure flag、29-32 chord / note、33-35 `ChordOrnament`、
+     36-38 `Fingering`、39-42 voice stream annotation、43-45 `ChordBracket`、
+     46-48 `EngravingSymbol`、49-50 `Capo`、51-52 `StringTunings`、53-54 `Ambitus`。
+     **次の空きは55。**
+   - **case tag（switchごとにローカル、0-）** —— 少なくとも2本ある。
+     `combine(_ element: VoiceElement)`が **0-16**（16が`Ambitus`、次は17）、
+     `combine(_ element: SystemElement)`が **0-4**（`ScoreFingerprintHasher.swift:307`。
+     tempo / rehearsalMark / staffText / swing / instrumentChange、次は5）。
+     **同じ0から始まるが別のstreamなので衝突しない。**
+   - さらに小さいordinalが**switchの数だけ**ある——`combine(_ duration:)`、
+     `combine(_ note:)`、`combine(_ articulation:)`、`combine(_ glissando:)`、
+     `combine(_ lyric:)`、`combine(_ tremolo:)`、`combine(_ chordLine:)`…
+     どれも0から始まる小さい整数を混ぜている。
 
-   **［2026-09-06 訂正］**ここには以前「16-20は過去に割り当てられて削除された番号なので
-   再利用してはならない」と書かれていたが、**誤り**だった。16-20はcase tagの予約領域である。
-   この誤りは有害で、読んだ人が`VoiceElement`にcaseを足すときに「次の空きは53」を取ると、
-   **occupant tagと衝突してheaderが防いでいる当のものが起きる**。
+   occupant tagが**21**始まりなのは、0-20を`VoiceElement`のcase tag用に空けているから
+   （hasherのheaderに"21 and up, so no tag can be mistaken for a `VoiceElement` case tag"）。
 
-   **表はmergeのたびにstaleになるのでcodeから数え直すこと。ただし数えるだけでは足りない。**
-   数えて出るのは`0-16, 21-54`という連続と穴だけで、**穴が何なのかはheaderの規約を
-   読まないと分からない**。この誤りはまさにそこで生まれた——一方が「16-20が空いている」と
-   観測を報告し、もう一方がそれに「削除された番号かもしれない」という解釈を足して規則として
-   固定した。どちらの段も単独では誤っていないが、合成すると誤った規則になる。
-   **観測を規則に変える段で根拠を確認すること。**
+   **［2026-09-06 訂正2回］**この段落は2度直っている。1度目は「16-20は削除された番号なので
+   再利用禁止」という**誤り**の訂正——16-20は`VoiceElement` case tagの予約領域である。
+   2度目は、その訂正が書いた「名前空間は2つ」という言い方が**まだ足りなかった**こと。
+   実際にはcase tagはswitchごとにローカルで、`SystemElement`にcaseを足す人が
+   「次の空きは17」を取ってしまう形になっていた（衝突はしないが、`VoiceElement`の番号である）。
+
+   **数えるだけでは足りず、規約を読むだけでも足りず、その番号を混ぜている呼び出し元まで見ること。**
+   素朴に`combine\([0-9]+\)`をgrepすると`combineFlags`のmeasure flag（21-28）も
+   case tagに見える。表はmergeのたびにstaleになるので数え直す必要があるが、
+   **数え方（`grep -c`は行数、`-o`は出現数）でも結果が変わる**。
+
+   この段落の訂正2回は、どちらも同じ形で生まれている——**観測が解釈を経て規則になる段で、
+   根拠が確認されていない**。1度目は「16-20が空いている」という観測に「削除された番号かも」
+   という解釈が付いた。2度目は「名前空間は2つ」という**訂正そのもの**が、確認した2つだけを
+   数えて書かれた。**訂正は訂正であるがゆえに検証されにくい。**
 
    **optionalをfingerprintに混ぜるときはpresence byteを落とさないこと。** これはtag採番とは
    別の軸——tagは「衝突させない」話、presenceは「情報を落とさない」話。`nil`と「値がordinal 0」は

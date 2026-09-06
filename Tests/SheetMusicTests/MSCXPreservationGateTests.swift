@@ -85,6 +85,14 @@ enum MSCXPreservation {
         "by design: MuseScore 5's <InstrumentLabel> wrapper holds <longName> / <shortName>, which "
             + "are modeled and re-emitted in MuseScore 4's direct-child form. Preserving the "
             + "wrapper too would duplicate modeled data and go stale on the first rename."
+    private static let defaultClefDialectReason =
+        "by design, and the same shape as keySignatureDialectReason: MuseScore writes the "
+            + "staff's default clef as <defaultClef>, or as <defaultConcertClef> / "
+            + "<defaultTransposingClef>, or as both halves of the pair. "
+            + "MSCXDecoder+Staff.swift collapses all three spellings into one defaultClefType "
+            + "and the encoder writes <defaultClef>. Preserving the pair alongside it would "
+            + "emit three tags where MuseScore wrote two, and the copies would contradict the "
+            + "modeled value the moment a host changed the clef."
     private static let keySignatureDialectReason =
         "by design, and not a preservation gap: MSCXDecoder+KeySignature.swift consumes "
             + "<concertKey>, falls back to <accidental>, and uses <mode> in its custom-key "
@@ -196,6 +204,9 @@ enum MSCXPreservation {
         allow([
             "Instrument/InstrumentLabel", "InstrumentLabel/longName", "InstrumentLabel/shortName",
         ], because: instrumentLabelReason, into: &result)
+        allow([
+            "Staff/defaultConcertClef", "Staff/defaultTransposingClef",
+        ], because: defaultClefDialectReason, into: &result)
         addLeafPermanentLosses(to: &result)
     }
 
