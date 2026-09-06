@@ -1162,6 +1162,19 @@ readerが受けるtag集合と、ssm側のconsumed setを突き合わせて数�
 §7.1のTextContent作業として`allowedLosses`に載っている。**後者は二重に未測定**——
 bagが無いうえにfixtureも無いので、何が落ちているかを言う手段が現状ゼロである。
 
+**§7.1が入ってもこの穴は閉じない。** §7.1が救うのは`<text>`の**中身**（inline markup）で、
+それは要素にbagを与えることとは別である。`<StaffText>`が`<text>`と並べて持つ未model子要素
+——`<style>`が典型——は、**中身用の入れ物ができても行き先が無いまま**になる。
+`allowedLosses`の`Text/style`が§7.1で消えるかどうかは、その作業が
+`<text>`の中身だけを扱うのか要素全体にbagを与えるのかで決まる。
+**2026-09-06時点のmainでは`StaffText`にbagは無い**（`Sources/SheetMusicCore/Score/StaffText.swift`に
+`preservedMarkup`が0 hit）。§7.1完了後にこの行を確認し直すこと。
+
+一般化するとこうなる。**tag単位の「consumedか / fieldがあるか」（上の4分類）の手前に、
+型単位の「そもそも受け皿があるか」がある。** 前者は分類できるが、後者はその分類が
+始まる前の条件で、bagが無い型では4分類そのものが意味を持たない——
+consumed setに載っていない子も等しく落ちるので。
+
 **この節の残りを「落ちる」と書き続けるのは、§5.3で誤りだった書き方と同じ**なので、
 上では「落ちる」と「未測定」を分けてある。埋めるにはfixtureを足すしかない
 （`docs/development/mscx-preserved-markup.md`の「What the allowlist is not」を参照）。
