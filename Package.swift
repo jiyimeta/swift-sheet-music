@@ -654,7 +654,7 @@ if isWasm {
 }
 
 let packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.4.0"),
+    .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.5.1"),
     // swift-java 0.4.0's SwiftJavaTool is written against swift-subprocess 0.4.x
     // (`OutputProtocol.standardOutput` / `ErrorOutputProtocol.standardError`).
     // swift-subprocess 0.5.0 removed those static members, which breaks the
