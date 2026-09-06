@@ -1008,11 +1008,27 @@ mirrorされるので、それぞれ別sliceになる。intervalをmodelに入�
 |---|---|---|
 | **round-tripする / model化されていない** | byteは戻るが、型からは読めない | tagがconsumed setに**無い** |
 | **model化されているが情報を落とす** | 型はあるが、fileの一部を落とす | tagがconsumed setに**有り**、model化もされている |
-| **consumeされて捨てられる** | 型にも無く、bagにも入らない | tagがconsumed setに**有るのに**、対応するfieldが無い |
+| **consumeして再生成する** | fieldは無いが、encoderが他のfieldから導出して書く | consumed setに**有り**、fieldが**無い**が、encoderが書く |
+| **consumeされて捨てられる** | 型にも無く、bagにも入らない | consumed setに**有り**、fieldが**無く**、encoderも書かない |
 
-**3つ目が一番悪く、しかも一番見えにくい。** consumed setに入れた時点でpreserved markupの
-対象から外れるので、**「model化しないまま consumed set に足す」と、それまで往復していたものが
-その瞬間から失われる**。§4.6.1のgrace chordの穴と同じ向きの罠が、tag levelにもある。
+**最後の1つが実損失で、しかも4つ目とdecoderからは見分けがつかない。** consumed setと
+fieldだけでは足りず、**encoderがそのtagを書いているかまで見ないと判定できない**。
+1段目で止めると`<tpc2>`を損失と誤判定する（§5.3の下の追記）。
+そしてconsumed setに入れた時点でpreserved markupの対象から外れるので、
+**「model化しないまま consumed set に足す」と、それまで往復していたものがその瞬間から失われる**。
+§4.6.1のgrace chordの穴と同じ向きの罠が、tag levelにもある。
+
+**［2026-09-06 追記］3つ目を全decoderで洗い出したところ、2件の実損失が出た。**
+`<Measure><stretch>`（user stretch）と`<Measure><noOffset>`（measure number offset）が
+consumed setに入っていて誰も読んでいなかった。consumed setから外して往復するようにしてある。
+
+**preservation gateはこれを警告できなかった。** gateはcommitted fixtureの`parent/child`を
+数えるので、**どのfixtureにも入っていないtagの損失は測定対象にすら入らない**。
+つまりallowlistは「既知の損失の一覧」ではなく「fixtureが偶然踏んだ損失の一覧」で、
+allowlistが短いことは損失が少ないことを意味しない。詳細と、この洗い出しで
+**損失ではなかった**もの（`<tpc2>` / `<actualKey>`はencoderが再生成する、`<Style>`の大半は
+`PageChrome`が持っている、`<multiMeasureRest>`を持つmeasureは意図的に丸ごと捨てる）は
+`docs/development/mscx-preserved-markup.md`の「What the allowlist is not」を参照。
 
 以下、§5.3は上の3分類で数え直した。**§5.1 / §5.2 / §5.4はまだ数え直していない**——
 それらの記述は初出時のままで、同じ検算を通していない。

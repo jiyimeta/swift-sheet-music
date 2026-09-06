@@ -506,6 +506,20 @@ and this project adheres to
   `CTFontCreateWithName` answers an unregistered family with the system font, so
   the suite had been measuring Helvetica while calling it Edwin.
 
+### Fixed
+
+- **A measure's manual stretch and its measure-number offset no longer vanish
+  on save.** Both are things an engraver sets by hand — widening one bar to fit
+  a dense passage, nudging a bar number away from a collision — and opening such
+  a score and saving it silently discarded them.
+
+  The cause was in how the reader declares what it understands. Anything it does
+  not claim is carried through untouched, so the way to lose something is to
+  claim it and then not store it. These two were claimed and dropped, and no
+  test could see it: the check that guards against exactly this loss compares
+  what a set of sample scores contains before and after a round trip, and none
+  of those samples happened to use either feature. One that does has been added.
+
 ## [2.4.1] - 2026-09-04
 
 ### Fixed
