@@ -279,6 +279,7 @@ extension Voice {
             return capo.encode(options: options)
         case let .stringTunings(tunings):
             return tunings.encode(options: options)
+        case let .ambitus(ambitus): return ambitus.encode(options: options)
         case let .preserved(markup):
             return XMLTreeNode(preserved: markup)
         case let .measureRepeat(measureRepeat):

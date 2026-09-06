@@ -766,7 +766,7 @@ link graph）を作る話で、value type設計そのものへの追加になる
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
 | ~~`ORNAMENT`~~ | `dom/ornament.h:29` | **`ChordOrnament`**（2026-09-04実装） | 下の追記を参照 |
-| `AMBITUS` | `dom/ambitus.h:38` | なし | 音域表示。**この節の他と違いvoice stream要素**（下の訂正を参照） |
+| ~~`AMBITUS`~~ | `dom/ambitus.h:38` | **`Ambitus`**（2026-09-06実装） | 下の追記を参照。**この節の他と違いvoice stream要素** |
 | `MMREST_RANGE` | `dom/mmrestrange.h:34` | なし | 多小節休符の範囲label。**measure直下**（下の訂正を参照） |
 | ~~`DEAD_SLAPPED`~~ | `dom/deadslapped.h:34` | — | **MSCXに存在しない。parity対象外**（下の訂正を参照） |
 | `CHORD_BRACKET` | `dom/chordbracket.h:29` | なし | chord bracket。`<Chord>`の直接の子 |
@@ -798,6 +798,72 @@ link graph）を作る話で、value type設計そのものへの追加になる
 `v4.7.0`の同じfileには4 hitある。つまり4.7が`read460`モジュールに枝を足した。
 そのモジュールが4.60–4.99のfileを全部読む（`rw/rwregister.cpp:52`、§2.2）ので、
 **「`read460`にあるから4.6にある」は成り立たない。**
+
+**［2026-09-06 追記］`AMBITUS`はmodel化した。** `SheetMusicCore`の`Ambitus`、
+`VoiceElement`の`.ambitus`、decoder / encoderは`MSCXDecoder+Ambitus.swift` /
+`MSCXEncoder+Ambitus.swift`、fixtureは`Tests/SheetMusicTests/Resources/own/ambitus.mscx`。
+`EngravingItem`派生で`TextBase`ではないので、§7.2の`<style>` reset順序制約は無関係。
+
+### 4.6.1 version罠の3階層目——値の形式は要素ごとに違う
+
+`read460`の罠（要素が4.6にあるか）と`<transposeMode>`の罠（propertyが4.6にあるか）に続く
+3つ目で、**これは version だけでは決まらない**。
+
+`v4.6.5:twrite.cpp`を読むと、同じPidが要素によって違う形式で書かれている:
+
+```cpp
+// :572-574 — Ambitus
+xml.tagProperty(Pid::HEAD_GROUP, int(item->noteHeadGroup()), ...);   // ← 序数
+// :2358 — Note
+for (Pid id : { ..., Pid::HEAD_GROUP, ..., Pid::HEAD_TYPE, ... }) {
+    writeProperty(item, xml, id);                                     // ← 名前
+}
+```
+
+`HEAD_GROUP` / `HEAD_TYPE` / `MIRROR_HEAD`の3つとも、**`Note`では名前・`Ambitus`では序数**。
+同じfile versionの中で、である。加えて5.0-devでは`Ambitus`側の`int(...)`キャストが外れて
+名前になるので、**要素差とversion差が両方乗っている**。
+
+読み戻しは両方通る——`TConv::fromXml`に`tag.toInt()`のfallbackがある
+（`v4.6.5:typesconv.cpp:2293-2297`、コメントが`// compatibility`）。
+なのでssmは**decodeで序数と名前の両方を受け、encodeでは序数を書く**（4.60を名乗る以上、
+4.6自身と同じ形にする）。
+
+**`<head>`のdecode / encodeを`Note`と共有するhelperにしてはいけない。** 片方が必ず壊れる。
+`MSCXDecoder+Note.swift`が`<head>`をtoken文字列で読んでいるのは、`Note`が名前を書くから
+正しい。同じPidだから統一しよう、とやると`Ambitus`が壊れる。
+
+| 階層 | 確認手段 |
+|---|---|
+| 要素が4.6にあるか | `git show v4.6.5:.../read460/tread.cpp \| grep '"Element"'` |
+| propertyが4.6にあるか | `git show v4.6.5:dom/property.h \| grep PID_NAME` |
+| **値の形式** | **その要素のwriter関数を読む。grep一発では出ず、要素ごとに読む** |
+
+#### `Ambitus`の設計判断
+
+- **`noteHeadGroup`は`String?`でtagのtextをそのまま持つ。** 上流の`NoteHeadGroup`は約30値の
+  **閉じたenum**だが、ssmはnoteheadをenumでmodel化しておらず（`Note.headType`は`String?`）、
+  揃える先が無い。序数と名前のどちらが来ても素通しで往復するので、fidelityは保たれる。
+  **semantic mappingは保留**であって、原理的にenum化できないという意味ではない。
+  保持している序数は**4.6のenum順序に紐づいた値**なので、後でmappingする人は現代のenumに
+  素直にindexしてはいけない。
+- `noteHeadType`（5値）と`mirror`（3値）は小さいので closed enum + `.other(rawValue:)`。
+- **`topPitch` / `topTpc` / `bottomPitch` / `bottomTpc`はfileの値が正。** `Ambitus::setTopPitch`
+  （`dom/ambitus.cpp:154`）は`applyLogic == false`のとき`m_topPitch = val; return;`で
+  tpc導出も`normalize()`も飛ばし、readerは`setTopPitch(e.readInt(), false)`を呼ぶ——
+  **MuseScoreが読み込み時に自分の導出ロジックを明示的に切っている**。
+  一般則として、**readerが渡すrecomputeフラグを見れば「派生値かauthor intentか」が分かる**。
+  `false`ならfileが勝つのでmodelが持つ。readerが再計算するなら持ってはいけない
+  （`ChordOrnament`のcue note `<Chord>`がその逆側の例）。
+- `<topAccidental>` / `<bottomAccidental>`はwrapperごとconsumeし、入れ子の`<subtype>`だけを
+  modelする。**入れ子の残り（`<role>` / `<small>`等）は落ちる**——`ChordOrnament`が既に
+  出荷している同じtradeoffで、現行の機構はsubtreeを半分だけconsumeできない。
+
+**命名の注意。** ssmの`Note.headType`は名前と中身がずれていて、上流の**`HEAD_GROUP`**
+（noteheadの形）を保持している（`<head>`を読んでいる）。上流の`HEAD_TYPE`
+（whole / half / quarter / breve）はssmに無い。`Ambitus`は両方を持つので、
+上流のPid名に素直に寄せた（`noteHeadGroup` / `noteHeadType`）。結果として
+**同じlibraryに`headType`が2つあって別のものを指す**状態になる。`Note`側の改名は別slice。
 
 要素の導入versionを主張するときは、reference checkoutの`read460/`ではなく
 `git show v4.6.5:…` / `git show v4.7.0:…` で当たること。同じ理由で「MS3が読まない」の
@@ -1129,12 +1195,37 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
 
    **fingerprintのoccupant tagはレーンをまたいで一意にすること。** 別worktreeで並行実装すると
    双方が「未使用の次の番号」として同じ値を選ぶ。実際に2026-09-05に衝突した。
-   現在: 0-15 `VoiceElement` case、21-28 measure flag、29-32 chord / note、
-   33-35 `ChordOrnament`、36-38 `Fingering`、39-42 voice stream annotation、
-   43-45 `ChordBracket`、46-48 `EngravingSymbol`、49-50 `Capo`、51-52 `StringTunings`。
-   16-20は未使用だが、過去に割り当てられて削除された番号が古いcommitted goldenと衝突しうるため、
-   再利用してはならない。次の空きtagは53。この表はmergeのたびにstaleになるので、信用せずcodeから
-   数え直すこと。
+   **tagには名前空間が2つある。** `VoiceElement`のcase tagは0から、occupant tagは21から。
+   **occupant tagが21始まりなのは、0-20をcase tag用に空けているから**で、hasherのheaderに
+   そう書いてある（"21 and up, so no tag can be mistaken for a `VoiceElement` case tag"）。
+
+   現在: **case tag 0-16**（16は`Ambitus`）、**occupant tag 21-54**
+   ——21-28 measure flag、29-32 chord / note、33-35 `ChordOrnament`、36-38 `Fingering`、
+   39-42 voice stream annotation、43-45 `ChordBracket`、46-48 `EngravingSymbol`、
+   49-50 `Capo`、51-52 `StringTunings`、53-54 `Ambitus`。
+   **次の空きはcase tagなら17、occupant tagなら55。**
+
+   **［2026-09-06 訂正］**ここには以前「16-20は過去に割り当てられて削除された番号なので
+   再利用してはならない」と書かれていたが、**誤り**だった。16-20はcase tagの予約領域である。
+   この誤りは有害で、読んだ人が`VoiceElement`にcaseを足すときに「次の空きは53」を取ると、
+   **occupant tagと衝突してheaderが防いでいる当のものが起きる**。
+
+   **表はmergeのたびにstaleになるのでcodeから数え直すこと。ただし数えるだけでは足りない。**
+   数えて出るのは`0-16, 21-54`という連続と穴だけで、**穴が何なのかはheaderの規約を
+   読まないと分からない**。この誤りはまさにそこで生まれた——一方が「16-20が空いている」と
+   観測を報告し、もう一方がそれに「削除された番号かもしれない」という解釈を足して規則として
+   固定した。どちらの段も単独では誤っていないが、合成すると誤った規則になる。
+   **観測を規則に変える段で根拠を確認すること。**
+
+   **optionalをfingerprintに混ぜるときはpresence byteを落とさないこと。** これはtag採番とは
+   別の軸——tagは「衝突させない」話、presenceは「情報を落とさない」話。`nil`と「値がordinal 0」は
+   別物で、presenceを省くと両者が同じhashになる。`combinePresence`が`nil`で`0`、非nilで`1`+値を
+   混ぜているのはそのため。
+
+   2026-09-05〜06に**3回**出た——`ExpressionText.snapToDynamics`（`Bool?`）、
+   `+Parity.swift`分割でhelperをinline化しようとしたとき、`Ambitus.mirror`（`.auto`がordinal 0）。
+   **毎回違うレーンが違う入口から来ている**ので、「optionalをhashに混ぜる」場面に来たら疑うこと。
+   diffを縮めたくなる場所でもあるので、helperを展開するときは特に。
 
    **どちら側かは要素名では決まらない。親をread460で確認すること。** §4の節見出しは
    上流のelement familyで切ってあり、file上の親子関係とは一致しない。実際に

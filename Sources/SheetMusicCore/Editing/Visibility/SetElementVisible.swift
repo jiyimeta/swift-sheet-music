@@ -61,6 +61,7 @@ public struct SetElementVisible: EditCommand {
         case let .expression(expression): expression.visible
         case let .capo(capo): capo.visible
         case let .stringTunings(tunings): tunings.visible
+        case let .ambitus(ambitus): ambitus.visible
         case .measureRepeat, .locationShift, .preserved: nil
         }
     }
@@ -109,6 +110,9 @@ public struct SetElementVisible: EditCommand {
         case var .stringTunings(tunings):
             tunings.visible = visible
             return .stringTunings(tunings)
+        case var .ambitus(ambitus):
+            ambitus.visible = visible
+            return .ambitus(ambitus)
         case .measureRepeat, .locationShift, .preserved:
             return nil
         }

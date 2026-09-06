@@ -103,6 +103,36 @@ and this project adheres to
   inline markup inside `<text>` flattens to plain text — the same limitation
   `StaffText` has. Engraving does not place a fingering glyph yet.
 
+- **The ambitus is modeled.** `<Ambitus>` is the range indicator a choral or
+  early-music part carries at its start — the highest and lowest note the part
+  ever reaches, drawn as two noteheads joined by a line. It sits in the voice
+  stream on its own segment, and reached the model only as an opaque preserved
+  subtree.
+
+  `VoiceElement.ambitus(Ambitus)` carries the four pitch and tpc values, the
+  notehead group, notehead type and mirror direction, the connecting line's
+  presence and width, and an optional accidental at each end.
+
+  **The pitches are what the file says, not what the staff implies.** MuseScore
+  derives an ambitus from the music when you ask it to, but its reader calls
+  `setTopPitch(value, applyLogic: false)`, which skips both the tpc derivation
+  and the normalization — it deliberately opts out of its own logic when
+  reading, so the written values are author intent. They round-trip verbatim
+  here, unnormalized and unvalidated.
+
+  **`<head>` is kept as text rather than mapped.** MuseScore 4.6 writes this
+  element's notehead group, notehead type and mirror as integer ordinals, while
+  writing the very same properties as names on a `<Note>` — the difference is
+  per element, not per version, and the ordinal form drops out again in 5.x. The
+  decoder therefore accepts both spellings and the encoder writes the ordinal
+  form 4.6 uses. The notehead group's ~30-value enum is not mapped: this library
+  models noteheads nowhere else as an enum, so the tag's text is carried through
+  unchanged and the semantic mapping is deferred rather than guessed at.
+
+  Everything inside the nested `<Accidental>` beyond its subtype is lost, the
+  same tradeoff `ChordOrnament` already carries. **Nothing draws an ambitus
+  yet** — this is round-trip fidelity only.
+
 - **Capos and string tunings are modeled.** `<Capo>` and `<StringTunings>` are
   the two fretted-instrument annotations that sit in the voice stream: a capo
   says which fret the player has clamped and which strings it skips, and a
