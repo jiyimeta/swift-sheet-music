@@ -519,8 +519,9 @@ geometryを導出するのは設計どおりだが、**導出できない作者�
 ### 5.3 構造・signature
 
 - `BAR_LINE` — subtypeがtyped enumでなく生string。`spanStaff` / `spanFrom` / `spanTo`なし
-- `TIMESIG` — `TimeSigType`（common / alla breve等）、text numerator / denominator、
-  local stretch、beam group、括弧が落ちる。integer numerator / denominatorのみ
+- `TIMESIG` — text numerator / denominator、local stretch、beam group、括弧が落ちる。
+  numerator / denominatorはinteger。`TimeSigType`は`TimeSignature.symbol`
+  (`TimeSignatureSymbol`) として全5値対応済み（`<subtype>` 0…4）
 - `KEYSIG` — concert fifthsのみ。actual / transposing keyの区別、mode、custom key signature、
   `forInstrumentChange`が落ちる
 - `LAYOUT_BREAK` — line / page / sectionの3 boolのみ。`NOBREAK`、pause、

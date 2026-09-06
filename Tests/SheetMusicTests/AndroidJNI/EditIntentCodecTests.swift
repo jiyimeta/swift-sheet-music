@@ -183,6 +183,9 @@ struct EditIntentCodecTests {
             // Indices 21…22. The numerator and denominator are deliberately unequal to each other and to the
             // measure index, so a field written into the wrong tag cannot survive the round trip looking right.
             .setTimeSignature(measureIndex: 3, numerator: 7, denominator: 8),
+            // Twice: `symbol` is the fourth field of the same payload, and a regression that dropped it would
+            // still round-trip the numeric form — which every other intent in this list uses — looking correct.
+            .setTimeSignature(measureIndex: 3, numerator: 2, denominator: 2, symbol: .cutCommon),
             .removeTimeSignature(measureIndex: 4),
             // Appended for M4 rehearsal marks — indices 23…24. The mark's text is deliberately non-ASCII: it is
             // the only free-form string an intent carries, and a UTF-8 regression that truncated to the character

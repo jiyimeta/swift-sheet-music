@@ -17,10 +17,13 @@ extension PDFImporter {
         for glyph in glyphs {
             if isLeadingRegionTerminator(glyph.semantic) { return nil }
             switch glyph.semantic {
+            // The page drew a symbol, so the meter it stands for is the one to report — and the symbol
+            // itself is kept, so re-engraving the imported score draws the C the page had rather than a 4
+            // over a 4.
             case .timeSignatureCommon:
-                return TimeSignature(numerator: 4, denominator: 4)
+                return TimeSignature(numerator: 4, denominator: 4, symbol: .common)
             case .timeSignatureCutTime:
-                return TimeSignature(numerator: 2, denominator: 2)
+                return TimeSignature(numerator: 2, denominator: 2, symbol: .cutCommon)
             case .timeSignatureDigit:
                 return parseStackedDigits(from: glyphs)
             default: continue

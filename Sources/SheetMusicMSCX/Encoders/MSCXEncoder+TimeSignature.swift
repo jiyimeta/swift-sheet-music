@@ -4,7 +4,14 @@ import SheetMusicXMLTools
 
 extension TimeSignature {
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children: [XMLTreeNode] = [
+        var children: [XMLTreeNode] = []
+        // MuseScore writes `<subtype>` FIRST — `TWrite::write(const TimeSig*, …)` emits `Pid::TIMESIG_TYPE`
+        // ahead of the item properties and `<sigN>` — and omits it for the default `NORMAL`, so a numeric
+        // signature's bytes are unchanged.
+        if symbol != .numeric {
+            children.append(XMLTreeNode(name: "subtype", text: String(symbol.rawValue)))
+        }
+        children += [
             XMLTreeNode(name: "sigN", text: String(numerator)),
             XMLTreeNode(name: "sigD", text: String(denominator)),
         ]

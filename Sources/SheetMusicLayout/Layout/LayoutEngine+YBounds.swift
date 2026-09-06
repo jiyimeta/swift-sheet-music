@@ -55,7 +55,7 @@ extension LayoutEngine {
         switch element {
         case let .clef(_, p, _),
              let .keySignature(_, _, _, _, p),
-             let .timeSignature(_, _, p),
+             let .timeSignature(_, _, _, p),
              let .barLine(_, p, _),
              let .textMark(_, _, p),
              let .fermata(_, p),

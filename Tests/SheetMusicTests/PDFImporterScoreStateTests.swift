@@ -92,7 +92,9 @@
             let staff = importStaff(measures: [m0])
             let events = PDFImporter.scoreStateEvents(staff: staff, texts: [])
             let result = timeSig(events)
-            #expect(result?.0 == TimeSignature(numerator: 4, denominator: 4))
+            // The page drew a C, so the imported score declares a C — not a 4 over a 4 that happens to
+            // last as long.
+            #expect(result?.0 == TimeSignature(numerator: 4, denominator: 4, symbol: .common))
             #expect(result?.1 == 0)
         }
 
@@ -103,7 +105,7 @@
             let staff = importStaff(measures: [m0])
             let events = PDFImporter.scoreStateEvents(staff: staff, texts: [])
             let result = timeSig(events)
-            #expect(result?.0 == TimeSignature(numerator: 2, denominator: 2))
+            #expect(result?.0 == TimeSignature(numerator: 2, denominator: 2, symbol: .cutCommon))
             #expect(result?.1 == 0)
         }
 

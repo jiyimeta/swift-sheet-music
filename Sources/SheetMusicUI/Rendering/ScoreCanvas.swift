@@ -183,10 +183,10 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 naturals: naturals,
                 origin: shift(p), metrics: metrics,
             )
-        case let .timeSignature(n, d, p):
+        case let .timeSignature(n, d, symbol, p):
             TimeSignatureRenderer.draw(
                 context: &context, numerator: n, denominator: d,
-                origin: shift(p), metrics: metrics,
+                symbol: symbol, origin: shift(p), metrics: metrics,
             )
         case let .barLine(s, p, halfHeight):
             BarLineRenderer.draw(

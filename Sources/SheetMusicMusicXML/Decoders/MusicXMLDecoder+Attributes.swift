@@ -60,18 +60,20 @@ enum AttributesDecoder {
             previous.keyFifths = fifths
         }
 
-        if let (n, d) = decodeTime(node) {
-            let changed = n != previous.timeN || d != previous.timeD
+        if let (n, d, symbol) = decodeTime(node) {
+            let changed = n != previous.timeN || d != previous.timeD || symbol != previous.timeSymbol
             if isFirstMeasure || changed {
                 output.append(Emission(
                     staffIndex: nil,
                     element: .timeSignature(TimeSignature(
                         numerator: n,
                         denominator: d,
+                        symbol: symbol,
                     )),
                 ))
                 previous.timeN = n
                 previous.timeD = d
+                previous.timeSymbol = symbol
             }
         }
 
@@ -153,7 +155,9 @@ enum AttributesDecoder {
         return keyNode.first("fifths").flatMap { Int($0.text) }
     }
 
-    private static func decodeTime(_ node: XMLTreeNode) -> (Int, Int)? {
+    private static func decodeTime(
+        _ node: XMLTreeNode,
+    ) -> (numerator: Int, denominator: Int, symbol: TimeSignatureSymbol)? {
         guard let timeNode = node.first("time"),
               let beatsText = timeNode.first("beats")?.text,
               let beatTypeText = timeNode.first("beat-type")?.text,
@@ -161,7 +165,18 @@ enum AttributesDecoder {
         else {
             return nil
         }
-        return (n, d)
+        return (n, d, decodeTimeSymbol(timeNode))
+    }
+
+    /// MusicXML `<time symbol="…">`. Only `common` and `cut` name a glyph this model draws; the format's
+    /// remaining values (`single-number`, `note`, `dotted-note`, and the explicit `normal`) all describe ways
+    /// of writing the NUMBERS, which is what `.numeric` already means here.
+    private static func decodeTimeSymbol(_ timeNode: XMLTreeNode) -> TimeSignatureSymbol {
+        switch timeNode.attributes["symbol"] {
+        case "common": .common
+        case "cut": .cutCommon
+        default: .numeric
+        }
     }
 
     /// Map MusicXML `<sign>`/`<line>` to MuseScore's `concertClefType` value.
@@ -199,4 +214,5 @@ struct MusicXMLAttributesSnapshot {
     var keyFifths: Int?
     var timeN: Int?
     var timeD: Int?
+    var timeSymbol: TimeSignatureSymbol?
 }

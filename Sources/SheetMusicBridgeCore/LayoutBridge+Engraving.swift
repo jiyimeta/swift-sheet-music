@@ -251,12 +251,25 @@ extension LayoutBridge {
     static func encodeTimeSignature(
         numerator: Int,
         denominator: Int,
+        symbol: TimeSignatureSymbol,
         originX: Double,
         originY: Double,
         sp: Double,
         glyphSize: Double,
         into out: inout [DrawCommand],
     ) {
+        // A symbol is ONE glyph on the staff middle, replacing both rows.
+        if let codepoint = TimeSignatureLayout.symbolCodepoint(symbol) {
+            emitCenterAnchoredGlyph(
+                codepoint: codepoint,
+                cxPt: originX,
+                cyPt: originY
+                    + Double(TimeSignatureLayout.symbolDy(sp: CGFloat(sp))),
+                sizePt: glyphSize,
+                into: &out,
+            )
+            return
+        }
         let advance = TimeSignatureLayout.digitAdvance(sp: CGFloat(sp))
         let (numDx, denDx, _) = TimeSignatureLayout.rowOffsets(
             numerator: numerator, denominator: denominator,
