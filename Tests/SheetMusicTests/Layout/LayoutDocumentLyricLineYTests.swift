@@ -6,6 +6,19 @@ import SheetMusicCore
 import Testing
 
 #if !canImport(CoreGraphics)
+    /// Redundant, and kept only so nobody re-adds it wondering why it is
+    /// missing. `SheetMusicCore` and `SheetMusicLayout` both declare `CGFloat`,
+    /// but both declare it as `typealias CGFloat = Double` — the same type, so
+    /// the bare name resolves without complaint.
+    ///
+    /// **Do not copy this line into a file that also names `CGPoint`.** There
+    /// the two modules declare separate `struct`s, so the bare name really is
+    /// ambiguous off Apple and needs its own alias. Copying the `CGFloat` line
+    /// alone looks like the convention has been followed while leaving the one
+    /// that matters missing, which is how `LayoutDocumentTextEntryOriginTests`
+    /// reached main failing to compile on the wasm SDK (fixed in 080e426d).
+    /// Apple shows neither the omission nor this redundancy, because there
+    /// CoreGraphics supplies both names.
     private typealias CGFloat = SheetMusicLayout.CGFloat
 #endif
 
