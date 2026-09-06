@@ -1030,8 +1030,12 @@ allowlistが短いことは損失が少ないことを意味しない。詳細�
 `PageChrome`が持っている、`<multiMeasureRest>`を持つmeasureは意図的に丸ごと捨てる）は
 `docs/development/mscx-preserved-markup.md`の「What the allowlist is not」を参照。
 
-以下、§5.3は上の3分類で数え直した。**§5.1 / §5.2 / §5.4はまだ数え直していない**——
-それらの記述は初出時のままで、同じ検算を通していない。
+以下、§5.3と§5.4は上の分類で数え直した。**§5.1 / §5.2はまだ数え直していない**——
+それらの記述は初出時のままで、同じ検算を通していない。手法も変える必要がある:
+§5.1（spanner payload）と§5.2（author intent）はtagではなく**property単位**の話で、
+consumed setとreaderのtag集合を突き合わせるやり方では片付かない。
+この2節は他より「本当にPARTIAL」である可能性が高い、というのが検算前の見立てだが、
+§5.3と§5.4がどちらも予想を外した以上、当てにはしないこと。
 
 ### 5.1 spanner payload
 
@@ -1119,14 +1123,48 @@ readerが受けるtag集合と、ssm側のconsumed setを突き合わせて数�
 
 ### 5.4 instrument / playback
 
-- `Instrument.id`が内部id・soundId・MusicXML idを1つに潰している（`MSCXDecoder+Instrument.swift:7`）
+**［2026-09-06 検算］§5.3と同じ手法を当てた。1行は誤り、残りは「落ちる」こと自体は
+もっともらしいが、どれも一度も測られていない。**
+
+- `Instrument.id`が内部id・soundId・MusicXML idを1つに潰している（`MSCXDecoder+Instrument.swift`）。
+  **これは正しい。** preservation gateの`Instrument/instrumentId`
+  （`soundIDReason`）が実測でそう言っている——`<instrumentId>`はdrumsetのときencoderが
+  合成するので、preserved markupに逃がすこともできない
+- ~~per-staff clef、trait、singleNoteDynamics、glissandoStyleがInstrumentに無い~~
+  **「modelに無い」は正しいが、「落ちる」は誤り。** `consumedInstrumentChildren`に
+  `clef` / `singleNoteDynamics` / `glissandoStyle` / `trait`のどれも入っていないので、
+  **`Instrument.preservedMarkup`に入って往復する**。`MSCXPreservedMarkupTests`の
+  `partLevelMarkupSurvives`が`<clef>`について実際にそれを固定している
 - channelはprogram / bank / volume / pan / chorus / reverb / port / channelのみ。
-  CC 0 / 7 / 10 / 32 / 91 / 93以外を捨てる（`MSCXDecoder+InstrumentChannel.swift:30`）。
-  名前付きMIDI action list、synth名 / color / user bankが無い
+  **CC 0 / 7 / 10 / 32 / 91 / 93以外は落ちる**——`controller`がconsumed setに入っていて、
+  encoderは6つのfieldから`<controller>`を**合成**するだけなので、任意のCCは戻らない。
+  ただし**これは未測定**: committed fixtureにあるctrlは`0` / `7` / `10` / `32`の4つだけで、
+  **model外のCCを持つfixtureが1つも無い**（`91` / `93`すらない）。§5.3の`Measure/stretch`と
+  同じ形で、gateはこの主張を一度も検査していない
 - drumsetはname / head / line / voice / stem / shortcutのみ。duration別notehead、
-  variant（articulation / tremolo別のpitch差し替え）、panel座標が無い
-- instrument articulationは`descr`が落ちる
-- per-staff clef、trait、singleNoteDynamics、glissandoStyleがInstrumentに無い
+  variant、panel座標が無い。**未測定**（`<Drum>`の未model子要素を持つfixtureが無い）
+- instrument articulationは`descr`が落ちる。**これは他より悪い**——
+  `MSCXDecoder+InstrumentArticulation.swift`は`velocity`と`gateTime`を読むだけで、
+  **consumed setもpreserved markupも持たない**。consumed setを持つ型は「宣言した子だけ」を
+  失うが、**bagを持たない型は読まない子を全部失う**。`<descr>`もfixtureに1件も無いので、
+  やはり未測定
+
+#### bagを持たない型が14ある
+
+上の`InstrumentArticulation`は単独の抜けではない。`Sources/SheetMusicMSCX/Decoders/`で
+`preservedMarkup`に一度も触れていないdecoderを数えると14件ある。
+
+- **corpusに出てくる**: `GuitarBend`、`InstrumentChange`、`MeasureRepeat`、`StaffText`、`Tempo`
+- **corpusに出てこない**: `Breath`、`ChordLine`、`InstrumentArticulation`、`RehearsalMark`、
+  `Swing`、`Tremolo`、`HeadType`、`ElementProperties+MSCX`、`TextProperties`
+
+前者のうち`StaffText` / `Tempo`の損失はgateが実際に捕まえていて、`Text/style`などが
+§7.1のTextContent作業として`allowedLosses`に載っている。**後者は二重に未測定**——
+bagが無いうえにfixtureも無いので、何が落ちているかを言う手段が現状ゼロである。
+
+**この節の残りを「落ちる」と書き続けるのは、§5.3で誤りだった書き方と同じ**なので、
+上では「落ちる」と「未測定」を分けてある。埋めるにはfixtureを足すしかない
+（`docs/development/mscx-preserved-markup.md`の「What the allowlist is not」を参照）。
 
 ---
 
