@@ -25,9 +25,18 @@
         @Binding var isExportAudioPresented: Bool
         let soundfontChoices: [SoundfontChoice]
         @Binding var selectedSoundfontID: String
+        let canEnterText: Bool
+        let canEnterLyrics: Bool
 
         let onTogglePlayback: () -> Void
         let onExportPDF: () -> Void
+        let onLoadHarmonyBasic: () -> Void
+        let onLoadLyricsBasic: () -> Void
+        let onBeginLyrics: () -> Void
+        let onBeginStaffText: () -> Void
+        let onBeginSystemText: () -> Void
+        let onBeginChordSymbol: () -> Void
+        let onBeginRehearsalMark: () -> Void
 
         var body: some ToolbarContent {
             // Leading — playback controls. Two buttons fit
@@ -67,8 +76,38 @@
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Button("Lyrics", action: onBeginLyrics)
+                        .disabled(!canEnterLyrics)
+                    Button("Staff Text", action: onBeginStaffText)
+                    Button("System Text", action: onBeginSystemText)
+                    Button("Chord Symbol", action: onBeginChordSymbol)
+                    Button("Rehearsal Mark", action: onBeginRehearsalMark)
+                } label: {
+                    Image(systemName: "textformat")
+                }
+                .disabled(!canEnterText)
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
                     Section("Source: \(score?.source.displayName ?? "No Score")") {
                         EmptyView()
+                    }
+
+                    // The bundled fixtures are inside the .app, where the
+                    // document picker cannot reach them, so without these
+                    // the only score the app can open is one the user has
+                    // already put in Files. macOS offers the same two in
+                    // its sidebar.
+                    Section("Samples") {
+                        Button(
+                            "Load harmony-basic.mscx",
+                            action: onLoadHarmonyBasic,
+                        )
+                        Button(
+                            "Load lyrics-basic.mscx",
+                            action: onLoadLyricsBasic,
+                        )
                     }
 
                     Button {

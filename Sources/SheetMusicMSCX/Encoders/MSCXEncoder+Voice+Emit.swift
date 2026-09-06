@@ -271,6 +271,7 @@ extension Voice {
         case let .stringTunings(tunings): return tunings.encode(options: options)
         case let .ambitus(ambitus): return ambitus.encode(options: options)
         case let .figuredBass(figuredBass): return figuredBass.encode(options: options)
+        case let .symbol(symbol): return symbol.encode(options: options)
         case let .fretDiagram(diagram): return diagram.encode(options: options)
         case let .preserved(markup):
             return XMLTreeNode(preserved: markup)
@@ -293,8 +294,7 @@ extension Voice {
                     text: "\(delta.numerator)/\(delta.denominator)",
                 )],
             )
-        case let .spanner(spanner):
-            return spanner.encode(options: options)
+        case let .spanner(spanner): return spanner.encode(options: options)
         }
     }
 }

@@ -30,15 +30,18 @@ extension EngravingSymbol {
     ) -> [EngravingSymbol] {
         node.all("Symbol")
             .filter { !excludingNames.contains($0.first("name")?.text ?? "") }
-            .map(decode)
+            .map { decode($0) }
     }
 
     /// Decode one `<Symbol>` without throwing. A missing or empty `<name>` is
     /// malformed embellishment, so the unnamed value survives and a diagnostic
     /// records the degradation rather than failing the score.
     /// C++: `TRead::read(Symbol*, …)` (`rw/read460/tread.cpp:2364`).
-    private static func decode(_ node: XMLTreeNode) -> EngravingSymbol {
-        let name = decodeName(node)
+    static func decode(
+        _ node: XMLTreeNode,
+        location: String = "Note/Symbol",
+    ) -> EngravingSymbol {
+        let name = decodeName(node, location: location)
         var symbol = EngravingSymbol(
             name: name,
             scoreFont: node.first("font")?.text,
@@ -50,12 +53,12 @@ extension EngravingSymbol {
         return symbol
     }
 
-    private static func decodeName(_ node: XMLTreeNode) -> String {
+    private static func decodeName(_ node: XMLTreeNode, location: String) -> String {
         guard let name = node.first("name")?.text, !name.isEmpty else {
             mscxDecoderWarn(
                 code: "mscx.engravingSymbol.missingName",
                 message: "<Symbol> without <name> — kept as an unnamed symbol",
-                location: "Note/Symbol",
+                location: location,
             )
             return ""
         }

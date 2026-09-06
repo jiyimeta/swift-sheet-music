@@ -17,6 +17,8 @@
     }
 
     struct ContentView: View {
+        @Environment(\.undoManager) private var undoManager
+
         @State private var score: Score?
         @State private var errorMessage: String?
         @State private var layoutMode: IOSLayoutMode = .vertical
@@ -24,6 +26,11 @@
         @State private var pageIndex = 0
         @State private var totalPages = 1
         @State private var selection: ScoreSelection = .none
+        @State private var inputController: NoteInputController?
+        @State private var lyricSession = LyricInputSession()
+        @State private var textSession = TextInputSession()
+        @State private var layoutCache = LayoutCache()
+        @FocusState private var textEntryFocused: Bool
         /// Pre-computed layout for the vertical viewport. Rebuilt on
         /// width / staffSize / score changes; shared by ScoreView and
         /// ScoreHitTester so layout runs once per change instead of
@@ -101,7 +108,12 @@
             NavigationStack {
                 Group {
                     if let score {
-                        scoreContent(score: score.transposed(bySemitones: transposeSemitones))
+                        scoreContent(score: score)
+                            .safeAreaInset(edge: .bottom) {
+                                if lyricSession.isActive || textSession.isActive {
+                                    textEntryControls
+                                }
+                            }
                     } else if let error = errorMessage {
                         VStack {
                             Image(systemName: "exclamationmark.triangle")
@@ -117,21 +129,7 @@
                 .navigationTitle("Sheet Music")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ContentToolbar(
-                        playbackEngine: playbackEngine,
-                        score: score,
-                        layoutMode: $layoutMode,
-                        staffSize: $staffSize,
-                        transposeSemitones: $transposeSemitones,
-                        isMixerPresented: $isMixerPresented,
-                        isImportingFile: $isImportingFile,
-                        isMarqueeMode: $isMarqueeMode,
-                        isExportAudioPresented: $isExportAudioPresented,
-                        soundfontChoices: soundfontChoices,
-                        selectedSoundfontID: $selectedSoundfontID,
-                        onTogglePlayback: togglePlayback,
-                        onExportPDF: exportPDF,
-                    )
+                    contentToolbar
                 }
             }
             .onAppear {
@@ -232,6 +230,20 @@
 
         @ViewBuilder
         private func scoreContent(score: Score) -> some View {
+            // Two screen scores, deliberately. `screenScore` carries the
+            // in-flight inline edit and feeds only the interactive vertical
+            // and horizontal viewports. `committedScreenScore` omits it, so
+            // the paged and PDF previews keep showing what is actually in
+            // the document. Export paths read `score` directly and must
+            // never be handed either of these.
+            let screenScore = ScoreTextEntryPreview.compose(
+                committed: score,
+                lyricSession: lyricSession,
+                textSession: textSession,
+            ).transposed(bySemitones: transposeSemitones)
+            let committedScreenScore = score.transposed(
+                bySemitones: transposeSemitones,
+            )
             // Per-system gap. Horizontal mode laps systems side-by-side
             // so this is unused there but we keep the ratio consistent.
             // MuseScore's `Sid::minSystemDistance = 8.5 sp` is the
@@ -255,7 +267,7 @@
                             if let doc = verticalDoc {
                                 ZStack(alignment: .topLeading) {
                                     ScoreView(
-                                        document: doc, score: score,
+                                        document: doc, score: screenScore,
                                         selection: selection,
                                         voiceColors: exampleVoiceColors,
                                         playbackCursor: playbackEngine.currentCursor,
@@ -273,6 +285,7 @@
                                         MarqueeOverlay(rect: marqueeRect),
                                     )
                                     VerticalSystemAnchors(document: doc)
+                                    textEntryOverlay(document: doc)
                                 }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 16)
@@ -285,7 +298,7 @@
                         .onChange(of: playbackEngine.currentCursor) { newCursor in
                             autoScroll(
                                 cursor: newCursor, doc: verticalDoc,
-                                score: score,
+                                score: screenScore,
                                 axis: .vertical,
                                 viewport: geo.size, proxy: proxy,
                             )
@@ -297,11 +310,14 @@
                             staffSize: staffSize,
                             scoreVersion: scoreVersion,
                             transposeSemitones: transposeSemitones,
+                            textEntryPreview: textEntryPreviewIdentity,
                         ),
                     ) {
                         verticalDoc = LayoutEngine.layout(
-                            score: score, options: opts,
+                            score: livePreviewScore(committed: score),
+                            options: opts,
                             availableWidth: max(100, width),
+                            cache: layoutCache,
                         )
                     }
                 }
@@ -312,7 +328,7 @@
                             if let doc = horizontalDoc {
                                 ZStack(alignment: .topLeading) {
                                     ScoreView(
-                                        document: doc, score: score,
+                                        document: doc, score: screenScore,
                                         selection: selection,
                                         voiceColors: exampleVoiceColors,
                                         playbackCursor: playbackEngine.currentCursor,
@@ -330,6 +346,7 @@
                                         MarqueeOverlay(rect: marqueeRect),
                                     )
                                     HorizontalMeasureAnchors(document: doc)
+                                    textEntryOverlay(document: doc)
                                 }
                                 .frame(minHeight: geo.size.height)
                                 .padding(16)
@@ -342,7 +359,7 @@
                         .onChange(of: playbackEngine.currentCursor) { newCursor in
                             autoScroll(
                                 cursor: newCursor, doc: horizontalDoc,
-                                score: score,
+                                score: screenScore,
                                 axis: .horizontal,
                                 viewport: geo.size, proxy: proxy,
                             )
@@ -353,25 +370,28 @@
                             staffSize: staffSize,
                             scoreVersion: scoreVersion,
                             transposeSemitones: transposeSemitones,
+                            textEntryPreview: textEntryPreviewIdentity,
                         ),
                     ) {
+                        let live = livePreviewScore(committed: score)
                         let natural = LayoutEngine.naturalContentWidth(
-                            score: score, options: opts,
+                            score: live, options: opts,
                         )
                         horizontalDoc = LayoutEngine.layout(
-                            score: score, options: opts,
+                            score: live, options: opts,
                             availableWidth: natural,
+                            cache: layoutCache,
                         )
                     }
                 }
             case .paged:
                 PagedScoreContainer(
-                    score: score, options: opts,
+                    score: committedScreenScore, options: opts,
                     pageIndex: $pageIndex,
                     totalPages: $totalPages,
                 )
             case .pdf:
-                pdfPreview(score: score)
+                pdfPreview(score: committedScreenScore)
             }
         }
 
@@ -619,14 +639,370 @@
         /// Replace the active score with `loaded`, reset cached
         /// per-score view state, kick off background sampler prep.
         private func adoptLoadedScore(_ loaded: Score) {
-            score = loaded
+            layoutCache = LayoutCache()
+            lyricSession.end()
+            textSession.end()
             verticalDoc = nil
             horizontalDoc = nil
             pdfLayout = nil
+            score = loaded
+            if let inputController {
+                inputController.reset(score: loaded)
+            } else {
+                let controller = NoteInputController(score: loaded)
+                controller.onScoreEdited = handleControllerEdit
+                inputController = controller
+            }
             scoreVersion = UUID()
             selection = .none
             errorMessage = nil
             playbackEngine.prepareInBackground(score: loaded)
+        }
+    }
+
+    extension ContentView {
+        private var contentToolbar: ContentToolbar {
+            ContentToolbar(
+                playbackEngine: playbackEngine,
+                score: score,
+                layoutMode: $layoutMode,
+                staffSize: $staffSize,
+                transposeSemitones: $transposeSemitones,
+                isMixerPresented: $isMixerPresented,
+                isImportingFile: $isImportingFile,
+                isMarqueeMode: $isMarqueeMode,
+                isExportAudioPresented: $isExportAudioPresented,
+                soundfontChoices: soundfontChoices,
+                selectedSoundfontID: $selectedSoundfontID,
+                canEnterText: selectedVoiceElementID() != nil,
+                canEnterLyrics: isLyricEntryAvailable,
+                onTogglePlayback: togglePlayback,
+                onExportPDF: exportPDF,
+                onLoadHarmonyBasic: {
+                    loadFixture(ScoreLoader.loadHarmonyBasic)
+                },
+                onLoadLyricsBasic: {
+                    loadFixture(ScoreLoader.loadLyricsBasic)
+                },
+                onBeginLyrics: beginLyricEntry,
+                onBeginStaffText: {
+                    beginTextEntry(.staffText)
+                },
+                onBeginSystemText: {
+                    beginTextEntry(.systemText)
+                },
+                onBeginChordSymbol: {
+                    beginTextEntry(.chordSymbol)
+                },
+                onBeginRehearsalMark: {
+                    beginTextEntry(.rehearsalMark)
+                },
+            )
+        }
+
+        private var textEntryPreviewIdentity: ScoreTextEntryPreviewIdentity? {
+            ScoreTextEntryPreview.identity(
+                lyricSession: lyricSession,
+                textSession: textSession,
+            )
+        }
+
+        private var textEntryOverlayIdentity: ScoreTextEntryOverlayIdentity? {
+            if let cursor = lyricSession.cursor {
+                return .lyric(cursor)
+            }
+            if let anchor = textSession.anchor {
+                return .text(
+                    kind: textSession.kind.overlayIdentity,
+                    anchor: anchor,
+                )
+            }
+            return nil
+        }
+
+        private var isLyricEntryAvailable: Bool {
+            if case .single(.note) = selection {
+                return true
+            }
+            return false
+        }
+
+        private var textEntryControls: some View {
+            HStack {
+                Button("Cancel", action: cancelTextEntry)
+
+                if lyricSession.isActive {
+                    lyricEntryControls
+                }
+
+                Spacer(minLength: 0)
+                Button("Done", action: finishTextEntry)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.bar)
+        }
+
+        @ViewBuilder
+        private var lyricEntryControls: some View {
+            Spacer(minLength: 0)
+            Button {
+                guard let controller = inputController else { return }
+                lyricSession.movePrevious(controller: controller)
+                syncSelectionToLyricCursor()
+            } label: {
+                Image(systemName: "chevron.left")
+            }
+            .accessibilityLabel("Previous Lyric")
+
+            Spacer(minLength: 0)
+            Button {
+                commitLyricAndAdvance(.word)
+            } label: {
+                Image(systemName: "chevron.right")
+            }
+            .accessibilityLabel("Next Word")
+
+            Spacer(minLength: 0)
+            Button {
+                commitLyricAndAdvance(.syllable)
+            } label: {
+                Image(systemName: "minus")
+            }
+            .accessibilityLabel("Next Syllable")
+
+            Spacer(minLength: 0)
+            Button {
+                commitLyricAndAdvance(.melisma)
+            } label: {
+                Image(systemName: "arrow.right.to.line")
+            }
+            .accessibilityLabel("Extend Melisma")
+
+            Spacer(minLength: 0)
+            Button {
+                guard let controller = inputController else { return }
+                lyricSession.moveVerse(
+                    .previous,
+                    controller: controller,
+                )
+                syncSelectionToLyricCursor()
+            } label: {
+                Image(systemName: "chevron.up")
+            }
+            .accessibilityLabel("Previous Verse")
+
+            Spacer(minLength: 0)
+            Button {
+                guard let controller = inputController else { return }
+                lyricSession.moveVerse(
+                    .next,
+                    controller: controller,
+                )
+                syncSelectionToLyricCursor()
+            } label: {
+                Image(systemName: "chevron.down")
+            }
+            .accessibilityLabel("Next Verse")
+        }
+
+        @ViewBuilder
+        private func textEntryOverlay(document: LayoutDocument) -> some View {
+            if lyricSession.isActive || textSession.isActive,
+               let controller = inputController
+            {
+                ScoreTextEntryOverlayHost(
+                    document: document,
+                    lyricSession: lyricSession,
+                    textSession: textSession,
+                    controller: controller,
+                    undoManager: undoManager,
+                    focus: $textEntryFocused,
+                    onApplied: { edited, _ in
+                        adoptEditedScore(edited)
+                    },
+                    onError: { error in
+                        errorMessage = exampleErrorDescription(error)
+                    },
+                )
+                .id(textEntryOverlayIdentity)
+            }
+        }
+
+        private func beginLyricEntry() {
+            guard case let .single(.note(noteID)) = selection,
+                  let controller = inputController
+            else { return }
+            lyricSession.begin(
+                at: VoiceElementID(noteID),
+                verse: 0,
+                controller: controller,
+                ending: textSession,
+            )
+            syncSelectionToLyricCursor()
+            textEntryFocused = true
+        }
+
+        private func beginTextEntry(_ kind: TextInputPlanner.Kind) {
+            guard let anchor = selectedVoiceElementID(),
+                  let controller = inputController
+            else {
+                errorMessage = "Select a note or rest before entering text."
+                return
+            }
+            textSession.begin(
+                kind: kind,
+                at: anchor,
+                controller: controller,
+                ending: lyricSession,
+            )
+            textEntryFocused = true
+        }
+
+        private func cancelTextEntry() {
+            lyricSession.end()
+            textSession.end()
+            textEntryFocused = false
+        }
+
+        private func finishTextEntry() {
+            guard let controller = inputController else { return }
+            if lyricSession.isActive {
+                do {
+                    _ = try lyricSession.commit(
+                        .none,
+                        controller: controller,
+                        undoManager: undoManager,
+                    )
+                    adoptEditedScore(controller.score)
+                } catch {
+                    errorMessage = exampleErrorDescription(error)
+                }
+                lyricSession.end()
+                textEntryFocused = false
+            } else if textSession.isActive {
+                do {
+                    _ = try textSession.commit(
+                        advance: false,
+                        controller: controller,
+                        undoManager: undoManager,
+                    )
+                    adoptEditedScore(controller.score)
+                    textSession.end()
+                    textEntryFocused = false
+                } catch {
+                    errorMessage = exampleErrorDescription(error)
+                }
+            }
+        }
+
+        private func commitLyricAndAdvance(
+            _ terminator: LyricInputPlanner.Terminator,
+        ) {
+            guard let controller = inputController else { return }
+            do {
+                _ = try lyricSession.commit(
+                    terminator,
+                    controller: controller,
+                    undoManager: undoManager,
+                )
+                adoptEditedScore(controller.score)
+                syncSelectionToLyricCursor()
+            } catch {
+                errorMessage = exampleErrorDescription(error)
+            }
+            textEntryFocused = true
+        }
+
+        /// Keep the score selection on the chord the lyric caret sits on, so
+        /// ⌘L, Delete and the arrow shortcuts all target what the user is
+        /// typing into. The pre-session lyric editor did this inline on every
+        /// advance; the session-based flow has to do it at each caret move.
+        private func syncSelectionToLyricCursor() {
+            guard let cursor = lyricSession.cursor,
+                  let controller = inputController,
+                  case let .chord(chord) = controller.score[cursor.location],
+                  !chord.notes.isEmpty
+            else { return }
+            let location = cursor.location
+            selection = .single(.note(NoteID(
+                staff: location.staff,
+                measureIndex: location.measureIndex,
+                voiceIndex: location.voiceIndex,
+                elementIndex: location.elementIndex,
+                noteIndexInChord: 0,
+            )))
+        }
+
+        /// VoiceElementID derived from the current selection, or nil
+        /// when the selection isn't a single chord/rest. Used by
+        /// copy / cut / paste so they share the same selection model.
+        private func selectedVoiceElementID() -> VoiceElementID? {
+            switch selection {
+            case let .single(.note(n)):
+                return VoiceElementID(n)
+            case let .single(.rest(r)):
+                return VoiceElementID(r)
+            default:
+                return nil
+            }
+        }
+
+        private func handleControllerEdit() {
+            if let edited = inputController?.score {
+                adoptEditedScore(edited)
+            }
+        }
+
+        /// The score the interactive viewports must lay out, resolved when the
+        /// layout task actually runs rather than when its closure was built.
+        ///
+        /// The renderer takes lyric and text glyphs from the `LayoutDocument`
+        /// (`ScoreLayerBuilder` draws `.textMark(.lyrics(…), text, …)`), not
+        /// from the `Score` handed to `ScoreView`. So the document *is* the
+        /// preview, and laying out a stale score means rendering stale text.
+        ///
+        /// Passing `scoreContent`'s `screenScore` into `.task(id:)` did exactly
+        /// that: the closure ran with the value captured one body pass earlier,
+        /// so every keystroke engraved the string as it stood before that
+        /// keystroke — type "a" and nothing appears, type "b" and "a" appears.
+        /// The sessions and the controller are reference types, so reading
+        /// through them here yields the current text no matter when SwiftUI
+        /// decides to run the task.
+        private func livePreviewScore(committed: Score) -> Score {
+            ScoreTextEntryPreview.compose(
+                committed: inputController?.score ?? committed,
+                lyricSession: lyricSession,
+                textSession: textSession,
+            )
+            .transposed(bySemitones: transposeSemitones)
+        }
+
+        /// Load one of the fixtures bundled inside the app. `adoptLoadedScore`
+        /// already resets sessions, caches and selection, so this only has to
+        /// carry the throw.
+        private func loadFixture(_ load: () throws -> Score) {
+            do {
+                try adoptLoadedScore(load())
+            } catch {
+                errorMessage = exampleErrorDescription(error)
+            }
+        }
+
+        /// Deliberately does NOT clear `verticalDoc` / `horizontalDoc`, even
+        /// though `adoptLoadedScore` does. Both viewports render inside
+        /// `if let doc = …`, so dropping the document unmounts the subtree
+        /// that hosts the inline editor — the text field would resign first
+        /// responder and the keyboard would dismiss on every syllable
+        /// advance. Both layout keys already carry `scoreVersion`, so the
+        /// `.task(id:)` relayout fires anyway; keeping the previous document
+        /// mounted just means the last frame stays on screen while it runs.
+        ///
+        /// `pdfLayout` is keyed the same way and PDF mode is not an editing
+        /// mode, so it is left to its own task rather than cleared here.
+        private func adoptEditedScore(_ edited: Score) {
+            score = edited
+            scoreVersion = UUID()
         }
     }
 
@@ -635,12 +1011,14 @@
         let staffSize: CGFloat
         let scoreVersion: UUID
         let transposeSemitones: Int
+        let textEntryPreview: ScoreTextEntryPreviewIdentity?
     }
 
     private struct HorizontalLayoutKey: Hashable {
         let staffSize: CGFloat
         let scoreVersion: UUID
         let transposeSemitones: Int
+        let textEntryPreview: ScoreTextEntryPreviewIdentity?
     }
 
     private struct PDFLayoutKey: Hashable {

@@ -30,17 +30,16 @@ public enum Syllabic: Sendable, Equatable {
 /// One lyric syllable attached to a `Chord` (for a single verse).
 ///
 /// C++: `mu::engraving::Lyrics` (subset). The combination of
-/// `syllabic` and `ticks` drives melisma rendering: a syllable with
-/// `ticks` greater than its anchor chord's duration is held across
-/// the following notes and is drawn with an underscore-style
-/// horizontal line.
+/// `syllabic` and `ticks` drives melisma rendering. A zero value means
+/// no melisma; any positive value draws a line from this syllable to
+/// the chord beginning at `anchor.tick + ticks` (`LayoutEngine+Placement`).
 public struct Lyric: Sendable, Equatable {
     public var text: String
     public var preservedTextMarkup: PreservedTextMarkup?
     public var syllabic: Syllabic
-    /// Duration of the syllable in MIDI ticks at the score's
-    /// division. A value greater than the anchor chord's duration
-    /// turns the syllable into a melisma.
+    /// Melisma length in MIDI ticks at the score's division. Zero means
+    /// no melisma; any positive value targets the chord beginning at
+    /// `anchor.tick + ticks` (`LayoutEngine+Placement`).
     public var ticks: Int
     /// Verse number (0-indexed). Even verses (0, 2, …) inherit from
     /// `TextStyleType.lyricsOdd`; odd indices (1, 3, …) from

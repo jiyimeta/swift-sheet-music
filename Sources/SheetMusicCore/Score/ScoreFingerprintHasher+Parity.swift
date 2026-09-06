@@ -114,7 +114,8 @@ extension FNV1a {
     /// parity project (spec 2026-09-02 §2.5): the `combine(_ clef:)` / `combine(_ barLine:)` /
     /// `combine(_ dynamic:)` / `combine(_ fermata:)` / `combine(_ breath:)` / `combine(_ harmony:)` /
     /// `combine(_ sticking:)` / `combine(_ expression:)` / `combine(_ capo:)` / `combine(_ tunings:)` /
-    /// `combine(_ ambitus:)` / `combine(_ figuredBass:)` / `combine(_ fretDiagram:)` / `combine(_ spanner:)` /
+    /// `combine(_ ambitus:)` / `combine(_ figuredBass:)` / `combine(_ symbol:)` /
+    /// `combine(_ fretDiagram:)` / `combine(_ spanner:)` /
     /// `combine(_ repeat:)` overloads below are what this switch calls into.
     ///
     /// This switch lives here rather than in `ScoreFingerprintHasher.swift` because every overload it
@@ -181,6 +182,9 @@ extension FNV1a {
         case let .figuredBass(figuredBass):
             combine(17)
             combine(figuredBass)
+        case let .symbol(symbol):
+            combine(18)
+            combine(symbol)
         case let .fretDiagram(diagram):
             combine(19)
             combine(diagram)
