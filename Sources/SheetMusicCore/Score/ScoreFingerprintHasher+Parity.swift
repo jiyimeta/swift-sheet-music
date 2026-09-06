@@ -7,7 +7,7 @@ import SheetMusicFoundation
 ///
 /// - **Measure flags and element properties are fed BY OCCUPANTS.** A field contributes bytes only when it holds a
 ///   non-default value, and always as a unique non-zero tag (21 and up, so no tag can be mistaken for a
-///   `VoiceElement` case tag 0…15 or for a presence byte) followed by its value. The tag is what keeps
+///   `VoiceElement` case tag 0…16 or for a presence byte) followed by its value. The tag is what keeps
 ///   `endRepeatCount = 2` and `measureRepeatCount = 2` apart; the fixed-arity prefix of each measure block is what
 ///   keeps "flag on measure 3" and "flag on measure 4" apart.
 /// - **The marker `VoiceElement` cases are fed their content UNCONDITIONALLY.** A clef has no default type to be
@@ -114,7 +114,8 @@ extension FNV1a {
     /// parity project (spec 2026-09-02 §2.5): the `combine(_ clef:)` / `combine(_ barLine:)` /
     /// `combine(_ dynamic:)` / `combine(_ fermata:)` / `combine(_ breath:)` / `combine(_ harmony:)` /
     /// `combine(_ sticking:)` / `combine(_ expression:)` / `combine(_ capo:)` / `combine(_ tunings:)` /
-    /// `combine(_ spanner:)` / `combine(_ repeat:)` overloads below are what this switch calls into.
+    /// `combine(_ ambitus:)` / `combine(_ spanner:)` / `combine(_ repeat:)` overloads below are what this switch
+    /// calls into.
     ///
     /// This switch lives here rather than in `ScoreFingerprintHasher.swift` because every overload it
     /// dispatches to is in this file, and because that one was at the `file_length` limit — a new
@@ -174,6 +175,9 @@ extension FNV1a {
         case let .stringTunings(tunings):
             combine(15)
             combine(tunings)
+        case let .ambitus(ambitus):
+            combine(16)
+            combine(ambitus)
         case .preserved:
             // Source-only XML is outside the semantic edit fingerprint.
             break
@@ -258,6 +262,23 @@ extension FNV1a {
         // is a semantic-edit fingerprint rather than a fidelity hash.
         combine(tunings.text)
         combineOccupied(tunings.elementProperties, visibleTag: 51, colorTag: 52)
+    }
+
+    /// Every modeled ambitus field an edit can change. `preservedMarkup` stays
+    /// out because it is source fidelity rather than model state.
+    mutating func combine(_ ambitus: Ambitus) {
+        combine(ambitus.topPitch)
+        combine(ambitus.topTpc)
+        combine(ambitus.bottomPitch)
+        combine(ambitus.bottomTpc)
+        combine(ambitus.noteHeadGroup)
+        combinePresence(ambitus.noteHeadType?.mscxOrdinal)
+        combinePresence(ambitus.mirror?.mscxOrdinal)
+        combine(ambitus.hasLine)
+        combinePresence(ambitus.lineWidth)
+        combine(ambitus.topAccidental)
+        combine(ambitus.bottomAccidental)
+        combineOccupied(ambitus.elementProperties, visibleTag: 53, colorTag: 54)
     }
 
     mutating func combine(_ repeat: MeasureRepeat) {

@@ -176,6 +176,7 @@ enum ScoreSemanticComparison {
         case let .expression(e): return "expression(\"\(e.text)\")"
         case let .capo(c): return "capo(\(c.fretPosition))"
         case let .stringTunings(t): return "stringTunings(\"\(t.preset)\")"
+        case let .ambitus(a): return "ambitus(\(a.topPitch)-\(a.bottomPitch))"
         case let .locationShift(delta):
             return "locationShift(\(delta.numerator)/\(delta.denominator))"
         case let .preserved(markup): return "preserved(<\(markup.name)>)"

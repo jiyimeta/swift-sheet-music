@@ -317,6 +317,8 @@ extension Voice {
                 appendVoiceElement(.capo(Capo.decode(child)))
             case "StringTunings":
                 appendVoiceElement(.stringTunings(StringTunings.decode(child)))
+            case "Ambitus":
+                appendVoiceElement(.ambitus(Ambitus.decode(child)))
             case "RehearsalMark":
                 try lifted(.rehearsalMark(
                     RehearsalMark.decode(child),

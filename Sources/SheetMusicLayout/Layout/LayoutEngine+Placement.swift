@@ -1235,7 +1235,7 @@ extension LayoutEngine {
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
                     break
-                case .sticking, .expression, .capo, .stringTunings, .preserved:
+                case .sticking, .expression, .capo, .stringTunings, .ambitus, .preserved:
                     // These modeled annotations do not have an engraving pass
                     // yet. Source-only preserved markup likewise has no layout
                     // behavior.

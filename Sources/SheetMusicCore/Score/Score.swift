@@ -181,6 +181,7 @@ private func strippingPreservedMarkup(from element: VoiceElement) -> VoiceElemen
     if case var .stringTunings(value) = element {
         value.preservedMarkup = []; value.stringData?.preservedMarkup = []; return .stringTunings(value)
     }
+    if case var .ambitus(value) = element { value.preservedMarkup = []; return .ambitus(value) }
     return element
 }
 

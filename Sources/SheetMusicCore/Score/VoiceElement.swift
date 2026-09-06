@@ -39,6 +39,9 @@ public enum VoiceElement: Sendable, Equatable {
     /// A staff-bound string-tunings segment annotation attached at the current
     /// tick. Occupies no tick budget.
     case stringTunings(StringTunings)
+    /// The staff's range indicator, attached at the current tick. Occupies no
+    /// tick budget.
+    case ambitus(Ambitus)
     /// A `<voice>` child this library does not model, kept at its
     /// position in the stream. Unlike container-level
     /// `preservedMarkup` bags, a voice child's position is its

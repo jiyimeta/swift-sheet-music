@@ -364,6 +364,13 @@ extension MSCXPreservedMarkupTests {
                 stringData: StringData(preservedMarkup: [marker]),
                 preservedMarkup: [marker],
             )),
+            .ambitus(Ambitus(
+                topPitch: 72,
+                topTpc: 14,
+                bottomPitch: 60,
+                bottomTpc: 14,
+                preservedMarkup: [marker],
+            )),
         ]
         score.parts[0].staves[0].measures[0] = measure
     }
@@ -388,6 +395,7 @@ extension MSCXPreservedMarkupTests {
                 result += value.preservedMarkup
                 result += value.stringData?.preservedMarkup ?? []
             }
+            if case let .ambitus(value) = element { result += value.preservedMarkup }
         }
         return result
     }
@@ -568,6 +576,9 @@ extension MSCXPreservedMarkupTests {
             expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
         }
         if case let .stringTunings(value) = element {
+            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+        }
+        if case let .ambitus(value) = element {
             expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
         }
     }
