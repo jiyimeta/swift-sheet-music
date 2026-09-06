@@ -1859,9 +1859,16 @@ witness thunk 3本、base conformance descriptor、そして
 `$ss10_hashValue3for…Tg5`）。**1 enumあたり約8関数、6つで約48関数、呼ぶ側がゼロ。**
 
 **それでも今は外せない。** `CHANGELOG.md`冒頭がSemVer遵守を宣言していて、
-現在は**2.4.1**。`public enum`からprotocol conformanceを外すのは
+現在は**2.5.0**。`public enum`からprotocol conformanceを外すのは
 **major bumpを要するbreaking change**で、consumerが誰かは判定基準にならない。
 **3.0を切るときの候補**としてここに置く。
+
+*［2026-09-07 訂正］この節は初出時に「2.4.1」と書いていた。**書いた時点で既に誤り**で、
+`origin/main`には2026-09-04の`chore(release): swift-sheet-music 2.5.0`がある。
+localの`CHANGELOG.md`を読んで確認したのだが、**localのmainが`origin/main`より21 commit
+遅れていた**。結論（public conformanceの除去はmajorを要する）は動かないが、
+**「確認した」と書ける状態で誤っていた**のが問題。localのrefは上流と双方向にずれるので、
+versionやreleaseに触れる主張は`git fetch`の後に`origin/main`側を見ること。*
 
 **この項目をsize対策の文脈に置かないこと。** wasm ceilingとは独立に立つ話で、
 逆も真——**仮にdist側で0 byteだったとしても、外す理由は変わらない**。
