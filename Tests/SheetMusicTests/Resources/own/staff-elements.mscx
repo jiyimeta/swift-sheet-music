@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="guitar-steel">
+        <longName>Guitar</longName>
+        <trackName>Guitar</trackName>
+        <Channel>
+          <program value="25"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <TimeSig>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+          </TimeSig>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note>
+              <pitch>60</pitch>
+              <tpc>14</tpc>
+            </Note>
+          </Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <StaffTypeChange>
+          <StaffType group="tab">
+            <name>tab6StrSimple</name>
+            <lines>6</lines>
+            <lineDistance>1.5</lineDistance>
+            <clef>0</clef>
+          </StaffType>
+        </StaffTypeChange>
+        <voice>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note>
+              <pitch>64</pitch>
+              <tpc>18</tpc>
+            </Note>
+          </Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <StaffState>
+            <subtype>1</subtype>
+          </StaffState>
+          <Chord>
+            <durationType>whole</durationType>
+            <Note>
+              <pitch>67</pitch>
+              <tpc>15</tpc>
+            </Note>
+          </Chord>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

@@ -745,21 +745,82 @@ TBoxのtextも置かない。ただし**現状はboxを丸ごと捨てている*
 
 ### 4.5 staff / part構造
 
-| MuseScore | 定義 | ssm | 影響 |
-|---|---|---|---|
-| `STAFFTYPE_CHANGE` | `dom/stafftypechange.h:38` | なし | 曲の途中でpitched↔TAB↔percussionを切り替えられない |
-| `StaffTypeList` | `dom/stafftypelist.h:35` | なし | 同上（時間軸を持つstaff type） |
-| `STAFF_STATE` | `types/types.h:81` | なし | staff状態変更 |
-| `STAFF_LINES` | `types/types.h:180` | なし | measure単位のline数上書き |
-| `SHARED_PART` / `Excerpt` / `LinkedObjects` | `dom/excerpt.h:41`, `dom/linkedobjects.h:30` | なし | part譜がない。`MSCZReader.swift:5`にexcerptを無視する旨の明記あり |
-| `SCOREORDER` | `dom/scoreorder.h` | なし | part並び順のpolicy |
-| `SynthesizerState` | `dom/synthesizerstate.h:41` | なし | score固有のsynth / effect設定 |
-| `NoteEvent` / `NoteEventList` | `dom/noteevent.h:36` | なし | user編集済みplayback event（`<Events>`）。`MSCXDecoder+Note.swift:21`が到達しない |
+**［2026-09-06 検算］この節は初出時、8行のうち7行の位置づけを間違えていた。**
+**round-trip lossとして残っているのはexcerptの1行だけで、節名の「staff / part構造」自体が
+誤誘導だった。** 以下は検算後の表。
 
-**linked parts（excerpt）が単独で一番重い。** 他のMISSINGが「型を1つ足す」で済むのに対し、
-これはimmutable `Score`の外側にdocument wrapper（master score + excerpt定義 + 安定element ID +
-link graph）を作る話で、value type設計そのものへの追加になる。`ARCHITECTURE.md`が謳う
-「back-pointerを持たない」方針と正面から交渉が要る唯一の項目。
+| MuseScore | file上の親 | ssm | round-trip |
+|---|---|---|---|
+| ~~`STAFFTYPE_CHANGE`~~ | **`<Measure>`の子** | model無し | **保持される（実測）** |
+| ~~`StaffTypeList`~~ | **file要素ではない** | — | 該当なし |
+| ~~`STAFF_STATE`~~ | **voice stream annotation** | model無し | **保持される（実測）** |
+| ~~`STAFF_LINES`~~ | **file要素ではない** | — | 該当なし |
+| `SHARED_PART` / `Excerpt` / `LinkedObjects` | **`.mscz` container内の別file** | なし | **失われる**。下を参照 |
+| ~~`SCOREORDER`~~ | `<Score>`直下の`<Order>` | model無し | **保持される（実測）** |
+| ~~`SynthesizerState`~~ | `<Score>`直下の`<Synthesizer>` | model無し | **保持される（実測）** |
+| ~~`NoteEvent` / `NoteEventList`~~ | `<Note>`配下の`<Events>` | model無し | **保持される（実測）** |
+
+#### 何を間違えていたか
+
+**1. `STAFFTYPE_CHANGE`は`<Staff>`の兄弟ではなく`<Measure>`の子。**
+`readProperties(MeasureBase*)`（`rw/read460/tread.cpp:2291`）で読まれ、`<Measure>` readerの
+`measureread.cpp:189`——`readProperties(static_cast<MeasureBase*>(measure), …)`——から到達する。
+`consumedMeasureChildren`に無いので`Measure.preservedMarkup`に入る。
+**「曲の途中でstaff typeを切り替えられない」のは表現の話であって、保存の話ではない。**
+
+**2. `STAFF_STATE`はvoice streamのannotation。** `measureread.cpp:501`で
+`Sticking` / `Capo` / `StringTunings` / `RehearsalMark` / `InstrumentChange` / `FiguredBass`と
+**同じ分岐**で読まれ、tickのsegmentに載る。`VoiceElement.preserved`として位置ごと保持される。
+
+**3. `StaffTypeList`と`STAFF_LINES`はfile要素ですらない。** `"StaffTypeList"`も`"StaffLines"`も
+`rw/read460/`とrw/write/`に0 hit。前者はstaffが持つstaff typeのC++ container（file上の対応物は
+`<Staff>`内の`<StaffType>`で、ssmは既にconsumeしている）、後者は
+`Factory::createStaffLines(measure)`が作るlayout objectで、書き出されるtagが無い。
+**§4.4の`SPACER`とまったく同じ**——enumに名前はあるが、その綴りのtagはfileに存在しない。
+
+**4. 行番号が2つ入れ替わっていた。** `types/types.h:81`は**`STAFF_LINES`**、`:180`が
+**`STAFF_STATE`**（`:135`が`STAFFTYPE_CHANGE`）。この表は逆に引いていた。
+
+この4点目が、§4の表の作られ方についての一番強い証拠になる。**`ElementType` enumから起こしたのに、
+そのenumの行番号すら照合されていない。** 要素の実体を1つも見ずに名前を並べ、後から行番号を
+当てた形が見える。同種の誤りはこれで**6例目**——§4.6の4件、§4.3の`<Symbol>`の親、
+§4.1の`StringData`の親、§4.4の`SPACER`、§4.4の「boxはper-staff」、そしてここ。
+**6例出た時点で、これは個別の誤りではなく表の作られ方の問題**として扱うべき。
+
+#### 実測の根拠
+
+`Order`（fixture 7件）・`Synthesizer`（4件）・`Events`（1件）は元々committed fixtureが
+持っていて、preservation gateを通っている。`StaffTypeChange`と`StaffState`は**fixtureが1件も
+無かった**ので、この検算までは演繹でしかなかった。`own/staff-elements.mscx`と
+`StaffStructureRoundTripTests`を足して実測に変えてある——gateはparseできないfixtureを黙って
+`continue`するので、fixtureを足すだけでは根拠にならない点も含めて、そのtestで固定した。
+
+#### excerptだけは本物。ただしfidelityとsemanticsで桁が違う
+
+**4.6のexcerptはfile内の要素ではない。** `"Excerpt"`というtagが読まれるのは
+`rw/read114/`（MuseScore 1.x）だけ。4.6では`.mscz` container内の**独立した`.mscx` file**で、
+`rw/mscloader.cpp:156-205`が1件ずつ完全な`Score`として読み、**link graphは読み込み後に
+`Excerpt::linkMeasures`が導出する**。file上にlink graphも安定element IDも無い
+（後者はMS5の`<eid>`の話で、§3.6のとおり対象外）。
+
+ssm側は`MSCZReader`がmain `.mscx`だけを読み（同fileのdoc commentに
+「thumbnails, pictures, excerpts, … are ignored」と明記）、`MSCZWriter`は
+`META-INF/container.xml`とmain `.mscx`の**2 entryしか書かない**。
+
+したがって:
+
+- **round-trip fidelityはcontainer層の作業。** source containerの他のentryをread→writeで
+  運ぶだけで、model変更もlink graphも安定IDも要らない。しかも**excerpt以外も同時に直る**
+  ——thumbnails / images / audiosettings / excerptのstyle fileが全部同じ理由で落ちている
+- **document wrapperが要るのはsemanticsの方。** masterを編集してpart譜が追従する、
+  partを第一級で扱う、という話。ここで初めて`ARCHITECTURE.md`の
+  「back-pointerを持たない」と交渉になる
+
+初出時のこの節は後者のコストで前者を見積もっていた。**§8優先順4の3項目が全部この形だった**
+（§8を参照）。なおcontainer層のpass-throughにも、preserved markupと同じstaleness
+（masterを編集するとexcerptが古くなる）が付く。`emitPreservedMarkup = false` /
+`strippingPreservedMarkup()`に相当する逃げ道が要る。**そして「運べばMuseScoreが受け取る」は
+まだ実測していない。**
 
 ### 4.6 note / chord周辺
 
@@ -1235,14 +1296,29 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    `SYMBOL`も同様に、note添付だけが単発で、annotation位置のものは`VoiceElement`側
    （§4.3の追記）。
 4. **構造変更を伴うもの** — ~~box family~~（2026-09-06完了、§4.4の追記）、
-   `STAFFTYPE_CHANGE`（staffの時間軸）、そして最後に**excerpt / linked parts**。
+   ~~`STAFFTYPE_CHANGE`（staffの時間軸）~~（2026-09-06検算、§4.5）、
+   そして**excerpt / linked parts**——ただし下記のとおりfidelityとsemanticsで桁が違う。
 
-   **box familyは「構造変更が要る」という見立て自体が誤りだった**（§4.4の追記1）。
-   `MeasureBase`相当の並びは要らず、score直下の疎な列1本で足りた。ここに置いていたのは
-   「MuseScoreがlinked listで持っているから、ssmも同じ形が要る」という推論だが、
-   **上流のdata構造ではなくfile上の書かれ方を見るべきだった**——writerが
-   `staffIdx == 0`でしかboxを書かない時点で、boxはscore-levelだと分かる。
-   この列の残り2つ（`STAFFTYPE_CHANGE`、excerpt）も、着手前に同じ確認をすること。
+   **この列は3項目とも、着手前の検算で見積もりを外していた。しかも3件とも同じ形——
+   fidelityのコストをsemanticsのコストで見積もっていた。**
+
+   | 項目 | 初出時の見立て | 検算結果 |
+   |---|---|---|
+   | box family | `MeasureBase`相当の並びが要る | score直下の疎な列1本で足りた（§4.4） |
+   | staff時間軸 | 構造変更が要る | 8行中7行は既に往復済み。要素ですらない行が2つ（§4.5） |
+   | excerpt | `ARCHITECTURE.md`と正面から交渉 | fidelityはcontainer層のpass-through 1本（§4.5） |
+
+   誤りの出どころも3件とも同じで、**上流のdata構造からssmに要る形を推論していた**。
+   boxは「MuseScoreがlinked listで持っているから同じ形が要る」、excerptは
+   「`Excerpt`クラスがlink graphを持つから同じものが要る」。**見るべきなのはdata構造ではなく
+   file上の書かれ方**——writerが`staffIdx == 0`でしかboxを書かない時点でboxはscore-levelだと
+   分かるし、link graphがfileに無く読み込み後に`linkMeasures`で導出される時点で、
+   保存に必要なのはlink graphではないと分かる。
+
+   **残工事の見積もりは、この列以外もまだ引き直していない。** 着手前に
+   「その要素はfile上どこにいるか」「いま実際に失われているか」をread460と
+   preservation gateで確認するのを、実装前の定型手順にすること。§4の表は
+   `ElementType` enumから起こされていてfile formatから起こされていない（§4.5に6例）。
 
 **MSC 5.00の`<SpannerMap>` + EID対応はこの列に入れない。** `v5.0.0-alpha` tagが立った時点で
 着手する（§3.6・§3.7）。1を先に済ませておけば、対応が入る前でもMS5 fileはデータ欠損しない。
