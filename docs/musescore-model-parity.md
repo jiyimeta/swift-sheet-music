@@ -1205,6 +1205,23 @@ decodeは`StaffText.plainText(of:)`（`MSCXDecoder+StaffText.swift:34`）を複�
 encodeは**14ファイル15箇所**が`XMLTreeNode(name: "text", …)`をinlineで組み立てている。
 「decoder 1つを差し替えれば全要素に効く」はdecode側にしか当たらない。
 
+**5.（実装して分かった）decode側の共有helperは、全員が使っているわけではない。**
+`plainText(of:)`は**再帰**（自分のcharacter data + 子孫のflatten）だが、
+`Marker` / `Jump` / `Lyric` / `FrameText`は**その要素自身のcharacter dataしか読まない**。
+`<text><sym>coda</sym></text>`は`StaffText`にとって`"coda"`、`Marker`にとって`""`である。
+`FrameText`はさらに独自で、文字列レベルの`stripInlineMarkup`を通していた。
+
+**この差は暗黙で、encoderが「markupのflatten結果 == modelのtext」で再出力を判定した瞬間に
+契約に変わる。** 全decoderが同じ規約でflattenしていることを要求してしまうので、
+そうでないMarkerでは`<sym>`が永久に戻らない。実装中に実際にこれが起きて、
+4つのdecoderが再帰flattenに書き換えられ、MusicXML importのsemantic比較
+（`phase2_jumpMarker_semanticEquivalence`の`testCodaHBox`）が落ちて発覚した。
+
+**対処は「decoderが自分のflatten結果を渡す」**——`PreservedTextMarkup.derivedText`。
+規約が呼び出し側に閉じるので、どのdecoderも導出を変えずに済む。
+**一般則として、共有helperの存在は共通規約の存在を意味しない。** helperの戻り値を
+別の場所の判定に使うときは、全呼び出し元がそれを使っているかを確認すること。
+
 **この訂正が測れる形:** preservation gateのallowlistに`"b/font"` / `"text/b"` /
 `"text/font"` / `"text/sym"`が載っており、理由文が「§7.1の作業で消す」と自称している
 （`MSCXPreservationGateTests.swift:65, 184`）。ただし前3つはfixture上**Tempo markingにしか
