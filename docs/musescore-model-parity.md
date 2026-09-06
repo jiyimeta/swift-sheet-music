@@ -23,6 +23,13 @@ MuseScoreの`ElementType` enumを背骨にして全件洗い出した記録。�
    MSCX decoderは未知elementを黙って捨てる（`MSCXDecoder+Voice.swift:329`）ので、
    これらはread→writeで**fileから削除される**。詳細は §4。
 
+   **この件数は目安として読むこと。** §4の表を数えると36行あり、この見出しの数と合わない
+   （`ElementType` enumに無い`StringData` / `StaffTypeList` / `SynthesizerState` /
+   `NoteEvent` / `Excerpt`などを含み、`FIGURED_BASS`+`FIGURED_BASS_ITEM`のように
+   1行に複数まとめた箇所もある）。残工事を見るときは件数ではなく表を見ること。
+   なお`DEAD_SLAPPED`は**MSCXに読み書きが存在しない**ため、round-trip lossという意味では
+   最初からこの層に属していない（§4.6の訂正）。
+
 2. **型はあるが情報が落ちる（PARTIAL）** — こちらのほうが件数も影響も大きい。特に
    横断的な4つのギャップ（text markup / element base property / style / 時間軸map）が、
    個別要素のPARTIAL判定の大半の原因になっている。詳細は §5・§7。
@@ -407,6 +414,36 @@ annotationなので、`VoiceElement`にcaseを足す作業になる。`FINGERING
 実file中の出現頻度は低くない。ssmが`NoteParentheses`だけ特別扱いしている
 （`MSCXDecoder+Note.swift:235`）のは、この一般機構が無いための個別対応。
 
+**［2026-09-04 追記／2026-09-05 訂正］`<Symbol>`が付く場所は1箇所ではない。**
+read460で`<Symbol>`を子として読む親は、`<Note>`（`tread.cpp:3359`）、
+`<BarLine>`（`tread.cpp:2053`、`read(BarLine*)`は`:2032`）、
+**box family（`HBox`/`VBox`/`TBox`/`FBox`、`tread.cpp:2203`、`readProperties(Box*)`は`:2166`）**、
+`<MMRest>`（`tread.cpp:3236`）、segment直下のannotation（`measureread.cpp:465`）、
+そして`BSymbol`の`readProperties`（`tread.cpp:2342`）経由で
+`<Symbol>`自身の入れ子（`:2389`）・`<FSymbol>`の中・`<Image>`の中。
+clipboard paste（`read460.cpp:689`）もここに来る。
+
+§8が言う「単発で入る」のは**note添付のものだけ**で、annotation位置のものは
+`VoiceElement`案件。`<Chord>`の子にはならない
+（`readProperties(Chord*)` `:2458`にも`readProperties(ChordRest*)` `:2574`にも分岐が無い）。
+
+*初出時にこの段落は`<BarLine>`を`tread.cpp:2203`と書き、box familyを落としていた。
+`:2203`は`readProperties(Box*)`の側。2026-09-05のfableによる上流突合で判明。*
+
+`<FSymbol>`はさらに狭く、**`<Note>`の子にはならない**。read460では`BSymbol`の
+`readProperties`（`tread.cpp:2346`）経由、つまり`<Symbol>`・`<FSymbol>`・`<Image>`の
+中にしか現れない。
+
+**［2026-09-05 追記］`SYMBOL`のnote添付分はmodel化した。** `EngravingSymbol`
+（`Note.symbols`）。`name`は**closed enumにしていない**——`SymId`は約2600個の
+open-endedなSMuFL glyph名registryで、ssmは`SymId`型を持たないため。未知の名前をそのまま
+往復させるので、**MuseScore自身の再保存より保持量が多い**（上流は`noSym`に潰して書き戻す。
+`tread.cpp:2370`、`types/symnames.cpp:50`）。
+
+encoderで1つ注意がある。`TWrite::writeProperties(const BSymbol*)`（`twrite.cpp:1930`）は
+**leaf childrenを先に、base element propertyを後に**書く。`ChordBracket`の`Arpeggio`基底
+（`twrite.cpp:764`）は逆順なので、**この2要素はencoderのtail順が意図的に違う**。
+
 ### 4.4 frame / layout container
 
 | MuseScore | 定義 | ssm | 影響 |
@@ -447,10 +484,80 @@ link graph）を作る話で、value type設計そのものへの追加になる
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
 | ~~`ORNAMENT`~~ | `dom/ornament.h:29` | **`ChordOrnament`**（2026-09-04実装） | 下の追記を参照 |
-| `AMBITUS` | `dom/ambitus.h:38` | なし | 音域表示 |
-| `MMREST_RANGE` | `dom/mmrestrange.h:34` | なし | 多小節休符の範囲label |
-| `DEAD_SLAPPED` | `dom/deadslapped.h:34` | なし | rest添付のdead slap |
-| `CHORD_BRACKET` | `dom/chordbracket.h:29` | なし | chord bracket |
+| `AMBITUS` | `dom/ambitus.h:38` | なし | 音域表示。**この節の他と違いvoice stream要素**（下の訂正を参照） |
+| `MMREST_RANGE` | `dom/mmrestrange.h:34` | なし | 多小節休符の範囲label。**measure直下**（下の訂正を参照） |
+| ~~`DEAD_SLAPPED`~~ | `dom/deadslapped.h:34` | — | **MSCXに存在しない。parity対象外**（下の訂正を参照） |
+| `CHORD_BRACKET` | `dom/chordbracket.h:29` | なし | chord bracket。`<Chord>`の直接の子 |
+
+**［2026-09-04 訂正］この表の4件は「note / chord周辺」で一括りにできない。**
+`CHORD_BRACKET`の実装に入る前にread460を読み直して分かったことで、
+作業量の見積りが3件とも変わる:
+
+- **`DEAD_SLAPPED`はそもそもMSCXに読み書きされない。** `TRead` / `TWrite`のどちらにも
+  `DEAD_SLAPPED`のcaseが無く（`rw/`全体に0 hit）、生成しているのはGuitar Pro importerの
+  `gpconverter.cpp:572`だけ。つまり`.mscx`にこの要素は出現しえず、**round-trip lossは起きない**。
+  §2.4の「MISSING = fileから消える」がこの行だけ成り立たない。ssmがGuitar Proを
+  読むようになれば model gap として復活するが、それはMSCX parityの話ではない。
+- **`AMBITUS`はvoice streamの要素。** `measureread.cpp:583`が`readVoice`の中で読み、
+  `SegmentType::Ambitus`のsegmentに置く——つまり`<Chord>` / `<Rest>`と並ぶ位置に現れる。
+  したがって§8の言う「単独で追加できる」側ではなく、**`VoiceElement`にcaseを足す側**。
+  `STICKING` / `EXPRESSION`と同じ棚。
+- **`MMREST_RANGE`はmeasure直下**（`measureread.cpp:184`、`MeasureNumber`と同じ列の
+  `MeasureNumberBase` = TextBase）。`VoiceElement`は要らないが、ssmは`MeasureNumber`自体を
+  modelしていない（`Score+MeasureNumber.swift`は表示番号を計算するだけ）ので、
+  measure添付のtext elementを置く場所から作ることになる。`MEASURE_NUMBER`とセットの別slice。
+
+**この節で本当に「単発」なのは`CHORD_BRACKET`だけ**（`tread.cpp:2518`、
+`<Chord>`の子として`<Arpeggio>`の隣で読まれる）。
+
+**［2026-09-05 追記］`read460/`は「4.6のreader」ではない。4.60–4.99のreaderで、4.7の追加を含む。**
+`CHORD_BRACKET`で実際に踏んだ。upstreamがこの型を作ったのは2025-12-10（`67b083e753`）で、
+初出tagは**`v4.7.0`**。`v4.6.5`の`rw/read460/tread.cpp`には`ChordBracket`が**0 hit**、
+`v4.7.0`の同じfileには4 hitある。つまり4.7が`read460`モジュールに枝を足した。
+そのモジュールが4.60–4.99のfileを全部読む（`rw/rwregister.cpp:52`、§2.2）ので、
+**「`read460`にあるから4.6にある」は成り立たない。**
+
+要素の導入versionを主張するときは、reference checkoutの`read460/`ではなく
+`git show v4.6.5:…` / `git show v4.7.0:…` で当たること。同じ理由で「MS3が読まない」の
+根拠に`rw/read302`を使うのも誤り——`read302`はmeasure readerを`read400`に委譲するので、
+MuseScore 4/5は`version="3.02"`のfile中の4.x専用tagも読む。MS3の挙動は
+`git show v3.6.2:libmscore/…`で確認する。
+
+実害: ssmは`version="4.60"`を書くので、emitした`<ChordBracket>`は4.7+では往復するが
+**4.6.xでは未知tagとして捨てられる**。それでもemitするのが正しい（代替はssm側で毎回失うこと）が、
+4.6 readerに対してlosslessではない。
+
+**［2026-09-05 追記］`CHORD_BRACKET`はmodel化した。** `SheetMusicCore`の`ChordBracket`と
+`Chord.bracket`、decoder / encoderは`MSCX{Decoder,Encoder}+ChordBracket.swift`、
+fixtureは`Tests/SheetMusicTests/Resources/own/chord-brackets.mscx`。
+持っているのは`bracketHookLen` / `bracketHookPos` / `bracketRightSide`の3つで、
+継承元`Arpeggio`のtag（`userLen1` / `userLen2` / `span` / `play` / `timeStretch`）は
+preserved markup。`<subtype>`はMuseScoreのwriterがchord bracketには書かないのでmodelしない
+（`twrite.cpp:747`）。`bracketHookPos`の`auto` / `up` / `down`は上流`DirectionV`
+（`types/types.h:371-373`）を写した`ChordBracket.HookPosition`にした——ssmは
+stem directionすらmodelしておらず、この形の型が1つも無かったため。2人目の利用者が出たら
+共有型に昇格させる。
+
+### 4.6.1 grace chordはmodel化した子要素を落とす（構造的な穴）
+
+`CHORD_BRACKET`の実装中に見つかった、この節より広い問題。
+
+`GraceChord`は`graceType` / `duration` / `notes` / `preservedMarkup`しか持たない
+（`Sources/SheetMusicCore/Score/GraceChord.swift`）。一方
+`MSCXDecoder+Voice.swift`のgrace分岐は`Chord.decode`を通してから`GraceChord`を組み直すので、
+**`Chord`がmodelした子要素は全部そこで捨てられる**。`<Arpeggio>` / `<Articulation>` /
+`<Ornament>` / `<ChordLine>` / `<Tremolo>` / `<Lyrics>`がこれに当たる。
+
+たちが悪いのは、**要素をmodel化するたびにこの穴が1つ広がる**こと。model化前は
+`Chord.preservedMarkup`に残って往復していたものが、model化した瞬間に
+`Chord.decode`がそれを取り上げ、grace分岐が捨てる。`<Spanner>`だけは
+`mscx.chord.spannerDropped`で診断が出るが、他は無言で消える。
+
+`CHORD_BRACKET`については、grace分岐で元のsubtreeを`GraceChord.preservedMarkup`へ
+戻すことで塞いだ（`ChordBracketEdgeTests.graceChordKeepsItsBracketAsPreservedMarkup`が固定）。
+**他の要素は塞いでいない。** 本筋は`GraceChord`が`Chord`と同じ子要素を持つか、grace分岐が
+狭いconsumed setで自前にpreserved markupを作るかで、どちらもこのsliceの外。
+次にchord子要素をmodel化する人は、**grace分岐も一緒に見ること**。
 
 **［2026-09-04 追記］`ORNAMENT`はmodel化した。** `SheetMusicCore`の`ChordOrnament`と
 `Chord.ornaments`、decoderは`MSCXDecoder+ChordOrnament.swift`、encoderは
@@ -642,10 +749,33 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    互いに独立なので並列に進められる。
 
    実装して分かったこの層の境目: **noteやchordに直接ぶら下がる要素は単発で入る**
-   （`ORNAMENT`・`FINGERING`がそうだった）。**voice streamに並ぶ要素は`VoiceElement`に
-   caseを足す話になり、fingerprint・layout・wasm / Android bridgeのswitchまで届く**
-   （`STICKING`・`EXPRESSION`・`FIGURED_BASS`・voice stream上の`SYMBOL`）。
-   同じ「単独で追加できる」でも作業量が一段違うので、分けて見積もること。
+   （`ORNAMENT`・`FINGERING`・`CHORD_BRACKET`がそうだった）。**voice streamに並ぶ要素は
+   `VoiceElement`にcaseを足す話になる**（`STICKING`・`EXPRESSION`・`FIGURED_BASS`・
+   voice stream上の`SYMBOL`・`AMBITUS`）。同じ「単独で追加できる」でも作業量が違うので、
+   分けて見積もること。
+
+   **ただしその差は2倍程度で、当初の見積りは過大だった（2026-09-05に実測）。**
+   ここには「`.harmony`のgrepが13箇所以上出るので、fingerprint・layout・
+   `ScoreCanvas`・`LayoutBridge`・edit commandまで届く」と書いてあったが、
+   enumにcaseを足してprobe buildを回すとexhaustive switchは**Sources 7箇所 +
+   Tests 1箇所**しかなく、**うち5つはno-op arm**だった。
+   layout（Placement / Spacing / Skyline）・`ScoreCanvas`・`LayoutBridge`には**届かない**
+   ——あれは`LayoutElement.harmony`側の話で、`LayoutElement`にcaseを足さない限り無関係。
+   engravingを別sliceに切る前提なら、voice stream要素のmodel化はnote添付要素の2倍程度で
+   見積もってよい。内訳は§4.2.1。
+
+   **fingerprintのoccupant tagはレーンをまたいで一意にすること。** 別worktreeで並行実装すると
+   双方が「未使用の次の番号」として同じ値を選ぶ。実際に2026-09-05に衝突した。
+   現在: 33-35 `ChordOrnament`、36-38 `Fingering`、39-42 voice stream annotation、
+   43-45 `ChordBracket`、46-48 `EngravingSymbol`。次は49以降。
+
+   **どちら側かは要素名では決まらない。親をread460で確認すること。** §4の節見出しは
+   上流のelement familyで切ってあり、file上の親子関係とは一致しない。実際に
+   §4.6「note / chord周辺」の4件を確認したら、単発だったのは`CHORD_BRACKET`だけで、
+   `AMBITUS`はvoice stream、`MMREST_RANGE`はmeasure直下、`DEAD_SLAPPED`は
+   **MSCXに読み書きが存在しない**（parity対象外）だった。§4.6の訂正を参照。
+   `SYMBOL`も同様に、note添付だけが単発で、annotation位置のものは`VoiceElement`側
+   （§4.3の追記）。
 4. **構造変更を伴うもの** — box family（`MeasureBase`相当の並びが要る）、
    `STAFFTYPE_CHANGE`（staffの時間軸）、そして最後に**excerpt / linked parts**。
 
