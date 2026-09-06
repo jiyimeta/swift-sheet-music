@@ -9,7 +9,9 @@ import SwiftUI
 /// Systems are wrapped to the available width (like vertical-scroll
 /// mode) then grouped into pages by available height. The caller
 /// controls navigation via the `pageIndex` binding; `totalPages`
-/// is written back when layout completes.
+/// is written back when layout completes. The page width comes from
+/// `options.fixedLayoutWidth` when the host set one, else the
+/// available width.
 @available(macOS 15.0, *)
 public struct PagedScoreView: View {
     private let score: Score
@@ -44,14 +46,10 @@ public struct PagedScoreView: View {
 
     @ViewBuilder
     private func pageContent(in proxy: GeometryProxy) -> some View {
-        let w = max(proxy.size.width, options.staffSize * 4)
-        let pageOpts = ScoreViewOptions(
-            staffSize: options.staffSize,
-            systemGap: options.systemGap,
-            wrapToViewWidth: true,
-            breakPolicy: options.breakPolicy,
-            multiMeasureRest: options.multiMeasureRest,
+        let w = Self.pageWidth(
+            containerWidth: proxy.size.width, options: options,
         )
+        let pageOpts = Self.pageOptions(from: options)
         let doc = LayoutEngine.layout(
             score: score, options: pageOpts,
             availableWidth: w,
@@ -126,6 +124,34 @@ public struct PagedScoreView: View {
                 .offset(x: sys.origin.x, y: pageOrigins[idx])
             }
         }
+    }
+
+    /// The caller's options as the page layout needs them: wrapping
+    /// is forced on (a page is wrapped by definition) and everything
+    /// else is carried through unchanged.
+    ///
+    /// Written as a mutation of the caller's value rather than a
+    /// field-by-field `ScoreViewOptions(...)` call on purpose: the
+    /// field-by-field version is what silently dropped seven options
+    /// as the struct grew. `PagedScoreViewOptionsCopyTests` pins it.
+    static func pageOptions(
+        from options: ScoreViewOptions,
+    ) -> ScoreViewOptions {
+        var copy = options
+        copy.wrapToViewWidth = true
+        return copy
+    }
+
+    /// The width the page layout wraps to: `fixedLayoutWidth` when the
+    /// host pinned one, else the available width, floored either way.
+    static func pageWidth(
+        containerWidth: CGFloat,
+        options: ScoreViewOptions,
+    ) -> CGFloat {
+        ScoreView.flooredWrapWidth(
+            options.fixedLayoutWidth ?? containerWidth,
+            options: options,
+        )
     }
 
     static func paginate(

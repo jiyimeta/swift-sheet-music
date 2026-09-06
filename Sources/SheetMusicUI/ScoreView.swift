@@ -7,14 +7,21 @@ import SwiftUI
 ///
 /// Bundles the Bravura SMuFL font for glyph drawing.
 ///
-/// **Vertical scroll mode** (`wrapToViewWidth: true`): systems are
-/// wrapped to the available width and rendered in a `VStack`
-/// of per-system `Canvas` views.  Each canvas uses
-/// `rendersAsynchronously: true` to keep drawing off the main thread.
+/// Both modes render `SystemLayerView` CALayer trees inside a
+/// `ZStack`, positioned by each system's document-coordinate
+/// `origin`; neither slices the music into per-system SwiftUI
+/// `Canvas` views any more.
 ///
-/// **Horizontal scroll mode** (`wrapToViewWidth: false`): all measures
-/// stay on one system, sliced into 600 pt chunks rendered in an
-/// `HStack`.
+/// **Vertical scroll mode** (`wrapToViewWidth: true`): systems wrap
+/// to a width chosen, in order, from `options.fixedLayoutWidth`, the
+/// `availableWidth` argument, or an internal `GeometryReader`. Set
+/// `fixedLayoutWidth` when the engraving must NOT re-flow as the
+/// container resizes — the view then sizes itself to the layout and
+/// the host scrolls or zooms it.
+///
+/// **Horizontal scroll mode** (`wrapToViewWidth: false`): all
+/// measures stay on one system laid out at its natural width;
+/// `fixedLayoutWidth` and `availableWidth` are both ignored.
 ///
 /// For correct sizing inside a `ScrollView`, pass the container width
 /// via the `availableWidth` parameter (read it with a `GeometryReader`
@@ -93,8 +100,9 @@ public struct ScoreView: View {
         if let doc = providedDocument {
             systemStack(doc: doc, selection: selState)
         } else if options.wrapToViewWidth {
-            if let ew = explicitWidth {
-                let w = max(ew, options.staffSize * 4)
+            if let w = Self.resolvedWrapWidth(
+                options: options, explicitWidth: explicitWidth,
+            ) {
                 let doc = LayoutEngine.layout(
                     score: score, options: options,
                     availableWidth: w,
@@ -102,7 +110,9 @@ public struct ScoreView: View {
                 systemStack(doc: doc, selection: selState)
             } else {
                 GeometryReader { proxy in
-                    let w = max(proxy.size.width, options.staffSize * 4)
+                    let w = Self.flooredWrapWidth(
+                        proxy.size.width, options: options,
+                    )
                     let doc = LayoutEngine.layout(
                         score: score, options: options,
                         availableWidth: w,
@@ -233,5 +243,39 @@ public struct ScoreView: View {
             .background(Color.white)
             .environment(\.colorScheme, .light)
         }
+    }
+}
+
+@available(macOS 15.0, *)
+extension ScoreView {
+    /// The wrap width when it can be decided without measuring the
+    /// container, with the minimum-width floor already applied.
+    ///
+    /// Precedence: `options.fixedLayoutWidth` (the host pinned it),
+    /// then the `availableWidth` the caller passed. `nil` means the
+    /// caller has to fall back to a `GeometryReader` — and returning
+    /// `nil` for the fixed case in horizontal mode is deliberate:
+    /// `fixedLayoutWidth` is documented as ignored when
+    /// `wrapToViewWidth` is false.
+    static func resolvedWrapWidth(
+        options: ScoreViewOptions,
+        explicitWidth: CGFloat?,
+    ) -> CGFloat? {
+        guard options.wrapToViewWidth else { return nil }
+        guard let raw = options.fixedLayoutWidth ?? explicitWidth else {
+            return nil
+        }
+        return flooredWrapWidth(raw, options: options)
+    }
+
+    /// Clamp a wrap width to something the engine can lay a staff out
+    /// in. Four staff heights is the historical floor; a zero or
+    /// negative container width (a collapsed `GeometryReader` during
+    /// the first layout pass) would otherwise reach the packer.
+    static func flooredWrapWidth(
+        _ raw: CGFloat,
+        options: ScoreViewOptions,
+    ) -> CGFloat {
+        max(raw, options.staffSize * 4)
     }
 }

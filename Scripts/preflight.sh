@@ -84,6 +84,15 @@ if [[ "$run_apple" == 1 ]]; then
     swift run --package-path "$ROOT" GenWebFixtures \
         "$ROOT/Web/sheet-music-web/test/fixtures" \
         "$ROOT/Web/sheet-music-web/assets/sheet-music.smft"
+
+    # assets/bravura.smft is the deprecated 2.4.x name, shipped as a byte
+    # copy so a host that still fetches it keeps getting a CURRENT table
+    # rather than a 404. A copy that drifts would be worse than the 404 it
+    # replaces — it would serve a stale table silently — so pin them equal.
+    # Delete both this check and the copy in 3.0.0.
+    step "Apple: deprecated bravura.smft copy matches sheet-music.smft"
+    cmp "$ROOT/Web/sheet-music-web/assets/sheet-music.smft" \
+        "$ROOT/Web/sheet-music-web/assets/bravura.smft"
 fi
 
 if [[ "$run_wasm" == 1 ]]; then

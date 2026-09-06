@@ -34,6 +34,7 @@
         /// `1.0` is the score's native tempo; the slider spans `0.5…2.0×`.
         @Binding var playbackRate: Double
         @Binding var showsInvisibleElements: Bool
+        @Binding var useFixedLayoutWidth: Bool
         @Binding var honorAuthoredHiding: Bool
         @Binding var transposeSemitones: Int
         let soundfontChoices: [SoundfontChoice]
@@ -213,7 +214,11 @@
                     }
                     .disabled(score == nil)
                     Text(
-                        "Draws elements with `visible == false` at 50 % opacity (MuseScore #808080 on white). Off = print behaviour (hidden entirely).",
+                        """
+                        Draws elements with `visible == false` at 50 % \
+                        opacity (MuseScore #808080 on white). \
+                        Off = print behaviour (hidden entirely).
+                        """,
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -225,7 +230,29 @@
                     }
                     .disabled(score == nil)
                     Text(
-                        "Hides parts the file marked `<Part><show>0</show>` (MuseScore's \"hide instrument in score\"). Off = draw every staff. This mirrors how a host filters authored-hidden staves.",
+                        """
+                        Hides parts the file marked `<Part><show>0</show>` \
+                        (MuseScore's "hide instrument in score"). \
+                        Off = draw every staff. This mirrors how a host \
+                        filters authored-hidden staves.
+                        """,
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    Toggle(isOn: $useFixedLayoutWidth) {
+                        Label(
+                            "Fixed width (page)",
+                            systemImage: "arrow.left.and.right.square",
+                        )
+                    }
+                    .disabled(score == nil || layoutMode != .vertical)
+                    Text(
+                        """
+                        Wraps vertical mode to the score's page content \
+                        width instead of the window width, so resizing the \
+                        window scrolls the engraving instead of re-flowing \
+                        it (`ScoreViewOptions.fixedLayoutWidth`).
+                        """,
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)

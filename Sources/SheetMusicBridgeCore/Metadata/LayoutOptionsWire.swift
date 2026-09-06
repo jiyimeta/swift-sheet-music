@@ -6,6 +6,15 @@ import Wirelet
 /// Display settings passed from the Android Reader to the layout bridge across JNI.
 /// Self-contained (no cross-directory @WireFormat references) so the SheetMusicAndroid
 /// wirelet codegen can emit its Kotlin model + codec from this file alone.
+///
+/// **`ScoreViewOptions.fixedLayoutWidth` deliberately has no counterpart here.**
+/// It exists because `ScoreView` measures its own container with a
+/// `GeometryReader` and re-wraps as that container resizes; the option turns
+/// that following off. This bridge never measures anything — the host passes
+/// `pageWidthMM` to `LayoutBridge.encode` and that *is* the wrap width — so a
+/// portable host already has the behaviour the option buys on Apple, by
+/// passing a width it chose. Adding the field would only give the same number
+/// a second way in.
 @WireFormat
 public struct LayoutOptionsWire {
     public var layoutMode: UInt8 // 0 = vertical, 1 = horizontal, 2 = page

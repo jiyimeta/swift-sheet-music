@@ -1116,6 +1116,10 @@ export class SheetMusic {
    * Returns `false` for an unreadable table, which includes one written for an
    * older format version. Serve the `sheet-music.smft` from the version of this
    * package you load rather than a copy pinned elsewhere.
+   *
+   * `assets/bravura.smft` is the pre-2.5.0 name for the same file and still
+   * ships as a byte copy, so an existing fetch keeps working. It is removed
+   * in 3.0.0 — point at `sheet-music.smft` when convenient.
    */
   installSMuFLMetrics(bytes: Uint8Array): boolean {
     return this.bridge.installSMuFLMetrics(bytes);

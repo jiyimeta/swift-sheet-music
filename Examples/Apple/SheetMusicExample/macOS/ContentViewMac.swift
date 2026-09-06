@@ -209,6 +209,12 @@
         /// (= MuseScore's `#808080` on white). When OFF (print default),
         /// they are dropped entirely. Wired into `ScoreViewOptions.showsInvisibleElements`.
         @State private var showsInvisibleElements = false
+        /// When ON, vertical mode wraps to a fixed page-content width
+        /// instead of the window width, so resizing the window scrolls
+        /// the engraving instead of re-flowing it. This is
+        /// `ScoreViewOptions.fixedLayoutWidth` — the option a reader
+        /// app uses to keep line breaks stable while zooming.
+        @State private var useFixedLayoutWidth = false
         /// When ON (default), parts the file authored as hidden via
         /// `<Part><show>0</show>` are dropped from the rendered score, the
         /// way a host (Folino) filters authored-hidden staves. Toggling it OFF
@@ -289,6 +295,23 @@
             return hidden
         }
 
+        /// The content width of the score's own page geometry — the
+        /// same number `PDFPreviewLayout` lays the PDF preview out at,
+        /// so "fixed width" means "as wide as a printed page" rather
+        /// than an arbitrary constant.
+        private var pageContentWidth: CGFloat? {
+            guard let score else { return nil }
+            let resolved = PDFExporter.resolve(
+                options: PDFExporter.Options(), score: score,
+            )
+            return max(
+                resolved.staffSize * 4,
+                resolved.page.size.width
+                    - resolved.page.oddMargins.leading
+                    - resolved.page.oddMargins.trailing,
+            )
+        }
+
         /// systemGap targets MuseScore's `Sid::minSystemDistance` of
         /// 8.5 sp; with our staff-distance pads contributing ~3.5 sp
         /// below the last lyric staff, ~5 sp here (≈ 1.25 × staffSize)
@@ -300,6 +323,8 @@
                     ? .collapse(minimumMeasures: 2)
                     : .disabled,
                 showsInvisibleElements: showsInvisibleElements,
+                fixedLayoutWidth: useFixedLayoutWidth
+                    ? pageContentWidth : nil,
             )
         }
 
@@ -332,6 +357,7 @@
                     isMetronomeEnabled: $isMetronomeEnabled,
                     playbackRate: $playbackRate,
                     showsInvisibleElements: $showsInvisibleElements,
+                    useFixedLayoutWidth: $useFixedLayoutWidth,
                     honorAuthoredHiding: $honorAuthoredHiding,
                     transposeSemitones: $transposeSemitones,
                     soundfontChoices: soundfontChoices,
@@ -443,7 +469,12 @@
                         .foregroundStyle(on ? Color.accentColor : .primary)
                     }
                     .disabled(inputController == nil)
-                    .help("Toggle note input mode. Then click a rest and type C/D/E/F/G/A/B; ↑/↓ shifts octave; ⌘Z undoes.")
+                    .help(
+                        """
+                        Toggle note input mode. Then click a rest and type \
+                        C/D/E/F/G/A/B; ↑/↓ shifts octave; ⌘Z undoes.
+                        """,
+                    )
                 }
                 ToolbarItemGroup(placement: .primaryAction) {
                     accidentalButton(
@@ -1210,7 +1241,7 @@
             // multi-note case. Plain Backspace below stays "delete the
             // whole element".
             if event.modifierFlags
-                .intersection([.command, .control, .option]).isEmpty,
+                .isDisjoint(with: [.command, .control, .option]),
                 event.modifierFlags.contains(.shift),
                 event.keyCode == 51 || event.keyCode == 117,
                 case let .single(.note(noteID)) = selection
@@ -1225,7 +1256,7 @@
             // duration. Drum notes included — DeleteVoiceElement just
             // calls into ReplaceVoiceElement at the library level.
             if event.modifierFlags
-                .intersection(blockingMods).isEmpty,
+                .isDisjoint(with: blockingMods),
                 event.keyCode == 51 || event.keyCode == 117
             {
                 deleteSelectedElement(controller: controller)
@@ -1236,7 +1267,7 @@
             // octave (used for the next letter typed onto a rest).
             // Always consume so AppKit doesn't beep on unhandled events.
             if event.modifierFlags
-                .intersection(blockingMods).isEmpty,
+                .isDisjoint(with: blockingMods),
                 event.keyCode == 126 || event.keyCode == 125
             {
                 let delta = event.keyCode == 126 ? 1 : -1
@@ -1261,7 +1292,7 @@
             // lands in a note-input lookup that doesn't know about it.
             if event.characters == "+",
                event.modifierFlags
-                   .intersection([.command, .control, .option]).isEmpty,
+                   .isDisjoint(with: [.command, .control, .option]),
                    case let .single(.note(noteID)) = selection
             {
                 toggleTieForward(
@@ -1276,7 +1307,7 @@
             // SetRestDuration (both share the same shorten / lengthen
             // / chord-overshoot algorithm).
             if event.modifierFlags
-                .intersection([.command, .control, .option]).isEmpty,
+                .isDisjoint(with: [.command, .control, .option]),
                 let duration = NoteInputKeyMap.duration(
                     forCharacter: event.characters ?? "",
                 )
@@ -1366,7 +1397,11 @@
                 scrollToAffectedMeasure(
                     measureIndex: restID.measureIndex,
                 )
-                errorMessage = "Inserted \(String(letter).uppercased())\(controller.inputOctave) (MIDI \(mapped.pitch)). Click another rest to keep typing."
+                errorMessage = """
+                Inserted \(String(letter).uppercased())\
+                \(controller.inputOctave) (MIDI \(mapped.pitch)). \
+                Click another rest to keep typing.
+                """
             } catch {
                 errorMessage = exampleErrorDescription(error)
             }
@@ -1900,8 +1935,8 @@
         ) -> (Int, Int)? {
             guard !slice.isEmpty else { return nil }
             outer: for start in 0 ... (live.count - slice.count) {
-                for k in 0 ..< slice.count {
-                    if live[start + k] != slice[k] { continue outer }
+                for k in 0 ..< slice.count where live[start + k] != slice[k] {
+                    continue outer
                 }
                 return (start, start + slice.count - 1)
             }

@@ -244,11 +244,18 @@ included:
   # without it a manifest violation only ever surfaces on the machine that
   # happens to have the hook installed.
   - Package.swift
+  # The Apple example app. Not a product, but the surface a host reads to
+  # learn the library, so it is held to the same rules — with the four
+  # size rules relaxed in `Examples/Apple/.swiftlint.yml`, which explains
+  # why. Excluding it outright used to make the pre-commit hook fail on
+  # any Examples-only commit: every staged path was excluded, and
+  # SwiftLint 0.63.2 errors on an all-excluded path set instead of
+  # exiting 0.
+  - Examples/Apple
 
 excluded:
   - "**/.build"
   - "**/.swiftpm"
-  - "Examples/Apple"
   # Untracked PDF spike harnesses (.git/info/exclude) — measurement probes
   # gated behind SM_PDF_SPIKE, not shipped code. Linting them made a personal
   # scratch file able to fail `preflight.sh --apple` for the whole checkout.

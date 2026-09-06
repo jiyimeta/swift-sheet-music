@@ -170,6 +170,109 @@
                 #expect(metronome.isMuted == true)
                 #expect(engine.exportEngineSnapshot().metronomeEnabled == false)
             }
+
+            @Test("restartGraphPreservingState keeps a paused cursor and mixer state")
+            func restartSeamPreservesState() throws {
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                let score = Self.singleStaffScore()
+                try engine.prepare(score: score)
+                engine.setVolume(forChannel: .instrument(partIndex: 0, ordinal: 0), to: 0.4)
+                engine.play(from: nil, in: score)
+                engine.pause()
+                let before = try #require(engine.currentCursor)
+
+                try engine.restartGraphPreservingState()
+
+                #expect(engine.currentCursor == before)
+                #expect(engine.state == .paused)
+                #expect(engine.graphRestartCount == 1)
+                let channel = try #require(
+                    engine.mixerChannels.first { $0.id == .instrument(partIndex: 0, ordinal: 0) },
+                )
+                #expect(channel.volume == 0.4)
+                #expect(engine.lastGraphRestartError == nil)
+            }
+
+            @Test("restartGraphPreservingState is a no-op before any prepare")
+            func restartSeamWithoutScore() throws {
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                try engine.restartGraphPreservingState()
+                #expect(engine.graphRestartCount == 0)
+            }
+
+            @Test("a failed restart is recorded and stops claiming to play")
+            func restartSeamFailureIsRecorded() throws {
+                struct Boom: Error {}
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                let score = Self.singleStaffScore()
+                try engine.prepare(score: score)
+                engine.play(from: nil, in: score)
+                #expect(engine.state == .playing)
+
+                engine.graphRestartFailureForTesting = Boom()
+                #expect(throws: Boom.self) {
+                    try engine.restartGraphPreservingState()
+                }
+                engine.recordGraphRestartFailure(Boom())
+
+                #expect(engine.state == .stopped)
+                #expect(engine.lastGraphRestartError is Boom)
+                #expect(engine.graphRestartCount == 0)
+                engine.teardown()
+            }
+
+            @Test("a successful restart clears a previously recorded failure")
+            func restartSeamClearsPreviousFailure() throws {
+                struct Boom: Error {}
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                try engine.prepare(score: Self.singleStaffScore())
+                engine.recordGraphRestartFailure(Boom())
+                #expect(engine.lastGraphRestartError != nil)
+
+                try engine.restartGraphPreservingState()
+
+                #expect(engine.lastGraphRestartError == nil)
+                #expect(engine.graphRestartCount == 1)
+            }
+
+            /// A host is documented as able to re-`prepare` on `lastGraphRestartError` to dismiss it. Before this
+            /// fix `prepare(score:)` neither set nor cleared the field, so an error from a prior automatic rebuild
+            /// stuck around on `@Observable` state even after a plain, successful re-`prepare`.
+            @Test("prepare(score:) clears a previously recorded graph-restart failure")
+            func prepareClearsPreviousRestartFailure() throws {
+                struct Boom: Error {}
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                try engine.prepare(score: Self.singleStaffScore())
+                engine.recordGraphRestartFailure(Boom())
+                #expect(engine.lastGraphRestartError != nil)
+
+                try engine.prepare(score: Self.singleStaffScore())
+
+                #expect(engine.lastGraphRestartError == nil)
+            }
+
+            /// Pins what `reloadSoundfont(resolver:)` does differently from the configuration-change path on
+            /// failure: the resolver (and the click resolver built from it) are swapped BEFORE the rebuild, so a
+            /// failed rebuild leaves the engine with a new resolver bound to an old, now-stopped graph — the same
+            /// `lastGraphRestartError` / `.stopped` glue `restartGraphPreservingState()` produces for every
+            /// caller, but reached here through the resolver-swap-then-rebuild path rather than a direct call.
+            @Test("a failed reload records the error and stops claiming to play")
+            func reloadFailureIsRecorded() throws {
+                struct Boom: Error {}
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: Self.urlA))
+                let score = Self.singleStaffScore()
+                try engine.prepare(score: score)
+                engine.play(from: nil, in: score)
+                #expect(engine.state == .playing)
+
+                engine.graphRestartFailureForTesting = Boom()
+                engine.reloadSoundfont(resolver: FakeResolver(gmURL: Self.urlB))
+
+                #expect(engine.state == .stopped)
+                #expect(engine.lastGraphRestartError is Boom)
+                #expect(engine.exportEngineSnapshot().resolver.defaultGMSoundfontURL == Self.urlB)
+                engine.teardown()
+            }
         }
     }
 #endif

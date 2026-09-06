@@ -82,49 +82,6 @@ and this project adheres to
   preserved markup. The element remains chord-only and is never written on a
   rest.
 
-- **Chord ornaments are modeled.** MuseScore 4 split `Ornament` out of
-  `Articulation` so that a trill, turn, or mordent could carry the state that
-  makes it sound — which scale degree the auxiliary note takes above and below
-  the written note, whether that note draws an accidental, and whether the
-  realization starts on the upper note. This library modeled none of it, and
-  read `<Ornament>` as an unrecognized element.
-
-  `Chord.ornaments` now holds `ChordOrnament` values: the 23 symbols
-  MuseScore's master ornaments palette offers plus an `.unknown` escape for
-  anything outside it, both intervals, the accidental pair, and
-  `ornamentShowAccidental` / `ornamentShowCueNote` / `startOnUpperNote` /
-  `ornamentStyle` / `play`. A `.mscx` round trip is typed rather than opaque,
-  and a v3 encode degrades each ornament to the `<Articulation>` spelling
-  MuseScore 3 understands.
-
-  Three things stay outside the model on purpose. The cue-note `<Chord>` is a
-  value MuseScore recomputes from the parent chord on every layout, so holding
-  it here would go stale the moment that note is edited; `<direction>` and
-  `<placement>` are base `Articulation` properties that `ChordArticulation`
-  does not model either. Both ride through a round trip as preserved markup.
-  MuseScore 3's spelling of an ornament — `<Articulation>` with an `ornament…`
-  SymId — keeps decoding as an articulation, because converting it would change
-  the element shape a round trip produces.
-
-  **Playback and engraving are unchanged.** The MIDI renderer does not yet
-  realize an ornament into notes and the engraver does not place its glyph; the
-  intervals are modeled so that both have somewhere to read them from.
-
-- **Note fingerings are modeled.** `<Fingering>` was an unrecognized `<Note>`
-  child, so a finger number, a guitar-hand fingering, or a string number
-  reached the model only as an opaque preserved subtree — in scores where it is
-  some of the most common notation on the page.
-
-  `Note.fingerings` holds `Fingering` values, several per note where the
-  notation calls for it. Upstream the four variants are *text styles*, but on
-  this element the style is what says whether "2" means a finger, a hand, or a
-  string, so it is modeled as the element's role; a style outside the family is
-  kept verbatim rather than collapsing to the default.
-
-  `<placement>`, `<offset>`, and font overrides stay in preserved markup, and
-  inline markup inside `<text>` flattens to plain text — the same limitation
-  `StaffText` has. Engraving does not place a fingering glyph yet.
-
 - **A `<Symbol>` attached to a segment is modeled.** MuseScore lets a score
   carry an arbitrary SMuFL glyph anywhere, and uses it as the escape hatch for
   notation it has no element for. The note-attached form shipped a day earlier
@@ -429,6 +386,19 @@ and this project adheres to
   fingering on a grace note, as it happens — still needs a test of its own, and
   has one.
 
+- **A measure's manual stretch and its measure-number offset no longer vanish
+  on save.** Both are things an engraver sets by hand — widening one bar to fit
+  a dense passage, nudging a bar number away from a collision — and opening such
+  a score and saving it silently discarded them.
+
+  The cause was in how the reader declares what it understands. Anything it does
+  not claim is carried through untouched, so the way to lose something is to
+  claim it and then not store it. These two were claimed and dropped, and no
+  test could see it: the check that guards against exactly this loss compares
+  what a set of sample scores contains before and after a round trip, and none
+  of those samples happened to use either feature. One that does has been added.
+
+
 ### Changed
 
 - **Score text is drawn at its real weight everywhere, not only on Apple
@@ -495,6 +465,61 @@ and this project adheres to
   golden taken from a score with no styling would match another picture of a
   score with no styling while the style path silently broke.
 
+
+## [2.5.0] - 2026-09-04
+
+### Added
+
+- `ScoreViewOptions.fixedLayoutWidth` pins the wrap width of vertical-scroll
+  mode so the engraving stops re-flowing when its container resizes — a
+  window resize scrolls or zooms instead of re-wrapping every system.
+  Default `nil` keeps existing behavior, which follows the container width.
+
+- **Chord ornaments are modeled.** MuseScore 4 split `Ornament` out of
+  `Articulation` so that a trill, turn, or mordent could carry the state that
+  makes it sound — which scale degree the auxiliary note takes above and below
+  the written note, whether that note draws an accidental, and whether the
+  realization starts on the upper note. This library modeled none of it, and
+  read `<Ornament>` as an unrecognized element.
+
+  `Chord.ornaments` now holds `ChordOrnament` values: the 23 symbols
+  MuseScore's master ornaments palette offers plus an `.unknown` escape for
+  anything outside it, both intervals, the accidental pair, and
+  `ornamentShowAccidental` / `ornamentShowCueNote` / `startOnUpperNote` /
+  `ornamentStyle` / `play`. A `.mscx` round trip is typed rather than opaque,
+  and a v3 encode degrades each ornament to the `<Articulation>` spelling
+  MuseScore 3 understands.
+
+  Three things stay outside the model on purpose. The cue-note `<Chord>` is a
+  value MuseScore recomputes from the parent chord on every layout, so holding
+  it here would go stale the moment that note is edited; `<direction>` and
+  `<placement>` are base `Articulation` properties that `ChordArticulation`
+  does not model either. Both ride through a round trip as preserved markup.
+  MuseScore 3's spelling of an ornament — `<Articulation>` with an `ornament…`
+  SymId — keeps decoding as an articulation, because converting it would change
+  the element shape a round trip produces.
+
+  **Playback and engraving are unchanged.** The MIDI renderer does not yet
+  realize an ornament into notes and the engraver does not place its glyph; the
+  intervals are modeled so that both have somewhere to read them from.
+
+- **Note fingerings are modeled.** `<Fingering>` was an unrecognized `<Note>`
+  child, so a finger number, a guitar-hand fingering, or a string number
+  reached the model only as an opaque preserved subtree — in scores where it is
+  some of the most common notation on the page.
+
+  `Note.fingerings` holds `Fingering` values, several per note where the
+  notation calls for it. Upstream the four variants are *text styles*, but on
+  this element the style is what says whether "2" means a finger, a hand, or a
+  string, so it is modeled as the element's role; a style outside the family is
+  kept verbatim rather than collapsing to the default.
+
+  `<placement>`, `<offset>`, and font overrides stay in preserved markup, and
+  inline markup inside `<text>` flattens to plain text — the same limitation
+  `StaffText` has. Engraving does not place a fingering glyph yet.
+
+### Changed
+
 - **Reading a `.mscx` and writing it back no longer deletes what the model
   does not cover.** The decoder skipped every element it did not recognize and
   the encoder wrote only what the model held, so opening a MuseScore score
@@ -550,15 +575,25 @@ and this project adheres to
   lacks falls through *per scalar* — Edwin has no CJK at all, so a Japanese
   lyric keeps the stub's 1 em per ideograph.
 
-  **Breaking for hosts.** The browser asset is now
-  `assets/sheet-music.smft`, not `assets/bravura.smft` — a host fetching the
-  old name gets a 404 rather than a quietly stale table, and a v3 table still
-  makes `installSMuFLMetrics` return `false`. `BravuraMetricsBuilder` is now
-  `FontMetricsBuilder`, with the same `buildTable(assets:)` shape. Android
-  hosts should serve `fonts/Edwin-Roman.otf` from the same `AssetManager` as
-  `fonts/Bravura.otf` to get the text face; it is optional, and a host without
-  it keeps the pre-v4 text estimates rather than failing.
-  `installSMuFLMetrics` and `nativeInstallSMuFLMetrics` keep their names.
+  **Renamed, but not breaking — both old names keep working through 2.x.**
+  The browser asset is now `assets/sheet-music.smft`, and
+  `BravuraMetricsBuilder` is now `FontMetricsBuilder` (same
+  `buildTable(assets:)` shape), because neither is Bravura-only any more.
+  A host on the old names is not broken by this release:
+  `assets/bravura.smft` still ships, as a byte copy of the new table that
+  `preflight.sh` pins equal, and `BravuraMetricsBuilder` remains as a
+  deprecated object forwarding to `FontMetricsBuilder`. **Both shims are
+  removed in 3.0.0** — move to the new names when you upgrade, not when
+  they disappear. Nothing changed on the Swift side: the table type was
+  never public API.
+
+  A v3 table does make `installSMuFLMetrics` return `false`, so a host
+  pinning its own pre-2.5.0 copy of the table must ship the new one.
+  Android hosts should serve `fonts/Edwin-Roman.otf` from the same
+  `AssetManager` as `fonts/Bravura.otf` to get the text face; it is
+  optional, and a host without it keeps the pre-v4 text estimates rather
+  than failing. `installSMuFLMetrics` and `nativeInstallSMuFLMetrics` keep
+  their names.
 
   **Text WIDTHS still differ between Apple and the other two platforms, by up
   to 0.1 em.** `AppleFontMetricsProvider` measures through `CTLine`, which
@@ -600,17 +635,54 @@ and this project adheres to
 
 ### Fixed
 
-- **A measure's manual stretch and its measure-number offset no longer vanish
-  on save.** Both are things an engraver sets by hand — widening one bar to fit
-  a dense passage, nudging a bar number away from a collision — and opening such
-  a score and saving it silently discarded them.
+- **A system that announces the next system's key or time change engraved
+  the announcement outside the staff.** `staffLineEndX` clipped the staff
+  lines to the terminal barline while `courtesyElements` placed the glyphs
+  past it, so the accidentals and numerals floated in blank space. The
+  lines now span the reserved band to the measure's right edge whenever an
+  announcement is present, which is what MuseScore does
+  (`TLayout::layoutStaffLines` lays out the whole measure, announce
+  segments included).
 
-  The cause was in how the reader declares what it understands. Anything it does
-  not claim is carried through untouched, so the way to lose something is to
-  claim it and then not store it. These two were claimed and dropped, and no
-  test could see it: the check that guards against exactly this loss compares
-  what a set of sample scores contains before and after a round trip, and none
-  of those samples happened to use either feature. One that does has been added.
+  That boundary also takes a double barline now, but only before a **key**
+  signature: MuseScore's `keySigCourtesyBarlineMode` defaults to
+  `DOUBLE_BEFORE_COURTESY` while `timeSigCourtesyBarlineMode` is
+  `ALWAYS_SINGLE`, so a time-signature announcement stays single, and a
+  synthesized barline is never upgraded mid-system, over an explicit
+  barline, or over a repeat end. Checked against MuseScore v4.6.4, the
+  release this project targets.
+
+- **Android and the browser drew every barline as one thin line.** The
+  portable bridge discarded the barline subtype, so final, repeat and
+  double barlines were indistinguishable from a normal one. Each subtype
+  now renders with the offsets the Apple renderers use, shared through
+  `BarLineGeometry`, and repeat dots draw as SMuFL `repeatDot` glyphs
+  because `DrawCommand` has no arbitrary-path fill. One known difference
+  remains: the bridge scales its dot to the 0.3 sp the Apple renderers
+  already filled rather than Bravura's natural 0.4 sp ink — unifying on
+  the SMuFL size would move every Apple repeat barline, so it is a
+  follow-up rather than part of this fix.
+
+- `PagedScoreView` was reverting seven caller options to their defaults —
+  `includeTitleFrame`, `breakIndicatorVisibility`, `graceNoteMag`,
+  `smallNoteMag`, `showsInvisibleElements`, `measureNumbers` and
+  `lyricsVisible` — because it rebuilt `ScoreViewOptions` field by field
+  instead of copying the caller's value. **This is a user-visible behavior
+  change on upgrade**: any host that set one of those options and used
+  paged mode was silently getting the default instead. `PagedScoreView` now
+  copies the caller's options and only forces `wrapToViewWidth` on.
+- Playback follows a change of audio output. `AVAudioEngine` stops itself when
+  the I/O configuration changes — the user picks a different output device on a
+  Mac, headphones come out on iOS — and nothing observed that, so the score went
+  silent while `PlaybackEngine.state` still reported `.playing`. The engine now
+  rebuilds its graph on the new route, keeping the cursor, the transport (playing
+  stays playing, paused stays paused) and every mixer strip. Offline exports,
+  which render on their own engine, are untouched.
+- An automatic graph rebuild that fails is no longer silent: the error lands in
+  the new `PlaybackEngine.lastGraphRestartError` and the transport reports
+  `.stopped` instead of an inaudible `.playing`. This also covers the SoundFont
+  hot-swap (`reloadSoundfont(resolver:)`), whose failure was previously
+  unobservable by design.
 
 ## [2.4.1] - 2026-09-04
 

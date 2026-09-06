@@ -3,84 +3,19 @@ import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
 
-/// A single system rendered in its own Canvas. Used by `ScoreView`
-/// inside a `LazyVStack` so only visible systems are drawn — the
-/// biggest performance win for long scores during scrolling.
-@available(macOS 15.0, *)
-struct SystemCanvas: View {
-    let system: LayoutSystem
-    let metrics: StaffMetrics
-
-    private static let overlap: CGFloat = 1
-
-    var body: some View {
-        let h = system.size.height + Self.overlap
-        Canvas(opaque: true, rendersAsynchronously: true) { context, _ in
-            context.fill(
-                Path(CGRect(
-                    origin: .zero,
-                    size: CGSize(
-                        width: system.size.width, height: h,
-                    ),
-                )),
-                with: .color(.white),
-            )
-            var local = context
-            local.translateBy(x: -system.origin.x, y: -system.origin.y)
-            ScoreCanvasDrawing.drawSystem(
-                system, metrics: metrics, into: &local,
-            )
-        }
-        .frame(
-            width: system.size.width,
-            height: h,
-            alignment: .topLeading,
-        )
-        .environment(\.colorScheme, .light)
-    }
-}
-
-/// A horizontal slice of a single system. Used by `ScoreView` in
-/// horizontal-scroll mode inside a `LazyHStack` so only visible
-/// portions of a long system are rasterised.
-@available(macOS 15.0, *)
-struct SystemSliceCanvas: View {
-    let system: LayoutSystem
-    let metrics: StaffMetrics
-    let xStart: CGFloat
-    let sliceWidth: CGFloat
-
-    var body: some View {
-        let h = system.size.height + 1
-        Canvas(opaque: true, rendersAsynchronously: true) { context, _ in
-            context.fill(
-                Path(CGRect(
-                    origin: .zero,
-                    size: CGSize(width: sliceWidth, height: h),
-                )),
-                with: .color(.white),
-            )
-            var local = context
-            local.translateBy(
-                x: -system.origin.x - xStart,
-                y: -system.origin.y,
-            )
-            let absX = system.origin.x + xStart
-            ScoreCanvasDrawing.drawSystem(
-                system, metrics: metrics, into: &local,
-                visibleX: absX ... (absX + sliceWidth),
-            )
-        }
-        .frame(width: sliceWidth, height: h, alignment: .topLeading)
-        .environment(\.colorScheme, .light)
-    }
-}
-
 /// Static drawing routines shared between single-system and full-
-/// document canvases. Factored out of `ScoreCanvas` so `SystemCanvas`
-/// can call them too.
+/// document canvases. Factored out so every `Canvas`-based renderer —
+/// `PagedScoreView`, `PDFPageView`, `TitleFrameView` — draws a system
+/// exactly the same way.
 @available(macOS 15.0, *)
 public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
+    /// Draw one system into `context`.
+    ///
+    /// `visibleX` clips the draw to a document-X range. It existed for
+    /// the slice-per-chunk renderer that `ScoreView` retired in favor
+    /// of CALayer trees, so **no caller in this package passes it any
+    /// more**; it stays because it is public API and callers outside
+    /// the package may rely on it.
     public static func drawSystem( // swiftlint:disable:this function_body_length
         _ system: LayoutSystem,
         metrics: StaffMetrics,

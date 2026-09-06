@@ -41,3 +41,35 @@ struct ScoreViewOptionsShowsInvisibleTests {
         #expect(opts.showsInvisibleElements == true)
     }
 }
+
+@Suite("ScoreViewOptions fixedLayoutWidth")
+struct ScoreViewOptionsFixedLayoutWidthTests {
+    @Test func defaultsToNil() {
+        #expect(ScoreViewOptions().fixedLayoutWidth == nil)
+    }
+
+    @Test func initAcceptsTheField() {
+        let opts = ScoreViewOptions(staffSize: 18, fixedLayoutWidth: 612)
+        #expect(opts.fixedLayoutWidth == 612)
+        // Every argument here is labeled and every other parameter is
+        // defaulted, so this passes regardless of the field's position
+        // in the initializer's parameter list — it does not verify
+        // parameter order. The real source-compatibility gate is that
+        // the package and both example targets still compile.
+        #expect(opts.staffSize == 18)
+        #expect(opts.lyricsVisible == true)
+    }
+
+    @Test func equatableDistinguishesTheField() {
+        var a = ScoreViewOptions()
+        var b = ScoreViewOptions()
+        #expect(a == b)
+        a.fixedLayoutWidth = 800
+        #expect(a != b)
+        b.fixedLayoutWidth = 800
+        #expect(a == b)
+        // nil and 0 are different states, not the same "unset".
+        b.fixedLayoutWidth = 0
+        #expect(a != b)
+    }
+}
