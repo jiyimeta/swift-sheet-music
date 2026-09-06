@@ -45,12 +45,17 @@ public enum VoiceElement: Sendable, Equatable {
     /// A thoroughbass figure stored as a segment annotation at the current
     /// tick. Occupies no tick budget.
     case figuredBass(FiguredBass)
+    /// A `<Symbol>` attached to a segment at the current voice tick rather than
+    /// to a note. Occupies no tick budget. The note-attached form of the same
+    /// type lives in `Note.symbols`. MuseScore always uses a ChordRest segment,
+    /// never a time-tick segment (`rw/read460/measureread.cpp:465`).
+    case symbol(EngravingSymbol)
     /// A `<voice>` child this library does not model, kept at its
     /// position in the stream. Unlike container-level
     /// `preservedMarkup` bags, a voice child's position is its
-    /// meaning: a `<Symbol>` between two chords attaches at that tick. No
-    /// layout, MIDI, or playback pass reads
-    /// the preserved subtree.
+    /// meaning: an unknown child between two chords remains attached
+    /// at that tick. No layout, MIDI, or playback pass reads the
+    /// preserved subtree.
     ///
     /// Occupies no tick budget: both `tickCount` overloads return
     /// `nil`, exactly as they do for `.locationShift`.

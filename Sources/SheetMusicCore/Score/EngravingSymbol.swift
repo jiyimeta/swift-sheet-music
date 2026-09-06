@@ -1,22 +1,24 @@
 import SheetMusicFoundation
 
-/// A SMuFL engraving symbol attached directly to a note.
+/// A SMuFL engraving symbol attached directly to a note or segment.
 /// C++: `mu::engraving::Symbol`. MuseScore 4.6 reads it with
 /// `TRead::read(Symbol*, …)` (`rw/read460/tread.cpp:2364`) and dispatches the
 /// note-attached form from `TRead::readProperties(Note*, …)` (`:3359`).
 /// `TWrite::write(const Symbol*, …)` is shared by every parent
 /// (`rw/write/twrite.cpp:3221`).
 ///
-/// `<Symbol>` has many parents in the 4.6 reader, and this type models only the
-/// note-attached one: `<Note>` (`rw/read460/tread.cpp:3359`). The others are
-/// `<BarLine>` (`:2053`, inside `read(BarLine*)` at `:2032`), the box family —
-/// `HBox` / `VBox` / `TBox` / `FBox` — (`:2203`, inside `readProperties(Box*)`
-/// at `:2166`), `<MMRest>` (`:3236`), a segment-level annotation
-/// (`rw/read460/measureread.cpp:465`), and the `BSymbol` branch at `:2342`,
-/// which puts a `<Symbol>` inside another `<Symbol>` (`:2389`), inside an
-/// `<FSymbol>`, or inside an `<Image>`. Clipboard paste reaches it too
-/// (`read460.cpp:689`). The annotation-position form belongs to a separate
-/// parallel slice and will reuse this same type.
+/// `<Symbol>` has many parents in the 4.6 reader. This type models the
+/// note-attached form under `<Note>` (`rw/read460/tread.cpp:3359`) and the
+/// segment-annotation form in `VoiceElement.symbol`
+/// (`rw/read460/measureread.cpp:465`). The annotation branch always chooses a
+/// ChordRest segment, unlike the shared annotation branch further down that can
+/// choose a time-tick segment through `allowTimeAnchor()`; both add the element
+/// to the selected segment. The remaining parents are `<BarLine>` (`:2053`,
+/// inside `read(BarLine*)` at `:2032`), the box family — `HBox` / `VBox` /
+/// `TBox` / `FBox` — (`:2203`, inside `readProperties(Box*)` at `:2166`),
+/// `<MMRest>` (`:3236`), and the `BSymbol` branch at `:2342`, which puts a
+/// `<Symbol>` inside another `<Symbol>` (`:2389`), inside an `<FSymbol>`, or
+/// inside an `<Image>`. Clipboard paste reaches it too (`read460.cpp:689`).
 ///
 /// It is never a `<Chord>` child: neither `TRead::readProperties(Chord*, …)`
 /// (`rw/read460/tread.cpp:2458`) nor the `ChordRest` overload (`:2574`) has a
@@ -52,6 +54,12 @@ public struct EngravingSymbol: Sendable, Equatable {
     /// Base element properties shared with every engravable element, including
     /// the spatium-unit `<offset>`.
     public var elementProperties: ElementProperties
+    /// Sugar over `elementProperties.visible`.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
+
     /// Source XML children this model does not represent, including nested
     /// `<Symbol>`, `<Image>`, and `<FSymbol>` subtrees.
     public var preservedMarkup: [PreservedXML]

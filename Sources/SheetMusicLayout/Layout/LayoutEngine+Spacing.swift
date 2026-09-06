@@ -810,7 +810,7 @@ extension LayoutEngine {
                 case .dynamic, .fermata, .breath,
                      .measureRepeat, .spanner,
                      .locationShift, .harmony, .sticking, .expression, .capo,
-                     .stringTunings, .ambitus, .figuredBass,
+                     .stringTunings, .ambitus, .figuredBass, .symbol,
                      .preserved:
                     break
                 }

@@ -136,13 +136,17 @@ struct MSCXPreservedMarkupTests {
 
     @Test("an unknown voice child keeps its position in the stream")
     func unknownVoiceChildKeepsPosition() throws {
+        // Deliberately not a real MuseScore element. This test is about an
+        // *unknown* child holding its position, not about any particular one.
+        // It previously used <FiguredBass>, then <Symbol>, and broke each time
+        // that element was modeled; a synthetic tag ends that cycle.
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <museScore version="4.60"><Score><Division>480</Division>
         <Part><Staff id="1"/><Instrument/></Part>
         <Staff id="1"><Measure><voice>
         <Chord><durationType>quarter</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
-        <Symbol><name>segno</name></Symbol>
+        <UnmodeledElement><name>segno</name></UnmodeledElement>
         <Chord><durationType>quarter</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
         </voice></Measure></Staff></Score></museScore>
         """
@@ -150,18 +154,18 @@ struct MSCXPreservedMarkupTests {
         let elements = score.parts[0].staves[0].measures[0].voices[0].elements
         guard case let .preserved(kept) = elements[1] else {
             Issue.record(Comment(
-                rawValue: "expected the Symbol between the two chords, got \(elements)",
+                rawValue: "expected the UnmodeledElement between the two chords, got \(elements)",
             ))
             return
         }
-        #expect(kept.name == "Symbol")
+        #expect(kept.name == "UnmodeledElement")
 
         let root = try XMLTreeParser.parse(MSCXEncoder.encode(score))
         let voice = try #require(
             root.first("Score")?.all("Staff").last?
                 .first("Measure")?.first("voice"),
         )
-        #expect(voice.children.map(\.name) == ["Chord", "Symbol", "Chord"])
+        #expect(voice.children.map(\.name) == ["Chord", "UnmodeledElement", "Chord"])
     }
 
     @Test("<LayoutBreak><subtype>nobreak</subtype> survives")

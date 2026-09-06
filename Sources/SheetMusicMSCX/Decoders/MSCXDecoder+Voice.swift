@@ -321,6 +321,10 @@ extension Voice {
                 appendVoiceElement(.ambitus(Ambitus.decode(child)))
             case "FiguredBass":
                 appendVoiceElement(.figuredBass(FiguredBass.decode(child)))
+            case "Symbol":
+                appendVoiceElement(.symbol(
+                    EngravingSymbol.decode(child, location: "voice/Symbol"),
+                ))
             case "RehearsalMark":
                 try lifted(.rehearsalMark(
                     RehearsalMark.decode(child),

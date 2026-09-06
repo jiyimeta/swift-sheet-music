@@ -114,8 +114,8 @@ extension FNV1a {
     /// parity project (spec 2026-09-02 §2.5): the `combine(_ clef:)` / `combine(_ barLine:)` /
     /// `combine(_ dynamic:)` / `combine(_ fermata:)` / `combine(_ breath:)` / `combine(_ harmony:)` /
     /// `combine(_ sticking:)` / `combine(_ expression:)` / `combine(_ capo:)` / `combine(_ tunings:)` /
-    /// `combine(_ ambitus:)` / `combine(_ figuredBass:)` / `combine(_ spanner:)` / `combine(_ repeat:)` overloads
-    /// below are what this switch calls into.
+    /// `combine(_ ambitus:)` / `combine(_ figuredBass:)` / `combine(_ symbol:)` / `combine(_ spanner:)` /
+    /// `combine(_ repeat:)` overloads below are what this switch calls into.
     ///
     /// This switch lives here rather than in `ScoreFingerprintHasher.swift` because every overload it
     /// dispatches to is in this file, and because that one was at the `file_length` limit — a new
@@ -181,6 +181,9 @@ extension FNV1a {
         case let .figuredBass(figuredBass):
             combine(17)
             combine(figuredBass)
+        case let .symbol(symbol):
+            combine(18)
+            combine(symbol)
         case .preserved:
             // Source-only XML is outside the semantic edit fingerprint.
             break

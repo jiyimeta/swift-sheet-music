@@ -786,6 +786,46 @@ encoderで1つ注意がある。`TWrite::writeProperties(const BSymbol*)`（`twr
 **leaf childrenを先に、base element propertyを後に**書く。`ChordBracket`の`Arpeggio`基底
 （`twrite.cpp:764`）は逆順なので、**この2要素はencoderのtail順が意図的に違う**。
 
+**［2026-09-06 追記］annotation位置の`SYMBOL`もmodel化した。**
+`VoiceElement.symbol(EngravingSymbol)`。**新しいmodel型は作っていない**——note添付分と
+同じ`EngravingSymbol`をそのまま使う。`EngravingSymbol.swift`のdoc commentが
+最初から「The annotation-position form belongs to a separate parallel slice and will
+reuse this same type」と予告していたとおり。fingerprintの`combine(_ symbol:)`も
+occupant tag 47/48ごと再利用しているので、**この slice が足した tag は
+`VoiceElement` case tag 18 の1つだけ**。
+
+**上流で1点、隣の要素と違う。** `<Symbol>`はannotation branchの中に
+**自分専用の分岐**を持っている（`measureread.cpp:465`）。`Sticking` / `Capo` /
+`StringTunings` / `FiguredBass` / `HarpPedalDiagram`などは1つの共有分岐にまとまっていて、
+そこは`allowTimeAnchor()`で`getChordRestOrTimeTickSegment`と
+`getSegment(SegmentType::ChordRest, …)`を選び分ける。**`<Symbol>`は常に後者**で、
+time-tick segmentには載らない。どちらも`segment->add(el)`なのでannotationであることは
+同じ（`AdjacentElementSlot.isAnnotation`はtrue）。
+
+#### 「まだmodel化されていない要素」をtest fixtureに使うと、3回壊れる
+
+`MSCXPreservedMarkupTests.unknownVoiceChildKeepsPosition`は
+「unmodeledなvoice childがstream中の位置を保つ」ことを見るtestで、
+その"unmodeledな要素"として**実在のMuseScore要素**を使っていた。
+
+| 時期 | 使っていた要素 | 壊れた理由 |
+|---|---|---|
+| 〜2026-09-05 | `<FiguredBass>` | FIGURED_BASSをmodel化 |
+| 2026-09-05〜06 | `<Symbol>` | このsliceでmodel化 |
+
+**2回とも、model化した側が気づいて差し替えている。** つまりこのtestは
+**parity workが進むたびに壊れる**設計で、しかも**壊れ方がcompile errorではなくtest失敗**
+なので、model化する人がこのfileを開くまで見えない。
+
+3度目を`<HarpPedalDiagram>`にするのは、**次にそれをmodel化する人に同じ作業を予約する**だけ。
+testのtitle自身が「an **unknown** voice child」と言っているとおり、
+**特定の要素であることはこのtestの主張ではない**ので、
+`<UnmodeledElement>`——MuseScoreが決して書かないtag——に差し替えた。
+
+**実要素での往復はpreservation gateが見ている**ので、失うcoverageは無い。
+一般化すると、**「まだ実装されていないこと」を前提に書いたtestは、実装が進むと壊れる。
+前提が要件でないなら、前提のほうを合成物にすること。**
+
 ### 4.4 frame / layout container
 
 | MuseScore | 定義 | ssm | 影響 |
@@ -1539,7 +1579,7 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    後2者は2026-09-06）+`FRET_DIAGRAM`、
    ~~`STICKING`/`EXPRESSION`~~（2026-09-04完了、§4.2の追記）、
    ~~`FIGURED_BASS`~~（2026-09-06完了、§4.2の追記）、
-   `FSYMBOL`、**annotation位置の**`SYMBOL`。
+   `FSYMBOL`、~~**annotation位置の**`SYMBOL`~~（2026-09-06完了、§4.3の追記）。
 
    **［2026-09-06 訂正］この行は2件古かった。** `SYMBOL`は**note添付分が
    2026-09-05にmodel化済み**（`EngravingSymbol`、§4.3の追記）で、残っているのは
