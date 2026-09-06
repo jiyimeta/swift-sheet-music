@@ -31,6 +31,12 @@ set -euo pipefail
 # So a model-parity slice costs 6–22 KB, and roughly a dozen remain. 4 MiB had
 # 16 KB of headroom left; it was going to be crossed by whoever went next.
 #
+# It was crossed by two, independently, the same afternoon. An unrelated branch
+# adding lyric text entry came to 4,194,867 — **563 bytes over**, having spent
+# 96% of the remaining headroom and missed by the last 4%. One branch over the
+# line reads as that branch being large. Two, from different work, by 8,560 and
+# by 563, reads as the line being in the wrong place.
+#
 # **This number is the wrong shape for what the gate detects**, and raising it
 # does not fix that. The failure it exists to catch is a plain `import
 # Foundation` drifting into a portable target, which costs about 10 MB — a
