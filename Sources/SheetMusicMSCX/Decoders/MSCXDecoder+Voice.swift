@@ -153,11 +153,22 @@ extension Voice {
                             location: "Chord[grace]/Spanner",
                         )
                     }
+                    // `GraceChord` carries no bracket either, and unlike a
+                    // spanner a `<ChordBracket>` is *consumable*: `Chord.decode`
+                    // lifts it out of `inner.preservedMarkup` into
+                    // `inner.bracket`, which this initializer then drops. Put
+                    // the source subtree back so the element still round-trips,
+                    // exactly as it did before `<ChordBracket>` was modeled.
+                    // It lands after the other preserved children rather than
+                    // in document order; MuseScore's reader is order-agnostic
+                    // inside `<Chord>`.
+                    let graceMarkup = inner.preservedMarkup
+                        + child.all("ChordBracket").map(PreservedXML.init)
                     pendingGraces.append(GraceChord(
                         graceType: graceType,
                         duration: inner.duration,
                         notes: inner.notes,
-                        preservedMarkup: inner.preservedMarkup,
+                        preservedMarkup: graceMarkup,
                     ))
                     continue
                 }

@@ -8,19 +8,26 @@ import SheetMusicXMLTools
 
 extension Note {
     /// Every direct `<Note>` child this decoder or its owning chord
-    /// decoder reads. `<Symbol>` is conditional and is handled by
-    /// `preservedNoteMarkup(in:)` instead of this name-only set.
+    /// decoder reads.
     /// `tpc2` is encoder-owned: the writer regenerates it from the
     /// instrument transposition, so preserving the source spelling
     /// would collide with the generated value.
     private static let consumedNoteChildren: Set = [
-        "Accidental", "Bend", "ChordLine", "Fingering", "Parenthesis",
+        "Accidental", "Bend", "ChordLine", "Fingering", "Parenthesis", "Symbol",
         "Spanner", "Tie",
         "color", "endSpanner", "fret", "head", "parentheses", "pitch", "play",
         "small", "string", "tpc", "tpc2", "veloType", "velocity", "visible",
     ]
 
-    private static let parenthesisSymbolNames: Set = [
+    /// Symbol names owned exclusively by `decodeParentheses(_:)`. Keeping the
+    /// exclusion next to the Note consumed set makes its coupling to
+    /// `EngravingSymbol.decodeAll(inNote:excludingNames:)` explicit and avoids
+    /// emitting the same glyph from both `Note.parentheses` and `Note.symbols`.
+    /// Internal rather than private: `MSCXEncoder+Note` enforces the same
+    /// ownership on the way out, because `Note.symbols` is a `public var` and
+    /// a caller can put a parenthesis glyph there without going through this
+    /// decoder.
+    static let parenthesisSymbolNames: Set = [
         "noteheadParenthesisLeft", "noteheadParenthesisRight",
     ]
 
@@ -73,7 +80,8 @@ extension Note {
             fret: (node.first("fret")?.text).flatMap(Int.init),
             string: (node.first("string")?.text).flatMap(Int.init),
             fingerings: Fingering.decodeAll(inNote: node),
-            preservedMarkup: preservedNoteMarkup(in: node),
+            symbols: EngravingSymbol.decodeAll(inNote: node, excludingNames: parenthesisSymbolNames),
+            preservedMarkup: node.preservedMarkup(consuming: consumedNoteChildren),
         )
         note.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         // `Note.legacyBend` holds one curve, so only the first `<Bend>` can be
@@ -280,24 +288,6 @@ extension Note {
         // <parentheses> property still mean the note is parenthesized.
         if node.children.contains(where: { $0.name == "Parenthesis" }) { return .both }
         return .none
-    }
-
-    /// Preserve only `<Symbol>` values `decodeParentheses` does not
-    /// interpret, while keeping their order among every other
-    /// unconsumed note child. A tag-name consumed set cannot express
-    /// "consumed only for the two notehead-parenthesis names", so the
-    /// value-aware filter mirrors Measure's conditional LayoutBreak
-    /// preservation.
-    private static func preservedNoteMarkup(
-        in node: XMLTreeNode,
-    ) -> [PreservedXML] {
-        node.preservedMarkup(consuming: consumedNoteChildren)
-            .filter { markup in
-                guard markup.name == "Symbol" else { return true }
-                let name = markup.children
-                    .first(where: { $0.name == "name" })?.text
-                return !parenthesisSymbolNames.contains(name ?? "")
-            }
     }
 
     /// Normalize `<head>` to a MS4 string token.

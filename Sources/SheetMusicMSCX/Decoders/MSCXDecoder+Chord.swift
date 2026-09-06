@@ -7,7 +7,7 @@ extension Chord {
     /// children interpreted by the voice decoder before this method
     /// is called. Anything else becomes preserved markup.
     private static let consumedChordChildren: Set = [
-        "Arpeggio", "Articulation", "ChordLine", "Lyrics",
+        "Arpeggio", "Articulation", "ChordBracket", "ChordLine", "Lyrics",
         "Note", "NoteParenGroup", "Ornament", "Spanner", "Stem", "Tremolo",
         "TremoloSingleChord", "TremoloTwoChord", "acciaccatura",
         "appoggiatura", "color", "dots", "durationType", "grace16",
@@ -64,7 +64,8 @@ extension Chord {
 
         var chord = Chord(
             duration: duration, notes: ChordNotes(notes),
-            arpeggio: arpeggio, lyrics: decodeLyrics(node),
+            arpeggio: arpeggio, bracket: ChordBracket.decode(inChord: node),
+            lyrics: decodeLyrics(node),
             articulations: articulations,
             ornaments: ChordOrnament.decodeAll(inChord: node),
             tremolo: tremolo,

@@ -130,14 +130,19 @@ extension Chord {
         return XMLTreeNode(name: "Chord", children: children)
     }
 
-    /// Append the modeled arpeggio, element properties, and preserved
-    /// markup after the notes, matching MuseScore's Chord child order.
+    /// Append the modeled arpeggio and chord bracket, element properties, and
+    /// preserved markup after the notes, matching MuseScore's Chord child
+    /// order. Rest encoding deliberately does not call this helper because a
+    /// `<Rest>` cannot carry `<ChordBracket>`.
     private func appendChordTail(
         to children: inout [XMLTreeNode],
         options: MSCXEncoderOptions,
     ) {
         if let arpeggio {
             children.append(arpeggio.encode())
+        }
+        if let bracket {
+            children.append(bracket.encode(options: options))
         }
         children.append(contentsOf: elementProperties.mscxChildren())
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)

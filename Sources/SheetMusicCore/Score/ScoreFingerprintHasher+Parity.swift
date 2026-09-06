@@ -137,6 +137,38 @@ extension FNV1a {
         combineOccupied(fingering.elementProperties, visibleTag: 37, colorTag: 38)
     }
 
+    /// Note-attached engraving symbols, BY OCCUPANTS: an empty array feeds no
+    /// bytes, so scores without them retain their committed replay fingerprint.
+    mutating func combineOccupied(_ symbols: [EngravingSymbol], tag: Int) {
+        guard !symbols.isEmpty else { return }
+        combine(tag)
+        combine(symbols.count)
+        for symbol in symbols {
+            combine(symbol)
+        }
+    }
+
+    /// Every modeled symbol field an edit can change. `preservedMarkup` stays
+    /// out because it is source fidelity rather than model state.
+    mutating func combine(_ symbol: EngravingSymbol) {
+        combine(symbol.name)
+        combine(symbol.scoreFont)
+        combinePresence(symbol.size)
+        combinePresence(symbol.angle)
+        combineOccupied(symbol.elementProperties, visibleTag: 47, colorTag: 48)
+    }
+
+    /// A chord bracket, BY OCCUPANTS: an absent bracket feeds no bytes, so
+    /// every score without one keeps its committed replay fingerprint.
+    mutating func combineOccupied(_ bracket: ChordBracket?, tag: Int) {
+        guard let bracket else { return }
+        combine(tag)
+        combinePresence(bracket.hookLength)
+        combine(bracket.hookPosition?.rawValue)
+        combineTristate(bracket.isRightSide)
+        combineOccupied(bracket.elementProperties, visibleTag: 44, colorTag: 45)
+    }
+
     mutating func combine(_ clef: Clef) {
         combine(clef.concertClefType)
         combine(clef.transposingClefType)
@@ -210,6 +242,17 @@ extension FNV1a {
     /// Explicit 0/1 presence byte for an unbounded `Int?` — the `combine(_ fraction:)` / `combine(_ address:)`
     /// rule, restated for the TPCs and velocities above, whose `-1` is a real value.
     private mutating func combinePresence(_ value: Int?) {
+        guard let value else {
+            combine(0)
+            return
+        }
+        combine(1)
+        combine(value)
+    }
+
+    /// Explicit 0/1 presence byte for a `Double?`, keeping an absent hook
+    /// length distinct from every possible IEEE 754 bit pattern.
+    private mutating func combinePresence(_ value: Double?) {
         guard let value else {
             combine(0)
             return
