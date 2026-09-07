@@ -139,6 +139,14 @@ public struct ScoreHitTester: Sendable {
         if let target = hitClef(measure: measure, base: base, point: point, sp: sp) {
             return target
         }
+        // 8. Engraved text — lyrics, staff / system text, chord
+        //    symbols, rehearsal marks. Last on purpose: a low
+        //    notehead's hit circle reaches into the first verse's
+        //    line, and a click plainly on the note must stay a note.
+        //    See `ScoreHitTarget`'s doc comment.
+        if let target = hitText(measure: measure, base: base, point: point, sp: sp) {
+            return target
+        }
         return nil
     }
 

@@ -3193,6 +3193,12 @@
                 primary = .note(first)
             case let .clef(anchor):
                 primary = .clef(anchor)
+            case .lyric, .staffText, .harmony, .rehearsalMark:
+                // Engraved text is reported by the hit tester but has no `ScoreItemID` to select, and
+                // resolving it to the note it hangs from would move the note selection on a click aimed at
+                // a syllable. Opening a caret from here is a later step; for now a text click deselects.
+                selection = .none
+                return
             }
 
             if shift {

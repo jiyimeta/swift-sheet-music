@@ -12,6 +12,21 @@ import SheetMusicCore
 /// lists every notehead that shares the stem / flag / beam run. For
 /// a chord this is all of its notes; for a beam run it is every
 /// notehead on every chord under that beam.
+///
+/// ## Engraved text is tried LAST
+///
+/// The four text cases at the bottom of this enum are reported only after the whole engraving ladder
+/// (notehead → rest → beam → flag → stem → tuplet → clef) has declined the point. Lyrics sit directly under
+/// the staff and a low notehead's hit circle reaches into the first verse's line, so trying text earlier
+/// would let a syllable steal a click that is plainly on a note. Nothing in the ladder is text, so the two
+/// passes never compete for the same element — the ordering only decides who wins an overlap.
+///
+/// Each text case carries the identity the layout element already holds, so a hit round-trips back to the
+/// command that edits it: `SetLyric` takes the `anchor` + `verse`, `SetStaffText` the `anchor` + `style`,
+/// `SetChordSymbol` the `anchor`, and `SetRehearsalMark` the `measureIndex` (a rehearsal mark is a system
+/// element addressed by bar, so it has no voice element to name). Text whose layout element carries no
+/// identity is not reported at all: an instrument-change instruction and a `<Swing>` marking reach the page
+/// through `.staffText` but no text-entry command can address them.
 public enum ScoreHitTarget: Hashable, Sendable {
     case note(NoteID)
     case rest(RestID)
@@ -25,4 +40,15 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// `LayoutElement.clef.anchor` is non-nil — continuation-system
     /// header clef restatements are not hit-targets.
     case clef(ClefAnchor)
+    /// An engraved lyric syllable. `anchor` is the chord that owns it, `verse` its lyric-array index — the
+    /// two arguments `SetLyric` takes.
+    case lyric(anchor: VoiceElementID, verse: Int)
+    /// Free-form staff or system text. The two are ONE layout case separated by `style`, and a host needs to
+    /// know which it clicked to open the right kind of caret, so the style travels with the target.
+    case staffText(anchor: VoiceElementID, style: TextStyleType)
+    /// A chord symbol. `anchor` is the chord or rest the symbol names, not the harmony element's own index.
+    case harmony(anchor: VoiceElementID)
+    /// A rehearsal mark, including its frame: the box is what a reader aims at, and a click on the border of
+    /// a boxed "A" means the mark. Addressed by bar, like `SetRehearsalMark`.
+    case rehearsalMark(measureIndex: Int)
 }

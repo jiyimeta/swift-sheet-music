@@ -4,6 +4,24 @@
 import SheetMusicCore
 
 extension LayoutDocument {
+    /// The final document-space origin of the lyric syllable `cursor` names — the point the engraved
+    /// syllable is centred on, which is where an inline lyric caret belongs.
+    ///
+    /// The X is the owning chord's column (`chordStemOrigin`) rather than anything read off the syllable:
+    /// `LayoutEngine+Placement` centres a syllable on that same `chordX`, so the two agree, and the column
+    /// still answers for a verse that has no syllable engraved yet. The Y comes from `lyricLineY`, which
+    /// prefers the verse's own engraved line and falls back to the placement engine's baseline.
+    ///
+    /// `nil` when the anchor names no chord in this document, or when its staff is not laid out here.
+    public func lyricEntryOrigin(
+        at cursor: LyricInputPlanner.Cursor,
+    ) -> CGPoint? {
+        guard let anchor = chordStemOrigin(at: cursor.location),
+              let y = lyricLineY(at: cursor.location, verse: cursor.verse)
+        else { return nil }
+        return CGPoint(x: anchor.x, y: y)
+    }
+
     /// The final document-space origin of a chord stem or rest at `anchor`.
     /// Used only as a deterministic empty-editor fallback when no pending
     /// engraved text exists yet.
