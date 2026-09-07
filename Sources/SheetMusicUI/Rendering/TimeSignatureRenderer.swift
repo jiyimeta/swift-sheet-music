@@ -1,3 +1,4 @@
+import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
 
@@ -7,9 +8,22 @@ enum TimeSignatureRenderer {
         context: inout GraphicsContext,
         numerator: Int,
         denominator: Int,
+        symbol: TimeSignatureSymbol,
         origin: CGPoint,
         metrics: StaffMetrics,
     ) {
+        // A symbol is ONE glyph on the staff middle, replacing both rows.
+        if let glyph = SMuFLGlyph.timeSigSymbol(symbol) {
+            context.drawGlyph(
+                glyph,
+                at: CGPoint(
+                    x: origin.x,
+                    y: origin.y + TimeSignatureLayout.symbolDy(sp: metrics.sp),
+                ),
+                size: metrics.glyphFontSize,
+            )
+            return
+        }
         let advance = TimeSignatureLayout.digitAdvance(sp: metrics.sp)
         let (numOffsetX, denOffsetX, _) = TimeSignatureLayout.rowOffsets(
             numerator: numerator,

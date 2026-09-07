@@ -40,9 +40,10 @@ extension ScoreLayerBuilder {
                 origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .timeSignature(n, d, p):
+        case let .timeSignature(n, d, symbol, p):
             drawTimeSignature(
-                numerator: n, denominator: d, origin: shift(p),
+                numerator: n, denominator: d, symbol: symbol,
+                origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
         case let .barLine(s, p, halfHeight):

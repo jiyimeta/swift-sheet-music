@@ -59,14 +59,23 @@ extension ScoreEditSession {
     /// each of them and re-spells whatever the new barlines moved. The key intents need their span named
     /// explicitly precisely because they move only one bar's bytes while re-reading the rest.
     ///
-    /// The range is NOT validated here: `SetTimeSignature.apply` states it once, and so are the numerator and
-    /// denominator — an unwritable pair is never equal to the meter in force, so it reaches the command.
+    /// The range is NOT validated here: `SetTimeSignature.apply` states it once, and so are the numerator, the
+    /// denominator and their pairing with `symbol` — an unwritable or mismatched signature is never equal to the
+    /// one in force, so it reaches the command.
     static func setTimeSignatureCommand(
-        at measureIndex: Int, numerator: Int, denominator: Int, in score: Score,
+        at measureIndex: Int, numerator: Int, denominator: Int,
+        symbol: TimeSignatureSymbol, in score: Score,
     ) -> (any EditCommand)? {
         let inForce = TimeSignatureRegion.signature(inForceAt: measureIndex, in: score)
-        guard inForce.numerator != numerator || inForce.denominator != denominator else { return nil }
-        return SetTimeSignature(measureIndex: measureIndex, numerator: numerator, denominator: denominator)
+        // The symbol is part of what the bar declares, so swapping "4/4" for a C is a change even though the
+        // meter is untouched — the region re-bars to the same barlines and the glyph is what moves.
+        guard inForce.numerator != numerator
+            || inForce.denominator != denominator
+            || inForce.symbol != symbol
+        else { return nil }
+        return SetTimeSignature(
+            measureIndex: measureIndex, numerator: numerator, denominator: denominator, symbol: symbol,
+        )
     }
 
     /// `.removeTimeSignature`: the removal, plus the re-barring of the span that reverts with it.

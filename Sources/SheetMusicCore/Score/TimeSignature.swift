@@ -5,6 +5,11 @@ public struct TimeSignature: Sendable, Equatable {
     public var numerator: Int
     public var denominator: Int
 
+    /// Whether this meter is drawn as its two numbers or as a symbol standing in for them (C, cut C, …).
+    /// MuseScore `<subtype>` / `TimeSigType`. Purely how it LOOKS: `numerator` and `denominator` still say
+    /// how long the bar is, so nothing outside layout reads this.
+    public var symbol: TimeSignatureSymbol
+
     /// MuseScore `<showCourtesySig>` — whether the end-of-system courtesy for this signature is drawn.
     /// Layout reads it, nothing else does.
     public var showCourtesy: Bool
@@ -25,12 +30,14 @@ public struct TimeSignature: Sendable, Equatable {
     public init(
         numerator: Int,
         denominator: Int,
+        symbol: TimeSignatureSymbol = .numeric,
         visible: Bool = true,
         showCourtesy: Bool = true,
         preservedMarkup: [PreservedXML] = [],
     ) {
         self.numerator = numerator
         self.denominator = denominator
+        self.symbol = symbol
         self.showCourtesy = showCourtesy
         self.preservedMarkup = preservedMarkup
         elementProperties = ElementProperties(visible: visible)

@@ -319,6 +319,7 @@ import Wirelet
 /// tag 1: measureIndex  i32, zig-zag varint
 /// tag 2: numerator     i32, zig-zag varint — 1…63
 /// tag 3: denominator   i32, zig-zag varint — 1, 2, 4, 8, 16 or 32
+/// tag 4: symbol        i32, zig-zag varint — TimeSignatureSymbol.rawValue, 0…4
 /// ```
 ///
 /// `RemoveTimeSignatureIntentWire` (`removeTimeSignature`'s payload):
@@ -1085,9 +1086,10 @@ public enum EditIntentWire {
             )
         case let .removeKeySignature(measureIndex):
             self = .removeKeySignature(RemoveKeySignatureIntentWire(measureIndex: measureIndex))
-        case let .setTimeSignature(measureIndex, numerator, denominator):
+        case let .setTimeSignature(measureIndex, numerator, denominator, symbol):
             self = .setTimeSignature(SetTimeSignatureIntentWire(
                 measureIndex: measureIndex, numerator: numerator, denominator: denominator,
+                symbol: symbol,
             ))
         case let .removeTimeSignature(measureIndex):
             self = .removeTimeSignature(RemoveTimeSignatureIntentWire(measureIndex: measureIndex))
@@ -1290,6 +1292,7 @@ public enum EditIntentWire {
             return .setTimeSignature(
                 measureIndex: decoded.measureIndex,
                 numerator: decoded.numerator, denominator: decoded.denominator,
+                symbol: decoded.symbol,
             )
         case let .removeTimeSignature(wire):
             return .removeTimeSignature(measureIndex: wire.decoded())
@@ -1940,25 +1943,43 @@ public struct RemoveKeySignatureIntentWire {
     }
 }
 
-/// `setTimeSignature`'s payload — which bar declares the meter, and which meter it declares.
+/// `setTimeSignature`'s payload — which bar declares the meter, which meter it declares, and how that
+/// declaration is drawn.
 ///
-/// The two halves travel as separate fields rather than as one packed number: a host picks them independently,
-/// and the range each is valid over (`1…63` over `1, 2, 4, 8, 16, 32`) is stated by `SetTimeSignature.apply`,
-/// which both images reach from these same scalars.
+/// The halves travel as separate fields rather than as one packed number: a host picks them independently, and
+/// the range each is valid over (`1…63` over `1, 2, 4, 8, 16, 32`, and a symbol only over the meter it stands
+/// for) is stated by `SetTimeSignature.apply`, which both images reach from these same scalars.
+///
+/// `symbol` carries `TimeSignatureSymbol.rawValue`, which is also MuseScore's `<subtype>` integer. A value
+/// outside the enum decodes as `.numeric` rather than throwing: an unknown glyph is a cosmetic fallback, the
+/// same answer the MSCX decoder gives an unknown `<subtype>`, and refusing the whole edit over it would lose a
+/// meter change this codec understood perfectly.
 @WireFormat
 public struct SetTimeSignatureIntentWire {
     public var measureIndex: Int32
     public var numerator: Int32
     public var denominator: Int32
+    public var symbol: Int32
 
-    public init(measureIndex: Int, numerator: Int, denominator: Int) {
+    public init(
+        measureIndex: Int, numerator: Int, denominator: Int,
+        symbol: TimeSignatureSymbol = .numeric,
+    ) {
         self.measureIndex = Int32(measureIndex)
         self.numerator = Int32(numerator)
         self.denominator = Int32(denominator)
+        self.symbol = Int32(symbol.rawValue)
     }
 
-    public func decoded() -> (measureIndex: Int, numerator: Int, denominator: Int) {
-        (measureIndex: Int(measureIndex), numerator: Int(numerator), denominator: Int(denominator))
+    public func decoded() -> (
+        measureIndex: Int, numerator: Int, denominator: Int, symbol: TimeSignatureSymbol,
+    ) {
+        (
+            measureIndex: Int(measureIndex),
+            numerator: Int(numerator),
+            denominator: Int(denominator),
+            symbol: TimeSignatureSymbol(rawValue: Int(symbol)) ?? .numeric,
+        )
     }
 }
 

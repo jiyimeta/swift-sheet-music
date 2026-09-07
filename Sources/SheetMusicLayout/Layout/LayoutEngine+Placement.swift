@@ -532,6 +532,7 @@ extension LayoutEngine {
                     let element = LayoutElement.timeSignature(
                         numerator: ts.numerator,
                         denominator: ts.denominator,
+                        symbol: ts.symbol,
                         origin: CGPoint(x: tsX, y: timeSigY),
                     )
                     if ts.visible {

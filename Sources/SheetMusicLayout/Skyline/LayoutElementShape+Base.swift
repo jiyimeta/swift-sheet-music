@@ -304,7 +304,7 @@ extension LayoutElementShape {
         switch element {
         case let .clef(_, origin, _),
              let .keySignature(_, _, _, _, origin),
-             let .timeSignature(_, _, origin),
+             let .timeSignature(_, _, _, origin),
              let .measureRepeat(_, origin),
              let .multiMeasureRest(_, origin):
             p = origin

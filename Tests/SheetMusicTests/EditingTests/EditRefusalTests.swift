@@ -87,6 +87,7 @@ struct EditRefusalTests {
             .rebarWouldSplitTuplet(measureIndex: 2),
             .rebarWouldDisplaceBarlineMarker(measureIndex: 3),
             .invalidTimeSignatureValue(numerator: 0, denominator: 3),
+            .timeSignatureSymbolMismatch(symbol: .common, numerator: 3, denominator: 4),
             .emptyRehearsalMarkText,
             .voiceAlreadyExists(staff: staff, measureIndex: 0, voiceIndex: 1),
             .invalidRepeatCount(1),

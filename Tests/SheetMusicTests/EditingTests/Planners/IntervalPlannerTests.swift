@@ -60,4 +60,47 @@ struct IntervalPlannerTests {
 
         #expect(result == nil)
     }
+
+    // MARK: - note(_:above:keySig:)
+
+    /// MuseScore's `Alt`+1…0, every degree it offers, read off C4 in C major. The interval NUMBER is the argument,
+    /// so the step count is one less — which is why 8 is the octave and 10 the tenth (`Alt+0`), not the other way
+    /// round.
+    @Test(arguments: [
+        (1, 60, 14), (2, 62, 16), (3, 64, 18), (4, 65, 13), (5, 67, 15),
+        (6, 69, 17), (7, 71, 19), (8, 72, 14), (9, 74, 16), (10, 76, 18),
+    ])
+    func `every degree above C4 in C major`(degrees: Int, pitch: Int, tpc: Int) {
+        let result = IntervalPlanner.note(degrees, above: Note(pitch: 60, tpc: 14), keySig: 0)
+
+        #expect(result?.pitch == pitch)
+        #expect(result?.tpc == tpc)
+    }
+
+    /// The octave rule, and the only case where it is observable: an octave keeps the reference's OWN spelling
+    /// rather than the one the key would give. C♯4 in C major (tpc 21) → C♯5, not the C♮ the signature spells.
+    /// MuseScore's `useOctaveRule` (`engraving/editing/cmd.cpp`).
+    @Test func `an octave keeps an altered note's spelling instead of re-reading the key`() {
+        let result = IntervalPlanner.note(8, above: Note(pitch: 61, tpc: 21), keySig: 0)
+
+        #expect(result?.pitch == 73)
+        #expect(result?.tpc == 21)
+    }
+
+    /// And the contrast that makes the rule mean something: a NON-octave degree above the same C♯ is read from the
+    /// key, so the alteration is not carried.
+    @Test func `a third above an altered note is spelled in key`() {
+        let result = IntervalPlanner.note(3, above: Note(pitch: 61, tpc: 21), keySig: 0)
+
+        #expect(result?.pitch == 64)
+        #expect(result?.tpc == 18)
+    }
+
+    /// Negative degrees read downward — what `AddIntervalToSelection` uses for MuseScore's `Shift+Alt` row.
+    @Test func `a negative degree reads downward`() {
+        let result = IntervalPlanner.note(-3, above: Note(pitch: 64, tpc: 18), keySig: 0)
+
+        #expect(result?.pitch == 60)
+        #expect(result?.tpc == 14)
+    }
 }

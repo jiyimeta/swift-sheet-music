@@ -138,6 +138,13 @@ Pixel 8a it reports that Edwin has CJK, kana and emoji — and `getTextWidths` a
 `getTextPath` substitute the same way. The builder parses each font's own `cmap`
 for that reason, and the instrumented test pins the resulting glyph counts.
 
+### Instrumented tests in CI
+
+CI builds the instrumented-test APKs in the macOS job, where the Swift Android
+cross-compile and wirelet codegen run, then executes them on an accelerated
+x86_64 emulator in a Linux job. No GitHub-hosted runner can accelerate an arm64
+Android emulator. The local Gradle command above is unchanged.
+
 ## Wirelet bootstrap and schema rules
 
 Gradle invokes `io.github.jiyimeta.wirelet` against SwiftPM's pinned checkout.

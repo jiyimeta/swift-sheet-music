@@ -81,7 +81,7 @@ public enum BarLineGeometry {
         let announcesCourtesy = last.elements.contains { element in
             switch element {
             case let .keySignature(_, _, _, _, origin),
-                 let .timeSignature(_, _, origin):
+                 let .timeSignature(_, _, _, origin):
                 origin.x > barX
             default:
                 false

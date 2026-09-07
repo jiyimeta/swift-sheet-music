@@ -21,9 +21,10 @@ extension LayoutEngine {
                 sharps: s, flats: f, clef: clef, naturals: naturals,
                 origin: shift(p),
             )
-        case let .timeSignature(n, d, p):
+        case let .timeSignature(n, d, symbol, p):
             return .timeSignature(
-                numerator: n, denominator: d, origin: shift(p),
+                numerator: n, denominator: d, symbol: symbol,
+                origin: shift(p),
             )
         case let .barLine(s, p, halfHeight):
             return .barLine(

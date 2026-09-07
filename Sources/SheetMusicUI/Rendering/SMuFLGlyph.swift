@@ -1,4 +1,5 @@
 import CoreGraphics
+import SheetMusicCore
 import SheetMusicLayout
 
 /// `Character`-typed wrapper around `SheetMusicLayout.SMuFLCodepoint`.
@@ -87,8 +88,12 @@ enum SMuFLGlyph {
         scalar(SMuFLCodepoint.timeSigDigit(d))
     }
 
-    static let timeSigCommon: Character = scalar(SMuFLCodepoint.timeSigCommon)
-    static let timeSigCutCommon: Character = scalar(SMuFLCodepoint.timeSigCutCommon)
+    /// The glyph a non-numeric `TimeSignatureSymbol` is drawn as, or `nil` for `.numeric`, which is
+    /// drawn as two rows of `timeSigDigit(_:)` instead. The mapping itself is
+    /// `TimeSignatureLayout.symbolCodepoint`, so all three renderers pick the same glyph.
+    static func timeSigSymbol(_ symbol: TimeSignatureSymbol) -> Character? {
+        TimeSignatureLayout.symbolCodepoint(symbol).map(scalar)
+    }
 
     // MARK: - Navigation marks
 

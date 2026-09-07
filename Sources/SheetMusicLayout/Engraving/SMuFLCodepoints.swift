@@ -70,6 +70,10 @@ public enum SMuFLCodepoint {
     public static let timeSig0: UInt32 = 0xE080
     public static let timeSigCommon: UInt32 = 0xE08A
     public static let timeSigCutCommon: UInt32 = 0xE08B
+    /// Bach's cut-time sign. Outside the E0xx time-signature block: SMuFL puts the two "cut" variants in the
+    /// optional ECxx range (`timeSigCut2` / `timeSigCut3`), and Bravura ships both.
+    public static let timeSigCut2: UInt32 = 0xEC85
+    public static let timeSigCut3: UInt32 = 0xEC86
 
     /// Convenience for the `0…9` time-signature digit range.
     public static func timeSigDigit(_ d: Int) -> UInt32 {

@@ -418,8 +418,22 @@ public final class SwiftySynthBackend: SynthBackend {
         }
     }
 
+    /// Ends the sounding voices as well as holding the transport — see `SynthBackend.pause()` for why a pause that
+    /// only stops the clock is heard later as a chord underneath the next note preview.
+    ///
+    /// Both synthesizers, because a count-in click can be mid-decay at a pause exactly as a chord can, and
+    /// `immediate: true` rather than a release: the host pauses the graph right after this, and a release segment
+    /// nothing renders is a held voice by another name.
+    ///
+    /// Unlike `stop()` this moves neither transport, so `play()` resumes from where the pause left off. What it
+    /// costs is a note held across the pause — the sequencer does not re-articulate it on resume, so the rest of
+    /// that note is lost. Pause means silence here, as it does in MuseScore and in a DAW.
     public func pause() {
-        lock.withLockUnchecked { $0.isPlaying = false }
+        lock.withLockUnchecked { shared in
+            shared.isPlaying = false
+            shared.synthesizer?.noteOffAll(immediate: true)
+            shared.metronomeSynthesizer?.noteOffAll(immediate: true)
+        }
     }
 
     public func stop() {

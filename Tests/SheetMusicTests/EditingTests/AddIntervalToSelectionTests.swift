@@ -61,7 +61,16 @@ struct AddIntervalToSelectionTests {
         #expect(score[Self.slot.withElementIndex(2)] == .rest(duration: .quarter))
     }
 
-    @Test("an interval outside 1…9, or a range that resolves to nothing, is refused")
+    /// A tenth is the widest MuseScore offers (`Alt+0`), so it is the widest this accepts.
+    @Test("a tenth is accepted")
+    func tenthIsAccepted() throws {
+        var score = EditingFixtures.chordAtIndex1()
+        _ = try AddIntervalToSelection(over: Self.range, steps: 10).apply(to: &score)
+        // C4 (60) plus the tenth above it, E5 (76) — the third, an octave up.
+        #expect(Self.pitches(score).map(\.0) == [60, 76])
+    }
+
+    @Test("an interval outside 1…10, or a range that resolves to nothing, is refused")
     func refusals() {
         var score = EditingFixtures.chordAtIndex1()
         let before = score
@@ -70,7 +79,7 @@ struct AddIntervalToSelectionTests {
         }
         #expect(Self.reason(of: zero) == .invalidInterval(steps: 0))
         #expect(throws: SheetMusicError.self) {
-            _ = try AddIntervalToSelection(over: Self.range, steps: 10).apply(to: &score)
+            _ = try AddIntervalToSelection(over: Self.range, steps: 11).apply(to: &score)
         }
         let nowhere = VoiceElementRange(start: Self.slot, end: Self.slot.withElementIndex(9))
         #expect(throws: SheetMusicError.self) {

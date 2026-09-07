@@ -304,10 +304,11 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .timeSignature(numerator, denominator, origin):
+        case let .timeSignature(numerator, denominator, symbol, origin):
             encodeTimeSignature(
                 numerator: numerator,
                 denominator: denominator,
+                symbol: symbol,
                 originX: mox + Double(origin.x),
                 originY: moy + Double(origin.y),
                 sp: sp,

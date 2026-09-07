@@ -2170,12 +2170,41 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             backend.pause()
         } else {
             sequencer?.stop()
+            silenceSoundingVoices()
         }
         stopCursorTimer()
         if engine.isRunning {
             engine.pause()
         }
         state = .paused
+    }
+
+    /// The AU path's half of "a transport stop leaves nothing sounding" — All Sound Off on every channel of every
+    /// attached unit. The backend path does it inside `SynthBackend.pause()` / `stop()`, whose doc comment carries
+    /// the reasoning; there is no equivalent seam here, because `AVAudioSequencer.stop()` is Apple's.
+    ///
+    /// **Why a transport stop needs this at all.** Stopping the sequencer stops event dispatch, so the note-offs
+    /// belonging to whatever was sounding at that instant are never sent — those voices stay in their sustain
+    /// segment. The `engine.pause()` right after hides it (a paused `AVAudioEngine` renders nothing), but it hides
+    /// it the way a freeze-frame hides motion: the voices are still there, at full amplitude, the next time
+    /// anything starts the graph. `playPreview` starts the graph for a single note, so the chord the user paused on
+    /// came back with the preview — the reported symptom, "after playing, clicking a note mixes other sounds into
+    /// the preview". `renderCountIn`'s "a note left ringing by the previous playback decays naturally" had the same
+    /// hole under it: an un-released voice does not decay, so it sustained through the whole count-in.
+    ///
+    /// Measured on 2026-09-06 (`SwiftySynthPausedVoiceTests`, offline rendering, no hardware): five seconds of
+    /// rendering after a pause still peaked at 0.024 against 0.111 while playing — 22%, flat, not a release tail.
+    ///
+    /// `cutPreviewNote` addresses one known channel; here nothing says which channels the sequencer left sounding,
+    /// so it is all of them.
+    private func silenceSoundingVoices() {
+        for unit in attachedSynths {
+            for channel in UInt8(0) ..< 16 {
+                MIDISynthBuilder.sendControlChange(
+                    into: unit, controller: 120, value: 0, onChannel: channel,
+                )
+            }
+        }
     }
 
     /// Stop playback and rewind to the start. Different from
@@ -2190,6 +2219,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         } else {
             sequencer?.stop()
             sequencer?.currentPositionInBeats = 0
+            // The backend's own `stop()` already ends its voices; the AU path freezes them exactly as `pause()`
+            // did — see `silenceSoundingVoices`.
+            silenceSoundingVoices()
         }
         stopCursorTimer()
         if engine.isRunning {

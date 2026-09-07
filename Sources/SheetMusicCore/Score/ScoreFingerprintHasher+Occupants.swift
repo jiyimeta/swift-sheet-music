@@ -85,4 +85,17 @@ extension FNV1a {
             combine(item)
         }
     }
+
+    /// A time signature's symbol (`TimeSignature.symbol`), BY OCCUPANTS for the same reason
+    /// `combineOccupied(_ spanners:tag:)` is: `.numeric` feeds no bytes, so every score whose signatures are
+    /// drawn as numbers — which is every committed golden — hashes exactly as it did before the symbol
+    /// existed.
+    ///
+    /// It has to be here at all because `.setTimeSignature` writes the symbol: without it, a mirror that
+    /// applied the meter but not the C would agree with one that applied both.
+    mutating func combineOccupied(_ symbol: TimeSignatureSymbol, tag: Int) {
+        guard symbol != .numeric else { return }
+        combine(tag)
+        combine(symbol.rawValue)
+    }
 }

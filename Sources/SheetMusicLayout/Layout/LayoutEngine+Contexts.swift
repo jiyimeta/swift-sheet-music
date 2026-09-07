@@ -28,9 +28,16 @@ public struct LayoutMeasureContext: Sendable, Equatable {
     public struct TimeSignaturePair: Sendable, Equatable {
         public let numerator: Int
         public let denominator: Int
-        public init(numerator: Int, denominator: Int) {
+        /// How the pair is DRAWN — see `TimeSignatureSymbol`. Defaulted so a
+        /// caller that only knows a meter keeps building the numeric form.
+        public let symbol: TimeSignatureSymbol
+        public init(
+            numerator: Int, denominator: Int,
+            symbol: TimeSignatureSymbol = .numeric,
+        ) {
             self.numerator = numerator
             self.denominator = denominator
+            self.symbol = symbol
         }
     }
 
@@ -100,6 +107,7 @@ extension LayoutEngine {
                         timeSig = .init(
                             numerator: t.numerator,
                             denominator: t.denominator,
+                            symbol: t.symbol,
                         )
                     case .chord:
                         break scan
@@ -275,6 +283,7 @@ extension LayoutEngine {
                 elements.append(.timeSignature(
                     numerator: ts.numerator,
                     denominator: ts.denominator,
+                    symbol: ts.symbol,
                     origin: CGPoint(
                         x: timeSigX,
                         y: staffMidY + metrics.sp * geometry.centerOffsetSp,

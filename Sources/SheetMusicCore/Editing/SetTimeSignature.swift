@@ -30,11 +30,18 @@ public struct SetTimeSignature: EditCommand {
     public let measureIndex: Int
     public let numerator: Int
     public let denominator: Int
+    /// How the declaration is drawn. Never affects the re-bar — the region is re-partitioned by `numerator` /
+    /// `denominator` whichever glyph stands over it.
+    public let symbol: TimeSignatureSymbol
 
-    public init(measureIndex: Int, numerator: Int, denominator: Int) {
+    public init(
+        measureIndex: Int, numerator: Int, denominator: Int,
+        symbol: TimeSignatureSymbol = .numeric,
+    ) {
         self.measureIndex = measureIndex
         self.numerator = numerator
         self.denominator = denominator
+        self.symbol = symbol
     }
 
     public var affectedLocation: VoiceElementID {
@@ -53,9 +60,18 @@ public struct SetTimeSignature: EditCommand {
         guard TimeSignatureRegion.isWritable(numerator: numerator, denominator: denominator) else {
             throw Self.refused(.invalidTimeSignatureValue(numerator: numerator, denominator: denominator))
         }
+        // A symbol stands for exactly one meter (`TimeSignatureSymbol.conventionalMeter`). Writing it over a
+        // different one would engrave a glyph contradicting the bar length the same element declares.
+        if let expected = symbol.conventionalMeter,
+           expected != (numerator, denominator)
+        {
+            throw Self.refused(.timeSignatureSymbolMismatch(
+                symbol: symbol, numerator: numerator, denominator: denominator,
+            ))
+        }
         return try TimeSignatureRegion.rebar(
             &score, from: measureIndex,
-            to: TimeSignature(numerator: numerator, denominator: denominator),
+            to: TimeSignature(numerator: numerator, denominator: denominator, symbol: symbol),
             declaringAtHead: true,
         )
     }
@@ -164,6 +180,7 @@ extension TimeSignatureRegion {
         var columns = try RebarPlanner.rebar(
             region: region, in: score,
             numerator: signature.numerator, denominator: signature.denominator,
+            symbol: signature.symbol,
             emitsLeadingSignature: declaringAtHead && !headIsIrregular,
         ).columns
         if headIsIrregular, !columns.isEmpty {

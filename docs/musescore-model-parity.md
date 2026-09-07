@@ -1378,10 +1378,10 @@ readerが受けるtag集合と、ssm側のconsumed setを突き合わせて数�
   **落ちているのはsubtypeのtyped化だけ**——生stringとして往復はする。
 - `TIMESIG` — integer numerator / denominatorのみ、は正しい。ただし
   ~~`TimeSigType`、text numerator / denominator、local stretch、beam group、括弧が落ちる~~
-  **`subtype`（`TimeSigType`）・`textN` / `textD`・`stretchN` / `stretchD`・`Groups`は
-  consumed setに無いので往復する。**「括弧」に相当するtagは4.6.5のreaderに存在しない。
-  つまりcommon timeとcut timeは**fileからは消えないが、`TimeSignature`からは読めない**。
-  1つ目の分類。
+  **`textN` / `textD`・`stretchN` / `stretchD`・`Groups`はconsumed setに無いので往復する。**
+  「括弧」に相当するtagは4.6.5のreaderに存在しない。`subtype`（`TimeSigType`）だけは別で、
+  **`TimeSignature.symbol`（`TimeSignatureSymbol`）として全5値をmodel化済み**（`<subtype>` 0…4）。
+  common timeとcut timeはfileから消えないだけでなく、modelからも読めて描画される。
 - `KEYSIG` — concert fifthsのみ、は正しい。内訳は3分類に分かれる:
   - **往復する（consumed setに無い）**: `CustDef`、`subtype`、`isCourtesy`、
     そしてcustom key signatureの実体である`KeySym`子要素。

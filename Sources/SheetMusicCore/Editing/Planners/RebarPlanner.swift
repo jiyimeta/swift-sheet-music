@@ -19,7 +19,8 @@ enum RebarPlanner {
     }
 
     /// `region` is [firstMeasure, endMeasure) in current measure indices. `numerator`/`denominator` are the
-    /// new nominal signature.
+    /// new nominal signature and `symbol` is how it is drawn — the latter reaches only the declaration this
+    /// plan writes, never the barring, which is the numbers' business alone.
     ///
     /// With `emitsLeadingSignature` the first REGULAR column's voice-0 prefix declares the new meter on every
     /// staff; without it nothing is declared at all — the shape `RemoveTimeSignature` needs, where the region
@@ -27,6 +28,7 @@ enum RebarPlanner {
     /// way every `.timeSignature` already inside a re-barred run is dropped.
     static func rebar(
         region: Range<Int>, in score: Score, numerator: Int, denominator: Int,
+        symbol: TimeSignatureSymbol = .numeric,
         emitsLeadingSignature: Bool = true,
     ) throws -> Rebarred {
         let measureCount = MeasureStructure.measureCount(of: score)
@@ -38,7 +40,7 @@ enum RebarPlanner {
 
         var columns: [MeasureSlice] = []
         var pendingSignature = emitsLeadingSignature
-            ? TimeSignature(numerator: numerator, denominator: denominator)
+            ? TimeSignature(numerator: numerator, denominator: denominator, symbol: symbol)
             : nil
         for run in runs(in: region, of: score) {
             switch run {

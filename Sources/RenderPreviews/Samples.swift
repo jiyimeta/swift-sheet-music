@@ -251,16 +251,27 @@
 
         static var timeSignatures: Score {
             let c4 = Note(pitch: 60, tpc: 14)
-            func m(_ n: Int, _ d: Int) -> Measure {
+            func m(
+                _ n: Int, _ d: Int, _ symbol: TimeSignatureSymbol = .numeric,
+            ) -> Measure {
                 Measure(voices: [Voice(elements: [
                     .clef(Clef(concertClefType: "G")),
-                    .timeSignature(TimeSignature(numerator: n, denominator: d)),
+                    .timeSignature(TimeSignature(
+                        numerator: n, denominator: d, symbol: symbol,
+                    )),
                     .chord(Chord(duration: .whole, notes: [c4])),
                 ])])
             }
+            // The numeric forms first, then all four symbols, so a symbol's
+            // glyph and vertical placement can be read against the digit
+            // rows it replaces in the same image.
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m(3, 4), m(6, 8), m(12, 8)])],
+                parts: [treblePart(measures: [
+                    m(3, 4), m(6, 8), m(12, 8),
+                    m(4, 4, .common), m(2, 2, .cutCommon),
+                    m(2, 2, .cutBach), m(9, 8, .cutTriple),
+                ])],
             )
         }
 
