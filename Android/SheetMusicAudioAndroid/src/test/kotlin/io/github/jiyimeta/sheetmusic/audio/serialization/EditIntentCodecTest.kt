@@ -23,36 +23,56 @@ import java.io.File
  * them with the generated Kotlin codec and re-encoding must reproduce the same bytes; that is the
  * only assertion that says the two languages spell one wire format.
  *
- * 87 of them, spanning `EditIntent` cases 30…73 — layout breaks, barlines, range transposes, clefs,
- * dynamics, articulations, grace notes, spanners, chord symbols — which makes this a far wider
- * sweep of the vocabulary than any hand-written fixture set would be.
+ * Two chains' worth: 87 steps spanning `EditIntent` cases 30…73 (the edit-command parity project's
+ * frozen chain) plus 5 steps carrying case 74 (`setLyricSyllables`, the macOS score-text-entry
+ * project's chain) — 92 in total, which makes this a far wider sweep of the vocabulary than any
+ * hand-written fixture set would be. `standard`'s chain (cases 0…4, 12…13) is deliberately not
+ * included: it predates this codec's cases and adds no vocabulary the two above do not already cover.
  */
 class EditIntentCodecTest {
 
     private companion object {
         /**
-         * The committed parity-chain steps, relative to this module's directory.
+         * Each chain's committed steps, relative to this module's directory, keyed by its asset
+         * directory name — read from the sibling module's `androidTest` assets rather than copied
+         * here, so a third copy of these opaque binaries is not a third thing to keep in step with
+         * chains that are either frozen (`parity`) or, for `lyrics`, recorded by the Swift host only.
          *
-         * Read from the sibling module's `androidTest` assets rather than copied here: a third copy
-         * of 87 opaque binaries is a third thing to keep in step with the frozen chain, and the
-         * chain's own doc says it is never re-recorded.
+         * The value is the floor `the fixtures are present` checks that chain's directory against.
+         * Per-chain rather than one combined floor over `steps().size`: a healthy `parity` directory
+         * (87 files) alone clears any single combined threshold this file would plausibly choose, so
+         * a combined floor could not notice `lyrics`' own directory going empty — every assertion
+         * below would then vacuously "pass" while testing none of case 74's vocabulary.
          */
-        val STEP_DIR = File("../SheetMusicAndroid/src/androidTest/assets/editReplay-parity")
+        val STEP_DIR_FLOORS = mapOf(
+            "editReplay-parity" to 80,
+            "editReplay-lyrics" to 5,
+        )
 
-        fun steps(): List<File> =
-            STEP_DIR.listFiles { f: File -> f.name.startsWith("step-") && f.extension == "bin" }
+        fun stepsIn(chain: String): List<File> {
+            val dir = File("../SheetMusicAndroid/src/androidTest/assets/$chain")
+            return dir.listFiles { f: File -> f.name.startsWith("step-") && f.extension == "bin" }
                 ?.sortedBy { it.name.removePrefix("step-").removeSuffix(".bin").toInt() }
                 ?: emptyList()
+        }
+
+        fun steps(): List<File> = STEP_DIR_FLOORS.keys.flatMap { stepsIn(it) }
+
+        /** `"editReplay-parity/step-3.bin"` rather than the bare filename, since two chains both have a `step-0.bin`. */
+        fun File.chainRelativeName(): String = "${parentFile?.name}/$name"
     }
 
     @Test
     fun `the fixtures are present`() {
         // Guards the rest of the file: an empty directory would make every assertion below vacuous
-        // and the suite would pass while testing nothing.
-        assertTrue(
-            "no step-*.bin under ${STEP_DIR.absolutePath} — the parity chain assets moved?",
-            steps().size >= 80,
-        )
+        // for that chain's vocabulary, and the suite would still pass having tested none of it.
+        for ((chain, floor) in STEP_DIR_FLOORS) {
+            val count = stepsIn(chain).size
+            assertTrue(
+                "no step-*.bin under $chain (want at least $floor) — did its assets move?",
+                count >= floor,
+            )
+        }
     }
 
     @Test
@@ -60,7 +80,7 @@ class EditIntentCodecTest {
         val failures = steps().mapNotNull { file ->
             runCatching { EditIntentCodec.decode(file.readBytes()) }
                 .exceptionOrNull()
-                ?.let { "${file.name}: $it" }
+                ?.let { "${file.chainRelativeName()}: $it" }
         }
         assertEquals("intents this codec could not decode", emptyList<String>(), failures)
     }
@@ -73,22 +93,22 @@ class EditIntentCodecTest {
             val original = file.readBytes()
             val reencoded = runCatching {
                 EditIntentCodec.encode(EditIntentCodec.decode(original))
-            }.getOrElse { return@mapNotNull "${file.name}: $it" }
+            }.getOrElse { return@mapNotNull "${file.chainRelativeName()}: $it" }
             if (original.contentEquals(reencoded)) {
                 null
             } else {
-                "${file.name}: ${original.size} bytes in, ${reencoded.size} out"
+                "${file.chainRelativeName()}: ${original.size} bytes in, ${reencoded.size} out"
             }
         }
         assertEquals("intents that did not re-encode identically", emptyList<String>(), mismatches)
     }
 
     @Test
-    fun `the vocabulary the chain exercises is wide`() {
-        // The chain spans EditIntent cases 30…73. If a future codegen change silently collapsed
-        // several cases into one, every assertion above would still pass — the bytes would round
-        // trip through whatever single case they all decoded to. Counting distinct decoded case
-        // types is what notices.
+    fun `the vocabulary the chains exercise is wide`() {
+        // The parity chain spans EditIntent cases 30…73; the lyrics chain adds case 74. If a future
+        // codegen change silently collapsed several cases into one, every assertion above would still
+        // pass — the bytes would round trip through whatever single case they all decoded to. Counting
+        // distinct decoded case types is what notices.
         val distinctCases = steps().map { EditIntentCodec.decode(it.readBytes())::class.simpleName }
             .toSet()
         assertTrue("only ${distinctCases.size} distinct intent cases: $distinctCases", distinctCases.size >= 30)
@@ -124,8 +144,8 @@ class EditIntentCodecTest {
                 (intent as? EditIntent.Composite)?.arg0?.members?.firstOrNull()?.intent
             }.count() > 1
         }
-        // Nothing to assert about depth if the frozen chain carries no composite; the codec's own
-        // bound is exercised by the decode tests above either way.
+        // Nothing to assert about depth if neither chain carries a composite; the codec's own bound
+        // is exercised by the decode tests above either way.
         assumeTrue(deep)
     }
 }
