@@ -2133,10 +2133,10 @@ extension LayoutEngine {
     /// The chord or rest a system-lane mark at `tick` hangs on: the first voice of `measure` that has one.
     ///
     /// A lane mark is addressed by beat and staff, never by voice — `SetStaffText` reduces whatever anchor it
-    /// is handed to a `MeasurePosition` — so a bar whose beat carries chords in several voices has no one
-    /// right voice to name and this picks the lowest-numbered. A caret opened from a chord in another voice at
-    /// the same beat therefore misses, and the caller falls back to its empty-editor origin. That is a worse
-    /// position, not a wrong element, which is the trade the identity match is here to make.
+    /// is handed to a `MeasurePosition` — so a bar whose beat carries chords in several voices has no one right
+    /// voice to name and this picks the lowest-numbered. A `VoiceElementID` is therefore a NARROWER identity
+    /// than the mark actually has, and the two ways that costs a caller are stated in full on the accessor that
+    /// consumes it, `LayoutDocument.staffTextOrigin(at:style:)`. Read them there before relying on this.
     static func systemLaneAnchor(
         atTick tick: Int,
         in measure: Measure,

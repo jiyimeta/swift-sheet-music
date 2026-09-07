@@ -42,6 +42,25 @@ extension LayoutDocument {
     /// two "solo"s in one bar are two marks, and a lookup that could only compare text had to rank them by
     /// proximity and could pick the wrong one. `style` still narrows the search because one beat can carry both
     /// a staff text and a system text — `SetStaffText` writes them as distinct marks at the same anchor.
+    ///
+    /// ## What `nil` means, and the two anchors that cannot match
+    ///
+    /// `nil` is not "the mark is not engraved". A caller re-editing an EXISTING, non-empty mark has nothing to
+    /// fall back on — the empty-editor fallback in the example overlay is gated on the editor being empty
+    /// (`ScoreTextEntryOverlay.textEntryOrigin`) — so a miss here shows up as NO CARET AT ALL, not as a caret
+    /// in a worse place. The text-and-proximity lookup this replaced always returned something, so these two
+    /// cases are a regression in exchange for never returning the wrong element; both need a beat-shaped
+    /// identity to fix properly, and both are worth checking before this is relied on for a new caret path.
+    ///
+    /// 1. **Another voice at the same beat.** A lane mark has no voice: `SetStaffText` reduces any anchor it is
+    ///    given to a `MeasurePosition`. Layout must still name one voice element, and picks the lowest-numbered
+    ///    voice with a chord or rest at that beat. Pass an anchor from voice 2 of a bar whose beat also has a
+    ///    voice-1 chord and this returns `nil`; the voice-1 anchor for the same mark answers.
+    /// 2. **A system text queried from any staff but the canonical one.** `SetStaffText` writes a system text
+    ///    with `originalStaff: nil` (it belongs to no staff), and `LayoutEngine` places a staff-less lane
+    ///    element on the canonical staff only — one glyph, carrying a staff-(0,0) anchor. So
+    ///    `staffTextOrigin(at:style: .systemText)` returns `nil` for EVERY anchor outside part 0 / staff 0,
+    ///    which in a multi-part score is most of them.
     public func staffTextOrigin(
         at anchor: VoiceElementID,
         style: TextStyleType,
@@ -80,9 +99,12 @@ extension LayoutDocument {
     /// A rehearsal mark's layout origin belongs to its frame. The renderer moves the bottom-leading text origin
     /// inward by the frame padding, so this accessor applies that same offset for an inline editing caret.
     ///
-    /// Matched on the mark's own `measureIndex` rather than on the enclosing `LayoutMeasure`'s: a mark is
-    /// addressed by bar (`SetRehearsalMark`), and the layout measure it was placed into is not always its
-    /// source bar.
+    /// The two `measureIndex` checks below are not redundant in intent, though they are in effect today. The
+    /// outer `where` narrows the scan to one bar's layout measures and is load-bearing: **do not remove it.**
+    /// The inner one asks the mark itself which bar it is for, so the lookup does not depend on the fact that
+    /// the engine currently files a mark under exactly the bar it was emitted for — one wiring point passes the
+    /// same `measureIdx` to both, so the second check is a tautology at present and is here to stay true if
+    /// that ever stops holding.
     public func rehearsalMarkTextOrigin(
         at anchor: VoiceElementID,
     ) -> CGPoint? {

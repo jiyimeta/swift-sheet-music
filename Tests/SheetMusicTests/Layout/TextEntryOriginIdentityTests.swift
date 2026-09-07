@@ -136,6 +136,56 @@ struct TextEntryOriginIdentityTests {
         #expect(anchors.compactMap(\.self) == [anchor])
     }
 
+    /// The narrower-identity limit, dimension 1, pinned: a lane mark has no voice, layout must still name one,
+    /// and it names the lowest-numbered voice with a chord or rest at that beat. Anchoring the write from voice
+    /// 2 does not make the mark voice 2's — the voice-1 anchor is the one that answers, and voice 2's returns
+    /// `nil`, which for a non-empty editor means no caret at all.
+    ///
+    /// Change this expectation only by making the miss ANSWER, never by making it answer with a different
+    /// mark's origin.
+    @Test func aLaneMarkIsFoundOnlyThroughItsLowestNumberedVoice() throws {
+        var score = EditingFixtures.parityFixture()
+        // Bar 1 of staff (0,0) is the fixture's two-voice bar: voice 1 holds four quarter rests, voice 2 a
+        // single measure rest. Both start at the bar's downbeat, so the beat is genuinely shared.
+        let secondVoice = VoiceElementID(
+            staff: EditingFixtures.staff0, measureIndex: 1, voiceIndex: 1, elementIndex: 0,
+        )
+        let firstVoice = VoiceElementID(
+            staff: EditingFixtures.staff0, measureIndex: 1, voiceIndex: 0, elementIndex: 0,
+        )
+        _ = try SetStaffText(anchor: secondVoice, text: "pizz.", isSystemText: false).apply(to: &score)
+
+        let document = Self.layout(score)
+
+        #expect(document.staffTextOrigin(at: firstVoice, style: .staffText) != nil)
+        #expect(document.staffTextOrigin(at: secondVoice, style: .staffText) == nil)
+    }
+
+    /// The narrower-identity limit, dimension 2, pinned: `SetStaffText` writes a system text with no staff, and
+    /// a staff-less lane element is engraved on the canonical staff only — one glyph carrying a staff-(0,0)
+    /// anchor. So the part-1 anchor that WROTE the mark cannot find it again, while a canonical-staff anchor at
+    /// the same beat can.
+    ///
+    /// This is the case a multi-part score hits constantly, and the one a beat-shaped identity would fix.
+    @Test func aSystemTextIsFoundOnlyThroughTheCanonicalStaff() throws {
+        var score = EditingFixtures.parityFixture()
+        // Staff (1,0) bar 0 is [timeSignature, measure rest]; element 1 is the rest, on the downbeat.
+        let secondPart = VoiceElementID(
+            staff: StaffAddress(partIndex: 1, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+        )
+        // Staff (0,0) bar 0 is [timeSignature, C4, D4, rest, rest]; element 1 is the chord on the same downbeat.
+        let canonical = VoiceElementID(
+            staff: EditingFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+        )
+        _ = try SetStaffText(anchor: secondPart, text: "rit.", isSystemText: true).apply(to: &score)
+
+        let document = Self.layout(score)
+
+        #expect(document.staffTextOrigin(at: canonical, style: .systemText) != nil)
+        #expect(document.staffTextOrigin(at: secondPart, style: .systemText) == nil)
+    }
+
     private static func layout(_ score: Score) -> LayoutDocument {
         LayoutEngine.layout(
             score: score,

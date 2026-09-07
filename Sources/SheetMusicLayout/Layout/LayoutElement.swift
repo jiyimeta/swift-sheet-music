@@ -234,8 +234,14 @@ public enum LayoutElement: Sendable, Equatable {
     ///
     /// `measureIndex` is the source bar the mark belongs to — its identity, and deliberately NOT a
     /// `VoiceElementID`: a rehearsal mark is a system element addressed by bar (`SetRehearsalMark`), so it has
-    /// no voice element to name. It is carried rather than read off the enclosing `LayoutMeasure` because the
-    /// two can differ — a repeat-unwound or multi-measure-rest layout measure is not always its source bar.
+    /// no voice element to name.
+    ///
+    /// Today it always equals the enclosing `LayoutMeasure.measureIndex`: there is one wiring point, and it
+    /// hands the same `measureIdx` to `placeMeasureElements` and to `LayoutMeasure` (`LayoutEngine+SystemBuild`).
+    /// Carrying it anyway is what stops a lookup from DEPENDING on that coincidence — the mark states which bar
+    /// it is for, rather than a caller inferring it from where the element happens to have been filed.
+    /// (The multi-measure-rest collapse is the one path where a layout measure is not one source bar, and it
+    /// bypasses `placeMeasureElements` entirely, so no rehearsal mark is emitted through it.)
     case rehearsalMark(
         text: String,
         origin: CGPoint,
