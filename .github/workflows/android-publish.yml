@@ -58,7 +58,7 @@ jobs:
           # SDK; Apple's Xcode swiftc produces incompatible swiftmodules).
           echo "/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin" >> "$GITHUB_PATH"
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
 
       - name: Install required NDK
         run: sdkmanager "ndk;27.3.13750724"
