@@ -1,7 +1,8 @@
 name: Android audio module
 
-# Android cross-compile + Kotlin test + AAR assembly. Runs on push to main
-# and on demand. It is deliberately NOT triggered on pull_request: the job
+# Android cross-compile + Kotlin tests + AAR assembly on macOS, followed by
+# instrumented tests on Linux. Runs on push to main and on demand. It is
+# deliberately NOT triggered on pull_request: the build job
 # needs a GitHub Packages token (WIRELET_PAT) to download the wirelet
 # Gradle plugin / runtime, and secrets are unavailable to fork PRs on a
 # public repo — a fork PR would always fail here. Apple-side verification
@@ -13,8 +14,9 @@ on:
   workflow_dispatch:
 
 # Building the Android audio module reproduces the full local-dev
-# cross-compile pipeline, so this runs on macOS (Scripts/android-build-libs.sh
-# hardcodes darwin NDK paths). The chain mirrors android-publish.yml:
+# cross-compile pipeline, so the build job runs on macOS
+# (Scripts/android-build-libs.sh hardcodes darwin NDK paths). The chain mirrors
+# android-publish.yml:
 #
 #   1. Host Swift 6.3.3 (org.swift toolchain) + Android Swift SDK + NDK.
 #   2. Scripts/android-build-libs.sh cross-compiles SheetMusicAndroidJNI for
@@ -29,13 +31,12 @@ on:
 # over public HTTPS with no auth. A classic PAT (read:packages) is still
 # needed as WIRELET_PAT because GitHub Packages requires authentication to
 # download the wirelet Gradle plugin / runtime even when they are public.
-env:
-  WIRELET_PAT: ${{ secrets.WIRELET_PAT }}
-
 jobs:
   build-and-test:
     runs-on: macos-14
     timeout-minutes: 75
+    env:
+      WIRELET_PAT: ${{ secrets.WIRELET_PAT }}
     steps:
       - uses: actions/checkout@v4
 
@@ -129,9 +130,50 @@ jobs:
           path: Android/SheetMusicAudioAndroid/build/outputs/aar/*.aar
           retention-days: 30
 
-      # Everything that can only be answered on a device.
+      - name: Assemble instrumented test APKs
+        working-directory: Android
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.WIRELET_PAT }}
+        run: >-
+          ./gradlew
+          :SheetMusicAndroid:assembleDebugAndroidTest
+          :SheetMusicComposeAndroid:assembleDebugAndroidTest
+
+      - name: Upload instrumented test APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: androidTest-apks
+          path: |
+            Android/SheetMusicAndroid/build/outputs/apk/androidTest/debug/*.apk
+            Android/SheetMusicComposeAndroid/build/outputs/apk/androidTest/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  instrumented-tests:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # This job takes the WIRELET_PAT-dependent build result as an artifact
+      # rather than rebuilding it, so it needs neither Swift nor access to
+      # GitHub Packages.
+      - uses: actions/download-artifact@v4
+        with:
+          name: androidTest-apks
+          path: androidTest-apks
+
+      # The instrumented tests this workflow covers.
       #
-      # Three test classes have existed for a while and never run anywhere:
+      # Three test classes have existed for a while and never run in CI:
       # `FontMetricsBuilderTest` pins the runtime-measured font-metrics table —
       # the one thing that can engrave WRONG on Android without failing
       # anything, because nothing on the host exercises `Paint` — and
@@ -148,36 +190,45 @@ jobs:
       # *program*, the Kotlin unit tests on band arithmetic, and neither can see
       # a glyph that stopped drawing or a paint state that leaked.
       #
-      # In THIS job rather than a Linux one with KVM, despite the acceleration
-      # Linux would bring: the wirelet Gradle plugin shells out to `swift run`,
-      # so any job that compiles Kotlin needs the Swift toolchain and the
-      # resolved SwiftPM checkout that only this job has. Splitting would mean
-      # installing Swift on Linux and resolving the package a second time to
-      # save emulator minutes on a job that already paid for the cross-compile.
+      # SheetMusicAudioAndroid's `AacM4aEncoderInstrumentedTest` and
+      # `Mp3MediaCodecEncoderInstrumentedTest` remain unrun; adding that module
+      # is a separate pipeline decision. Driving `am instrument` directly also
+      # means there are no Gradle HTML androidTests reports, only the raw
+      # instrumentation text and logcat captured by the runner script.
       #
-      # `arch: arm64-v8a` because the macOS runners are Apple silicon and the
-      # emulator is only usable there with a matching image (HVF); an x86_64
-      # image would fall back to full emulation and time out.
+      # ScoreCanvasGoldenTest's committed PNG is pinned to API 35, arm64, and
+      # the bundled Bravura and Edwin fonts. CI keeps the API and fonts but now
+      # compares it on x86_64. The bitmap is rasterized on the CPU into an
+      # ARGB_8888 Bitmap, so the emulator's GPU mode is irrelevant, but a Skia
+      # blitter or libm difference between architectures can still shift a
+      # pixel or sub-pixel position. Its tolerance (±12 per channel across at
+      # most 0.2% of pixels) has to absorb that. If it does not, record a second
+      # golden for the CI ABI rather than loosening the tolerance: a tolerance
+      # wide enough to cover an architecture difference could stop catching a
+      # glyph that vanished.
+      #
+      # GitHub's arm64 macOS runners cannot run any Android emulator because
+      # Apple's Virtualization Framework does not expose nested virtualization;
+      # QEMU fails with `HVF error: HV_UNSUPPORTED` (run 34049473476). The arm64
+      # Linux runners have no /dev/kvm, so the only accelerated option is an
+      # x86_64 image on ubuntu-latest. The APKs are built in the macOS job,
+      # where the Swift cross-compile and wirelet codegen live, then executed
+      # here. SheetMusicAndroid and SheetMusicAudioAndroid both declare x86_64
+      # in their abiFilters, and the Compose test APK inherits those natives
+      # transitively through its dependencies.
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@v2
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.WIRELET_PAT }}
         with:
           api-level: 35
-          arch: arm64-v8a
+          arch: x86_64
           target: google_apis
           disable-animations: true
-          script: >-
-            ./Android/gradlew -p Android
-            :SheetMusicAndroid:connectedDebugAndroidTest
-            :SheetMusicComposeAndroid:connectedDebugAndroidTest
+          script: Scripts/ci-run-instrumented-apks.sh androidTest-apks
 
-      - name: Upload instrumented test reports on failure
+      - name: Upload instrumentation logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: instrumented-test-reports
-          path: |
-            Android/SheetMusicAndroid/build/reports/androidTests/
-            Android/SheetMusicComposeAndroid/build/reports/androidTests/
+          name: instrumentation-logs
+          path: build/instrumentation-logs/
+          retention-days: 7

@@ -7,6 +7,22 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **Android instrumented tests now run in CI.** The step shipped in 2.6.0 never
+  passed a CI run: GitHub's arm64 macOS runners cannot start any Android
+  emulator (`HVF error: HV_UNSUPPORTED`), arm64 Linux runners have no
+  `/dev/kvm`, and Intel `macos-13` is retired. An x86_64 Linux emulator is the
+  only accelerated option left, so the APKs are assembled in the macOS job and
+  executed in a new `ubuntu-latest` job.
+
+  `ScoreCanvasGoldenTest` consequently compares its arm64-recorded golden PNG
+  on a different ABI. If the architecture changes the rasterization beyond the
+  existing tolerance, record a second golden for the CI ABI rather than
+  loosening the tolerance until a vanished glyph can pass. The runner also pins
+  the expected instrumentation packages and a per-package test-count floor, so
+  a module or registered test cannot drop out of the gate unnoticed.
+
 ## [2.6.0] - 2026-09-07
 
 ### Added
