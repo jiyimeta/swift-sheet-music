@@ -1303,6 +1303,15 @@ extension LayoutEngine {
                         y: Double(yLocal),
                         runs: runs,
                         width: width,
+                        anchor: timedAnchor(
+                            atTick: tickCursor,
+                            in: voice,
+                            staff: staffAddress,
+                            measureIndex: measureIndex,
+                            voiceIndex: voiceIdx,
+                            measureDuration: measureDuration,
+                            division: division,
+                        ),
                     ))
                     if harmony.visible {
                         out.append(harmonyElement)
@@ -2005,6 +2014,14 @@ extension LayoutEngine {
                     ),
                     color: st.color,
                     style: st.styleType,
+                    anchor: systemLaneAnchor(
+                        atTick: tick,
+                        in: measure,
+                        staff: staffAddress,
+                        measureIndex: measureIndex,
+                        measureDuration: measureDuration,
+                        division: division,
+                    ),
                 )
                 if st.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .swing(s):
@@ -2019,6 +2036,11 @@ extension LayoutEngine {
                     ),
                     color: s.color,
                     style: s.isSystemText ? .systemText : .staffText,
+                    // No anchor: a `<Swing>` marking is its own model element, reaching the page through this
+                    // layout case only because it prints as staff text. No text-entry command addresses it, and
+                    // an anchor here would let a caret opened on a staff text at the same beat resolve to the
+                    // swing marking instead.
+                    anchor: nil,
                 )
                 if s.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .instrumentChange(ic):
@@ -2037,6 +2059,9 @@ extension LayoutEngine {
                     ),
                     color: ic.color,
                     style: .instrumentChange,
+                    // No anchor, for `<Swing>`'s reason: an instrument-change instruction is a separate model
+                    // element that no text-entry command writes.
+                    anchor: nil,
                 )
                 if ic.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .rehearsalMark(rm):
@@ -2052,6 +2077,7 @@ extension LayoutEngine {
                     ),
                     frame: rm.frame,
                     color: rm.color,
+                    measureIndex: measureIndex,
                 )
                 if rm.visible {
                     out.append(rehearsalElement)
@@ -2067,6 +2093,72 @@ extension LayoutEngine {
             key: currentKey,
             synthesizedEndBarLineIndex: synthesizedEndBarLineIndex,
         )
+    }
+
+    /// The chord or rest starting at `tick` in `voice`, named the way an edit command names it.
+    ///
+    /// This is the inverse of the addressing every text mark uses: a chord symbol sits immediately before the
+    /// element it names (`SetChordSymbol` / `AdjacentElementSlot`) and a lane mark is placed at that element's
+    /// onset (`SetStaffText` / `SystemLaneSlot.position`), so both reduce to "the timed element at this tick".
+    /// Layout carries the result on the emitted element so a caret can find the glyph it is editing without
+    /// falling back to matching on the text itself.
+    ///
+    /// The walk is `chordRestIndex`, the cursor `placeMeasureElements` already keeps — asking one walker keeps
+    /// the layout's answer and the model's from drifting apart, the reason `ScoreTickPosition` gives for
+    /// folding `.locationShift` in everywhere.
+    static func timedAnchor(
+        atTick tick: Int,
+        in voice: Voice,
+        staff: StaffAddress,
+        measureIndex: Int,
+        voiceIndex: Int,
+        measureDuration: Fraction,
+        division: Int,
+    ) -> VoiceElementID? {
+        chordRestIndex(
+            in: voice,
+            atTick: tick,
+            measureDuration: measureDuration,
+            division: division,
+        ).map {
+            VoiceElementID(
+                staff: staff,
+                measureIndex: measureIndex,
+                voiceIndex: voiceIndex,
+                elementIndex: $0,
+            )
+        }
+    }
+
+    /// The chord or rest a system-lane mark at `tick` hangs on: the first voice of `measure` that has one.
+    ///
+    /// A lane mark is addressed by beat and staff, never by voice — `SetStaffText` reduces whatever anchor it
+    /// is handed to a `MeasurePosition` — so a bar whose beat carries chords in several voices has no one
+    /// right voice to name and this picks the lowest-numbered. A caret opened from a chord in another voice at
+    /// the same beat therefore misses, and the caller falls back to its empty-editor origin. That is a worse
+    /// position, not a wrong element, which is the trade the identity match is here to make.
+    static func systemLaneAnchor(
+        atTick tick: Int,
+        in measure: Measure,
+        staff: StaffAddress,
+        measureIndex: Int,
+        measureDuration: Fraction,
+        division: Int,
+    ) -> VoiceElementID? {
+        for (voiceIndex, voice) in measure.voices.enumerated() {
+            if let anchor = timedAnchor(
+                atTick: tick,
+                in: voice,
+                staff: staff,
+                measureIndex: measureIndex,
+                voiceIndex: voiceIndex,
+                measureDuration: measureDuration,
+                division: division,
+            ) {
+                return anchor
+            }
+        }
+        return nil
     }
 
     /// Decide which notes in a chord need to render on the OPPOSITE

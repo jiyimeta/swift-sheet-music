@@ -36,45 +36,37 @@ extension LayoutDocument {
         return nil
     }
 
-    /// The final document-space origin of a staff- or system-text glyph.
+    /// The final document-space origin of the staff- or system-text glyph anchored at `anchor`.
     ///
-    /// This is an example-grade lookup: text and role do not uniquely
-    /// identify an element, so equal candidates are ranked by proximity to
-    /// `anchor` and can still select the wrong one. Carrying element identity
-    /// into layout is the durable fix.
+    /// Matched on the identity `placeMeasureElements` carried onto the element, not on the string it prints:
+    /// two "solo"s in one bar are two marks, and a lookup that could only compare text had to rank them by
+    /// proximity and could pick the wrong one. `style` still narrows the search because one beat can carry both
+    /// a staff text and a system text — `SetStaffText` writes them as distinct marks at the same anchor.
     public func staffTextOrigin(
         at anchor: VoiceElementID,
-        text: String,
         style: TextStyleType,
     ) -> CGPoint? {
-        textEntryCandidate(
-            in: anchor.measureIndex,
-            nearestTo: timedAnchorX(at: anchor),
-        ) { element in
+        firstOrigin(inMeasure: anchor.measureIndex) { element in
             guard case let .staffText(
-                candidate, origin, _, candidateStyle,
+                _, origin, _, candidateStyle, candidateAnchor,
             ) = element,
-                candidate == text,
+                candidateAnchor == anchor,
                 candidateStyle == style
             else { return nil }
             return origin
         }
     }
 
-    /// The final document-space leading origin of a chord symbol.
+    /// The final document-space leading origin of the chord symbol on the chord or rest at `anchor`.
     ///
-    /// This has the same example-grade text-match limitation as
-    /// `staffTextOrigin(at:text:style:)`; element identity is the durable fix.
+    /// Identity-matched for `staffTextOrigin(at:style:)`'s reason. `LayoutHarmony.anchor` names the element the
+    /// symbol is written against, which is the same `VoiceElementID` `SetChordSymbol` takes.
     public func harmonyOrigin(
         at anchor: VoiceElementID,
-        text: String,
     ) -> CGPoint? {
-        textEntryCandidate(
-            in: anchor.measureIndex,
-            nearestTo: timedAnchorX(at: anchor),
-        ) { element in
+        firstOrigin(inMeasure: anchor.measureIndex) { element in
             guard case let .harmony(harmony) = element,
-                  harmony.harmony.name == text
+                  harmony.anchor == anchor
             else { return nil }
             return CGPoint(
                 x: CGFloat(harmony.anchorX),
@@ -85,9 +77,12 @@ extension LayoutDocument {
 
     /// The final document-space origin of the rehearsal-mark text itself.
     ///
-    /// A rehearsal mark's layout origin belongs to its frame. The renderer
-    /// moves the bottom-leading text origin inward by the frame padding, so
-    /// this accessor applies that same offset for an inline editing caret.
+    /// A rehearsal mark's layout origin belongs to its frame. The renderer moves the bottom-leading text origin
+    /// inward by the frame padding, so this accessor applies that same offset for an inline editing caret.
+    ///
+    /// Matched on the mark's own `measureIndex` rather than on the enclosing `LayoutMeasure`'s: a mark is
+    /// addressed by bar (`SetRehearsalMark`), and the layout measure it was placed into is not always its
+    /// source bar.
     public func rehearsalMarkTextOrigin(
         at anchor: VoiceElementID,
     ) -> CGPoint? {
@@ -97,8 +92,8 @@ extension LayoutDocument {
             {
                 for element in measure.elements {
                     guard case let .rehearsalMark(
-                        _, origin, _, _,
-                    ) = element
+                        _, origin, _, _, candidateMeasureIndex,
+                    ) = element, candidateMeasureIndex == anchor.measureIndex
                     else { continue }
                     let padding = RehearsalMarkFrame.paddingSp(sp: system.sp)
                     return absolute(
@@ -115,30 +110,25 @@ extension LayoutDocument {
         return nil
     }
 
-    private func textEntryCandidate(
-        in measureIndex: Int,
-        nearestTo anchorX: CGFloat?,
+    /// The document-space origin of the first element of `measureIndex` that `origin` answers for.
+    ///
+    /// Scoped to one bar because that is where a text-entry caret's anchor lives; systems are walked in order
+    /// so a bar an unwound repeat laid out twice answers with its first copy.
+    private func firstOrigin(
+        inMeasure measureIndex: Int,
         origin: (LayoutElement) -> CGPoint?,
     ) -> CGPoint? {
-        var candidates: [CGPoint] = []
         for system in systems {
             for measure in system.measures
                 where measure.measureIndex == measureIndex
             {
-                candidates.append(contentsOf: measure.elements.compactMap {
-                    guard let local = origin($0) else { return nil }
+                for element in measure.elements {
+                    guard let local = origin(element) else { continue }
                     return absolute(local, in: system, measure: measure)
-                })
+                }
             }
         }
-        guard let anchorX else { return candidates.first }
-        return candidates.min {
-            abs($0.x - anchorX) < abs($1.x - anchorX)
-        }
-    }
-
-    private func timedAnchorX(at anchor: VoiceElementID) -> CGFloat? {
-        timedElementOrigin(at: anchor)?.x
+        return nil
     }
 
     private func absolute(

@@ -223,7 +223,7 @@ struct LayoutElementAutoplacedShapeTests {
         func width(_ text: String) throws -> CGFloat {
             let el = LayoutElement.rehearsalMark(
                 text: text, origin: CGPoint(x: 0, y: 0),
-                frame: .rectangle, color: nil,
+                frame: .rectangle, color: nil, measureIndex: 0,
             )
             let shape = try #require(LayoutElementShape.shape(
                 for: el, id: 0, xOffset: 0, metrics: metrics,
@@ -240,7 +240,7 @@ struct LayoutElementAutoplacedShapeTests {
         func box(_ frame: RehearsalMark.FrameKind) throws -> CGRect {
             let el = LayoutElement.rehearsalMark(
                 text: "A", origin: CGPoint(x: 0, y: 0),
-                frame: frame, color: nil,
+                frame: frame, color: nil, measureIndex: 0,
             )
             let shape = try #require(LayoutElementShape.shape(
                 for: el, id: 0, xOffset: 0, metrics: metrics,
@@ -258,7 +258,7 @@ struct LayoutElementAutoplacedShapeTests {
     @Test func bottomLeadingAnchorPlacesRectAboveOrigin() throws {
         let el = LayoutElement.staffText(
             text: "dolce", origin: CGPoint(x: 30, y: 10),
-            color: nil, style: .staffText,
+            color: nil, style: .staffText, anchor: nil,
         )
         let shape = try #require(LayoutElementShape.shape(
             for: el, id: 0, xOffset: 0, metrics: metrics,
@@ -304,7 +304,7 @@ struct LayoutElementAutoplacedShapeTests {
         let harmony = Harmony(name: "C", rootTpc: 14)
         let lh = LayoutHarmony(
             harmony: harmony, anchorX: 40, y: -18,
-            runs: [], width: 33,
+            runs: [], width: 33, anchor: nil,
         )
         let shape = try #require(LayoutElementShape.shape(
             for: .harmony(lh), id: 0, xOffset: 0, metrics: metrics,

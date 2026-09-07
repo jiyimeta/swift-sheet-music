@@ -290,7 +290,7 @@ extension ScoreLayerBuilder {
                 kind: kind, text: text, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .rehearsalMark(text, p, frame, color):
+        case let .rehearsalMark(text, p, frame, color, _):
             drawRehearsalMark(
                 text: text, origin: shift(p), frame: frame,
                 color: color.map(scoreColorToCGColor) ?? Self.inkColor,
@@ -332,7 +332,7 @@ extension ScoreLayerBuilder {
             {
                 parent.addSublayer(layer)
             }
-        case let .staffText(text, p, color, style):
+        case let .staffText(text, p, color, style, _):
             // Author-supplied staff/system text. Color and offset
             // (already baked into `p` by placement) come from the
             // source `.mscx`. Bottom-leading anchor at `p` matches

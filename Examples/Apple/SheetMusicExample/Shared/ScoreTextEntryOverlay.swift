@@ -193,15 +193,11 @@ extension LayoutDocument {
         let engraved: CGPoint?
         switch kind {
         case .staffText:
-            engraved = staffTextOrigin(
-                at: anchor, text: trimmed, style: .staffText,
-            )
+            engraved = staffTextOrigin(at: anchor, style: .staffText)
         case .systemText:
-            engraved = staffTextOrigin(
-                at: anchor, text: trimmed, style: .systemText,
-            )
+            engraved = staffTextOrigin(at: anchor, style: .systemText)
         case .chordSymbol:
-            engraved = harmonyOrigin(at: anchor, text: trimmed)
+            engraved = harmonyOrigin(at: anchor)
         case .rehearsalMark:
             engraved = rehearsalMarkTextOrigin(at: anchor)
         }

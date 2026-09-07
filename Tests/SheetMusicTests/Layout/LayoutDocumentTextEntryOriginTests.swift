@@ -38,10 +38,10 @@ struct LayoutDocumentTextEntryOriginTests {
         ).apply(to: &score)
         let document = Self.layout(score)
         let staffOrigin = try #require(document.staffTextOrigin(
-            at: first, text: "same", style: .staffText,
+            at: first, style: .staffText,
         ))
         let systemOrigin = try #require(document.staffTextOrigin(
-            at: second, text: "same", style: .systemText,
+            at: second, style: .systemText,
         ))
         let expectedStaff = try Self.staffTextElementOrigin(
             in: document, text: "same", style: .staffText,
@@ -55,37 +55,20 @@ struct LayoutDocumentTextEntryOriginTests {
         #expect(staffOrigin != systemOrigin)
     }
 
-    @Test func duplicateTextUsesTheOriginNearestItsAnchor() throws {
-        var score = Self.score()
-        let first = Self.anchor(element: 0)
-        let second = Self.anchor(element: 1)
-        _ = try SetStaffText(
-            anchor: first, text: "pizz.", isSystemText: false,
-        ).apply(to: &score)
-        _ = try SetStaffText(
-            anchor: second, text: "pizz.", isSystemText: false,
-        ).apply(to: &score)
-        let document = Self.layout(score)
-        let firstOrigin = try #require(document.staffTextOrigin(
-            at: first, text: "pizz.", style: .staffText,
-        ))
-        let secondOrigin = try #require(document.staffTextOrigin(
-            at: second, text: "pizz.", style: .staffText,
-        ))
-
-        #expect(firstOrigin.x < secondOrigin.x)
-    }
+    // Two marks with the SAME text in one bar are `TextEntryOriginIdentityTests`' subject — the case that
+    // motivated carrying identity, and the one a text match could not answer.
 
     @Test func harmonyOriginIsTheLeadingRunAnchor() throws {
         var score = Self.score()
-        let anchor = Self.anchor(element: 0)
         _ = try SetChordSymbol(
-            at: anchor, name: "Am7", harmonyType: .standard,
+            at: Self.anchor(element: 0), name: "Am7", harmonyType: .standard,
         ).apply(to: &score)
+        // The symbol is inserted into the voice stream immediately before the chord it names, so the chord that
+        // was element 0 is element 1 by the time the score is laid out — and element 1 is the identity the
+        // engraved symbol carries.
+        let anchor = Self.anchor(element: 1)
         let document = Self.layout(score)
-        let origin = try #require(document.harmonyOrigin(
-            at: anchor, text: "Am7",
-        ))
+        let origin = try #require(document.harmonyOrigin(at: anchor))
         let expected = try Self.harmonyElementOrigin(
             in: document, text: "Am7",
         )
@@ -155,7 +138,7 @@ struct LayoutDocumentTextEntryOriginTests {
     ) throws -> CGPoint {
         let (system, measure) = try firstMeasure(in: document)
         let local = try #require(measure.elements.compactMap { element -> CGPoint? in
-            guard case let .staffText(candidate, origin, _, candidateStyle) = element,
+            guard case let .staffText(candidate, origin, _, candidateStyle, _) = element,
                   candidate == text,
                   candidateStyle == style
             else { return nil }
@@ -190,7 +173,7 @@ struct LayoutDocumentTextEntryOriginTests {
     ) throws -> (CGPoint, LayoutSystem) {
         let (system, measure) = try firstMeasure(in: document)
         let local = try #require(measure.elements.compactMap { element -> CGPoint? in
-            guard case let .rehearsalMark(_, origin, _, _) = element
+            guard case let .rehearsalMark(_, origin, _, _, _) = element
             else { return nil }
             return origin
         }.first)

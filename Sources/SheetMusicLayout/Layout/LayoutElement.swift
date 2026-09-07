@@ -184,11 +184,20 @@ public enum LayoutElement: Sendable, Equatable {
     /// `style` picks the `TextStyleDefaults` row every renderer resolves
     /// against. It replaced an `isSystemText: Bool`, which could not
     /// express the third (`.instrumentChange`) style.
+    ///
+    /// `anchor` is the chord or rest whose beat the mark sits on — the same `VoiceElementID` `SetStaffText`
+    /// takes, recovered at emission by walking the voice to the lane element's tick. It is what lets a caret
+    /// find the glyph it is editing when a bar holds two marks with identical text, which text-and-proximity
+    /// matching could not. `nil` for a text this case renders but no text-entry command can address: a
+    /// `<Swing>` marking and an instrument-change instruction are separate model elements that merely reach
+    /// the page through this layout case, and a lane element positioned at a tick no chord starts (the
+    /// `<location>`-shifted case `SystemLaneSlot` documents) has no voice element to name.
     case staffText(
         text: String,
         origin: CGPoint,
         color: ScoreColor?,
         style: TextStyleType,
+        anchor: VoiceElementID?,
     )
     /// Pre-typeset chord symbol with a baked-in run list (text +
     /// SMuFL accidental glyphs) and total width. The placement
@@ -222,11 +231,17 @@ public enum LayoutElement: Sendable, Equatable {
     /// Rehearsal letter / number drawn above the top staff at the
     /// start of its containing measure. `frame` controls whether
     /// the text is boxed, circled, or unframed.
+    ///
+    /// `measureIndex` is the source bar the mark belongs to — its identity, and deliberately NOT a
+    /// `VoiceElementID`: a rehearsal mark is a system element addressed by bar (`SetRehearsalMark`), so it has
+    /// no voice element to name. It is carried rather than read off the enclosing `LayoutMeasure` because the
+    /// two can differ — a repeat-unwound or multi-measure-rest layout measure is not always its source bar.
     case rehearsalMark(
         text: String,
         origin: CGPoint,
         frame: RehearsalMark.FrameKind,
         color: ScoreColor?,
+        measureIndex: Int,
     )
     case jump(text: String, origin: CGPoint)
     case measureRepeat(count: Int, origin: CGPoint)
