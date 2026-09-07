@@ -36,16 +36,25 @@ public enum LyricInputPlanner {
     }
 
     public struct Plan: Sendable {
-        /// The edit to apply as one undo step, or `nil` when nothing changes.
-        public let command: (any EditCommand)?
-        /// The same edit as scalars, for a host that applies `EditIntent`s rather than commands. Empty exactly when
-        /// `command` is `nil`.
+        /// The edit as scalars — the plan's only stored edit, and what a host that applies `EditIntent`s rather
+        /// than commands passes to `.setLyricSyllables`. Empty exactly when `command` is `nil`.
         ///
-        /// The two can never disagree: `writes` is the planner's single source of truth and `command` is derived
-        /// from it, so there is no second code path that could decide a different edit.
+        /// The syllable the caret is on comes first, its neighbor repairs after it. The writes address distinct
+        /// chords, so the order changes nothing about the score they produce; what it decides is the composite's
+        /// anchor, which `LyricSyllableWrite.command(for:)` takes from the first write.
         public let writes: [LyricSyllableWrite]
         /// Where the caret goes next; `nil` when there is no advance or the staff has no further chord.
         public let next: Cursor?
+
+        /// The same edit as one command, to apply as one undo step, or `nil` when nothing changes.
+        ///
+        /// Computed from `writes` rather than stored beside it, so the two cannot disagree even in principle:
+        /// there is no second value to keep in step, and no constructor that could be handed a mismatched pair.
+        /// `LyricSyllableWrite.command(for:)` is the same function `ScoreEditSession` plans `.setLyricSyllables`
+        /// through, so a host applying the intent gets the command this property names, anchor included.
+        public var command: (any EditCommand)? {
+            LyricSyllableWrite.command(for: writes)
+        }
     }
 
     /// Plans the score mutation and cursor advance for one completed syllable.
@@ -60,13 +69,15 @@ public enum LyricInputPlanner {
         let next = nextCursor(after: cursor, for: terminator, in: score)
         var writes: [LyricSyllableWrite] = []
 
+        // The caret's own write leads, its neighbor repairs follow — the order that makes
+        // `LyricSyllableWrite.command(for:)`'s "anchor on the first write" rule land on the caret, which is where
+        // a host should scroll. The writes address distinct chords (the preceding syllable is strictly before the
+        // caret and the destination strictly after), so nothing about the resulting score depends on the order.
         if trimmed.isEmpty {
             if current != nil {
                 writes.append(LyricSyllableWrite(location: cursor.location, verse: cursor.verse, text: nil))
-                if let repair = precedingRepair(for: terminator, before: cursor, in: score) {
-                    writes.insert(repair, at: 0)
-                }
-            } else if let repair = precedingRepair(for: terminator, before: cursor, in: score) {
+            }
+            if let repair = precedingRepair(for: terminator, before: cursor, in: score) {
                 writes.append(repair)
             }
         } else if let write = writtenSyllable(
@@ -82,7 +93,7 @@ public enum LyricInputPlanner {
         if let next, let repair = destinationRepair(for: terminator, at: next, in: score) {
             writes.append(repair)
         }
-        return Plan(command: bundled(writes, at: cursor.location), writes: writes, next: next)
+        return Plan(writes: writes, next: next)
     }
 
     public static func verseCursor(_ direction: VerseDirection, from cursor: Cursor) -> Cursor? {
@@ -280,19 +291,6 @@ public enum LyricInputPlanner {
               let end = score.absoluteTick(of: cursor)
         else { return nil }
         return end - start
-    }
-
-    /// Derives the plan's command from its writes — the only place the two are related, so they cannot drift.
-    private static func bundled(
-        _ writes: [LyricSyllableWrite],
-        at location: VoiceElementID,
-    ) -> (any EditCommand)? {
-        let commands = writes.map(\.command)
-        switch commands.count {
-        case 0: return nil
-        case 1: return commands[0]
-        default: return CompositeEditCommand(commands: commands, location: location)
-        }
     }
 
     private struct SyllableState: Equatable {

@@ -64,10 +64,10 @@ extension ScoreEditSession {
             // No "already says" check here, unlike every other planner in this file: the writes arrive already
             // decided by `LyricInputPlanner`, which drops a repair whose syllable is unchanged before it ever
             // becomes a write. An empty list is the restatement case, and it plans to `nil` like the rest.
-            let commands = writes.map(\.command)
-            guard let first = commands.first else { return nil }
-            guard commands.count > 1 else { return first }
-            return CompositeEditCommand(commands: commands, location: first.location)
+            //
+            // Bundled by the same function `LyricInputPlanner.Plan.command` is computed through, so the composite
+            // a host gets from the intent is the one the planner named — the same members AND the same anchor.
+            return LyricSyllableWrite.command(for: writes)
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.

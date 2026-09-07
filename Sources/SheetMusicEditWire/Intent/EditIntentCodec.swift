@@ -734,8 +734,9 @@ import Wirelet
 /// tag 4: harmonyType  u8, varint — 0 standard / 1 roman / 2 nashville, else throws; 0 when hasName == 0
 /// ```
 ///
-/// `SetLyricSyllablesIntentWire` (`setLyricSyllables`'s payload) — the only payload carrying a REPEATED message,
-/// because one lyric keystroke plans up to three writes that have to land as one undo step:
+/// `SetLyricSyllablesIntentWire` (`setLyricSyllables`'s payload). Repeated, like `setJumps` and `setMarkers`
+/// before it, but for a different reason: those carry a list because a bar's jumps ARE a list, while this one
+/// carries a list because one lyric keystroke plans up to three writes that have to land as one undo step:
 /// ```
 /// tag 1: writes  repeated LyricSyllableWriteWire — may be empty, which the far side plans as nothing to apply
 /// ```

@@ -7,9 +7,10 @@ import Wirelet
 // unchanged — every field mandatory, the optional text as a `has` + value pair, the syllabic as a `u8` with a
 // throwing table.
 //
-// This is the first intent whose payload is a REPEATED message: one lyric keystroke plans up to three writes and
-// they must cross as one unit, because they are one undo step on the far side. `SetJumpsIntentWire` is the
-// precedent for the shape (`@WireFormat` encodes an array of messages as a repeated field).
+// The payload is a REPEATED message, the shape `SetJumpsIntentWire` and `SetMarkersIntentWire` (intents 48 and 49)
+// already use — `@WireFormat` encodes an array of messages as a repeated field. What differs is why: those carry a
+// list because a bar's jumps or markers ARE a list, whereas one lyric keystroke is a single gesture that lands in
+// up to three places, and the three must cross as one unit because they are one undo step on the far side.
 
 /// The `LyricSyllableWriteWire` table, in a type of its own so the payload struct carries stored INSTANCE
 /// properties only — `@WireFormat` numbers those into tags (the `BreathTables` / `HarmonyTables` precedent).
