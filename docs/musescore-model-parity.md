@@ -1742,6 +1742,39 @@ ssmはinline element + 都度導出。導出方針自体は妥当だが、以下
 - `Score+ActiveKey.swift:10`がmid-measureのkey変更をmeasure単位に丸める
 - `TimeSigMap`のnominal / actual分離が無く、`TimeSignature`はinteger分数のみ
 
+#### 7.4.1 ［2026-09-06 訂正］3点とも round-trip の穴ではない。1点は事実として誤り
+
+**1点目は誤り。しかも自分を否定する節を引用している。** §4.5の表（`:973`）は
+`STAFFTYPE_CHANGE`を`~~打ち消し~~`にして**「保持される（実測）」**と書いており、
+§8の優先順4でも「2026-09-06検算」として済みになっている。`<Measure>`の子として
+preserved markupに入るので、**`StaffTypeList`が無くてもfileからは消えない。**
+`StaffTypeList`が要るのは「staff typeがtickのどこで変わるかをmodelから引く」ためで、
+それは表現力の話。
+
+**2点目と3点目は事実だが、round-trip lossではない。**
+
+`Score+ActiveKey.swift`が丸めているのは**問い合わせの解像度**であって保存ではない。
+`<KeySig>`は`VoiceElement.keySignature`としてvoice stream中の位置ごと保持されるので、
+**fileの中でmid-measureに居たものはmid-measureに戻る。** 丸めているのは
+`activeKey(staff:measureIndex:)`の戻り値で、doc commentが理由も書いている——
+矢印キーの移調がmeasure単位で動くから。**編集動作の粒度であって、fidelityではない。**
+
+`TimeSignature`が`numerator` / `denominator`しか持たないのも同じ。`<TimeSig>`の
+`subtype`（`TimeSigType`）/ `textN` / `textD` / `stretchN` / `stretchD` / `Groups`は
+**全部preserved markupで往復する**（§5.3の検算）。**common timeとcut timeはfileから
+消えないが、`TimeSignature`からは読めない。**
+
+**つまり§7.4は§7.3と同じ状態にある**——round-tripは解決済みで、残っているのは
+「modelから読めるか」「engravingが反応できるか」。§7の見出しは
+「個別要素のPARTIALの大半がここに帰着する」と言っているが、**§2.4の意味でのPARTIAL
+（fileから情報が消える）に帰着するのは§7.1と§7.2の2つだけ**で、§7.3と§7.4は
+別の軸の話である。4つを同じ列に並べると、残工事を2倍に見積もる。
+
+**この節が古くなった形は今日8件目**で、1点目は特殊である——**引用先が引用元を
+否定している**。`（§4.5）`と書いてあるのに§4.5は逆のことを言っており、
+**参照を辿れば即座に分かる**。参照は「確認した」の証拠として読まれるが、
+**書いた時点で正しかった参照は、参照先が更新されても参照のまま残る。**
+
 ---
 
 ## 8. 推奨する順序
