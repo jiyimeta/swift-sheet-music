@@ -817,7 +817,7 @@ inlineで`<text>`を組み立てる箇所として残る。
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
 | ~~`SYMBOL`~~ | `dom/symbol.h:46` | **`EngravingSymbol`**（note添付2026-09-05、annotation位置2026-09-06） | 下の追記を参照 |
-| `FSYMBOL` | `dom/symbol.h:93` | なし | 任意fontの1文字 |
+| ~~`FSYMBOL`~~ | `dom/symbol.h:93` | model無し。**ただし往復する**（2026-09-06実測） | 下の追記を参照 |
 | `IMAGE` | `dom/image.h:52` | なし | 埋め込みraster / SVG |
 
 `SYMBOL`は「modelにない記譜をとりあえず貼る」というMuseScore側の逃げ道でもあるので、
@@ -869,6 +869,23 @@ occupant tag 47/48ごと再利用しているので、**この slice が足し�
 `getSegment(SegmentType::ChordRest, …)`を選び分ける。**`<Symbol>`は常に後者**で、
 time-tick segmentには載らない。どちらも`segment->add(el)`なのでannotationであることは
 同じ（`AdjacentElementSlot.isAnnotation`はtrue）。
+
+**［2026-09-06 追記］`FSYMBOL`はmodel化しない。既に往復している。**
+§8の「単独で追加できるMISSING」の最後の1件だったが、**実装sliceにはならなかった。**
+
+理由はfile formatの側にある。`v4.6.5`で`"FSymbol"`というtagが現れるのは
+**`readProperties(BSymbol*)`の1箇所だけ**で（`read460/tread.cpp:2367`）、
+`read400` / `read410`も同じ。**measureのannotation dispatchにも`<Note>` readerにも無い。**
+つまり`<FSymbol>`は**他のsymbolの中にしか出現できない**。そしてその親である`<Symbol>`は
+`EngravingSymbol`としてmodel化済みでbagを持ち、consumed setに`"FSymbol"`が無いので、
+**入れ子のまま保持されて書き戻される。**
+
+**実測に変えてある。** `own/font-symbol.mscx`（`<Note>`の`<Symbol>`の中に`<FSymbol>`）と
+`FontSymbolRoundTripTests`を足した——それまで**どのfixtureも`<FSymbol>`を持っていなかった**ので、
+preservation gateはこの主張を一度も検査していなかった。allowlistへの追加は不要だった。
+
+**「modelが無い」と「落ちる」を分けること**、という§5の結論がここでも当てはまる。
+§4の表の「ssm」列が`なし`である行は、**model化されていないことしか言っていない。**
 
 #### 「まだmodel化されていない要素」をtest fixtureに使うと、3回壊れる
 
@@ -1793,7 +1810,8 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    `StringData`は2026-09-04、残り3件は2026-09-06）、
    ~~`STICKING`/`EXPRESSION`~~（2026-09-04完了、§4.2の追記）、
    ~~`FIGURED_BASS`~~（2026-09-06完了、§4.2の追記）、
-   `FSYMBOL`、~~**annotation位置の**`SYMBOL`~~（2026-09-06完了、§4.3の追記）。
+   ~~`FSYMBOL`~~（2026-09-06検算——**model化不要、既に往復している**。§4.3の追記）、
+   ~~**annotation位置の**`SYMBOL`~~（2026-09-06完了、§4.3の追記）。
 
    **［2026-09-06 訂正］この行は2件古かった。** `SYMBOL`は**note添付分が
    2026-09-05にmodel化済み**（`EngravingSymbol`、§4.3の追記）で、残っているのは
