@@ -371,7 +371,7 @@ git -C <musescore> log --format=%ad --date=format:%Y-%m --since=<6か月前> \
 
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
-| `FRET_DIAGRAM` | `dom/fret.h:137` | なし | chord diagramが丸ごと消える。string / fret / dot / barre / marker / 埋め込みharmony |
+| ~~`FRET_DIAGRAM`~~ | `dom/fret.h:137` | **`FretDiagram`**（2026-09-06実装） | 下の追記を参照 |
 | ~~`STRING_TUNINGS`~~ | `dom/stringtunings.h:49` | **`StringTunings`**（2026-09-06実装） | 下の追記を参照 |
 | ~~`CAPO`~~ | `types/types.h:1368`（`CapoParams`） | **`Capo`**（2026-09-06実装） | 下の追記を参照 |
 | ~~`StringData`（Instrument配下）~~ | `dom/stringdata.h:42` | **`StringData`**（2026-09-04実装） | 下の追記を参照 |
@@ -425,8 +425,8 @@ encoderを変えることではなく、この判断を書いた`allowedLosses` 
 **まだ「検証も再計算もできる」ようにはなっていない。** このsliceはtuningを保持するところまでで、
 `Note.string` / `Note.fret`をtuningと突き合わせる処理は入っていない。それには
 `StringData::convertPitch` / `getPitch`相当のport（5弦banjoの特例と`CapoParams`のpitch offsetを
-含む）が要り、別sliceにした。`FRET_DIAGRAM` / `STRING_TUNINGS` / `CAPO`も未実装のままだが、
-これらが乗る起点はこれで埋まった。
+含む）が要り、別sliceにした。この起点の上に乗る`STRING_TUNINGS` / `CAPO`（2026-09-06）と
+`FRET_DIAGRAM`（同日、下の追記）は、その後すべてmodel化された。
 
 **［2026-09-06 追記］`CAPO`と`STRING_TUNINGS`もmodel化した。** `SheetMusicCore`の`Capo`と
 `StringTunings`、`VoiceElement`の`.capo` / `.stringTunings`、decoder / encoderは
@@ -468,6 +468,42 @@ release tagで確認する必要がある。
 `<Capo>` / `<StringTunings>`という要素自体の境界は**MuseScore 4.1**。
 `rw/read400/tread.cpp`にはどちらのreaderも無く（"Capo"のhitは`FretDiagram`の
 `setCapo(fretId)`という別物）、両方を持つ最初のreaderは`rw/read410/`。
+
+**［2026-09-06 追記］`FRET_DIAGRAM`もmodel化した。** `SheetMusicCore`の`FretDiagram` /
+`FretString` / `FretBarre`、`VoiceElement.fretDiagram`、decoder / encoderは
+`MSCXDecoder+FretDiagram.swift` / `MSCXEncoder+FretDiagram.swift`、fixtureは
+`Tests/SheetMusicTests/Resources/own/fret-diagrams.mscx`。
+`<Harmony>`は既存の`Harmony`をそのまま入れ子で再利用している。
+case tagは19、occupant tagは58 / 59。
+
+**この要素の難所は情報の欠落ではなく、encoderが書く子要素の順序だった。**
+`TRead::read(FretDiagram*)`は`<fretDiagram>`（小文字f、新形式）を読むと`haveReadNew`を立て、
+**loopの先頭でそれ以降の子を全部`skipCurrentElement()`する**
+（`v4.6.5`の`read460/tread.cpp:802-807`）。そして`<Harmony>`は**同じloopの:874**で読まれ、
+writerは`<Harmony>`を:1372、`<fretDiagram>`を:1379と**Harmonyを先に**書いている。
+つまり**ssmが`<fretDiagram>`を`<Harmony>`より先に出すと、MuseScoreはharmonyを黙って捨てる**。
+
+**この壊れ方はssmのgateを2つとも素通りする。** preservation gateは`parent/child`の
+出現数を数えるので順序を見ず、idempotency gateはpass 1とpass 2を比べるので
+両passが同じ順序で間違えれば一致する。§4.4のbox familyで踏んだ
+「multi-measure rest containerのindexずれ」と同じ形で、**fixtureを足しても見えない**——
+gateが測っている量にその性質が入っていない。encoderに順序のassertionを置くしかない。
+
+**assertionは「`<Harmony>`が先」ではなく「`<fretDiagram>`の後にpreserved markup以外を
+書かない」と書いた。** readerが守っているのは後者で、`<Harmony>`は今日たまたま
+唯一の後続候補にすぎない。**守るべき不変条件を、その現れの1つで書くと、
+現れが増えたときに条件が壊れる。**
+
+**旧互換blockは再生成せず、preserved markupで運んでいる。** MuseScoreは
+`<fretDiagram>`の後ろに旧blockを書き、自分では読み戻さない（上の`haveReadNew`）ので、
+verbatimなコピーが最も忠実になる。旧blockの`<barre>`は値ではなく**導出**で
+（「lowest fret with a dotにあり、そのfretに他のdotが無く、右端まで届くbarreだけをboolで書く」、
+`twrite.cpp:1470-1490`）、これをportしても得るものが無い。
+`<fingering>`は対象外——4.6.5のreaderは読んで`e.readText()`で捨て、writerも書かない。
+
+markerとdotのtokenは`Fingering.Role`と同じ closed enum + `.other`。
+**上流は未知の名前をdefaultに潰して失う**（`nameToMarkerType`が`NONE`、
+`nameToDotType`が`NORMAL`を返す）が、こちらは`.other`でverbatimに保持する。
 
 #### 4.1.1 タグが無いときの意味は`propertyDefault`が決める
 
@@ -1702,8 +1738,8 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    個別要素のPARTIALの大半がここに帰着する。
 3. **単独で追加できるMISSING** — ~~`ORNAMENT`~~（2026-09-04完了、§4.6の追記）、
    ~~`FINGERING`~~（2026-09-04完了、§4.2の追記）、
-   ~~`StringData`~~+~~`STRING_TUNINGS`~~+~~`CAPO`~~（§4.1の追記。前者は2026-09-04、
-   後2者は2026-09-06）+`FRET_DIAGRAM`、
+   ~~`StringData`~~+~~`STRING_TUNINGS`~~+~~`CAPO`~~+~~`FRET_DIAGRAM`~~（§4.1の追記。
+   `StringData`は2026-09-04、残り3件は2026-09-06）、
    ~~`STICKING`/`EXPRESSION`~~（2026-09-04完了、§4.2の追記）、
    ~~`FIGURED_BASS`~~（2026-09-06完了、§4.2の追記）、
    `FSYMBOL`、~~**annotation位置の**`SYMBOL`~~（2026-09-06完了、§4.3の追記）。
@@ -1721,6 +1757,16 @@ parity作業として意味のある依存順。対象は出荷版のMuseScore 4
    **古いリストはそのまま作業指示になる。** 誰かが`SPACER`を実装しに行って、往復済みだと
    気づくまで半日使う経路が実在した。§4を更新した人が§8を更新していない、という形で
    2件とも生まれている——**§4の追記と§8のリストは同じcommitで動かすこと。**
+
+   **［2026-09-06 追記］この規則は、書いた当日に書いた本人が破った。** `FRET_DIAGRAM`を
+   実装してmergeした同じsessionが、§4.1の表・§4.1の一文・§8のこの行の3箇所を
+   古いまま残し、別レーンに指摘されて後から直している。これで7件目。
+
+   **規則を書くことと規則に従うことは別の動作で、ここでは後者が起きにくい。**
+   理由は単純で、**§8は実装中に一度も開かない節**だから——decoder / encoder / test /
+   fixtureを触っている間、この行は視界に入らない。「忘れないようにする」では直らない。
+   実装sliceのcommit messageに**触ったdocの節を書く**と、少なくとも
+   「書いていない = 触っていない」がreviewで見える形になる。
    互いに独立なので並列に進められる。
 
    実装して分かったこの層の境目: **noteやchordに直接ぶら下がる要素は単発で入る**
