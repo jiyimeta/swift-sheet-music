@@ -66,5 +66,20 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
         minimumDistinctFingerprints: 57,
     )
 
-    static let all: [ReplayChain] = [.standard, .parity]
+    /// The macOS score-text-entry project's chain (spec 2026-09-07): six steps over
+    /// `EditingFixtures.twoConsecutiveC4Chords()` covering `setLyricSyllables` (74) — the only intent this
+    /// project appended. A third chain rather than a fifth group on `.parity`: see `EditReplayScript.lyrics`'s
+    /// own doc comment for why `.parity`'s freeze does not extend to it.
+    static let lyrics = ReplayChain(
+        name: "lyrics",
+        androidAssetDir: "editReplay-lyrics",
+        webFixtureStem: "edit-replay-lyrics",
+        fixture: { EditingFixtures.twoConsecutiveC4Chords() },
+        steps: { EditReplayScript.lyrics(staff: $0) },
+        // Actual is 5 of 7 recorded values (steps 3/4 each repeat an earlier one) — one below the actual, tight
+        // enough that every non-repeating step stays load-bearing.
+        minimumDistinctFingerprints: 4,
+    )
+
+    static let all: [ReplayChain] = [.standard, .parity, .lyrics]
 }

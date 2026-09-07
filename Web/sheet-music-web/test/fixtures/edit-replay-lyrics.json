@@ -1,0 +1,36 @@
+{
+  "fingerprints" : [
+    "-4059957878035358318",
+    "4688663597897805570",
+    "-6941553227591753484",
+    "4688663597897805570",
+    "-6941553227591753484",
+    "6537506088494397827",
+    "3817337960277225155"
+  ],
+  "steps" : [
+    {
+      "base64" : "IEoKHQobGgoMCgQIABAAEAAYACACEAAYASICbGEoADAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "PEoKOQo3GwoMCgQIABAAEAAYACACEAAYASIDZ2xvKAEwABoKDAoECAAQABAAGAAgBBAAGAEiAnJpKAMwAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "PEoKOQo3GwoMCgQIABAAEAAYACACEAAYASIDZ2xvKAEwABoKDAoECAAQABAAGAAgBBAAGAEiAnJpKAMwAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "HkoKGwoZGAoMCgQIABAAEAAYACACEAAYACIAKAAwAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "I0oKIAoeHQoMCgQIABAAEAAYACAEEAIYASIEYW1lbigAMMAH",
+      "op" : "intentBytes"
+    }
+  ]
+}
