@@ -367,6 +367,23 @@ git -C <musescore> log --format=%ad --date=format:%Y-%m --since=<6か月前> \
 全件、`Sources/SheetMusicCore`と`Sources/SheetMusicMSCX`をgrepして0 hitを確認済み。
 （`Capo`は`Marker.daCapo`、`StringData`は「ここには来ない」という注釈の誤hitのみ）
 
+**［2026-09-06 監査］表の「ssm」列を実装と突き合わせた。** releaseのnoteを書く人が
+最初に読むのはこの表なので、**実装済みなのに「なし」のままの行**を探した。
+
+結果は**2行**——`SYMBOL`と`CHORD_BRACKET`。どちらも本文には正しい追記があったのに
+**表の行だけが古い**という形で、`FRET_DIAGRAM`（同日に別途訂正）と合わせて3件。
+**追記を書いた人が表の行を戻していない**のが共通で、§8のリストが取り残されるのと同じ経路。
+
+逆方向——**「実装済み」と書いてあるのに型が無い行**——は0件だった。
+`Ambitus` / `Capo` / `ChordOrnament` / `ExpressionText` / `Fingering` / `FretDiagram` /
+`Sticking` / `StringData` / `StringTunings` / `FiguredBass` / `ScoreBlock`のすべてに
+対応する型が`Sources/SheetMusicCore/Score/`にある。
+
+**この監査が見ていないもの**: 「型はあるが、その型が表の説明どおりのことをしていない」行。
+§5で見つけた「consume して再生成する」型のように、**表からはmodel化されているように見えて
+実際には別のことをしている**ケースは、型名のgrepでは出ない。releaseにとって危険なのは
+前者（未対応と書かれる）なので、そちらを優先した。
+
 ### 4.1 ギター / TAB系
 
 | MuseScore | 定義 | ssm | 影響 |
@@ -799,7 +816,7 @@ inlineで`<text>`を組み立てる箇所として残る。
 
 | MuseScore | 定義 | ssm | 影響 |
 |---|---|---|---|
-| `SYMBOL` | `dom/symbol.h:46` | なし | 任意のSMuFL記号添付。`SymId` / font / size / angle / anchor |
+| ~~`SYMBOL`~~ | `dom/symbol.h:46` | **`EngravingSymbol`**（note添付2026-09-05、annotation位置2026-09-06） | 下の追記を参照 |
 | `FSYMBOL` | `dom/symbol.h:93` | なし | 任意fontの1文字 |
 | `IMAGE` | `dom/image.h:52` | なし | 埋め込みraster / SVG |
 
@@ -1032,7 +1049,7 @@ ssm側は`MSCZReader`がmain `.mscx`だけを読み（同fileのdoc commentに
 | ~~`AMBITUS`~~ | `dom/ambitus.h:38` | **`Ambitus`**（2026-09-06実装） | 下の追記を参照。**この節の他と違いvoice stream要素** |
 | `MMREST_RANGE` | `dom/mmrestrange.h:34` | なし | 多小節休符の範囲label。**measure直下**（下の訂正を参照） |
 | ~~`DEAD_SLAPPED`~~ | `dom/deadslapped.h:34` | — | **MSCXに存在しない。parity対象外**（下の訂正を参照） |
-| `CHORD_BRACKET` | `dom/chordbracket.h:29` | なし | chord bracket。`<Chord>`の直接の子 |
+| ~~`CHORD_BRACKET`~~ | `dom/chordbracket.h:29` | **`ChordBracket`**（`Chord.bracket`、2026-09-05実装） | 下の訂正を参照。**要素自体は4.7で入ったもので4.6には無い** |
 
 **［2026-09-04 訂正］この表の4件は「note / chord周辺」で一括りにできない。**
 `CHORD_BRACKET`の実装に入る前にread460を読み直して分かったことで、
@@ -1053,7 +1070,8 @@ ssm側は`MSCZReader`がmain `.mscx`だけを読み（同fileのdoc commentに
   measure添付のtext elementを置く場所から作ることになる。`MEASURE_NUMBER`とセットの別slice。
 
 **この節で本当に「単発」なのは`CHORD_BRACKET`だけ**（`tread.cpp:2518`、
-`<Chord>`の子として`<Arpeggio>`の隣で読まれる）。
+`<Chord>`の子として`<Arpeggio>`の隣で読まれる）。**2026-09-05にmodel化済み**——
+`SheetMusicCore`の`ChordBracket`と`Chord.bracket`。
 
 **［2026-09-05 追記］`read460/`は「4.6のreader」ではない。4.60–4.99のreaderで、4.7の追加を含む。**
 `CHORD_BRACKET`で実際に踏んだ。upstreamがこの型を作ったのは2025-12-10（`67b083e753`）で、
