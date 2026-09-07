@@ -222,7 +222,7 @@
                  .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible,
                  .setSlur, .setHairpin, .setPedal, .setVolta, .setOttava, .setTextLine, .setTrill, .setVibrato,
                  .setPalmMute, .setLetRing, .removeSpanner,
-                 .setChordSymbol:
+                 .setChordSymbol, .setLyricSyllables:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }

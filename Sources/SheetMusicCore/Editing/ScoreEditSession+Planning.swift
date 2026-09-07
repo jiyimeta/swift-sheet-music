@@ -134,7 +134,7 @@ extension ScoreEditSession {
              .respellRange:
             return rangeCommand(for: intent, in: score)
         case .setClef, .removeClef, .setTempo, .setStaffText, .setDynamic, .setFermata, .setBreath, .setJumps,
-             .setMarkers, .setChordSymbol:
+             .setMarkers, .setChordSymbol, .setLyricSyllables:
             return markCommand(for: intent, in: score)
         case .setArticulation, .setGraceNotes, .setTremolo, .setArpeggio, .setGlissando, .setDots, .setChordLine,
              .setNoteParentheses:

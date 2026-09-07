@@ -409,4 +409,19 @@ public enum EditIntent: Sendable, Equatable {
     /// `.emptyChordSymbol`. Resolves to nothing to apply when the symbol already reads this way (name, type, and no
     /// root or bass left standing).
     case setChordSymbol(at: VoiceElementID, name: String?, harmonyType: HarmonyType)
+
+    // Appended for the macOS score-text-entry project (spec 2026-09-07) — index 74.
+
+    /// Writes one lyric keystroke's worth of syllables as a single undo step.
+    ///
+    /// Plural because `LyricInputPlanner` repairs the neighbours of the syllable being typed: a hyphen turns the
+    /// preceding `.single` into a `.begin` and the destination `.single` into an `.end`, and splitting those across
+    /// three intents would make one keystroke three undo steps. An empty list is refused as `.nothingToApply`.
+    ///
+    /// The one intent whose payload is a LIST of writes rather than one edit's scalars. That is not a widening of
+    /// the scalar rule stated at the top of this type — a `LyricSyllableWrite` is itself scalars only — but it is
+    /// the reason the case is plural where `.setChordSymbol` next to it is singular: a lyric keystroke is one
+    /// gesture that lands in up to three places, and `.composite` cannot express it, since a composite of three
+    /// `setLyric` intents would have to exist first.
+    case setLyricSyllables(writes: [LyricSyllableWrite])
 }

@@ -38,6 +38,12 @@ public enum LyricInputPlanner {
     public struct Plan: Sendable {
         /// The edit to apply as one undo step, or `nil` when nothing changes.
         public let command: (any EditCommand)?
+        /// The same edit as scalars, for a host that applies `EditIntent`s rather than commands. Empty exactly when
+        /// `command` is `nil`.
+        ///
+        /// The two can never disagree: `writes` is the planner's single source of truth and `command` is derived
+        /// from it, so there is no second code path that could decide a different edit.
+        public let writes: [LyricSyllableWrite]
         /// Where the caret goes next; `nil` when there is no advance or the staff has no further chord.
         public let next: Cursor?
     }
@@ -52,31 +58,31 @@ public enum LyricInputPlanner {
         let trimmed = text.trimmingWhitespaceAndNewlines()
         let current = lyric(at: cursor, in: score)
         let next = nextCursor(after: cursor, for: terminator, in: score)
-        var commands: [any EditCommand] = []
+        var writes: [LyricSyllableWrite] = []
 
         if trimmed.isEmpty {
             if current != nil {
-                commands.append(SetLyric(at: cursor.location, verse: cursor.verse, text: nil))
+                writes.append(LyricSyllableWrite(location: cursor.location, verse: cursor.verse, text: nil))
                 if let repair = precedingRepair(for: terminator, before: cursor, in: score) {
-                    commands.insert(repair, at: 0)
+                    writes.insert(repair, at: 0)
                 }
             } else if let repair = precedingRepair(for: terminator, before: cursor, in: score) {
-                commands.append(repair)
+                writes.append(repair)
             }
-        } else if let write = writingCommand(
+        } else if let write = writtenSyllable(
             text: trimmed,
             current: current,
             terminator: terminator,
             at: cursor,
             in: score,
         ) {
-            commands.append(write)
+            writes.append(write)
         }
 
         if let next, let repair = destinationRepair(for: terminator, at: next, in: score) {
-            commands.append(repair)
+            writes.append(repair)
         }
-        return Plan(command: bundled(commands, at: cursor.location), next: next)
+        return Plan(command: bundled(writes, at: cursor.location), writes: writes, next: next)
     }
 
     public static func verseCursor(_ direction: VerseDirection, from cursor: Cursor) -> Cursor? {
@@ -113,13 +119,13 @@ public enum LyricInputPlanner {
         return Cursor(location: location, verse: cursor.verse)
     }
 
-    private static func writingCommand(
+    private static func writtenSyllable(
         text: String,
         current: Lyric?,
         terminator: Terminator,
         at cursor: Cursor,
         in score: Score,
-    ) -> (any EditCommand)? {
+    ) -> LyricSyllableWrite? {
         var written = current.map { SyllableState($0) } ?? SyllableState(
             syllabic: startingSyllabic(before: cursor, in: score),
             ticks: 0,
@@ -129,8 +135,8 @@ public enum LyricInputPlanner {
             $0.text == text && $0.syllabic == written.syllabic && $0.ticks == written.ticks
         } ?? false
         guard !unchanged else { return nil }
-        return SetLyric(
-            at: cursor.location,
+        return LyricSyllableWrite(
+            location: cursor.location,
             verse: cursor.verse,
             text: text,
             syllabic: written.syllabic,
@@ -142,7 +148,7 @@ public enum LyricInputPlanner {
         for terminator: Terminator,
         before cursor: Cursor,
         in score: Score,
-    ) -> (any EditCommand)? {
+    ) -> LyricSyllableWrite? {
         guard terminator != .none,
               let preceding = precedingLyric(before: cursor, in: score)
         else { return nil }
@@ -155,8 +161,8 @@ public enum LyricInputPlanner {
             in: score,
         )
         guard repaired != SyllableState(preceding.lyric) else { return nil }
-        return SetLyric(
-            at: preceding.location,
+        return LyricSyllableWrite(
+            location: preceding.location,
             verse: cursor.verse,
             text: preceding.lyric.text,
             syllabic: repaired.syllabic,
@@ -168,7 +174,7 @@ public enum LyricInputPlanner {
         for terminator: Terminator,
         at cursor: Cursor,
         in score: Score,
-    ) -> (any EditCommand)? {
+    ) -> LyricSyllableWrite? {
         guard let lyric = lyric(at: cursor, in: score) else { return nil }
         var destination = SyllableState(lyric)
         let previous = destination
@@ -189,8 +195,8 @@ public enum LyricInputPlanner {
             }
         }
         guard destination != previous else { return nil }
-        return SetLyric(
-            at: cursor.location,
+        return LyricSyllableWrite(
+            location: cursor.location,
             verse: cursor.verse,
             text: lyric.text,
             syllabic: destination.syllabic,
@@ -276,14 +282,16 @@ public enum LyricInputPlanner {
         return end - start
     }
 
+    /// Derives the plan's command from its writes — the only place the two are related, so they cannot drift.
     private static func bundled(
-        _ commands: [any EditCommand],
+        _ writes: [LyricSyllableWrite],
         at location: VoiceElementID,
     ) -> (any EditCommand)? {
+        let commands = writes.map(\.command)
         switch commands.count {
-        case 0: nil
-        case 1: commands[0]
-        default: CompositeEditCommand(commands: commands, location: location)
+        case 0: return nil
+        case 1: return commands[0]
+        default: return CompositeEditCommand(commands: commands, location: location)
         }
     }
 
