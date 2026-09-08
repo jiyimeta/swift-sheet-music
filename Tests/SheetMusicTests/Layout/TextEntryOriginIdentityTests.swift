@@ -186,6 +186,95 @@ struct TextEntryOriginIdentityTests {
         #expect(document.staffTextOrigin(at: secondPart, style: .systemText) == nil)
     }
 
+    // MARK: - Matching by beat instead of by element index
+
+    /// Dimension 1, fixed. Same fixture and same two anchors as
+    /// `aLaneMarkIsFoundOnlyThroughItsLowestNumberedVoice` above, so the pair reads as one statement: the
+    /// identity overload still misses voice 2, and the beat overload answers it — with the SAME point the
+    /// voice-1 anchor gets, not merely with something non-nil.
+    @Test func anyVoiceAtALaneMarksBeatFindsIt() throws {
+        var score = EditingFixtures.parityFixture()
+        let secondVoice = VoiceElementID(
+            staff: EditingFixtures.staff0, measureIndex: 1, voiceIndex: 1, elementIndex: 0,
+        )
+        let firstVoice = VoiceElementID(
+            staff: EditingFixtures.staff0, measureIndex: 1, voiceIndex: 0, elementIndex: 0,
+        )
+        _ = try SetStaffText(anchor: secondVoice, text: "pizz.", isSystemText: false).apply(to: &score)
+
+        let document = Self.layout(score)
+        let identity = try #require(document.staffTextOrigin(at: firstVoice, style: .staffText))
+        let byBeat = try #require(
+            document.staffTextOrigin(at: secondVoice, style: .staffText, in: score),
+        )
+
+        #expect(byBeat == identity)
+        // And the anchor that already resolved is not moved by the new path.
+        #expect(document.staffTextOrigin(at: firstVoice, style: .staffText, in: score) == identity)
+    }
+
+    /// Dimension 2, fixed. The part-1 anchor that WROTE the system text finds it again, at the canonical
+    /// staff's glyph — the case a multi-part score hits constantly.
+    @Test func aNonCanonicalStaffFindsTheSystemTextItWrote() throws {
+        var score = EditingFixtures.parityFixture()
+        let secondPart = VoiceElementID(
+            staff: StaffAddress(partIndex: 1, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+        )
+        let canonical = VoiceElementID(
+            staff: EditingFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+        )
+        _ = try SetStaffText(anchor: secondPart, text: "rit.", isSystemText: true).apply(to: &score)
+
+        let document = Self.layout(score)
+        let identity = try #require(document.staffTextOrigin(at: canonical, style: .systemText))
+        let byBeat = try #require(
+            document.staffTextOrigin(at: secondPart, style: .systemText, in: score),
+        )
+
+        #expect(byBeat == identity)
+    }
+
+    /// The beat is compared, not ignored. Element 2 of the bar is a different beat from element 1, so an
+    /// anchor there must NOT be handed the mark written at element 1 — which is exactly what "return the first
+    /// staff text in this bar" would do, and what this fixture would let it get away with.
+    @Test func aDifferentBeatInTheSameBarIsNotAMatch() throws {
+        var score = EditingFixtures.fourQuarterRests()
+        let onBeatOne = Self.anchor(element: 1)
+        let onBeatTwo = Self.anchor(element: 2)
+        _ = try SetStaffText(anchor: onBeatOne, text: "solo", isSystemText: false).apply(to: &score)
+
+        let document = Self.layout(score)
+        // The control: beat 1 itself does resolve, so a nil for beat 2 is not the whole lookup failing.
+        #expect(document.staffTextOrigin(at: onBeatOne, style: .staffText, in: score) != nil)
+        #expect(document.staffTextOrigin(at: onBeatTwo, style: .staffText, in: score) == nil)
+    }
+
+    /// A STAFF text keeps its staff. `LayoutMeasure.elements` aggregates every staff in the bar, so a beat
+    /// match that dropped the staff would hand a caret on part 1 the origin of part 0's mark at the same
+    /// downbeat — the aggregation bug `lyricLineY` records. Only a system text is allowed to cross, and this
+    /// asserts both halves against one score.
+    @Test func aStaffTextDoesNotCrossStavesButASystemTextDoes() throws {
+        var score = EditingFixtures.parityFixture()
+        let firstPart = VoiceElementID(
+            staff: EditingFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+        )
+        let secondPart = VoiceElementID(
+            staff: StaffAddress(partIndex: 1, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+        )
+        _ = try SetStaffText(anchor: firstPart, text: "solo", isSystemText: false).apply(to: &score)
+        _ = try SetStaffText(anchor: firstPart, text: "rit.", isSystemText: true).apply(to: &score)
+
+        let document = Self.layout(score)
+        // The control: part 0's own anchor finds its own staff text at that beat.
+        #expect(document.staffTextOrigin(at: firstPart, style: .staffText, in: score) != nil)
+        // Part 1 shares the downbeat and does not get part 0's staff text.
+        #expect(document.staffTextOrigin(at: secondPart, style: .staffText, in: score) == nil)
+        // The system text at that same beat, which belongs to no staff, it does get.
+        #expect(document.staffTextOrigin(at: secondPart, style: .systemText, in: score) != nil)
+    }
+
     private static func layout(_ score: Score) -> LayoutDocument {
         LayoutEngine.layout(
             score: score,

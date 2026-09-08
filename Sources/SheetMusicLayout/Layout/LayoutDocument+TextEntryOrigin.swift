@@ -67,8 +67,7 @@ extension LayoutDocument {
     /// fall back on — the empty-editor fallback in the example overlay is gated on the editor being empty
     /// (`ScoreTextEntryOverlay.textEntryOrigin`) — so a miss here shows up as NO CARET AT ALL, not as a caret
     /// in a worse place. The text-and-proximity lookup this replaced always returned something, so these two
-    /// cases are a regression in exchange for never returning the wrong element; both need a beat-shaped
-    /// identity to fix properly, and both are worth checking before this is relied on for a new caret path.
+    /// cases are a regression in exchange for never returning the wrong element.
     ///
     /// 1. **Another voice at the same beat.** A lane mark has no voice: `SetStaffText` reduces any anchor it is
     ///    given to a `MeasurePosition`. Layout must still name one voice element, and picks the lowest-numbered
@@ -79,6 +78,12 @@ extension LayoutDocument {
     ///    element on the canonical staff only — one glyph, carrying a staff-(0,0) anchor. So
     ///    `staffTextOrigin(at:style: .systemText)` returns `nil` for EVERY anchor outside part 0 / staff 0,
     ///    which in a multi-part score is most of them.
+    ///
+    /// **Both are fixed by `staffTextOrigin(at:style:in:)`**, which matches by beat instead of by element
+    /// index. This overload stays because it needs no `Score`, and because a caller that genuinely means "the
+    /// mark whose emitted identity is exactly this" — a test pinning the emission, the JNI bridge's
+    /// identity-keyed path — should not silently start matching a neighbouring voice. New caret paths want the
+    /// beat-matching one.
     public func staffTextOrigin(
         at anchor: VoiceElementID,
         style: TextStyleType,
@@ -89,6 +94,61 @@ extension LayoutDocument {
             ) = element,
                 candidateAnchor == anchor,
                 candidateStyle == style
+            else { return nil }
+            return origin
+        }
+    }
+
+    /// The final document-space origin of the staff- or system-text glyph at `anchor`'s BEAT, matched through
+    /// `score` rather than by element index.
+    ///
+    /// A lane mark is addressed by beat and staff, never by voice or by slot: `SetStaffText` reduces whatever
+    /// anchor it is handed to a `MeasurePosition` (`SystemLaneSlot.position(of:in:)`). Layout must still name
+    /// one voice element when it emits the glyph, and `LayoutEngine.systemLaneAnchor(atTick:…)` picks the
+    /// lowest-numbered voice carrying a chord or rest at that tick — on the CANONICAL staff when the mark
+    /// belongs to no staff at all. That emitted `VoiceElementID` is therefore narrower than the mark's real
+    /// address, and the identity-matching overload above misses whenever the caller holds a different — equally
+    /// correct — name for the same beat. Both misses it documents are of that shape.
+    ///
+    /// So this resolves BOTH sides to a beat and compares those. Neither side re-derives the arithmetic: the
+    /// caller's anchor and the emitted anchor go through the same `SystemLaneSlot.position(of:in:)` the writer
+    /// used, which reaches `Score.onset(of:)` — the one walker that folds `.locationShift` jogs and
+    /// `effectiveMeasureDurations` in, and the reason `ScoreTickPosition` exists. A `MeasurePosition` is a
+    /// reduced fraction of the bar, so the comparison is independent of `division` and of which voice or staff
+    /// each side counted in.
+    ///
+    /// Exact identity is still tried first, and not only as an optimization: it keeps the answer for an anchor
+    /// that resolves exactly identical to the overload above, so adopting this can add matches but never move
+    /// one.
+    ///
+    /// `score` must be the score `self` was laid out from. Passing a different one silently compares beats
+    /// across two documents; nothing here can detect that.
+    ///
+    /// **The beat is relaxed; the STAFF is not.** A `LayoutMeasure`'s `elements` aggregate every staff in the
+    /// bar, so a scan that dropped the staff would hand a caret on staff 1 the origin of staff 0's "solo" at
+    /// the same beat — the same class of bug `lyricLineY`'s comment records. A staff text keeps its anchor's
+    /// staff; a system text deliberately does not, because it has none and is laid out on the canonical staff
+    /// whatever staff the caller is editing from. That single exception IS miss 2.
+    ///
+    /// **What still returns `nil`:** a mark at a beat no chord or rest starts (a `<location>`-shifted lane
+    /// element — the v1 limit `SystemLaneSlot` records), an anchor naming a non-timed element, and an anchor
+    /// whose bar this document does not lay out.
+    public func staffTextOrigin(
+        at anchor: VoiceElementID,
+        style: TextStyleType,
+        in score: Score,
+    ) -> CGPoint? {
+        if let exact = staffTextOrigin(at: anchor, style: style) { return exact }
+        guard let wanted = SystemLaneSlot.position(of: anchor, in: score) else { return nil }
+        return firstOrigin(inMeasure: anchor.measureIndex) { element in
+            guard case let .staffText(
+                _, origin, _, candidateStyle, candidateAnchor,
+            ) = element,
+                candidateStyle == style,
+                let candidateAnchor,
+                candidateAnchor.measureIndex == anchor.measureIndex,
+                style == .systemText || candidateAnchor.staff == anchor.staff,
+                SystemLaneSlot.position(of: candidateAnchor, in: score) == wanted
             else { return nil }
             return origin
         }
