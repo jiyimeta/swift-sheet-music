@@ -74,7 +74,9 @@ extension LayoutEngine {
         // every label is empty. Pad: 1 sp between text and the
         // staff so glyphs don't touch the leftmost barline.
         let pad = metrics.sp * 1
-        let floor = useLong ? metrics.sp * 4 : metrics.sp * 2
+        let floor = metrics.sp * (useLong
+            ? metrics.spacing.firstSystemIndent
+            : metrics.spacing.continuationSystemIndent)
         // Reserve room for bracket columns on the staff's left side.
         // One column ≈ sp * 1 of horizontal stride; the base inset
         // (sp * 0.5) is the bracket-spine-to-staff distance.

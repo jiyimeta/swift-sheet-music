@@ -64,6 +64,15 @@ public enum PDFExporter {
         /// `.honor` reproduces export behavior from before this option
         /// existed.
         public var breakPolicy: LayoutBreakPolicy
+        /// Engraving spacing forwarded to the layout engine.
+        ///
+        /// PDF already has the page margins in `EngravingPage`, and
+        /// `PDFPageView` maps document coordinates by that page's leading
+        /// and top margins. Non-default `spacing.margins` therefore add an
+        /// inner margin inside the page margin. PDF hosts should normally
+        /// treat the page margin as authoritative and leave
+        /// `spacing.margins` at its default.
+        public var spacing: EngravingSpacing
 
         public init(
             page: PageGeometry = .fromScore,
@@ -72,6 +81,7 @@ public enum PDFExporter {
             title: String? = nil,
             author: String? = nil,
             breakPolicy: LayoutBreakPolicy = .honor,
+            spacing: EngravingSpacing = .standard,
         ) {
             self.page = page
             self.staffSize = staffSize
@@ -79,6 +89,7 @@ public enum PDFExporter {
             self.title = title
             self.author = author
             self.breakPolicy = breakPolicy
+            self.spacing = spacing
         }
     }
 
@@ -103,6 +114,7 @@ public enum PDFExporter {
             // are fully omitted, never grayed. Explicit even though false
             // is the default — guards against the default ever changing.
             showsInvisibleElements: false,
+            spacing: options.spacing,
         )
         let availableWidth = max(
             resolved.staffSize * 4,

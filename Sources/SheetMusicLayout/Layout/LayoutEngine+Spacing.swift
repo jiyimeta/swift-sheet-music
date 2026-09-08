@@ -163,7 +163,10 @@ extension LayoutEngine {
     public static func naturalContentWidth(
         score: Score, options: ScoreViewOptions,
     ) -> CGFloat {
-        let metrics = StaffMetrics(staffSize: options.staffSize)
+        let metrics = StaffMetrics(
+            staffSize: options.staffSize,
+            spacing: options.spacing,
+        )
         let partLabelWidth: CGFloat = 80
         let staves = score.allStaves.map(\.staff)
         guard let firstStaff = staves.first else {
@@ -633,6 +636,15 @@ extension LayoutEngine {
                     maxGap = max(maxGap, share)
                     break
                 }
+            }
+            // A floor on the distance between two ADJACENT note columns.
+            // The final entry spans the last tick to the measure end, which
+            // is barline clearance rather than a column-to-column gap.
+            if i + 1 < sortedTicks.count {
+                maxGap = max(
+                    maxGap,
+                    metrics.sp * metrics.spacing.minNoteDistance,
+                )
             }
             gapWeights.append(maxGap)
         }

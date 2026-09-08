@@ -54,6 +54,11 @@ public final class LayoutCache: @unchecked Sendable {
         let measures: [Measure?] // one per staff (nil if absent)
         let sp: CGFloat
         let division: Int
+        /// The host's engraving spacing at the time this entry was built.
+        /// Both `minWidth` and `tickAggregate` use `minNoteDistance` and
+        /// `spacePerQuarter`, so changing spacing must invalidate the entry;
+        /// otherwise a hit silently serves widths computed for old options.
+        let spacing: EngravingSpacing
         /// The effective duration `measureDuration(context
         /// .measureDurations, at: measureIdx)` resolved to for this
         /// measure at the time this entry was built. NOT derivable
@@ -83,9 +88,9 @@ public final class LayoutCache: @unchecked Sendable {
 
         /// --- Output of aggregatedTickWeights, shared between the
         /// width pass (`packSystems`) and the placement pass
-        /// (`buildSystem`). Key: `measures`, `sp`, `division`, AND
-        /// `measureDuration` (see that field's doc for why the last
-        /// one is required).
+        /// (`buildSystem`). Key: `measures`, `sp`, `division`, `spacing`,
+        /// and `measureDuration` (see those fields' docs for why both are
+        /// required).
         let tickAggregate: LayoutEngine.TickAggregate
 
         /// --- Per-staff placement results ---

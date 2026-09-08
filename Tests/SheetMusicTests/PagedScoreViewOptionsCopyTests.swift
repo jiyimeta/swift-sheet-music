@@ -28,6 +28,16 @@
                 measureNumbers: .interval(every: 4),
                 lyricsVisible: false,
                 fixedLayoutWidth: 777,
+                spacing: EngravingSpacing(
+                    minNoteDistance: 0.3,
+                    spacePerQuarter: 2.1,
+                    systemStretch: 1.9,
+                    margins: EngravingMargins(top: 1, leading: 2, bottom: 3, trailing: 4),
+                    firstSystemIndent: 5,
+                    continuationSystemIndent: 3,
+                    minStaffGap: 1.25,
+                    systemVerticalPadding: 2,
+                ),
             )
         }
 

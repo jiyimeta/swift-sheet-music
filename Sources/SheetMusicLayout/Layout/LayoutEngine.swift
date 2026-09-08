@@ -66,7 +66,11 @@ public enum LayoutEngine {
         // same engraved set MuseScore would draw. USER accidentals and
         // any note whose spelling can't be derived are left untouched.
         let score = score.suppressingRedundantAccidentals()
-        let metrics = StaffMetrics(staffSize: options.staffSize)
+        let metrics = StaffMetrics(
+            staffSize: options.staffSize,
+            spacing: options.spacing,
+        )
+        let margins = options.spacing.margins
         let effectiveMelismaTicks = computeEffectiveMelismaTicks(
             score: score, division: score.division,
         )
@@ -112,7 +116,7 @@ public enum LayoutEngine {
         // Title block at the top of the document. Built first so we
         // know how much vertical space to leave above the first
         // system.
-        let titleFrame: LayoutTitleFrame? = {
+        let unshiftedTitleFrame: LayoutTitleFrame? = {
             guard options.includeTitleFrame, let src = score.titleFrame
             else { return nil }
             return buildTitleFrame(
@@ -127,27 +131,43 @@ public enum LayoutEngine {
                 ),
             )
         }()
-        let yShift = titleFrame?.height ?? 0
-        let systems = yShift > 0
-            ? packedSystems.map { shift($0, byY: yShift) }
-            : packedSystems
         // Use the actual rendered system extent — not `availableWidth`,
-        // which may be larger than the content needs.
-        let totalWidth = systems.reduce(CGFloat(0)) { acc, system in
+        // which may be larger than the content needs. Measure before the
+        // leading-margin shift so that margin is added exactly once below.
+        let totalWidth = packedSystems.reduce(CGFloat(0)) { acc, system in
             max(acc, system.origin.x + system.size.width)
+        }
+        let topMargin = metrics.sp * margins.top
+        let leadingMargin = metrics.sp * margins.leading
+        let yShift = (unshiftedTitleFrame?.height ?? 0) + topMargin
+        let systems = packedSystems.map { system in
+            let shiftedY = yShift != 0
+                ? shift(system, byY: yShift) : system
+            return leadingMargin != 0
+                ? shift(shiftedY, byX: leadingMargin) : shiftedY
+        }
+        // The title block moves with BOTH margins, not just the top one.
+        // Its texts are placed against the music width (`baseX` resolves
+        // `.center` to `docWidth / 2` and `.right` to `docWidth`, where
+        // that `docWidth` excludes margins), so a leading margin that
+        // moved only the systems would leave a centered title off-centre
+        // over the music and a left-aligned one hanging in the margin.
+        let titleFrame = unshiftedTitleFrame.map { frame in
+            shift(frame, byX: leadingMargin, byY: topMargin)
         }
         let totalHeight = systems.reduce(CGFloat(0)) { acc, system in
             max(acc, system.origin.y + system.size.height)
-        }
+        } + metrics.sp * margins.bottom
         let systemsWithSpanners = attachSpanners(
             to: systems,
             anchors: anchors,
             score: score,
             metrics: metrics,
         )
-        // Add a small right margin so the last barline doesn't
-        // touch the canvas edge.
-        let docWidth = totalWidth + metrics.sp * 2
+        // Margins live outside the music width and deliberately do not
+        // participate in system wrapping.
+        let docWidth = leadingMargin + totalWidth
+            + metrics.sp * margins.trailing
         let firstPass = LayoutDocument(
             size: CGSize(width: docWidth, height: totalHeight),
             systems: systemsWithSpanners,
@@ -209,6 +229,49 @@ public enum LayoutEngine {
         _ system: LayoutSystem, byY dy: CGFloat,
     ) -> LayoutSystem {
         system.movedBy(dy: dy)
+    }
+
+    static func shift(
+        _ system: LayoutSystem, byX dx: CGFloat,
+    ) -> LayoutSystem {
+        LayoutSystem(
+            origin: CGPoint(x: system.origin.x + dx, y: system.origin.y),
+            size: system.size,
+            measures: system.measures,
+            staffOrigins: system.staffOrigins,
+            staffAddresses: system.staffAddresses,
+            staffGeometries: system.staffGeometries,
+            partLabels: system.partLabels,
+            brackets: system.brackets,
+            spanners: system.spanners,
+            sp: system.sp,
+            invisibleSpanners: system.invisibleSpanners,
+            showsInvisibleElements: system.showsInvisibleElements,
+        )
+    }
+
+    /// `LayoutTitleFrame` has no origin of its own — its texts carry
+    /// absolute positions — so a document-level shift has to move every
+    /// text. `height` is a size, not a position, and stays put.
+    static func shift(
+        _ titleFrame: LayoutTitleFrame, byX dx: CGFloat, byY dy: CGFloat,
+    ) -> LayoutTitleFrame {
+        guard dx != 0 || dy != 0 else { return titleFrame }
+        return LayoutTitleFrame(
+            height: titleFrame.height,
+            texts: titleFrame.texts.map { text in
+                LayoutFrameText(
+                    text: text.text,
+                    style: text.style,
+                    position: CGPoint(
+                        x: text.position.x + dx,
+                        y: text.position.y + dy,
+                    ),
+                    fontSize: text.fontSize,
+                    anchor: text.anchor,
+                )
+            },
+        )
     }
 
     private static func buildTitleFrame(

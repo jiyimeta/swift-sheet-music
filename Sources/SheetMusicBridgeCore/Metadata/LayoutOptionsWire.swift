@@ -3,6 +3,55 @@ import SheetMusicFoundation
 import SheetMusicLayout
 import Wirelet
 
+/// Optional engraving-spacing overrides carried by `LayoutOptionsWire`.
+///
+/// These fields use `nil` for "unspecified", unlike the scalar sentinels on
+/// `LayoutOptionsWire`. An absent non-optional wire field throws
+/// `WireFormatError.unknownTag`, while a nested struct default such as
+/// `.init()` cannot be translated by the Kotlin emitter. Making the nested
+/// struct and its fields optional preserves old blobs, lets generated Kotlin
+/// use `null`, and keeps a real `minNoteDistance` value of `0` unambiguous.
+@WireFormat
+public struct EngravingSpacingWire {
+    public var minNoteDistance: Double?
+    public var spacePerQuarter: Double?
+    public var systemStretch: Double?
+    public var marginTop: Double?
+    public var marginLeading: Double?
+    public var marginBottom: Double?
+    public var marginTrailing: Double?
+    public var firstSystemIndent: Double?
+    public var continuationSystemIndent: Double?
+    public var minStaffGap: Double?
+    public var systemVerticalPadding: Double?
+
+    public init(
+        minNoteDistance: Double? = nil,
+        spacePerQuarter: Double? = nil,
+        systemStretch: Double? = nil,
+        marginTop: Double? = nil,
+        marginLeading: Double? = nil,
+        marginBottom: Double? = nil,
+        marginTrailing: Double? = nil,
+        firstSystemIndent: Double? = nil,
+        continuationSystemIndent: Double? = nil,
+        minStaffGap: Double? = nil,
+        systemVerticalPadding: Double? = nil,
+    ) {
+        self.minNoteDistance = minNoteDistance
+        self.spacePerQuarter = spacePerQuarter
+        self.systemStretch = systemStretch
+        self.marginTop = marginTop
+        self.marginLeading = marginLeading
+        self.marginBottom = marginBottom
+        self.marginTrailing = marginTrailing
+        self.firstSystemIndent = firstSystemIndent
+        self.continuationSystemIndent = continuationSystemIndent
+        self.minStaffGap = minStaffGap
+        self.systemVerticalPadding = systemVerticalPadding
+    }
+}
+
 /// Display settings passed from the Android Reader to the layout bridge across JNI.
 /// Self-contained (no cross-directory @WireFormat references) so the SheetMusicAndroid
 /// wirelet codegen can emit its Kotlin model + codec from this file alone.
@@ -108,6 +157,9 @@ public struct LayoutOptionsWire {
     /// Scale factor for small / cue noteheads. `0` keeps `ScoreViewOptions`'s own default.
     public var smallNoteMag: Double = 0
 
+    /// Optional engraving-spacing overrides. `nil` preserves the engine defaults.
+    public var spacing: EngravingSpacingWire?
+
     // swiftlint:disable:next function_default_parameter_at_end
     public init(
         layoutMode: UInt8,
@@ -127,6 +179,7 @@ public struct LayoutOptionsWire {
         breakIndicatorVisibilityRaw: UInt8 = 0,
         graceNoteMag: Double = 0,
         smallNoteMag: Double = 0,
+        spacing: EngravingSpacingWire? = nil,
     ) {
         self.layoutMode = layoutMode
         self.staffSize = staffSize
@@ -145,6 +198,7 @@ public struct LayoutOptionsWire {
         self.breakIndicatorVisibilityRaw = breakIndicatorVisibilityRaw
         self.graceNoteMag = graceNoteMag
         self.smallNoteMag = smallNoteMag
+        self.spacing = spacing
     }
 }
 
@@ -255,6 +309,32 @@ extension LayoutOptionsWire {
         case 1: true
         default: modeDefault
         }
+    }
+
+    /// Engraving spacing with every omitted wire field restored from the engine default.
+    public var engravingSpacing: EngravingSpacing {
+        let standard = EngravingSpacing.standard
+        return EngravingSpacing(
+            minNoteDistance: CGFloat(spacing?.minNoteDistance ?? Double(standard.minNoteDistance)),
+            spacePerQuarter: CGFloat(spacing?.spacePerQuarter ?? Double(standard.spacePerQuarter)),
+            systemStretch: CGFloat(spacing?.systemStretch ?? Double(standard.systemStretch)),
+            margins: EngravingMargins(
+                top: CGFloat(spacing?.marginTop ?? Double(standard.margins.top)),
+                leading: CGFloat(spacing?.marginLeading ?? Double(standard.margins.leading)),
+                bottom: CGFloat(spacing?.marginBottom ?? Double(standard.margins.bottom)),
+                trailing: CGFloat(spacing?.marginTrailing ?? Double(standard.margins.trailing)),
+            ),
+            firstSystemIndent: CGFloat(
+                spacing?.firstSystemIndent ?? Double(standard.firstSystemIndent),
+            ),
+            continuationSystemIndent: CGFloat(
+                spacing?.continuationSystemIndent ?? Double(standard.continuationSystemIndent),
+            ),
+            minStaffGap: CGFloat(spacing?.minStaffGap ?? Double(standard.minStaffGap)),
+            systemVerticalPadding: CGFloat(
+                spacing?.systemVerticalPadding ?? Double(standard.systemVerticalPadding),
+            ),
+        )
     }
 
     /// Default for the legacy no-options LayoutBridge.compute path + tests.
