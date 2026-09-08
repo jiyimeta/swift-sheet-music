@@ -47,6 +47,7 @@ extension LayoutEngine {
         context: RenderContext,
     ) -> LayoutSystem {
         let metrics = context.metrics
+        let spacing = metrics.spacing
         let allStaves = context.score.allStaves
         let staves = allStaves.map(\.staff)
         // Per-staff line geometry, parallel to `staves` (and therefore
@@ -85,16 +86,17 @@ extension LayoutEngine {
         // that distance and produced systems ~50% taller than
         // MuseScore. 1sp leaves a hairline so glyph extents that
         // overshoot the staff don't graze the system above / below.
-        let topPad: CGFloat = metrics.sp * 1
-        let bottomPad: CGFloat = metrics.sp * 1
+        // The value is now host-overridable.
+        let topPad = metrics.sp * spacing.systemVerticalPadding
+        let bottomPad = metrics.sp * spacing.systemVerticalPadding
         // Inter-staff vertical gap baseline. Combined with
         // `staffBottomPads[idx]` (lyrics / dynamics extent) and
         // the next staff's `staffTopPads` (2 sp baseline), this
         // approximates MuseScore's `Sid::staffDistance = 6.5 sp`.
         // 0.5 sp keeps total system height in line with
         // MuseScore's reference output without sacrificing
-        // breathing room.
-        let minGap: CGFloat = metrics.sp * 0.5
+        // breathing room. The baseline is now host-overridable.
+        let minGap = metrics.sp * spacing.minStaffGap
 
         // `staffBottomPads` is computed AFTER the untranslated
         // layout below — it depends on the actual south-skyline

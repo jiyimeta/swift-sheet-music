@@ -203,6 +203,7 @@ extension LayoutBridge {
             showsInvisibleElements: optionsWire.showsInvisibleElements == 1,
             measureNumbers: optionsWire.measureNumberPolicy,
             lyricsVisible: optionsWire.lyricsVisible,
+            spacing: optionsWire.engravingSpacing,
         )
         // Assigned after construction rather than passed in, so `0` keeps whatever
         // `ScoreViewOptions` itself defaults to. Naming the literal here would pin the engine's

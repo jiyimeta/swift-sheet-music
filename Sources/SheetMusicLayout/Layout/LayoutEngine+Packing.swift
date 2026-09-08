@@ -84,7 +84,7 @@ extension LayoutEngine {
             let durationAt = measureDuration(measureDurations, at: i)
             if let prior = priorEntries[i],
                prior.sp == sp,
-               prior.division == division,
+               prior.division == division, prior.spacing == context.options.spacing,
                prior.measures == measuresAt,
                prior.measureDuration == durationAt
             {
@@ -114,7 +114,7 @@ extension LayoutEngine {
             context.cache?.entries[i] = LayoutCache.Entry(
                 measures: measuresAt,
                 sp: sp,
-                division: division,
+                division: division, spacing: context.options.spacing,
                 measureDuration: durationAt,
                 minWidth: result.width,
                 tickAggregate: result.aggregate,
@@ -253,8 +253,9 @@ extension LayoutEngine {
             // into 4-measure systems for visual breathing. 1.5
             // is the ratio at which MuseScore's mostly-4-measure
             // wraps emerge on dense lyric content; loosening
-            // further re-introduces 5-6 measure systems.
-            let naturalStretch: CGFloat = 1.5
+            // further re-introduces 5-6 measure systems. The host can now
+            // override this ratio through its engraving spacing options.
+            let naturalStretch = context.options.spacing.systemStretch
             let naturalAvail = contentAvail / naturalStretch
             while cursor < measureCount {
                 // Multi-measure-rest interior indices contribute width 0 and emit

@@ -224,6 +224,19 @@ struct LayoutEntryTests {
             transposeSemitones: transposeSemitones,
             hiddenStaves: hiddenStaves,
             clefOverrides: clefOverrides,
+            spacing: EngravingSpacingOptions(
+                minNoteDistance: -1,
+                spacePerQuarter: -1,
+                systemStretch: -1,
+                marginTop: -1,
+                marginLeading: -1,
+                marginBottom: -1,
+                marginTrailing: -1,
+                firstSystemIndent: -1,
+                continuationSystemIndent: -1,
+                minStaffGap: -1,
+                systemVerticalPadding: -1,
+            ),
         )
     }
 }

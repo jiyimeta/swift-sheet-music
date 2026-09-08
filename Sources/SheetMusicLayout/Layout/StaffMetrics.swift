@@ -11,10 +11,21 @@ public struct StaffMetrics: Sendable, Equatable {
     public let staffHeight: CGFloat
     /// One staff space in points (distance between adjacent staff lines).
     public let sp: CGFloat
+    /// Host-selected engraving distances used by spacing calculations.
+    public let spacing: EngravingSpacing
 
-    public init(staffSize: CGFloat) {
+    /// Creates point-based metrics for a staff and its engraving spacing.
+    ///
+    /// Reconstruction sites that rescale for glyph magnification (grace / cue
+    /// noteheads) deliberately omit `spacing` and receive `.standard`: those
+    /// sites read only `glyphFontSize` and never call spacing functions.
+    public init(
+        staffSize: CGFloat,
+        spacing: EngravingSpacing = .standard,
+    ) {
         staffHeight = staffSize
         sp = staffSize / 4
+        self.spacing = spacing
     }
 
     /// Thickness of a staff line. Engraving: typically 0.13 sp.
@@ -45,7 +56,7 @@ public struct StaffMetrics: Sendable, Equatable {
     /// 4 sp value over-stretched measures, especially under
     /// lyrics, and reduced systems-per-page by ~40 %.
     public var spacePerQuarter: CGFloat {
-        sp * 1.6
+        sp * spacing.spacePerQuarter
     }
 
     /// Default Y origin for chord symbols, in points (relative to

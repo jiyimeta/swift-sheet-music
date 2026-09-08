@@ -7,6 +7,48 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Engraving spacing and document margins are host-injectable.**
+  `ScoreViewOptions.spacing` carries a new `EngravingSpacing`: a minimum
+  distance between adjacent note columns, the per-quarter horizontal advance,
+  the natural system-stretch ratio, the four document margins, the first- and
+  continuation-system indent floors, the inter-staff gap floor, and the padding
+  above and below each system. Values are in staff spaces — not points — so
+  they survive a change of `staffSize`, and so they read in the same units as
+  the MuseScore style values they correspond to. `systemStretch` is the one
+  unitless ratio.
+
+  `minNoteDistance` is genuinely new behavior rather than a renamed constant.
+  The engine had no column-to-column floor at all: the nearest thing was a
+  per-element weight floor inside `durationWidth`, and that weight gets prorated
+  across intervening tick boundaries, so an individual gap could fall below it.
+  The new floor is applied in `aggregatedTickWeights` and only between adjacent
+  columns — the last gap in a measure is barline clearance, not a column gap.
+  It defaults to `0`, which is a no-op; MuseScore's `Sid::minNoteDistance`
+  default is `0.25`.
+
+  **Margins sit outside `availableWidth`, and do not move system breaks.**
+  `availableWidth` is the width offered to the music; the document comes back
+  wider by the margins. That is not new — the engine has always added a 2 sp
+  right margin on top of `availableWidth` — this release only gives that
+  2 sp a name and three siblings. A host that needs the document to fit a
+  container should subtract its margins from what it passes in, or use
+  `fixedLayoutWidth`. Wrapping deliberately ignores the margins so that
+  adjusting whitespace never reflows a system.
+
+  Every default reproduces the previous output exactly. The option reaches
+  Apple, PDF (`PDFExporter.Options.spacing`), Android (`LayoutOptionsWire`),
+  and the browser (`LayoutOptions.spacing`). On the wire the nested struct and
+  all of its fields are optional, so a Kotlin host built before this release
+  compiles unchanged and keeps the engine defaults; the browser surface uses a
+  negative sentinel instead, because its TypeScript resolver fills every field
+  regardless.
+
+  PDF hosts should note that `EngravingPage` already supplies the page margins
+  and `PDFPageView` maps document coordinates by them, so a non-default
+  `spacing.margins` acts as a second margin inside the page margin.
+
 ### Fixed
 
 - **Android instrumented tests now run in CI.** The step shipped in 2.6.0 never
