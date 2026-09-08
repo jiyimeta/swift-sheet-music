@@ -124,6 +124,19 @@ const defaultLayoutOptions = {
   transposeSemitones: 0,
   hiddenStaves: [],
   clefOverrides: [],
+  spacing: {
+    minNoteDistance: -1,
+    spacePerQuarter: -1,
+    systemStretch: -1,
+    marginTop: -1,
+    marginLeading: -1,
+    marginBottom: -1,
+    marginTrailing: -1,
+    firstSystemIndent: -1,
+    continuationSystemIndent: -1,
+    minStaffGap: -1,
+    systemVerticalPadding: -1,
+  },
 };
 
 describe("wasm bridge parity with the Apple build", () => {

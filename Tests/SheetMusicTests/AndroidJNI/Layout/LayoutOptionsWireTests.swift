@@ -3,6 +3,7 @@
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicBridgeCore
     import SheetMusicCore
+    import SheetMusicLayout
     import Testing
     import Wirelet
 
@@ -26,6 +27,19 @@
                 breakIndicatorVisibilityRaw: 2,
                 graceNoteMag: 0.55,
                 smallNoteMag: 0.65,
+                spacing: EngravingSpacingWire(
+                    minNoteDistance: 0.3,
+                    spacePerQuarter: 2.1,
+                    systemStretch: 1.9,
+                    marginTop: 1.1,
+                    marginLeading: 2.2,
+                    marginBottom: 3.3,
+                    marginTrailing: 4.4,
+                    firstSystemIndent: 5.5,
+                    continuationSystemIndent: 3.6,
+                    minStaffGap: 1.25,
+                    systemVerticalPadding: 2.7,
+                ),
             )
             let decoded = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(decoded.staffSize == 18.5)
@@ -47,6 +61,36 @@
             #expect(decoded.breakIndicatorVisibilityRaw == 2)
             #expect(decoded.graceNoteMag == 0.55)
             #expect(decoded.smallNoteMag == 0.65)
+            let spacing = try #require(decoded.spacing)
+            #expect(spacing.minNoteDistance == 0.3)
+            #expect(spacing.spacePerQuarter == 2.1)
+            #expect(spacing.systemStretch == 1.9)
+            #expect(spacing.marginTop == 1.1)
+            #expect(spacing.marginLeading == 2.2)
+            #expect(spacing.marginBottom == 3.3)
+            #expect(spacing.marginTrailing == 4.4)
+            #expect(spacing.firstSystemIndent == 5.5)
+            #expect(spacing.continuationSystemIndent == 3.6)
+            #expect(spacing.minStaffGap == 1.25)
+            #expect(spacing.systemVerticalPadding == 2.7)
+        }
+
+        @Test func absentSpacingDecodesForBackwardCompatibility() throws {
+            let wire = LayoutOptionsWire(
+                layoutMode: 0,
+                staffSize: 28,
+                honorLayoutBreaks: 1,
+                collapseMultiMeasureRests: 0,
+                showsInvisibleElements: 0,
+                hiddenStaves: [],
+                clefOverrides: [],
+                transposeSemitones: 0,
+                showsLyrics: 1,
+                spacing: nil,
+            )
+            let decoded = try LayoutOptionsCodec.decode(wire.encodeToData())
+            #expect(decoded.spacing == nil)
+            #expect(decoded.engravingSpacing == EngravingSpacing.standard)
         }
 
         /// The NOTATION half of the transpose clamp. It must match the two audio clamps

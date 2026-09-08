@@ -121,6 +121,7 @@ let wasmProgram = computeLayout(
         transposeSemitones: 0,
         hiddenStaves: [],
         clefOverrides: [],
+        spacing: .unspecified,
     ),
 )
 let wasmBreaks = pageBreaks(handle: wasmHandle, pageHeightMM: 297)

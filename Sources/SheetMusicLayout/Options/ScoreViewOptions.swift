@@ -208,6 +208,9 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// Default: `nil` (follow the container, the behavior from
     /// before this option existed).
     public var fixedLayoutWidth: CGFloat?
+    /// Host-overridable engraving distances. `.standard` preserves the
+    /// layout engine's historical spacing and document margins.
+    public var spacing: EngravingSpacing
 
     public init(
         staffSize: CGFloat = 28,
@@ -223,6 +226,7 @@ public struct ScoreViewOptions: Sendable, Equatable {
         measureNumbers: MeasureNumberPolicy = .systemStart,
         lyricsVisible: Bool = true,
         fixedLayoutWidth: CGFloat? = nil,
+        spacing: EngravingSpacing = .standard,
     ) {
         self.staffSize = staffSize
         self.systemGap = systemGap
@@ -237,5 +241,6 @@ public struct ScoreViewOptions: Sendable, Equatable {
         self.measureNumbers = measureNumbers
         self.lyricsVisible = lyricsVisible
         self.fixedLayoutWidth = fixedLayoutWidth
+        self.spacing = spacing
     }
 }

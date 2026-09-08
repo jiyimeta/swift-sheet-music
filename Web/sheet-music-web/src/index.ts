@@ -96,6 +96,21 @@ export interface ClefOverride {
   readonly clef: string;
 }
 
+/** Engraving dimensions in staff spaces, except the unitless system stretch ratio. */
+export interface EngravingSpacing {
+  readonly minNoteDistance?: number;
+  readonly spacePerQuarter?: number;
+  readonly systemStretch?: number;
+  readonly marginTop?: number;
+  readonly marginLeading?: number;
+  readonly marginBottom?: number;
+  readonly marginTrailing?: number;
+  readonly firstSystemIndent?: number;
+  readonly continuationSystemIndent?: number;
+  readonly minStaffGap?: number;
+  readonly systemVerticalPadding?: number;
+}
+
 /**
  * Display settings for one layout pass. All fields are optional; omitted values
  * resolve to `LayoutOptionsWire.verticalDefault`.
@@ -110,6 +125,21 @@ export interface LayoutOptions {
   readonly transposeSemitones?: number;
   readonly hiddenStaves?: readonly HiddenStaff[];
   readonly clefOverrides?: readonly ClefOverride[];
+  readonly spacing?: EngravingSpacing;
+}
+
+interface ResolvedEngravingSpacing {
+  readonly minNoteDistance: number;
+  readonly spacePerQuarter: number;
+  readonly systemStretch: number;
+  readonly marginTop: number;
+  readonly marginLeading: number;
+  readonly marginBottom: number;
+  readonly marginTrailing: number;
+  readonly firstSystemIndent: number;
+  readonly continuationSystemIndent: number;
+  readonly minStaffGap: number;
+  readonly systemVerticalPadding: number;
 }
 
 interface ResolvedLayoutOptions {
@@ -122,6 +152,7 @@ interface ResolvedLayoutOptions {
   readonly transposeSemitones: number;
   readonly hiddenStaves: readonly HiddenStaff[];
   readonly clefOverrides: readonly ClefOverride[];
+  readonly spacing: ResolvedEngravingSpacing;
 }
 
 /**
@@ -591,6 +622,19 @@ function resolveOptions(options: LayoutOptions | undefined): ResolvedLayoutOptio
     transposeSemitones: options?.transposeSemitones ?? 0,
     hiddenStaves: options?.hiddenStaves ?? [],
     clefOverrides: options?.clefOverrides ?? [],
+    spacing: {
+      minNoteDistance: options?.spacing?.minNoteDistance ?? -1,
+      spacePerQuarter: options?.spacing?.spacePerQuarter ?? -1,
+      systemStretch: options?.spacing?.systemStretch ?? -1,
+      marginTop: options?.spacing?.marginTop ?? -1,
+      marginLeading: options?.spacing?.marginLeading ?? -1,
+      marginBottom: options?.spacing?.marginBottom ?? -1,
+      marginTrailing: options?.spacing?.marginTrailing ?? -1,
+      firstSystemIndent: options?.spacing?.firstSystemIndent ?? -1,
+      continuationSystemIndent: options?.spacing?.continuationSystemIndent ?? -1,
+      minStaffGap: options?.spacing?.minStaffGap ?? -1,
+      systemVerticalPadding: options?.spacing?.systemVerticalPadding ?? -1,
+    },
   };
 }
 
