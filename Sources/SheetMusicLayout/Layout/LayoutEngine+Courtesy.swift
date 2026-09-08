@@ -61,11 +61,17 @@ extension LayoutEngine {
         let width: CGFloat
     }
 
-    /// Clearance around the announced columns: after the end barline,
-    /// between the key and time columns, and after the last column so
-    /// the glyphs don't sit flush against the system's right edge. The
-    /// last of the three mirrors the `sp * 0.5` the header schedule adds
-    /// after its own time-signature column.
+    /// Clearance at the two ENDS of the announced band: after the end
+    /// barline, and after the last column so the glyphs don't sit flush
+    /// against the system's right edge. The first is MuseScore's
+    /// `keysigLeftMargin` (0.5 sp, measured from a barline in
+    /// `paddingtable.cpp`); the second mirrors the `sp * 0.5` the header
+    /// schedule adds after its own time-signature column.
+    ///
+    /// The gap BETWEEN the key and time columns is not this one — that
+    /// pair has its own distance wherever it occurs, and the band takes
+    /// it from `keyTimeSignatureGap` so an announcement and a header
+    /// cannot answer differently.
     private static func courtesyGap(sp: CGFloat) -> CGFloat {
         sp * 0.5
     }
@@ -195,14 +201,14 @@ extension LayoutEngine {
 
     /// Lay the announced columns out and size the band that holds them.
     ///
-    /// Sized from what the RENDERERS actually draw, not from the header
-    /// schedule's `sp * (glyphs + 1.5)` / `sp * 3` columns. Those are
-    /// padded estimates that happen to work INSIDE a measure — an
-    /// overrun there just eats into the next column — but this band ends
-    /// at the system's right edge, where an overrun leaves the page. The
-    /// header's arithmetic under-reserves from five accidentals up
-    /// (seven sharps stride out 9.4 sp into an 8.5 sp column), so a real
-    /// modulation to C♯ or G♭ spilled past `LayoutSystem.size.width`.
+    /// Sized from what the RENDERERS actually draw — the same ink the
+    /// header schedule lays its own columns out from
+    /// (`LayoutEngine.headerColumns`). The count-based estimate both
+    /// used to share (`sp * (glyphs + 1.5)` for the key, `sp * 3` for
+    /// the meter) is narrower than a seven-accidental row, which strides
+    /// out 9.4 sp into an 8.5 sp column; here that spilled a modulation
+    /// to C♯ or G♭ past `LayoutSystem.size.width`, and in the header it
+    /// dragged the time signature back over the last sharp.
     private static func band(
         keys: [CourtesyKeySignature],
         time: CourtesyTimeSignature?,
@@ -234,14 +240,16 @@ extension LayoutEngine {
         // Half a glyph inside its column's left edge, because every
         // renderer centers a time-signature glyph on its stride — and a
         // symbol's glyph is not a digit's.
-        let timeGlyphWidth = (time?.symbol ?? .numeric) == .numeric
-            ? TimeSignatureLayout.digitWidth(sp: metrics.sp)
-            : TimeSignatureLayout.symbolWidth(sp: metrics.sp)
+        let timeGlyphWidth = TimeSignatureLayout.glyphWidth(
+            symbol: time?.symbol ?? .numeric, sp: metrics.sp,
+        )
         // Columns left to right, each preceded by a gap; the trailing pad
         // closes the band. A key-only or time-only announcement simply
         // drops the column it doesn't have, and with it that column's
         // gap.
-        let timeColumnStart = keyInk > 0 ? gap + keyInk + gap : gap
+        let timeColumnStart = keyInk > 0
+            ? gap + keyInk + keyTimeSignatureGap(sp: metrics.sp)
+            : gap
         let lastColumnEnd = timeInk > 0
             ? timeColumnStart + timeInk
             : gap + keyInk

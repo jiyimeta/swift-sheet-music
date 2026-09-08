@@ -224,10 +224,19 @@ struct CancellationNaturalStepsTests {
                 synthesizeClefForAllStaves: false,
                 activeKeys: [0],
             )
+            // Measured from the column's INK edge, half a glyph left of
+            // the first accidental's anchor: the naturals occupy exactly
+            // the column three sharps would have, clearance included.
+            let halfGlyph = KeySignatureSteps.glyphWidth(sp: metrics.sp) / 2
             #expect(
-                cancelling.timeSigX - cancelling.keySigX == metrics.sp * 4.5,
+                cancelling.timeSigX - (cancelling.keySigX - halfGlyph)
+                    == LayoutEngine.keySignatureColumnWidth(
+                        glyphCount: 3, sp: metrics.sp,
+                    ),
             )
-            #expect(plain.timeSigX - plain.keySigX == metrics.sp * 1.5)
+            // Nothing to cancel: no accidental is drawn, so neither the
+            // column nor the clearance after it exists.
+            #expect(plain.timeSigX == plain.keySigX)
         }
 
         /// The per-measure width pass is deliberately blind to the
@@ -240,7 +249,12 @@ struct CancellationNaturalStepsTests {
                     .allStaves.map(\.staff),
                 metrics: metrics,
             )
-            #expect(boosts == [0, metrics.sp * 3])
+            #expect(boosts == [
+                0,
+                LayoutEngine.keySignatureColumnWidth(
+                    glyphCount: 3, sp: metrics.sp,
+                ),
+            ])
             let none = LayoutEngine.cancellationNaturalWidths(
                 staves: twoBarScore(firstKey: 1, secondKey: 2)
                     .allStaves.map(\.staff),

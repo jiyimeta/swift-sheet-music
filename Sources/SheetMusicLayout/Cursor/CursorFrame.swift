@@ -313,15 +313,13 @@ extension LayoutDocument {
     /// Approximate right edge of a measure's leading clef / key sig /
     /// time sig column, in measure-local coords. Mirrors the
     /// `HeaderSchedule.contentStartX` the layout engine derived when
-    /// placing the measure: `clefX` baseline of `sp * 2` plus each
-    /// header glyph's reserved width. Used by `beatXInMeasure`'s no-
-    /// anchors fallback so the cursor doesn't sit on top of the
-    /// leading glyphs in an all-whole-rest measure.
+    /// placing the measure — the `sp * 2` `clefX` baseline plus each
+    /// column's own width. Used by `beatXInMeasure`'s no-anchors
+    /// fallback so the cursor doesn't sit on the leading glyphs.
     ///
-    /// Mid-measure clef / key changes also land in `elements` and would
-    /// be picked up here, but they only arise after a chord — and a
-    /// measure with any chord wouldn't reach this fallback in the first
-    /// place, so widening the floor with them is a no-op.
+    /// Mid-measure clef / key changes land in `elements` too, but only
+    /// after a chord — and a measure with any chord never reaches this
+    /// fallback, so widening the floor with them is a no-op.
     private func leadingHeaderRightEdge(in measure: LayoutMeasure) -> CGFloat {
         let sp = metrics.sp
         var rightEdge: CGFloat = sp * 2
@@ -330,8 +328,10 @@ extension LayoutDocument {
             case let .clef(_, origin, _):
                 rightEdge = max(rightEdge, origin.x + sp * 2)
             case let .keySignature(sharps, flats, _, naturals, origin):
-                let glyphs = CGFloat(max(sharps, flats, naturals.count))
-                rightEdge = max(rightEdge, origin.x + sp * (glyphs + 1.5))
+                let glyphs = max(sharps, flats, naturals.count)
+                rightEdge = max(rightEdge, LayoutEngine.keySignatureColumnEnd(
+                    anchorX: origin.x, glyphCount: glyphs, sp: sp,
+                ))
             case let .timeSignature(_, _, _, origin):
                 rightEdge = max(rightEdge, origin.x + sp * 3.5)
             default:

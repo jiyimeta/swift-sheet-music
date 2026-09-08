@@ -22,6 +22,134 @@ extension LayoutEngine {
         let contentStartX: CGFloat
     }
 
+    /// Clearance between the key signature's last accidental and the
+    /// time signature's first digit, measured edge to edge on the INK
+    /// rather than between the columns' nominal starts.
+    ///
+    /// MuseScore's `keyTimesigDistance` (1 sp, `style/styledef.cpp`),
+    /// applied in `paddingtable.cpp` as
+    /// `table[ElementType::KEYSIG][ElementType::TIMESIG]` — a padding
+    /// between the two elements' SHAPES, which for a key signature is
+    /// the union of its accidentals' bounding boxes
+    /// (`TLayout::layoutKeySig`). Sizing the column from an accidental
+    /// count instead is what let the last sharp of a wide key reach
+    /// into the numbers.
+    static func keyTimeSignatureGap(sp: CGFloat) -> CGFloat {
+        sp
+    }
+
+    /// Horizontal room a key signature of `glyphCount` accidentals takes
+    /// in a header, INCLUDING the clearance to whatever follows it.
+    ///
+    /// The ink comes from the renderers' own stride and glyph width
+    /// (`KeySignatureSteps.inkWidth`), not from a per-accidental
+    /// estimate: `sp * (glyphCount + 1.5)` is narrower than the row it
+    /// has to hold from four accidentals up, which is what used to drag
+    /// the time signature back over the last sharp. A key that draws
+    /// nothing takes no column and needs no gap.
+    static func keySignatureColumnWidth(
+        glyphCount: Int, sp: CGFloat,
+    ) -> CGFloat {
+        guard glyphCount > 0 else { return 0 }
+        return KeySignatureSteps.inkWidth(glyphCount: glyphCount, sp: sp)
+            + keyTimeSignatureGap(sp: sp)
+    }
+
+    /// Right edge of the key-signature column whose FIRST accidental is
+    /// anchored at `anchorX` — the anchor sits half a glyph inside the
+    /// column's ink edge (renderers center that glyph on it), and the
+    /// column runs `keySignatureColumnWidth` from there. For readers
+    /// that hold a placed element rather than the schedule that placed
+    /// it.
+    static func keySignatureColumnEnd(
+        anchorX: CGFloat, glyphCount: Int, sp: CGFloat,
+    ) -> CGFloat {
+        anchorX - KeySignatureSteps.glyphWidth(sp: sp) / 2
+            + keySignatureColumnWidth(glyphCount: glyphCount, sp: sp)
+    }
+
+    /// How much ink a header's time-signature column holds, accumulated
+    /// over every staff that carries one — polymetric scores can differ
+    /// staff to staff, and the column has to hold the widest.
+    struct TimeSignatureInk: Equatable {
+        /// Horizontal span of the drawn row.
+        var width: CGFloat = 0
+        /// Half the glyph that OPENS the row, which is how far inside
+        /// the column's left edge the origin sits: renderers center that
+        /// glyph on the origin.
+        var leadHalf: CGFloat = 0
+
+        mutating func widen(
+            numerator: Int, denominator: Int,
+            symbol: TimeSignatureSymbol, sp: CGFloat,
+        ) {
+            width = max(width, TimeSignatureLayout.inkWidth(
+                numerator: numerator, denominator: denominator,
+                symbol: symbol, sp: sp,
+            ))
+            leadHalf = max(leadHalf, TimeSignatureLayout.glyphWidth(
+                symbol: symbol, sp: sp,
+            ) / 2)
+        }
+    }
+
+    /// Where the header's three columns land, given how much ink each
+    /// one holds. Shared by the per-measure `HeaderSchedule` and the
+    /// sticky header pane so the pane never drifts from the score it
+    /// floats over.
+    struct HeaderColumns: Equatable {
+        /// Anchor of the clef glyph, which renderers center on it.
+        let clefX: CGFloat
+        /// Left edge of the key signature column — where its ink starts,
+        /// half a glyph LEFT of `keySigX`. Callers that align something
+        /// to the clef's right edge (the sticky pane's staff-name label)
+        /// want this, not the anchor.
+        let keySigInkLeft: CGFloat
+        /// Anchor of the FIRST accidental, half a glyph inside the
+        /// column, because `KeySignatureRenderer` centers each glyph on
+        /// its stride.
+        let keySigX: CGFloat
+        /// Row origin of the time signature, half a glyph inside its own
+        /// column for the same reason.
+        let timeSigX: CGFloat
+        /// Right edge of the last column's ink. No trailing pad — a
+        /// caller that wants one adds its own.
+        let contentEndX: CGFloat
+    }
+
+    /// Lay the header columns out from the ink each one holds.
+    ///
+    /// This is the arithmetic MuseScore performs with shapes and its
+    /// padding table: the distance between two header elements is
+    /// measured between their bounding boxes and padded by a style
+    /// value — `keyTimesigDistance` for this pair
+    /// (`rendering/paddingtable.cpp`, `style/styledef.cpp`). Measuring
+    /// between COLUMN STARTS instead, as this used to, silently assumes
+    /// every column contains its own ink.
+    static func headerColumns(
+        staffStartX: CGFloat = 0,
+        clefWidth: CGFloat,
+        keyGlyphCount: Int,
+        timeSigInk: TimeSignatureInk,
+        metrics: StaffMetrics,
+    ) -> HeaderColumns {
+        let clefX = staffStartX + metrics.sp * 2
+        let keySigInkLeft = clefX + clefWidth
+        let keySigX = keyGlyphCount > 0
+            ? keySigInkLeft + KeySignatureSteps.glyphWidth(sp: metrics.sp) / 2
+            : keySigInkLeft
+        let timeSigInkLeft = keySigInkLeft + keySignatureColumnWidth(
+            glyphCount: keyGlyphCount, sp: metrics.sp,
+        )
+        return HeaderColumns(
+            clefX: clefX,
+            keySigInkLeft: keySigInkLeft,
+            keySigX: keySigX,
+            timeSigX: timeSigInkLeft + timeSigInk.leadHalf,
+            contentEndX: timeSigInkLeft + timeSigInk.width,
+        )
+    }
+
     /// Compute the shared header schedule for `measureIdx` across all
     /// staves. Each column's width is the max width consumed by any
     /// staff that carries that element, so staves lacking an element
@@ -40,8 +168,8 @@ extension LayoutEngine {
         activeKeys: [Int]? = nil,
     ) -> HeaderSchedule {
         var clefWidth: CGFloat = 0
-        var keySigWidth: CGFloat = 0
-        var timeSigWidth: CGFloat = 0
+        var keyGlyphCount = 0
+        var timeSigInk = TimeSignatureInk()
 
         for (idx, staff) in staves.enumerated() {
             guard measureIdx < staff.measures.count else { continue }
@@ -61,10 +189,7 @@ extension LayoutEngine {
                idx < keys.count,
                keys[idx] != 0
             {
-                keySigWidth = max(
-                    keySigWidth,
-                    metrics.sp * (CGFloat(abs(keys[idx])) + 1.5),
-                )
+                keyGlyphCount = max(keyGlyphCount, abs(keys[idx]))
             }
             let carriedKey: Int = {
                 guard let keys = activeKeys, idx < keys.count else {
@@ -88,12 +213,14 @@ extension LayoutEngine {
                     // `cancellationNaturalWidths` instead.
                     let glyphs = k.concertKey != 0
                         ? abs(k.concertKey) : abs(carriedKey)
-                    keySigWidth = max(
-                        keySigWidth,
-                        metrics.sp * (CGFloat(glyphs) + 1.5),
+                    keyGlyphCount = max(keyGlyphCount, glyphs)
+                case let .timeSignature(ts):
+                    timeSigInk.widen(
+                        numerator: ts.numerator,
+                        denominator: ts.denominator,
+                        symbol: ts.symbol,
+                        sp: metrics.sp,
                     )
-                case .timeSignature:
-                    timeSigWidth = max(timeSigWidth, metrics.sp * 3)
                 case .chord:
                     stop = true
                 default:
@@ -105,30 +232,46 @@ extension LayoutEngine {
 
         return headerSchedule(
             clefWidth: clefWidth,
-            keySigWidth: keySigWidth,
-            timeSigWidth: timeSigWidth,
+            keyGlyphCount: keyGlyphCount,
+            timeSigInk: timeSigInk,
             staves: staves,
             measureIdx: measureIdx,
             metrics: metrics,
         )
     }
 
-    /// Turn the per-column widths `computeHeaderSchedule` measured into
-    /// the schedule's x-coordinates. Split out so that function's body
-    /// stays inside the project's length limit.
+    /// Turn the per-column ink `computeHeaderSchedule` measured into the
+    /// schedule's x-coordinates. Split out so that function's body stays
+    /// inside the project's length limit.
     private static func headerSchedule(
         clefWidth: CGFloat,
-        keySigWidth: CGFloat,
-        timeSigWidth: CGFloat,
+        keyGlyphCount: Int,
+        timeSigInk: TimeSignatureInk,
         staves: [Staff],
         measureIdx: Int,
         metrics: StaffMetrics,
     ) -> HeaderSchedule {
-        let clefX = metrics.sp * 2
-        let keySigX = clefX + clefWidth
-        let timeSigX = keySigX + keySigWidth
-        var contentStartX = timeSigX + timeSigWidth
-            + (timeSigWidth > 0 ? metrics.sp * 0.5 : 0)
+        let columns = headerColumns(
+            clefWidth: clefWidth,
+            keyGlyphCount: keyGlyphCount,
+            timeSigInk: timeSigInk,
+            metrics: metrics,
+        )
+        let clefX = columns.clefX
+        let keySigX = columns.keySigX
+        let timeSigX = columns.timeSigX
+        // Room between the time signature's ANCHOR and the first note's
+        // column, unchanged from when the header's columns were nominal:
+        // `sp * 3` for the signature plus `sp * 0.5` of clearance, with
+        // `tickColumns` adding one more sp before the first anchor. It
+        // stays anchor-relative on purpose — this is padding to the
+        // content, not a claim about how much ink the meter holds, and
+        // the two must not be confused again. Every meter's ink fits
+        // inside it (a two-digit row strides 3.12 sp from the column's
+        // left edge, 2.26 sp from the anchor).
+        var contentStartX = timeSigInk.width > 0
+            ? timeSigX + metrics.sp * 3.5
+            : columns.contentEndX
         // Repeat flags live on the canonical staff only
         // (`Score.canonicalStaff`); MuseScore generates the barline from
         // the flag rather than storing a `<BarLine>` element, so this is
@@ -685,7 +828,9 @@ extension LayoutEngine {
                         ? abs(k.concertKey) : abs(activeKey)
                     explicitKeyWidth = max(
                         explicitKeyWidth,
-                        metrics.sp * (CGFloat(glyphs) + 1),
+                        keySignatureColumnWidth(
+                            glyphCount: glyphs, sp: metrics.sp,
+                        ),
                     )
                 case .chord:
                     break scan
@@ -697,8 +842,9 @@ extension LayoutEngine {
                 clefBoost = max(clefBoost, metrics.sp * 2)
             }
             if activeKey != 0 {
-                let synthKeyW = metrics.sp
-                    * (CGFloat(abs(activeKey)) + 1.5)
+                let synthKeyW = keySignatureColumnWidth(
+                    glyphCount: abs(activeKey), sp: metrics.sp,
+                )
                 keyBoost = max(
                     keyBoost,
                     max(0, synthKeyW - explicitKeyWidth),
@@ -718,12 +864,12 @@ extension LayoutEngine {
     /// forward walk of the score, and added on top of the cached widths
     /// — the same shape `synthHeaderOverhead` uses for the system head.
     ///
-    /// The delta is `|outgoing key| * sp`: `computeHeaderSchedule`
-    /// reserves `sp * (glyphs + 1.5)` once it can see the carried key,
-    /// against the `sp * 1.5` the width pass assumed for a
-    /// zero-accidental signature. Counting every explicit signature in
-    /// the voice — not just the leading run — covers the mid-measure
-    /// `timedX` path too.
+    /// The delta is the whole key column: `computeHeaderSchedule`
+    /// reserves `keySignatureColumnWidth(|outgoing key|)` once it can
+    /// see the carried key, against the nothing a width pass reserves
+    /// for a signature it reads as zero-accidental. Counting every
+    /// explicit signature in the voice — not just the leading run —
+    /// covers the mid-measure `timedX` path too.
     static func cancellationNaturalWidths(
         staves: [Staff],
         metrics: StaffMetrics,
@@ -744,8 +890,10 @@ extension LayoutEngine {
                 {
                     guard case let .keySignature(k) = el else { continue }
                     if k.concertKey == 0, keys[staffIdx] != 0 {
-                        staffWidth += metrics.sp
-                            * CGFloat(abs(keys[staffIdx]))
+                        staffWidth += keySignatureColumnWidth(
+                            glyphCount: abs(keys[staffIdx]),
+                            sp: metrics.sp,
+                        )
                     }
                     keys[staffIdx] = k.concertKey
                 }
