@@ -232,9 +232,15 @@ extension LayoutEngine {
             // Mirrors MuseScore's `LyricsLayout::layoutDashes`: when
             // the previous syllable was `begin`/`middle` and the
             // current is `middle`/`end`, dashes fill the gap between
-            // them. Within-measure only for now; cross-measure
-            // hyphens (when a word spans a barline) would need the
-            // same continuation plumbing as melismas.
+            // them. **Within-measure only, and deliberately so**: the
+            // trail dies at the barline because a word spanning one
+            // has to be measured across the whole SYSTEM, which is
+            // where MuseScore segments its hyphen spanner and where
+            // the dash count is computed. A per-measure emission of
+            // that case would put a dash on each side of the barline
+            // instead of one across it. `emitCrossMeasureLyricHyphens`
+            // owns every pair this trail cannot see — see
+            // `LayoutEngine+LyricHyphenSpans`.
             struct LyricTrail {
                 let centerX: CGFloat
                 let textWidth: CGFloat
