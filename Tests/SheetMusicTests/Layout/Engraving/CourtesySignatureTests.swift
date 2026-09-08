@@ -410,10 +410,12 @@ import Testing
             #expect(table[2] == nil)
             #expect(table[3] == nil)
             let courtesy = try #require(table[1])
-            // Gap, the two flats' ink, gap, the single digit's ink, and
-            // the trailing pad — built from the renderers' own constants
-            // rather than the header schedule's padded columns.
+            // Gap, the two flats' ink, the key-to-time clearance, the
+            // single digit's ink, and the trailing pad — built from the
+            // renderers' own constants rather than a padded column, and
+            // from the SAME key-to-time distance a header uses.
             let gap = metrics.sp * 0.5
+            let keyTimeGap = LayoutEngine.keyTimeSignatureGap(sp: metrics.sp)
             let keyInk = KeySignatureSteps.inkWidth(
                 glyphCount: 2, sp: metrics.sp,
             )
@@ -421,8 +423,10 @@ import Testing
                 numerator: 3, denominator: 4, symbol: .numeric, sp: metrics.sp,
             )
             #expect(
-                abs(courtesy.width - (gap + keyInk + gap + timeInk + gap))
-                    < 0.0001,
+                abs(
+                    courtesy.width
+                        - (gap + keyInk + keyTimeGap + timeInk + gap),
+                ) < 0.0001,
             )
             // Every column's ink sits inside the reservation, with the
             // trailing pad to spare: the anchors are half a glyph in

@@ -67,6 +67,16 @@ public enum TimeSignatureLayout {
         sp * 1.68
     }
 
+    /// Ink width of the glyph that opens the signature's row — a digit
+    /// for `.numeric`, the symbol itself otherwise. Half of it is how
+    /// far inside its column's left edge the origin has to sit, because
+    /// every renderer centers that glyph on the origin.
+    static func glyphWidth(symbol: TimeSignatureSymbol, sp: CGFloat)
+        -> CGFloat
+    {
+        symbol == .numeric ? digitWidth(sp: sp) : symbolWidth(sp: sp)
+    }
+
     /// Horizontal ink the signature occupies.
     ///
     /// A symbol is one glyph drawn centered on the origin, so its ink is

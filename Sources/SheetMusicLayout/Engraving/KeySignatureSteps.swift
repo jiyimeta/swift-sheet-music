@@ -112,10 +112,11 @@ public enum KeySignatureSteps {
     /// Renderers stride by `advance` and draw each glyph CENTERED on its
     /// stride (`KeySignatureRenderer.draw`), so the row spans
     /// `(glyphCount - 1)` strides plus one whole glyph. Sizing a column
-    /// as `glyphCount * advance` — or, as the header schedule does, as
-    /// `sp * (glyphCount + 1.5)` — under-reserves from five accidentals
-    /// up, because the stride is narrower than the glyph plus its share
-    /// of the margin.
+    /// as `glyphCount * advance`, or as `sp * (glyphCount + 1.5)`,
+    /// under-reserves from five accidentals up, because the stride is
+    /// narrower than the glyph plus its share of the margin — and the
+    /// neighbour's own glyph is centered on ITS column edge, so the two
+    /// rows of ink meet a full accidental earlier than that.
     static func inkWidth(glyphCount: Int, sp: CGFloat) -> CGFloat {
         guard glyphCount > 0 else { return 0 }
         return CGFloat(glyphCount - 1) * advance(sp: sp)

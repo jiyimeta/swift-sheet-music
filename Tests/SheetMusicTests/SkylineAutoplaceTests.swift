@@ -308,7 +308,7 @@ struct SkylineAutoplaceRegressionTests {
     @Test func harmonyClearsRehearsalMark() throws {
         let score = SkylineFixtures.score(
             measures: [
-                SkylineFixtures.harmonyMeasure(offsetX: -5),
+                SkylineFixtures.harmonyMeasure(offsetX: -7),
             ],
             systemMeasures: [SystemMeasure(elements: [
                 PositionedSystemElement(

@@ -214,7 +214,6 @@ extension LayoutEngine {
         // x relative to the staff start as it would in any first
         // measure of a system.
         let staffStartX = staffOrigins.first?.x ?? metrics.sp * 8
-        let clefX = staffStartX + metrics.sp * 2
         // Reserved width past the clef center, sized to clef
         // glyph half-width (Bravura gClef bbox ≈ sp * 2 wide,
         // half ≈ sp * 1) + MuseScore's `keysigLeftMargin` (0.5 sp,
@@ -222,27 +221,41 @@ extension LayoutEngine {
         // start — matches MuseScore's
         // `clefLeftMargin + widthClef + keysigLeftMargin` ≈ sp * 3.85.
         let clefW = metrics.sp * 2
-        let keySigX = clefX + clefW
+        // The pane's columns come from the SAME arithmetic the score's
+        // own header schedule uses, so the sticky row never drifts out
+        // of alignment with the music it floats over — including the
+        // key-to-time clearance, which a wide key needs here exactly as
+        // it does in the measure.
+        let keyAbs = context.keySignatures.map { abs($0) }.max() ?? 0
+        var timeSigInk = TimeSignatureInk()
+        if let ts = context.timeSignature {
+            timeSigInk.widen(
+                numerator: ts.numerator,
+                denominator: ts.denominator,
+                symbol: ts.symbol,
+                sp: metrics.sp,
+            )
+        }
+        let columns = headerColumns(
+            staffStartX: staffStartX,
+            clefWidth: clefW,
+            keyGlyphCount: keyAbs,
+            timeSigInk: timeSigInk,
+            metrics: metrics,
+        )
+        let clefX = columns.clefX
+        let keySigX = columns.keySigX
+        let timeSigX = columns.timeSigX
         // Staff name and measure-number labels live at the clef
         // right edge — i.e. `keysigLeftMargin` (0.5 sp) LEFT of
-        // the keysig. Matches MuseScore's `clefLeftMargin +
-        // widthClef` (continuouspanel.cpp:463 / 424).
-        let labelX = keySigX - metrics.sp * 0.5
-        // Width of the key-signature column = 0 if all staves are in
-        // C major, else max(|key| + 1.5 sp) across staves so accident
-        // rows fit.
-        let keyAbs = context.keySignatures.map { abs($0) }.max() ?? 0
-        let keySigW = keyAbs > 0
-            ? metrics.sp * (CGFloat(keyAbs) + 1.5)
-            : 0
-        let timeSigX = keySigX + keySigW
-        let timeSigW: CGFloat = context.timeSignature != nil
-            ? metrics.sp * 3
-            : 0
+        // the key column. Matches MuseScore's `clefLeftMargin +
+        // widthClef` (continuouspanel.cpp:463 / 424). Anchored on the
+        // column's ink edge, not on the first accidental's center.
+        let labelX = columns.keySigInkLeft - metrics.sp * 0.5
         // No trailing padding — the pane ends flush with the time
         // signature's right edge so score content reappears
         // immediately past it.
-        let contentEndX = timeSigX + timeSigW
+        let contentEndX = columns.contentEndX
         let headerW = max(contentEndX, staffStartX + metrics.sp * 6)
 
         var elements: [LayoutElement] = []

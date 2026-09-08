@@ -51,6 +51,27 @@ and this project adheres to
 
 ### Fixed
 
+- **A wide key signature no longer collides with the time signature beside
+  it.** The header's key column was sized from a COUNT of accidentals
+  (`sp * (glyphs + 1.5)`) while the renderers stride by 1.4 sp and center each
+  glyph on its stride, and the time signature's first digit was centered on the
+  column edge rather than starting there. From four accidentals up the two rows
+  of ink met: at seven sharps the last one landed 1.26 sp inside the numbers,
+  most of a glyph.
+
+  Both columns are now measured as ink and separated the way MuseScore
+  separates them — a padding between the two elements' shapes,
+  `Sid::keyTimesigDistance` (1 sp) from `paddingtable.cpp`, rather than a
+  distance between column starts that silently assumed each column contained
+  its own glyphs. `LayoutEngine.headerColumns` owns that arithmetic for both
+  the per-measure schedule and the sticky header pane, and the end-of-system
+  courtesy band — which had already been given ink-based sizing for the same
+  reason — now shares its constants.
+
+  Headers with a key signature of four or more accidentals get wider; every
+  other header moves by less than a staff space. Nothing changes in the
+  distance from the time signature to the first note.
+
 - **Android instrumented tests now run in CI.** The step shipped in 2.6.0 never
   passed a CI run: GitHub's arm64 macOS runners cannot start any Android
   emulator (`HVF error: HV_UNSUPPORTED`), arm64 Linux runners have no

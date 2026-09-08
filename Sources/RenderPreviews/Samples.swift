@@ -238,6 +238,7 @@
                 Measure(voices: [Voice(elements: [
                     .clef(Clef(concertClefType: "G")),
                     .keySignature(KeySignature(concertKey: k)),
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
                     .chord(Chord(duration: .whole, notes: [c4])),
                 ])])
             }
