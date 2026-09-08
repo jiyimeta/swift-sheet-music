@@ -74,6 +74,53 @@ extension ScoreHitTester {
         return nil
     }
 
+    /// Document-coord rectangle of the engraved text identified by `target`, or `nil` when no layout
+    /// element reports that target — a stale anchor after a re-layout, a verse that no longer exists, or a
+    /// target that is not one of the four text cases at all.
+    ///
+    /// The identity-keyed counterpart of `hitText`, in the same shape as `ScoreHitTester.clefHitRect(for:)`:
+    /// a host that has a target (from `hitTest(at:)`, or held across an edit) asks for the box to draw a
+    /// selection highlight around, instead of re-resolving a `TextStyleType` to a font and measuring the run
+    /// a second time. That second measurement is the thing this pass exists to spare a host — see
+    /// `hitText`'s doc — and a host-side one would drift from the box the skyline actually reserved.
+    ///
+    /// The box is the SAME rect `hitText` tests, from the same `LayoutElementShape.autoplacedRects` call
+    /// under the same `LayoutElementShape.kind(of:)`, but **without** `textHitTolerance`: the padding widens
+    /// what a click may claim, and drawing it would show the reader a box larger than the ink. A caller that
+    /// wants the click box back can inset by `sp * ScoreHitTester.textHitTolerance` itself.
+    ///
+    /// Where an element measures to more than one rect the union is returned, so the result is always one
+    /// box. No text case produces more than one today.
+    ///
+    /// Resolution is first match in document order, which for a text target is also the only match: every
+    /// identity here names one element (`.lyric` an anchor + verse, `.staffText` an anchor + style,
+    /// `.harmony` an anchor, `.rehearsalMark` a bar). Unlike `hitText`'s first-match-wins among OVERLAPPING
+    /// boxes, nothing is being resolved — the walk simply stops when it finds the element.
+    public func textHitRect(for target: ScoreHitTarget) -> CGRect? {
+        for system in document.systems {
+            for measure in system.measures {
+                let base = CGPoint(
+                    x: system.origin.x + measure.origin.x,
+                    y: system.origin.y + measure.origin.y,
+                )
+                for element in measure.elements {
+                    guard Self.textTarget(for: element) == target,
+                          let kind = LayoutElementShape.kind(of: element)
+                    else { continue }
+                    let rects = LayoutElementShape.autoplacedRects(
+                        for: element, kind: kind, metrics: document.metrics,
+                    )
+                    guard var box = rects.first else { continue }
+                    for rect in rects.dropFirst() {
+                        box = box.union(rect)
+                    }
+                    return box.offsetBy(dx: base.x, dy: base.y)
+                }
+            }
+        }
+        return nil
+    }
+
     /// The target a hit on `element` reports, or `nil` when `element` is not addressable text.
     ///
     /// Only the identity extraction and the target / non-target decision live here; the box's measurement
