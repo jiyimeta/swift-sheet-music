@@ -35,11 +35,43 @@ struct EIDTests {
     }
 
     @Test func rejectsMalformedStrings() {
+        // Cases where we and MuseScore genuinely agree the string is invalid.
         #expect(EID(string: "B") == nil) // no separator
         #expect(EID(string: "B_B_B") == nil) // three parts
-        #expect(EID(string: "B_") == nil) // empty half
         #expect(EID(string: "B_?") == nil) // character outside the alphabet
-        #expect(EID(string: "AAAAAAAAAAAA_A") == nil) // half longer than 11
+    }
+
+    /// Real MuseScore's decoder is more permissive than ours on malformed
+    /// input; we deliberately diverge because its permissiveness lets two
+    /// different malformed strings decode to the same identifier. See the
+    /// `EID` type's doc comment for the full argument.
+    @Test func isStricterThanMuseScoreForMalformedInput() {
+        // Real MuseScore: base64StrToInt64("") returns 0 (the reversed loop
+        // doesn't execute), and getline-based splitting keeps a leading
+        // empty field, so "_B" decodes to the valid-looking EID(0, 1) there.
+        // We reject an empty half instead.
+        #expect(EID(string: "_B") == nil)
+        #expect(EID(string: "B_") == nil)
+
+        // Real MuseScore: base64StrToInt64 has no length check, so a half
+        // longer than MAX_UINT64_BASE64_SIZE (11) silently truncates rather
+        // than being rejected. We reject it: it cannot have come from any
+        // conforming encoder.
+        #expect(EID(string: "AAAAAAAAAAAA_A") == nil)
+    }
+
+    /// The property that actually matters: every identifier our own
+    /// `stringValue` can produce decodes back to the same value, across a
+    /// spread including the zero-digit case and both halves at their
+    /// extremes.
+    @Test func roundTripsEverythingOurOwnEncoderCanProduce() {
+        let values: [UInt64] = [0, 1, 63, 64, .max]
+        for first in values {
+            for second in values {
+                let eid = EID(first: first, second: second)
+                #expect(EID(string: eid.stringValue) == eid)
+            }
+        }
     }
 
     @Test func invalidIsBothHalvesMaxAndOnlyThat() {

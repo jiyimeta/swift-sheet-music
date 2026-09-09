@@ -1,9 +1,18 @@
 import SheetMusicFoundation
 
-/// A stable element identifier, byte-compatible with MuseScore's
-/// `mu::engraving::EID`: two 64-bit halves serialized as base64 and joined
-/// by `_`. Identifiers this library writes therefore survive a MuseScore
-/// round trip, and identifiers MuseScore wrote are read back unchanged.
+/// A stable element identifier. The **encoder** is byte-compatible with
+/// MuseScore's `mu::engraving::EID`: two 64-bit halves serialized as base64
+/// (MuseScore's alphabet, digits least-significant first) and joined by
+/// `_`. Identifiers this library writes therefore round-trip through
+/// MuseScore unchanged.
+///
+/// The **decoder** accepts everything MuseScore's encoder can emit, but is
+/// deliberately stricter than MuseScore's own decoder on malformed input
+/// (an empty half, or a half longer than any conforming encoder could
+/// produce): a malformed string must not decode to a valid-looking
+/// identifier, because two different malformed strings could then decode
+/// to the same one, and a duplicate identifier breaks the one invariant
+/// this retrofit exists to establish.
 ///
 /// The halves are **opaque**. Only identifiers this library mints have
 /// internal meaning (`first` is the actor, `second` its counter); MuseScore
@@ -31,8 +40,12 @@ public struct EID: Hashable, Sendable {
 }
 
 extension EID {
-    /// Longest base64 rendering of a `UInt64` in this scheme: `ceil(64 / 6)`.
-    /// C++: `EID::MAX_UINT64_BASE64_SIZE`.
+    /// The longest half our own `encode` can ever produce (`ceil(64 / 6)`
+    /// digits). This is not a limit MuseScore's decoder enforces —
+    /// `base64StrToInt64` (`eid.cpp:123-133`) has no length check and would
+    /// silently truncate a longer half — but a half longer than this cannot
+    /// have come from any conforming encoder, so `decode` rejects it rather
+    /// than accept a value nothing actually wrote.
     private static let maxHalfLength = 11
 
     private static let alphabet = Array(
@@ -59,6 +72,10 @@ extension EID {
         return String(characters)
     }
 
+    /// Real MuseScore decodes an empty half to `0` (the reversed loop simply
+    /// doesn't execute), so `"_B"` decodes to a valid-looking `EID(0, 1)`
+    /// there. We reject an empty half instead — see the type's doc comment
+    /// for why.
     private static func decode(_ text: Substring) -> UInt64? {
         guard !text.isEmpty, text.count <= maxHalfLength else { return nil }
         var result: UInt64 = 0
