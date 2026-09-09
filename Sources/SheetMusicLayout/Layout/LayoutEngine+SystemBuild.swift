@@ -1256,7 +1256,7 @@ extension LayoutEngine {
         var out: [LayoutMeasure.DynamicExtent] = []
         for element in elements {
             guard case let .textMark(kind, _, origin) = element,
-                  kind == .dynamic,
+                  case .dynamic = kind,
                   let tick = dynamicTick(
                       anchorX: origin.x + metrics.sp,
                       tickColumns: tickColumns,

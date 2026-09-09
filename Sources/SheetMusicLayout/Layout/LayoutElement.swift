@@ -204,7 +204,8 @@ public enum LayoutElement: Sendable, Equatable {
     /// and run structure are computed at layout time so renderers
     /// just walk the runs.
     case harmony(LayoutHarmony)
-    case fermata(subtype: String, origin: CGPoint)
+    /// `anchor` names the chord or rest accepted by `SetFermata`, or explicitly has no command address.
+    case fermata(subtype: String, origin: CGPoint, anchor: VoiceElementID?)
     /// A breath mark or caesura between two chords. `kind` selects the
     /// SMuFL glyph (`BreathGlyph.codepoint(forKind:)`); `origin` is the
     /// glyph anchor (`.center`) in measure-local coordinates. Placement
@@ -214,7 +215,8 @@ public enum LayoutElement: Sendable, Equatable {
     /// `Breath.visible == false`, the element is routed into the
     /// `invisibleElements` overlay (only laid out when
     /// `ScoreViewOptions.showsInvisibleElements` is on).
-    case breath(kind: Breath.Kind, origin: CGPoint)
+    /// `anchor` names the preceding chord accepted by `SetBreath(after:)`, not the next visible chord.
+    case breath(kind: Breath.Kind, origin: CGPoint, anchor: VoiceElementID?)
     /// Per-chord articulation glyph (staccato dot / staccatissimo wedge /
     /// tenuto bar). Emitted from `placeMeasureElements` for each
     /// `ChordArticulation` whose `kind` is in scope; round-trip-only
@@ -222,10 +224,13 @@ public enum LayoutElement: Sendable, Equatable {
     /// `origin` is the SMuFL glyph anchor in measure-local coords;
     /// `isAbove` selects the above-vs-below glyph variant and is also
     /// used by the YBounds pass.
+    /// `anchor` is the owning chord. Duplicate entries of one kind share its identity,
+    /// matching `SetArticulation`, which replaces or removes every entry of that kind.
     case articulation(
         kind: ArticulationKind,
         origin: CGPoint,
         isAbove: Bool,
+        anchor: VoiceElementID?,
     )
     case marker(kind: Marker.Kind, text: String, origin: CGPoint)
     /// Rehearsal letter / number drawn above the top staff at the
@@ -273,6 +278,8 @@ public enum LayoutElement: Sendable, Equatable {
     /// left, with the text free to overflow the pane's white box if
     /// the name is long.
     case staffName(text: String, origin: CGPoint)
+    /// `anchor` names the source spanner slot, shared by every system segment.
+    /// Unsupported identities are explicitly absent; geometry and continuation flags never name a spanner.
     case spannerSegment(
         kind: SpannerKind,
         fromOrigin: CGPoint,
@@ -280,6 +287,7 @@ public enum LayoutElement: Sendable, Equatable {
         continuesLeft: Bool,
         continuesRight: Bool,
         text: String,
+        anchor: VoiceElementID?,
     )
     case tieArc(
         fromOrigin: CGPoint,
@@ -392,8 +400,10 @@ public enum LayoutElement: Sendable, Equatable {
     }
 
     public enum TextMarkKind: Sendable, Equatable {
-        case dynamic
-        case tempo
+        /// The chord with notes accepted by `SetDynamic`, not the marking slot.
+        case dynamic(anchor: VoiceElementID?)
+        /// The timed element accepted by `SetTempo`, or nil when the lane tick has no onset.
+        case tempo(anchor: VoiceElementID?)
         /// Lyric syllable. Carries the author-supplied color
         /// (`<Lyrics><color>`) from `Lyric.elementProperties.color`
         /// and the lyric-array index used as its verse. `anchor`

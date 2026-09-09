@@ -526,7 +526,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             // `TextMarkRenderer.drawDynamic`. `emitText` alone would
             // emit the literal letters in Edwin (the bug this fixes).
             // Non-symbol / other text marks keep the generic path.
-            if kind == .dynamic {
+            if case .dynamic = kind {
                 emitDynamic(
                     text: text,
                     originX: mox + Double(origin.x),
@@ -564,7 +564,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         case let .note(_, _, _, _, origin, _, _, _):
             placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
-        case let .fermata(subtype, origin):
+        case let .fermata(subtype, origin, _):
             emitCenterAnchoredGlyph(
                 codepoint: FermataGlyph.codepoint(forSubtype: subtype),
                 cxPt: mox + Double(origin.x),
@@ -573,7 +573,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .breath(kind, origin):
+        case let .breath(kind, origin, _):
             emitCenterAnchoredGlyph(
                 codepoint: BreathGlyph.codepoint(forKind: kind),
                 cxPt: mox + Double(origin.x),
@@ -659,7 +659,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .articulation(kind, origin, isAbove):
+        case let .articulation(kind, origin, isAbove, _):
             emitCenterAnchoredGlyph(
                 codepoint: ArticulationGlyph.codepoint(
                     kind: kind, isAbove: isAbove,
@@ -818,7 +818,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             )
 
         case let .spannerSegment(
-            kind, fromOrigin, toOrigin, continuesLeft, continuesRight, text,
+            kind, fromOrigin, toOrigin, continuesLeft, continuesRight, text, _,
         ):
             encodeSpanner(
                 kind: kind,

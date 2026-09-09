@@ -69,19 +69,19 @@ extension LayoutElementShape {
         for element: LayoutElement, sp: CGFloat,
     ) -> [CGRect] {
         switch element {
-        case let .articulation(artKind, p, isAbove):
+        case let .articulation(artKind, p, isAbove, _):
             return [smuflGlyphRect(
                 codepoint: ArticulationGlyph.codepoint(
                     kind: artKind, isAbove: isAbove,
                 ),
                 center: p, sp: sp,
             )]
-        case let .fermata(subtype, p):
+        case let .fermata(subtype, p, _):
             return [smuflGlyphRect(
                 codepoint: FermataGlyph.codepoint(forSubtype: subtype),
                 center: p, sp: sp,
             )]
-        case let .breath(breathKind, p):
+        case let .breath(breathKind, p, _):
             return [smuflGlyphRect(
                 codepoint: BreathGlyph.codepoint(forKind: breathKind),
                 center: p, sp: sp,

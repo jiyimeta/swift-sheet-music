@@ -215,17 +215,17 @@ extension ScoreLayerBuilder {
                 color: beamColor.map(scoreColorToCGColor) ?? inkColor,
                 metrics: metrics, height: height, into: parent,
             )
-        case let .fermata(subtype, p):
+        case let .fermata(subtype, p, _):
             drawFermata(
                 subtype: subtype, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .breath(kind, p):
+        case let .breath(kind, p, _):
             drawBreath(
                 kind: kind, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .articulation(kind, p, isAbove):
+        case let .articulation(kind, p, isAbove, _):
             drawArticulation(
                 kind: kind, isAbove: isAbove,
                 origin: shift(p),
@@ -242,7 +242,7 @@ extension ScoreLayerBuilder {
                 metrics: metrics, height: height, into: parent,
             )
         case let .spannerSegment(
-            kind, from, to, cl, cr, text,
+            kind, from, to, cl, cr, text, _,
         ):
             drawSpanner(
                 kind: kind, from: shift(from), to: shift(to),

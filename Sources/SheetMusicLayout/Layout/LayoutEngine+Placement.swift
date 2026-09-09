@@ -470,6 +470,10 @@ extension LayoutEngine {
             var lastEmittedChordTick: Int?
 
             for (voiceElemIdx, el) in voice.elements.enumerated() {
+                let elementAddress = VoiceElementID(
+                    staff: staffAddress, measureIndex: measureIndex,
+                    voiceIndex: voiceIdx, elementIndex: voiceElemIdx,
+                )
                 switch el {
                 case let .clef(clef):
                     // Slot-preservation: `currentClef` MUST be updated
@@ -842,6 +846,7 @@ extension LayoutEngine {
                     // pass fixes a beamed chord's stem direction.
                     out.append(contentsOf: Self.articulationElements(
                         for: chord.articulations,
+                        anchor: elementAddress,
                         stem: stem,
                         noteYs: chordNotes.map(\.origin.y),
                         chordX: chordX,
@@ -1123,7 +1128,7 @@ extension LayoutEngine {
                     let chordAvoid = chordSouth + metrics.sp * 2.5
                     let dynY = max(defaultDynY, chordAvoid)
                     let dynamicElement = LayoutElement.textMark(
-                        kind: .dynamic,
+                        kind: .dynamic(anchor: attachmentAnchor(at: elementAddress, in: voice)),
                         text: d.subtype,
                         origin: CGPoint(
                             x: baseX - metrics.sp,
@@ -1231,6 +1236,7 @@ extension LayoutEngine {
                     let fermataElement = LayoutElement.fermata(
                         subtype: f.subtype,
                         origin: CGPoint(x: anchorX, y: anchorY),
+                        anchor: attachmentAnchor(at: elementAddress, in: voice),
                     )
                     if f.visible {
                         // Only visible fermatas participate in the
@@ -1443,6 +1449,7 @@ extension LayoutEngine {
                     let breathElement = LayoutElement.breath(
                         kind: b.kind,
                         origin: CGPoint(x: originX, y: originY),
+                        anchor: attachmentAnchor(at: elementAddress, in: voice),
                     )
                     if b.visible {
                         out.append(breathElement)
@@ -1686,6 +1693,10 @@ extension LayoutEngine {
                     {
                         let replacements = Self.articulationElements(
                             for: modelChord.articulations,
+                            anchor: VoiceElementID(
+                                staff: staffAddress, measureIndex: measureIndex,
+                                voiceIndex: voiceIdx, elementIndex: memberIdx,
+                            ),
                             stem: groupDirection,
                             noteYs: n.map(\.origin.y),
                             chordX: so.x,
@@ -1696,8 +1707,8 @@ extension LayoutEngine {
                         var j = outIdx + 1
                         var k = 0
                         while j < out.count, k < replacements.count,
-                              case let .articulation(_, oldOrigin, _) = out[j],
-                              case let .articulation(kind, newOrigin, isAbove)
+                              case let .articulation(_, oldOrigin, _, _) = out[j],
+                              case let .articulation(kind, newOrigin, isAbove, anchor)
                               = replacements[k]
                         {
                             // Keep the original X (beaming changes only Y).
@@ -1705,6 +1716,7 @@ extension LayoutEngine {
                                 kind: kind,
                                 origin: CGPoint(x: oldOrigin.x, y: newOrigin.y),
                                 isAbove: isAbove,
+                                anchor: anchor,
                             )
                             j += 1
                             k += 1
@@ -1810,7 +1822,7 @@ extension LayoutEngine {
                 let visualGap = metrics.sp * 0.5
                 for entry in fermataPostProcessAnchors {
                     guard entry.outIndex < out.count,
-                          case let .fermata(subtype, oldOrigin) =
+                          case let .fermata(subtype, oldOrigin, anchor) =
                           out[entry.outIndex]
                     else { continue }
                     guard let tick = entry.anchorTick,
@@ -1836,6 +1848,7 @@ extension LayoutEngine {
                         out[entry.outIndex] = .fermata(
                             subtype: subtype,
                             origin: CGPoint(x: oldOrigin.x, y: newY),
+                            anchor: anchor,
                         )
                     }
                 }
@@ -1998,7 +2011,10 @@ extension LayoutEngine {
                 // U+E1D5, or a dotted quarter U+E1D5 U+E1E7). Renderers split the string into Bravura-glyph and
                 // Edwin-text runs via `MusicTextRuns.runs`.
                 let element = LayoutElement.textMark(
-                    kind: .tempo,
+                    kind: .tempo(anchor: systemLaneAnchor(
+                        atTick: tick, in: measure, staff: staffAddress,
+                        measureIndex: measureIndex, measureDuration: measureDuration, division: division,
+                    )),
                     text: "\(t.beatGlyph) = \(value)",
                     origin: CGPoint(
                         x: xAtTick
@@ -2099,6 +2115,49 @@ extension LayoutEngine {
             key: currentKey,
             synthesizedEndBarLineIndex: synthesizedEndBarLineIndex,
         )
+    }
+
+    /// Invert the attachment runs used by `AdjacentElementSlot` and the mark commands.
+    ///
+    /// Dynamics and fermatas look forward through annotations and signatures to their timed owner;
+    /// breaths look backward only through breaths. A location shift, barline, or other run boundary
+    /// ends the search even when geometry happens to put a chord at the same tick. Rest owners are
+    /// accepted only for fermatas, matching the commands' element-kind guards.
+    static func attachmentAnchor(at marking: VoiceElementID, in voice: Voice) -> VoiceElementID? {
+        guard voice.elements.indices.contains(marking.elementIndex) else { return nil }
+        let backwards: Bool
+        let permitsRest: Bool
+        switch voice.elements[marking.elementIndex] {
+        case .dynamic: backwards = false; permitsRest = false
+        case .fermata: backwards = false; permitsRest = true
+        case .breath: backwards = true; permitsRest = false
+        default: return nil
+        }
+        let step = backwards ? -1 : 1
+        var index = marking.elementIndex + step
+        while voice.elements.indices.contains(index) {
+            let element = voice.elements[index]
+            if case let .chord(chord) = element {
+                guard permitsRest || !chord.notes.isEmpty else { return nil }
+                return VoiceElementID(
+                    staff: marking.staff, measureIndex: marking.measureIndex,
+                    voiceIndex: marking.voiceIndex, elementIndex: index,
+                )
+            }
+            if backwards {
+                guard case .breath = element else { return nil }
+            } else {
+                // `AdjacentElementSlot.isAnnotation` plus `MeasureStructure.isLeadingSignature`.
+                switch element {
+                case .dynamic, .fermata, .harmony, .sticking, .expression, .capo, .stringTunings,
+                     .figuredBass, .symbol, .fretDiagram, .spanner, .keySignature, .timeSignature, .clef:
+                    break
+                default: return nil
+                }
+            }
+            index += step
+        }
+        return nil
     }
 
     /// The chord or rest starting at `tick` in `voice`, named the way an edit command names it.
@@ -2448,6 +2507,7 @@ extension LayoutEngine {
     /// Stacking adds 1 sp per extra glyph on a side.
     static func articulationElements(
         for articulations: [ChordArticulation],
+        anchor: VoiceElementID?,
         stem: StemDirection,
         noteYs: [CGFloat],
         chordX: CGFloat,
@@ -2509,6 +2569,7 @@ extension LayoutEngine {
                 kind: artKind,
                 origin: CGPoint(x: chordX, y: y),
                 isAbove: isAbove,
+                anchor: anchor,
             ))
             if isAbove { aboveCount += 1 } else { belowCount += 1 }
         }

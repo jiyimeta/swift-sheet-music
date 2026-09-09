@@ -1,16 +1,26 @@
 /// A selectable engraved element, addressed exactly as its editing command addresses it.
 public enum ScoreElementID: Hashable, Sendable {
-    /// Transitional positional address of a dynamic's `Voice.elements` slot.
-    /// P2b supplies its durable EID through `Score.eid(at:)`.
+    /// The chord with notes that `SetDynamic` addresses, deliberately not the dynamic's own slot.
+    /// Same-kind markings in one attachment run are indistinguishable to selection, as to the command.
+    /// A durable name for the marking's own slot would name a different element than this neighbor address;
+    /// resolving that seam belongs to the stable-identifier work's per-case table, as it does for harmony.
     case dynamic(anchor: VoiceElementID)
-    /// Transitional positional address of a fermata's `Voice.elements` slot.
-    /// P2b supplies its durable EID through `Score.eid(at:)`.
+    /// The chord or rest that `SetFermata` addresses, deliberately not the fermata's own slot.
+    /// Same-kind markings in one attachment run are indistinguishable to selection, as to the command.
+    /// A durable name for the marking's own slot would name a different element than this neighbor address;
+    /// resolving that seam belongs to the stable-identifier work's per-case table, as it does for harmony.
     case fermata(anchor: VoiceElementID)
-    /// Transitional positional address of a breath's `Voice.elements` slot.
-    /// P2b supplies its durable EID through `Score.eid(at:)`.
+    /// The preceding chord with notes that `SetBreath(after:)` addresses, not the breath's own slot.
+    /// Same-kind markings in one attachment run are indistinguishable to selection, as to the command.
+    /// A durable name for the marking's own slot would name a different element than this neighbor address;
+    /// resolving that seam belongs to the stable-identifier work's per-case table, as it does for harmony.
     case breath(anchor: VoiceElementID)
-    /// Transitional positional anchor for `SetTempo`, whose mark lives in `SystemMeasure.elements`.
-    /// P2b's successor for durable element naming is `Score.eid(at:)`.
+    /// The chord or rest that `SetTempo` addresses, deliberately not the tempo mark's own slot.
+    /// The mark lives in `SystemMeasure.elements`, a different collection from the anchor's, so this
+    /// anchor cannot one day be replaced by a name for the tempo itself — there is no slot in
+    /// `Voice.elements` for it to become. Same neighbor-address seam as the markings above and as
+    /// harmony: a durable name for the mark would identify a different element than this address,
+    /// and resolving that belongs to the stable-identifier work's per-case table.
     case tempo(anchor: VoiceElementID)
     /// Transitional positional address of a spanner's `Voice.elements` slot, qualified by kind.
     /// P2b supplies its durable EID through `Score.eid(at:)`.

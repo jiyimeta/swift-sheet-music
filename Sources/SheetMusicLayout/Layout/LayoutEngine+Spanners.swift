@@ -7,7 +7,25 @@ import SheetMusicCore
 extension LayoutEngine {
     /// Anchor describing a Spanner's position before it has been resolved
     /// to absolute system-level coordinates.
-    struct SpannerAnchor: Equatable {
+    struct SpannerAnchor: Equatable, Sendable {
+        /// The model address is independent of the flat staff index used for geometry.
+        let staffAddress: StaffAddress
+        let voiceIndex: Int
+        let elementIndex: Int
+
+        /// A selectable line names its own voice slot, never its clipped system segment.
+        /// Other spanners have no selection address in this phase.
+        var selectionAnchor: VoiceElementID? {
+            switch kind {
+            case .hairpin, .pedal, .ottava:
+                VoiceElementID(
+                    staff: staffAddress, measureIndex: startMeasure,
+                    voiceIndex: voiceIndex, elementIndex: elementIndex,
+                )
+            default: nil
+            }
+        }
+
         let kind: Spanner.Kind
         let rawType: String
         let startStaff: Int
@@ -61,9 +79,9 @@ extension LayoutEngine {
                 let measureDuration = measureIdx < measureDurations.count
                     ? measureDurations[measureIdx]
                     : Fraction(numerator: 4, denominator: 4)
-                for voice in measure.voices {
+                for (voiceIndex, voice) in measure.voices.enumerated() {
                     var tick = 0
-                    for el in voice.elements {
+                    for (elementIndex, el) in voice.elements.enumerated() {
                         // Skip hidden spanners entirely — `<visible>0</visible>`
                         // on Pedal/HairPin/etc. should produce neither
                         // glyph nor reserved space at the system level.
@@ -87,6 +105,9 @@ extension LayoutEngine {
                                 division: score.division,
                             )
                             out.append(SpannerAnchor(
+                                staffAddress: entry.address,
+                                voiceIndex: voiceIndex,
+                                elementIndex: elementIndex,
                                 kind: sp.kind,
                                 rawType: sp.rawType,
                                 startStaff: staffIdx,
@@ -220,6 +241,7 @@ extension LayoutEngine {
                     continuesLeft: false,
                     continuesRight: false,
                     text: label,
+                    anchor: nil,
                 ))
             } else {
                 let startSystem = systems[startSys]
@@ -255,6 +277,7 @@ extension LayoutEngine {
                     continuesLeft: false,
                     continuesRight: true,
                     text: label,
+                    anchor: nil,
                 ))
                 if endSys > startSys + 1 {
                     for mid in (startSys + 1) ..< endSys {
@@ -285,6 +308,7 @@ extension LayoutEngine {
                             continuesLeft: true,
                             continuesRight: true,
                             text: label,
+                            anchor: nil,
                         ))
                     }
                 }
@@ -321,6 +345,7 @@ extension LayoutEngine {
                     continuesLeft: true,
                     continuesRight: false,
                     text: label,
+                    anchor: nil,
                 ))
             }
         }

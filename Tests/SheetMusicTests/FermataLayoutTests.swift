@@ -100,7 +100,7 @@ struct FermataLayoutTests {
         var chordXs: [CGFloat] = []
         for el in measure.elements {
             switch el {
-            case let .fermata(_, origin):
+            case let .fermata(_, origin, _):
                 fermataX = origin.x
             case let .chord(_, _, _, stemOrigin, _, _, _, _, _, _, _):
                 chordXs.append(stemOrigin.x)
@@ -214,7 +214,7 @@ struct FermataLayoutTests {
         var noteYs: [CGFloat] = []
         for el in measure.elements {
             switch el {
-            case let .fermata(_, origin):
+            case let .fermata(_, origin, _):
                 fermataOrigin = origin
             case let .chord(notes, _, _, _, _, _, _, _, _, _, _):
                 noteYs.append(contentsOf: notes.map(\.origin.y))
@@ -339,7 +339,7 @@ struct FermataLayoutTests {
         var firstChordSeen = false
         for el in measure.elements {
             switch el {
-            case let .fermata(_, origin):
+            case let .fermata(_, origin, _):
                 fermataY = origin.y
             case let .chord(_, _, stem, stemOrigin, _, _, _, _, _, _, _):
                 // First chord emitted is B4. For stem-up, post-beam
@@ -373,7 +373,7 @@ struct FermataLayoutTests {
         var stemTopY: CGFloat?
         for el in measure.elements {
             switch el {
-            case let .fermata(_, origin):
+            case let .fermata(_, origin, _):
                 fermataY = origin.y
             case let .chord(notes, _, stem, stemOrigin, _, _, _, _, _, _, _):
                 // For stem-up, the chord's top is

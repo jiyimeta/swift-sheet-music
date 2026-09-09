@@ -85,15 +85,16 @@ extension LayoutEngine {
             )
         case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))
-        case let .fermata(s, p):
-            return .fermata(subtype: s, origin: shift(p))
-        case let .breath(kind, p):
-            return .breath(kind: kind, origin: shift(p))
-        case let .articulation(kind, p, isAbove):
+        case let .fermata(s, p, anchor):
+            return .fermata(subtype: s, origin: shift(p), anchor: anchor)
+        case let .breath(kind, p, anchor):
+            return .breath(kind: kind, origin: shift(p), anchor: anchor)
+        case let .articulation(kind, p, isAbove, anchor):
             return .articulation(
                 kind: kind,
                 origin: shift(p),
                 isAbove: isAbove,
+                anchor: anchor,
             )
         case let .measureRepeat(c, p):
             return .measureRepeat(count: c, origin: shift(p))
@@ -251,7 +252,7 @@ extension LayoutEngine {
             // shift onto the system's actual top-staff y.
             return .measureNumber(text: text, origin: shift(p))
         case let .spannerSegment(
-            kind, from, to, continuesLeft, continuesRight, text,
+            kind, from, to, continuesLeft, continuesRight, text, anchor,
         ):
             // Both endpoints share one anchor Y, but shifting them
             // independently is what keeps this correct if a sloped
@@ -263,6 +264,7 @@ extension LayoutEngine {
                 continuesLeft: continuesLeft,
                 continuesRight: continuesRight,
                 text: text,
+                anchor: anchor,
             )
         case .note, .marker, .jump, .staffName, .tieArc:
             return element

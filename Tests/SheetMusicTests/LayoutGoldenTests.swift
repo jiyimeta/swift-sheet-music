@@ -94,8 +94,30 @@
         /// exactly": injectable margins, inter-staff gap and system
         /// padding would all move y, and no y moved. That claim had
         /// been unverified since it landed.
+        /// **Re-recorded for the selectable-element identity phase.**
+        /// 174 lines changed, and every one of them changed only by
+        /// gaining an identity field — `TextMarkKind.tempo` and
+        /// `.dynamic` acquiring an `anchor:`, and `spannerSegment`
+        /// acquiring its own. Checked the way the previous re-record
+        /// was, but on the axis that matters when the TEXT of a line
+        /// necessarily changes: every coordinate was extracted from
+        /// both documents in order and compared. 4987 geometry values
+        /// before, 4987 after, byte-identical. Identity was added;
+        /// nothing moved.
+        ///
+        /// **The rule this gate cannot tell you on its own.** A green
+        /// digest is silence about any element kind the corpus holds
+        /// no instance of — those lines are ABSENT, not unchanged, and
+        /// absence and agreement look identical from here. So before
+        /// treating a green run as coverage for a kind, grep the
+        /// recorded text for that kind and see whether it appears at
+        /// all. Checking that on the day this was recorded, fermatas,
+        /// breaths and articulations each appeared zero times, so the
+        /// identity work on them rests entirely on
+        /// `LayoutElementIdentityTests` and not at all on this digest.
+        /// Widening the corpus is the better fix than remembering.
         private static let expectedDigestSHA256 =
-            "2e354b26d3a1ed0a1af511825f0a83c2fa7ae79db7400460fd7a4d0e9f1355e7"
+            "69ac71d8226753f70cab3952024594019d8ab8ff35237ec6da08d7139d099ed9"
 
         @Test("write digest")
         func writeDigest() throws {
