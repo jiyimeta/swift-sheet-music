@@ -189,4 +189,13 @@ struct IdentifiedArrayRestructuringTests {
         #expect(Array(array) == ["b", "c", "x", "a"])
         #expect(array.eid(at: 3) == a)
     }
+
+    @Test func movingAnElementAfterItselfChangesNothing() {
+        var array = sample()
+        array.move(eid: b, after: b)
+        #expect(Array(array) == ["a", "b", "c"])
+        #expect(array.eid(at: 0) == a)
+        #expect(array.eid(at: 1) == b)
+        #expect(array.eid(at: 2) == c)
+    }
 }

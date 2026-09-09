@@ -137,9 +137,11 @@ extension IdentifiedArray {
     /// One operation, not a removal and an insertion: the moved slot keeps
     /// its identifier, which is what lets an operation log say "this element
     /// moved" rather than "one vanished and another appeared".
-    /// When the anchor identifier is not present, the element lands at the end.
+    /// When `after` is nil, the element moves to the front. When the anchor
+    /// identifier is not present, the element lands at the end.
     public mutating func move(eid: EID, after target: EID?) {
         guard let from = index(of: eid) else { return }
+        guard target != eid else { return }
         let value = values.remove(at: from)
         let id = ids.remove(at: from)
         let position: Int
