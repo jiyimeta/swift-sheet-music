@@ -151,6 +151,18 @@ extension ScoreEditSession {
             if let current = SetElementPlacement.currentProperties(for: target, in: score),
                current.placement == placement { return nil }
             return SetElementPlacement(target, placement: placement)
+        case let .setTextFont(text, patch):
+            if let current = SetTextFont.current(text, in: score), !patch.changes(current) {
+                return nil
+            }
+            return SetTextFont(text, patch: patch)
+        case let .setLyricVerse(text, destination):
+            if case let .lyric(anchor, verse) = text, verse == destination,
+               let current = SetLyric.current(at: anchor, verse: verse, in: score), !current.text.isEmpty
+            {
+                return nil
+            }
+            return SetLyricVerse(text, toVerse: destination)
         case .setSlur, .setHairpin, .setPedal, .setVolta, .setOttava, .setTextLine, .setTrill, .setVibrato,
              .setPalmMute, .setLetRing, .removeSpanner:
             return spannerCommand(for: intent, in: score)

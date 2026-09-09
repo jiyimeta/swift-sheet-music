@@ -3,7 +3,7 @@ import SheetMusicFoundation
 
 /// What a host asked the score to become — the unit of editing that crosses a process or image boundary.
 ///
-/// An intent is deliberately *scalar*: identities and numbers only, never a slice of the score. That is what lets an
+/// An intent carries identities and scalar editing parameters, never a slice of the score. That is what lets an
 /// Android host relay one to a second copy of this module as a handful of bytes, and lets both copies plan it into
 /// the same commands rather than shipping the commands themselves. The heavy commands — the ones carrying whole
 /// `VoiceElement` subtrees — are built on each side from these scalars and never travel.
@@ -64,7 +64,7 @@ public enum EditIntent: Sendable, Equatable {
     case deleteMeasure(at: Int)
 
     /// Insert a new part built from `plan` before `index`; `index == parts.count` appends. The one intent that
-    /// carries something other than scalars — a `PartPlan` is the instrument's identity and staff list, not a slice
+    /// carries a plan — a `PartPlan` is the instrument's identity and staff list, not a slice
     /// of the score, and both images build the same `Part` from it rather than shipping the built part across.
     ///
     /// An out-of-range `index` is refused as `.targetNotFound` by `AddPart.apply` rather than by the session's
@@ -440,4 +440,10 @@ public enum EditIntent: Sendable, Equatable {
     /// Set or clear authored placement on one text, note, or whole chord. MSCX preserves the override;
     /// this library's renderer does not yet honor it, including on files authored elsewhere.
     case setElementPlacement(target: SetElementPlacement.Target, placement: Placement?)
+
+    /// Five independent three-state edits, flattened on the wire. See SetTextFont's drawing-support table.
+    case setTextFont(text: ScoreTextID, patch: SetTextFont.Patch)
+
+    /// Move a whole syllable without neighbor repair; occupied destination rows are refused.
+    case setLyricVerse(text: ScoreTextID, toVerse: Int)
 }

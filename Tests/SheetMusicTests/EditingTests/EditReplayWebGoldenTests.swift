@@ -26,6 +26,43 @@
             packageRoot.appendingPathComponent("Web/sheet-music-web/test/fixtures")
         }
 
+        @Test("property intents survive replay JSON, including unchanged, clear and set font fields")
+        func propertyIntentsSurviveJSON() throws {
+            let anchor = VoiceElementID(staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1)
+            let lyric = ScoreTextID.lyric(anchor: anchor, verse: 0)
+            let patches: [SetTextFont.Patch] = [
+                .init(),
+                .init(face: .clear, size: .clear, style: .clear, frameType: .clear, framePadding: .clear),
+                .init(
+                    face: .set("Edwin"),
+                    size: .set(12),
+                    style: .set([.bold, .underline]),
+                    frameType: .set(.circle),
+                    framePadding: .set(2),
+                ),
+                .init(face: .clear, size: .set(0), frameType: .set(TextFrameType.none)),
+            ]
+            let intents: [EditIntent] = [
+                .setElementColor(target: .text(.harmony(anchor: anchor)), color: nil),
+                .setElementColor(target: .text(lyric), color: ScoreColor(red: 1, green: 2, blue: 3)),
+                .setElementPlacement(target: .text(.staffText(anchor: anchor, style: .systemText)), placement: .below),
+                .setElementPlacement(target: .text(.rehearsalMark(measureIndex: 0)), placement: nil),
+                .setLyricVerse(text: lyric, toVerse: 2),
+            ] + patches.map { .setTextFont(text: lyric, patch: $0) }
+            var fontPayloads = Set<String>()
+            for intent in intents {
+                let step = try ReplayStep(intent: intent)
+                let json = try JSONEncoder().encode(step)
+                let decoded = try JSONDecoder().decode(ReplayStep.self, from: json)
+                #expect(decoded.op == "intentBytes")
+                let base64 = try #require(decoded.base64)
+                let data = try #require(Data(base64Encoded: base64))
+                #expect(try EditIntentCodec.decode(data) == intent)
+                if case .setTextFont = intent { fontPayloads.insert(base64) }
+            }
+            #expect(fontPayloads.count == patches.count)
+        }
+
         /// The Android goldens the chain's web fingerprints are cross-checked against — that chain's own, so a
         /// second chain cannot silently be verified against the first one's numbers.
         private func androidGoldensPath(for chain: ReplayChain) -> URL {
@@ -222,7 +259,8 @@
                  .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible,
                  .setSlur, .setHairpin, .setPedal, .setVolta, .setOttava, .setTextLine, .setTrill, .setVibrato,
                  .setPalmMute, .setLetRing, .removeSpanner,
-                 .setChordSymbol, .setLyricSyllables, .setTextVisible, .setElementColor, .setElementPlacement:
+                 .setChordSymbol, .setLyricSyllables, .setTextVisible, .setElementColor, .setElementPlacement,
+                 .setTextFont, .setLyricVerse:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }

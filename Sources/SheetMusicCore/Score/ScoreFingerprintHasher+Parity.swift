@@ -231,15 +231,6 @@ extension FNV1a {
         combine(breath.visible)
     }
 
-    mutating func combine(_ harmony: Harmony) {
-        combine(harmony.name)
-        combine(harmony.harmonyType.rawValue)
-        combinePresence(harmony.rootTpc)
-        combinePresence(harmony.bassTpc)
-        combine(harmony.visible)
-        combineOccupied(harmony.elementProperties, colorTag: 67, placementTag: 83)
-    }
-
     mutating func combine(_ sticking: Sticking) {
         combine(sticking.text)
         combineOccupied(sticking.elementProperties, visibleTag: 39, colorTag: 40, placementTag: 71)
