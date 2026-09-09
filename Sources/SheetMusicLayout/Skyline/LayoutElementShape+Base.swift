@@ -303,12 +303,12 @@ extension LayoutElementShape {
         var barLineHalfHeight: CGFloat?
         switch element {
         case let .clef(_, origin, _),
-             let .keySignature(_, _, _, _, origin),
-             let .timeSignature(_, _, _, origin),
+             let .keySignature(_, _, _, _, origin, _),
+             let .timeSignature(_, _, _, origin, _),
              let .measureRepeat(_, origin),
              let .multiMeasureRest(_, origin):
             p = origin
-        case let .barLine(_, origin, half):
+        case let .barLine(_, origin, half, _, _):
             p = origin
             barLineHalfHeight = half
         default:

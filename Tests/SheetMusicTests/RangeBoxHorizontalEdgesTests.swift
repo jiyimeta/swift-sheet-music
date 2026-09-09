@@ -89,7 +89,7 @@
         /// from the code under test.
         private static func trailingBarLineX(_ measure: LayoutMeasure) -> CGFloat? {
             var localX: CGFloat?
-            for case let .barLine(_, origin, _) in measure.elements {
+            for case let .barLine(_, origin, _, _, _) in measure.elements {
                 localX = max(localX ?? origin.x, origin.x)
             }
             return localX.map { measure.origin.x + $0 }

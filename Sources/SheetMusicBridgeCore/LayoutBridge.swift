@@ -304,7 +304,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .timeSignature(numerator, denominator, symbol, origin):
+        case let .timeSignature(numerator, denominator, symbol, origin, _):
             encodeTimeSignature(
                 numerator: numerator,
                 denominator: denominator,
@@ -316,7 +316,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .keySignature(sharps, flats, clef, naturals, origin):
+        case let .keySignature(sharps, flats, clef, naturals, origin, _):
             encodeKeySignature(
                 sharps: sharps,
                 flats: flats,
@@ -394,7 +394,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .barLine(subtype, origin, halfHeightPt):
+        case let .barLine(subtype, origin, halfHeightPt, _, _):
             // Barline origin sits at the middle of its own stroke, and
             // the engine hands over the half-height so the span follows
             // the staff's line count (4 sp tall on five lines, 2 sp on

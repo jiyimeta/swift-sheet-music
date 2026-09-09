@@ -57,6 +57,7 @@ extension LayoutEngine {
         measure: Measure,
         staffAddress: StaffAddress,
         measureIndex: Int,
+        isPitchedStaff: Bool,
         width: CGFloat,
         metrics: StaffMetrics,
         options: ScoreViewOptions = ScoreViewOptions(),
@@ -450,6 +451,7 @@ extension LayoutEngine {
                     origin: CGPoint(
                         x: headerSchedule.keySigX, y: staffMidY,
                     ),
+                    measureIndex: nil,
                 ))
                 remainingSynthKeySig = false
             }
@@ -468,6 +470,19 @@ extension LayoutEngine {
             // by the fermata case to look up the north/south skyline
             // when no following chord exists in the same voice.
             var lastEmittedChordTick: Int?
+
+            // Match SetKeySignature's leading signature prefix, not the geometry's tick-zero header.
+            let signaturePrefixCount = voice.elements.prefix {
+                switch $0 {
+                case .clef, .keySignature, .timeSignature: true
+                default: false
+                }
+            }.count
+            // SetBarLine replaces only the last barline after voice zero's last chord or rest.
+            let lastTimedIndex = voice.elements.lastIndex { if case .chord = $0 { true } else { false } } ?? -1
+            let editableBarIndex = voiceIdx == 0 ? voice.elements.indices.last { index in
+                index > lastTimedIndex && { if case .barLine = voice.elements[index] { true } else { false } }()
+            } : nil
 
             for (voiceElemIdx, el) in voice.elements.enumerated() {
                 let elementAddress = VoiceElementID(
@@ -529,6 +544,8 @@ extension LayoutEngine {
                             clef: currentClef,
                         ),
                         origin: CGPoint(x: keyX, y: staffMidY),
+                        measureIndex: isPitchedStaff && voiceIdx == 0 && voiceElemIdx < signaturePrefixCount
+                            ? measureIndex : nil,
                     )
                     if key.visible {
                         out.append(element)
@@ -544,6 +561,7 @@ extension LayoutEngine {
                         denominator: ts.denominator,
                         symbol: ts.symbol,
                         origin: CGPoint(x: tsX, y: timeSigY),
+                        measureIndex: measureIndex,
                     )
                     if ts.visible {
                         out.append(element)
@@ -576,6 +594,8 @@ extension LayoutEngine {
                         subtype: b.subtype,
                         origin: CGPoint(x: barX, y: barLineMidY),
                         halfHeight: barLineHalfHeight,
+                        measureIndex: voiceElemIdx == editableBarIndex ? measureIndex : nil,
+                        role: .explicit,
                     )
                     if b.visible {
                         out.append(element)
@@ -1951,10 +1971,12 @@ extension LayoutEngine {
                 subtype: "start-repeat",
                 origin: CGPoint(x: startRepeatX, y: barLineMidY),
                 halfHeight: barLineHalfHeight,
+                measureIndex: measureIndex,
+                role: .startRepeat,
             ))
         }
         let hasExplicitBar = (out + invisibleOut).contains {
-            if case let .barLine(subtype, _, _) = $0 {
+            if case let .barLine(subtype, _, _, _, _) = $0 {
                 subtype != "start-repeat"
             } else {
                 false
@@ -1972,6 +1994,8 @@ extension LayoutEngine {
                     y: barLineMidY,
                 ),
                 halfHeight: barLineHalfHeight,
+                measureIndex: measureIndex,
+                role: .trailing,
             ))
         } else {
             synthesizedEndBarLineIndex = nil

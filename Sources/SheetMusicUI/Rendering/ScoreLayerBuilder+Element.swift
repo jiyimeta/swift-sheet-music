@@ -34,19 +34,19 @@ extension ScoreLayerBuilder {
             if let layer, let anchor {
                 context.attach(layer, to: .clef(anchor))
             }
-        case let .keySignature(s, f, clef, naturals, p):
+        case let .keySignature(s, f, clef, naturals, p, _):
             drawKeySignature(
                 sharps: s, flats: f, clef: clef, naturals: naturals,
                 origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .timeSignature(n, d, symbol, p):
+        case let .timeSignature(n, d, symbol, p, _):
             drawTimeSignature(
                 numerator: n, denominator: d, symbol: symbol,
                 origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .barLine(s, p, halfHeight):
+        case let .barLine(s, p, halfHeight, _, _):
             drawBarLine(
                 subtype: s, origin: shift(p), halfHeight: halfHeight,
                 metrics: metrics, height: height, into: parent,

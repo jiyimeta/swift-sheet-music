@@ -36,7 +36,7 @@ struct LayoutSpannerIdentityTests {
 
     @Test(
         "Every clipped segment names the source slot accepted by RemoveSpanner",
-        arguments: [Spanner.Kind.hairpin, .pedal, .ottava],
+        arguments: [Spanner.Kind.hairpin, .pedal, .ottava, .volta],
     )
     func commandAddress(kind: Spanner.Kind) throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
@@ -78,13 +78,36 @@ struct LayoutSpannerIdentityTests {
         #expect(removed.systems.flatMap(\.spanners).compactMap(\.elementID).isEmpty)
     }
 
-    @Test("Post-pass volta retains absent identity")
-    func voltaIsNotYetAddressed() {
+    @Test("SetVolta inserts on the canonical staff, but selection follows the slot after a head insertion")
+    func voltaInsertionAndCurrentAddress() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
-        let doc = LayoutEngine.layout(score: Self.score(kind: .volta), options: .init(), availableWidth: 1000)
-        let segments = doc.systems.flatMap(\.spanners)
-        #expect(!segments.isEmpty)
-        #expect(segments.allSatisfy { $0.elementID == nil })
+        var score = Self.score(kind: .volta)
+        _ = try RemoveSpanner(at: Self.anchor, kind: .volta).apply(to: &score)
+        let range = VoiceElementRange(start: Self.anchor, end: Self.anchor)
+        let command = SetVolta(over: range, endings: [1], text: nil)
+        _ = try command.apply(to: &score)
+        let inserted = VoiceElementID(
+            staff: Score.canonicalStaff, measureIndex: 1, voiceIndex: 0, elementIndex: 0,
+        )
+        #expect(command.affectedLocation == inserted)
+        let first = LayoutEngine.layout(score: score, options: .init(), availableWidth: 1000)
+        #expect(first.systems.flatMap(\.spanners).compactMap(\.elementID) == [
+            .spanner(anchor: inserted, kind: .volta),
+        ])
+        score.parts[0].staves[0].measures[1].voices[0].elements.insert(
+            .keySignature(KeySignature(concertKey: 2)), at: 0,
+        )
+        let moved = VoiceElementID(
+            staff: Score.canonicalStaff, measureIndex: 1, voiceIndex: 0, elementIndex: 1,
+        )
+        let second = LayoutEngine.layout(score: score, options: .init(), availableWidth: 1000)
+        let ids = second.systems.flatMap(\.spanners).compactMap(\.elementID)
+        #expect(ids == [.spanner(anchor: moved, kind: .volta)])
+        let anchor = try #require(ids.first?.anchor)
+        _ = try RemoveSpanner(at: anchor, kind: .volta).apply(to: &score)
+        #expect(LayoutEngine.collectSpanners(score: score).isEmpty)
+        #expect(score.parts[0].staves[0].measures[1].voices[0].elements[0]
+            == .keySignature(KeySignature(concertKey: 2)))
     }
 
     @Test("Explicitly unanchored geometry never reports a selectable item")
@@ -122,7 +145,7 @@ struct LayoutSpannerIdentityTests {
                 text: "",
                 anchor: nil,
             ),
-            .barLine(subtype: "normal", origin: .zero, halfHeight: 14),
+            .barLine(subtype: "normal", origin: .zero, halfHeight: 14, measureIndex: nil, role: .explicit),
         ]
         #expect(elements.allSatisfy { $0.elementID == nil && $0.elementItemID == nil })
     }

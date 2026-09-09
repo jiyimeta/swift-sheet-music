@@ -16,19 +16,20 @@ extension LayoutEngine {
         switch element {
         case let .clef(t, p, anchor):
             return .clef(rawType: t, origin: shift(p), anchor: anchor)
-        case let .keySignature(s, f, clef, naturals, p):
+        case let .keySignature(s, f, clef, naturals, p, measureIndex):
             return .keySignature(
                 sharps: s, flats: f, clef: clef, naturals: naturals,
-                origin: shift(p),
+                origin: shift(p), measureIndex: measureIndex,
             )
-        case let .timeSignature(n, d, symbol, p):
+        case let .timeSignature(n, d, symbol, p, measureIndex):
             return .timeSignature(
                 numerator: n, denominator: d, symbol: symbol,
-                origin: shift(p),
+                origin: shift(p), measureIndex: measureIndex,
             )
-        case let .barLine(s, p, halfHeight):
+        case let .barLine(s, p, halfHeight, measureIndex, role):
             return .barLine(
                 subtype: s, origin: shift(p), halfHeight: halfHeight,
+                measureIndex: measureIndex, role: role,
             )
         case let .ledgerLine(from, to, thickness):
             return .ledgerLine(

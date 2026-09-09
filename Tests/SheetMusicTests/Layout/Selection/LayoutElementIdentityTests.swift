@@ -33,6 +33,13 @@ struct LayoutElementIdentityTests {
             .systems.flatMap { system in
                 system.measures.flatMap { $0.elements + $0.invisibleElements } + system.spanners
             }
+            .filter {
+                // These tests cover owner-anchored markings; measure identities have their own suite.
+                switch $0 {
+                case .keySignature, .timeSignature, .barLine: false
+                default: true
+                }
+            }
     }
 
     @Test("Adjacent markings name the chord the commands accept, not their own slots")

@@ -23,10 +23,16 @@ public enum ScoreElementID: Hashable, Sendable {
     /// and resolving that belongs to the stable-identifier work's per-case table.
     case tempo(anchor: VoiceElementID)
     /// Transitional positional address of a spanner's `Voice.elements` slot, qualified by kind.
+    /// A volta names its current slot, just as other voice-element spanners do.
+    /// `SetVolta` re-homes a range to the canonical staff on insertion; `RemoveSpanner` addresses
+    /// the slot the volta actually occupies, including a noncanonical staff or a shifted element index.
     /// P2b supplies its durable EID through `Score.eid(at:)`.
     case spanner(anchor: VoiceElementID, kind: Spanner.Kind)
     /// Transitional positional bar address for a key signature stored in `Voice.elements`.
-    /// Only the bar's leading signature run is addressable: that is all `SetKeySignature` reaches.
+    /// `SetKeySignature` writes the leading signature run of voice zero on every pitched staff.
+    /// The identity deliberately omits staff and voice, which the command does not take.
+    /// Mid-bar keys, keys outside that run or voice, and unpitched-staff keys have no identity by design.
+    /// Courtesy announcements and system-head restatements likewise do not name a new declaration.
     /// P2b's successor for the underlying slot's durable name is `Score.eid(at:)`.
     case keySignature(measureIndex: Int)
     /// Transitional positional bar address for a time signature stored in `Voice.elements`.
@@ -38,6 +44,9 @@ public enum ScoreElementID: Hashable, Sendable {
     case timeSignature(measureIndex: Int)
     /// Transitional positional bar address, with a role distinguishing explicit and synthesized barlines.
     /// An explicit barline occupies a `Voice.elements` slot; synthesized roles have no slot to name.
+    /// Only the last explicit barline after voice zero's last chord or rest is reached by `SetBarLine`.
+    /// Other explicit glyphs have no identity by design. The role names the source, not a unique command:
+    /// `BarLineRole` records which command owns each editable aspect, including synthesized repeat flags.
     /// P2b's successor for a slot's durable name is `Score.eid(at:)`.
     case barLine(measureIndex: Int, role: BarLineRole)
     /// Permanent positional address through the owning chord and the articulation's kind.

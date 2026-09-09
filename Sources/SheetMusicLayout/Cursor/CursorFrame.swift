@@ -327,12 +327,12 @@ extension LayoutDocument {
             switch el {
             case let .clef(_, origin, _):
                 rightEdge = max(rightEdge, origin.x + sp * 2)
-            case let .keySignature(sharps, flats, _, naturals, origin):
+            case let .keySignature(sharps, flats, _, naturals, origin, _):
                 let glyphs = max(sharps, flats, naturals.count)
                 rightEdge = max(rightEdge, LayoutEngine.keySignatureColumnEnd(
                     anchorX: origin.x, glyphCount: glyphs, sp: sp,
                 ))
-            case let .timeSignature(_, _, _, origin):
+            case let .timeSignature(_, _, _, origin, _):
                 rightEdge = max(rightEdge, origin.x + sp * 3.5)
             default:
                 break

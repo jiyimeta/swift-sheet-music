@@ -75,6 +75,7 @@
                 elements: original.elements
                     + [.barLine(
                         subtype: token, origin: .zero, halfHeight: 4,
+                        measureIndex: nil, role: .explicit,
                     )],
                 markers: original.markers,
                 jumps: original.jumps,

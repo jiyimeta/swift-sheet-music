@@ -165,6 +165,9 @@ public final class LayoutCache: @unchecked Sendable {
         /// Drum maps per staff. Static for the score; included so a
         /// part-instrument change invalidates affected systems.
         let drumLineMaps: [[Int: Int]?]
+        /// Key declaration eligibility must invalidate a system even when its geometry is unchanged.
+        /// The instrument's drum-set eligibility is already captured by `drumLineMaps`.
+        let percussionGroups: [Bool]
         /// The part label this system actually draws, per part —
         /// the long name (with its `trackName` fallback) on the first
         /// system, the abbreviation on every other. Resolved rather
@@ -210,6 +213,8 @@ public final class LayoutCache: @unchecked Sendable {
     /// reused.
     struct PlacementInputs: Equatable {
         let measure: Measure
+        /// Matches SetKeySignature's pitched-staff rule, independently of percussion glyph geometry.
+        let isPitchedStaff: Bool
         let width: CGFloat
         let metricsSp: CGFloat
         let activeClef: NotatedClef

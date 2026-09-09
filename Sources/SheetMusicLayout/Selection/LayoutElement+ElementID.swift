@@ -7,6 +7,12 @@ extension LayoutElement {
     /// The command's identity, independent of geometry, clipping, and continuation flags.
     public var elementID: ScoreElementID? {
         switch self {
+        case let .keySignature(_, _, _, _, _, measureIndex):
+            return measureIndex.map { .keySignature(measureIndex: $0) }
+        case let .timeSignature(_, _, _, _, measureIndex):
+            return measureIndex.map { .timeSignature(measureIndex: $0) }
+        case let .barLine(_, _, _, measureIndex, role):
+            return measureIndex.map { .barLine(measureIndex: $0, role: role) }
         case let .textMark(.dynamic(anchor), _, _):
             return anchor.map { .dynamic(anchor: $0) }
         case let .textMark(.tempo(anchor), _, _):
@@ -23,7 +29,8 @@ extension LayoutElement {
             case .hairpinOpen, .hairpinClose, .hairpinLine: return .spanner(anchor: anchor, kind: .hairpin)
             case .pedal: return .spanner(anchor: anchor, kind: .pedal)
             case .ottava: return .spanner(anchor: anchor, kind: .ottava)
-            case .slur, .vibrato, .trill, .volta, .textLine, .palmMute, .letRing: return nil
+            case .volta: return .spanner(anchor: anchor, kind: .volta)
+            case .slur, .vibrato, .trill, .textLine, .palmMute, .letRing: return nil
             }
         default:
             return nil

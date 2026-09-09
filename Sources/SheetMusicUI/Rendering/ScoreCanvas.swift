@@ -177,18 +177,18 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, rawType: raw,
                 origin: shift(p), metrics: metrics,
             )
-        case let .keySignature(s, f, clef, naturals, p):
+        case let .keySignature(s, f, clef, naturals, p, _):
             KeySignatureRenderer.draw(
                 context: &context, sharps: s, flats: f, clef: clef,
                 naturals: naturals,
                 origin: shift(p), metrics: metrics,
             )
-        case let .timeSignature(n, d, symbol, p):
+        case let .timeSignature(n, d, symbol, p, _):
             TimeSignatureRenderer.draw(
                 context: &context, numerator: n, denominator: d,
                 symbol: symbol, origin: shift(p), metrics: metrics,
             )
-        case let .barLine(s, p, halfHeight):
+        case let .barLine(s, p, halfHeight, _, _):
             BarLineRenderer.draw(
                 context: &context, subtype: s,
                 origin: shift(p), halfHeight: halfHeight,

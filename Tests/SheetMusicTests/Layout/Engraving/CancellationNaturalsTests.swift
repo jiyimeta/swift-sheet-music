@@ -133,7 +133,7 @@ struct CancellationNaturalStepsTests {
             sharps: Int, flats: Int, naturals: [Int], origin: CGPoint,
         ) {
             for element in elements(doc, measure: index) {
-                if case let .keySignature(s, f, _, naturals, origin) = element {
+                if case let .keySignature(s, f, _, naturals, origin, _) = element {
                     return (s, f, naturals, origin)
                 }
             }

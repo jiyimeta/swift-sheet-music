@@ -116,8 +116,21 @@
         /// identity work on them rests entirely on
         /// `LayoutElementIdentityTests` and not at all on this digest.
         /// Widening the corpus is the better fix than remembering.
+        /// Re-recorded again when key signatures, time signatures,
+        /// barlines and voltas gained identity. Same check, same
+        /// result: every coordinate extracted from both documents in
+        /// order, all of them byte-identical, and the only lines that
+        /// changed were those four kinds gaining an anchor.
+        ///
+        /// A trap worth naming, because it nearly produced a false
+        /// alarm here: a spanner segment's line begins `spanner`, not
+        /// `el`, so a filter written to enumerate `el <kind>(` misses
+        /// voltas entirely and reports them as unchanged when they
+        /// changed. Whatever tool you use to classify a diff of this
+        /// file, check it against a line you KNOW moved before
+        /// believing what it says about the ones you don't.
         private static let expectedDigestSHA256 =
-            "69ac71d8226753f70cab3952024594019d8ab8ff35237ec6da08d7139d099ed9"
+            "9b15fd57f1713137f14c431bdccaf291db9ae33767e20ac53065a6ca30b9e6f3"
 
         @Test("write digest")
         func writeDigest() throws {

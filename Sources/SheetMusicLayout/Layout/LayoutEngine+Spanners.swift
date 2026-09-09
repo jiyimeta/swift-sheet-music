@@ -13,11 +13,11 @@ extension LayoutEngine {
         let voiceIndex: Int
         let elementIndex: Int
 
-        /// A selectable line names its own voice slot, never its clipped system segment.
+        /// A selectable spanner names its current voice slot, never its clipped system segment.
         /// Other spanners have no selection address in this phase.
         var selectionAnchor: VoiceElementID? {
             switch kind {
-            case .hairpin, .pedal, .ottava:
+            case .hairpin, .pedal, .ottava, .volta:
                 VoiceElementID(
                     staff: staffAddress, measureIndex: startMeasure,
                     voiceIndex: voiceIndex, elementIndex: elementIndex,
@@ -241,7 +241,7 @@ extension LayoutEngine {
                     continuesLeft: false,
                     continuesRight: false,
                     text: label,
-                    anchor: nil,
+                    anchor: anchor.selectionAnchor,
                 ))
             } else {
                 let startSystem = systems[startSys]
@@ -277,7 +277,7 @@ extension LayoutEngine {
                     continuesLeft: false,
                     continuesRight: true,
                     text: label,
-                    anchor: nil,
+                    anchor: anchor.selectionAnchor,
                 ))
                 if endSys > startSys + 1 {
                     for mid in (startSys + 1) ..< endSys {
@@ -308,7 +308,7 @@ extension LayoutEngine {
                             continuesLeft: true,
                             continuesRight: true,
                             text: label,
-                            anchor: nil,
+                            anchor: anchor.selectionAnchor,
                         ))
                     }
                 }
@@ -345,7 +345,7 @@ extension LayoutEngine {
                     continuesLeft: true,
                     continuesRight: false,
                     text: label,
-                    anchor: nil,
+                    anchor: anchor.selectionAnchor,
                 ))
             }
         }
