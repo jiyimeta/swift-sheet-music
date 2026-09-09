@@ -35,11 +35,34 @@ struct EIDAllocatorTests {
         #expect(original.next() == EID(first: 7, second: 1))
     }
 
-    @Test func drawsAnActorThatCannotCollideWithTheInvalidSentinel() {
-        for _ in 0 ..< 100 {
-            let allocator = EIDAllocator()
-            #expect(allocator.actor != UInt64.max)
-            #expect(allocator.actor != 0)
+    @Test func nextNeverReturnsTheInvalidSentinel() {
+        // Allocators from init() should never return the sentinel,
+        // even over many successive calls.
+        for _ in 0 ..< 50 {
+            var allocator = EIDAllocator()
+            for _ in 0 ..< 100 {
+                #expect(allocator.next() != EID.invalid)
+            }
+        }
+
+        // Allocators from init(actor:counter:) with legal actors
+        // at various counter values, including adjacent to the boundary.
+        let testCases: [(actor: UInt64, counter: UInt64)] = [
+            (1, 0),
+            (1, UInt64.max - 2),
+            (1, UInt64.max - 1),
+            (7, UInt64.max - 2),
+            (7, UInt64.max - 1),
+            (99, UInt64.max - 1),
+            (UInt64.max - 1, 0),
+            (UInt64.max - 1, UInt64.max - 2),
+            (UInt64.max - 1, UInt64.max - 1),
+        ]
+
+        for (actor, counter) in testCases {
+            var allocator = EIDAllocator(actor: actor, counter: counter)
+            let id = allocator.next()
+            #expect(id != EID.invalid)
         }
     }
 }
