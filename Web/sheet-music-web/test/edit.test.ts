@@ -66,8 +66,9 @@ interface GeometryProbe {
 
 // One entry per `ReplayChain` on the Swift side: "edit-replay" is the standard note- and slot-level chain,
 // "edit-replay-parity" the structural one covering EditIntent cases 30–73, and "edit-replay-lyrics" the
-// macOS score-text-entry chain covering case 74 (`setLyricSyllables`). All three pairs are recorded by
-// EditReplayWebGoldenTests.swift, so a chain added there is picked up here by adding its stem to this list.
+// macOS score-text-entry chain covering cases 74 (`setLyricSyllables`) and 75 (`setTextVisible`). All three
+// pairs are recorded by EditReplayWebGoldenTests.swift, so a chain added there is picked up here by adding its
+// stem to this list.
 const replayChains = (["edit-replay", "edit-replay-parity", "edit-replay-lyrics"] as const).map((stem) => ({
   stem,
   fixture: JSON.parse(readFileSync(fixturePath(`${stem}.json`), "utf8")) as ReplayFixture,

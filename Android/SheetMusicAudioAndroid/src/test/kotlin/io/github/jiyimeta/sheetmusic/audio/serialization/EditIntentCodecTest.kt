@@ -46,7 +46,7 @@ class EditIntentCodecTest {
          */
         val STEP_DIR_FLOORS = mapOf(
             "editReplay-parity" to 80,
-            "editReplay-lyrics" to 5,
+            "editReplay-lyrics" to 13,
         )
 
         fun stepsIn(chain: String): List<File> {
@@ -105,7 +105,7 @@ class EditIntentCodecTest {
 
     @Test
     fun `the vocabulary the chains exercise is wide`() {
-        // The parity chain spans EditIntent cases 30…73; the lyrics chain adds case 74. If a future
+        // The parity chain spans EditIntent cases 30…73; the lyrics chain adds cases 74 and 75. If a future
         // codegen change silently collapsed several cases into one, every assertion above would still
         // pass — the bytes would round trip through whatever single case they all decoded to. Counting
         // distinct decoded case types is what notices.

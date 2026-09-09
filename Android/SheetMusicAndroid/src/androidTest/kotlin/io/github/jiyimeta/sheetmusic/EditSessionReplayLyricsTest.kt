@@ -9,10 +9,15 @@ import org.junit.runner.RunWith
 
 /**
  * [EditSessionReplayTest] / [EditSessionReplayParityTest]'s twin for the macOS score-text-entry project's chain
- * (`ReplayChain.lyrics` on the host): six `EditReplayScript.lyrics` steps covering `setLyricSyllables` (`EditIntent`
- * case 74) — the only intent this project appended — relayed from Kotlin across the JNI boundary into a second,
- * separately-linked image of the engine. Equal fingerprints at every step is the claim the whole Android editing
- * design rests on: relaying an intent's bytes keeps two copies of a score identical.
+ * (`ReplayChain.lyrics` on the host): fifteen `EditReplayScript.lyrics` steps covering both intents this project
+ * appended — `setLyricSyllables` (`EditIntent` case 74) in steps 1…6 and `setTextVisible` (case 75) in steps
+ * 7…15 — relayed from Kotlin across the JNI boundary into a second, separately-linked image of the engine. Equal
+ * fingerprints at every step is the claim the whole Android editing design rests on: relaying an intent's bytes
+ * keeps two copies of a score identical.
+ *
+ * Three of the four text kinds case 75 addresses were invisible to `Score.stableFingerprint` until it landed, so
+ * this chain would have passed while one image failed to apply a hide. `ScoreFingerprint.swift`'s blind-spot list
+ * names the fields that were brought into the walk to close that.
  *
  * A third class rather than a parameterized one, for the same reason [EditSessionReplayParityTest] is its own
  * class and not folded into [EditSessionReplayTest]: the chains share nothing but this procedure, and a failure
@@ -28,16 +33,17 @@ import org.junit.runner.RunWith
  * result.
  *
  * Whether a step is an edit or an undo is derived from asset presence: index `i` (0-based, this asset numbering)
- * has a `step-i.bin` when the host applied an intent there, and has none when that step was an undo — index 2 in
- * this chain, the undo of the hyphenated two-chord write that step 4 (the host's 1-based chain step) then
- * re-applies. That is a real, if implicit, coupling between the two sides; it is not part of the wire format
- * itself, just this harness's own convention for telling the two step kinds apart from a directory listing.
+ * has a `step-i.bin` when the host applied an intent there, and has none when that step was an undo — indices 2
+ * and 8 in this chain, the undos of the hyphenated two-chord write and of the rehearsal-mark hide, each of which
+ * the following step re-applies. That is a real, if implicit, coupling between the two sides; it is not part of
+ * the wire format itself, just this harness's own convention for telling the two step kinds apart from a
+ * directory listing.
  */
 @RunWith(AndroidJUnit4::class)
 class EditSessionReplayLyricsTest {
     companion object {
         /** Must track `EditReplayScript.lyrics(staff:).count` on the host exactly — see the assertion below. */
-        private const val EXPECTED_STEP_COUNT = 6
+        private const val EXPECTED_STEP_COUNT = 15
 
         private const val ASSET_DIR = "editReplay-lyrics"
     }
