@@ -73,7 +73,7 @@ struct LyricSyllableIntentTests {
         // The same list, planned as an intent, has to come back as the same composite — this is what stops the
         // two bundling sites drifting apart.
         let viaIntent = try ScoreEditSession.command(
-            for: .setLyricSyllables(writes: plan.writes), in: score, depth: 0,
+            for: .setLyricSyllables(writes: plan.writes), in: score, ids: EIDAllocator(), depth: 0,
         )
         let viaIntentComposite = try #require(viaIntent as? CompositeEditCommand)
         #expect(viaIntentComposite.location == composite.location)
