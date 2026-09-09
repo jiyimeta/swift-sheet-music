@@ -54,8 +54,48 @@
         /// and is therefore SKIPPED by every ordinary `swift test`. A
         /// gate nothing runs is a gate that rots; that is worth fixing
         /// separately from this constant.
+        ///
+        /// **Where that stale value came from, traced 2026-09-10.**
+        /// `e7314362…` first appears at `3348a8a2`, a MERGE commit
+        /// ("Merge remote-tracking branch 'origin/main' into
+        /// feature/scratch-creation-m1", 2026-08-29). No non-merge
+        /// commit in this history introduces it; the last value anyone
+        /// recorded deliberately was `3cbdef0b…` at `d026b7d5`. So it
+        /// entered as a conflict resolution that picked a side — and
+        /// the content of this file is a MEASUREMENT, where neither
+        /// side of a conflict is right and the only correct resolution
+        /// is to re-run and record. `git log -S` does not find it,
+        /// because history simplification skips merge commits; use
+        /// `git log --all -- <path>` instead. That drift
+        /// (`e7314362` -> `426372bf`) is still un-diagnosed and is an
+        /// open item on main, needing the tree at `3348a8a2`.
+        ///
+        /// **Re-recorded 2026-09-10 for the `c270a2bb` merge.**
+        /// `fcf4d078` ("measure the header's key column as ink") is
+        /// NOT an ancestor of `44353d0d`, the commit that recorded
+        /// `7bc79806…`: the header-ink change and the text-entry batch
+        /// lived on branches that could not see each other, and
+        /// `c270a2bb` is the first tree containing both. Two
+        /// internally-consistent lineages, only one of which had
+        /// re-recorded — so the digest moves there and only there.
+        ///
+        /// The diff was READ, not regenerated to green. 1063 lines
+        /// changed; on every one of them ONLY numbers changed (no
+        /// element appeared, disappeared, or altered a non-geometric
+        /// field), and every moved number is a coordinate. Splitting
+        /// them: 1493 are x-only. The 18 that touch a y are 15
+        /// `guitarBend.vertex` (a bend apex derived from its own
+        /// horizontal span, whose endpoints' y are unchanged) and 3
+        /// `chord.stemOrigin` differing in the last floating-point bit
+        /// (38.284400000000005 -> 38.2844). Nothing vertical moved.
+        ///
+        /// That last fact also VERIFIES `169a5807`'s CHANGELOG claim
+        /// that "every default reproduces the previous output
+        /// exactly": injectable margins, inter-staff gap and system
+        /// padding would all move y, and no y moved. That claim had
+        /// been unverified since it landed.
         private static let expectedDigestSHA256 =
-            "7bc79806da0df093db9a1aa894830d58626a5759f1c780b263ebb8942fa86e16"
+            "2e354b26d3a1ed0a1af511825f0a83c2fa7ae79db7400460fd7a4d0e9f1355e7"
 
         @Test("write digest")
         func writeDigest() throws {
