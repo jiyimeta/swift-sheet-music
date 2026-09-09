@@ -190,7 +190,10 @@ enum TimeSignatureRegion {
         for offset in sharedCount ..< columns.count {
             let index = range.lowerBound + offset
             let anchor = index == 0 ? nil : score.systemMeasures.eid(at: index - 1)
-            score.systemMeasures.insert(columns[offset].systemMeasure, after: anchor, id: ids.next())
+            score.systemMeasures.insert(
+                columns[offset].systemMeasure, after: anchor,
+                id: columns[offset].systemMeasureEID ?? ids.next(),
+            )
         }
     }
 }

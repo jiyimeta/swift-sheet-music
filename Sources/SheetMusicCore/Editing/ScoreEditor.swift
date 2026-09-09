@@ -23,6 +23,9 @@ public final class ScoreEditor {
 
     private var undoStack: [any EditCommand] = []
     private var redoStack: [any EditCommand] = []
+    #if DEBUG
+        private var undoIdentityStack: [Set<EID>] = []
+    #endif
     /// Voice-element slot most recently touched (by `apply`,
     /// `undo`, or `redo`). Hosts use this to scroll the affected
     /// measure into view, position a cursor, etc. `nil` until the
@@ -49,8 +52,16 @@ public final class ScoreEditor {
     /// and clears the redo stack (a fresh edit invalidates redo).
     public func apply(_ command: any EditCommand) throws {
         score.assignMissingIDs(using: &ids)
+        #if DEBUG
+            let previousIDs = Set(EditingIdentityInvariants.identifiers(in: score))
+        #endif
         let inverse = try command.apply(to: &score, ids: &ids)
         assert(!score.hasUnassignedIDs, "command dropped element identifiers")
+        #if DEBUG
+            // Gate 5's reach and low-level bypass are documented at check(_:at:).
+            EditingIdentityInvariants.check(score, at: .apply)
+            undoIdentityStack.append(previousIDs)
+        #endif
         undoStack.append(inverse)
         redoStack.removeAll()
         lastAffectedLocation = command.affectedLocation
@@ -64,6 +75,10 @@ public final class ScoreEditor {
     /// (a precondition of its own that no longer holds) leaves the
     /// stack exactly as it was rather than losing the entry while
     /// the score stays unmoved.
+    ///
+    /// Debug gate 7a compares the structural identifier set with the corresponding pre-apply snapshot.
+    /// It covers editor/session undo only: a bare command followed by manually applying its returned
+    /// inverse is invisible to this stack and is not checked. Gate 5 still checks each covered entry point.
     public func undo() throws {
         guard let inverse = undoStack.last else {
             throw SheetMusicError.invalidEdit(EditRefusal(
@@ -74,6 +89,15 @@ public final class ScoreEditor {
         score.assignMissingIDs(using: &ids)
         let redo = try inverse.apply(to: &score, ids: &ids)
         assert(!score.hasUnassignedIDs, "command dropped element identifiers")
+        #if DEBUG
+            // Gate 7a's bare-inverse blind spot is documented on undo(); count only completed checks.
+            assert(EditingIdentityInvariants.restoresIDs(
+                undoIdentityStack[undoIdentityStack.count - 1],
+                after: Set(EditingIdentityInvariants.identifiers(in: score)),
+            ), "undo changed the structural identifier set")
+            EditingIdentityInvariants.check(score, at: .undo)
+            undoIdentityStack.removeLast()
+        #endif
         undoStack.removeLast()
         redoStack.append(redo)
         lastAffectedLocation = inverse.affectedLocation
@@ -89,8 +113,15 @@ public final class ScoreEditor {
             ))
         }
         score.assignMissingIDs(using: &ids)
+        #if DEBUG
+            let previousIDs = Set(EditingIdentityInvariants.identifiers(in: score))
+        #endif
         let inverse = try command.apply(to: &score, ids: &ids)
         assert(!score.hasUnassignedIDs, "command dropped element identifiers")
+        #if DEBUG
+            EditingIdentityInvariants.check(score, at: .redo)
+            undoIdentityStack.append(previousIDs)
+        #endif
         redoStack.removeLast()
         undoStack.append(inverse)
         lastAffectedLocation = command.affectedLocation

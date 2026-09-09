@@ -40,6 +40,10 @@ extension EditCommand {
         score.assignMissingIDs(using: &ids)
         let inverse = try apply(to: &score, ids: &ids)
         assert(!score.hasUnassignedIDs, "command dropped element identifiers")
+        #if DEBUG
+            // Gate 5's coverage and deliberate low-level test bypass are documented at check(_:at:).
+            EditingIdentityInvariants.check(score, at: .bare)
+        #endif
         return inverse
     }
 
