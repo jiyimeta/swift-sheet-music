@@ -77,7 +77,9 @@ public struct ScoreHitTester: Sendable {
                 }
             }
         }
-        return nil
+        // 9. Engraved elements, after the earlier rungs in every measure have declined.
+        //    System spanners and elements outside nominal measure bounds participate here too.
+        return hitElement(at: point)
     }
 
     /// Reports directly selectable notation identities, including clefs and engraved elements.
@@ -127,7 +129,7 @@ public struct ScoreHitTester: Sendable {
         if let target = hitStem(measure: measure, base: base, point: point, sp: sp) {
             return target
         }
-        // 6. Tuplet bracket / number — lowest priority so a click
+        // 6. Tuplet bracket / number — after note geometry so a click
         //    on a notehead inside the bracket still selects the
         //    note. The bracket is a thin strip at the top/bottom
         //    of the tuplet's vertical extent, plus a small label
@@ -135,15 +137,12 @@ public struct ScoreHitTester: Sendable {
         if let target = hitTuplet(measure: measure, base: base, point: point, sp: sp) {
             return target
         }
-        // 7. Clef glyph — last in the priority ladder. Header
-        //    column doesn't overlap note geometry so the position
-        //    is mostly cosmetic; keeping clefs last minimises
-        //    disruption to the existing ladder.
+        // 7. Clef glyph — after shared note geometry and tuplets.
         if let target = hitClef(measure: measure, base: base, point: point, sp: sp) {
             return target
         }
         // 8. Engraved text — lyrics, staff / system text, chord
-        //    symbols, rehearsal marks. Last on purpose, so a click
+        //    symbols, rehearsal marks. After note geometry, so a click
         //    plainly on a note stays a note. Today's autoplace keeps
         //    the two apart by ~0.15 sp, so this ordering is
         //    defence-in-depth rather than a rule anything exercises;
@@ -151,6 +150,7 @@ public struct ScoreHitTester: Sendable {
         if let target = hitText(measure: measure, base: base, point: point, sp: sp) {
             return target
         }
+        // Rung 9 is deferred to hitTest so an overlap with a later measure keeps its earlier-rung target.
         return nil
     }
 

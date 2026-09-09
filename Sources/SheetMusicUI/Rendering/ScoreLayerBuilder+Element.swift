@@ -25,6 +25,18 @@ extension ScoreLayerBuilder {
         func shift(_ p: CGPoint) -> CGPoint {
             CGPoint(x: base.x + p.x, y: base.y + p.y)
         }
+        let firstLayerIndex = parent.sublayers?.count ?? 0
+        defer {
+            // Register only this element's newly drawn ink, including every stroke, dot and text run.
+            // The shared identity predicate is also the hit tester's eligibility rule.
+            if let itemID = element.elementItemID {
+                for layer in (parent.sublayers ?? []).dropFirst(firstLayerIndex) {
+                    if let ink = layer as? CAShapeLayer {
+                        context.attach(ink, to: itemID)
+                    }
+                }
+            }
+        }
         switch element {
         case let .clef(raw, p, anchor):
             let layer = drawClef(

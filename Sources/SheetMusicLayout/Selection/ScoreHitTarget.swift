@@ -17,7 +17,7 @@ import SheetMusicCore
 ///
 /// `ScoreHitTester.hitTest(at:)` tries, in order:
 ///
-/// **notehead → rest → beam → flag → stem → tuplet → clef → text.**
+/// **notehead → rest → beam → flag → stem → tuplet → clef → text → engraved element.**
 ///
 /// This is the one place that order is written down; `hitTest`'s own doc points here, because the copy it
 /// used to carry went stale. Each rung earns its position: beam precedes stem so a click on the beam bar
@@ -26,10 +26,15 @@ import SheetMusicCore
 /// inside the bracket still selects the note, and clef is later still (its header column overlaps no note
 /// geometry, so its position is mostly cosmetic).
 ///
-/// ## Engraved text is tried LAST
+/// ## Text and engraved elements follow note geometry
 ///
 /// Engraved text targets are reported only after every preceding rung has declined the
 /// point, so a syllable can never steal a click that is plainly on a note.
+/// Engraved elements wait until the earlier rungs have declined across the document, including overlapping
+/// measures. Within the element rung, the first matching element in document order wins; a system's
+/// measure elements precede its system spanners. Only `LayoutElement.elementID` decides eligibility.
+/// Within a measure, elements precede markers, then jumps, then emitted hidden elements.
+/// Within a system's spanners, visible ink precedes emitted hidden ink.
 ///
 /// How much that ordering currently buys was measured rather than assumed, and the answer is: nothing yet,
 /// by a hair. The skyline leaves the lyric line a constant **2.6 sp** below the lowest notehead — at every

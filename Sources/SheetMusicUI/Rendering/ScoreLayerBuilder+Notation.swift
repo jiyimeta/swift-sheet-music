@@ -114,21 +114,17 @@ extension ScoreLayerBuilder {
         }
         let numStr = String(numerator)
         let denStr = String(denominator)
-        let digitAdvance = metrics.sp * 1.4
-        let numWidth = CGFloat(numStr.count) * digitAdvance
-        let denWidth = CGFloat(denStr.count) * digitAdvance
-        let maxWidth = max(numWidth, denWidth)
-        let numOffsetX = (maxWidth - numWidth) / 2
-        let denOffsetX = (maxWidth - denWidth) / 2
+        let digitAdvance = TimeSignatureLayout.digitAdvance(sp: metrics.sp)
+        let offsets = TimeSignatureLayout.rowOffsets(numerator: numerator, denominator: denominator, sp: metrics.sp)
 
         for (i, ch) in numStr.enumerated() {
             let digit = Int(String(ch)) ?? 0
             if let layer = glyphLayer(
                 SMuFLGlyph.timeSigDigit(digit),
                 at: CGPoint(
-                    x: origin.x + numOffsetX
+                    x: origin.x + offsets.numeratorOffsetX
                         + CGFloat(i) * digitAdvance,
-                    y: origin.y - metrics.sp,
+                    y: origin.y + TimeSignatureLayout.numeratorDy(sp: metrics.sp),
                 ),
                 size: metrics.glyphFontSize,
                 height: height,
@@ -141,9 +137,9 @@ extension ScoreLayerBuilder {
             if let layer = glyphLayer(
                 SMuFLGlyph.timeSigDigit(digit),
                 at: CGPoint(
-                    x: origin.x + denOffsetX
+                    x: origin.x + offsets.denominatorOffsetX
                         + CGFloat(i) * digitAdvance,
-                    y: origin.y + metrics.sp,
+                    y: origin.y + TimeSignatureLayout.denominatorDy(sp: metrics.sp),
                 ),
                 size: metrics.glyphFontSize,
                 height: height,
