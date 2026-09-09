@@ -2904,6 +2904,7 @@
             case .single(.note): return "note"
             case .single(.tuplet): return "tuplet"
             case .single(.clef): return "clef"
+            case .single(.text): return "text"
             case .range: return "range"
             case .multi: return "multi"
             }
@@ -3080,6 +3081,10 @@
                 selection = .single(.tuplet(id))
             case let .clef(anchor):
                 selection = .single(.clef(anchor))
+            case .text:
+                // The original-PDF geometry indexes notes and rests; it carries no engraved text, so
+                // nothing here can produce one.
+                selection = .single(item)
             }
         }
 
@@ -3162,6 +3167,16 @@
                     attachmentRect: rect,
                 )
                 selection = .single(.clef(anchor))
+                return
+            }
+
+            // Engraved text: a click selects it, exactly as a click on a notehead does. The blue is the
+            // library's own — `ScoreLayerBuilder` registers a text's layers under this same
+            // `ScoreItemID`, so the syllable takes the voice color a selected notehead would. Text is the
+            // last rung of the hit ladder, so this branch can never steal a click that landed on a note.
+            // A double-click on the same text opens its caret instead (`handleDoubleTap`).
+            if let item = target.selectableItem, item.textID != nil {
+                selection = .single(item)
                 return
             }
 
