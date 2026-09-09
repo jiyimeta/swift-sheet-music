@@ -29,6 +29,8 @@ extension Score {
                 staff: full, measureIndex: tupletID.measureIndex, voiceIndex: tupletID.voiceIndex,
                 startElementIndex: tupletID.startElementIndex,
             )))
+        case let .text(textID):
+            return .item(.text(textID.withStaff(full)))
         case .clef:
             // Deliberately NOT re-addressed — but only because nothing produces a `.clef` cursor today:
             // `editingHitTest` drops clef hits (no clef editing UI in v1) and the playback engine never
@@ -131,10 +133,42 @@ extension Score {
                 staff: filteredStaff, measureIndex: tupletID.measureIndex, voiceIndex: tupletID.voiceIndex,
                 startElementIndex: tupletID.startElementIndex,
             )))
+        case let .text(textID):
+            return .item(.text(textID.withStaff(filteredStaff)))
         case .clef:
             // Same deliberate gap as `engineCursorForFilteredTap`'s `.clef` case (see the comment there):
             // no producer exists, and any future one must re-stamp instead of passing through.
             return cursor
         }
+    }
+}
+
+extension ScoreTextID {
+    /// This identity re-stamped onto `staff`, for the part/staff renumbering a filtered score performs.
+    ///
+    /// A rehearsal mark is returned unchanged: it is addressed by bar, carries no staff, and
+    /// `ScoreItemID.staff`'s answer for it is the top-staff approximation rather than a stored value, so
+    /// there is nothing to re-stamp. That is not the `.clef` pass-through's deliberate gap — it is the
+    /// absence of a field.
+    func withStaff(_ staff: StaffAddress) -> ScoreTextID {
+        switch self {
+        case let .lyric(anchor, verse):
+            return .lyric(anchor: anchor.withStaff(staff), verse: verse)
+        case let .staffText(anchor, style):
+            return .staffText(anchor: anchor.withStaff(staff), style: style)
+        case let .harmony(anchor):
+            return .harmony(anchor: anchor.withStaff(staff))
+        case .rehearsalMark:
+            return self
+        }
+    }
+}
+
+extension VoiceElementID {
+    fileprivate func withStaff(_ staff: StaffAddress) -> VoiceElementID {
+        VoiceElementID(
+            staff: staff, measureIndex: measureIndex,
+            voiceIndex: voiceIndex, elementIndex: elementIndex,
+        )
     }
 }

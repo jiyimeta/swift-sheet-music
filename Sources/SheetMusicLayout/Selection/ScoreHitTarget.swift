@@ -72,3 +72,60 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// a boxed "A" means the mark. Addressed by bar, like `SetRehearsalMark`.
     case rehearsalMark(measureIndex: Int)
 }
+
+extension ScoreHitTarget {
+    /// The target that reports `id`. The inverse of `textID`, and the only way a text target is built from
+    /// a layout element — see `LayoutElement.textID`.
+    public init(textID id: ScoreTextID) {
+        switch id {
+        case let .lyric(anchor, verse):
+            self = .lyric(anchor: anchor, verse: verse)
+        case let .staffText(anchor, style):
+            self = .staffText(anchor: anchor, style: style)
+        case let .harmony(anchor):
+            self = .harmony(anchor: anchor)
+        case let .rehearsalMark(measureIndex):
+            self = .rehearsalMark(measureIndex: measureIndex)
+        }
+    }
+
+    /// This target's text identity, or `nil` for the seven non-text targets.
+    ///
+    /// A straight re-wrap: `ScoreTextID` carries the same four cases with the same labels and the same
+    /// payloads, so a host turning a hit into a selection does not need a translation table, and cannot
+    /// invent an identity the editing commands would not recognise.
+    public var textID: ScoreTextID? {
+        switch self {
+        case let .lyric(anchor, verse):
+            return .lyric(anchor: anchor, verse: verse)
+        case let .staffText(anchor, style):
+            return .staffText(anchor: anchor, style: style)
+        case let .harmony(anchor):
+            return .harmony(anchor: anchor)
+        case let .rehearsalMark(measureIndex):
+            return .rehearsalMark(measureIndex: measureIndex)
+        case .note, .rest, .stem, .flag, .beam, .tuplet, .clef:
+            return nil
+        }
+    }
+
+    /// The selectable item a click on this target names, INCLUDING the four text kinds — the total map
+    /// `LayoutDocument.editingHitTest` deliberately does not perform.
+    ///
+    /// `editingHitTest` drops text (and clefs) because what a click on a syllable MEANS is host policy;
+    /// see `selectableItem(from:)`. This property is the other half a host needs once it has decided that
+    /// policy: it answers for every target, so `hitTest(at:)` → `ScoreSelection.single` is one step.
+    /// `.stem` / `.flag` / `.beam` resolve to the first notehead they carry, as they do there.
+    public var selectableItem: ScoreItemID? {
+        switch self {
+        case let .note(id): return .note(id)
+        case let .rest(id): return .rest(id)
+        case let .tuplet(id): return .tuplet(id)
+        case let .clef(anchor): return .clef(anchor)
+        case let .stem(notes), let .flag(notes), let .beam(notes):
+            return notes.first.map(ScoreItemID.note)
+        case .lyric, .staffText, .harmony, .rehearsalMark:
+            return textID.map(ScoreItemID.text)
+        }
+    }
+}

@@ -123,26 +123,11 @@ extension ScoreHitTester {
 
     /// The target a hit on `element` reports, or `nil` when `element` is not addressable text.
     ///
-    /// Only the identity extraction and the target / non-target decision live here; the box's measurement
-    /// kind comes from `LayoutElementShape.kind(of:)` in `hitText`. The one thing that decision cannot be
-    /// delegated to that function is `.instrumentChange`, which deliberately shares the `.staffText` skyline
-    /// slot (same staff-attached autoplace behaviour) but is a separate model element with no text-entry
-    /// command — so it must be excluded here, by style, even though its kind is indistinguishable.
+    /// Only the box's measurement kind is decided here (via `LayoutElementShape.kind(of:)` in `hitText`);
+    /// the identity extraction and the addressable / not-addressable decision are `LayoutElement.textID`'s,
+    /// because `ScoreLayerBuilder` needs the same answer to register a text's layers for tinting. Its doc
+    /// carries the three exclusions and why each is shaped the way it is.
     private static func textTarget(for element: LayoutElement) -> ScoreHitTarget? {
-        switch element {
-        case let .textMark(.lyrics(_, verse, anchor), _, _):
-            guard let anchor else { return nil }
-            return .lyric(anchor: anchor, verse: verse)
-        case let .staffText(_, _, _, style, anchor):
-            guard let anchor, style == .staffText || style == .systemText else { return nil }
-            return .staffText(anchor: anchor, style: style)
-        case let .harmony(harmony):
-            guard let anchor = harmony.anchor else { return nil }
-            return .harmony(anchor: anchor)
-        case let .rehearsalMark(_, _, _, _, measureIndex):
-            return .rehearsalMark(measureIndex: measureIndex)
-        default:
-            return nil
-        }
+        element.textID.map(ScoreHitTarget.init(textID:))
     }
 }
