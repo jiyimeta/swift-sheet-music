@@ -95,20 +95,28 @@ struct EditingIdentityInvariantTests {
         #expect(!callsBareApply("let score = Score(division: 480)"))
     }
 
-    @Test func productionSourcesNeverCallTheBareConvenience() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let sources = root.appendingPathComponent("Sources")
-        let paths = try FileManager.default.subpathsOfDirectory(atPath: sources.path)
-            .filter { $0.hasSuffix(".swift") }.sorted()
-        // A missing/empty source tree must not turn this guard into a vacuous pass.
-        #expect(!paths.isEmpty)
-        var violations: [String] = []
-        for path in paths {
-            let source = try String(contentsOf: sources.appendingPathComponent(path), encoding: .utf8)
-            if callsBareApply(source) { violations.append(path) }
+    // Host-only: this walks the checked-out source tree through `#filePath`, which exists on the
+    // machine that checked the repository out and nowhere else. Under WASI and on an Android device
+    // there is no such tree, and `subpathsOfDirectory` fails with "The file doesn't exist" — a
+    // failure about the sandbox, not about the guarded property. The matcher's own test above is
+    // pure string work and deliberately stays unguarded, so the part that can be wrong everywhere
+    // is still checked everywhere.
+    #if !os(Android) && !os(WASI)
+        @Test func productionSourcesNeverCallTheBareConvenience() throws {
+            let root = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            let sources = root.appendingPathComponent("Sources")
+            let paths = try FileManager.default.subpathsOfDirectory(atPath: sources.path)
+                .filter { $0.hasSuffix(".swift") }.sorted()
+            // A missing/empty source tree must not turn this guard into a vacuous pass.
+            #expect(!paths.isEmpty)
+            var violations: [String] = []
+            for path in paths {
+                let source = try String(contentsOf: sources.appendingPathComponent(path), encoding: .utf8)
+                if callsBareApply(source) { violations.append(path) }
+            }
+            #expect(violations.isEmpty)
+            print("Ruling E guard scanned \(paths.count) Swift files; violations: \(violations.count)")
         }
-        #expect(violations.isEmpty)
-        print("Ruling E guard scanned \(paths.count) Swift files; violations: \(violations.count)")
-    }
+    #endif
 }
