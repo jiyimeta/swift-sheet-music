@@ -29,7 +29,7 @@ public struct SplitRest: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let voice = DurationChangeAlgorithm.voice(in: score, at: location) else {
             throw Self.refused(.targetNotFound(location))
         }
@@ -78,6 +78,6 @@ public struct SplitRest: EditCommand {
         )
         // `ReplaceVoiceElements` hands back the prior voice as its own inverse, which is exactly what undo
         // needs here — the rest as it was spelled, and the tuplet list untouched.
-        return try write.apply(to: &score)
+        return try write.apply(to: &score, ids: &ids)
     }
 }

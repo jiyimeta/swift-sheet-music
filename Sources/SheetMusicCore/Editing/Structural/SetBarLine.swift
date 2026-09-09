@@ -24,7 +24,7 @@ public struct SetBarLine: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.contains(measure) else { throw Self.refused(.targetNotFound(affectedLocation)) }
         var writes: [any EditCommand] = []
         for (address, _) in score.allStaves {
@@ -47,7 +47,7 @@ public struct SetBarLine: EditCommand {
                 elements: elements, tuplets: voice.tuplets,
             ))
         }
-        return try CompositeEditCommand(commands: writes, location: affectedLocation).apply(to: &score)
+        return try CompositeEditCommand(commands: writes, location: affectedLocation).apply(to: &score, ids: &ids)
     }
 
     /// Index of the `.barLine` that follows the last chord or rest of `elements`, if any.

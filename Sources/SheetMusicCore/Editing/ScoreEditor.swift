@@ -14,6 +14,13 @@ import SheetMusicFoundation
 /// It is not `Sendable` — hold one per isolation domain, which is what both hosts do.
 public final class ScoreEditor {
     public private(set) var score: Score
+    private var ids = EIDAllocator()
+
+    /// A value snapshot for planning; undo and redo never roll back the live allocator.
+    public var idAllocator: EIDAllocator {
+        ids
+    }
+
     private var undoStack: [any EditCommand] = []
     private var redoStack: [any EditCommand] = []
     /// Voice-element slot most recently touched (by `apply`,
@@ -37,7 +44,7 @@ public final class ScoreEditor {
     /// Applies `command`, pushes its inverse onto the undo stack,
     /// and clears the redo stack (a fresh edit invalidates redo).
     public func apply(_ command: any EditCommand) throws {
-        let inverse = try command.apply(to: &score)
+        let inverse = try command.apply(to: &score, ids: &ids)
         undoStack.append(inverse)
         redoStack.removeAll()
         lastAffectedLocation = command.affectedLocation
@@ -58,7 +65,7 @@ public final class ScoreEditor {
                 reason: .nothingToUndo,
             ))
         }
-        let redo = try inverse.apply(to: &score)
+        let redo = try inverse.apply(to: &score, ids: &ids)
         undoStack.removeLast()
         redoStack.append(redo)
         lastAffectedLocation = inverse.affectedLocation
@@ -73,7 +80,7 @@ public final class ScoreEditor {
                 reason: .nothingToRedo,
             ))
         }
-        let inverse = try command.apply(to: &score)
+        let inverse = try command.apply(to: &score, ids: &ids)
         redoStack.removeLast()
         undoStack.append(inverse)
         lastAffectedLocation = command.affectedLocation

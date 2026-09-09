@@ -84,12 +84,12 @@ struct SetPartNamesTests {
     func noOpPlansToNothing() throws {
         let score = fixture()
         let unchanged = try ScoreEditSession.command(
-            for: .setPartNames(at: 0, longName: "Flute", shortName: "Fl."), in: score, depth: 0,
+            for: .setPartNames(at: 0, longName: "Flute", shortName: "Fl."), in: score, ids: EIDAllocator(), depth: 0,
         )
         #expect(unchanged == nil)
 
         let changed = try ScoreEditSession.command(
-            for: .setPartNames(at: 0, longName: "Flute", shortName: nil), in: score, depth: 0,
+            for: .setPartNames(at: 0, longName: "Flute", shortName: nil), in: score, ids: EIDAllocator(), depth: 0,
         )
         #expect(changed != nil)
     }

@@ -26,23 +26,23 @@ public struct SetAccidentalsInRange: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
-        guard let composite = try plan(in: score) else {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
+        guard let composite = try plan(in: score, ids: ids) else {
             return CompositeEditCommand(commands: [], location: range.start)
         }
-        return try composite.apply(to: &score)
+        return try composite.apply(to: &score, ids: &ids)
     }
 
     /// The composite this command would apply to `score`, or `nil` when it would change nothing — what the
     /// session's planner reads as "restating is nil". Validation happens here so a direct `apply` and a planned one
     /// refuse identically.
-    func plan(in score: Score) throws -> CompositeEditCommand? {
+    func plan(in score: Score, ids: EIDAllocator) throws -> CompositeEditCommand? {
         guard !score.voiceElements(in: range).isEmpty else { throw Self.refused(.targetNotFound(range.start)) }
         var visited: Set<NoteID> = []
-        return try RangeEditPlanner.plan(over: range, in: score) { target, working in
+        return try RangeEditPlanner.plan(over: range, in: score, ids: ids) { target, working in
             guard RangeEditPlanner.isPitched(target.staff, in: working) else { return [] }
             return RangeEditPlanner.unvisitedTieChains(of: target, in: working, visited: &visited)
-                .flatMap { respell(chain: $0, in: working) }
+                .flatMap { respell(chain: $0, in: working, ids: ids) }
         }?.composite
     }
 
@@ -50,10 +50,11 @@ public struct SetAccidentalsInRange: EditCommand {
     /// reads this way. The tail's new pitch is what `SetAccidental` will write on the head, computed the same way:
     /// applying one `SetAccidental` to a score copy is how this reuses that command's transposing-staff detour
     /// (`SetAccidental.respelled`, `private`) without duplicating it.
-    private func respell(chain: [NoteID], in score: Score) -> [any EditCommand] {
+    private func respell(chain: [NoteID], in score: Score, ids: EIDAllocator) -> [any EditCommand] {
+        var scratch = ids
         guard let head = chain.first, let note = score[head] else { return [] }
         var preview = score
-        guard (try? SetAccidental(at: head, accidental: accidental).apply(to: &preview)) != nil,
+        guard (try? SetAccidental(at: head, accidental: accidental).apply(to: &preview, ids: &scratch)) != nil,
               let written = preview[head], written != note
         else { return [] }
         var commands: [any EditCommand] = [SetAccidental(at: head, accidental: accidental)]

@@ -30,17 +30,17 @@ public struct DeleteRange: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
-        guard let composite = try plan(in: score) else {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
+        guard let composite = try plan(in: score, ids: ids) else {
             return CompositeEditCommand(commands: [], location: range.start)
         }
-        return try composite.apply(to: &score)
+        return try composite.apply(to: &score, ids: &ids)
     }
 
     /// The composite this command would apply to `score`, or `nil` when it would change nothing — what the
     /// session's planner reads as "restating is nil". Validation happens here so a direct `apply` and a planned one
     /// refuse identically.
-    func plan(in score: Score) throws -> CompositeEditCommand? {
+    func plan(in score: Score, ids: EIDAllocator) throws -> CompositeEditCommand? {
         guard !score.voiceElements(in: range).isEmpty else { throw Self.refused(.targetNotFound(range.start)) }
         // The last slot this command actually deleted, per `(staff, measure, voice)`, in the order the voices were
         // first touched. The collapse must be planned against a slot the delete emptied — `FullMeasureRestCollapse`
@@ -48,7 +48,7 @@ public struct DeleteRange: EditCommand {
         // did NOT cover (the bar's tick-0 element, say) hands it an exemption for a surviving chord and collapses
         // the bar on top of it. Element indices stay valid: `DeleteVoiceElement` replaces one slot with one rest.
         var lastDeleted: [VoiceElementID] = []
-        guard var plan = try RangeEditPlanner.plan(over: range, in: score, step: { target, working in
+        guard var plan = try RangeEditPlanner.plan(over: range, in: score, ids: ids, step: { target, working in
             guard case let .chord(chord)? = working[target], !chord.notes.isEmpty else { return [] }
             if let seen = lastDeleted.firstIndex(where: { VoiceRef($0) == VoiceRef(target) }) {
                 lastDeleted[seen] = target
@@ -57,10 +57,11 @@ public struct DeleteRange: EditCommand {
             }
             return [DeleteVoiceElement(at: target)]
         }) else { return nil }
+        var scratch = plan.idAllocator
         for deleted in lastDeleted {
             guard let collapse = FullMeasureRestCollapse.plan(deleting: deleted, in: plan.result)
             else { continue }
-            _ = try collapse.command.apply(to: &plan.result)
+            _ = try collapse.command.apply(to: &plan.result, ids: &scratch)
             plan.commands.append(collapse.command)
         }
         return plan.composite

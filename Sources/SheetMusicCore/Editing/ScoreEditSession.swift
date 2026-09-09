@@ -24,6 +24,10 @@ public final class ScoreEditSession {
         partIDBaseline = score.parts.map(\.id)
     }
 
+    public var idAllocator: EIDAllocator {
+        editor.idAllocator
+    }
+
     public var score: Score {
         editor.score
     }
@@ -55,7 +59,7 @@ public final class ScoreEditSession {
     public func apply(_ intent: EditIntent) -> Bool {
         let planned: (any EditCommand)?
         do {
-            planned = try Self.command(for: intent, in: editor.score, depth: 0)
+            planned = try Self.command(for: intent, in: editor.score, ids: idAllocator, depth: 0)
         } catch {
             lastRefusal = Self.refusal(for: error, operation: "apply")
             return false
@@ -65,7 +69,7 @@ public final class ScoreEditSession {
             return false
         }
         do {
-            try editor.apply(Self.renotatingAccidentals(planned, from: editor.score))
+            try editor.apply(Self.renotatingAccidentals(planned, from: editor.score, ids: idAllocator))
         } catch {
             lastRefusal = Self.refusal(for: error, operation: "apply")
             return false
@@ -84,9 +88,12 @@ public final class ScoreEditSession {
     ///
     /// The repairs are planned against the POST-edit score, so the command is applied to a throwaway copy first.
     /// That copy is also what tells us a refused edit needs no repairs at all.
-    private static func renotatingAccidentals(_ command: any EditCommand, from score: Score) -> any EditCommand {
+    private static func renotatingAccidentals(
+        _ command: any EditCommand, from score: Score, ids: EIDAllocator,
+    ) -> any EditCommand {
+        var scratch = ids
         var preview = score
-        guard (try? command.apply(to: &preview)) != nil else { return command }
+        guard (try? command.apply(to: &preview, ids: &scratch)) != nil else { return command }
         let repairs = MeasureAccidentals.renotationCommands(in: preview, changedFrom: score)
         guard !repairs.isEmpty else { return command }
         return CompositeEditCommand(commands: [command] + repairs, location: command.affectedLocation)

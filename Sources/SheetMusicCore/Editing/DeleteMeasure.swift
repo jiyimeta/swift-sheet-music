@@ -19,7 +19,7 @@ public struct DeleteMeasure: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let count = MeasureStructure.measureCount(of: score)
         guard measureIndex >= 0, measureIndex < count, !score.parts.isEmpty else {
             throw Self.refused(.targetNotFound(affectedLocation))

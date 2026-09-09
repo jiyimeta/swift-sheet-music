@@ -8,7 +8,9 @@ extension ScoreEditSession {
     ///
     /// Reached only via `command(for:in:depth:)`'s combined case above, so — exactly like `directNoteEditCommand`
     /// — the `if case` chain below never needs to handle the intents that function keeps for itself.
-    static func structuralCommand(for intent: EditIntent, in score: Score) throws -> (any EditCommand)? {
+    static func structuralCommand(
+        for intent: EditIntent, in score: Score, ids: EIDAllocator,
+    ) throws -> (any EditCommand)? {
         if case let .insertMeasure(index) = intent {
             return InsertMeasure(measureIndex: index)
         }
@@ -36,10 +38,10 @@ extension ScoreEditSession {
             return unchanged ? nil : SetPartNames(partIndex: index, longName: longName, shortName: shortName)
         }
         if case let .setKeySignature(measureIndex, concertKey) = intent {
-            return try setKeySignatureCommand(at: measureIndex, concertKey: concertKey, in: score)
+            return try setKeySignatureCommand(at: measureIndex, concertKey: concertKey, in: score, ids: ids)
         }
         if case let .removeKeySignature(measureIndex) = intent {
-            return try removeKeySignatureCommand(at: measureIndex, in: score)
+            return try removeKeySignatureCommand(at: measureIndex, in: score, ids: ids)
         }
         if case let .setRehearsalMark(measureIndex, text) = intent {
             return setRehearsalMarkCommand(at: measureIndex, text: text, in: score)

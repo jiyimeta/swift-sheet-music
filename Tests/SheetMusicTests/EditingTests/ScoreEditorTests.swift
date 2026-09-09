@@ -152,7 +152,7 @@ struct ScoreEditorTests {
             location
         }
 
-        func apply(to _: inout Score) throws -> any EditCommand {
+        func apply(to _: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
             AlwaysThrows(location: location)
         }
     }
@@ -166,7 +166,7 @@ struct ScoreEditorTests {
             location
         }
 
-        func apply(to _: inout Score) throws -> any EditCommand {
+        func apply(to _: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
             PushesThrowingInverse(location: location)
         }
     }
@@ -180,7 +180,7 @@ struct ScoreEditorTests {
             location
         }
 
-        func apply(to _: inout Score) throws -> any EditCommand {
+        func apply(to _: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
             throw SheetMusicError.invalidEdit(EditRefusal(
                 operation: "AlwaysThrows",
                 reason: .targetNotFound(location),

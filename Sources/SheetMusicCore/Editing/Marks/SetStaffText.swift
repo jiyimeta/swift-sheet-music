@@ -39,7 +39,7 @@ public struct SetStaffText: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         // The restore branch is decided BEFORE the anchor is resolved, for `SetTempo`'s reason: the pre-image
         // lane needs no beat, and an inverse must never refuse.
         let previous = score.systemMeasures

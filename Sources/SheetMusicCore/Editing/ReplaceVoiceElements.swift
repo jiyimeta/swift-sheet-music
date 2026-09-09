@@ -39,7 +39,7 @@ public struct ReplaceVoiceElements: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.parts.indices.contains(staff.partIndex),
               score.parts[staff.partIndex].staves.indices
                   .contains(staff.staffIndexInPart)

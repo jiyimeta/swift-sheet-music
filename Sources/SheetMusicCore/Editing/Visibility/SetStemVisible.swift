@@ -21,7 +21,7 @@ public struct SetStemVisible: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let element = score[location] else { throw Self.refused(.targetNotFound(location)) }
         guard case var .chord(chord) = element, !chord.notes.isEmpty else {
             throw Self.refused(.wrongElementKind(at: location, expected: .chord))

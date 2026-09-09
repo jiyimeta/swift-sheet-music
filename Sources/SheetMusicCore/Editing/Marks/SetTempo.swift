@@ -50,7 +50,7 @@ public struct SetTempo: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         // The restore branch is decided BEFORE the anchor is resolved — `SetRehearsalMark.apply`'s shape. The
         // pre-image lane is a whole-score value that needs no beat, and an inverse that refused because a later
         // edit had moved the anchor's element would leave an undo stuck.

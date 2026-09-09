@@ -38,7 +38,7 @@ public struct SetChordSymbol: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let element = score[location] else { throw Self.refused(.targetNotFound(location)) }
         guard case .chord = element else {
             throw Self.refused(.wrongElementKind(at: location, expected: .chordOrRest))
@@ -49,7 +49,7 @@ public struct SetChordSymbol: EditCommand {
             guard let index = existing,
                   let removal = AdjacentElementSlot.removing(at: index, in: ref, of: score)
             else { throw Self.refused(.targetNotFound(location)) }
-            return try removal.apply(to: &score)
+            return try removal.apply(to: &score, ids: &ids)
         }
         let trimmed = name.trimmingWhitespaceAndNewlines()
         guard !trimmed.isEmpty else { throw Self.refused(.emptyChordSymbol) }
@@ -58,13 +58,13 @@ public struct SetChordSymbol: EditCommand {
             harmony.harmonyType = harmonyType
             harmony.rootTpc = nil
             harmony.bassTpc = nil
-            return try AdjacentElementSlot.replacing(.harmony(harmony), at: index, in: ref).apply(to: &score)
+            return try AdjacentElementSlot.replacing(.harmony(harmony), at: index, in: ref).apply(to: &score, ids: &ids)
         }
         guard let insert = AdjacentElementSlot.inserting(
             .harmony(Harmony(name: trimmed, harmonyType: harmonyType)),
             at: AdjacentElementSlot.insertionIndex(.before, of: location.elementIndex), in: ref, of: score,
         ) else { throw Self.refused(.targetNotFound(location)) }
-        return try insert.apply(to: &score)
+        return try insert.apply(to: &score, ids: &ids)
     }
 
     /// The chord symbol in the attachment run before the chord or rest at `location`, or `nil`.

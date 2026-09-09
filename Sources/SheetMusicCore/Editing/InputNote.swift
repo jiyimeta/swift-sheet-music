@@ -39,7 +39,7 @@ public struct InputNote: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let rest = score[location] else {
             throw Self.refused(.targetNotFound(VoiceElementID(location)))
         }

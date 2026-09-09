@@ -81,7 +81,7 @@ public struct MovePart: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.parts.indices.contains(fromIndex), score.parts.indices.contains(toIndex) else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }

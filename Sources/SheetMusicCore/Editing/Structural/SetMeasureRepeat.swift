@@ -36,7 +36,7 @@ public struct SetMeasureRepeat: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score[staff] != nil else { throw Self.refused(.staffNotFound(staff)) }
         guard score.contains(measure) else { throw Self.refused(.targetNotFound(affectedLocation)) }
         if let restoredMeasures {

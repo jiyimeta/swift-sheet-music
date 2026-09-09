@@ -49,7 +49,7 @@ public struct PasteVoiceElements: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard !elements.isEmpty else {
             throw Self.refused(.emptyPayload)
         }
@@ -97,7 +97,7 @@ public struct PasteVoiceElements: EditCommand {
             elements: newElements,
             tuplets: newTuplets,
         )
-        return try replace.apply(to: &score)
+        return try replace.apply(to: &score, ids: &ids)
     }
 
     private static func ticks(

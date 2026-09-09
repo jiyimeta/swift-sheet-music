@@ -30,7 +30,7 @@ public struct RemoveNoteFromChord: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let veID = VoiceElementID(location)
         guard case var .chord(chord) = score[veID] else {
             throw Self.refused(.wrongElementKind(at: veID, expected: .chord))

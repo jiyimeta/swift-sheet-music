@@ -38,7 +38,7 @@ public struct SetChordDuration: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let voice = DurationChangeAlgorithm
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)
@@ -86,6 +86,6 @@ public struct SetChordDuration: EditCommand {
             elements: newElements,
             tuplets: newTuplets,
         )
-        return try replace.apply(to: &score)
+        return try replace.apply(to: &score, ids: &ids)
     }
 }

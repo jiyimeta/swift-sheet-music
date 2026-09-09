@@ -25,12 +25,14 @@ extension ScoreEditSession {
     /// The range is NOT validated here: `SetKeySignature.apply` states it once, and the preview inside
     /// `keyChangeCommand` is what surfaces its refusal.
     static func setKeySignatureCommand(
-        at measureIndex: Int, concertKey: Int, in score: Score,
+        at measureIndex: Int, concertKey: Int, in score: Score, ids: EIDAllocator,
     ) throws -> (any EditCommand)? {
         guard let reference = KeySignatureStaves.reference(in: score),
               score.activeKey(staff: reference, measureIndex: measureIndex) != concertKey
         else { return nil }
-        return try keyChangeCommand(SetKeySignature(measureIndex: measureIndex, concertKey: concertKey), in: score)
+        return try keyChangeCommand(
+            SetKeySignature(measureIndex: measureIndex, concertKey: concertKey), in: score, ids: ids,
+        )
     }
 
     /// `.removeKeySignature`: the removal, plus the re-spelling of the span that reverts with it.
@@ -39,12 +41,12 @@ extension ScoreEditSession {
     /// apply rather than a refusal. Measure 0 DOES declare one, so it reaches `RemoveKeySignature.apply` and comes
     /// back as `.cannotRemoveInitialSignature`; that refusal is the command's to state, not this planner's.
     static func removeKeySignatureCommand(
-        at measureIndex: Int, in score: Score,
+        at measureIndex: Int, in score: Score, ids: EIDAllocator,
     ) throws -> (any EditCommand)? {
         guard let reference = KeySignatureStaves.reference(in: score),
               KeySignatureStaves.explicitKey(in: score, staff: reference, measureIndex: measureIndex) != nil
         else { return nil }
-        return try keyChangeCommand(RemoveKeySignature(measureIndex: measureIndex), in: score)
+        return try keyChangeCommand(RemoveKeySignature(measureIndex: measureIndex), in: score, ids: ids)
     }
 
     /// `.setTimeSignature`: the meter write and the re-barring of the span it governs, as one command.
@@ -104,9 +106,12 @@ extension ScoreEditSession {
     /// The session wraps whatever comes back in its own diff-driven renotation pass, which then finds nothing left
     /// to fix — the two compose rather than fight. That diff alone could not do this job: a key change moves the
     /// bytes of ONE bar while silently re-reading every bar after it.
-    private static func keyChangeCommand(_ command: any EditCommand, in score: Score) throws -> any EditCommand {
+    private static func keyChangeCommand(
+        _ command: any EditCommand, in score: Score, ids: EIDAllocator,
+    ) throws -> any EditCommand {
+        var scratch = ids
         var preview = score
-        try command.apply(to: &preview)
+        try command.apply(to: &preview, ids: &scratch)
         let measureIndex = command.affectedLocation.measureIndex
         // `apply` has accepted the index, so `measureIndex` names a real bar and the range below is never empty.
         let end = nextExplicitKeyChange(after: measureIndex, in: preview)

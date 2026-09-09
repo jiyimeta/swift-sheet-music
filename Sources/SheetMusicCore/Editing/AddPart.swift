@@ -91,7 +91,7 @@ public struct AddPart: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         // `!parts.isEmpty` for the same reason `InsertMeasure` requires it: a partless score has no reference
         // staff to take the signature skeleton or the measure count from, and nothing sensible to build against.
         guard partIndex >= 0, partIndex <= score.parts.count, !score.parts.isEmpty else {

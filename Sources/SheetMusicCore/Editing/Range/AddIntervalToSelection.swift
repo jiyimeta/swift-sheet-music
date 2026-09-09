@@ -29,20 +29,20 @@ public struct AddIntervalToSelection: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
-        guard let composite = try plan(in: score) else {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
+        guard let composite = try plan(in: score, ids: ids) else {
             return CompositeEditCommand(commands: [], location: range.start)
         }
-        return try composite.apply(to: &score)
+        return try composite.apply(to: &score, ids: &ids)
     }
 
     /// The composite this command would apply to `score`, or `nil` when it would change nothing — what the
     /// session's planner reads as "restating is nil". Validation happens here so a direct `apply` and a planned one
     /// refuse identically.
-    func plan(in score: Score) throws -> CompositeEditCommand? {
+    func plan(in score: Score, ids: EIDAllocator) throws -> CompositeEditCommand? {
         guard (1 ... 10).contains(abs(steps)) else { throw Self.refused(.invalidInterval(steps: steps)) }
         guard !score.voiceElements(in: range).isEmpty else { throw Self.refused(.targetNotFound(range.start)) }
-        return try RangeEditPlanner.plan(over: range, in: score) { target, working in
+        return try RangeEditPlanner.plan(over: range, in: score, ids: ids) { target, working in
             guard RangeEditPlanner.isPitched(target.staff, in: working),
                   case let .chord(chord)? = working[target], !chord.notes.isEmpty,
                   let added = addedNote(to: chord, keySig: working.activeKey(

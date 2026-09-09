@@ -138,7 +138,7 @@ public struct SetRehearsalMark: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         // One place states the range, for the same reason `SetKeySignature` does: the answer is the same whether
         // the command is reached through an intent or built directly.
         guard measureIndex >= 0, measureIndex < MeasureStructure.measureCount(of: score), !score.parts.isEmpty
@@ -183,7 +183,7 @@ public struct RemoveRehearsalMark: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard measureIndex >= 0, measureIndex < MeasureStructure.measureCount(of: score), !score.parts.isEmpty,
               score.systemMeasures.indices.contains(measureIndex)
         else { throw Self.refused(.targetNotFound(affectedLocation)) }

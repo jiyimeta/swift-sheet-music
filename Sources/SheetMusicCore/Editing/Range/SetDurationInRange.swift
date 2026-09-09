@@ -28,21 +28,21 @@ public struct SetDurationInRange: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
-        guard let composite = try plan(in: score) else {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
+        guard let composite = try plan(in: score, ids: ids) else {
             return CompositeEditCommand(commands: [], location: range.start)
         }
-        return try composite.apply(to: &score)
+        return try composite.apply(to: &score, ids: &ids)
     }
 
     /// The composite this command would apply to `score`, or `nil` when it would change nothing — what the
     /// session's planner reads as "restating is nil". Validation happens here so a direct `apply` and a planned one
     /// refuse identically.
-    func plan(in score: Score) throws -> CompositeEditCommand? {
+    func plan(in score: Score, ids: EIDAllocator) throws -> CompositeEditCommand? {
         let targets = score.voiceElements(in: range)
         guard !targets.isEmpty else { throw Self.refused(.targetNotFound(range.start)) }
         try ensureWritable(targets, in: score)
-        return try RangeEditPlanner.plan(over: range, in: score) { target, working in
+        return try RangeEditPlanner.plan(over: range, in: score, ids: ids) { target, working in
             guard case let .chord(timed)? = working[target] else { return [] }
             let measureDuration = working.effectiveMeasureDuration(at: target.staff, measureIndex: target.measureIndex)
             let current = timed.duration.resolved(in: measureDuration).ticks(division: working.division)

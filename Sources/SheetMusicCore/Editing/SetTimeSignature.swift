@@ -52,7 +52,7 @@ public struct SetTimeSignature: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         // One place states the range, for the same reason `SetKeySignature` does: the answer is the same whether
         // the command is reached through an intent or built directly.
         guard measureIndex >= 0, measureIndex < MeasureStructure.measureCount(of: score), !score.parts.isEmpty
@@ -107,7 +107,7 @@ public struct RemoveTimeSignature: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard measureIndex >= 0, measureIndex < MeasureStructure.measureCount(of: score), !score.parts.isEmpty
         else { throw Self.refused(.targetNotFound(affectedLocation)) }
         guard measureIndex > 0 else { throw Self.refused(.cannotRemoveInitialSignature) }
@@ -144,7 +144,7 @@ struct RestoreTimeSignatureRegion: EditCommand {
     }
 
     @discardableResult
-    func apply(to score: inout Score) throws -> any EditCommand {
+    func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard range.lowerBound >= 0, range.upperBound <= MeasureStructure.measureCount(of: score),
               !score.parts.isEmpty
         else { throw Self.refused(.targetNotFound(affectedLocation)) }

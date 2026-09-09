@@ -28,7 +28,7 @@ public struct MoveToVoice: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard destination.staff == location.staff, destination.measureIndex == location.measureIndex,
               destination.voiceIndex != location.voiceIndex
         else { throw Self.refused(.voiceMismatch(from: VoiceRef(location), to: destination)) }
@@ -51,6 +51,7 @@ public struct MoveToVoice: EditCommand {
 
         // Plan against a scratch copy so every step sees the score the previous one produced, then apply the
         // composite to the real score for the inverse.
+        var scratchIDs = ids
         var scratch = score
         var steps: [any EditCommand] = []
         if score[voice: destination] == nil {
@@ -58,7 +59,7 @@ public struct MoveToVoice: EditCommand {
                 staff: destination.staff, measureIndex: destination.measureIndex,
                 voiceIndex: destination.voiceIndex,
             )
-            _ = try create.apply(to: &scratch)
+            _ = try create.apply(to: &scratch, ids: &scratchIDs)
             steps.append(create)
         }
         guard scratch[voice: destination] != nil else {
@@ -66,14 +67,14 @@ public struct MoveToVoice: EditCommand {
         }
         try Self.carveSlot(
             start: start, length: length, in: &scratch, destination: destination,
-            steps: &steps, measureDuration: measureDuration,
+            steps: &steps, measureDuration: measureDuration, ids: &scratchIDs,
         )
         try steps.append(Self.replaceSlot(
             start: start, length: length, with: chord, in: scratch,
             destination: destination, measureDuration: measureDuration,
         ))
         steps.append(ReplaceVoiceElement(at: location, with: .rest(duration: chord.duration)))
-        return try CompositeEditCommand(commands: steps, location: location).apply(to: &score)
+        return try CompositeEditCommand(commands: steps, location: location).apply(to: &score, ids: &ids)
     }
 
     /// Splits the destination voice's rests so that `[start, start + length)` is covered by whole rests only.
@@ -84,7 +85,7 @@ public struct MoveToVoice: EditCommand {
     /// at `start + length` none straddles its end.
     private static func carveSlot(
         start: Int, length: Int, in scratch: inout Score, destination: VoiceRef,
-        steps: inout [any EditCommand], measureDuration: Fraction,
+        steps: inout [any EditCommand], measureDuration: Fraction, ids: inout EIDAllocator,
     ) throws {
         for _ in 0 ..< 2 {
             guard let voice = scratch[voice: destination] else { throw refused(.targetNotFound(slot(destination))) }
@@ -92,7 +93,7 @@ public struct MoveToVoice: EditCommand {
                 start: start, length: length, in: voice, destination: destination,
                 measureDuration: measureDuration, division: scratch.division,
             ) else { return }
-            _ = try cut.apply(to: &scratch)
+            _ = try cut.apply(to: &scratch, ids: &ids)
             steps.append(cut)
         }
     }

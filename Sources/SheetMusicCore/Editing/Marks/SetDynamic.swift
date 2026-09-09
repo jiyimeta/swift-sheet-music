@@ -27,7 +27,7 @@ public struct SetDynamic: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let element = score[location] else { throw Self.refused(.targetNotFound(location)) }
         guard case let .chord(chord) = element, !chord.notes.isEmpty else {
             throw Self.refused(.wrongElementKind(at: location, expected: .chord))
@@ -38,18 +38,18 @@ public struct SetDynamic: EditCommand {
             guard let index = existing,
                   let removal = AdjacentElementSlot.removing(at: index, in: ref, of: score)
             else { throw Self.refused(.targetNotFound(location)) }
-            return try removal.apply(to: &score)
+            return try removal.apply(to: &score, ids: &ids)
         }
         if let index = existing, case var .dynamic(dynamic)? = score[location.withElementIndex(index)] {
             dynamic.subtype = subtype
             dynamic.velocity = Dynamic.defaultVelocity(for: subtype)
-            return try AdjacentElementSlot.replacing(.dynamic(dynamic), at: index, in: ref).apply(to: &score)
+            return try AdjacentElementSlot.replacing(.dynamic(dynamic), at: index, in: ref).apply(to: &score, ids: &ids)
         }
         guard let insert = AdjacentElementSlot.inserting(
             .dynamic(Dynamic(subtype: subtype, velocity: Dynamic.defaultVelocity(for: subtype))),
             at: AdjacentElementSlot.insertionIndex(.before, of: location.elementIndex), in: ref, of: score,
         ) else { throw Self.refused(.targetNotFound(location)) }
-        return try insert.apply(to: &score)
+        return try insert.apply(to: &score, ids: &ids)
     }
 
     /// The dynamic in the attachment run before the chord at `location`, or `nil`.
