@@ -42,12 +42,11 @@ public struct ScoreHitTester: Sendable {
         self.document = document
     }
 
-    /// Full hit-test that reports stems, flags, and beams in addition
-    /// to noteheads and rests. Priority (first match wins):
-    /// notehead → rest → beam → flag → stem — so a click on the
-    /// beam bar returns `.beam` even if the stem rectangle also
-    /// contains the point, and a click on the flag curve returns
-    /// `.flag` rather than the stem it sits on top of.
+    /// Full hit-test: every engraving element this tester knows, not just the primary selectable ones.
+    ///
+    /// First match wins, down a fixed priority ladder. The ladder is documented once, on `ScoreHitTarget` —
+    /// duplicating the order here is how the previous copy went stale (it still read
+    /// "notehead → rest → beam → flag → stem" two rungs after tuplet and clef were added).
     public func hitTest(at point: CGPoint) -> ScoreHitTarget? {
         let sp = document.metrics.sp
         for system in document.systems {
@@ -137,6 +136,15 @@ public struct ScoreHitTester: Sendable {
         //    is mostly cosmetic; keeping clefs last minimises
         //    disruption to the existing ladder.
         if let target = hitClef(measure: measure, base: base, point: point, sp: sp) {
+            return target
+        }
+        // 8. Engraved text — lyrics, staff / system text, chord
+        //    symbols, rehearsal marks. Last on purpose, so a click
+        //    plainly on a note stays a note. Today's autoplace keeps
+        //    the two apart by ~0.15 sp, so this ordering is
+        //    defence-in-depth rather than a rule anything exercises;
+        //    `ScoreHitTarget`'s doc comment has the measurement.
+        if let target = hitText(measure: measure, base: base, point: point, sp: sp) {
             return target
         }
         return nil

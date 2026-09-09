@@ -14,7 +14,24 @@ import Wirelet
 /// 1 = rest(RestIDWire), see PathIDCodecs.swift
 /// 2 = tuplet(TupletIDWire), see PathIDCodecs.swift
 /// 3 = clef(ClefAnchorWire), see ClefAnchorCodec.swift
+/// 4 = text(ScoreTextIDWire), below
+///
+/// ScoreTextIDWire — case indices matching ScoreTextID's declaration order:
+/// 0 = lyric(LyricTextIDWire)
+///       tag 1: anchor  VoiceElementIDWire, see PathIDCodecs.swift
+///       tag 2: verse   i32, zig-zag varint
+/// 1 = staffText(StaffTextIDWire)
+///       tag 1: anchor        VoiceElementIDWire, see PathIDCodecs.swift
+///       tag 2: isSystemText  bool, varint
+/// 2 = harmony(VoiceElementIDWire), see PathIDCodecs.swift
+/// 3 = rehearsalMark(i32 measureIndex, zig-zag varint)
 /// ```
+///
+/// **`staffText`'s style crosses as a Bool, not as a `TextStyleType`**, matching
+/// `SetStaffTextIntentWire.isSystemText` — the same two-valued choice the command that edits the text
+/// takes. That is lossless for every value this case can hold: `ScoreHitTester`'s `textTarget` reports a
+/// `.staffText` target only for `.staffText` and `.systemText` (an `.instrumentChange` shares the layout
+/// case but has no text-entry command and is excluded there), so no third style can reach this wire.
 ///
 /// Top-level single: `ScoreItemIDWire` bytes directly. Array: via `Array<T: WireFormat>`'s own encoding
 /// (`varint(count)` + each element's length-delimited encoding).
@@ -42,6 +59,7 @@ public enum ScoreItemIDWire {
     case rest(RestIDWire)
     case tuplet(TupletIDWire)
     case clef(ClefAnchorWire)
+    case text(ScoreTextIDWire)
 
     public init(from value: ScoreItemID) {
         switch value {
@@ -53,6 +71,8 @@ public enum ScoreItemIDWire {
             self = .tuplet(TupletIDWire(from: id))
         case let .clef(anchor):
             self = .clef(ClefAnchorWire(from: anchor))
+        case let .text(id):
+            self = .text(ScoreTextIDWire(from: id))
         }
     }
 
@@ -62,6 +82,68 @@ public enum ScoreItemIDWire {
         case let .rest(wire): return .rest(wire.decoded())
         case let .tuplet(wire): return .tuplet(wire.decoded())
         case let .clef(wire): return .clef(wire.decoded())
+        case let .text(wire): return .text(wire.decoded())
+        }
+    }
+}
+
+// MARK: - ScoreTextID
+
+@WireFormat
+public struct LyricTextIDWire {
+    public var anchor: VoiceElementIDWire
+    public var verse: Int32
+
+    public init(anchor: VoiceElementID, verse: Int) {
+        self.anchor = VoiceElementIDWire(from: anchor)
+        self.verse = Int32(verse)
+    }
+}
+
+@WireFormat
+public struct StaffTextIDWire {
+    public var anchor: VoiceElementIDWire
+    public var isSystemText: Bool
+
+    public init(anchor: VoiceElementID, style: TextStyleType) {
+        self.anchor = VoiceElementIDWire(from: anchor)
+        isSystemText = style == .systemText
+    }
+}
+
+@WireFormatChoice
+public enum ScoreTextIDWire {
+    case lyric(LyricTextIDWire)
+    case staffText(StaffTextIDWire)
+    case harmony(VoiceElementIDWire)
+    case rehearsalMark(Int32)
+
+    public init(from value: ScoreTextID) {
+        switch value {
+        case let .lyric(anchor, verse):
+            self = .lyric(LyricTextIDWire(anchor: anchor, verse: verse))
+        case let .staffText(anchor, style):
+            self = .staffText(StaffTextIDWire(anchor: anchor, style: style))
+        case let .harmony(anchor):
+            self = .harmony(VoiceElementIDWire(from: anchor))
+        case let .rehearsalMark(measureIndex):
+            self = .rehearsalMark(Int32(measureIndex))
+        }
+    }
+
+    public func decoded() -> ScoreTextID {
+        switch self {
+        case let .lyric(wire):
+            return .lyric(anchor: wire.anchor.decoded(), verse: Int(wire.verse))
+        case let .staffText(wire):
+            return .staffText(
+                anchor: wire.anchor.decoded(),
+                style: wire.isSystemText ? .systemText : .staffText,
+            )
+        case let .harmony(wire):
+            return .harmony(anchor: wire.decoded())
+        case let .rehearsalMark(measureIndex):
+            return .rehearsalMark(measureIndex: Int(measureIndex))
         }
     }
 }

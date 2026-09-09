@@ -155,4 +155,35 @@ struct ScoreFingerprintParityTests {
         placed[Self.slot] = .chord(chord)
         #expect(placed.stableFingerprint == plain.stableFingerprint)
     }
+
+    /// Every kind `SetTextVisible` (intent 75) can hide moves the fingerprint, and showing it again moves it
+    /// back. Without this the JNI / web replay chains would report two images as agreeing after one of them had
+    /// failed to apply a hide — the exact false pass `ScoreFingerprint.swift`'s blind-spot list warns about, and
+    /// the reason three of these four fields entered the walk with this command.
+    @Test("hiding each kind of engraved text moves the fingerprint, and showing it moves it back")
+    func textVisibilityIsCovered() throws {
+        var score = EditingFixtures.twoConsecutiveC4Chords()
+        let second = VoiceElementID(staff: Self.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 2)
+        _ = try SetLyric(at: Self.slot, verse: 0, text: "la", syllabic: .single).apply(to: &score)
+        _ = try SetStaffText(anchor: second, text: "pizz.", isSystemText: false).apply(to: &score)
+        _ = try SetRehearsalMark(measureIndex: 0, text: "A").apply(to: &score)
+        _ = try SetChordSymbol(at: Self.slot, name: "Am7").apply(to: &score)
+        // The symbol insert shifted both chords one slot right.
+        let shifted = VoiceElementID(staff: Self.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 2)
+        let ids: [ScoreTextID] = [
+            .lyric(anchor: shifted, verse: 0),
+            .staffText(anchor: VoiceElementID(
+                staff: Self.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 3,
+            ), style: .staffText),
+            .harmony(anchor: shifted),
+            .rehearsalMark(measureIndex: 0),
+        ]
+        for id in ids {
+            let before = score.stableFingerprint
+            let inverse = try SetTextVisible(id, visible: false).apply(to: &score)
+            #expect(score.stableFingerprint != before, "hiding \(id) should move the fingerprint")
+            _ = try inverse.apply(to: &score)
+            #expect(score.stableFingerprint == before, "showing \(id) should restore the fingerprint")
+        }
+    }
 }

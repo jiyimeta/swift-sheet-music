@@ -363,10 +363,10 @@ extension LayoutDocument {
                     return p.x
                 }
             }
-        case .tuplet, .clef:
-            // Playback cursor never positions on a tuplet bracket
-            // or a clef — these are display-only selection targets,
-            // not tick anchors.
+        case .tuplet, .clef, .text:
+            // Playback cursor never positions on a tuplet bracket,
+            // a clef or a piece of engraved text — these are
+            // display-only selection targets, not tick anchors.
             return nil
         }
         return nil

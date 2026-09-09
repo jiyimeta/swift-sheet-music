@@ -183,7 +183,7 @@ private func editHitItem(from item: ScoreItemID, in score: Score) -> EditHitItem
             pitch: -1,
             tpc: 0,
         )
-    case .clef:
+    case .clef, .text:
         return nil
     }
 }

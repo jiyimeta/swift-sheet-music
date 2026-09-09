@@ -131,6 +131,7 @@ own substantive logic.
 | `SetLetRing` | not in the example — host command registry | sugar |
 | `RemoveSpanner` | not in the example — host command registry | sugar |
 | `SetChordSymbol` | not in the example — host command registry | sugar |
+| `SetTextVisible` | not in the example — a host's properties panel, on a selected text | partly sugar |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
@@ -142,17 +143,41 @@ list) and a step of the frozen parity replay chain (`ReplayChain.parity`).
 `CompositeEditCommand`, listed last as infrastructure, is not: it
 predates the project and keeps its own earlier wire index.
 
+`SetTextVisible` is intent **75**, and its chain is `ReplayChain.lyrics`
+(steps 7–15) rather than `parity`, which is frozen. Intent **74**
+(`setLyricSyllables`, steps 1–6 of the same chain) has no command of its
+own — it carries a list of `SetLyric` writes so one keystroke is one undo
+step — which is why it appears nowhere in the table above.
+
+`SetTextVisible` is marked *partly* sugar because only one of its four
+arms is: a chord symbol is a `VoiceElement`, so that arm delegates to
+`SetElementVisible`, and what the command adds there is the address —
+`ScoreTextID.harmony(anchor:)` names the chord the symbol sits on, not the
+symbol's own slot. The lyric, staff-text and rehearsal-mark arms write
+model fields no other command reaches.
+
 ---
 
 ## B. To-do checklist
 
-Empty. Every operation the `Score` model can express has a named
-command in §A — the edit-command parity project
+The edit-command parity project
 (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`,
-intents 30–73) closed the queue this section used to hold. New
-commands start with a gap from §C, or with a new feature
-altogether; either way they open a new wire chain rather than extending
-the frozen parity one (`ReplayChain`).
+intents 30–73) emptied this section: every operation the `Score` model
+could express had a named command in §A. It re-opened when engraved text
+became selectable (spec 2026-09-07) and the properties a host wants for a
+selected text turned out to be a different set from the ones a note has.
+`SetTextVisible` (75) closed the first of them. What is left:
+
+| Property of a selected text | Model field | Why there is no command yet |
+| --- | --- | --- |
+| Color | `elementProperties.color` on `Lyric` / `StaffText` / `RehearsalMark` / `Harmony`, and the renderer already honors it | nothing writes it. The field is there and round-trips, so this is a command-shaped gap, not a model one — the cheapest of these to add, and the one a user asked for first. |
+| Font (face, size, style) | `TextProperties` on all four | nothing writes it, and `TextProperties` is a wider payload than the scalar rule `EditIntent` holds — an intent for it needs a decision about how much of the struct crosses. |
+| Placement (above / below) | `elementProperties.placement`, deliberately outside `Score.stableFingerprint` | a command would have to bring the field into the fingerprint walk first, or two images could disagree undetected. |
+| A lyric's verse | `Lyric.verse`, and the index into `Chord.lyrics` that `SetLyric` owns | moving a syllable between verses is a re-index of the array, not a field write; `SetLyric` owns that invariant and would have to grow the operation. |
+
+Apart from those, new commands start with a gap from §C, or with a new
+feature altogether; either way they open a new wire chain rather than
+extending the frozen parity one (`ReplayChain`).
 
 ---
 
@@ -166,7 +191,9 @@ command. The edit-command parity project
 (`docs/superpowers/specs/2026-09-02-edit-command-parity-design.md`)
 gave each one an edit command, landed in seven groups: Structural
 (intents 30–34), Range (35–40), Marks (41–49), Note / chord (50–57),
-Visibility (58–61), Spanners (62–72) and Harmony (73).
+Visibility (58–61), Spanners (62–72) and Harmony (73). The macOS
+score-text-entry project (spec 2026-09-07) added two more: lyric
+keystrokes (74) and an engraved text's own visibility (75).
 
 What is left below is the true remainder — the rows that need the
 `Score` model to grow, plus the ones the parity groups recorded as

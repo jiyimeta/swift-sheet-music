@@ -216,7 +216,48 @@ public enum ScoreLayerBuilder {
         mutating func attach(
             _ layer: CAShapeLayer, to id: ScoreItemID,
         ) {
+            BaseInk.remember(on: layer)
             items[id, default: []].append(layer)
+        }
+    }
+
+    /// The ink a selectable layer was built with, remembered on the layer itself the moment it becomes
+    /// selectable, so `applySelection` can undo a tint exactly instead of assuming the layer was black.
+    ///
+    /// Author `<color>` overrides make that assumption wrong: a red lyric, a colored notehead or a colored
+    /// rehearsal mark reset to `inkColor` would come back from a selection permanently black. MuseScore has
+    /// the same rule — `EngravingItem::curColor` returns the item's own `normalColor` when it is not
+    /// selected, never a default (`dom/engravingitem.cpp`).
+    ///
+    /// It rides on the layer through `CALayer`'s undefined-key storage rather than in a parallel dictionary
+    /// because the layer maps are rebuilt per measure by the diff planner, and a side table keyed by layer
+    /// identity would have to be kept in step with every one of those rebuilds.
+    final class BaseInk: NSObject {
+        static let key = "sheetMusicBaseInk"
+
+        let fill: CGColor?
+        let stroke: CGColor?
+
+        init(fill: CGColor?, stroke: CGColor?) {
+            self.fill = fill
+            self.stroke = stroke
+            super.init()
+        }
+
+        /// Records `layer`'s current fill / stroke, once. Re-attaching the same layer (a notehead is
+        /// attached twice — head and accidental — and a harmony once per run) must not overwrite a record
+        /// made before a tint was applied.
+        static func remember(on layer: CAShapeLayer) {
+            guard layer.value(forKey: key) == nil else { return }
+            layer.setValue(
+                BaseInk(fill: layer.fillColor, stroke: layer.strokeColor),
+                forKey: key,
+            )
+        }
+
+        /// The ink `layer` was built with, or `nil` when it was never attached.
+        static func of(_ layer: CAShapeLayer) -> BaseInk? {
+            layer.value(forKey: key) as? BaseInk
         }
     }
 
@@ -240,11 +281,14 @@ public enum ScoreLayerBuilder {
                 // Notehead / text glyphs are filled paths; bracket
                 // hooks and segments are stroked. Resetting both
                 // covers either kind without needing to know which.
+                // The ink is the layer's own, recorded at `attach`
+                // — see `BaseInk` for why not `inkColor`.
+                let base = BaseInk.of(layer)
                 if layer.fillColor != nil {
-                    layer.fillColor = inkColor
+                    layer.fillColor = base?.fill ?? inkColor
                 }
                 if layer.strokeColor != nil {
-                    layer.strokeColor = inkColor
+                    layer.strokeColor = base?.stroke ?? inkColor
                 }
             }
         }

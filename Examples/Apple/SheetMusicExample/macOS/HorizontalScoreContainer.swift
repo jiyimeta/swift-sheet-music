@@ -25,6 +25,9 @@
         let playbackCursor: ScoreCursor?
         let isMarqueeMode: Bool
         let onTap: (CGPoint) -> Void
+        /// Forwarded to `MagnifyingScoreScrollView.onDoubleTap` — a double-click on engraved text opens
+        /// its inline caret.
+        let onDoubleTap: (CGPoint) -> Void
         let onMarqueeEnd: (CGRect, LayoutDocument) -> Void
         /// Fired on every cursor change with the current viewport
         /// width. The host calls back into its `autoScrollHorizontal`
@@ -102,6 +105,7 @@
                     isMarqueeMode: isMarqueeMode,
                     marqueeRect: $marqueeRect,
                     onTap: onTap,
+                    onDoubleTap: onDoubleTap,
                     onMarqueeEnd: { rect in
                         onMarqueeEnd(rect, document)
                     },

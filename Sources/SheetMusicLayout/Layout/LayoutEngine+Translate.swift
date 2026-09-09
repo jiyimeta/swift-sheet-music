@@ -181,7 +181,7 @@ extension LayoutEngine {
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
             )
-        case let .staffText(text, p, color, style):
+        case let .staffText(text, p, color, style, anchor):
             // Emitted by `placeMeasureElements` in staff-local coords
             // (relative to a virtual staff with top at sp * 2), so the
             // per-staff `dy` must be applied for the text to land above
@@ -192,13 +192,15 @@ extension LayoutEngine {
                 origin: shift(p),
                 color: color,
                 style: style,
+                anchor: anchor,
             )
-        case let .rehearsalMark(text, p, frame, color):
+        case let .rehearsalMark(text, p, frame, color, measureIndex):
             // Same staff-local origin convention as `.staffText`;
             // shift onto the system's actual top-staff y.
             return .rehearsalMark(
                 text: text, origin: shift(p),
                 frame: frame, color: color,
+                measureIndex: measureIndex,
             )
         case let .harmony(lh):
             // Apply per-staff dy to the anchor point. The runs are
@@ -210,6 +212,7 @@ extension LayoutEngine {
                 y: lh.y + Double(dy),
                 runs: lh.runs,
                 width: lh.width,
+                anchor: lh.anchor,
             ))
         case let .graceChord(
             notes, dur, stem, so, relX, slash, mag, vi,
@@ -281,17 +284,17 @@ extension LayoutEngine {
             CGPoint(x: p.x + dx, y: p.y)
         }
         switch element {
-        case let .staffText(text, p, color, style):
+        case let .staffText(text, p, color, style, anchor):
             return .staffText(
                 text: text, origin: shift(p),
-                color: color, style: style,
+                color: color, style: style, anchor: anchor,
             )
         case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))
-        case let .rehearsalMark(text, p, frame, color):
+        case let .rehearsalMark(text, p, frame, color, measureIndex):
             return .rehearsalMark(
                 text: text, origin: shift(p),
-                frame: frame, color: color,
+                frame: frame, color: color, measureIndex: measureIndex,
             )
         default:
             return element

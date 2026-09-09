@@ -1,7 +1,8 @@
 import SheetMusicFoundation
 
-/// `ScoreEditSession`'s planning half for the parity project's visibility intents (58…61). Its own file for the
-/// reason `+MarkPlanning.swift` exists: `+Planning.swift` sits at its line budget.
+/// `ScoreEditSession`'s planning half for the parity project's visibility intents (58…61), and for the engraved
+/// text's own visibility (75), which joined them because it is the same operation on a different address. Its own
+/// file for the reason `+MarkPlanning.swift` exists: `+Planning.swift` sits at its line budget.
 ///
 /// Every planner here follows the standing rule: an intent that restates what the score already says plans to
 /// `nil` (`.nothingToApply`), never to a self-restoring undo entry. Each reads the score through the command's own
@@ -29,6 +30,12 @@ extension ScoreEditSession {
             guard SetBeamVisible.current(at: location, in: score) != visible else { return nil }
             let leader = SetBeamVisible.leader(of: location, in: score) ?? location
             return SetBeamVisible(at: leader, visible: visible)
+        case let .setTextVisible(text, visible):
+            // A text the score does not carry reads `nil` here, which is NOT equal to `visible` and so plans a
+            // command — deliberately, so a stale selection is refused by `apply` as `.targetNotFound` rather than
+            // silently reported as nothing to apply. Only a text that really reads this way already plans to nil.
+            return SetTextVisible.current(text, in: score) == visible
+                ? nil : SetTextVisible(text, visible: visible)
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.

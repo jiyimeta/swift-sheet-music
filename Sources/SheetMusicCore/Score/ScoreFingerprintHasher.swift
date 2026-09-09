@@ -191,6 +191,11 @@ struct FNV1a {
         }
         combine(lyric.ticks)
         combine(lyric.verse)
+        // Brought in by `SetTextVisible` (intent 75): a hidden syllable is a state an edit can now reach, so a
+        // mirror that failed to apply the hide has to disagree here. BY OCCUPANTS, so a score whose syllables are
+        // all visible and uncolored feeds exactly the bytes it did before — which is what keeps every committed
+        // replay golden and the layout golden unmoved. `Lyric.properties` (fonts) stays out: nothing writes it.
+        combineOccupied(lyric.elementProperties, visibleTag: 61, colorTag: 62)
     }
 
     /// Recurses into the grace chord's own notes (via `combine(_ note:)`) rather than hashing a count, so a
@@ -302,8 +307,13 @@ struct FNV1a {
     /// stayed put — the position and measure index `combineSystemLane` feeds would be identical either way.
     ///
     /// What stays out is the display trivia hanging off each one (`offsetX` / `offsetY`, `properties`,
-    /// `elementProperties`, `RehearsalMark.frame`, `InstrumentChange.isUserInitialized`), in the same spirit as this
-    /// file's other exclusions: no edit command in this package writes any of it.
+    /// `RehearsalMark.frame`, `InstrumentChange.isUserInitialized`), in the same spirit as this file's other
+    /// exclusions: no edit command in this package writes any of it.
+    ///
+    /// `elementProperties` was on that list until `SetTextVisible` (intent 75) started writing it on a rehearsal
+    /// mark and on a staff / system text. Those two cases now feed it BY OCCUPANTS, so a lane whose marks are all
+    /// visible and uncolored feeds the bytes it always did; the other three cases still feed none, because
+    /// nothing writes theirs.
     mutating func combine(_ element: SystemElement) {
         switch element {
         case let .tempo(tempo):
@@ -314,10 +324,12 @@ struct FNV1a {
         case let .rehearsalMark(mark):
             combine(1)
             combine(mark.text)
+            combineOccupied(mark.elementProperties, visibleTag: 63, colorTag: 64)
         case let .staffText(text):
             combine(2)
             combine(text.text)
             combine(text.isSystemText)
+            combineOccupied(text.elementProperties, visibleTag: 65, colorTag: 66)
         case let .swing(swing):
             combine(3)
             combine(swing.text)

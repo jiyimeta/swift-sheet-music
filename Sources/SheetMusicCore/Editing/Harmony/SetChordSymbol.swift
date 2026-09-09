@@ -69,10 +69,18 @@ public struct SetChordSymbol: EditCommand {
 
     /// The chord symbol in the attachment run before the chord or rest at `location`, or `nil`.
     static func current(at location: VoiceElementID, in score: Score) -> Harmony? {
-        guard let index = AdjacentElementSlot.find(.before, of: location, in: score, where: isHarmony),
-              case let .harmony(harmony)? = score[location.withElementIndex(index)]
+        guard let slot = harmonySlot(at: location, in: score), case let .harmony(harmony)? = score[slot]
         else { return nil }
         return harmony
+    }
+
+    /// The SYMBOL's own slot for a chord or rest at `location` — the identity `SetElementVisible` and every other
+    /// `VoiceElementID`-addressed command needs, which a selection cannot supply because `ScoreTextID.harmony`
+    /// (like `LayoutHarmony.anchor`) names the chord the symbol is written over instead. `nil` when the run
+    /// carries no symbol. `SetTextVisible` is the other caller.
+    static func harmonySlot(at location: VoiceElementID, in score: Score) -> VoiceElementID? {
+        AdjacentElementSlot.find(.before, of: location, in: score, where: isHarmony)
+            .map(location.withElementIndex)
     }
 
     private static func isHarmony(_ element: VoiceElement) -> Bool {

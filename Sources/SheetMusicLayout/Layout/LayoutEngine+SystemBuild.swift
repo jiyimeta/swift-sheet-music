@@ -543,6 +543,28 @@ extension LayoutEngine {
             xOffsets.append(contentWidth)
             contentWidth += um.width
         }
+        // --- Hyphen trails that cross a barline ---
+        //
+        // `placeMeasureElements` keeps its per-verse trail inside a
+        // per-measure pass, so a word split across a barline lost its
+        // hyphen. MuseScore's is a spanner segmented per SYSTEM, and
+        // the dash count is computed over the whole segment — so this
+        // runs here, where the system's measures and their x offsets
+        // are both in hand, rather than as a longer trail. After the
+        // lyric-Y alignment above (the dashes take the aligned row's
+        // y) and before autoplace below (a cross-measure dash moves by
+        // the same rules as a within-measure one). See
+        // `LayoutEngine+LyricHyphenSpans`.
+        if context.options.lyricsVisible {
+            emitCrossMeasureLyricHyphens(
+                into: &untranslated,
+                staffCount: staves.count,
+                score: context.score,
+                xOffsets: xOffsets,
+                metrics: metrics,
+            )
+        }
+
         // --- Line spanners into the pass-1 buffer ---
         //
         // Before the autoplace block below, not after: its writeback

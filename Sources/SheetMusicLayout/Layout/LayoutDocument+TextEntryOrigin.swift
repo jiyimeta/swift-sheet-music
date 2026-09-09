@@ -4,6 +4,24 @@
 import SheetMusicCore
 
 extension LayoutDocument {
+    /// The final document-space origin of the lyric syllable `cursor` names — the point the engraved
+    /// syllable is centred on, which is where an inline lyric caret belongs.
+    ///
+    /// The X is the owning chord's column (`chordStemOrigin`) rather than anything read off the syllable:
+    /// `LayoutEngine+Placement` centres a syllable on that same `chordX`, so the two agree, and the column
+    /// still answers for a verse that has no syllable engraved yet. The Y comes from `lyricLineY`, which
+    /// prefers the verse's own engraved line and falls back to the placement engine's baseline.
+    ///
+    /// `nil` when the anchor names no chord in this document, or when its staff is not laid out here.
+    public func lyricEntryOrigin(
+        at cursor: LyricInputPlanner.Cursor,
+    ) -> CGPoint? {
+        guard let anchor = chordStemOrigin(at: cursor.location),
+              let y = lyricLineY(at: cursor.location, verse: cursor.verse)
+        else { return nil }
+        return CGPoint(x: anchor.x, y: y)
+    }
+
     /// The final document-space origin of a chord stem or rest at `anchor`.
     /// Used only as a deterministic empty-editor fallback when no pending
     /// engraved text exists yet.
@@ -36,45 +54,116 @@ extension LayoutDocument {
         return nil
     }
 
-    /// The final document-space origin of a staff- or system-text glyph.
+    /// The final document-space origin of the staff- or system-text glyph anchored at `anchor`.
     ///
-    /// This is an example-grade lookup: text and role do not uniquely
-    /// identify an element, so equal candidates are ranked by proximity to
-    /// `anchor` and can still select the wrong one. Carrying element identity
-    /// into layout is the durable fix.
+    /// Matched on the identity `placeMeasureElements` carried onto the element, not on the string it prints:
+    /// two "solo"s in one bar are two marks, and a lookup that could only compare text had to rank them by
+    /// proximity and could pick the wrong one. `style` still narrows the search because one beat can carry both
+    /// a staff text and a system text — `SetStaffText` writes them as distinct marks at the same anchor.
+    ///
+    /// ## What `nil` means, and the two anchors that cannot match
+    ///
+    /// `nil` is not "the mark is not engraved". A caller re-editing an EXISTING, non-empty mark has nothing to
+    /// fall back on — the empty-editor fallback in the example overlay is gated on the editor being empty
+    /// (`ScoreTextEntryOverlay.textEntryOrigin`) — so a miss here shows up as NO CARET AT ALL, not as a caret
+    /// in a worse place. The text-and-proximity lookup this replaced always returned something, so these two
+    /// cases are a regression in exchange for never returning the wrong element.
+    ///
+    /// 1. **Another voice at the same beat.** A lane mark has no voice: `SetStaffText` reduces any anchor it is
+    ///    given to a `MeasurePosition`. Layout must still name one voice element, and picks the lowest-numbered
+    ///    voice with a chord or rest at that beat. Pass an anchor from voice 2 of a bar whose beat also has a
+    ///    voice-1 chord and this returns `nil`; the voice-1 anchor for the same mark answers.
+    /// 2. **A system text queried from any staff but the canonical one.** `SetStaffText` writes a system text
+    ///    with `originalStaff: nil` (it belongs to no staff), and `LayoutEngine` places a staff-less lane
+    ///    element on the canonical staff only — one glyph, carrying a staff-(0,0) anchor. So
+    ///    `staffTextOrigin(at:style: .systemText)` returns `nil` for EVERY anchor outside part 0 / staff 0,
+    ///    which in a multi-part score is most of them.
+    ///
+    /// **Both are fixed by `staffTextOrigin(at:style:in:)`**, which matches by beat instead of by element
+    /// index. This overload stays because it needs no `Score`, and because a caller that genuinely means "the
+    /// mark whose emitted identity is exactly this" — a test pinning the emission, the JNI bridge's
+    /// identity-keyed path — should not silently start matching a neighbouring voice. New caret paths want the
+    /// beat-matching one.
     public func staffTextOrigin(
         at anchor: VoiceElementID,
-        text: String,
         style: TextStyleType,
     ) -> CGPoint? {
-        textEntryCandidate(
-            in: anchor.measureIndex,
-            nearestTo: timedAnchorX(at: anchor),
-        ) { element in
+        firstOrigin(inMeasure: anchor.measureIndex) { element in
             guard case let .staffText(
-                candidate, origin, _, candidateStyle,
+                _, origin, _, candidateStyle, candidateAnchor,
             ) = element,
-                candidate == text,
+                candidateAnchor == anchor,
                 candidateStyle == style
             else { return nil }
             return origin
         }
     }
 
-    /// The final document-space leading origin of a chord symbol.
+    /// The final document-space origin of the staff- or system-text glyph at `anchor`'s BEAT, matched through
+    /// `score` rather than by element index.
     ///
-    /// This has the same example-grade text-match limitation as
-    /// `staffTextOrigin(at:text:style:)`; element identity is the durable fix.
+    /// A lane mark is addressed by beat and staff, never by voice or by slot: `SetStaffText` reduces whatever
+    /// anchor it is handed to a `MeasurePosition` (`SystemLaneSlot.position(of:in:)`). Layout must still name
+    /// one voice element when it emits the glyph, and `LayoutEngine.systemLaneAnchor(atTick:…)` picks the
+    /// lowest-numbered voice carrying a chord or rest at that tick — on the CANONICAL staff when the mark
+    /// belongs to no staff at all. That emitted `VoiceElementID` is therefore narrower than the mark's real
+    /// address, and the identity-matching overload above misses whenever the caller holds a different — equally
+    /// correct — name for the same beat. Both misses it documents are of that shape.
+    ///
+    /// So this resolves BOTH sides to a beat and compares those. Neither side re-derives the arithmetic: the
+    /// caller's anchor and the emitted anchor go through the same `SystemLaneSlot.position(of:in:)` the writer
+    /// used, which reaches `Score.onset(of:)` — the one walker that folds `.locationShift` jogs and
+    /// `effectiveMeasureDurations` in, and the reason `ScoreTickPosition` exists. A `MeasurePosition` is a
+    /// reduced fraction of the bar, so the comparison is independent of `division` and of which voice or staff
+    /// each side counted in.
+    ///
+    /// Exact identity is still tried first, and not only as an optimization: it keeps the answer for an anchor
+    /// that resolves exactly identical to the overload above, so adopting this can add matches but never move
+    /// one.
+    ///
+    /// `score` must be the score `self` was laid out from. Passing a different one silently compares beats
+    /// across two documents; nothing here can detect that.
+    ///
+    /// **The beat is relaxed; the STAFF is not.** A `LayoutMeasure`'s `elements` aggregate every staff in the
+    /// bar, so a scan that dropped the staff would hand a caret on staff 1 the origin of staff 0's "solo" at
+    /// the same beat — the same class of bug `lyricLineY`'s comment records. A staff text keeps its anchor's
+    /// staff; a system text deliberately does not, because it has none and is laid out on the canonical staff
+    /// whatever staff the caller is editing from. That single exception IS miss 2.
+    ///
+    /// **What still returns `nil`:** a mark at a beat no chord or rest starts (a `<location>`-shifted lane
+    /// element — the v1 limit `SystemLaneSlot` records), an anchor naming a non-timed element, and an anchor
+    /// whose bar this document does not lay out.
+    public func staffTextOrigin(
+        at anchor: VoiceElementID,
+        style: TextStyleType,
+        in score: Score,
+    ) -> CGPoint? {
+        if let exact = staffTextOrigin(at: anchor, style: style) { return exact }
+        guard let wanted = SystemLaneSlot.position(of: anchor, in: score) else { return nil }
+        return firstOrigin(inMeasure: anchor.measureIndex) { element in
+            guard case let .staffText(
+                _, origin, _, candidateStyle, candidateAnchor,
+            ) = element,
+                candidateStyle == style,
+                let candidateAnchor,
+                candidateAnchor.measureIndex == anchor.measureIndex,
+                style == .systemText || candidateAnchor.staff == anchor.staff,
+                SystemLaneSlot.position(of: candidateAnchor, in: score) == wanted
+            else { return nil }
+            return origin
+        }
+    }
+
+    /// The final document-space leading origin of the chord symbol on the chord or rest at `anchor`.
+    ///
+    /// Identity-matched for `staffTextOrigin(at:style:)`'s reason. `LayoutHarmony.anchor` names the element the
+    /// symbol is written against, which is the same `VoiceElementID` `SetChordSymbol` takes.
     public func harmonyOrigin(
         at anchor: VoiceElementID,
-        text: String,
     ) -> CGPoint? {
-        textEntryCandidate(
-            in: anchor.measureIndex,
-            nearestTo: timedAnchorX(at: anchor),
-        ) { element in
+        firstOrigin(inMeasure: anchor.measureIndex) { element in
             guard case let .harmony(harmony) = element,
-                  harmony.harmony.name == text
+                  harmony.anchor == anchor
             else { return nil }
             return CGPoint(
                 x: CGFloat(harmony.anchorX),
@@ -85,9 +174,15 @@ extension LayoutDocument {
 
     /// The final document-space origin of the rehearsal-mark text itself.
     ///
-    /// A rehearsal mark's layout origin belongs to its frame. The renderer
-    /// moves the bottom-leading text origin inward by the frame padding, so
-    /// this accessor applies that same offset for an inline editing caret.
+    /// A rehearsal mark's layout origin belongs to its frame. The renderer moves the bottom-leading text origin
+    /// inward by the frame padding, so this accessor applies that same offset for an inline editing caret.
+    ///
+    /// The two `measureIndex` checks below are not redundant in intent, though they are in effect today. The
+    /// outer `where` narrows the scan to one bar's layout measures and is load-bearing: **do not remove it.**
+    /// The inner one asks the mark itself which bar it is for, so the lookup does not depend on the fact that
+    /// the engine currently files a mark under exactly the bar it was emitted for — one wiring point passes the
+    /// same `measureIdx` to both, so the second check is a tautology at present and is here to stay true if
+    /// that ever stops holding.
     public func rehearsalMarkTextOrigin(
         at anchor: VoiceElementID,
     ) -> CGPoint? {
@@ -97,8 +192,8 @@ extension LayoutDocument {
             {
                 for element in measure.elements {
                     guard case let .rehearsalMark(
-                        _, origin, _, _,
-                    ) = element
+                        _, origin, _, _, candidateMeasureIndex,
+                    ) = element, candidateMeasureIndex == anchor.measureIndex
                     else { continue }
                     let padding = RehearsalMarkFrame.paddingSp(sp: system.sp)
                     return absolute(
@@ -115,30 +210,25 @@ extension LayoutDocument {
         return nil
     }
 
-    private func textEntryCandidate(
-        in measureIndex: Int,
-        nearestTo anchorX: CGFloat?,
+    /// The document-space origin of the first element of `measureIndex` that `origin` answers for.
+    ///
+    /// Scoped to one bar because that is where a text-entry caret's anchor lives; systems are walked in order
+    /// so a bar an unwound repeat laid out twice answers with its first copy.
+    private func firstOrigin(
+        inMeasure measureIndex: Int,
         origin: (LayoutElement) -> CGPoint?,
     ) -> CGPoint? {
-        var candidates: [CGPoint] = []
         for system in systems {
             for measure in system.measures
                 where measure.measureIndex == measureIndex
             {
-                candidates.append(contentsOf: measure.elements.compactMap {
-                    guard let local = origin($0) else { return nil }
+                for element in measure.elements {
+                    guard let local = origin(element) else { continue }
                     return absolute(local, in: system, measure: measure)
-                })
+                }
             }
         }
-        guard let anchorX else { return candidates.first }
-        return candidates.min {
-            abs($0.x - anchorX) < abs($1.x - anchorX)
-        }
-    }
-
-    private func timedAnchorX(at anchor: VoiceElementID) -> CGFloat? {
-        timedElementOrigin(at: anchor)?.x
+        return nil
     }
 
     private func absolute(

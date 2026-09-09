@@ -362,7 +362,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, kind: kind, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .rehearsalMark(text, p, frame, color):
+        case let .rehearsalMark(text, p, frame, color, _):
             RehearsalMarkRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p), frame: frame, color: color,
@@ -383,7 +383,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .staffText(text, p, color, style):
+        case let .staffText(text, p, color, style, _):
             StaffTextRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p),
