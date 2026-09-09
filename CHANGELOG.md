@@ -9,6 +9,59 @@ and this project adheres to
 
 ### Added
 
+- **Twelve engraved elements other than text are now selectable.** A click
+  reports, and a selection tints, dynamics, fermatas, breath marks, tempo
+  marks, articulations, hairpins, pedals, octave lines, key signatures,
+  time signatures, barlines and voltas. `ScoreItemID` gained one case,
+  `.element(ScoreElementID)`, whose nine kinds nest inside it for the reason
+  `ScoreTextID` already established: the four positional accessors have to
+  answer for every case, and every exhaustive switch elsewhere gains one arm
+  instead of nine. `ScoreHitTarget` mirrors it case for case, so a hit
+  becomes a selection by re-wrapping, with no translation table to drift.
+
+  **An identity is the address its editing command accepts, and for several
+  kinds that is a NEIGHBOUR.** `SetDynamic`, `SetFermata` and `SetBreath`
+  require a chord or rest and then search the adjacent attachment run;
+  `SetTempo` takes the timed element the mark sits on while the mark lives
+  in `SystemMeasure.elements`. So those identities name the chord, not the
+  marking's own slot — following `ScoreTextID.harmony`, which already does
+  exactly that. An identity naming a slot no command accepts would be a
+  selection you cannot act on. The precision this loses is precision the
+  editing layer never had: two markings of the same kind in one run are
+  indistinguishable to the command too.
+
+  Where an element is drawn but no command can reach it — a mid-bar key
+  change, a mid-measure explicit barline, a courtesy restatement — it
+  reports no identity, deliberately, and is not a hit target.
+
+  Two switches that FAILED OPEN are now exhaustive, which was most of the
+  point: `ScoreHitTester.itemID(at:)` and the web fixture generator both
+  ended in `default: return nil`, so a new hit-target case would have
+  vanished silently through either.
+
+- **A selected element's colour, placement, font and verse can be edited.**
+  `SetElementColor` (76), `SetElementPlacement` (77), `SetTextFont` (78) and
+  `SetLyricVerse` (79) empty §B of `docs/edit-commands.md`, which reopened
+  when engraved text became selectable.
+
+  The address splits three ways rather than one: `ScoreTextID` for the four
+  text kinds, `NoteID` for a single notehead, `VoiceElementID` for a chord.
+  `VoiceElementID` cannot name an individual note, and recolouring a whole
+  chord when the user selected one notehead would be a different edit from
+  the one they asked for.
+
+  `SetTextFont` carries a patch whose every field distinguishes three
+  states — leave alone, clear, set — because conflating the first two
+  silently discards data. It carries all five `TextProperties` fields
+  rather than the three the renderer draws: baking today's renderer gap
+  into a wire format would make it permanent, and the gap is not.
+
+  `SetLyricVerse` is a re-index of `Chord.lyrics`, not a field write. An
+  occupied destination is refused rather than swapped. Neighbours are
+  deliberately not repaired — repair is driven by the terminator the user
+  typed and a verse move has none — so a hyphen or melisma the syllable
+  participated in can be left pointing at a row it no longer occupies.
+
 - **Engraving spacing and document margins are host-injectable.**
   `ScoreViewOptions.spacing` carries a new `EngravingSpacing`: a minimum
   distance between adjacent note columns, the per-quarter horizontal advance,
@@ -81,6 +134,39 @@ and this project adheres to
   address is an `internal` slot search, so no host could have supplied it. Wire index 75.
 
 ### Fixed
+
+- **`stableFingerprint` can see colour, placement and text properties.**
+  It could not, and each of the three would have let the golden replay gate
+  pass on a no-op: the mirror reports a FAILED write and a successful one as
+  identical when the field it wrote is not hashed. That is not hypothetical
+  here — `SetTextVisible` shipped before visibility was hashed, and the first
+  recording of that chain produced 9 distinct fingerprints for 16 steps.
+  Harmony's colour was the odd one out among the four text kinds; placement
+  had no parameter in the shared occupancy helper at all; `TextProperties`
+  was unhashed on all four carriers. Closed by occupying free tags strictly
+  by occupants, so a score with none of those set hashes exactly as before
+  and the committed literal hashes are unmoved. `Spanner.placement`, hashed
+  by an older path since before that helper existed, is untouched.
+
+- **Clicking an engraved element hits its ink, not a collision box.** The
+  hit boxes for barlines, pedals and signatures came from
+  `LayoutElementShape`, which is a COLLISION approximation rather than an ink
+  measurement — a fact that stayed hidden because for text the two coincide.
+  A double barline's box covered the gap BETWEEN its two strokes and neither
+  stroke; a pedal is drawn as glyphs while its box was an endpoint span, so
+  of 1,307 points inside the painted ink the box missed 1,075; a key
+  signature's box was a fixed ±1.5 sp around the FIRST glyph while
+  accidentals advance 1.4 sp each, leaving every signature of three or more
+  accidentals — D, A, E, B, F sharp major and their flat-side equivalents —
+  partly unclickable. All three now measure ink from the constants and
+  metrics the renderer draws with.
+
+  `LayoutElementShape` itself is deliberately unchanged: widening it changes
+  what the skyline believes and can move engraving. That it under-reports is
+  a separate, older defect, and a live one — the barline rect feeds collision
+  avoidance on one-line staves and the pedal rect does so on ordinary ones,
+  so an element autoplaced beside either can overlap ink the skyline does not
+  know about.
 
 - **A wide key signature no longer collides with the time signature beside
   it.** The header's key column was sized from a COUNT of accidentals
