@@ -156,6 +156,7 @@ struct FNV1a {
         combine(note.visible)
         combineOccupied(note.fingerings, tag: 36)
         combineOccupied(note.symbols, tag: 46)
+        combineOccupied(note.elementProperties.placement, tag: 84)
         if let color = note.elementProperties.color {
             combine(31)
             combine(color.red)
@@ -195,7 +196,7 @@ struct FNV1a {
         // mirror that failed to apply the hide has to disagree here. BY OCCUPANTS, so a score whose syllables are
         // all visible and uncolored feeds exactly the bytes it did before — which is what keeps every committed
         // replay golden and the layout golden unmoved. `Lyric.properties` (fonts) stays out: nothing writes it.
-        combineOccupied(lyric.elementProperties, visibleTag: 61, colorTag: 62)
+        combineOccupied(lyric.elementProperties, visibleTag: 61, colorTag: 62, placementTag: 80)
     }
 
     /// Recurses into the grace chord's own notes (via `combine(_ note:)`) rather than hashing a count, so a
@@ -298,7 +299,7 @@ struct FNV1a {
         combine(chord.stemVisible)
         combine(chord.beamVisible)
         combineOccupied(chord.spanners, tag: 32)
-        combineOccupied(chord.elementProperties, visibleTag: 29, colorTag: 30)
+        combineOccupied(chord.elementProperties, visibleTag: 29, colorTag: 30, placementTag: 68)
     }
 
     /// Unlike `combine(_ element: VoiceElement)`'s marker cases, every case here is fed the fields that give the
@@ -324,12 +325,12 @@ struct FNV1a {
         case let .rehearsalMark(mark):
             combine(1)
             combine(mark.text)
-            combineOccupied(mark.elementProperties, visibleTag: 63, colorTag: 64)
+            combineOccupied(mark.elementProperties, visibleTag: 63, colorTag: 64, placementTag: 81)
         case let .staffText(text):
             combine(2)
             combine(text.text)
             combine(text.isSystemText)
-            combineOccupied(text.elementProperties, visibleTag: 65, colorTag: 66)
+            combineOccupied(text.elementProperties, visibleTag: 65, colorTag: 66, placementTag: 82)
         case let .swing(swing):
             combine(3)
             combine(swing.text)
