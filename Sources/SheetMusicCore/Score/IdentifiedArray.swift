@@ -85,3 +85,88 @@ extension IdentifiedArray: Equatable {
         lhs.values == rhs.values
     }
 }
+
+// MARK: - Changing a value
+
+extension IdentifiedArray {
+    /// The same element, changed. The slot keeps its identifier.
+    public mutating func setValue(_ value: Value, at eid: EID) {
+        guard let index = index(of: eid) else { return }
+        values[index] = value
+    }
+
+    /// In-place edit of one slot's value. The slot keeps its identifier.
+    public mutating func updateValue(
+        at position: Int, _ body: (inout Value) -> Void,
+    ) {
+        body(&values[position])
+    }
+
+    /// In-place edit of every value. Every slot keeps its identifier.
+    public mutating func mapValues(_ body: (Value) -> Value) {
+        for index in values.indices {
+            values[index] = body(values[index])
+        }
+    }
+}
+
+// MARK: - Restructuring
+
+extension IdentifiedArray {
+    /// Insert after the named slot, or at the front when `after` is nil.
+    /// When the anchor identifier is not present, the element lands at the end.
+    /// The new slot's identifier is supplied by the caller, so a command and
+    /// its replay produce the same identifier.
+    public mutating func insert(_ value: Value, after eid: EID?, id: EID) {
+        let position: Int
+        if let eid, let index = index(of: eid) {
+            position = index + 1
+        } else {
+            position = eid == nil ? 0 : values.endIndex
+        }
+        values.insert(value, at: position)
+        ids.insert(id, at: position)
+    }
+
+    public mutating func remove(eid: EID) {
+        guard let index = index(of: eid) else { return }
+        values.remove(at: index)
+        ids.remove(at: index)
+    }
+
+    /// One operation, not a removal and an insertion: the moved slot keeps
+    /// its identifier, which is what lets an operation log say "this element
+    /// moved" rather than "one vanished and another appeared".
+    /// When the anchor identifier is not present, the element lands at the end.
+    public mutating func move(eid: EID, after target: EID?) {
+        guard let from = index(of: eid) else { return }
+        let value = values.remove(at: from)
+        let id = ids.remove(at: from)
+        let position: Int
+        if let target, let index = index(of: target) {
+            position = index + 1
+        } else {
+            position = target == nil ? 0 : values.endIndex
+        }
+        values.insert(value, at: position)
+        ids.insert(id, at: position)
+    }
+
+    /// A different element in the same place, so it takes a new identifier.
+    public mutating func replace(
+        at eid: EID, with value: Value, newEID: EID,
+    ) {
+        guard let index = index(of: eid) else { return }
+        values[index] = value
+        ids[index] = newEID
+    }
+
+    /// Fill every unassigned slot. Called at the points that produce a score,
+    /// never as a cleanup after an edit — an edit that dropped identifiers
+    /// must fail loudly rather than be silently renumbered.
+    public mutating func assignMissingIDs(using allocator: inout EIDAllocator) {
+        for index in ids.indices where !ids[index].isValid {
+            ids[index] = allocator.next()
+        }
+    }
+}
