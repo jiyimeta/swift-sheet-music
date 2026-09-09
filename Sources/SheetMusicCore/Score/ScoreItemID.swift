@@ -2,7 +2,7 @@ import SheetMusicFoundation
 
 /// A selectable score item — a specific notehead (`NoteID`), a
 /// rest (`RestID`), a tuplet bracket (`TupletID`), a clef
-/// (`ClefAnchor`), or one piece of engraved text (`ScoreTextID`).
+/// (`ClefAnchor`), engraved text (`ScoreTextID`), or an engraved element (`ScoreElementID`).
 ///
 /// Produced by hit-testing and consumed by selection APIs.
 public enum ScoreItemID: Hashable, Sendable {
@@ -11,10 +11,12 @@ public enum ScoreItemID: Hashable, Sendable {
     case tuplet(TupletID)
     case clef(ClefAnchor)
     /// One engraved lyric syllable, staff / system text, chord
-    /// symbol or rehearsal mark. See `ScoreTextID` for why the four
+    /// symbol or rehearsal mark. See `ScoreTextID` for why the
     /// text kinds nest inside one case, and for why a lyric
     /// selection is one syllable rather than a verse row.
     case text(ScoreTextID)
+    /// An engraved element addressed through its anchor or bar; see `ScoreElementID`.
+    case element(ScoreElementID)
 
     public var staff: StaffAddress {
         switch self {
@@ -30,6 +32,8 @@ public enum ScoreItemID: Hashable, Sendable {
             // accessor means by it.
             return id.anchor?.staff
                 ?? StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        case let .element(id):
+            return id.anchor?.staff ?? StaffAddress(partIndex: 0, staffIndexInPart: 0)
         }
     }
 
@@ -42,6 +46,7 @@ public enum ScoreItemID: Hashable, Sendable {
         case .clef(.staffDefault): return 0
         case let .text(.rehearsalMark(measureIndex)): return measureIndex
         case let .text(id): return id.anchor?.measureIndex ?? 0
+        case let .element(id): return id.anchor?.measureIndex ?? id.measureIndexIfAddressedByBar ?? 0
         }
     }
 
@@ -53,6 +58,7 @@ public enum ScoreItemID: Hashable, Sendable {
         case let .clef(.explicit(id)): return id.voiceIndex
         case .clef(.staffDefault): return 0
         case let .text(id): return id.anchor?.voiceIndex ?? 0
+        case let .element(id): return id.anchor?.voiceIndex ?? 0
         }
     }
 
@@ -60,8 +66,9 @@ public enum ScoreItemID: Hashable, Sendable {
     /// `startElementIndex` (the first member). For staff-default
     /// clefs this is `0` (a positional approximation; the
     /// authoritative target is the `ClefAnchor` itself), and for a
-    /// rehearsal mark likewise `0` (the authoritative target is the
-    /// bar index, which `measureIndex` answers exactly).
+    /// bar-addressed item likewise `0` (the authoritative target is the
+    /// bar index, which `measureIndex` answers exactly). Bar-addressed elements
+    /// also approximate staff with the top staff and voice with `0`.
     public var elementIndex: Int {
         switch self {
         case let .note(id): return id.elementIndex
@@ -70,14 +77,19 @@ public enum ScoreItemID: Hashable, Sendable {
         case let .clef(.explicit(id)): return id.elementIndex
         case .clef(.staffDefault): return 0
         case let .text(id): return id.anchor?.elementIndex ?? 0
+        case let .element(id): return id.anchor?.elementIndex ?? 0
         }
     }
 
-    /// The text this item names, or `nil` when it names a notehead,
-    /// rest, tuplet or clef. The one test a consumer needs to ask
-    /// "is this selection a piece of engraved text".
+    /// The engraved text this item names. Non-text items report `nil`.
     public var textID: ScoreTextID? {
         guard case let .text(id) = self else { return nil }
+        return id
+    }
+
+    /// The engraved element this item names. Other items report `nil`.
+    public var elementID: ScoreElementID? {
+        guard case let .element(id) = self else { return nil }
         return id
     }
 }

@@ -25,7 +25,7 @@ public enum SelectionTintCodec {
 
     public static func decode(_ data: Data) throws -> (argb: UInt32, ids: Set<ScoreItemID>) {
         let wire = try SelectionTintWire(decoding: data)
-        return (argb: wire.argb, ids: Set(wire.items.map { $0.decoded() }))
+        return try (argb: wire.argb, ids: Set(wire.items.map { try $0.decoded() }))
     }
 }
 
@@ -58,7 +58,7 @@ public enum ScoreItemIDListCodec {
     }
 
     public static func decode(_ data: Data) throws -> [ScoreItemID] {
-        try ScoreItemIDListWire(decoding: data).items.map { $0.decoded() }
+        try ScoreItemIDListWire(decoding: data).items.map { try $0.decoded() }
     }
 }
 

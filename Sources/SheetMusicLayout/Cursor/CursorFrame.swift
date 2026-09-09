@@ -363,9 +363,9 @@ extension LayoutDocument {
                     return p.x
                 }
             }
-        case .tuplet, .clef, .text:
-            // Playback cursor never positions on a tuplet bracket,
-            // a clef or a piece of engraved text — these are
+        case .tuplet, .clef, .text, .element:
+            // Playback cursor does not position on engraving selections
+            // outside noteheads and rests — these are
             // display-only selection targets, not tick anchors.
             return nil
         }

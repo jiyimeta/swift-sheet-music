@@ -139,6 +139,16 @@
             #expect(Array(ScoreItemIDCodec.encode(note))[1] == 0)
             #expect(Array(ScoreItemIDCodec.encode(clef))[1] == 3)
             #expect(Array(ScoreItemIDCodec.encode(text))[1] == 4)
+            let element = ScoreItemID.element(.keySignature(measureIndex: 0))
+            #expect(Array(ScoreItemIDCodec.encode(element))[1] == 5)
+            let rest = ScoreItemID.rest(RestID(
+                staff: EditingFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+            ))
+            let tuplet = ScoreItemID.tuplet(TupletID(
+                staff: EditingFixtures.staff0, measureIndex: 0, voiceIndex: 0, startElementIndex: 1,
+            ))
+            #expect(Array(ScoreItemIDCodec.encode(rest))[1] == 1)
+            #expect(Array(ScoreItemIDCodec.encode(tuplet))[1] == 2)
         }
     }
 #endif

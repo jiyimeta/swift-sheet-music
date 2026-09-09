@@ -80,16 +80,20 @@ public struct ScoreHitTester: Sendable {
         return nil
     }
 
-    /// Convenience that only reports the "primary" selectable items.
-    /// Equivalent to `hitTest(at:)` filtered to `.note`, `.rest`,
-    /// and `.tuplet`.
+    /// Reports directly selectable notation identities, including clefs and engraved elements.
+    /// Text and shared note geometry are excluded; hosts can use a hit's `selectableItem`
+    /// when their interaction policy also selects those targets.
     public func itemID(at point: CGPoint) -> ScoreItemID? {
-        switch hitTest(at: point) {
+        guard let target = hitTest(at: point) else { return nil }
+        switch target {
         case let .note(id): return .note(id)
         case let .rest(id): return .rest(id)
         case let .tuplet(id): return .tuplet(id)
         case let .clef(anchor): return .clef(anchor)
-        default: return nil
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation:
+            return target.elementID.map(ScoreItemID.element)
+        case .stem, .flag, .beam, .lyric, .staffText, .harmony, .rehearsalMark:
+            return nil
         }
     }
 

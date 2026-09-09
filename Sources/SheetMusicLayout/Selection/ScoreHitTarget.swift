@@ -28,7 +28,7 @@ import SheetMusicCore
 ///
 /// ## Engraved text is tried LAST
 ///
-/// The four text cases at the bottom of this enum are reported only after every rung above has declined the
+/// Engraved text targets are reported only after every preceding rung has declined the
 /// point, so a syllable can never steal a click that is plainly on a note.
 ///
 /// How much that ordering currently buys was measured rather than assumed, and the answer is: nothing yet,
@@ -71,6 +71,25 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// A rehearsal mark, including its frame: the box is what a reader aims at, and a click on the border of
     /// a boxed "A" means the mark. Addressed by bar, like `SetRehearsalMark`.
     case rehearsalMark(measureIndex: Int)
+    /// A dynamic marking, addressed by `SetDynamic`. See `ScoreElementID.dynamic` for its address semantics.
+    case dynamic(anchor: VoiceElementID)
+    /// A fermata, addressed by `SetFermata`. See `ScoreElementID.fermata` for its address semantics.
+    case fermata(anchor: VoiceElementID)
+    /// A breath mark, addressed by `SetBreath`. See `ScoreElementID.breath` for its address semantics.
+    case breath(anchor: VoiceElementID)
+    /// A tempo marking, addressed by `SetTempo`. See `ScoreElementID.tempo` for its address semantics.
+    case tempo(anchor: VoiceElementID)
+    /// A spanner identified by its anchor and kind for `RemoveSpanner`. See `ScoreElementID.spanner`.
+    case spanner(anchor: VoiceElementID, kind: Spanner.Kind)
+    /// A bar's key signature, addressed by `SetKeySignature`. See `ScoreElementID.keySignature` for its scope.
+    case keySignature(measureIndex: Int)
+    /// A bar's meter, addressed by `SetTimeSignature`. See `ScoreElementID.timeSignature` for the re-bar scope.
+    case timeSignature(measureIndex: Int)
+    /// A barline: explicit and trailing roles feed `SetBarLine`, start-repeat feeds `SetRepeatBarLines`.
+    /// See `ScoreElementID.barLine` for its address semantics.
+    case barLine(measureIndex: Int, role: BarLineRole)
+    /// An owning chord's articulation kind, addressed by `SetArticulation`. See `ScoreElementID.articulation`.
+    case articulation(anchor: VoiceElementID, kind: ChordArticulation.Kind)
 }
 
 extension ScoreHitTarget {
@@ -89,9 +108,9 @@ extension ScoreHitTarget {
         }
     }
 
-    /// This target's text identity, or `nil` for the seven non-text targets.
+    /// This target's text identity. Non-text targets report `nil`.
     ///
-    /// A straight re-wrap: `ScoreTextID` carries the same four cases with the same labels and the same
+    /// A straight re-wrap: `ScoreTextID` carries the text cases with matching labels and
     /// payloads, so a host turning a hit into a selection does not need a translation table, and cannot
     /// invent an identity the editing commands would not recognise.
     public var textID: ScoreTextID? {
@@ -106,13 +125,15 @@ extension ScoreHitTarget {
             return .rehearsalMark(measureIndex: measureIndex)
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef:
             return nil
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation:
+            return nil
         }
     }
 
-    /// The selectable item a click on this target names, INCLUDING the four text kinds — the total map
+    /// The selectable item a click on this target names, including text and engraved elements — the total map
     /// `LayoutDocument.editingHitTest` deliberately does not perform.
     ///
-    /// `editingHitTest` drops text (and clefs) because what a click on a syllable MEANS is host policy;
+    /// `editingHitTest` drops text, clefs and engraved elements because the meaning of a click is host policy;
     /// see `selectableItem(from:)`. This property is the other half a host needs once it has decided that
     /// policy: it answers for every target, so `hitTest(at:)` → `ScoreSelection.single` is one step.
     /// `.stem` / `.flag` / `.beam` resolve to the first notehead they carry, as they do there.
@@ -126,6 +147,59 @@ extension ScoreHitTarget {
             return notes.first.map(ScoreItemID.note)
         case .lyric, .staffText, .harmony, .rehearsalMark:
             return textID.map(ScoreItemID.text)
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation:
+            return elementID.map(ScoreItemID.element)
+        }
+    }
+
+    /// Re-wraps an element identity without changing its address or kind.
+    public init(elementID id: ScoreElementID) {
+        switch id {
+        case let .dynamic(anchor):
+            self = .dynamic(anchor: anchor)
+        case let .fermata(anchor):
+            self = .fermata(anchor: anchor)
+        case let .breath(anchor):
+            self = .breath(anchor: anchor)
+        case let .tempo(anchor):
+            self = .tempo(anchor: anchor)
+        case let .spanner(anchor, kind):
+            self = .spanner(anchor: anchor, kind: kind)
+        case let .keySignature(measureIndex):
+            self = .keySignature(measureIndex: measureIndex)
+        case let .timeSignature(measureIndex):
+            self = .timeSignature(measureIndex: measureIndex)
+        case let .barLine(measureIndex, role):
+            self = .barLine(measureIndex: measureIndex, role: role)
+        case let .articulation(anchor, kind):
+            self = .articulation(anchor: anchor, kind: kind)
+        }
+    }
+
+    /// This target's element identity. Targets outside the engraved-element vocabulary report `nil`.
+    public var elementID: ScoreElementID? {
+        switch self {
+        case let .dynamic(anchor):
+            return .dynamic(anchor: anchor)
+        case let .fermata(anchor):
+            return .fermata(anchor: anchor)
+        case let .breath(anchor):
+            return .breath(anchor: anchor)
+        case let .tempo(anchor):
+            return .tempo(anchor: anchor)
+        case let .spanner(anchor, kind):
+            return .spanner(anchor: anchor, kind: kind)
+        case let .keySignature(measureIndex):
+            return .keySignature(measureIndex: measureIndex)
+        case let .timeSignature(measureIndex):
+            return .timeSignature(measureIndex: measureIndex)
+        case let .barLine(measureIndex, role):
+            return .barLine(measureIndex: measureIndex, role: role)
+        case let .articulation(anchor, kind):
+            return .articulation(anchor: anchor, kind: kind)
+        case .note, .rest, .stem, .flag, .beam, .tuplet, .clef,
+             .lyric, .staffText, .harmony, .rehearsalMark:
+            return nil
         }
     }
 }

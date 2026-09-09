@@ -31,6 +31,20 @@ extension Score {
             )))
         case let .text(textID):
             return .item(.text(textID.withStaff(full)))
+        case let .element(elementID):
+            switch elementID {
+            case let .dynamic(anchor): return .item(.element(.dynamic(anchor: anchor.withStaff(full))))
+            case let .fermata(anchor): return .item(.element(.fermata(anchor: anchor.withStaff(full))))
+            case let .breath(anchor): return .item(.element(.breath(anchor: anchor.withStaff(full))))
+            case let .tempo(anchor): return .item(.element(.tempo(anchor: anchor.withStaff(full))))
+            case let .spanner(anchor, kind):
+                return .item(.element(.spanner(anchor: anchor.withStaff(full), kind: kind)))
+            case let .articulation(anchor, kind):
+                return .item(.element(.articulation(anchor: anchor.withStaff(full), kind: kind)))
+            case .keySignature, .timeSignature, .barLine:
+                // Bar addresses have no staff field to re-stamp; this is not a deferred remapping.
+                return cursor
+            }
         case .clef:
             // Deliberately NOT re-addressed — but only because nothing produces a `.clef` cursor today:
             // `editingHitTest` drops clef hits (no clef editing UI in v1) and the playback engine never
@@ -105,11 +119,14 @@ extension Score {
     ///
     /// `.beat` cursors and visible-staff `.item` values whose full and filtered addresses already match pass
     /// through unchanged. This is the playback-side mirror of `engineCursorForFilteredTap` (tap → engine).
+    /// Bar-addressed element identities also pass through: their approximate staff is not a field to remap.
     public func translateCursorForHiddenStaves(
         _ cursor: ScoreCursor?, hiddenStaves hidden: Set<StaffAddress>,
     ) -> ScoreCursor? {
         guard let cursor else { return nil }
         guard !hidden.isEmpty, case let .item(id) = cursor else { return cursor }
+        // The top-staff approximation is not an owned staff and must not trigger the hidden-staff beat fallback.
+        if id.elementID?.measureIndexIfAddressedByBar != nil { return cursor }
         if hidden.contains(id.staff) {
             guard let tick = resolveTickInMeasure(for: id) else { return cursor }
             return .beat(measureIndex: id.measureIndex, tickInMeasure: tick)
@@ -135,6 +152,20 @@ extension Score {
             )))
         case let .text(textID):
             return .item(.text(textID.withStaff(filteredStaff)))
+        case let .element(elementID):
+            switch elementID {
+            case let .dynamic(anchor): return .item(.element(.dynamic(anchor: anchor.withStaff(filteredStaff))))
+            case let .fermata(anchor): return .item(.element(.fermata(anchor: anchor.withStaff(filteredStaff))))
+            case let .breath(anchor): return .item(.element(.breath(anchor: anchor.withStaff(filteredStaff))))
+            case let .tempo(anchor): return .item(.element(.tempo(anchor: anchor.withStaff(filteredStaff))))
+            case let .spanner(anchor, kind):
+                return .item(.element(.spanner(anchor: anchor.withStaff(filteredStaff), kind: kind)))
+            case let .articulation(anchor, kind):
+                return .item(.element(.articulation(anchor: anchor.withStaff(filteredStaff), kind: kind)))
+            case .keySignature, .timeSignature, .barLine:
+                // Bar addresses have no staff field to re-stamp; this is not a deferred remapping.
+                return cursor
+            }
         case .clef:
             // Same deliberate gap as `engineCursorForFilteredTap`'s `.clef` case (see the comment there):
             // no producer exists, and any future one must re-stamp instead of passing through.
