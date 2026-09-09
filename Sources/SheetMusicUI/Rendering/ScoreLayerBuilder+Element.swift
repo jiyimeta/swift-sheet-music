@@ -202,6 +202,11 @@ extension ScoreLayerBuilder {
                 height: height,
             ) {
                 parent.addSublayer(layer)
+                // One syllable, one selectable item — never the verse
+                // row, and never the hyphen / melisma rules between
+                // syllables, which are their own elements. See
+                // `ScoreTextID` for the MuseScore rule this follows.
+                attachText(element, layer, context: &context)
             }
         case let .beam(from, to, direction, level, beamColor):
             drawBeam(
@@ -291,11 +296,17 @@ extension ScoreLayerBuilder {
                 metrics: metrics, height: height, into: parent,
             )
         case let .rehearsalMark(text, p, frame, color, _):
-            drawRehearsalMark(
+            // The frame is attached alongside the letter: MuseScore
+            // tints a selected text's frame too, from the same
+            // `curColor` (`TDraw::drawTextBase`), so a selected boxed
+            // "A" turns blue box and all.
+            for layer in drawRehearsalMark(
                 text: text, origin: shift(p), frame: frame,
                 color: color.map(scoreColorToCGColor) ?? Self.inkColor,
                 metrics: metrics, height: height, into: parent,
-            )
+            ) {
+                attachText(element, layer, context: &context)
+            }
         case let .jump(text, p):
             if !text.isEmpty,
                let layer = textLayer(
@@ -352,6 +363,7 @@ extension ScoreLayerBuilder {
                )
             {
                 parent.addSublayer(layer)
+                attachText(element, layer, context: &context)
             }
         case let .harmony(lh):
             // Per-run dispatch: text runs go through the
@@ -392,6 +404,7 @@ extension ScoreLayerBuilder {
                         height: height,
                     ) {
                         parent.addSublayer(layer)
+                        attachText(element, layer, context: &context)
                     }
                 case let .accidental(acc):
                     if let layer = textLayer(
@@ -404,6 +417,9 @@ extension ScoreLayerBuilder {
                         height: height,
                     ) {
                         parent.addSublayer(layer)
+                        // Every run, text and SMuFL accidental alike:
+                        // "Cm♭5" is one chord symbol and tints whole.
+                        attachText(element, layer, context: &context)
                     }
                 }
             }
@@ -472,6 +488,20 @@ extension ScoreLayerBuilder {
         case .note:
             break
         }
+    }
+
+    /// Registers `layer` as part of the engraved text `element` draws, so a selection naming that text can
+    /// re-tint it. A no-op for an element that is not addressable text.
+    ///
+    /// The predicate is `LayoutElement.textID`, the same one `ScoreHitTester` reports a hit from — so what
+    /// a click can select and what a selection can tint are one decision, not two that could drift.
+    private static func attachText(
+        _ element: LayoutElement,
+        _ layer: CAShapeLayer,
+        context: inout BuildContext,
+    ) {
+        guard let id = element.textItemID else { return }
+        context.attach(layer, to: id)
     }
 
     // MARK: - Melisma
