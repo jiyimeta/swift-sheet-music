@@ -423,7 +423,7 @@ extension HarmonyTests {
         let lh = LayoutHarmony(
             harmony: Harmony(name: "F#"),
             anchorX: 100, y: -10,
-            runs: runs, width: 9.0,
+            runs: runs, width: 9.0, anchor: nil,
         )
         let element: LayoutElement = .harmony(lh)
         guard case let .harmony(unwrapped) = element else {

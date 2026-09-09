@@ -183,7 +183,7 @@ extension LayoutElementShape {
                 markKind: markKind, text: text, origin: origin,
                 kind: kind, metrics: metrics,
             )]
-        case let .staffText(text, origin, _, _):
+        case let .staffText(text, origin, _, _, _):
             return [textRect(
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,
@@ -198,7 +198,7 @@ extension LayoutElementShape {
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .leadingCenter,
             )]
-        case let .rehearsalMark(text, origin, frame, _):
+        case let .rehearsalMark(text, origin, frame, _, _):
             return [rehearsalMarkRect(
                 text: text, origin: origin, frame: frame,
                 metrics: metrics,

@@ -107,6 +107,8 @@ import Wirelet
 /// 71 = setLetRing(SetLetRingIntentWire)
 /// 72 = removeSpanner(RemoveSpannerIntentWire)
 /// 73 = setChordSymbol(SetChordSymbolIntentWire)
+/// 74 = setLyricSyllables(SetLyricSyllablesIntentWire)
+/// 75 = setTextVisible(SetTextVisibleIntentWire)
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -115,7 +117,8 @@ import Wirelet
 /// for the edit-command parity project's structural group (spec 2026-09-02). Cases 35…40 were appended for its
 /// range group. Cases 41…49 were appended for its mark group. Cases 50…57 were appended for its note / chord
 /// group. Cases 58…61 were appended for its visibility group. Cases 62…72 were appended for its spanner group.
-/// Case 73 was appended for its harmony group, and is the catalogue's last.
+/// Case 73 was appended for its harmony group. Cases 74 and 75 were appended for the macOS score-text-entry
+/// project (spec 2026-09-07), and 75 is the catalogue's last.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -731,6 +734,30 @@ import Wirelet
 /// tag 3: name         string — the symbol as typed ("Am7", "bVII", "C/E"); "" when hasName == 0
 /// tag 4: harmonyType  u8, varint — 0 standard / 1 roman / 2 nashville, else throws; 0 when hasName == 0
 /// ```
+///
+/// `SetLyricSyllablesIntentWire` (`setLyricSyllables`'s payload). Repeated, like `setJumps` and `setMarkers`
+/// before it, but for a different reason: those carry a list because a bar's jumps ARE a list, while this one
+/// carries a list because one lyric keystroke plans up to three writes that have to land as one undo step:
+/// ```
+/// tag 1: writes  repeated LyricSyllableWriteWire — may be empty, which the far side plans as nothing to apply
+/// ```
+///
+/// `LyricSyllableWriteWire` fields, in tag order:
+/// ```
+/// tag 1: location   VoiceElementIDWire, see PathIDCodecs.swift
+/// tag 2: verse      i32, zig-zag varint
+/// tag 3: hasText    u8, varint — 0 = remove this verse's syllable, 1 = write `text`
+/// tag 4: text       string — the syllable as typed; "" when hasText == 0
+/// tag 5: syllabic   u8, varint — 0 single / 1 begin / 2 middle / 3 end, else throws; 0 when hasText == 0
+/// tag 6: ticks      i32, zig-zag varint — melisma length, 0 for none; 0 when hasText == 0
+/// ```
+///
+/// `SetTextVisibleIntentWire` (`setTextVisible`'s payload). The only intent addressed by a `ScoreTextID` rather
+/// than a `VoiceElementID` / `NoteID` / range — the identity a click on engraved text produces:
+/// ```
+/// tag 1: text     ScoreTextIDWire, see ScoreItemIDCodec.swift (lyric / staffText / harmony / rehearsalMark)
+/// tag 2: visible  u8, varint — 0 hidden, non-zero shown (the same rule as intents 58…61)
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -1025,6 +1052,12 @@ public enum EditIntentWire {
     /// Appended for the edit-command parity project's harmony group (spec 2026-09-02) — index 73. Never renumber
     /// anything above it.
     case setChordSymbol(SetChordSymbolIntentWire)
+    /// Appended for the macOS score-text-entry project (spec 2026-09-07) — index 74. Never renumber anything above
+    /// it.
+    case setLyricSyllables(SetLyricSyllablesIntentWire)
+    /// Appended for the macOS score-text-entry project (spec 2026-09-07) — index 75. Never renumber anything above
+    /// it.
+    case setTextVisible(SetTextVisibleIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1211,6 +1244,10 @@ public enum EditIntentWire {
             self = .removeSpanner(RemoveSpannerIntentWire(location: location, kind: kind))
         case let .setChordSymbol(location, name, harmonyType):
             self = .setChordSymbol(SetChordSymbolIntentWire(location: location, name: name, harmonyType: harmonyType))
+        case let .setLyricSyllables(writes):
+            self = .setLyricSyllables(SetLyricSyllablesIntentWire(writes: writes))
+        case let .setTextVisible(text, visible):
+            self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
         }
     }
 
@@ -1454,6 +1491,11 @@ public enum EditIntentWire {
         case let .setChordSymbol(wire):
             let decoded = try wire.decoded()
             return .setChordSymbol(at: decoded.location, name: decoded.name, harmonyType: decoded.harmonyType)
+        case let .setLyricSyllables(wire):
+            return try .setLyricSyllables(writes: wire.decoded())
+        case let .setTextVisible(wire):
+            let decoded = wire.decoded()
+            return .setTextVisible(text: decoded.text, visible: decoded.visible)
         }
     }
 }

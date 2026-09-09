@@ -294,8 +294,8 @@ extension ScoreLayerBuilder {
         frame: TextFrameType, color: CGColor,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
-    ) {
-        guard !text.isEmpty else { return }
+    ) -> [CAShapeLayer] {
+        guard !text.isEmpty else { return [] }
         // MuseScore `Sid::rehearsalMarkFontSize` = 14 pt with
         // `FontSpatiumDependent = true`; resolved through
         // `TextStyleType.rehearsalMark` (Edwin 14 pt bold).
@@ -327,6 +327,7 @@ extension ScoreLayerBuilder {
             x: origin.x + pad, y: origin.y - pad,
         )
 
+        var built: [CAShapeLayer] = []
         if let layer = textLayer(
             text: text, at: textOrigin,
             size: textSize, italic: style.isItalic,
@@ -336,6 +337,7 @@ extension ScoreLayerBuilder {
             height: height,
         ) {
             parent.addSublayer(layer)
+            built.append(layer)
         }
 
         let boxRect = RehearsalMarkFrame.boxRect(
@@ -353,10 +355,13 @@ extension ScoreLayerBuilder {
             framePath = CGPath(ellipseIn: rect, transform: nil)
         }
         if let fp = framePath {
-            parent.addSublayer(strokeLayer(
+            let frameLayer = strokeLayer(
                 path: fp, height: height,
                 lineWidth: lineWidth, color: color,
-            ))
+            )
+            parent.addSublayer(frameLayer)
+            built.append(frameLayer)
         }
+        return built
     }
 }

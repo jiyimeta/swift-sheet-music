@@ -42,9 +42,10 @@ extension LayoutDocument {
     /// chord at `voiceElementID`. Used to anchor an inline lyric editor
     /// exactly where the rendered glyph sits.
     ///
-    /// Strategy:
-    /// 1. Prefer an existing verse-0 lyric mark, whose Y is the exact
-    ///    base shared across the measure.
+    /// Strategy — every step scoped to `voiceElementID.staff`, since
+    /// each staff carries its own lyric line:
+    /// 1. Prefer an existing verse-0 lyric mark ON THIS STAFF, whose Y
+    ///    is the exact base shared across the measure.
     /// 2. If only a higher verse is present, derive the base by removing
     ///    that mark's indexed verse offset.
     /// 3. Else fall back to the placement engine's per-system
@@ -66,9 +67,17 @@ extension LayoutDocument {
                 else { return nil }
                 var higherVerseMark: (y: CGFloat, verse: Int)?
                 for el in measure.elements {
+                    // `measure.elements` aggregates EVERY staff in the
+                    // measure, in staff order, so an unfiltered scan
+                    // hands each caret the topmost lyric-carrying
+                    // staff's line. Only a mark anchored on this staff
+                    // describes this staff's lyric line; the no-mark
+                    // fallback below was already staff-aware, which is
+                    // why an empty bar answered correctly and a bar
+                    // with one syllable answered it for every staff.
                     if case let .textMark(
-                        .lyrics(_, markVerse, _), _, p,
-                    ) = el {
+                        .lyrics(_, markVerse, markAnchor), _, p,
+                    ) = el, markAnchor?.staff == voiceElementID.staff {
                         let y = system.origin.y + measure.origin.y + p.y
                         if markVerse == 0 {
                             return y + CGFloat(verse) * system.sp

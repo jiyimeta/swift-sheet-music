@@ -49,6 +49,37 @@ and this project adheres to
   and `PDFPageView` maps document coordinates by them, so a non-default
   `spacing.margins` acts as a second margin inside the page margin.
 
+- **A lyric keystroke is one undo step.** `EditIntent.setLyricSyllables(writes:)` carries a list rather
+  than a single write because one keystroke can be up to three `SetLyric`s — the syllable typed, and the
+  repair of a neighbour whose hyphen or melisma the terminator changed. Bundling them at the intent means
+  the host cannot accidentally record two undo steps for one key, and one rule decides the bundling for
+  both the plan and the intent. Wire index 74.
+
+- **Engraved text can be hit-tested.** `ScoreHitTarget` gained `.lyric(anchor:verse:)`,
+  `.staffText(anchor:style:)`, `.harmony(anchor:)` and `.rehearsalMark(measureIndex:)`, and
+  `ScoreHitTester.textHitRect(for:)` hands back the box behind a hit — the **ink** box, not a padded one,
+  because a highlight drawn on the padded box is visibly larger than the type. Text ranks eighth in the
+  hit ladder, so a notehead click never reports text.
+
+  This rests on staff text, harmonies and rehearsal marks now carrying **identity** in the layout. Before
+  that they could only be found by matching their text and position, which is not identity: the same
+  string at two places, or a string that changes as it is typed, defeats it. The proximity fallback that
+  existed for it is deleted.
+
+- **A text can be selected and is tinted like a selected notehead.** `ScoreItemID` gained one case,
+  `.text(ScoreTextID)`, whose four kinds carry the same case names, labels and payloads as the hit
+  target's — so a hit becomes a selection by re-wrapping, with no translation table to drift. The tint is
+  **per syllable**, matching MuseScore, where `Lyrics` is one element per syllable and nothing in the
+  selection path treats a verse row as a unit. A rehearsal mark's frame is tinted with it; hyphens and
+  melisma lines are not, since they carry their own colour.
+
+- **`SetTextVisible` hides the text rather than the chord under it.** `SetElementVisible` takes a
+  `VoiceElementID`, so on a lyric it hid the chord: a lyric is a field inside `Chord.lyrics`, and staff
+  text, system text and rehearsal marks are `SystemElement`s in the lane. One command covers all four
+  because the identity is already one type and only the address differs; its chord-symbol arm delegates
+  to `SetElementVisible`, where the write already existed and only the address was missing — and that
+  address is an `internal` slot search, so no host could have supplied it. Wire index 75.
+
 ### Fixed
 
 - **A wide key signature no longer collides with the time signature beside
@@ -71,6 +102,41 @@ and this project adheres to
   Headers with a key signature of four or more accidentals get wider; every
   other header moves by less than a staff space. Nothing changes in the
   distance from the time signature to the first note.
+
+- **A lyric line belongs to one staff.** `lyricLineY` scanned the measure for a verse-0 mark, but
+  `LayoutMeasure.elements` aggregates every staff in staff order, so an unfiltered scan handed every
+  caret the topmost lyric-carrying staff's line. Measured on two parts at sp 7: with no lyrics the two
+  staves answered 73.5 / 136.5, correctly; with one syllable on the lower staff both answered 147.7. The
+  no-mark fallback was already staff-aware, which is exactly why an empty bar looked right and one
+  syllable broke every staff at once.
+
+- **A lane mark is found by its beat, not by its element index.** `staffTextOrigin` could not match two
+  anchors its own documentation named: another voice at the same beat (layout anchors the mark to the
+  lowest-numbered voice present) and a system text queried from any staff but the canonical one (element
+  5 of a bar in part 2 is not element 5 of that bar on staff 0). It now resolves the anchor to a tick and
+  asks the layout what it filed there, calling into the placement code's own arithmetic rather than
+  restating it. The beat is relaxed; the staff is not.
+
+- **A lyric hyphen crosses a barline and a system break.** The trail reset per measure, so a word split
+  across a barline silently lost its hyphen — which real lyrics do constantly. MuseScore draws the hyphen
+  as a per-**system** spanner rather than a trail, and that decides the shape: a short barline crossing
+  gets one dash across the barline, not one per side. Both halves of a system break are drawn, including
+  MuseScore's `lyricsDashMinLength` back-off.
+
+- **Deselecting restores the ink a layer was built with.** It reset to a global ink colour instead, so
+  author-supplied `<color>` on a text — and on a notehead, which was already broken this way — was lost
+  the first time the element was selected.
+
+- **`stableFingerprint` hashes a text's visibility.** It did not, so the replay mirror called a failed
+  hide equal to a successful one: the first recording of the visibility chain produced 9 distinct
+  fingerprints for 16 steps. Closed by occupying free tags, so no existing fingerprint moved.
+
+- **The layout golden's committed digest was stale.** The gate is `.enabled(if: SM_LAYOUT_GOLDEN == "1")`
+  and is therefore skipped by an ordinary `swift test`, which is how it drifted unseen — main's own output
+  had already stopped matching the committed hash before this work began. Re-recorded after reading the
+  diff rather than to make the gate pass: every changed line was an `el` line gaining its new `anchor:`
+  field, with every origin, width and advance byte-identical. Note the corpus contains no lyrics and no
+  rehearsal marks, so a green gate is not coverage for those.
 
 - **Android instrumented tests now run in CI.** The step shipped in 2.6.0 never
   passed a CI run: GitHub's arm64 macOS runners cannot start any Android

@@ -93,6 +93,11 @@ extension LayoutDocument {
     /// Reduces a raw hit-test target to the `ScoreItemID` that tapping it selects. `.stem`/`.flag`/`.beam` all
     /// select the first notehead they carry (there's no dedicated selection UI for those geometric elements yet);
     /// `.clef` has no v1 editing UI and is dropped.
+    ///
+    /// The four text targets are dropped too, and deliberately: what a click on a lyric MEANS — open a caret,
+    /// select the note it hangs from, do nothing — is host policy, and answering with the anchor's note here
+    /// would silently move the note selection every time someone aimed at a syllable. A host that wants a text
+    /// hit reads it from `ScoreHitTester.hitTest(at:)` directly.
     private static func selectableItem(from target: ScoreHitTarget) -> ScoreItemID? {
         switch target {
         case let .note(id): .note(id)
@@ -100,7 +105,7 @@ extension LayoutDocument {
         case let .tuplet(id): .tuplet(id)
         case let .stem(notes), let .flag(notes), let .beam(notes):
             notes.first.map(ScoreItemID.note)
-        case .clef:
+        case .clef, .lyric, .staffText, .harmony, .rehearsalMark:
             nil
         }
     }

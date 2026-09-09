@@ -9,10 +9,11 @@
     /// The host half of SP0/SP1's acceptance test: every `ReplayChain`'s steps, run through the same JNI entry
     /// points a device calls, with the resulting wire bytes and fingerprints committed as instrumented-test assets
     /// under `Android/SheetMusicAndroid/src/androidTest/assets/<chain.androidAssetDir>/`. One Kotlin test per chain
-    /// (`EditSessionReplayTest.kt` for `standard`, `EditSessionReplayParityTest.kt` for `parity`) reads those
-    /// assets back and replays them on-device via `nativeApplyEditIntent` / `nativeEditUndo`, asserting the same
-    /// fingerprints this test computes. Each one's `EXPECTED_STEP_COUNT` tracks its chain's step count by hand — a
-    /// step added to a chain has to move that constant too.
+    /// (`EditSessionReplayTest.kt` for `standard`, `EditSessionReplayParityTest.kt` for `parity`,
+    /// `EditSessionReplayLyricsTest.kt` for `lyrics`) reads those assets back and replays them on-device via
+    /// `nativeApplyEditIntent` / `nativeEditUndo`, asserting the same fingerprints this test computes. Each one's
+    /// `EXPECTED_STEP_COUNT` tracks its chain's step count by hand — a step added to a chain has to move that
+    /// constant too.
     ///
     /// Kotlin never builds an intent here, because it never does in production either: the host's Swift core is
     /// always the one that applies an intent to its authoritative score and encodes it, and Kotlin's job is only to
@@ -38,6 +39,14 @@
     /// overwrite the committed assets first, and the same comparison then trivially passes. Re-run without the
     /// environment variable afterward to confirm the newly recorded assets are what's about to be committed, and
     /// `git diff` the chain's asset directory to review exactly what changed before committing it.
+    ///
+    /// **Recording a brand-new chain: run this suite before `EditReplayWebGoldenTests`, or run the whole
+    /// `SM_EDIT_REPLAY_RECORD=1` pass twice.** `EditReplayWebGoldenTests.verify(chain:...)` reads this suite's
+    /// `goldens.txt` (`androidGoldensPath(for:)`) to cross-check the web fixture, and Swift Testing runs suites in
+    /// parallel — for a chain recorded for the first time, that file does not exist until `record(chain:...)` below
+    /// has written it once. Harmless for an already-recorded chain (the file is already there, and `record` writes
+    /// it `atomically`), and the failure mode is a false FAILURE on that one run, never a false pass — but it costs
+    /// a re-run, which running this suite's record first, or recording twice, avoids.
     @Suite("Edit replay goldens")
     struct EditReplayGoldenTests {
         private static let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
