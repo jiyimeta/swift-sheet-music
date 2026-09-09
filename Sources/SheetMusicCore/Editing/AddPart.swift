@@ -44,7 +44,7 @@ public struct AddPart: EditCommand {
     public let plan: BlankScoreTemplate.PartPlan?
     /// Set only when this command is the inverse of a `RemovePart`: the removed part, whole, rather than one
     /// rebuilt from a plan.
-    let restoredPart: Part?
+    let restoredPart: (eid: EID, part: Part)?
     /// Also inverse-only: every staff's `brackets` array as it stood before the removal, indexed
     /// `[partIndex][staffIndexInPart]` over the PRE-removal parts. Restoring by whole-value overwrite is exact
     /// even though the removal's re-anchor pass is not a simple span decrement — a bracket whose anchor staff was
@@ -70,6 +70,7 @@ public struct AddPart: EditCommand {
 
     init(
         restoring part: Part,
+        eid: EID,
         at partIndex: Int,
         brackets: [[[BracketItem]]],
         originalStaves: [[StaffAddress?]],
@@ -77,7 +78,7 @@ public struct AddPart: EditCommand {
     ) {
         self.partIndex = partIndex
         plan = nil
-        restoredPart = part
+        restoredPart = (eid: eid, part: part)
         restoredBrackets = brackets
         restoredOriginalStaves = originalStaves
         restoredCanonicalFlags = canonicalFlags
@@ -99,10 +100,10 @@ public struct AddPart: EditCommand {
         }
 
         if let restoredPart {
-            var restored = restoredPart
+            var restored = restoredPart.part
             restored.staves.assignMissingIDs(using: &ids)
             let anchor = partIndex == 0 ? nil : score.parts.eid(at: partIndex - 1)
-            score.parts.insert(restored, after: anchor, id: ids.next())
+            score.parts.insert(restored, after: anchor, id: restoredPart.eid)
             restore(&score)
             return RemovePart(partIndex: partIndex)
         }

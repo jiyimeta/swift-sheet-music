@@ -110,6 +110,8 @@ enum RebarPlanner {
             },
             systemMeasure: score.systemMeasures.indices.contains(measureIndex)
                 ? score.systemMeasures[measureIndex] : SystemMeasure(),
+            systemMeasureEID: score.systemMeasures.indices.contains(measureIndex)
+                ? score.systemMeasures.eid(at: measureIndex) : nil,
         )
     }
 
@@ -147,6 +149,7 @@ enum RebarPlanner {
             MeasureSlice(
                 staffMeasures: staffColumns.map { part in part.map { $0[column] } },
                 systemMeasure: lanes[column],
+                systemMeasureEID: nil,
             )
         }
     }

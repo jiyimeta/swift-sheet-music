@@ -45,6 +45,7 @@ public struct RemovePart: EditCommand {
         }
 
         let removed = score.parts[partIndex]
+        let removedID = score.parts.eid(at: partIndex)
         let brackets = score.parts.map { $0.staves.map(\.brackets) }
         let originalStaves = score.systemMeasures.map { $0.elements.map(\.originalStaff) }
 
@@ -67,7 +68,7 @@ public struct RemovePart: EditCommand {
         }
         let rebased = Score.reanchoredBrackets(in: score.parts.values, survivorLocations: survivorLocations)
 
-        score.parts.remove(eid: score.parts.eid(at: partIndex))
+        score.parts.remove(eid: removedID)
         for part in score.parts.indices {
             for staff in score.parts[part].staves.indices {
                 score.parts.updateValue(at: part) { partValue in
@@ -90,7 +91,7 @@ public struct RemovePart: EditCommand {
             MeasureFlagsHoist.write(removedFlags, to: Score.canonicalStaff, in: &score)
         }
         return AddPart(
-            restoring: removed, at: partIndex,
+            restoring: removed, eid: removedID, at: partIndex,
             brackets: brackets, originalStaves: originalStaves, canonicalFlags: canonicalFlagsBefore,
         )
     }

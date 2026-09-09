@@ -144,6 +144,8 @@ enum TimeSignatureRegion {
                 },
                 systemMeasure: score.systemMeasures.indices.contains(measureIndex)
                     ? score.systemMeasures[measureIndex] : SystemMeasure(),
+                systemMeasureEID: score.systemMeasures.indices.contains(measureIndex)
+                    ? score.systemMeasures.eid(at: measureIndex) : nil,
             )
         }
     }

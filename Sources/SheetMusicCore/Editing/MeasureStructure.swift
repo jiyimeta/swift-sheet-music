@@ -143,6 +143,7 @@ enum MeasureStructure {
                 part.staves.map { _ in Measure(voices: [Voice(elements: [.rest(duration: .measure)])]) }
             },
             systemMeasure: SystemMeasure(),
+            systemMeasureEID: nil,
         )
     }
 

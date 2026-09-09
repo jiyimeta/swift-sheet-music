@@ -142,8 +142,15 @@ public struct InsertMeasure: EditCommand {
         // never maintained the invariant (see `MeasureSlice`'s `EditingFixtures` callout) must come back
         // out exactly as empty as it went in, not partially patched.
         if score.systemMeasures.count == preInsertMeasureCount {
+            let eid: EID
+            if let restoredContents {
+                guard let restoredID = restoredContents.systemMeasureEID else { return }
+                eid = restoredID
+            } else {
+                eid = ids.next()
+            }
             let anchor = measureIndex == 0 ? nil : score.systemMeasures.eid(at: measureIndex - 1)
-            score.systemMeasures.insert(column.systemMeasure, after: anchor, id: ids.next())
+            score.systemMeasures.insert(column.systemMeasure, after: anchor, id: eid)
         }
     }
 }

@@ -29,11 +29,11 @@ public struct DeleteMeasure: EditCommand {
         }
 
         let slice = MeasureSlice(
-            staffMeasures: score.parts.map { part in
-                part.staves.map { $0.measures[measureIndex] }
-            },
+            staffMeasures: score.parts.map { $0.staves.map { $0.measures[measureIndex] } },
             systemMeasure: score.systemMeasures.indices.contains(measureIndex)
                 ? score.systemMeasures[measureIndex] : SystemMeasure(),
+            systemMeasureEID: score.systemMeasures.indices.contains(measureIndex)
+                ? score.systemMeasures.eid(at: measureIndex) : nil,
         )
 
         // Run before removal so anchor measure indices are still pre-delete, matching the insert direction.
