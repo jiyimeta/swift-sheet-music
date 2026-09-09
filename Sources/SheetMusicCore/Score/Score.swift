@@ -3,7 +3,7 @@ import SheetMusicFoundation
 /// Root of the parsed MuseScore document. C++: `mu::engraving::MasterScore`/`Score`.
 public struct Score: Sendable, Equatable {
     public var division: Int
-    public var parts: [Part]
+    public var parts: IdentifiedArray<Part>
     /// System-level content for each measure, indexed positionally:
     /// `systemMeasures[i]` corresponds to measure index `i` across
     /// every part/staff. Holds tempo / rehearsal mark / system text
@@ -70,7 +70,7 @@ public struct Score: Sendable, Equatable {
 
     public init(
         division: Int,
-        parts: [Part] = [],
+        parts: IdentifiedArray<Part> = [],
         systemMeasures: IdentifiedArray<SystemMeasure> = [],
         metaTags: [String: String] = [:],
         titleFrame: ScoreFrame? = nil,
@@ -101,16 +101,20 @@ public struct Score: Sendable, Equatable {
     }
 
     /// Whether any currently identified collection contains an unassigned slot.
-    /// Task 2 covers systemMeasures; Task 3 extends this to parts and staves,
-    /// and P2b/P3 extend it to the remaining identified collections.
+    /// Covers parts, their staves, and systemMeasures. P2b/P3 extend this
+    /// traversal to the remaining identified collections.
     public var hasUnassignedIDs: Bool {
-        systemMeasures.hasUnassignedIDs
+        parts.hasUnassignedIDs || parts.contains { $0.staves.hasUnassignedIDs } || systemMeasures.hasUnassignedIDs
     }
 
     /// Fills only missing IDs on entry, preserving all assigned identifiers.
-    /// Extend this traversal alongside hasUnassignedIDs as later tasks identify
-    /// parts, staves, voice contents, and chord notes.
+    /// P2b/P3 extend this traversal alongside hasUnassignedIDs as they identify
+    /// voice contents and chord notes.
     public mutating func assignMissingIDs(using ids: inout EIDAllocator) {
+        parts.assignMissingIDs(using: &ids)
+        for index in parts.indices {
+            parts.updateValue(at: index) { $0.staves.assignMissingIDs(using: &ids) }
+        }
         systemMeasures.assignMissingIDs(using: &ids)
     }
 
@@ -144,16 +148,32 @@ public struct Score: Sendable, Equatable {
             }
         }
         for partIndex in stripped.parts.indices {
-            stripped.parts[partIndex].preservedMarkup = []
-            stripPreservedMarkup(from: &stripped.parts[partIndex].instrument)
+            stripped.parts.updateValue(at: partIndex) { partValue in
+                partValue.preservedMarkup = []
+            }
+            stripped.parts.updateValue(at: partIndex) { partValue in
+                stripPreservedMarkup(from: &partValue.instrument)
+            }
             for staffIndex in stripped.parts[partIndex].staves.indices {
-                stripped.parts[partIndex].staves[staffIndex].staffTypePreservedMarkup = []
-                stripped.parts[partIndex].staves[staffIndex].preservedMarkup = []
+                stripped.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        staffValue.staffTypePreservedMarkup = []
+                    }
+                }
+                stripped.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        staffValue.preservedMarkup = []
+                    }
+                }
                 for measureIndex in stripped.parts[partIndex].staves[staffIndex].measures.indices {
-                    stripPreservedMarkup(
-                        from: &stripped.parts[partIndex].staves[staffIndex]
-                            .measures[measureIndex],
-                    )
+                    stripped.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            stripPreservedMarkup(
+                                from: &staffValue
+                                    .measures[measureIndex],
+                            )
+                        }
+                    }
                 }
             }
         }

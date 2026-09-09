@@ -58,8 +58,12 @@ public struct InsertMeasure: EditCommand {
             if let incomingVoices = restoredIncomingVoice0, measureIndex < count {
                 for partIndex in score.parts.indices {
                     for staffIndex in score.parts[partIndex].staves.indices {
-                        score.parts[partIndex].staves[staffIndex].measures[measureIndex].voices[0] =
-                            incomingVoices[partIndex][staffIndex]
+                        score.parts.updateValue(at: partIndex) { partValue in
+                            partValue.staves.updateValue(at: staffIndex) { staffValue in
+                                staffValue.measures[measureIndex].voices[0] =
+                                    incomingVoices[partIndex][staffIndex]
+                            }
+                        }
                     }
                 }
             }
@@ -76,12 +80,20 @@ public struct InsertMeasure: EditCommand {
                     let oldVoice = score.parts[partIndex].staves[staffIndex].measures[0].voices[0]
                     let prefix = MeasureStructure.leadingSignaturePrefix(of: oldVoice)
                     guard !prefix.isEmpty else { continue }
-                    score.parts[partIndex].staves[staffIndex].measures[0].voices[0].elements
-                        .removeFirst(prefix.count)
-                    MeasureStructure.shiftTuplets(
-                        in: &score.parts[partIndex].staves[staffIndex].measures[0].voices[0],
-                        by: -prefix.count,
-                    )
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            staffValue.measures[0].voices[0].elements
+                                .removeFirst(prefix.count)
+                        }
+                    }
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            MeasureStructure.shiftTuplets(
+                                in: &staffValue.measures[0].voices[0],
+                                by: -prefix.count,
+                            )
+                        }
+                    }
                     column.staffMeasures[partIndex][staffIndex].voices[0].elements
                         .insert(contentsOf: prefix, at: 0)
                 }
@@ -118,8 +130,12 @@ public struct InsertMeasure: EditCommand {
         MeasureStructure.adjustSpannerOffsets(in: &score, forInsertionAt: measureIndex)
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
-                score.parts[partIndex].staves[staffIndex].measures
-                    .insert(column.staffMeasures[partIndex][staffIndex], at: measureIndex)
+                score.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        staffValue.measures
+                            .insert(column.staffMeasures[partIndex][staffIndex], at: measureIndex)
+                    }
+                }
             }
         }
         // Only keep `systemMeasures` parallel when it was already tracking every measure — a score that

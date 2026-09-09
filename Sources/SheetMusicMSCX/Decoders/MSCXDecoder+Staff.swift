@@ -240,7 +240,7 @@ func assembleParts( // swiftlint:disable:this function_body_length
             id: dp.partID,
             trackName: dp.trackName,
             instrument: dp.instrument,
-            staves: assembled,
+            staves: IdentifiedArray(assembled),
             isVisibleInScore: dp.isVisibleInScore,
             preservedMarkup: dp.preservedMarkup,
         ))

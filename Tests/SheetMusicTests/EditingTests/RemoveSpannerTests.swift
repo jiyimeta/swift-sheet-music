@@ -45,7 +45,11 @@ struct RemoveSpannerTests {
             survivor,
             Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 1),
         ]
-        score.parts[0].staves[0].measures[0].voices[0].elements[1] = .chord(head)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements[1] = .chord(head)
+            }
+        }
         _ = try RemoveSpanner(at: Self.slot(0, 1), kind: .slur).apply(to: &score)
         guard case let .chord(stripped) = score.parts[0].staves[0].measures[0].voices[0].elements[1] else {
             Issue.record("expected the C4"); return

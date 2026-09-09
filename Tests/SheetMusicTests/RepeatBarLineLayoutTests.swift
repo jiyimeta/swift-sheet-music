@@ -33,8 +33,16 @@
         @Test("start and end repeat flags on the canonical staff draw repeat barlines on every staff")
         func flagsDrawRepeatBars() {
             var score = EditingFixtures.parityFixture()
-            score.parts[0].staves[0].measures[1].startRepeat = true
-            score.parts[0].staves[0].measures[2].endRepeatCount = 2
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[1].startRepeat = true
+                }
+            }
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[2].endRepeatCount = 2
+                }
+            }
             let doc = LayoutEngine.layout(
                 score: score, options: ScoreViewOptions(), availableWidth: 900,
             )
@@ -57,9 +65,17 @@
         @Test("an explicit end-repeat BarLine element is not drawn twice")
         func explicitBarNotDuplicated() {
             var score = EditingFixtures.parityFixture()
-            score.parts[0].staves[0].measures[2].endRepeatCount = 2
-            score.parts[0].staves[0].measures[2].voices[0].elements
-                .append(.barLine(BarLine(subtype: "end-repeat")))
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[2].endRepeatCount = 2
+                }
+            }
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[2].voices[0].elements
+                        .append(.barLine(BarLine(subtype: "end-repeat")))
+                }
+            }
             let doc = LayoutEngine.layout(
                 score: score, options: ScoreViewOptions(), availableWidth: 900,
             )

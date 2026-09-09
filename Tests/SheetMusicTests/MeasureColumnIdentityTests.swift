@@ -14,6 +14,9 @@ struct MeasureColumnIdentityTests {
 
     private func bareScore() -> Score {
         var score = EditingFixtures.twoMeasuresOfQuarterRests()
+        // Keep these tests focused on unassigned columns as the identified spine grows.
+        var structuralIDs = EIDAllocator(actor: 99)
+        score.assignMissingIDs(using: &structuralIDs)
         score.systemMeasures = [column(1), column(2)]
         return score
     }
@@ -48,6 +51,8 @@ struct MeasureColumnIdentityTests {
 
     @Test func paddingMintsOnlyTheNewColumns() {
         var score = EditingFixtures.threeMeasuresOfQuarterRests()
+        var structuralIDs = EIDAllocator(actor: 99)
+        score.assignMissingIDs(using: &structuralIDs)
         score.systemMeasures = IdentifiedArray([(firstID, column(1))])
         var ids = EIDAllocator(actor: 42, counter: 1)
         RehearsalMarkLane.pad(&score, ids: &ids)

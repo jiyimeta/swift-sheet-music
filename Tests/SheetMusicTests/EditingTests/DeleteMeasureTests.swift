@@ -43,8 +43,12 @@ struct DeleteMeasureTests {
         // Give bar 1 its own key change; deleting bar 0 must keep it and only inherit the time signature —
         // ahead of it, per MuseScore's structural clef→key→time order, not wherever a blind prepend lands it.
         for staffIndex in score.parts[0].staves.indices {
-            score.parts[0].staves[staffIndex].measures[1].voices[0].elements
-                .insert(.keySignature(KeySignature(concertKey: 3)), at: 0)
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: staffIndex) { staffValue in
+                    staffValue.measures[1].voices[0].elements
+                        .insert(.keySignature(KeySignature(concertKey: 3)), at: 0)
+                }
+            }
         }
         _ = try DeleteMeasure(measureIndex: 0).apply(to: &score)
         for staff in score.parts[0].staves {
@@ -65,10 +69,18 @@ struct DeleteMeasureTests {
         ]
         // Bar 1 (the incoming first bar once bar 0 is deleted) was [rest]; give it 3 triplet members instead.
         for staffIndex in score.parts[0].staves.indices {
-            score.parts[0].staves[staffIndex].measures[1].voices[0].elements.replaceSubrange(0 ..< 1, with: members)
-            score.parts[0].staves[staffIndex].measures[1].voices[0].tuplets = [
-                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
-            ]
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: staffIndex) { staffValue in
+                    staffValue.measures[1].voices[0].elements.replaceSubrange(0 ..< 1, with: members)
+                }
+            }
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: staffIndex) { staffValue in
+                    staffValue.measures[1].voices[0].tuplets = [
+                        Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
+                    ]
+                }
+            }
         }
         let original = score
 
@@ -92,7 +104,11 @@ struct DeleteMeasureTests {
         // generic insertion predicate can't distinguish from "never touched this spanner" once the delete
         // has already shrunk the offset.
         let spanner = Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 1)
-        score.parts[0].staves[0].measures[0].voices[0].elements.append(.spanner(spanner))
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.append(.spanner(spanner))
+            }
+        }
         let original = score
 
         let inverse = try DeleteMeasure(measureIndex: 1).apply(to: &score)
@@ -114,7 +130,11 @@ struct DeleteMeasureTests {
         head.spanners = offsets.map {
             Spanner(kind: .slur, rawType: Spanner.Kind.slur.rawValue, nextMeasuresOffset: $0)
         }
-        score.parts[0].staves[0].measures[0].voices[0].elements[2] = .chord(head)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements[2] = .chord(head)
+            }
+        }
         return score
     }
 

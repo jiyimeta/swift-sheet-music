@@ -261,6 +261,10 @@ enum SignaturePrefixes {
               score.parts[partIndex].staves[staffIndex].measures.indices.contains(measureIndex),
               !score.parts[partIndex].staves[staffIndex].measures[measureIndex].voices.isEmpty
         else { return }
-        mutate(&score.parts[partIndex].staves[staffIndex].measures[measureIndex].voices[0])
+        score.parts.updateValue(at: partIndex) { partValue in
+            partValue.staves.updateValue(at: staffIndex) { staffValue in
+                mutate(&staffValue.measures[measureIndex].voices[0])
+            }
+        }
     }
 }

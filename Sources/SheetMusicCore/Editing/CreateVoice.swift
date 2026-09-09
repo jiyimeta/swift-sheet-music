@@ -48,9 +48,13 @@ public struct CreateVoice: EditCommand {
         guard voiceIndex == voiceCount else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
-        score.parts[p].staves[s].measures[measureIndex].voices.append(
-            Voice(elements: [.rest(duration: .measure)]),
-        )
+        score.parts.updateValue(at: p) { partValue in
+            partValue.staves.updateValue(at: s) { staffValue in
+                staffValue.measures[measureIndex].voices.append(
+                    Voice(elements: [.rest(duration: .measure)]),
+                )
+            }
+        }
         return RemoveVoice(staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex)
     }
 }
@@ -85,7 +89,11 @@ struct RemoveVoice: EditCommand {
         else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
-        score.parts[p].staves[s].measures[measureIndex].voices.removeLast()
+        score.parts.updateValue(at: p) { partValue in
+            partValue.staves.updateValue(at: s) { staffValue in
+                staffValue.measures[measureIndex].voices.removeLast()
+            }
+        }
         return CreateVoice(staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex)
     }
 }

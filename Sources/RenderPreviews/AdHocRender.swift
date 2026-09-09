@@ -96,8 +96,12 @@
                     let end = min(
                         clamped + max(0, count), measures.count,
                     )
-                    s.parts[p].staves[st].measures =
-                        Array(measures[clamped ..< end])
+                    s.parts.updateValue(at: p) { partValue in
+                        partValue.staves.updateValue(at: st) { staffValue in
+                            staffValue.measures =
+                                Array(measures[clamped ..< end])
+                        }
+                    }
                 }
             }
             return s

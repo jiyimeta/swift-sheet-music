@@ -38,10 +38,16 @@ struct SetChordSymbolTests {
     @Test("a file-authored symbol is replaced in place: parens and offsets survive, the tpcs do not")
     func replacesInPlace() throws {
         var score = EditingFixtures.parityFixture()
-        score.parts[0].staves[0].measures[0].voices[0].elements.insert(
-            .harmony(Harmony(name: "m7", rootTpc: 13, bassTpc: 12, leftParen: true, rightParen: true, offsetX: 1)),
-            at: 1,
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.insert(
+                    .harmony(Harmony(
+                        name: "m7", rootTpc: 13, bassTpc: 12, leftParen: true, rightParen: true, offsetX: 1,
+                    )),
+                    at: 1,
+                )
+            }
+        }
         // [ts, harmony, C4, D4, r, r]
         _ = try SetChordSymbol(at: Self.slot(0, 2), name: " Cmaj7 ", harmonyType: .standard).apply(to: &score)
         let elements = Self.elements(score, 0)
@@ -52,9 +58,13 @@ struct SetChordSymbolTests {
     @Test("the symbol is found past a dynamic in the same run")
     func findsThroughTheRun() throws {
         var score = EditingFixtures.parityFixture()
-        score.parts[0].staves[0].measures[0].voices[0].elements.insert(
-            contentsOf: [.harmony(Harmony(name: "C")), .dynamic(Dynamic(subtype: "p", velocity: 49))], at: 1,
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.insert(
+                    contentsOf: [.harmony(Harmony(name: "C")), .dynamic(Dynamic(subtype: "p", velocity: 49))], at: 1,
+                )
+            }
+        }
         // [ts, harmony, dyn, C4, D4, r, r]
         _ = try SetChordSymbol(at: Self.slot(0, 3), name: nil, harmonyType: .standard).apply(to: &score)
         let elements = Self.elements(score, 0)

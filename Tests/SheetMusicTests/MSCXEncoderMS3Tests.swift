@@ -224,7 +224,11 @@ struct MSCXEncoderMS3Tests {
         ]
         newElements.append(contentsOf: withoutKeySig)
         voice.elements = newElements
-        score.parts[0].staves[0].measures[0].voices[0] = voice
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = voice
+            }
+        }
 
         let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
         let root = try XMLTreeParser.parse(bytes)
@@ -249,7 +253,11 @@ struct MSCXEncoderMS3Tests {
         ]
         newElements.append(contentsOf: withoutKeySig)
         voice.elements = newElements
-        score.parts[0].staves[0].measures[0].voices[0] = voice
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = voice
+            }
+        }
 
         let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v3))
         let root = try XMLTreeParser.parse(bytes)
@@ -268,7 +276,11 @@ struct MSCXEncoderMS3Tests {
         guard score.parts[0].staves[0].measures.count >= 2 else { return }
         var v = score.parts[0].staves[0].measures[1].voices[0]
         v.elements.insert(.keySignature(KeySignature(concertKey: 2)), at: 0)
-        score.parts[0].staves[0].measures[1].voices[0] = v
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[0] = v
+            }
+        }
 
         let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
         let root = try XMLTreeParser.parse(bytes)
@@ -293,7 +305,11 @@ struct MSCXEncoderMS3Tests {
         ]
         newElements.append(contentsOf: withoutKeySig)
         voice.elements = newElements
-        score.parts[0].staves[0].measures[0].voices[0] = voice
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = voice
+            }
+        }
 
         let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
         let root = try XMLTreeParser.parse(bytes)
@@ -321,7 +337,11 @@ struct MSCXEncoderMS3Tests {
         ]
         newElements.append(contentsOf: withoutKeySig)
         voice.elements = newElements
-        score.parts[0].staves[0].measures[0].voices[0] = voice
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = voice
+            }
+        }
 
         let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v3))
         let root = try XMLTreeParser.parse(bytes)
@@ -384,7 +404,11 @@ struct MSCXEncoderMS3Tests {
         ]
         newElements.append(contentsOf: withoutKeySig)
         voice.elements = newElements
-        score.parts[0].staves[0].measures[0].voices[0] = voice
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = voice
+            }
+        }
 
         let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
         let root = try XMLTreeParser.parse(bytes)

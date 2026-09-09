@@ -170,7 +170,10 @@ struct ScoreEditSessionPartTests {
     @Test("duplicate baseline part ids report identity rather than a wrong answer")
     func mappingRefusesToGuessWithDuplicateIDs() {
         var score = duet()
-        score.parts[1].id = score.parts[0].id
+        let duplicateID = score.parts[0].id
+        score.parts.updateValue(at: 1) { partValue in
+            partValue.id = duplicateID
+        }
         let session = ScoreEditSession(score: score)
         #expect(session.apply(.movePart(from: 0, to: 1)))
         #expect(session.partIndexMapping == [0: 0, 1: 1])

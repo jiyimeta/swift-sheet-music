@@ -211,13 +211,17 @@
         func partRenameMisses() {
             guard #available(macOS 15.0, *) else { return }
             var score = Self.sampleScore()
-            score.parts[0].instrument.longName = "Flute"
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.instrument.longName = "Flute"
+            }
             let cache = LayoutCache()
             _ = LayoutEngine.layout(
                 score: score, options: .init(),
                 availableWidth: 800, cache: cache,
             )
-            score.parts[0].instrument.longName = "なおき"
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.instrument.longName = "なおき"
+            }
             let after = LayoutEngine.layout(
                 score: score, options: .init(),
                 availableWidth: 800, cache: cache,

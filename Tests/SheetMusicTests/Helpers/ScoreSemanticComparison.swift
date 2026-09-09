@@ -222,7 +222,7 @@ enum ScoreSemanticComparison {
             s.metaTags.removeValue(forKey: key)
         }
         if options.ignoreInstrumentPlaybackFields {
-            s.parts = s.parts.map { part in
+            s.parts.mapValues { part in
                 var p = part
                 // Part.id is format-specific ("P1" in MusicXML, "1" in MSCX).
                 p.id = ""
@@ -253,9 +253,9 @@ enum ScoreSemanticComparison {
         // `.measure` to `.fraction(1/1)` for cross-format comparison
         // (the actual bar duration is unknowable from a NoteDuration in
         // isolation — measure-resolution happens in renderers / encoders).
-        s.parts = s.parts.map { part in
+        s.parts.mapValues { part in
             var pt = part
-            pt.staves = pt.staves.map { staff in
+            pt.staves.mapValues { staff in
                 var st = staff
                 st.measures = st.measures.map { measure in
                     var m = measure

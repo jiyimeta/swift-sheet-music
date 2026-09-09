@@ -36,8 +36,12 @@ struct SetTimeSignatureTests {
             for staffIndex in part.staves.indices {
                 for measure in 0 ..< 4 {
                     let slot = measure == 0 ? 2 : 0
-                    score.parts[partIndex].staves[staffIndex].measures[measure].voices[0].elements[slot] =
-                        .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            staffValue.measures[measure].voices[0].elements[slot] =
+                                .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                        }
+                    }
                 }
             }
         }
@@ -59,11 +63,19 @@ struct SetTimeSignatureTests {
             for staffIndex in part.staves.indices {
                 for measure in 0 ..< 2 {
                     let slot = measure == 0 ? 2 : 0
-                    score.parts[partIndex].staves[staffIndex].measures[measure].voices[0].elements[slot] =
-                        .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            staffValue.measures[measure].voices[0].elements[slot] =
+                                .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                        }
+                    }
                 }
-                score.parts[partIndex].staves[staffIndex].measures[2].voices[0].elements
-                    .insert(.timeSignature(TimeSignature(numerator: 3, denominator: 4)), at: 0)
+                score.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        staffValue.measures[2].voices[0].elements
+                            .insert(.timeSignature(TimeSignature(numerator: 3, denominator: 4)), at: 0)
+                    }
+                }
             }
         }
         return score
@@ -201,17 +213,21 @@ struct SetTimeSignatureTests {
         var original = uniform44()
         let triplet = VoiceElement.rest(duration: .fraction(Fraction(numerator: 1, denominator: 12)))
         // Bar 0: quarter, triplet (480..<960), two quarters. 3/8 columns fall at 720, inside the triplet.
-        original.parts[0].staves[0].measures[0].voices[0] = Voice(
-            elements: [
-                .keySignature(KeySignature(concertKey: 0)),
-                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-                .chord(Chord(duration: .quarter, notes: [Note(pitch: 72, tpc: 14)])),
-                triplet, triplet, triplet,
-                .chord(Chord(duration: .quarter, notes: [Note(pitch: 72, tpc: 14)])),
-                .chord(Chord(duration: .quarter, notes: [Note(pitch: 72, tpc: 14)])),
-            ],
-            tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 3, endIndex: 5)],
-        )
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = Voice(
+                    elements: [
+                        .keySignature(KeySignature(concertKey: 0)),
+                        .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                        .chord(Chord(duration: .quarter, notes: [Note(pitch: 72, tpc: 14)])),
+                        triplet, triplet, triplet,
+                        .chord(Chord(duration: .quarter, notes: [Note(pitch: 72, tpc: 14)])),
+                        .chord(Chord(duration: .quarter, notes: [Note(pitch: 72, tpc: 14)])),
+                    ],
+                    tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 3, endIndex: 5)],
+                )
+            }
+        }
         let session = ScoreEditSession(score: original)
         #expect(!session.apply(.setTimeSignature(measureIndex: 0, numerator: 3, denominator: 8)))
         #expect(session.lastRefusal?.reason == .rebarWouldSplitTuplet(measureIndex: 0))
@@ -265,10 +281,14 @@ struct SetTimeSignatureTests {
         var original = changeAtBarTwo()
         // The slur's chord sits in bar 0, which `.removeTimeSignature(measureIndex: 2)` never touches — only
         // how many bars lie between it and the moment it reaches, exactly the shape the reported defect was.
-        original.parts[0].staves[0].measures[0].voices[0].elements[2] = .chord(Chord(
-            duration: .whole, notes: [Note(pitch: 72, tpc: 14)],
-            spanners: [Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 3)],
-        ))
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements[2] = .chord(Chord(
+                    duration: .whole, notes: [Note(pitch: 72, tpc: 14)],
+                    spanners: [Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 3)],
+                ))
+            }
+        }
         let endTick = original.effectiveMeasureDurations().prefix(3)
             .reduce(0) { $0 + $1.ticks(division: Self.division) }
 
@@ -345,14 +365,18 @@ struct SetTimeSignatureTests {
             parts: [.init(instrumentID: "piano", longName: "Piano", staves: [.init(clefType: "G")])],
             concertKey: 0, measureCount: 1,
         ))
-        original.parts[0].staves[0].measures[0].voices[0].elements = [
-            .keySignature(KeySignature(concertKey: 0)),
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .chord(Chord(duration: .quarter, notes: [Note(pitch: 61, tpc: 21, accidental: .sharp)])),
-            // The second C♯ needs no glyph while it shares a bar with the first one.
-            .chord(Chord(duration: .quarter, notes: [Note(pitch: 61, tpc: 21)])),
-            .rest(duration: .half),
-        ]
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements = [
+                    .keySignature(KeySignature(concertKey: 0)),
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 61, tpc: 21, accidental: .sharp)])),
+                    // The second C♯ needs no glyph while it shares a bar with the first one.
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 61, tpc: 21)])),
+                    .rest(duration: .half),
+                ]
+            }
+        }
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setTimeSignature(measureIndex: 0, numerator: 1, denominator: 4)))
         // 1920 ticks at 480 a bar: the two quarters end up in bars 0 and 1, so the second one is now the first
@@ -377,15 +401,31 @@ struct SetTimeSignatureTests {
             parts: [.init(instrumentID: "piano", longName: "Piano", staves: [.init(clefType: "G")])],
             concertKey: 0, measureCount: 3,
         ))
-        original.parts[0].staves[0].measures[0].actualLength = Fraction(numerator: 1, denominator: 4)
-        original.parts[0].staves[0].measures[0].irregular = true
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].actualLength = Fraction(numerator: 1, denominator: 4)
+            }
+        }
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].irregular = true
+            }
+        }
         // A courtesy-suppressed opening signature: this intent states which meter, never how it is drawn, so the
         // replacement has to be a value edit of the element already there rather than a fresh one.
-        original.parts[0].staves[0].measures[0].voices[0].elements[1] =
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4, showCourtesy: false))
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements[1] =
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4, showCourtesy: false))
+            }
+        }
         for measure in 1 ..< 3 {
-            original.parts[0].staves[0].measures[measure].voices[0].elements[0] =
-                .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+            original.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[measure].voices[0].elements[0] =
+                        .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                }
+            }
         }
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setTimeSignature(measureIndex: 0, numerator: 3, denominator: 4)))
@@ -419,16 +459,28 @@ struct SetTimeSignatureTests {
             concertKey: 0, measureCount: 2,
         ))
         for measure in 0 ..< 2 {
-            original.parts[0].staves[0].measures[measure].voices[0] = Voice(
-                elements: [
-                    .clef(Clef(concertClefType: "G")),
-                    .keySignature(KeySignature(concertKey: 0)),
-                    .rest(duration: .measure),
-                ],
-                tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 2)],
-            )
-            original.parts[0].staves[0].measures[measure].actualLength = Fraction(numerator: 1, denominator: 4)
-            original.parts[0].staves[0].measures[measure].irregular = true
+            original.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[measure].voices[0] = Voice(
+                        elements: [
+                            .clef(Clef(concertClefType: "G")),
+                            .keySignature(KeySignature(concertKey: 0)),
+                            .rest(duration: .measure),
+                        ],
+                        tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 2)],
+                    )
+                }
+            }
+            original.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[measure].actualLength = Fraction(numerator: 1, denominator: 4)
+                }
+            }
+            original.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[measure].irregular = true
+                }
+            }
         }
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setTimeSignature(measureIndex: 0, numerator: 3, denominator: 4)))

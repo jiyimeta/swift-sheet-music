@@ -350,7 +350,7 @@
             }
             return Score(
                 division: base.division,
-                parts: parts,
+                parts: IdentifiedArray(parts),
                 metaTags: base.metaTags,
                 titleFrame: base.titleFrame,
                 style: base.style,
@@ -387,7 +387,11 @@
                         lineBreak: measures[mi].lineBreak,
                         pageBreak: measures[mi].pageBreak,
                     )
-                    parts[0].staves[0] = Staff(measures: measures)
+                    parts.updateValue(at: 0) { partValue in
+                        partValue.staves.updateValue(at: 0) { staffValue in
+                            staffValue = Staff(measures: measures)
+                        }
+                    }
                     return Score(
                         division: score.division,
                         parts: parts,

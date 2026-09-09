@@ -55,12 +55,16 @@ extension Score {
                     // walks, so a measure inheriting its key from an earlier bar would be shifted twice.
                     let oldKey = activeKey(staff: address, measureIndex: measureIndex)
                     let newKey = Self.respelledKey(oldKey + phi)
-                    copy.parts[partIndex].staves[staffIndex].measures[measureIndex] =
-                        Self.rewriteMeasure(
-                            measures[measureIndex],
-                            semitones: delta, keyShift: phi,
-                            fifthsDelta: newKey - oldKey, key: newKey,
-                        )
+                    copy.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            staffValue.measures[measureIndex] =
+                                Self.rewriteMeasure(
+                                    measures[measureIndex],
+                                    semitones: delta, keyShift: phi,
+                                    fifthsDelta: newKey - oldKey, key: newKey,
+                                )
+                        }
+                    }
                 }
             }
         }
@@ -99,12 +103,16 @@ extension Score {
                     // Same rule as `transposed(bySemitones:)`: `activeKey` reads `self`, never `copy`.
                     let oldKey = activeKey(staff: address, measureIndex: measureIndex)
                     let newKey = Self.respelledKey(oldKey + fifths)
-                    copy.parts[partIndex].staves[staffIndex].measures[measureIndex] =
-                        Self.rewriteMeasure(
-                            measures[measureIndex],
-                            semitones: semitones, keyShift: fifths,
-                            fifthsDelta: newKey - oldKey, key: newKey,
-                        )
+                    copy.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            staffValue.measures[measureIndex] =
+                                Self.rewriteMeasure(
+                                    measures[measureIndex],
+                                    semitones: semitones, keyShift: fifths,
+                                    fifthsDelta: newKey - oldKey, key: newKey,
+                                )
+                        }
+                    }
                 }
             }
         }
@@ -296,10 +304,10 @@ extension Score {
         // Rebuild parts with hidden staves removed (dropping now-empty parts)
         // and brackets stripped, recording where each surviving staff landed so
         // brackets can be re-attached by global index afterwards.
-        var newParts: [Part] = []
+        var newParts: [(EID, Part)] = []
         var newLocation: [StaffAddress: (part: Int, staff: Int)] = [:]
         for (partIndex, part) in parts.enumerated() {
-            var keptStaves: [Staff] = []
+            var keptStaves: [(EID, Staff)] = []
             for (staffIndex, staff) in part.staves.enumerated() {
                 let address = StaffAddress(
                     partIndex: partIndex, staffIndexInPart: staffIndex,
@@ -308,23 +316,23 @@ extension Score {
                 newLocation[address] = (newParts.count, keptStaves.count)
                 var stripped = staff
                 stripped.brackets = []
-                keptStaves.append(stripped)
+                keptStaves.append((part.staves.eid(at: staffIndex), stripped))
             }
             guard !keptStaves.isEmpty else { continue }
             var newPart = part
-            newPart.staves = keptStaves
-            newParts.append(newPart)
+            newPart.staves = IdentifiedArray(keptStaves)
+            newParts.append((parts.eid(at: partIndex), newPart))
         }
 
         // Re-anchor / re-span each bracket over the surviving global staves — the
         // same pass `RemovePart` runs when a whole part goes away, which is why it
         // lives in `Score+Brackets.swift` rather than here.
-        for entry in Self.reanchoredBrackets(in: parts, survivorLocations: newLocation) {
-            newParts[entry.part].staves[entry.staff].brackets.append(entry.bracket)
+        for entry in Self.reanchoredBrackets(in: parts.values, survivorLocations: newLocation) {
+            newParts[entry.part].1.staves.updateValue(at: entry.staff) { $0.brackets.append(entry.bracket) }
         }
 
         var copy = self
-        copy.parts = newParts
+        copy.parts = IdentifiedArray(newParts)
         return copy
     }
 
@@ -358,10 +366,18 @@ extension Score {
                 .measures.first?.voices.first?.elements.first,
                 case .clef = firstElement
             {
-                copy.parts[p].staves[s].measures[0].voices[0].elements[0] =
-                    .clef(Clef(concertClefType: rawType))
+                copy.parts.updateValue(at: p) { partValue in
+                    partValue.staves.updateValue(at: s) { staffValue in
+                        staffValue.measures[0].voices[0].elements[0] =
+                            .clef(Clef(concertClefType: rawType))
+                    }
+                }
             } else {
-                copy.parts[p].staves[s].defaultClefType = rawType
+                copy.parts.updateValue(at: p) { partValue in
+                    partValue.staves.updateValue(at: s) { staffValue in
+                        staffValue.defaultClefType = rawType
+                    }
+                }
             }
         }
         return copy

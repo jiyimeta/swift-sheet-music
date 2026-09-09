@@ -91,9 +91,13 @@ struct VisibilityMidiInvariantTests {
                                     chord.notes[noteIdx].visible = false
                                     flippedAny = true
                                 }
-                                hidden.parts[partIdx].staves[staffIdx]
-                                    .measures[measureIdx].voices[voiceIdx]
-                                    .elements[elemIdx] = .chord(chord)
+                                hidden.parts.updateValue(at: partIdx) { partValue in
+                                    partValue.staves.updateValue(at: staffIdx) { staffValue in
+                                        staffValue
+                                            .measures[measureIdx].voices[voiceIdx]
+                                            .elements[elemIdx] = .chord(chord)
+                                    }
+                                }
                             }
                         }
                     }
@@ -144,9 +148,13 @@ struct VisibilityMidiInvariantTests {
                                 dynamic.visible
                             {
                                 dynamic.visible = false
-                                hidden.parts[partIdx].staves[staffIdx]
-                                    .measures[measureIdx].voices[voiceIdx]
-                                    .elements[elemIdx] = .dynamic(dynamic)
+                                hidden.parts.updateValue(at: partIdx) { partValue in
+                                    partValue.staves.updateValue(at: staffIdx) { staffValue in
+                                        staffValue
+                                            .measures[measureIdx].voices[voiceIdx]
+                                            .elements[elemIdx] = .dynamic(dynamic)
+                                    }
+                                }
                                 flippedAny = true
                             }
                         }

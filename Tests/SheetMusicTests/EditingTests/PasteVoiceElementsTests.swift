@@ -82,7 +82,11 @@ struct PasteVoiceElementsTests {
             .rest(duration: .quarter),
             .rest(duration: .quarter),
         ]
-        score.parts[0].staves[0].measures[0].voices[0] = v
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = v
+            }
+        }
         let halfRestID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1,
@@ -172,7 +176,11 @@ struct PasteVoiceElementsTests {
             normalNotes: 2, actualNotes: 3,
             startIndex: 3, endIndex: 5,
         )]
-        score.parts[0].staves[0].measures[0].voices[0] = v
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = v
+            }
+        }
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1,
@@ -222,7 +230,11 @@ struct PasteVoiceElementsTests {
             normalNotes: 2, actualNotes: 3,
             startIndex: 3, endIndex: 5,
         )]
-        score.parts[0].staves[0].measures[0].voices[0] = v
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = v
+            }
+        }
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1,
@@ -268,7 +280,11 @@ struct PasteVoiceElementsTests {
             normalNotes: 2, actualNotes: 3,
             startIndex: 3, endIndex: 5,
         )]
-        score.parts[0].staves[0].measures[0].voices[0] = v
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = v
+            }
+        }
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1,
@@ -322,7 +338,11 @@ struct PasteVoiceElementsTests {
             normalNotes: 2, actualNotes: 3,
             startIndex: 1, endIndex: 3,
         )]
-        score.parts[0].staves[0].measures[0].voices[0] = v
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = v
+            }
+        }
         // Target idx 2 = middle of the triplet.
         let middleID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,

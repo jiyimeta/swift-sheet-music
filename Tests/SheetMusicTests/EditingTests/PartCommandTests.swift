@@ -21,13 +21,21 @@ struct PartCommandTests {
         ))
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
-                score.parts[partIndex].staves[staffIndex].measures[1].voices[0].elements
-                    .insert(.keySignature(KeySignature(concertKey: 2)), at: 0)
+                score.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        staffValue.measures[1].voices[0].elements
+                            .insert(.keySignature(KeySignature(concertKey: 2)), at: 0)
+                    }
+                }
             }
         }
         // A natural C, so `MeasureAccidentals` has no glyph repair to bundle onto the edit under test.
-        score.parts[0].staves[0].measures[0].voices[0].elements[2] =
-            .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)]))
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements[2] =
+                    .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)]))
+            }
+        }
         return score
     }
 
@@ -118,8 +126,12 @@ struct PartCommandTests {
     @Test("the new id clears the highest existing numeric id, not the part count")
     func addPartIDClearsTheHighestExistingID() {
         var score = fixture()
-        score.parts[0].id = "9"
-        score.parts[1].id = "notANumber"
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.id = "9"
+        }
+        score.parts.updateValue(at: 1) { partValue in
+            partValue.id = "notANumber"
+        }
         let session = ScoreEditSession(score: score)
         #expect(session.apply(.addPart(plan: Self.clarinet, at: 2)))
         #expect(session.score.parts[2].id == "10")

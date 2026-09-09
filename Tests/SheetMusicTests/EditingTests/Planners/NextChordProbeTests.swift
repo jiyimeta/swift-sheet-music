@@ -15,8 +15,12 @@ struct NextChordProbeTests {
     func skipsNonTimed() {
         var score = EditingFixtures.parityFixture()
         // m0: [ts, C4, D4, r, r] -> [ts, C4, dynamic, D4, r, r]
-        score.parts[0].staves[0].measures[0].voices[0].elements
-            .insert(.dynamic(Dynamic(subtype: "p", velocity: 49)), at: 2)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements
+                    .insert(.dynamic(Dynamic(subtype: "p", velocity: 49)), at: 2)
+            }
+        }
         let next = NextChordProbe.nextTimedElement(after: Self.slot(0, 1), in: score)
         #expect(next == .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])))
     }

@@ -34,7 +34,11 @@ public struct SetStaffDefaultClef: EditCommand {
         let p = staff.partIndex
         let s = staff.staffIndexInPart
         let previous = score.parts[p].staves[s].defaultClefType
-        score.parts[p].staves[s].defaultClefType = newRawType
+        score.parts.updateValue(at: p) { partValue in
+            partValue.staves.updateValue(at: s) { staffValue in
+                staffValue.defaultClefType = newRawType
+            }
+        }
         return SetStaffDefaultClef(staff: staff, newRawType: previous)
     }
 }

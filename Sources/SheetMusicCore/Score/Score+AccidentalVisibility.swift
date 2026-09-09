@@ -35,10 +35,14 @@ extension Score {
         let division = copy.division
         for partIndex in copy.parts.indices {
             for staffIndex in copy.parts[partIndex].staves.indices {
-                Self.suppressInStaff(
-                    &copy.parts[partIndex].staves[staffIndex],
-                    division: division,
-                )
+                copy.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        Self.suppressInStaff(
+                            &staffValue,
+                            division: division,
+                        )
+                    }
+                }
             }
         }
         return copy

@@ -25,8 +25,16 @@ struct SignatureCourtesyFlagTests {
         // A mid-piece key change with courtesy suppressed, at the head of measure 1.
         var key = KeySignature(concertKey: 3)
         key.showCourtesy = false
-        score.parts[0].staves[0].measures[1].voices[0].elements.insert(.keySignature(key), at: 0)
-        MeasureStructure.shiftTuplets(in: &score.parts[0].staves[0].measures[1].voices[0], by: 1)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[0].elements.insert(.keySignature(key), at: 0)
+            }
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                MeasureStructure.shiftTuplets(in: &staffValue.measures[1].voices[0], by: 1)
+            }
+        }
         let xml = try #require(try String(data: MSCXEncoder.encode(score), encoding: .utf8))
         #expect(xml.contains("<showCourtesySig>0</showCourtesySig>"))
         let reparsed = try MSCXParser.parse(MSCXEncoder.encode(score))
@@ -41,8 +49,16 @@ struct SignatureCourtesyFlagTests {
         var score = Score.blank(pianoTemplate(measures: 2))
         var time = TimeSignature(numerator: 6, denominator: 8)
         time.showCourtesy = false
-        score.parts[0].staves[0].measures[1].voices[0].elements.insert(.timeSignature(time), at: 0)
-        MeasureStructure.shiftTuplets(in: &score.parts[0].staves[0].measures[1].voices[0], by: 1)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[0].elements.insert(.timeSignature(time), at: 0)
+            }
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                MeasureStructure.shiftTuplets(in: &staffValue.measures[1].voices[0], by: 1)
+            }
+        }
         let reparsed = try MSCXParser.parse(MSCXEncoder.encode(score))
         guard case let .timeSignature(decoded) = reparsed.parts[0].staves[0].measures[1].voices[0].elements[0]
         else { Issue.record("no time sig"); return }

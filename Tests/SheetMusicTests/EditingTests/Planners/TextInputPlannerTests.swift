@@ -26,10 +26,14 @@ struct TextInputPlannerTests {
     @Test("chord symbols write and read through the uniform surface")
     func chordSymbolRoundTrip() throws {
         var score = EditingFixtures.parityFixture()
-        score.parts[0].staves[0].measures[0].voices[0].elements.insert(
-            .harmony(Harmony(name: "C")),
-            at: 1,
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.insert(
+                    .harmony(Harmony(name: "C")),
+                    at: 1,
+                )
+            }
+        }
         let chord = Self.anchor(measure: 0, element: 2)
 
         _ = try TextInputPlanner.command(.chordSymbol, at: chord, text: "Cmaj7").apply(to: &score)

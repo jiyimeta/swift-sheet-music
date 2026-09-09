@@ -80,11 +80,19 @@ struct SetMeasureRepeatTests {
         var score = EditingFixtures.parityFixture()
         // MuseScore anchors a 4-bar group's `%` in bar 2 of the group; bar 1 stays a measure rest.
         for offset in 0 ..< 4 {
-            score.parts[1].staves[0].measures[offset].measureRepeatCount = offset + 1
+            score.parts.updateValue(at: 1) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[offset].measureRepeatCount = offset + 1
+                }
+            }
         }
-        score.parts[1].staves[0].measures[1].voices = [Voice(elements: [
-            .measureRepeat(MeasureRepeat(numMeasures: 4, duration: .measure)),
-        ])]
+        score.parts.updateValue(at: 1) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices = [Voice(elements: [
+                    .measureRepeat(MeasureRepeat(numMeasures: 4, duration: .measure)),
+                ])]
+            }
+        }
 
         let command = SetMeasureRepeat(at: MeasureRef(measureIndex: 0), staff: Self.cello, numMeasures: nil)
         _ = try command.apply(to: &score)
@@ -129,7 +137,11 @@ struct SetMeasureRepeatTests {
         let target = MeasureRef(measureIndex: 1)
         _ = try SetMeasureRepeat(at: target, staff: Self.cello, numMeasures: 2).apply(to: &score)
         // A bar with no voices at all is constructible, and the clear path used to index `voices[0]` blind.
-        score.parts[1].staves[0].measures[2].voices = []
+        score.parts.updateValue(at: 1) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[2].voices = []
+            }
+        }
         let voiceless = #expect(throws: SheetMusicError.self) {
             _ = try SetMeasureRepeat(at: target, staff: Self.cello, numMeasures: nil).apply(to: &score)
         }

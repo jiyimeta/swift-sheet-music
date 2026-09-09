@@ -29,9 +29,13 @@ extension MidiRenderer {
         var score = score
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
-                resolveTiedPitches(
-                    in: &score.parts[partIndex].staves[staffIndex],
-                )
+                score.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        resolveTiedPitches(
+                            in: &staffValue,
+                        )
+                    }
+                }
             }
         }
         return score

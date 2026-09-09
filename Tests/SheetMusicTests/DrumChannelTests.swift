@@ -122,7 +122,7 @@ struct DrumChannelTests {
         }
         let drumPart = Self.makePart(useDrumset: true)
         parts.append(drumPart)
-        let score = Score(division: 480, parts: parts)
+        let score = Score(division: 480, parts: IdentifiedArray(parts))
         let file = try MidiRenderer.render(score: score)
         let channels = file.tracks.compactMap(Self.channelOf(track:))
         // Melodic parts: 0,1,2,3,4,5,6,7,8,10,11 (skipping 9). Drum: 9.

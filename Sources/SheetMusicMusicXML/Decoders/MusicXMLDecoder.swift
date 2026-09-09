@@ -45,7 +45,7 @@ extension Score {
         // own `<divisions>` is part-local and would vary per fixture.
         return Score(
             division: 480,
-            parts: parts,
+            parts: IdentifiedArray(parts),
             systemMeasures: IdentifiedArray(systemMeasures),
             metaTags: metaTags,
             source: .musicXML,
@@ -210,7 +210,7 @@ extension Score {
             id: partTemplate.id,
             trackName: partTemplate.trackName,
             instrument: partTemplate.instrument,
-            staves: populatedStaves,
+            staves: IdentifiedArray(populatedStaves),
         )
         var staffElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])] = []
         for (staffIndex, perMeasure) in walker.systemElementsByStaffMeasure.enumerated() {

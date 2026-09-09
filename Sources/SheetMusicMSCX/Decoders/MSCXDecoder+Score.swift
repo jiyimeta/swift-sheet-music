@@ -130,7 +130,7 @@ extension Score {
             : systemMeasures
         return Score(
             division: division,
-            parts: parts,
+            parts: IdentifiedArray(parts),
             systemMeasures: IdentifiedArray(resolvedSystemMeasures),
             metaTags: metaTags,
             blocks: blocks,
@@ -185,11 +185,13 @@ extension Score {
             for staffIndex in part.staves.indices {
                 for measureIndex in part.staves[staffIndex].measures.indices {
                     for voiceIndex in part.staves[staffIndex].measures[measureIndex].voices.indices {
-                        rewriteKeys(
-                            in: &part.staves[staffIndex].measures[measureIndex]
-                                .voices[voiceIndex].elements,
-                            offset: offset,
-                        )
+                        part.staves.updateValue(at: staffIndex) { staffValue in
+                            rewriteKeys(
+                                in: &staffValue.measures[measureIndex]
+                                    .voices[voiceIndex].elements,
+                                offset: offset,
+                            )
+                        }
                     }
                 }
             }

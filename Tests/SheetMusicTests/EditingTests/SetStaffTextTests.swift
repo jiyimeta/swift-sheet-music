@@ -89,7 +89,11 @@ struct SetStaffTextTests {
         let anchor = Self.slot(Self.flute, 1, 3)
         let inverse = try SetStaffText(anchor: anchor, text: "pizz.", isSystemText: false).apply(to: &score)
         // A later edit shortened the bar, so the anchor's slot is gone: an undo must still put the lane back.
-        score.parts[0].staves[0].measures[1].voices[0].elements.removeLast(2)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[0].elements.removeLast(2)
+            }
+        }
         #expect(SystemLaneSlot.position(of: anchor, in: score) == nil)
         _ = try inverse.apply(to: &score)
         #expect(score.systemMeasures == before.systemMeasures)

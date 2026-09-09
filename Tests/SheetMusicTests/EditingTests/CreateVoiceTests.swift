@@ -57,8 +57,16 @@ struct CreateVoiceTests {
     @Test("the new voice fills a pickup bar to the bar's own length")
     func fillsIrregularMeasure() throws {
         var score = EditingFixtures.fourQuarterRests()
-        score.parts[0].staves[0].measures[0].actualLength = Fraction(numerator: 1, denominator: 4)
-        score.parts[0].staves[0].measures[0].irregular = true
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].actualLength = Fraction(numerator: 1, denominator: 4)
+            }
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].irregular = true
+            }
+        }
 
         _ = try CreateVoice(staff: Self.staff, measureIndex: 0, voiceIndex: 1).apply(to: &score)
 

@@ -41,7 +41,7 @@ struct MidiChannelAssignmentTests {
     }
 
     private func assignedChannels(_ parts: [Part]) -> [Int] {
-        MidiRenderer.assignChannels(score: Score(division: 480, parts: parts))
+        MidiRenderer.assignChannels(score: Score(division: 480, parts: IdentifiedArray(parts)))
             .flatMap(\.self)
             .map(\.channel)
     }

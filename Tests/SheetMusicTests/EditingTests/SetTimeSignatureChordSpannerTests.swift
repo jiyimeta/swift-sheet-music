@@ -30,8 +30,12 @@ struct SetTimeSignatureChordSpannerTests {
         ))
         for measure in 0 ..< 4 {
             let slot = measure == 0 ? 2 : 0
-            score.parts[0].staves[0].measures[measure].voices[0].elements[slot] =
-                .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[measure].voices[0].elements[slot] =
+                        .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                }
+            }
         }
         return score
     }
@@ -54,7 +58,11 @@ struct SetTimeSignatureChordSpannerTests {
             for index in elements.indices {
                 guard case var .chord(chord) = elements[index] else { continue }
                 chord.spanners = spanners
-                score.parts[0].staves[0].measures[measure].voices[voiceIndex].elements[index] = .chord(chord)
+                score.parts.updateValue(at: 0) { partValue in
+                    partValue.staves.updateValue(at: 0) { staffValue in
+                        staffValue.measures[measure].voices[voiceIndex].elements[index] = .chord(chord)
+                    }
+                }
                 return
             }
         }
@@ -211,7 +219,11 @@ struct SetTimeSignatureChordSpannerTests {
     func elementShapedSpannerStillWorksAlongsideAChordAnchoredOne() {
         var original = uniform44()
         Self.attach([Self.slur(measures: 3)], toChordIn: 0, of: &original)
-        original.parts[0].staves[0].measures[0].voices[0].elements.append(Self.hairpin(measures: 3))
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.append(Self.hairpin(measures: 3))
+            }
+        }
         let endTick = Self.absoluteStart(of: 3, in: original)
 
         let session = ScoreEditSession(score: original)

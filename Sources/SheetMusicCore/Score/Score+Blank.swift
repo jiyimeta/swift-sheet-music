@@ -160,7 +160,7 @@ extension Part {
                 transposeDiatonic: plan.transposeDiatonic,
                 transposeChromatic: plan.transposeChromatic,
             ),
-            staves: staves,
+            staves: IdentifiedArray(staves),
         )
     }
 }
@@ -220,7 +220,7 @@ extension Score {
 
         return Score(
             division: 480,
-            parts: parts,
+            parts: IdentifiedArray(parts),
             systemMeasures: IdentifiedArray(systemMeasures),
             metaTags: metaTags,
             titleFrame: ScoreFrame(heightSp: 10, texts: frameTexts),
@@ -248,9 +248,11 @@ extension Score {
             guard span > 1, !parts[group.lowerBound].staves.isEmpty else { continue }
             let existing = parts[group.lowerBound].staves[0].brackets
             let column = existing.isEmpty ? 0 : (existing.map(\.column).max() ?? 0) + 1
-            parts[group.lowerBound].staves[0].brackets.append(
-                BracketItem(type: .normal, span: span, column: column),
-            )
+            parts[group.lowerBound].staves.updateValue(at: 0) { staffValue in
+                staffValue.brackets.append(
+                    BracketItem(type: .normal, span: span, column: column),
+                )
+            }
         }
     }
 }

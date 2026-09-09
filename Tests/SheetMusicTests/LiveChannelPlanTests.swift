@@ -39,7 +39,7 @@ struct LiveChannelPlanTests {
                 )
             }
         }
-        return Score(division: 480, parts: parts, systemMeasures: IdentifiedArray(systemMeasures))
+        return Score(division: 480, parts: IdentifiedArray(parts), systemMeasures: IdentifiedArray(systemMeasures))
     }
 
     private func instrument(

@@ -255,7 +255,11 @@ struct ScoreFingerprintTests {
     func actualLengthMovesFingerprint() {
         let nominal = EditingFixtures.fourQuarterRests()
         var pickup = EditingFixtures.fourQuarterRests()
-        pickup.parts[0].staves[0].measures[0].actualLength = Fraction(numerator: 1, denominator: 4)
+        pickup.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].actualLength = Fraction(numerator: 1, denominator: 4)
+            }
+        }
         #expect(nominal.stableFingerprint != pickup.stableFingerprint)
     }
 
@@ -263,7 +267,11 @@ struct ScoreFingerprintTests {
     func irregularMovesFingerprint() {
         let counted = EditingFixtures.fourQuarterRests()
         var uncounted = EditingFixtures.fourQuarterRests()
-        uncounted.parts[0].staves[0].measures[0].irregular = true
+        uncounted.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].irregular = true
+            }
+        }
         #expect(counted.stableFingerprint != uncounted.stableFingerprint)
     }
 
@@ -291,7 +299,11 @@ struct ScoreFingerprintTests {
             kind: .slur, rawType: "Slur",
             nextMeasuresOffset: 0, nextFractionsOffset: Fraction(numerator: 1, denominator: 2),
         )]
-        score.parts[0].staves[0].measures[0].voices[0].elements[1] = .chord(chord)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements[1] = .chord(chord)
+            }
+        }
         return score
     }
 
@@ -316,7 +328,11 @@ struct ScoreFingerprintTests {
             Issue.record("expected the chord"); return
         }
         chord.spanners = []
-        restored.parts[0].staves[0].measures[0].voices[0].elements[1] = .chord(chord)
+        restored.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements[1] = .chord(chord)
+            }
+        }
         #expect(restored.stableFingerprint == plain.stableFingerprint)
     }
 
@@ -328,7 +344,11 @@ struct ScoreFingerprintTests {
         }
         let b = a
         chord.spanners[0].nextFractionsOffset = Fraction(numerator: 1, denominator: 4)
-        a.parts[0].staves[0].measures[0].voices[0].elements[1] = .chord(chord)
+        a.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements[1] = .chord(chord)
+            }
+        }
         #expect(a.stableFingerprint != b.stableFingerprint)
     }
 
@@ -342,7 +362,11 @@ struct ScoreFingerprintTests {
             kind: .slur, rawType: "Slur",
             nextMeasuresOffset: 0, nextFractionsOffset: Fraction(numerator: 1, denominator: 2),
         )]
-        moved.parts[0].staves[0].measures[0].voices[0].elements[2] = .chord(chord)
+        moved.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements[2] = .chord(chord)
+            }
+        }
         #expect(moved.stableFingerprint != Self.slurred(EditingFixtures.parityFixture()).stableFingerprint)
     }
 }

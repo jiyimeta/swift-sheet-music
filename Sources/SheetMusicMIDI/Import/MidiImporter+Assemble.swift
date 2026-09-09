@@ -71,7 +71,7 @@ extension MidiImporter {
         let meta = resolveTitle(file: file, sourceFilename: sourceFilename)
         return Score(
             division: file.division,
-            parts: parts,
+            parts: IdentifiedArray(parts),
             systemMeasures: IdentifiedArray(systemMeasures),
             metaTags: meta,
             source: .midi,

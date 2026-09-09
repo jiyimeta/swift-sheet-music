@@ -34,7 +34,9 @@ extension PDFImporter {
     static func propagateTiePitches(parts: inout [Part]) {
         for pi in parts.indices {
             for si in parts[pi].staves.indices {
-                propagateTiePitches(staff: &parts[pi].staves[si])
+                parts[pi].staves.updateValue(at: si) { staffValue in
+                    propagateTiePitches(staff: &staffValue)
+                }
             }
         }
     }

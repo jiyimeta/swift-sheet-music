@@ -7,8 +7,16 @@ struct MeasureFlagsHoistTests {
     private static func twoParts() -> Score {
         var score = EditingFixtures.twoMeasuresOfQuarterRests(key: 0)
         _ = try? AddPart(plan: .init(instrumentID: "cello", staves: [.init(clefType: "F")]), at: 1).apply(to: &score)
-        score.parts[0].staves[0].measures[1].lineBreak = true
-        score.parts[0].staves[0].measures[1].endRepeatCount = 2
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].lineBreak = true
+            }
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].endRepeatCount = 2
+            }
+        }
         return score
     }
 
@@ -23,7 +31,11 @@ struct MeasureFlagsHoistTests {
     @Test("undoing that removal restores the score byte-exact, stray flags on the demoted staff included")
     func removePartUndoIsExact() throws {
         var score = Self.twoParts()
-        score.parts[1].staves[0].measures[0].pageBreak = true // a stray flag the invariant says is meaningless
+        score.parts.updateValue(at: 1) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].pageBreak = true // a stray flag the invariant says is meaningless
+            }
+        }
         let before = score
         let inverse = try RemovePart(partIndex: 0).apply(to: &score)
         _ = try inverse.apply(to: &score)

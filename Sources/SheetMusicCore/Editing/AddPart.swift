@@ -99,16 +99,21 @@ public struct AddPart: EditCommand {
         }
 
         if let restoredPart {
-            score.parts.insert(restoredPart, at: partIndex)
+            var restored = restoredPart
+            restored.staves.assignMissingIDs(using: &ids)
+            let anchor = partIndex == 0 ? nil : score.parts.eid(at: partIndex - 1)
+            score.parts.insert(restored, after: anchor, id: ids.next())
             restore(&score)
             return RemovePart(partIndex: partIndex)
         }
 
         guard let plan else { throw Self.refused(.emptyPayload) }
-        let part = Self.builtPart(from: plan, joining: score)
+        var part = Self.builtPart(from: plan, joining: score)
+        part.staves.assignMissingIDs(using: &ids)
         Self.growBracketsCrossing(partIndex, in: &score, byStaves: part.staves.count)
         Self.restampSystemElements(in: &score, fromPartIndex: partIndex)
-        score.parts.insert(part, at: partIndex)
+        let anchor = partIndex == 0 ? nil : score.parts.eid(at: partIndex - 1)
+        score.parts.insert(part, after: anchor, id: ids.next())
         return RemovePart(partIndex: partIndex)
     }
 
@@ -121,7 +126,11 @@ public struct AddPart: EditCommand {
                 for staff in score.parts[part].staves.indices
                     where restoredBrackets[part].indices.contains(staff)
                 {
-                    score.parts[part].staves[staff].brackets = restoredBrackets[part][staff]
+                    score.parts.updateValue(at: part) { partValue in
+                        partValue.staves.updateValue(at: staff) { staffValue in
+                            staffValue.brackets = restoredBrackets[part][staff]
+                        }
+                    }
                 }
             }
         }
@@ -206,7 +215,11 @@ public struct AddPart: EditCommand {
                 for bracket in score.parts[part].staves[staff].brackets.indices {
                     let span = score.parts[part].staves[staff].brackets[bracket].span
                     guard boundary <= globalIndex + span - 1 else { continue }
-                    score.parts[part].staves[staff].brackets[bracket].span = span + staffCount
+                    score.parts.updateValue(at: part) { partValue in
+                        partValue.staves.updateValue(at: staff) { staffValue in
+                            staffValue.brackets[bracket].span = span + staffCount
+                        }
+                    }
                 }
                 globalIndex += 1
             }

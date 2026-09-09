@@ -128,13 +128,17 @@ enum EditingFixtures {
     /// beat 1), element 1 its leader. The remaining rests keep the bar full.
     static func twoBeamedEighths() -> Score {
         var score = fourQuarterRests()
-        score.parts[0].staves[0].measures[0].voices[0] = Voice(elements: [
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .chord(Chord(duration: .eighth, notes: [Note(pitch: 60, tpc: 14)])),
-            .chord(Chord(duration: .eighth, notes: [Note(pitch: 62, tpc: 16)])),
-            .rest(duration: .quarter),
-            .rest(duration: .half),
-        ])
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = Voice(elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .chord(Chord(duration: .eighth, notes: [Note(pitch: 60, tpc: 14)])),
+                    .chord(Chord(duration: .eighth, notes: [Note(pitch: 62, tpc: 16)])),
+                    .rest(duration: .quarter),
+                    .rest(duration: .half),
+                ])
+            }
+        }
         return score
     }
 
@@ -152,7 +156,11 @@ enum EditingFixtures {
                 .rest(duration: .quarter),
             ]),
         ])
-        score.parts[0].staves[0].measures.append(secondMeasure)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures.append(secondMeasure)
+            }
+        }
         return score
     }
 
@@ -161,28 +169,36 @@ enum EditingFixtures {
     /// second measure has, and what the cross-barline paths have to walk into.
     static func twoMeasuresOfQuarterRests() -> Score {
         var score = fourQuarterRests()
-        score.parts[0].staves[0].measures.append(Measure(voices: [
-            Voice(elements: [
-                .rest(duration: .quarter),
-                .rest(duration: .quarter),
-                .rest(duration: .quarter),
-                .rest(duration: .quarter),
-            ]),
-        ]))
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures.append(Measure(voices: [
+                    Voice(elements: [
+                        .rest(duration: .quarter),
+                        .rest(duration: .quarter),
+                        .rest(duration: .quarter),
+                        .rest(duration: .quarter),
+                    ]),
+                ]))
+            }
+        }
         return score
     }
 
     /// `twoMeasuresOfQuarterRests` with a third measure, for chains that run past two bars.
     static func threeMeasuresOfQuarterRests() -> Score {
         var score = twoMeasuresOfQuarterRests()
-        score.parts[0].staves[0].measures.append(Measure(voices: [
-            Voice(elements: [
-                .rest(duration: .quarter),
-                .rest(duration: .quarter),
-                .rest(duration: .quarter),
-                .rest(duration: .quarter),
-            ]),
-        ]))
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures.append(Measure(voices: [
+                    Voice(elements: [
+                        .rest(duration: .quarter),
+                        .rest(duration: .quarter),
+                        .rest(duration: .quarter),
+                        .rest(duration: .quarter),
+                    ]),
+                ]))
+            }
+        }
         return score
     }
 
@@ -207,14 +223,18 @@ enum EditingFixtures {
     /// sides start from identical bytes rather than from this builder and a file that agree only by inspection.
     static func replayFixture() -> Score {
         var score = twoMeasuresOfQuarterRests(key: 2)
-        score.parts[0].staves[0].measures.append(Measure(voices: [
-            Voice(elements: [
-                .rest(duration: .quarter),
-                .rest(duration: .quarter),
-                .rest(duration: .quarter),
-                .rest(duration: .quarter),
-            ]),
-        ]))
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures.append(Measure(voices: [
+                    Voice(elements: [
+                        .rest(duration: .quarter),
+                        .rest(duration: .quarter),
+                        .rest(duration: .quarter),
+                        .rest(duration: .quarter),
+                    ]),
+                ]))
+            }
+        }
         score[VoiceElementID(staff: staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 2)] =
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
         score[VoiceElementID(staff: staff0, measureIndex: 2, voiceIndex: 0, elementIndex: 1)] =

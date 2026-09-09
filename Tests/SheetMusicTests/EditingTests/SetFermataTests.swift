@@ -40,7 +40,11 @@ struct SetFermataTests {
         var score = EditingFixtures.parityFixture()
         var hidden = Fermata(subtype: "fermataAbove")
         hidden.visible = false
-        score.parts[0].staves[0].measures[2].voices[0].elements.insert(.fermata(hidden), at: 0)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[2].voices[0].elements.insert(.fermata(hidden), at: 0)
+            }
+        }
         _ = try SetFermata(at: Self.slot(2, 1), subtype: "fermataShortAbove", timeStretch: 1.25).apply(to: &score)
         guard case let .fermata(fermata) = Self.elements(score, 2)[0] else {
             Issue.record("expected a fermata")

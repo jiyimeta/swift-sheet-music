@@ -6,7 +6,7 @@ public struct Part: Sendable, Equatable {
     public var id: String
     public var trackName: String?
     public var instrument: Instrument
-    public var staves: [Staff]
+    public var staves: IdentifiedArray<Staff>
     /// Whether this part is shown in the main score. Mirrors MuseScore's
     /// `<Part><show>` flag (C++ `Part::show()`): the "hide instrument in
     /// score" toggle in the Instruments panel. `false` means every staff of
@@ -22,7 +22,7 @@ public struct Part: Sendable, Equatable {
         id: String,
         trackName: String? = nil,
         instrument: Instrument,
-        staves: [Staff] = [],
+        staves: IdentifiedArray<Staff> = [],
         isVisibleInScore: Bool = true,
         preservedMarkup: [PreservedXML] = [],
     ) {

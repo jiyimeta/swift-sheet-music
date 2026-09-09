@@ -39,7 +39,9 @@ struct SetPartNamesTests {
     @Test("leaves the instrument id and the track name alone")
     func leavesIdentityAlone() throws {
         var score = fixture()
-        score.parts[0].trackName = "Flute"
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.trackName = "Flute"
+        }
         _ = try SetPartNames(partIndex: 0, longName: "Solo", shortName: "S.").apply(to: &score)
 
         #expect(score.parts[0].instrument.id == "flute")

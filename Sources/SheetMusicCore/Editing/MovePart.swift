@@ -1,6 +1,6 @@
 import SheetMusicFoundation
 
-/// Moves the part at `fromIndex` to `toIndex` — a removal followed by an insertion of the same `Part` value, which
+/// Moves the part at `fromIndex` to `toIndex`, retaining the part and its slot identifier, which
 /// is what "drag this instrument up two rows" means: the parts between the two indices shift one place the other
 /// way, and nothing else in the column order changes.
 ///
@@ -104,8 +104,10 @@ public struct MovePart: EditCommand {
             : nil
         let outgoingFlags = canonicalChanges ? MeasureFlagsHoist.column(of: Score.canonicalStaff, in: score) : nil
 
-        let part = score.parts.remove(at: fromIndex)
-        score.parts.insert(part, at: toIndex)
+        let movedID = score.parts.eid(at: fromIndex)
+        let anchor: EID? = toIndex == 0 ? nil
+            : score.parts.eid(at: fromIndex < toIndex ? toIndex : toIndex - 1)
+        score.parts.move(eid: movedID, after: anchor)
         restampSystemElements(in: &score)
         Self.writeBack(rebased, to: &score)
         restore(&score)
@@ -190,11 +192,19 @@ public struct MovePart: EditCommand {
     ) {
         for part in score.parts.indices {
             for staff in score.parts[part].staves.indices {
-                score.parts[part].staves[staff].brackets = []
+                score.parts.updateValue(at: part) { partValue in
+                    partValue.staves.updateValue(at: staff) { staffValue in
+                        staffValue.brackets = []
+                    }
+                }
             }
         }
         for entry in entries {
-            score.parts[entry.part].staves[entry.staff].brackets.append(entry.bracket)
+            score.parts.updateValue(at: entry.part) { partValue in
+                partValue.staves.updateValue(at: entry.staff) { staffValue in
+                    staffValue.brackets.append(entry.bracket)
+                }
+            }
         }
     }
 
@@ -212,7 +222,11 @@ public struct MovePart: EditCommand {
                 for staff in score.parts[part].staves.indices
                     where restoredBrackets[part].indices.contains(staff)
                 {
-                    score.parts[part].staves[staff].brackets = restoredBrackets[part][staff]
+                    score.parts.updateValue(at: part) { partValue in
+                        partValue.staves.updateValue(at: staff) { staffValue in
+                            staffValue.brackets = restoredBrackets[part][staff]
+                        }
+                    }
                 }
             }
         }

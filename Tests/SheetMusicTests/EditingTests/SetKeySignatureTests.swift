@@ -28,12 +28,24 @@ struct SetKeySignatureTests {
                 // Bar 0 opens on the key and time signature, so its measure rest sits at element 2; every later bar
                 // holds the rest alone.
                 let slot = measure == 0 ? 2 : 0
-                score.parts[part].staves[0].measures[measure].voices[0].elements[slot] =
-                    .chord(Chord(duration: .whole, notes: [Note(pitch: 66, tpc: 20)]))
+                score.parts.updateValue(at: part) { partValue in
+                    partValue.staves.updateValue(at: 0) { staffValue in
+                        staffValue.measures[measure].voices[0].elements[slot] =
+                            .chord(Chord(duration: .whole, notes: [Note(pitch: 66, tpc: 20)]))
+                    }
+                }
             }
-            score.parts[part].staves[0].measures[2].voices[0].elements
-                .insert(.keySignature(KeySignature(concertKey: 2)), at: 0)
-            MeasureStructure.shiftTuplets(in: &score.parts[part].staves[0].measures[2].voices[0], by: 1)
+            score.parts.updateValue(at: part) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[2].voices[0].elements
+                        .insert(.keySignature(KeySignature(concertKey: 2)), at: 0)
+                }
+            }
+            score.parts.updateValue(at: part) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    MeasureStructure.shiftTuplets(in: &staffValue.measures[2].voices[0], by: 1)
+                }
+            }
         }
         return score
     }
@@ -149,16 +161,24 @@ struct SetKeySignatureTests {
     @Test("an inserted key lands after the clef, before the time signature, and carries tuplets with it")
     func insertedKeyTakesTheCanonicalPositionAndShiftsTuplets() {
         var original = fixture()
-        original.parts[0].staves[0].measures[1].voices[0].elements.insert(
-            contentsOf: [
-                .clef(Clef(concertClefType: "G")),
-                .timeSignature(TimeSignature(numerator: 3, denominator: 4)),
-            ],
-            at: 0,
-        )
-        original.parts[0].staves[0].measures[1].voices[0].tuplets = [
-            Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 2),
-        ]
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[0].elements.insert(
+                    contentsOf: [
+                        .clef(Clef(concertClefType: "G")),
+                        .timeSignature(TimeSignature(numerator: 3, denominator: 4)),
+                    ],
+                    at: 0,
+                )
+            }
+        }
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[0].tuplets = [
+                    Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 2),
+                ]
+            }
+        }
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setKeySignature(measureIndex: 1, concertKey: -2)))
         let voice = session.score.parts[0].staves[0].measures[1].voices[0]
@@ -194,9 +214,13 @@ struct SetKeySignatureTests {
     @Test("removing a key shifts the tuplets behind it back, and undo restores their indices")
     func removalShiftsTupletsBack() {
         var original = fixture()
-        original.parts[0].staves[0].measures[2].voices[0].tuplets = [
-            Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 1),
-        ]
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[2].voices[0].tuplets = [
+                    Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 1),
+                ]
+            }
+        }
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.removeKeySignature(measureIndex: 2)))
         #expect(session.score.parts[0].staves[0].measures[2].voices[0].tuplets == [

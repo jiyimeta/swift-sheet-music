@@ -82,10 +82,14 @@ extension Score {
                         .voices[id.voiceIndex].elements.indices
                         .contains(id.elementIndex)
             else { return }
-            parts[p].staves[s]
-                .measures[id.measureIndex]
-                .voices[id.voiceIndex]
-                .elements[id.elementIndex] = newValue
+            parts.updateValue(at: p) { partValue in
+                partValue.staves.updateValue(at: s) { staffValue in
+                    staffValue
+                        .measures[id.measureIndex]
+                        .voices[id.voiceIndex]
+                        .elements[id.elementIndex] = newValue
+                }
+            }
         }
     }
 }

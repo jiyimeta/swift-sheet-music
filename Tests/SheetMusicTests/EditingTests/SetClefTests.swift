@@ -44,7 +44,11 @@ struct SetClefTests {
         var score = EditingFixtures.parityFixture()
         var hidden = Clef(concertClefType: "G", transposingClefType: "G8vb")
         hidden.visible = false
-        score.parts[0].staves[0].measures[0].voices[0].elements.insert(.clef(hidden), at: 2)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.insert(.clef(hidden), at: 2)
+            }
+        }
         // [ts, C4, clef, D4, r, r] — the D4 is element 3 now.
         _ = try SetClef(before: Self.slot(0, 3), clef: .tenor).apply(to: &score)
         let elements = Self.elements(score, 0)
@@ -58,10 +62,16 @@ struct SetClefTests {
     @Test("the clef lands after a mid-bar key signature and before the chord's dynamic")
     func afterSignaturesBeforeAnnotations() throws {
         var score = EditingFixtures.parityFixture()
-        score.parts[0].staves[0].measures[0].voices[0].elements.insert(
-            contentsOf: [.keySignature(KeySignature(concertKey: 2)), .dynamic(Dynamic(subtype: "p", velocity: 49))],
-            at: 2,
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.insert(
+                    contentsOf: [
+                        .keySignature(KeySignature(concertKey: 2)), .dynamic(Dynamic(subtype: "p", velocity: 49)),
+                    ],
+                    at: 2,
+                )
+            }
+        }
         // [ts, C4, key, dynamic, D4, r, r]
         _ = try SetClef(before: Self.slot(0, 4), clef: .bass).apply(to: &score)
         let elements = Self.elements(score, 0)

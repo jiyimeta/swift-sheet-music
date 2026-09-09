@@ -86,9 +86,13 @@ struct MarkPlanningTests {
         // A MuseScore-authored `<name>m7</name><root>13</root>` reads "Am7" on the page; restating "m7" would
         // drop the root and read "m7", so it is a real edit.
         var authored = EditingFixtures.parityFixture()
-        authored.parts[0].staves[0].measures[3].voices[0].elements.insert(
-            .harmony(Harmony(name: "m7", rootTpc: 13)), at: 0,
-        )
+        authored.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[3].voices[0].elements.insert(
+                    .harmony(Harmony(name: "m7", rootTpc: 13)), at: 0,
+                )
+            }
+        }
         let second = ScoreEditSession(score: authored)
         #expect(second.apply(.setChordSymbol(at: Self.slot(3, 1), name: "m7", harmonyType: .standard)))
         #expect(SetChordSymbol.current(at: Self.slot(3, 1), in: second.score)?.rootTpc == nil)

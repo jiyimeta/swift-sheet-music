@@ -61,11 +61,15 @@ public struct ReplaceVoiceElements: EditCommand {
         }
         let priorVoice = score.parts[p].staves[s]
             .measures[measureIndex].voices[voiceIndex]
-        score.parts[p].staves[s]
-            .measures[measureIndex]
-            .voices[voiceIndex] = Voice(
-                elements: elements, tuplets: tuplets,
-            )
+        score.parts.updateValue(at: p) { partValue in
+            partValue.staves.updateValue(at: s) { staffValue in
+                staffValue
+                    .measures[measureIndex]
+                    .voices[voiceIndex] = Voice(
+                        elements: elements, tuplets: tuplets,
+                    )
+            }
+        }
         return ReplaceVoiceElements(
             staff: staff,
             measureIndex: measureIndex,

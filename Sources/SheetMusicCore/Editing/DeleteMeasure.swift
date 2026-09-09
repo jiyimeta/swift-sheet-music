@@ -40,7 +40,9 @@ public struct DeleteMeasure: EditCommand {
         let endpointSpanners = MeasureStructure.adjustSpannerOffsets(in: &score, forDeletionAt: measureIndex)
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
-                score.parts[partIndex].staves[staffIndex].measures.remove(at: measureIndex)
+                score.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { $0.measures.remove(at: measureIndex) }
+                }
             }
         }
         if score.systemMeasures.indices.contains(measureIndex) {
@@ -67,12 +69,15 @@ public struct DeleteMeasure: EditCommand {
                         inheritingFrom: deletedPrefix, into: incomingPrefix,
                     )
                     guard merged.count > incomingPrefix.count else { continue }
-                    score.parts[partIndex].staves[staffIndex].measures[0].voices[0].elements
-                        .replaceSubrange(0 ..< incomingPrefix.count, with: merged)
-                    MeasureStructure.shiftTuplets(
-                        in: &score.parts[partIndex].staves[staffIndex].measures[0].voices[0],
-                        by: merged.count - incomingPrefix.count,
-                    )
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            staffValue.measures[0].voices[0].elements
+                                .replaceSubrange(0 ..< incomingPrefix.count, with: merged)
+                            MeasureStructure.shiftTuplets(
+                                in: &staffValue.measures[0].voices[0], by: merged.count - incomingPrefix.count,
+                            )
+                        }
+                    }
                 }
             }
         }

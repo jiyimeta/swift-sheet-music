@@ -65,16 +65,24 @@ public struct RemovePart: EditCommand {
                     (part < partIndex ? part : part - 1, staff)
             }
         }
-        let rebased = Score.reanchoredBrackets(in: score.parts, survivorLocations: survivorLocations)
+        let rebased = Score.reanchoredBrackets(in: score.parts.values, survivorLocations: survivorLocations)
 
-        score.parts.remove(at: partIndex)
+        score.parts.remove(eid: score.parts.eid(at: partIndex))
         for part in score.parts.indices {
             for staff in score.parts[part].staves.indices {
-                score.parts[part].staves[staff].brackets = []
+                score.parts.updateValue(at: part) { partValue in
+                    partValue.staves.updateValue(at: staff) { staffValue in
+                        staffValue.brackets = []
+                    }
+                }
             }
         }
         for entry in rebased {
-            score.parts[entry.part].staves[entry.staff].brackets.append(entry.bracket)
+            score.parts.updateValue(at: entry.part) { partValue in
+                partValue.staves.updateValue(at: entry.staff) { staffValue in
+                    staffValue.brackets.append(entry.bracket)
+                }
+            }
         }
         reanchorSystemElements(in: &score)
 

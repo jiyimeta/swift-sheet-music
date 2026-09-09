@@ -18,11 +18,15 @@ struct AdjacentElementSlotTests {
     /// `[ts, dynamic, fermata, C4, breath, r, r, r]` — a chord wearing two attachments and a breath.
     private static func dressedScore() -> Score {
         var score = EditingFixtures.fourQuarterRests()
-        score.parts[0].staves[0].measures[0].voices[0] = Voice(elements: [
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            dynamic, fermata, chord, breath,
-            .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
-        ])
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = Voice(elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    dynamic, fermata, chord, breath,
+                    .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+                ])
+            }
+        }
         return score
     }
 

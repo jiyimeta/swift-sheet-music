@@ -118,7 +118,7 @@ extension PDFImporter {
         )
         return Score(
             division: 480,
-            parts: assembledParts,
+            parts: IdentifiedArray(assembledParts),
             systemMeasures: IdentifiedArray(systemMeasures),
             titleFrame: titleFrame,
             source: .pdf,
@@ -137,7 +137,9 @@ extension PDFImporter {
         var slotToStaff: [Int: StaffAddress] = [:]
         for (partIdx, slots) in shape.slotsByPartIndex {
             for (staffIdx, slot) in slots.enumerated() {
-                parts[partIdx].staves[staffIdx].measures = stavesContent[slot]
+                parts[partIdx].staves.updateValue(at: staffIdx) { staffValue in
+                    staffValue.measures = stavesContent[slot]
+                }
                 slotToStaff[slot] = StaffAddress(
                     partIndex: partIdx, staffIndexInPart: staffIdx,
                 )

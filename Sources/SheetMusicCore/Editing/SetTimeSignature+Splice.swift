@@ -168,8 +168,12 @@ enum TimeSignatureRegion {
                         ? column.staffMeasures[partIndex][staffIndex]
                         : Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
                 }
-                score.parts[partIndex].staves[staffIndex].measures
-                    .replaceSubrange(range, with: replacement)
+                score.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        staffValue.measures
+                            .replaceSubrange(range, with: replacement)
+                    }
+                }
             }
         }
         guard parallelLane, score.systemMeasures.count >= range.upperBound else { return }

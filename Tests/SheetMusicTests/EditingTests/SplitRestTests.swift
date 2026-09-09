@@ -6,12 +6,16 @@ struct SplitRestTests {
     private static func halfRestScore() -> Score {
         var score = EditingFixtures.fourQuarterRests()
         // Elements [1...4] are quarter rests; make [1] a half and drop one so the bar still totals 4/4.
-        score.parts[0].staves[0].measures[0].voices[0].elements = [
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .rest(duration: .half),
-            .rest(duration: .quarter),
-            .rest(duration: .quarter),
-        ]
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements = [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .rest(duration: .half),
+                    .rest(duration: .quarter),
+                    .rest(duration: .quarter),
+                ]
+            }
+        }
         return score
     }
 
@@ -86,14 +90,18 @@ struct SplitRestTests {
     private static func tupletAfterHalfRestScore() -> Score {
         var score = EditingFixtures.fourQuarterRests()
         let member = VoiceElement.chord(Chord(duration: .quarter, notes: [Note(pitch: 67, tpc: 15)]))
-        score.parts[0].staves[0].measures[0].voices[0] = Voice(
-            elements: [
-                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-                .rest(duration: .half),
-                member, member, member,
-            ],
-            tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)],
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = Voice(
+                    elements: [
+                        .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                        .rest(duration: .half),
+                        member, member, member,
+                    ],
+                    tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)],
+                )
+            }
+        }
         return score
     }
 

@@ -59,13 +59,21 @@ struct MeasureAccidentalsPlannerTests {
         ))
         for m in 0 ..< 2 {
             let slot = m == 0 ? 2 : 0
-            score.parts[0].staves[0].measures[m].voices[0].elements[slot] =
-                .chord(Chord(duration: .whole, notes: [Note(pitch: 66, tpc: 20)])) // F♯4, in-key in G major
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[m].voices[0].elements[slot] =
+                        .chord(Chord(duration: .whole, notes: [Note(pitch: 66, tpc: 20)])) // F♯4, in-key in G major
+                }
+            }
         }
         // Flip the stored key to C major the way SetKeySignature will: rewrite the measure-0 element.
         guard case .keySignature = score.parts[0].staves[0].measures[0].voices[0].elements[0]
         else { Issue.record("expected key sig at [0]"); return }
-        score.parts[0].staves[0].measures[0].voices[0].elements[0] = .keySignature(KeySignature(concertKey: 0))
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements[0] = .keySignature(KeySignature(concertKey: 0))
+            }
+        }
 
         let repairs = MeasureAccidentals.renotationCommands(in: score, measureRange: 0 ..< 2)
         #expect(repairs.count == 2) // BOTH measures need a repair — the diff-based path would only find bar 0

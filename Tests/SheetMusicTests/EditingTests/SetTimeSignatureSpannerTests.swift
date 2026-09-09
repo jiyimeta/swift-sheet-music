@@ -26,8 +26,12 @@ struct SetTimeSignatureSpannerTests {
         ))
         for measure in 0 ..< 4 {
             let slot = measure == 0 ? 2 : 0
-            score.parts[0].staves[0].measures[measure].voices[0].elements[slot] =
-                .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[measure].voices[0].elements[slot] =
+                        .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                }
+            }
         }
         return score
     }
@@ -44,11 +48,19 @@ struct SetTimeSignatureSpannerTests {
         ))
         for measure in 0 ..< 2 {
             let slot = measure == 0 ? 2 : 0
-            score.parts[0].staves[0].measures[measure].voices[0].elements[slot] =
-                .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[measure].voices[0].elements[slot] =
+                        .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                }
+            }
         }
-        score.parts[0].staves[0].measures[2].voices[0].elements
-            .insert(.timeSignature(TimeSignature(numerator: 3, denominator: 4)), at: 0)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[2].voices[0].elements
+                    .insert(.timeSignature(TimeSignature(numerator: 3, denominator: 4)), at: 0)
+            }
+        }
         return score
     }
 
@@ -96,7 +108,11 @@ struct SetTimeSignatureSpannerTests {
     @Test("a spanner anchored before the region keeps its endpoint's tick across a re-bar")
     func spannerAcrossRegionKeepsItsEndpoints() {
         var original = uniform44()
-        original.parts[0].staves[0].measures[0].voices[0].elements.append(Self.hairpin(measures: 3))
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.append(Self.hairpin(measures: 3))
+            }
+        }
         let endTick = Self.absoluteStart(of: 3, in: original)
 
         let session = ScoreEditSession(score: original)
@@ -121,7 +137,11 @@ struct SetTimeSignatureSpannerTests {
     @Test("an outside-anchored endpoint landing mid-bar gets its fractions offset re-derived")
     func outsideAnchoredEndpointLandingMidBarGetsAFraction() {
         var original = uniform44()
-        original.parts[0].staves[0].measures[0].voices[0].elements.append(Self.hairpin(measures: 3))
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.append(Self.hairpin(measures: 3))
+            }
+        }
         let endTick = Self.absoluteStart(of: 3, in: original)
 
         let session = ScoreEditSession(score: original)
@@ -149,7 +169,11 @@ struct SetTimeSignatureSpannerTests {
     func spannerAnchoredInsideRegionIsRestated() {
         var original = uniform44()
         // At the head of bar 1, so its own tick is the bar's — the anchor stays on the new bar 1.
-        original.parts[0].staves[0].measures[1].voices[0].elements.insert(Self.hairpin(measures: 2), at: 0)
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[0].elements.insert(Self.hairpin(measures: 2), at: 0)
+            }
+        }
         let endTick = Self.absoluteStart(of: 3, in: original)
 
         let session = ScoreEditSession(score: original)
@@ -178,7 +202,11 @@ struct SetTimeSignatureSpannerTests {
             concertKey: 0, timeNumerator: 3, timeDenominator: 4, measureCount: 4,
         ))
         // After the key and time signature, before the bar's rest, so the anchor's tick is 0.
-        original.parts[0].staves[0].measures[0].voices[0].elements.insert(Self.hairpin(measures: 3), at: 2)
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.insert(Self.hairpin(measures: 3), at: 2)
+            }
+        }
         let endTick = Self.absoluteStart(of: 3, in: original)
 
         let session = ScoreEditSession(score: original)
@@ -211,7 +239,11 @@ struct SetTimeSignatureSpannerTests {
     @Test("an outside-anchored endpoint past a padded region follows the bar it named, not its old tick")
     func outsideAnchoredEndpointPastPaddedRegionFollowsItsBar() {
         var original = changeAtBarTwo()
-        original.parts[0].staves[0].measures[0].voices[0].elements.append(Self.hairpin(measures: 2))
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.append(Self.hairpin(measures: 2))
+            }
+        }
         let oldEndBar = 2
         let oldMeasureCount = Self.measureCount(original)
 
@@ -237,7 +269,11 @@ struct SetTimeSignatureSpannerTests {
     func insideAnchoredEndpointPastPaddedRegionFollowsItsBar() {
         var original = changeAtBarTwo()
         // At the head of bar 1 — the bar the re-bar splits in two — reaching the downbeat of bar 2.
-        original.parts[0].staves[0].measures[1].voices[0].elements.insert(Self.hairpin(measures: 1), at: 0)
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[0].elements.insert(Self.hairpin(measures: 1), at: 0)
+            }
+        }
         let oldEndBar = 2
         let oldMeasureCount = Self.measureCount(original)
 
@@ -267,7 +303,11 @@ struct SetTimeSignatureSpannerTests {
         var original = uniform44()
         // Mid-bar on purpose: after the whole note, so the anchor's tick is a new barline's and a tick-derived
         // endpoint would land in an EARLIER column than the anchor.
-        original.parts[0].staves[0].measures[1].voices[0].elements.append(Self.hairpin(measures: 0))
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[0].elements.append(Self.hairpin(measures: 0))
+            }
+        }
 
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setTimeSignature(measureIndex: 1, numerator: 2, denominator: 4)))
@@ -289,9 +329,13 @@ struct SetTimeSignatureSpannerTests {
     @Test("a zero-valued fractions offset counts as no endpoint, like an absent one")
     func spannerWithZeroFractionIsLeftAlone() {
         var original = uniform44()
-        original.parts[0].staves[0].measures[1].voices[0].elements.insert(
-            Self.hairpin(measures: 0, fractions: Fraction(numerator: 0, denominator: 1)), at: 0,
-        )
+        original.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[0].elements.insert(
+                    Self.hairpin(measures: 0, fractions: Fraction(numerator: 0, denominator: 1)), at: 0,
+                )
+            }
+        }
 
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setTimeSignature(measureIndex: 1, numerator: 2, denominator: 4)))

@@ -233,9 +233,11 @@ struct StringDataMSCXTests {
 
     @Test func strippingPreservedMarkupClearsNestedTuningMarkup() throws {
         var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("string-data"))
-        score.parts[0].instrument.stringData?.preservedMarkup = [
-            PreservedXML(name: "customTuning"),
-        ]
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.instrument.stringData?.preservedMarkup = [
+                PreservedXML(name: "customTuning"),
+            ]
+        }
         let stripped = score.strippingPreservedMarkup()
         #expect(stripped.parts[0].instrument.stringData?.preservedMarkup.isEmpty == true)
     }

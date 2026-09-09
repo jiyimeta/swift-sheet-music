@@ -191,8 +191,12 @@ enum MeasureStructure {
                                 spanner.nextMeasuresOffset = transform(
                                     SpannerAddress(id: id, spannerIndex: nil), spanner.nextMeasuresOffset,
                                 )
-                                score.parts[partIndex].staves[staffIndex].measures[measureIndex]
-                                    .voices[voiceIndex].elements[elementIndex] = .spanner(spanner)
+                                score.parts.updateValue(at: partIndex) { partValue in
+                                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                                        staffValue.measures[measureIndex]
+                                            .voices[voiceIndex].elements[elementIndex] = .spanner(spanner)
+                                    }
+                                }
                             case var .chord(chord) where !chord.spanners.isEmpty:
                                 // A slur begin lives in `Chord.spanners`, not as a `.spanner` element, and its
                                 // `nextMeasuresOffset` is measured from the SAME anchor — so it has to move by the
@@ -203,8 +207,12 @@ enum MeasureStructure {
                                         chord.spanners[slot].nextMeasuresOffset,
                                     )
                                 }
-                                score.parts[partIndex].staves[staffIndex].measures[measureIndex]
-                                    .voices[voiceIndex].elements[elementIndex] = .chord(chord)
+                                score.parts.updateValue(at: partIndex) { partValue in
+                                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                                        staffValue.measures[measureIndex]
+                                            .voices[voiceIndex].elements[elementIndex] = .chord(chord)
+                                    }
+                                }
                             default:
                                 continue
                             }
