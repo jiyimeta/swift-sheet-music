@@ -59,14 +59,24 @@ import SheetMusicFoundation
             storage.snapshot()
         }
 
-        /// Gate 5 covers every apply through ScoreEditor (apply / undo / redo) or the bare
-        /// apply(to:) convenience: 804 bare call sites at introduction and the production editing entry points.
-        /// Direct low-level apply(to:ids:) calls are not covered: currently 15 call sites in four identity
-        /// test files, all of which assert identity explicitly. A future direct call silently inherits this gap.
-        /// Those files are StructuralCommandIdentityTests, StructuralSpineIdentityTests,
-        /// ScoreIdentityAssignmentTests, and MeasureColumnIdentityTests.
-        /// MeasureColumnIdentityTests.swift:114 bypasses the seam deliberately to observe dropped IDs;
-        /// routing that test through a covered entry point would trap instead of testing the observable state.
+        /// Gate 5 covers every apply that reaches the score through `ScoreEditor` (apply / undo /
+        /// redo) or the bare `apply(to:)` convenience — the whole production editing surface, and
+        /// every test that drives a command either of those ways.
+        ///
+        /// It does NOT cover a direct call to the low-level `apply(to:ids:)`, which bypasses all
+        /// four seams. Today every such call sits in a test that asserts identity explicitly, so the
+        /// gap is covered by construction rather than left open — but a new direct call inherits the
+        /// gap silently, and nothing recomputes that. `EditingIdentityInvariantTests` is where to add
+        /// a guard if that stops being true.
+        ///
+        /// One test bypasses the seam **deliberately**:
+        /// `MeasureColumnIdentityTests.aLaneRebuiltFromALiteralIsDetectableBeforeTheOutAssert`
+        /// observes the state the out-assert traps on, so routing it through a covered entry point
+        /// would crash instead of testing. Do not "close the coverage gap" by moving it.
+        ///
+        /// Deliberately no counts here: a tally in a doc comment is a claim nothing recomputes, and
+        /// this file's own guard test is what measures the reach.
+        ///
         /// Called beside the out-assert at each of the four seams; no checks or counters exist in release.
         static func check(_ score: Score, at seam: Seam) {
             assert(hasUniqueIDs(score), "duplicate structural element identifiers")
