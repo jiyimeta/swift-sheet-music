@@ -161,6 +161,52 @@
         public func offsetBy(dx: CGFloat, dy: CGFloat) -> CGRect {
             CGRect(x: origin.x + dx, y: origin.y + dy, width: size.width, height: size.height)
         }
+
+        /// A copy inset by `dx` on each vertical edge and `dy` on each horizontal one, keeping the same center —
+        /// matching `CGRect.insetBy(dx:dy:)`. Negative values GROW the rect, which is the direction every caller
+        /// in this package uses it in: a hit test widens an ink box by its tolerance before asking `contains`.
+        ///
+        /// **One documented divergence, at the far edge of the contract.** Real `CGRectInset` returns the NULL
+        /// rect when the inset exceeds half the width or half the height. This stand-in has no null rect to
+        /// return — `CGRectNull` is a sentinel with an infinite origin, and this type is a plain struct with no
+        /// such value — so it returns the arithmetic result, which is a rect with a negative width or height.
+        /// That is not nothing: this type's `minX`/`maxX`/`minY`/`maxY` already normalize a negative-size rect
+        /// (see their doc comment), so the result stays coherent for every operation defined here rather than
+        /// becoming garbage. But it is NOT what Apple returns, and the difference is observable — a null rect
+        /// intersects nothing, while a normalized inverted rect can intersect.
+        ///
+        /// So `CGRectNegativeSizeTests` deliberately covers only the region where the two agree. Over-insetting
+        /// is out of contract, not merely untested: if a future caller needs it, the fix is to give this type a
+        /// null representation, not to widen the test around the current behavior.
+        public func insetBy(dx: CGFloat, dy: CGFloat) -> CGRect {
+            CGRect(
+                x: origin.x + dx, y: origin.y + dy,
+                width: size.width - dx * 2, height: size.height - dy * 2,
+            )
+        }
+
+        /// The smallest rect containing both, matching `CGRect.union(_:)`. Computed from the normalized edges,
+        /// so a rect built with a negative width or height unions identically to its standardized form.
+        ///
+        /// **An empty operand is NOT dropped**, which is the part worth stating because the opposite is the
+        /// natural guess. A rect with zero width or height still has a position, and real `CGRectUnion`
+        /// stretches to reach it: unioning `(0, 0, 10, 10)` with `(100, 100, 0, 0)` gives a rect out to
+        /// (100, 100), not the first rect unchanged. Measured against Apple's real `CGRect`, not recalled —
+        /// `CGRectNegativeSizeTests` runs that assertion unguarded, so it exercises CoreGraphics on a macOS host
+        /// and this stand-in when cross-compiled, and the two are pinned to the same answer.
+        ///
+        /// The consequence for callers: `union` is not a "bounding box of these rects, skipping the empty ones"
+        /// fold. An empty rect in the sequence contributes its origin.
+        public func union(_ other: CGRect) -> CGRect {
+            let lowerX = min(minX, other.minX)
+            let lowerY = min(minY, other.minY)
+            let upperX = max(maxX, other.maxX)
+            let upperY = max(maxY, other.maxY)
+            return CGRect(
+                x: lowerX, y: lowerY,
+                width: upperX - lowerX, height: upperY - lowerY,
+            )
+        }
     }
 
 #endif

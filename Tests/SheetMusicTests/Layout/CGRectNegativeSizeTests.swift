@@ -106,4 +106,76 @@ struct CGRectNegativeSizeTests {
         #expect(samePoint.intersects(CGRect(x: 5, y: 5, width: 0, height: 0)))
         #expect(!samePoint.intersects(otherPoint))
     }
+
+    /// `insetBy(dx:dy:)` in the direction the package actually uses it: a NEGATIVE inset, which grows the rect.
+    /// `ScoreHitTester+Text` widens a text's ink box by the hit tolerance before asking `contains`, so getting
+    /// the sign backwards would silently shrink every text hit target instead of padding it.
+    ///
+    /// The positive direction is covered too, but only within half the extent. Past that, real `CGRectInset`
+    /// returns the null rect and the stand-in cannot — that divergence is documented on `insetBy` and is out of
+    /// contract, so asserting it here would pin a disagreement rather than an agreement.
+    @Test("insetBy(dx:dy:) grows on a negative inset and shrinks on a positive one, about the same center")
+    func insetByMatchesCoreGraphics() {
+        let rect = CGRect(x: 10, y: 20, width: 40, height: 30)
+
+        let grown = rect.insetBy(dx: -5, dy: -3)
+        #expect(grown.minX == 5)
+        #expect(grown.minY == 17)
+        #expect(grown.maxX == 55)
+        #expect(grown.maxY == 53)
+
+        let shrunk = rect.insetBy(dx: 5, dy: 3)
+        #expect(shrunk.minX == 15)
+        #expect(shrunk.minY == 23)
+        #expect(shrunk.maxX == 45)
+        #expect(shrunk.maxY == 47)
+
+        // The center is what an inset preserves; it is the property that makes the sign convention memorable.
+        #expect(grown.midX == rect.midX && grown.midY == rect.midY)
+        #expect(shrunk.midX == rect.midX && shrunk.midY == rect.midY)
+
+        // A reversed rect insets identically to its standardized form, because both read through the
+        // normalizing accessors rather than through `origin`/`size` in declaration order.
+        #expect(reversed.insetBy(dx: -5, dy: -5).midX == standardized.insetBy(dx: -5, dy: -5).midX)
+    }
+
+    /// `union(_:)` on two ordinary rects, on a reversed one, and — the case that is a real question rather than
+    /// arithmetic — on an EMPTY one.
+    ///
+    /// A zero-size rect still has a position. Whether `CGRectUnion` stretches to include that position or drops
+    /// the rect entirely is exactly the kind of edge behavior `intersects(_:)` was already caught guessing at.
+    /// This assertion runs unguarded against Apple's real `CGRect` as well as against the stand-in, so it is the
+    /// real CoreGraphics answer that both are pinned to — not anyone's recollection of the documentation.
+    ///
+    /// `ScoreHitTester+Text` seeds its box from the first ink rect and unions the rest, so it never passes an
+    /// empty one today. That is why this needs stating rather than why it does not.
+    @Test("union(_:) returns the smallest rect containing both, including when one is empty")
+    func unionMatchesCoreGraphics() {
+        let left = CGRect(x: 0, y: 0, width: 10, height: 10)
+        let right = CGRect(x: 20, y: 5, width: 10, height: 10)
+
+        let both = left.union(right)
+        #expect(both.minX == 0)
+        #expect(both.minY == 0)
+        #expect(both.maxX == 30)
+        #expect(both.maxY == 15)
+
+        // Commutative, and unaffected by how either operand was built.
+        #expect(right.union(left).minX == both.minX && right.union(left).maxX == both.maxX)
+        #expect(reversed.union(standardized).minX == standardized.minX)
+        #expect(reversed.union(standardized).maxY == standardized.maxY)
+
+        // Union with itself is itself.
+        #expect(left.union(left).minX == left.minX && left.union(left).maxY == left.maxY)
+
+        // The empty operand, and the answer measured rather than recalled: real `CGRectUnion` does NOT drop a
+        // zero-size rect. It has a position, and the union stretches to reach it — so this returns a rect from
+        // (0, 0) to (100, 100), not `left` unchanged. Anyone reaching for `union` as a "bounding box of these
+        // rects, skipping the empty ones" fold will silently include an empty rect's origin; that is what
+        // CoreGraphics does and therefore what the stand-in must do.
+        let emptyOutside = CGRect(x: 100, y: 100, width: 0, height: 0)
+        let withEmpty = left.union(emptyOutside)
+        #expect(withEmpty.maxX == 100)
+        #expect(withEmpty.maxY == 100)
+    }
 }
