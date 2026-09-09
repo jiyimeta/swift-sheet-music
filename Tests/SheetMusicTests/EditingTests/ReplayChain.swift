@@ -87,5 +87,18 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
         minimumDistinctFingerprints: 11,
     )
 
-    static let all: [ReplayChain] = [.standard, .parity, .lyrics]
+    /// The selection-and-editing project's accepting-path chain for intents 76...79. The script documents
+    /// its state transitions, three-state font patch and hand-derived fingerprint floor.
+    static let properties = ReplayChain(
+        name: "properties",
+        androidAssetDir: "editReplay-properties",
+        webFixtureStem: "edit-replay-properties",
+        fixture: { EditingFixtures.twoConsecutiveC4Chords() },
+        steps: { EditReplayScript.properties(staff: $0) },
+        // Initial state + seven new states; four undo/reapply steps revisit earlier states. No recorded count
+        // supplies this floor: each of the seven authored changes must contribute to the expected spread.
+        minimumDistinctFingerprints: 8,
+    )
+
+    static let all: [ReplayChain] = [.standard, .parity, .lyrics, .properties]
 }

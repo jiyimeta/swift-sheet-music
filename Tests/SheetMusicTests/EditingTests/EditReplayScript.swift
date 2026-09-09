@@ -2,6 +2,12 @@ import Foundation
 @testable import SheetMusicCore
 
 /// One step of a scripted editing session.
+///
+/// Every intent step is assumed to apply successfully. No chain can carry an expected failure: the JNI
+/// recorder, web recorder, TypeScript replay and Kotlin replay all require acceptance. A green replay gate
+/// therefore covers only accepting paths; it provides no evidence about refusals or validation failures for
+/// any command in the catalogue. Keep refusal behavior in unit tests that assert the specific error and reason
+/// until the harness gains an expected-failure representation across its recorders and consumers.
 enum EditReplayStep {
     case intent(EditIntent)
     case undo
