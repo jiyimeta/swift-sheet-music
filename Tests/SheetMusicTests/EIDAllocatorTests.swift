@@ -40,6 +40,11 @@ struct EIDAllocatorTests {
         // even over many successive calls.
         for _ in 0 ..< 50 {
             var allocator = EIDAllocator()
+            // Pin the boundary where it actually lives: `init()` must never
+            // draw an actor of 0 or .max, independent of what the counter
+            // does later.
+            #expect(allocator.actor != 0)
+            #expect(allocator.actor != UInt64.max)
             for _ in 0 ..< 100 {
                 #expect(allocator.next() != EID.invalid)
             }

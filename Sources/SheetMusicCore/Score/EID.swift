@@ -8,11 +8,12 @@ import SheetMusicFoundation
 ///
 /// The **decoder** accepts everything MuseScore's encoder can emit, but is
 /// deliberately stricter than MuseScore's own decoder on malformed input
-/// (an empty half, or a half longer than any conforming encoder could
-/// produce): a malformed string must not decode to a valid-looking
-/// identifier, because two different malformed strings could then decode
-/// to the same one, and a duplicate identifier breaks the one invariant
-/// this retrofit exists to establish.
+/// (an empty half, a half longer than any conforming encoder could
+/// produce, or an 11-character half whose value overflows 64 bits): a
+/// malformed string must not decode to a valid-looking identifier, because
+/// two different malformed strings could then decode to the same one, and
+/// a duplicate identifier breaks the one invariant this retrofit exists to
+/// establish.
 ///
 /// The halves are **opaque**. Only identifiers this library mints have
 /// internal meaning (`first` is the actor, `second` its counter); MuseScore
@@ -81,6 +82,9 @@ extension EID {
         var result: UInt64 = 0
         for character in text.reversed() {
             guard let digit = digits[character] else { return nil }
+            // An 11-digit half carries more than 64 bits; `<<` drops the overflow
+            // silently, so two different strings would alias onto one identifier.
+            guard result >> 58 == 0 else { return nil }
             result = (result << 6) | digit
         }
         return result

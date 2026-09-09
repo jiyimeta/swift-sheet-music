@@ -113,17 +113,28 @@ extension IdentifiedArray {
 // MARK: - Restructuring
 
 extension IdentifiedArray {
+    /// The anchor-resolution rule shared by `insert` and `move`: after the
+    /// named slot, at the front when `target` is nil, or at the end when the
+    /// anchor identifier is not present.
+    private func insertionIndex(after target: EID?) -> Int {
+        if let target, let index = index(of: target) {
+            return index + 1
+        }
+        return target == nil ? 0 : values.endIndex
+    }
+
     /// Insert after the named slot, or at the front when `after` is nil.
     /// When the anchor identifier is not present, the element lands at the end.
     /// The new slot's identifier is supplied by the caller, so a command and
-    /// its replay produce the same identifier.
+    /// its replay produce the same identifier. In debug builds, this asserts
+    /// that `id` is assigned and not already present in the array, and that
+    /// a non-nil `after` is itself assigned (an unassigned anchor names
+    /// nothing and is a programming error, not a synonym for "absent").
     public mutating func insert(_ value: Value, after eid: EID?, id: EID) {
-        let position: Int
-        if let eid, let index = index(of: eid) {
-            position = index + 1
-        } else {
-            position = eid == nil ? 0 : values.endIndex
-        }
+        assert(id.isValid, "insert requires an assigned identifier")
+        assert(index(of: id) == nil, "identifier already present — inserting it would duplicate")
+        assert(eid?.isValid != false, "an anchor identifier, when given, must be assigned")
+        let position = insertionIndex(after: eid)
         values.insert(value, at: position)
         ids.insert(id, at: position)
     }
@@ -138,26 +149,35 @@ extension IdentifiedArray {
     /// its identifier, which is what lets an operation log say "this element
     /// moved" rather than "one vanished and another appeared".
     /// When `after` is nil, the element moves to the front. When the anchor
-    /// identifier is not present, the element lands at the end.
+    /// identifier is not present, the element lands at the end. In debug
+    /// builds, this asserts that a non-nil `target` is itself assigned (an
+    /// unassigned anchor names nothing and is a programming error, not a
+    /// synonym for "absent").
     public mutating func move(eid: EID, after target: EID?) {
+        assert(target?.isValid != false, "an anchor identifier, when given, must be assigned")
         guard let from = index(of: eid) else { return }
         guard target != eid else { return }
         let value = values.remove(at: from)
         let id = ids.remove(at: from)
-        let position: Int
-        if let target, let index = index(of: target) {
-            position = index + 1
-        } else {
-            position = target == nil ? 0 : values.endIndex
-        }
+        // Resolve the anchor AFTER the subject has been removed — the
+        // shifted-index semantics this relies on are covered by the
+        // restructuring tests.
+        let position = insertionIndex(after: target)
         values.insert(value, at: position)
         ids.insert(id, at: position)
     }
 
     /// A different element in the same place, so it takes a new identifier.
+    /// In debug builds, this asserts that `newEID` is assigned and not
+    /// already present elsewhere in the array.
     public mutating func replace(
         at eid: EID, with value: Value, newEID: EID,
     ) {
+        assert(newEID.isValid, "replace requires an assigned identifier")
+        assert(
+            newEID == eid || index(of: newEID) == nil,
+            "identifier already present — replacing would duplicate",
+        )
         guard let index = index(of: eid) else { return }
         values[index] = value
         ids[index] = newEID

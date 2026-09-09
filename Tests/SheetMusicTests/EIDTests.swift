@@ -27,7 +27,7 @@ struct EIDTests {
         #expect(EID(string: "AB_A") == EID(first: 64, second: 0))
     }
 
-    @Test func roundTripsAcrossTheWholeAlphabet() {
+    @Test func roundTripsASpreadOfRepresentativeValues() {
         for raw in [UInt64(0), 1, 63, 64, 4095, 4096, 1 << 32, UInt64.max - 1] {
             let eid = EID(first: raw, second: raw &+ 7)
             #expect(EID(string: eid.stringValue) == eid)
@@ -58,6 +58,21 @@ struct EIDTests {
         // than being rejected. We reject it: it cannot have come from any
         // conforming encoder.
         #expect(EID(string: "AAAAAAAAAAAA_A") == nil)
+    }
+
+    /// `<<` on `UInt64` silently discards overflowing bits, so before the
+    /// guard, an 11-character half whose leading (most-significant) digit is
+    /// >= 16 wrapped onto the same value as `(leading digit - 16)`: "B" (1)
+    /// and "R" (17) differ only in that leading digit, and both decoded to
+    /// `1152921504606846976`. "AAAAAAAAAAB" is the genuine encoding our own
+    /// encoder produces for that value (leading digit 1 does not overflow 64
+    /// bits), so it must keep decoding successfully; "AAAAAAAAAAR" cannot
+    /// have come from any conforming encoder (leading digit 17 does
+    /// overflow) and the guard must now reject it — breaking the alias
+    /// without also rejecting the value it collided with.
+    @Test func rejectsTheOverflowAliasingPair() {
+        #expect(EID(string: "AAAAAAAAAAB_A") == EID(first: 1_152_921_504_606_846_976, second: 0))
+        #expect(EID(string: "AAAAAAAAAAR_A") == nil)
     }
 
     /// The property that actually matters: every identifier our own

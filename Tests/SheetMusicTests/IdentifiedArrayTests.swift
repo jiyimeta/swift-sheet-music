@@ -147,8 +147,6 @@ struct IdentifiedArrayRestructuringTests {
     }
 
     @Test func assigningMissingIdentifiersLeavesExistingOnesAlone() {
-        // The annotation is required, not decorative: without it `Value` can
-        // infer as `(EID, String)` through `init(_ values: [Value])`.
         var array: IdentifiedArray<String> =
             IdentifiedArray([(a, "a"), (EID.invalid, "b"), (c, "c")])
         var allocator = EIDAllocator(actor: 7, counter: 0)
@@ -197,5 +195,24 @@ struct IdentifiedArrayRestructuringTests {
         #expect(array.eid(at: 0) == a)
         #expect(array.eid(at: 1) == b)
         #expect(array.eid(at: 2) == c)
+    }
+
+    @Test func anEmptyArraySupportsAbsentMoveThenInsertion() {
+        var array = IdentifiedArray<String>()
+        #expect(array.isEmpty)
+        #expect(array.hasUnassignedIDs == false)
+
+        // Moving an id that is not present is a harmless no-op, even on an
+        // empty array.
+        array.move(eid: EID(first: 9, second: 9), after: nil)
+        #expect(array.isEmpty)
+
+        array.insert("a", after: nil, id: a)
+        #expect(Array(array) == ["a"])
+        #expect(array.eid(at: 0) == a)
+
+        array.insert("b", after: a, id: b)
+        #expect(Array(array) == ["a", "b"])
+        #expect(array.eid(at: 1) == b)
     }
 }
