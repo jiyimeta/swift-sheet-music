@@ -29,8 +29,12 @@ public final class ScoreEditor {
     /// first edit lands.
     public private(set) var lastAffectedLocation: VoiceElementID?
 
+    /// Identifies the adopted score with this editor's live allocator, without adding an undo step.
+    /// This also covers the spec's ScoreEditSession.init chokepoint: the session constructs an editor,
+    /// while hosts constructing an editor directly receive the same fully identified initial state.
     public init(score: Score) {
         self.score = score
+        self.score.assignMissingIDs(using: &ids)
     }
 
     public var canUndo: Bool {

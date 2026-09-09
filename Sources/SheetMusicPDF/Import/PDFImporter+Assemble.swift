@@ -27,9 +27,7 @@ extension PDFImporter {
         geometry: PDFGeometryCollector? = nil,
         rasterPages: Set<Int>? = nil,
     ) -> Score {
-        guard !systems.isEmpty else {
-            return Score(division: 480, source: .pdf)
-        }
+        guard !systems.isEmpty else { return Score(division: 480, source: .pdf) }
         // Derive the global part shape from the RICHEST system (max total
         // staves), not blindly from systems[0]. The first system is often a
         // title-page system whose staff detection is degenerate (fewer
@@ -116,13 +114,15 @@ extension PDFImporter {
             systems: systems, texts: texts,
             measureCount: assembledParts.first?.staves.first?.measures.count ?? 0,
         )
-        return Score(
-            division: 480,
-            parts: IdentifiedArray(assembledParts),
+        var score = Score(
+            division: 480, parts: IdentifiedArray(assembledParts),
             systemMeasures: IdentifiedArray(systemMeasures),
             titleFrame: titleFrame,
             source: .pdf,
         )
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        return score
     }
 
     /// Distribute each slot's measure array back into its Part's staff, and

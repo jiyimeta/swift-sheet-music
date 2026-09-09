@@ -111,17 +111,18 @@ public enum ScoreLoader {
     public static func loadScoreWithDiagnostics(
         bytes: Data, sourceFilename: String? = nil,
     ) throws -> LoadedScore {
+        let loaded: LoadedScore
         switch sniff(bytes) {
         case .mscx:
             let result = try MSCXParser.parseWithDiagnostics(bytes)
-            return LoadedScore(score: result.score, diagnostics: result.diagnostics)
+            loaded = LoadedScore(score: result.score, diagnostics: result.diagnostics)
         case .mscz:
             // A ZIP container is either `.mscz` or `.mxl`, and the magic cannot tell them apart. MuseScore first
             // because it is overwhelmingly the common case; the MXL path is the fallback rather than a peer so a
             // genuine `.mscz` never pays for the second attempt.
             do {
                 let result = try MSCZReader.parseWithDiagnostics(bytes)
-                return LoadedScore(score: result.score, diagnostics: result.diagnostics)
+                loaded = LoadedScore(score: result.score, diagnostics: result.diagnostics)
             } catch let error as SheetMusicError where error.isMuseScoreDocumentFault {
                 // The container did yield a `<museScore>` document and the
                 // MuseScore reader is the one that has an opinion about it.
@@ -130,15 +131,15 @@ public enum ScoreLoader {
                 // MusicXML problem in a MuseScore file.
                 throw error
             } catch {
-                return try LoadedScore(score: MusicXMLParser.parse(mxlData: bytes), diagnostics: [])
+                loaded = try LoadedScore(score: MusicXMLParser.parse(mxlData: bytes), diagnostics: [])
             }
         case .musicXML:
-            return try LoadedScore(score: MusicXMLParser.parse(bytes), diagnostics: [])
+            loaded = try LoadedScore(score: MusicXMLParser.parse(bytes), diagnostics: [])
         case .midi:
             let score = try MidiImporter.parse(
                 bytes, options: .init(), sourceFilename: sourceFilename,
             )
-            return LoadedScore(score: score, diagnostics: [])
+            loaded = LoadedScore(score: score, diagnostics: [])
         case .unknown:
             throw SheetMusicError.malformedScore(
                 ScoreFault(
@@ -147,6 +148,10 @@ public enum ScoreLoader {
                 ),
             )
         }
+        var score = loaded.score
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        return LoadedScore(score: score, diagnostics: loaded.diagnostics)
     }
 
     /// Reads the file at `url` and parses it, taking the MIDI title fallback from the file's own name.

@@ -218,13 +218,16 @@ extension Score {
             frameTexts.append(FrameText(style: .composer, text: composer))
         }
 
-        return Score(
+        var score = Score(
             division: 480,
             parts: IdentifiedArray(parts),
             systemMeasures: IdentifiedArray(systemMeasures),
             metaTags: metaTags,
             titleFrame: ScoreFrame(heightSp: 10, texts: frameTexts),
         )
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        return score
     }
 
     /// Anchors one `.normal` bracket per group on the top staff of the group's first part, spanning every

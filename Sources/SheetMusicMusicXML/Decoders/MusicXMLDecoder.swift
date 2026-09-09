@@ -43,13 +43,16 @@ extension Score {
         // Hard-code division = 480 ticks per quarter, matching MuseScore's default
         // and the `*_ref.mscx` fixtures we semantic-compare against. MusicXML's
         // own `<divisions>` is part-local and would vary per fixture.
-        return Score(
+        var score = Score(
             division: 480,
             parts: IdentifiedArray(parts),
             systemMeasures: IdentifiedArray(systemMeasures),
             metaTags: metaTags,
             source: .musicXML,
         )
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        return score
     }
 
     /// MusicXML carries metadata in `<work>`, `<identification>`, and `<credit>`.
