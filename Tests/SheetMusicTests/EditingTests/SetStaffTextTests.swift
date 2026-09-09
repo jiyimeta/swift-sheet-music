@@ -58,9 +58,11 @@ struct SetStaffTextTests {
         let before = score
         let writeInverse = try SetStaffText(anchor: Self.slot(Self.flute, 2, 0), text: "a", isSystemText: false)
             .apply(to: &score)
-        score.systemMeasures[2].elements[0].element = .staffText(StaffText(
-            text: "a", offsetX: 2, color: ScoreColor(red: 255, green: 0, blue: 0),
-        ))
+        score.systemMeasures.updateValue(at: 2) { column in
+            column.elements[0].element = .staffText(StaffText(
+                text: "a", offsetX: 2, color: ScoreColor(red: 255, green: 0, blue: 0),
+            ))
+        }
         let seeded = score
         _ = try SetStaffText(anchor: Self.slot(Self.flute, 2, 0), text: "b", isSystemText: false).apply(to: &score)
         guard case let .staffText(renamed)? = score.systemMeasures[2].elements.first?.element else {

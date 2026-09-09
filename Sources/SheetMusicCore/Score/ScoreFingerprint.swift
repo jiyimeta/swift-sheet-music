@@ -71,7 +71,7 @@ extension Score {
                 }
             }
         }
-        hash.combineSystemLane(systemMeasures)
+        hash.combineSystemLane(systemMeasures.values)
         return Int64(bitPattern: hash.value)
     }
 }

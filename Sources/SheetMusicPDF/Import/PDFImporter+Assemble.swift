@@ -119,7 +119,7 @@ extension PDFImporter {
         return Score(
             division: 480,
             parts: assembledParts,
-            systemMeasures: systemMeasures,
+            systemMeasures: IdentifiedArray(systemMeasures),
             titleFrame: titleFrame,
             source: .pdf,
         )

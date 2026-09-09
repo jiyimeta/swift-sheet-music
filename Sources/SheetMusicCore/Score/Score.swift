@@ -15,7 +15,7 @@ public struct Score: Sendable, Equatable {
     /// `measures.count` for any part/staff with non-empty content.
     /// Parsers (MSCX, MusicXML, MIDI import) and edit commands that
     /// add/remove measures must maintain this alignment.
-    public var systemMeasures: [SystemMeasure]
+    public var systemMeasures: IdentifiedArray<SystemMeasure>
     public var metaTags: [String: String]
     /// Score-level boxes in their document order among measures.
     public var blocks: [PositionedScoreBlock]
@@ -71,7 +71,7 @@ public struct Score: Sendable, Equatable {
     public init(
         division: Int,
         parts: [Part] = [],
-        systemMeasures: [SystemMeasure] = [],
+        systemMeasures: IdentifiedArray<SystemMeasure> = [],
         metaTags: [String: String] = [:],
         titleFrame: ScoreFrame? = nil,
         blocks: [PositionedScoreBlock] = [],
@@ -100,6 +100,20 @@ public struct Score: Sendable, Equatable {
         self.preservedMarkup = preservedMarkup
     }
 
+    /// Whether any currently identified collection contains an unassigned slot.
+    /// Task 2 covers systemMeasures; Task 3 extends this to parts and staves,
+    /// and P2b/P3 extend it to the remaining identified collections.
+    public var hasUnassignedIDs: Bool {
+        systemMeasures.hasUnassignedIDs
+    }
+
+    /// Fills only missing IDs on entry, preserving all assigned identifiers.
+    /// Extend this traversal alongside hasUnassignedIDs as later tasks identify
+    /// parts, staves, voice contents, and chord notes.
+    public mutating func assignMissingIDs(using ids: inout EIDAllocator) {
+        systemMeasures.assignMissingIDs(using: &ids)
+    }
+
     /// Return a copy without source-only XML carried for MSCX
     /// fidelity. As more model layers gain preserved markup, their
     /// clearing passes are added here.
@@ -121,10 +135,12 @@ public struct Score: Sendable, Equatable {
             }
         }
         for measureIndex in stripped.systemMeasures.indices {
-            for elementIndex in stripped.systemMeasures[measureIndex].elements.indices {
-                stripPreservedMarkup(
-                    from: &stripped.systemMeasures[measureIndex].elements[elementIndex].element,
-                )
+            stripped.systemMeasures.updateValue(at: measureIndex) { column in
+                for elementIndex in column.elements.indices {
+                    stripPreservedMarkup(
+                        from: &column.elements[elementIndex].element,
+                    )
+                }
             }
         }
         for partIndex in stripped.parts.indices {

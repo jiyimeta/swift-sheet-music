@@ -29,8 +29,8 @@
                     instrument: Instrument(id: "x"),
                     staves: [Staff(measures: measures)],
                 )],
-                systemMeasures: systemMeasures
-                    ?? Array(repeating: SystemMeasure(), count: measures.count),
+                systemMeasures: IdentifiedArray(systemMeasures
+                    ?? Array(repeating: SystemMeasure(), count: measures.count)),
             )
         }
 

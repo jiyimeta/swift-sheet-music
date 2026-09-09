@@ -72,7 +72,7 @@ public struct SetTimeSignature: EditCommand {
         return try TimeSignatureRegion.rebar(
             &score, from: measureIndex,
             to: TimeSignature(numerator: numerator, denominator: denominator, symbol: symbol),
-            declaringAtHead: true,
+            declaringAtHead: true, ids: &ids,
         )
     }
 }
@@ -117,7 +117,7 @@ public struct RemoveTimeSignature: EditCommand {
         return try TimeSignatureRegion.rebar(
             &score, from: measureIndex,
             to: TimeSignatureRegion.signature(inForceBefore: measureIndex, in: score),
-            declaringAtHead: false,
+            declaringAtHead: false, ids: &ids,
         )
     }
 }
@@ -151,7 +151,7 @@ struct RestoreTimeSignatureRegion: EditCommand {
 
         let previousColumns = TimeSignatureRegion.capturedColumns(of: score, over: range)
         let previousEndpoints = TimeSignatureRegion.currentEndpoints(for: spannerEndpoints, in: score)
-        TimeSignatureRegion.splice(columns, into: &score, replacing: range)
+        TimeSignatureRegion.splice(columns, into: &score, replacing: range, ids: &ids)
         TimeSignatureRegion.writeEndpoints(spannerEndpoints, into: &score)
         return RestoreTimeSignatureRegion(
             range: range.lowerBound ..< range.lowerBound + columns.count,
@@ -172,6 +172,7 @@ extension TimeSignatureRegion {
     /// the score exactly as it was.
     static func rebar(
         _ score: inout Score, from measureIndex: Int, to signature: TimeSignature, declaringAtHead: Bool,
+        ids: inout EIDAllocator,
     ) throws -> RestoreTimeSignatureRegion {
         let end = nextExplicitChange(after: measureIndex, in: score)
             ?? MeasureStructure.measureCount(of: score)
@@ -197,7 +198,7 @@ extension TimeSignatureRegion {
         let endpoints = restatingSpannerEndpoints(
             &columns, region: region, signature: signature, in: score,
         )
-        splice(columns, into: &score, replacing: region)
+        splice(columns, into: &score, replacing: region, ids: &ids)
         writeEndpoints(endpoints.map(\.restated), into: &score)
         return RestoreTimeSignatureRegion(
             range: measureIndex ..< measureIndex + columns.count,

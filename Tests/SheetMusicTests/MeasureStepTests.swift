@@ -24,7 +24,7 @@ struct MeasureStepTests {
         return Score(
             division: 480,
             parts: [part],
-            systemMeasures: Array(repeating: SystemMeasure(), count: 4),
+            systemMeasures: IdentifiedArray(Array(repeating: SystemMeasure(), count: 4)),
         )
     }
 

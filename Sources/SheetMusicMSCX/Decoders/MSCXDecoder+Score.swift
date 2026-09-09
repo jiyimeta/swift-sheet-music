@@ -131,7 +131,7 @@ extension Score {
         return Score(
             division: division,
             parts: parts,
-            systemMeasures: resolvedSystemMeasures,
+            systemMeasures: IdentifiedArray(resolvedSystemMeasures),
             metaTags: metaTags,
             blocks: blocks,
             style: style,

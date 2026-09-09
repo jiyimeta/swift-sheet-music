@@ -45,7 +45,7 @@ struct FermataMidiTests {
         return Score(
             division: 480,
             parts: [part],
-            systemMeasures: systemMeasures,
+            systemMeasures: IdentifiedArray(systemMeasures),
         )
     }
 

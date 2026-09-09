@@ -277,7 +277,7 @@ enum ScoreSemanticComparison {
         // round-trip through both. (Tempo / rehearsal mark / swing
         // are kept; only `.staffText` mirrors the old voice-level
         // strip semantics.)
-        s.systemMeasures = s.systemMeasures.map { measure in
+        s.systemMeasures.mapValues { measure in
             var copy = measure
             copy.elements = copy.elements.filter { element in
                 if case .staffText = element.element { return false }

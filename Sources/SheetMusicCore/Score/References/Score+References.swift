@@ -66,7 +66,7 @@ extension Score {
         }
         set {
             guard let newValue, systemMeasures.indices.contains(ref.measureIndex) else { return }
-            systemMeasures[ref.measureIndex] = newValue
+            systemMeasures.updateValue(at: ref.measureIndex) { $0 = newValue }
         }
     }
 }

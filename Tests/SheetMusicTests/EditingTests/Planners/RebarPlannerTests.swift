@@ -19,8 +19,8 @@ struct RebarPlannerTests {
         return Score(
             division: division,
             parts: [part],
-            systemMeasures: systemMeasures
-                ?? Array(repeating: SystemMeasure(), count: measures.count),
+            systemMeasures: IdentifiedArray(systemMeasures
+                ?? Array(repeating: SystemMeasure(), count: measures.count)),
         )
     }
 

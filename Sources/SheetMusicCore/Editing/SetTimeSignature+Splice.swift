@@ -153,7 +153,9 @@ enum TimeSignatureRegion {
     /// A staff too short to cover `range` is skipped whole rather than padded — the same conservatism
     /// `InsertMeasure.insert` applies to `systemMeasures`, and for the same reason: a score that never held the
     /// invariant must come back out of an undo exactly as it went in, not partially patched into it.
-    static func splice(_ columns: [MeasureSlice], into score: inout Score, replacing range: Range<Int>) {
+    static func splice(
+        _ columns: [MeasureSlice], into score: inout Score, replacing range: Range<Int>, ids: inout EIDAllocator,
+    ) {
         let parallelLane = score.systemMeasures.count == MeasureStructure.measureCount(of: score)
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
@@ -171,6 +173,18 @@ enum TimeSignatureRegion {
             }
         }
         guard parallelLane, score.systemMeasures.count >= range.upperBound else { return }
-        score.systemMeasures.replaceSubrange(range, with: columns.map(\.systemMeasure))
+        let sharedCount = min(range.count, columns.count)
+        for offset in 0 ..< sharedCount {
+            score.systemMeasures.updateValue(at: range.lowerBound + offset) { $0 = columns[offset].systemMeasure }
+        }
+        for index in (range.lowerBound + sharedCount ..< range.upperBound).reversed() {
+            let eid = score.systemMeasures.eid(at: index)
+            score.systemMeasures.remove(eid: eid)
+        }
+        for offset in sharedCount ..< columns.count {
+            let index = range.lowerBound + offset
+            let anchor = index == 0 ? nil : score.systemMeasures.eid(at: index - 1)
+            score.systemMeasures.insert(columns[offset].systemMeasure, after: anchor, id: ids.next())
+        }
     }
 }

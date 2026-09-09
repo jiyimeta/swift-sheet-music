@@ -129,11 +129,13 @@ public struct AddPart: EditCommand {
         for measureIndex in score.systemMeasures.indices
             where restoredOriginalStaves.indices.contains(measureIndex)
         {
-            for elementIndex in score.systemMeasures[measureIndex].elements.indices
-                where restoredOriginalStaves[measureIndex].indices.contains(elementIndex)
-            {
-                score.systemMeasures[measureIndex].elements[elementIndex].originalStaff =
-                    restoredOriginalStaves[measureIndex][elementIndex]
+            score.systemMeasures.updateValue(at: measureIndex) { column in
+                for elementIndex in column.elements.indices
+                    where restoredOriginalStaves[measureIndex].indices.contains(elementIndex)
+                {
+                    column.elements[elementIndex].originalStaff =
+                        restoredOriginalStaves[measureIndex][elementIndex]
+                }
             }
         }
         if let restoredCanonicalFlags, partIndex == 0 {
@@ -215,14 +217,16 @@ public struct AddPart: EditCommand {
     /// keeps naming the staff it was written on.
     private static func restampSystemElements(in score: inout Score, fromPartIndex partIndex: Int) {
         for measureIndex in score.systemMeasures.indices {
-            for elementIndex in score.systemMeasures[measureIndex].elements.indices {
-                guard let address = score.systemMeasures[measureIndex].elements[elementIndex].originalStaff,
-                      address.partIndex >= partIndex
-                else { continue }
-                score.systemMeasures[measureIndex].elements[elementIndex].originalStaff = StaffAddress(
-                    partIndex: address.partIndex + 1,
-                    staffIndexInPart: address.staffIndexInPart,
-                )
+            score.systemMeasures.updateValue(at: measureIndex) { column in
+                for elementIndex in column.elements.indices {
+                    guard let address = column.elements[elementIndex].originalStaff,
+                          address.partIndex >= partIndex
+                    else { continue }
+                    column.elements[elementIndex].originalStaff = StaffAddress(
+                        partIndex: address.partIndex + 1,
+                        staffIndexInPart: address.staffIndexInPart,
+                    )
+                }
             }
         }
     }

@@ -293,8 +293,10 @@ struct MSCXPreservedMarkupTests {
                     instrument.channels[channelIndex].preservedMarkup = [marker]
                 }
                 change.instrument = instrument
-                score.systemMeasures[measureIndex].elements[elementIndex].element =
-                    .instrumentChange(change)
+                score.systemMeasures.updateValue(at: measureIndex) { column in
+                    column.elements[elementIndex].element =
+                        .instrumentChange(change)
+                }
                 seeded += 1
             }
         }

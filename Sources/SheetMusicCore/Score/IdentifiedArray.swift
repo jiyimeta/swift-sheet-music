@@ -17,7 +17,12 @@ import SheetMusicFoundation
 /// integer subscripting, `count`, `map`, `filter` — compiles unchanged.
 public struct IdentifiedArray<Value: Sendable & Equatable>: Sendable {
     private var ids: [EID]
-    private var values: [Value]
+    /// Read-only access to the stored array for consumers that do not need slot identity.
+    /// Array COW avoids an eager copy, and concrete consumers avoid extra generic specialization.
+    /// There is deliberately no public setter: rebuilding this collection from a mutated
+    /// array would create all-unassigned slots. The editing entry points assert on exit
+    /// instead of filling those slots and hiding the lost identity.
+    public private(set) var values: [Value]
 
     public init() {
         ids = []

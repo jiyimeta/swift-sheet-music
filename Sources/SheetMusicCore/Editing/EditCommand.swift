@@ -37,7 +37,10 @@ extension EditCommand {
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         var ids = EIDAllocator()
-        return try apply(to: &score, ids: &ids)
+        score.assignMissingIDs(using: &ids)
+        let inverse = try apply(to: &score, ids: &ids)
+        assert(!score.hasUnassignedIDs, "command dropped element identifiers")
+        return inverse
     }
 
     /// Stamps the conforming command's type name as the refusal operation.

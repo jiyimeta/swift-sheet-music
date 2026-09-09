@@ -72,7 +72,7 @@ extension MidiImporter {
         return Score(
             division: file.division,
             parts: parts,
-            systemMeasures: systemMeasures,
+            systemMeasures: IdentifiedArray(systemMeasures),
             metaTags: meta,
             source: .midi,
         )

@@ -40,7 +40,7 @@ struct PlaybackEnginePreRollTests {
         let systemMeasures = [SystemMeasure(elements: [
             PositionedSystemElement(position: .start, element: .tempo(Tempo(beatsPerSecond: 2.0))),
         ])] + Array(repeating: SystemMeasure(), count: max(0, measureCount - 1))
-        return Score(division: division, parts: [part], systemMeasures: systemMeasures, metaTags: [:])
+        return Score(division: division, parts: [part], systemMeasures: IdentifiedArray(systemMeasures), metaTags: [:])
     }
 
     private static func managedChannels(_ score: Score) -> Set<Int> {

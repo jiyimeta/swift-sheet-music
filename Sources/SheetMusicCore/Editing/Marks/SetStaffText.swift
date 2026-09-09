@@ -18,7 +18,7 @@ public struct SetStaffText: EditCommand {
     /// The text to write, trimmed by `apply`; `nil` removes. Ignored on the restore path.
     public let text: String?
     public let isSystemText: Bool
-    let restoredLane: [SystemMeasure]?
+    let restoredLane: IdentifiedArray<SystemMeasure>?
 
     public init(anchor: VoiceElementID, text: String?, isSystemText: Bool) {
         self.anchor = anchor
@@ -27,7 +27,7 @@ public struct SetStaffText: EditCommand {
         restoredLane = nil
     }
 
-    init(restoringLane lane: [SystemMeasure], anchor: VoiceElementID, isSystemText: Bool) {
+    init(restoringLane lane: IdentifiedArray<SystemMeasure>, anchor: VoiceElementID, isSystemText: Bool) {
         self.anchor = anchor
         text = nil
         self.isSystemText = isSystemText
@@ -53,14 +53,16 @@ public struct SetStaffText: EditCommand {
         if let text {
             let trimmed = text.trimmingWhitespaceAndNewlines()
             guard !trimmed.isEmpty else { throw Self.refused(.emptyStaffText) }
-            RehearsalMarkLane.pad(&score)
-            write(trimmed, at: position, into: &score.systemMeasures[anchor.measureIndex])
+            RehearsalMarkLane.pad(&score, ids: &ids)
+            score.systemMeasures.updateValue(at: anchor.measureIndex) { write(trimmed, at: position, into: &$0) }
         } else {
             guard Self.current(at: anchor, isSystemText: isSystemText, in: score) != nil else {
                 throw Self.refused(.targetNotFound(anchor))
             }
-            score.systemMeasures[anchor.measureIndex].elements.removeAll {
-                $0.position == position && matches($0)
+            score.systemMeasures.updateValue(at: anchor.measureIndex) { measure in
+                measure.elements.removeAll {
+                    $0.position == position && matches($0)
+                }
             }
         }
         return SetStaffText(restoringLane: previous, anchor: anchor, isSystemText: isSystemText)

@@ -46,7 +46,7 @@ extension Score {
         return Score(
             division: 480,
             parts: parts,
-            systemMeasures: systemMeasures,
+            systemMeasures: IdentifiedArray(systemMeasures),
             metaTags: metaTags,
             source: .musicXML,
         )

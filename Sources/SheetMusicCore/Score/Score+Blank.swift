@@ -221,7 +221,7 @@ extension Score {
         return Score(
             division: 480,
             parts: parts,
-            systemMeasures: systemMeasures,
+            systemMeasures: IdentifiedArray(systemMeasures),
             metaTags: metaTags,
             titleFrame: ScoreFrame(heightSp: 10, texts: frameTexts),
         )

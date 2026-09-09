@@ -57,9 +57,12 @@ public final class ScoreEditSession {
     /// step by doing nothing too.
     @discardableResult
     public func apply(_ intent: EditIntent) -> Bool {
+        var planningScore = editor.score
+        var planningIDs = idAllocator
+        planningScore.assignMissingIDs(using: &planningIDs)
         let planned: (any EditCommand)?
         do {
-            planned = try Self.command(for: intent, in: editor.score, ids: idAllocator, depth: 0)
+            planned = try Self.command(for: intent, in: planningScore, ids: planningIDs, depth: 0)
         } catch {
             lastRefusal = Self.refusal(for: error, operation: "apply")
             return false
@@ -69,7 +72,7 @@ public final class ScoreEditSession {
             return false
         }
         do {
-            try editor.apply(Self.renotatingAccidentals(planned, from: editor.score, ids: idAllocator))
+            try editor.apply(Self.renotatingAccidentals(planned, from: planningScore, ids: planningIDs))
         } catch {
             lastRefusal = Self.refusal(for: error, operation: "apply")
             return false

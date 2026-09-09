@@ -240,11 +240,13 @@ struct PartCommandTests {
     @Test("a system element anchored into the removed part re-anchors on the first staff")
     func removePartReanchorsSystemElementsPointingIntoIt() throws {
         var score = fixture()
-        score.systemMeasures[1].elements.append(PositionedSystemElement(
-            position: .start,
-            element: .tempo(Tempo(beatsPerSecond: 3)),
-            originalStaff: StaffAddress(partIndex: 1, staffIndexInPart: 1),
-        ))
+        score.systemMeasures.updateValue(at: 1) { column in
+            column.elements.append(PositionedSystemElement(
+                position: .start,
+                element: .tempo(Tempo(beatsPerSecond: 3)),
+                originalStaff: StaffAddress(partIndex: 1, staffIndexInPart: 1),
+            ))
+        }
         let original = score
         let inverse = try RemovePart(partIndex: 1).apply(to: &score)
         #expect(score.systemMeasures[1].elements.count == 1)

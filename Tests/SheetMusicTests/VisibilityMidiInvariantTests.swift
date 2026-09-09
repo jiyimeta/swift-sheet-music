@@ -31,8 +31,10 @@ struct VisibilityMidiInvariantTests {
                     hidden.systemMeasures[measureIndex].elements[elementIndex].element
                 {
                     tempo.visible = false
-                    hidden.systemMeasures[measureIndex].elements[elementIndex].element =
-                        .tempo(tempo)
+                    hidden.systemMeasures.updateValue(at: measureIndex) { column in
+                        column.elements[elementIndex].element =
+                            .tempo(tempo)
+                    }
                 }
             }
         }

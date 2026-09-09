@@ -154,7 +154,7 @@
             return Score(
                 division: score.division,
                 parts: score.parts,
-                systemMeasures: lane,
+                systemMeasures: IdentifiedArray(lane),
             )
         }
 

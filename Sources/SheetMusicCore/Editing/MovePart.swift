@@ -168,13 +168,15 @@ public struct MovePart: EditCommand {
         // The permutation is stated over the PRE-move indices, so this reads each address once and writes the
         // answer — re-stamping in place against the already-permuted parts would compose the map with itself.
         for measureIndex in score.systemMeasures.indices {
-            for elementIndex in score.systemMeasures[measureIndex].elements.indices {
-                guard let address = score.systemMeasures[measureIndex].elements[elementIndex].originalStaff
-                else { continue }
-                score.systemMeasures[measureIndex].elements[elementIndex].originalStaff = StaffAddress(
-                    partIndex: permuted(address.partIndex),
-                    staffIndexInPart: address.staffIndexInPart,
-                )
+            score.systemMeasures.updateValue(at: measureIndex) { column in
+                for elementIndex in column.elements.indices {
+                    guard let address = column.elements[elementIndex].originalStaff
+                    else { continue }
+                    column.elements[elementIndex].originalStaff = StaffAddress(
+                        partIndex: permuted(address.partIndex),
+                        staffIndexInPart: address.staffIndexInPart,
+                    )
+                }
             }
         }
     }
@@ -218,11 +220,13 @@ public struct MovePart: EditCommand {
         for measureIndex in score.systemMeasures.indices
             where restoredOriginalStaves.indices.contains(measureIndex)
         {
-            for elementIndex in score.systemMeasures[measureIndex].elements.indices
-                where restoredOriginalStaves[measureIndex].indices.contains(elementIndex)
-            {
-                score.systemMeasures[measureIndex].elements[elementIndex].originalStaff =
-                    restoredOriginalStaves[measureIndex][elementIndex]
+            score.systemMeasures.updateValue(at: measureIndex) { column in
+                for elementIndex in column.elements.indices
+                    where restoredOriginalStaves[measureIndex].indices.contains(elementIndex)
+                {
+                    column.elements[elementIndex].originalStaff =
+                        restoredOriginalStaves[measureIndex][elementIndex]
+                }
             }
         }
     }

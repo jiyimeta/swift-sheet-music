@@ -63,7 +63,7 @@ public struct InsertMeasure: EditCommand {
                     }
                 }
             }
-            insert(contents, into: &score)
+            insert(contents, into: &score, ids: &ids)
             restoreEndpointSpanners(in: &score)
             return DeleteMeasure(measureIndex: measureIndex)
         }
@@ -87,7 +87,7 @@ public struct InsertMeasure: EditCommand {
                 }
             }
         }
-        insert(column, into: &score)
+        insert(column, into: &score, ids: &ids)
         return DeleteMeasure(measureIndex: measureIndex)
     }
 
@@ -113,7 +113,7 @@ public struct InsertMeasure: EditCommand {
         }
     }
 
-    private func insert(_ column: MeasureSlice, into score: inout Score) {
+    private func insert(_ column: MeasureSlice, into score: inout Score, ids: inout EIDAllocator) {
         let preInsertMeasureCount = MeasureStructure.measureCount(of: score)
         MeasureStructure.adjustSpannerOffsets(in: &score, forInsertionAt: measureIndex)
         for partIndex in score.parts.indices {
@@ -126,7 +126,8 @@ public struct InsertMeasure: EditCommand {
         // never maintained the invariant (see `MeasureSlice`'s `EditingFixtures` callout) must come back
         // out exactly as empty as it went in, not partially patched.
         if score.systemMeasures.count == preInsertMeasureCount {
-            score.systemMeasures.insert(column.systemMeasure, at: measureIndex)
+            let anchor = measureIndex == 0 ? nil : score.systemMeasures.eid(at: measureIndex - 1)
+            score.systemMeasures.insert(column.systemMeasure, after: anchor, id: ids.next())
         }
     }
 }

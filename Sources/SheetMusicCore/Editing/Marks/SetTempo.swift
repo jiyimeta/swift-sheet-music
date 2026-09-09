@@ -31,7 +31,7 @@ public struct SetTempo: EditCommand {
     public let anchor: VoiceElementID
     /// The marking to write, or `nil` to remove the tempo at the anchor's beat. Ignored on the restore path.
     public let marking: Marking?
-    let restoredLane: [SystemMeasure]?
+    let restoredLane: IdentifiedArray<SystemMeasure>?
 
     public init(anchor: VoiceElementID, marking: Marking?) {
         self.anchor = anchor
@@ -39,7 +39,7 @@ public struct SetTempo: EditCommand {
         restoredLane = nil
     }
 
-    init(restoringLane lane: [SystemMeasure], anchor: VoiceElementID) {
+    init(restoringLane lane: IdentifiedArray<SystemMeasure>, anchor: VoiceElementID) {
         self.anchor = anchor
         marking = nil
         restoredLane = lane
@@ -63,13 +63,15 @@ public struct SetTempo: EditCommand {
             throw Self.refused(.targetNotFound(anchor))
         }
         if let marking {
-            RehearsalMarkLane.pad(&score)
-            Self.write(marking, at: position, into: &score.systemMeasures[anchor.measureIndex])
+            RehearsalMarkLane.pad(&score, ids: &ids)
+            score.systemMeasures.updateValue(at: anchor.measureIndex) { Self.write(marking, at: position, into: &$0) }
         } else {
             // Decided against the untouched score, before anything is written — `RemoveRehearsalMark`'s order.
             guard Self.current(at: anchor, in: score) != nil else { throw Self.refused(.targetNotFound(anchor)) }
-            score.systemMeasures[anchor.measureIndex].elements.removeAll {
-                $0.position == position && Self.isTempo($0)
+            score.systemMeasures.updateValue(at: anchor.measureIndex) { measure in
+                measure.elements.removeAll {
+                    $0.position == position && Self.isTempo($0)
+                }
             }
         }
         return SetTempo(restoringLane: previous, anchor: anchor)

@@ -25,7 +25,7 @@ struct EffectiveMeasureDurationsTests {
                 instrument: Instrument(id: "x"),
                 staves: [Staff(measures: measures)],
             )],
-            systemMeasures: Array(repeating: SystemMeasure(), count: measures.count),
+            systemMeasures: IdentifiedArray(Array(repeating: SystemMeasure(), count: measures.count)),
         )
     }
 

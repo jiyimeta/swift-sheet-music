@@ -44,7 +44,9 @@ public final class ScoreEditor {
     /// Applies `command`, pushes its inverse onto the undo stack,
     /// and clears the redo stack (a fresh edit invalidates redo).
     public func apply(_ command: any EditCommand) throws {
+        score.assignMissingIDs(using: &ids)
         let inverse = try command.apply(to: &score, ids: &ids)
+        assert(!score.hasUnassignedIDs, "command dropped element identifiers")
         undoStack.append(inverse)
         redoStack.removeAll()
         lastAffectedLocation = command.affectedLocation
@@ -65,7 +67,9 @@ public final class ScoreEditor {
                 reason: .nothingToUndo,
             ))
         }
+        score.assignMissingIDs(using: &ids)
         let redo = try inverse.apply(to: &score, ids: &ids)
+        assert(!score.hasUnassignedIDs, "command dropped element identifiers")
         undoStack.removeLast()
         redoStack.append(redo)
         lastAffectedLocation = inverse.affectedLocation
@@ -80,7 +84,9 @@ public final class ScoreEditor {
                 reason: .nothingToRedo,
             ))
         }
+        score.assignMissingIDs(using: &ids)
         let inverse = try command.apply(to: &score, ids: &ids)
+        assert(!score.hasUnassignedIDs, "command dropped element identifiers")
         redoStack.removeLast()
         undoStack.append(inverse)
         lastAffectedLocation = command.affectedLocation

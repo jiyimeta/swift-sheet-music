@@ -22,7 +22,7 @@ struct RebarPlannerBarlineTests {
         return Score(
             division: division,
             parts: [part],
-            systemMeasures: Array(repeating: SystemMeasure(), count: measures.count),
+            systemMeasures: IdentifiedArray(Array(repeating: SystemMeasure(), count: measures.count)),
         )
     }
 

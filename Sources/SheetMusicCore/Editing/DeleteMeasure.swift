@@ -44,7 +44,8 @@ public struct DeleteMeasure: EditCommand {
             }
         }
         if score.systemMeasures.indices.contains(measureIndex) {
-            score.systemMeasures.remove(at: measureIndex)
+            let eid = score.systemMeasures.eid(at: measureIndex)
+            score.systemMeasures.remove(eid: eid)
         }
 
         // Re-home the score-start signatures when bar 0 was deleted. Capture every staff's incoming voice 0
