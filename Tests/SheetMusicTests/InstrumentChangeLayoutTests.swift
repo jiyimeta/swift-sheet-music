@@ -34,14 +34,14 @@ struct InstrumentChangeLayoutTests {
     func shapeKindPerStyle() {
         let origin = CGPoint(x: 10, y: 20)
         let staff = LayoutElement.staffText(
-            text: "pizz.", origin: origin, color: nil, style: .staffText,
+            text: "pizz.", origin: origin, color: nil, style: .staffText, anchor: nil,
         )
         let system = LayoutElement.staffText(
-            text: "Swing", origin: origin, color: nil, style: .systemText,
+            text: "Swing", origin: origin, color: nil, style: .systemText, anchor: nil,
         )
         let change = LayoutElement.staffText(
             text: "to Accordion", origin: origin, color: nil,
-            style: .instrumentChange,
+            style: .instrumentChange, anchor: nil,
         )
         #expect(LayoutElementShape.kind(of: staff) == .staffText)
         #expect(LayoutElementShape.kind(of: system) == .systemText)
@@ -57,9 +57,10 @@ struct InstrumentChangeLayoutTests {
             origin: CGPoint(x: 0, y: 0),
             color: nil,
             style: .instrumentChange,
+            anchor: nil,
         )
         let moved = LayoutEngine.translate(element: element, dy: 12)
-        guard case let .staffText(_, origin, _, style) = moved else {
+        guard case let .staffText(_, origin, _, style, _) = moved else {
             Issue.record("expected .staffText")
             return
         }
@@ -108,7 +109,7 @@ struct InstrumentChangeLayoutTests {
             .flatMap(\.measures)
             .flatMap(\.elements)
             .compactMap { element -> (text: String, origin: CGPoint, style: TextStyleType)? in
-                guard case let .staffText(text, origin, _, style) = element
+                guard case let .staffText(text, origin, _, style, _) = element
                 else { return nil }
                 return (text, origin, style)
             }
@@ -158,7 +159,7 @@ struct InstrumentChangeLayoutTests {
             .flatMap(\.measures)
             .flatMap(\.elements)
             .contains { element in
-                guard case let .staffText(text, _, _, _) = element
+                guard case let .staffText(text, _, _, _, _) = element
                 else { return false }
                 return text == "to Accordion"
             }

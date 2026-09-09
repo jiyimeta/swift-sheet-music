@@ -55,7 +55,7 @@ public enum LayoutElementShape {
         case .jump: .jump
         case .lyricsMelisma: .lyricsMelisma
         case .lyricHyphen: .lyricHyphen
-        case let .staffText(_, _, _, style):
+        case let .staffText(_, _, _, style, _):
             // Instrument-change instructions reuse the staffText skyline
             // slot — same staff-attached autoplace behaviour, and
             // `AutoplaceRules` already lists `.staffText`.

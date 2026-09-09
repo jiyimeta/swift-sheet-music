@@ -170,17 +170,9 @@ private struct EngravedSelectionBlendMode: ViewModifier {
 }
 
 extension LayoutDocument {
-    fileprivate func lyricEntryOrigin(
-        at cursor: LyricInputPlanner.Cursor,
-    ) -> CGPoint? {
-        guard let anchor = chordStemOrigin(at: cursor.location),
-              let y = lyricLineY(
-                  at: cursor.location,
-                  verse: cursor.verse,
-              )
-        else { return nil }
-        return CGPoint(x: anchor.x, y: y)
-    }
+    // `lyricEntryOrigin(at:)` used to live here. It is engine geometry the hit tester and any host caret
+    // need too, so it now ships from `SheetMusicLayout` as
+    // `LayoutDocument.lyricEntryOrigin(at:)` — the call below resolves to that.
 
     fileprivate func textEntryOrigin(
         kind: TextInputPlanner.Kind,
@@ -193,15 +185,11 @@ extension LayoutDocument {
         let engraved: CGPoint?
         switch kind {
         case .staffText:
-            engraved = staffTextOrigin(
-                at: anchor, text: trimmed, style: .staffText,
-            )
+            engraved = staffTextOrigin(at: anchor, style: .staffText)
         case .systemText:
-            engraved = staffTextOrigin(
-                at: anchor, text: trimmed, style: .systemText,
-            )
+            engraved = staffTextOrigin(at: anchor, style: .systemText)
         case .chordSymbol:
-            engraved = harmonyOrigin(at: anchor, text: trimmed)
+            engraved = harmonyOrigin(at: anchor)
         case .rehearsalMark:
             engraved = rehearsalMarkTextOrigin(at: anchor)
         }

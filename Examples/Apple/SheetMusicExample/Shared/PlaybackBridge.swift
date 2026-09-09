@@ -75,5 +75,10 @@ func primaryItemID(of target: ScoreHitTarget?) -> ScoreItemID? {
         return .tuplet(id)
     case let .clef(anchor):
         return .clef(anchor)
+    case .lyric, .staffText, .harmony, .rehearsalMark:
+        // Engraved text has no `ScoreItemID`, and resolving it to the note it hangs from would make
+        // tap-to-seek jump on a click aimed at a syllable. Same answer the library's own
+        // `LayoutDocument.editingHitTest` gives.
+        return nil
     }
 }

@@ -1,8 +1,8 @@
 import SheetMusicFoundation
 
-/// `ScoreEditSession`'s planning half for the parity project's mark intents (41…49) and its chord symbol (73), an
-/// adjacent mark in every respect a planner cares about. Its own file for the reason `+RangePlanning.swift`
-/// exists: `+Planning.swift` sits at its line budget.
+/// `ScoreEditSession`'s planning half for the parity project's mark intents (41…49), its chord symbol (73) and the
+/// lyric keystroke (74) — all adjacent marks in every respect a planner cares about. Its own file for the reason
+/// `+RangePlanning.swift` exists: `+Planning.swift` sits at its line budget.
 ///
 /// Every planner here follows the standing rule: an intent that restates what the score already says plans to
 /// `nil` (`.nothingToApply`), never to a self-restoring undo entry. Each reads the score through the command's
@@ -60,6 +60,14 @@ extension ScoreEditSession {
                 $0.name == trimmed && $0.harmonyType == harmonyType && $0.rootTpc == nil && $0.bassTpc == nil
             } ?? false
             return same ? nil : SetChordSymbol(at: location, name: name, harmonyType: harmonyType)
+        case let .setLyricSyllables(writes):
+            // No "already says" check here, unlike every other planner in this file: the writes arrive already
+            // decided by `LyricInputPlanner`, which drops a repair whose syllable is unchanged before it ever
+            // becomes a write. An empty list is the restatement case, and it plans to `nil` like the rest.
+            //
+            // Bundled by the same function `LyricInputPlanner.Plan.command` is computed through, so the composite
+            // a host gets from the intent is the one the planner named — the same members AND the same anchor.
+            return LyricSyllableWrite.command(for: writes)
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.

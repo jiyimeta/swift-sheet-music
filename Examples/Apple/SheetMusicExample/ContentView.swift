@@ -475,6 +475,10 @@
                 // Clef tap → no popover on iOS in this milestone
                 // (popover is macOS-only). Treat as a deselect.
                 selection = .none
+            case .lyric, .staffText, .harmony, .rehearsalMark:
+                // Text editing is macOS-only in this example; on iOS a
+                // tap on engraved text reads as a deselect.
+                selection = .none
             }
         }
 

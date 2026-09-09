@@ -53,6 +53,11 @@
         /// so this rides the `magnification` transform automatically.
         @Binding var marqueeRect: CGRect?
         let onTap: (CGPoint) -> Void
+        /// Fired on a double-click, in document coords, once the single-click gesture has already fired
+        /// its own `onTap`. Not installed via `require(toFail:)` against the single-click recognizer — that
+        /// would delay every ordinary selection by the system double-click interval. Both fire in sequence
+        /// instead: click selects, double-click (a beat later) opens a caret, matching MuseScore.
+        let onDoubleTap: (CGPoint) -> Void
         /// Fired on drag-end with the final rect in document coords.
         /// Also fired by a click in marquee mode (with `.zero`) so a
         /// tap-without-movement clears the selection — matching the
@@ -129,6 +134,19 @@
             click.buttonMask = 0x1
             hosting.addGestureRecognizer(click)
 
+            // Second, independent recognizer for the double-click. Deliberately NOT chained to `click` via
+            // `require(toFail:)`: that would hold every single click for the system double-click interval
+            // before firing, delaying ordinary selection. Letting both recognizers fire independently means
+            // a double-click always produces a `click` (selecting) immediately followed by a `doubleClick`
+            // (opening a caret) — the same two-step MuseScore itself uses.
+            let doubleClick = NSClickGestureRecognizer(
+                target: context.coordinator,
+                action: #selector(Coordinator.handleDoubleClick(_:)),
+            )
+            doubleClick.buttonMask = 0x1
+            doubleClick.numberOfClicksRequired = 2
+            hosting.addGestureRecognizer(doubleClick)
+
             // Marquee drag recognizer. Stays attached unconditionally so
             // we can flip its `isEnabled` from `updateNSView` without
             // re-installing it; AppKit lets click + pan coexist (pan
@@ -150,6 +168,7 @@
             context.coordinator.documentScrollYBinding = $documentScrollY
             context.coordinator.contentInset = Self.contentInset
             context.coordinator.onTap = onTap
+            context.coordinator.onDoubleTap = onDoubleTap
             context.coordinator.onMarqueeEnd = onMarqueeEnd
             context.coordinator.marqueeRectBinding = $marqueeRect
             context.coordinator.isMarqueeMode = isMarqueeMode
@@ -205,6 +224,7 @@
             coord.documentScrollXBinding = $documentScrollX
             coord.documentScrollYBinding = $documentScrollY
             coord.onTap = onTap
+            coord.onDoubleTap = onDoubleTap
             coord.onMarqueeEnd = onMarqueeEnd
             coord.marqueeRectBinding = $marqueeRect
             coord.isMarqueeMode = isMarqueeMode
@@ -289,6 +309,7 @@
             var documentScrollYBinding: Binding<CGFloat>?
             var marqueeRectBinding: Binding<CGRect?>?
             var onTap: ((CGPoint) -> Void)?
+            var onDoubleTap: ((CGPoint) -> Void)?
             var onMarqueeEnd: ((CGRect) -> Void)?
             var isMarqueeMode = false
             /// Drag start in document coords. `nil` outside an active
@@ -348,6 +369,22 @@
                 } else {
                     onTap?(docPoint)
                 }
+            }
+
+            @objc func handleDoubleClick(_ gr: NSClickGestureRecognizer) {
+                guard let hosting = hostingView else { return }
+                // Marquee mode has no caret-opening affordance — the
+                // click recognizer already resolves a click-without-
+                // drag to "clear selection" there, and a double-click
+                // shouldn't open a text caret while the user is set up
+                // to draw a selection rectangle.
+                guard !isMarqueeMode else { return }
+                let local = gr.location(in: hosting)
+                let docPoint = CGPoint(
+                    x: local.x - contentInset,
+                    y: local.y - contentInset,
+                )
+                onDoubleTap?(docPoint)
             }
 
             @objc func handlePan(_ gr: NSPanGestureRecognizer) {

@@ -70,13 +70,32 @@ public struct SetStaffText: EditCommand {
 
     /// The text at the anchor's beat of this kind (and, for staff text, on the anchor's staff), or `nil`.
     static func current(at anchor: VoiceElementID, isSystemText: Bool, in score: Score) -> String? {
+        laneMark(at: anchor, isSystemText: isSystemText, in: score)?.text
+    }
+
+    /// The mark itself rather than its string — what `SetTextVisible` reads, since it wants a field the text
+    /// alone does not carry. One spelling of the lookup for both, so "which lane element does this anchor name"
+    /// cannot come out differently for a rename and for a hide.
+    static func laneMark(at anchor: VoiceElementID, isSystemText: Bool, in score: Score) -> StaffText? {
+        guard let slot = laneSlot(at: anchor, isSystemText: isSystemText, in: score),
+              case let .staffText(text) = score.systemMeasures[slot.measureIndex].elements[slot.elementIndex]
+                  .element
+        else { return nil }
+        return text
+    }
+
+    /// Where the mark this anchor names sits in the lane: its bar, and its index within that bar's elements.
+    /// `nil` when the beat carries no text of this kind. The index is what a mutation needs; `laneMark` above is
+    /// the read built on it.
+    static func laneSlot(
+        at anchor: VoiceElementID, isSystemText: Bool, in score: Score,
+    ) -> (measureIndex: Int, elementIndex: Int)? {
         let probe = SetStaffText(anchor: anchor, text: nil, isSystemText: isSystemText)
         guard let position = SystemLaneSlot.position(of: anchor, in: score),
               let measure = score[system: MeasureRef(measureIndex: anchor.measureIndex)],
-              let index = SystemLaneSlot.firstIndex(in: measure, at: position, where: probe.matches),
-              case let .staffText(text) = measure.elements[index].element
+              let index = SystemLaneSlot.firstIndex(in: measure, at: position, where: probe.matches)
         else { return nil }
-        return text.text
+        return (anchor.measureIndex, index)
     }
 
     /// Whether `positioned` is a text of this command's kind, on this command's staff.

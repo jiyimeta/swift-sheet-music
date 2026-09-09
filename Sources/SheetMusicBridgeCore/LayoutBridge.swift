@@ -545,7 +545,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .staffText(text, origin, color, style):
+        case let .staffText(text, origin, color, style, _):
             let argb = color.flatMap(LayoutBridge.argb(from:))
             if let argb { out.append(.setColor(argb: argb)) }
             emitText(
@@ -602,7 +602,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .rehearsalMark(text, origin, frame, color):
+        case let .rehearsalMark(text, origin, frame, color, _):
             encodeRehearsalMark(
                 text: text,
                 originX: mox + Double(origin.x),

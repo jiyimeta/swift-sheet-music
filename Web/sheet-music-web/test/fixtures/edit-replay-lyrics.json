@@ -1,0 +1,80 @@
+{
+  "fingerprints" : [
+    "-4059957878035358318",
+    "4688663597897805570",
+    "-6941553227591753484",
+    "4688663597897805570",
+    "-6941553227591753484",
+    "6537506088494397827",
+    "3817337960277225155",
+    "165016263589464486",
+    "2448811473170331321",
+    "165016263589464486",
+    "2448811473170331321",
+    "9027163266648310354",
+    "1405450300977693299",
+    "2661844937262682534",
+    "-891970275336316477",
+    "3211083304690556834"
+  ],
+  "steps" : [
+    {
+      "base64" : "IEoKHQobGgoMCgQIABAAEAAYACACEAAYASICbGEoADAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "PEoKOQo3GwoMCgQIABAAEAAYACACEAAYASIDZ2xvKAEwABoKDAoECAAQABAAGAAgBBAAGAEiAnJpKAMwAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "PEoKOQo3GwoMCgQIABAAEAAYACACEAAYASIDZ2xvKAEwABoKDAoECAAQABAAGAAgBBAAGAEiAnJpKAMwAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "HkoKGwoZGAoMCgQIABAAEAAYACACEAAYACIAKAAwAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "I0oKIAoeHQoMCgQIABAAEAAYACAEEAIYASIEYW1lbigAMMAH",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "CBcKBQgAEgFB",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "CksKBwoDAwgAEAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "CksKBwoDAwgAEAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "HCwKGQoMCgQIABAAEAAYACAEEAEaBXBpenouIAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "GksKFwoTAQoQCgwKBAgAEAAQABgAIAQQABAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "GksKFwoTAAoQCgwKBAgAEAAQABgAIAQQAhAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "GkkKFwoMCgQIABAAEAAYACACEAEaA0FtNyAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FksKEwoPAgoMCgQIABAAEAAYACAEEAA=",
+      "op" : "intentBytes"
+    }
+  ]
+}

@@ -38,8 +38,24 @@
         /// fire without a local `.build/layout-golden-baseline.txt`.
         /// Regenerate whenever the digest legitimately changes — the
         /// test prints the actual hash on mismatch.
+        ///
+        /// Re-recorded 2026-09-09 for the text-entry branch. The diff
+        /// against main was READ before this was updated, not
+        /// regenerated to make the gate pass: all 28 changed lines are
+        /// `el` lines gaining the `anchor:` field that `0357c5be` added
+        /// to staff text and harmonies. Every origin, width and advance
+        /// is byte-identical, so no engraving moved.
+        ///
+        /// It was ALREADY stale before this branch: main (9b7fe860)
+        /// hashes to 426372bf3096e388ee11ca885ec44752c308334e8e6adabe2c
+        /// c82f125a58c0cd, not to the value that was committed here.
+        /// Whatever moved on main was never re-recorded and nobody saw
+        /// it, because this suite is `.enabled(if: SM_LAYOUT_GOLDEN)`
+        /// and is therefore SKIPPED by every ordinary `swift test`. A
+        /// gate nothing runs is a gate that rots; that is worth fixing
+        /// separately from this constant.
         private static let expectedDigestSHA256 =
-            "e7314362fd0a2a3adbc9e3a750c79f18d0aa53469deb34e33bc18e1b5eff0d1c"
+            "7bc79806da0df093db9a1aa894830d58626a5759f1c780b263ebb8942fa86e16"
 
         @Test("write digest")
         func writeDigest() throws {

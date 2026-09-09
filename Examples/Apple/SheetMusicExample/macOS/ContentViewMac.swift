@@ -2904,6 +2904,7 @@
             case .single(.note): return "note"
             case .single(.tuplet): return "tuplet"
             case .single(.clef): return "clef"
+            case .single(.text): return "text"
             case .range: return "range"
             case .multi: return "multi"
             }
@@ -2950,6 +2951,9 @@
                         isMarqueeMode: isMarqueeMode,
                         onTap: { loc in
                             handleTap(at: loc, document: doc)
+                        },
+                        onDoubleTap: { loc in
+                            handleDoubleTap(at: loc, document: doc)
                         },
                         onMarqueeEnd: { rect, doc in
                             applyMarquee(rect: rect, document: doc)
@@ -3077,6 +3081,10 @@
                 selection = .single(.tuplet(id))
             case let .clef(anchor):
                 selection = .single(.clef(anchor))
+            case .text:
+                // The original-PDF geometry indexes notes and rests; it carries no engraved text, so
+                // nothing here can produce one.
+                selection = .single(item)
             }
         }
 
@@ -3162,6 +3170,16 @@
                 return
             }
 
+            // Engraved text: a click selects it, exactly as a click on a notehead does. The blue is the
+            // library's own — `ScoreLayerBuilder` registers a text's layers under this same
+            // `ScoreItemID`, so the syllable takes the voice color a selected notehead would. Text is the
+            // last rung of the hit ladder, so this branch can never steal a click that landed on a note.
+            // A double-click on the same text opens its caret instead (`handleDoubleTap`).
+            if let item = target.selectableItem, item.textID != nil {
+                selection = .single(item)
+                return
+            }
+
             let shift = NSEvent.modifierFlags.contains(.shift)
 
             // Beam without shift: range-select every note under the beam
@@ -3193,6 +3211,12 @@
                 primary = .note(first)
             case let .clef(anchor):
                 primary = .clef(anchor)
+            case .lyric, .staffText, .harmony, .rehearsalMark:
+                // Engraved text is reported by the hit tester but has no `ScoreItemID` to select, and
+                // resolving it to the note it hangs from would move the note selection on a click aimed at
+                // a syllable. Opening a caret from here is a later step; for now a text click deselects.
+                selection = .none
+                return
             }
 
             if shift {
@@ -3220,6 +3244,64 @@
                     )
                 }
             }
+        }
+
+        /// Double-click on engraved text opens its inline caret — MuseScore's own click / double-click
+        /// split, where a plain click (already handled by `handleTap`) only selects. A double-click on
+        /// anything the hit-test ladder resolves to a `ScoreItemID` (a notehead, a stem, a clef, …) is a
+        /// no-op here: the single-click selection that already fired stands, matching today's behaviour.
+        private func handleDoubleTap(at location: CGPoint, document: LayoutDocument) {
+            guard let target = ScoreHitTester(document: document).hitTest(at: location),
+                  let controller = inputController
+            else { return }
+            switch target {
+            case let .lyric(anchor, verse):
+                lyricSession.begin(
+                    at: anchor, verse: verse,
+                    controller: controller, ending: textSession,
+                )
+                syncSelectionToLyricCursor()
+            case let .staffText(anchor, style):
+                textSession.begin(
+                    kind: style == .systemText ? .systemText : .staffText,
+                    at: anchor, controller: controller, ending: lyricSession,
+                )
+            case let .harmony(anchor):
+                textSession.begin(
+                    kind: .chordSymbol, at: anchor,
+                    controller: controller, ending: lyricSession,
+                )
+            case let .rehearsalMark(measureIndex):
+                guard let anchor = rehearsalMarkAnchor(
+                    measureIndex: measureIndex, controller: controller,
+                ) else { return }
+                textSession.begin(
+                    kind: .rehearsalMark, at: anchor,
+                    controller: controller, ending: lyricSession,
+                )
+            case .note, .rest, .stem, .flag, .beam, .tuplet, .clef:
+                return
+            }
+            textEntryFocused = true
+        }
+
+        /// A `VoiceElementID` inside `measureIndex`, for opening a rehearsal-mark caret from a hit target
+        /// that only names a bar (a rehearsal mark is a system element with no voice element of its own).
+        /// Mirrors `TextInputPlanner.nextAnchor`'s own technique for the same problem: build a "before this
+        /// measure's first element" cursor on staff 0 / voice 0 and ask the navigator for the next timed
+        /// slot, which lands on the measure's first chord or rest.
+        private func rehearsalMarkAnchor(
+            measureIndex: Int, controller: NoteInputController,
+        ) -> VoiceElementID? {
+            let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+            let before = VoiceElementID(
+                staff: address, measureIndex: measureIndex,
+                voiceIndex: 0, elementIndex: -1,
+            )
+            guard let anchor = ElementNavigator.nextTimedElement(
+                after: before, in: controller.score,
+            ), anchor.measureIndex == measureIndex else { return nil }
+            return anchor
         }
 
         /// Resolve a marquee drag's rect against the score's hit-test

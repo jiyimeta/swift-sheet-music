@@ -145,7 +145,7 @@ enum SkylineFixtures {
         guard let system = doc.systems.first else { return nil }
         for measure in system.measures {
             for el in measure.elements {
-                if case let .staffText(_, p, _, _) = el { return p.y }
+                if case let .staffText(_, p, _, _, _) = el { return p.y }
             }
         }
         return nil
