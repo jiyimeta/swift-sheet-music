@@ -139,7 +139,7 @@ extension ScoreEditSession {
         case .setArticulation, .setGraceNotes, .setTremolo, .setArpeggio, .setGlissando, .setDots, .setChordLine,
              .setNoteParentheses:
             return notationCommand(for: intent, in: score)
-        case .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible:
+        case .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible, .setTextVisible:
             return visibilityCommand(for: intent, in: score)
         case .setSlur, .setHairpin, .setPedal, .setVolta, .setOttava, .setTextLine, .setTrill, .setVibrato,
              .setPalmMute, .setLetRing, .removeSpanner:

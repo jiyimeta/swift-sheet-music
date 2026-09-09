@@ -82,4 +82,39 @@ struct VisibilityPlanningTests {
         #expect(!session.apply(.setElementVisible(at: missing, visible: false)))
         #expect(session.lastRefusal?.reason == .targetNotFound(missing))
     }
+
+    /// Intent 75 joins the group: one text hidden through the session is one undo step, and taking it back
+    /// restores the score exactly — the property a properties panel's Show / Hide pair rests on.
+    @Test("a text's visibility applies through the session and undoes as one step")
+    func textVisibilityAppliesAndUndoes() throws {
+        var score = EditingFixtures.twoConsecutiveC4Chords()
+        let chord = VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 1)
+        _ = try SetLyric(at: chord, verse: 0, text: "la", syllabic: .single).apply(to: &score)
+        let syllable = ScoreTextID.lyric(anchor: chord, verse: 0)
+
+        let session = ScoreEditSession(score: score)
+        #expect(session.apply(.setTextVisible(text: syllable, visible: false)))
+        #expect(SetTextVisible.current(syllable, in: session.score) == false)
+        // The chord the syllable hangs from is untouched — the whole reason this is not `.setElementVisible`.
+        guard case let .chord(anchored)? = session.score[chord] else { Issue.record("expected a chord"); return }
+        #expect(anchored.visible)
+        #expect(session.undo())
+        #expect(session.score == score)
+    }
+
+    @Test("restating a text's flag plans to nothing; a text that is not there is refused")
+    func textVisibilityRestatingAndMissing() throws {
+        var score = EditingFixtures.twoConsecutiveC4Chords()
+        let chord = VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 1)
+        _ = try SetLyric(at: chord, verse: 0, text: "la", syllabic: .single).apply(to: &score)
+
+        let session = ScoreEditSession(score: score)
+        #expect(!session.apply(.setTextVisible(text: .lyric(anchor: chord, verse: 0), visible: true)))
+        #expect(session.lastRefusal?.reason == .nothingToApply)
+        // A verse the chord does not carry is NOT "nothing to apply" — it is a stale address, and the planner
+        // deliberately builds the command so `apply` says so.
+        #expect(!session.apply(.setTextVisible(text: .lyric(anchor: chord, verse: 4), visible: false)))
+        #expect(session.lastRefusal?.reason == .targetNotFound(chord))
+        #expect(session.score == score)
+    }
 }

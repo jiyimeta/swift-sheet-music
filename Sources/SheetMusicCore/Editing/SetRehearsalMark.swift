@@ -16,11 +16,16 @@ enum RehearsalMarkLane {
 
     /// The same read against a captured lane, for the inverse's `text`.
     static func mark(in lane: [SystemMeasure], measureIndex: Int) -> RehearsalMark? {
-        guard lane.indices.contains(measureIndex) else { return nil }
-        for positioned in lane[measureIndex].elements {
-            if let mark = mark(of: positioned.element) { return mark }
+        guard lane.indices.contains(measureIndex), let index = markIndex(in: lane[measureIndex]) else {
+            return nil
         }
-        return nil
+        return mark(of: lane[measureIndex].elements[index].element)
+    }
+
+    /// Where the bar's mark sits in `measure.elements` — the FIRST one, the same premise the reads above hold and
+    /// `write` enforces. `SetTextVisible` needs the index rather than the value, because it mutates in place.
+    static func markIndex(in measure: SystemMeasure) -> Int? {
+        measure.elements.firstIndex { mark(of: $0.element) != nil }
     }
 
     /// The rehearsal mark `element` carries, or `nil` for any other kind of system element.

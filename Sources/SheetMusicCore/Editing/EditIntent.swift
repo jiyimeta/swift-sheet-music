@@ -410,7 +410,7 @@ public enum EditIntent: Sendable, Equatable {
     /// root or bass left standing).
     case setChordSymbol(at: VoiceElementID, name: String?, harmonyType: HarmonyType)
 
-    // Appended for the macOS score-text-entry project (spec 2026-09-07) — index 74.
+    // Appended for the macOS score-text-entry project (spec 2026-09-07) — indices 74 and 75.
 
     /// Writes one lyric keystroke's worth of syllables as a single undo step.
     ///
@@ -425,4 +425,11 @@ public enum EditIntent: Sendable, Equatable {
     /// lyric keystroke is one gesture that lands in up to three places, and `.composite` cannot express it, since a
     /// composite of three `setLyric` intents would have to exist first.
     case setLyricSyllables(writes: [LyricSyllableWrite])
+
+    /// Show or hide one piece of engraved text, named the way a click names it. Its own intent rather than a
+    /// widening of `.setElementVisible` because three of the four kinds are not voice elements at all, and the
+    /// fourth — a chord symbol — is addressed here by the chord it names rather than by its own slot; see
+    /// `SetTextVisible`. Resolves to nothing to apply when the text already reads this way, and is refused as
+    /// `.targetNotFound` when the score carries no such text.
+    case setTextVisible(text: ScoreTextID, visible: Bool)
 }
