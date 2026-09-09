@@ -432,4 +432,12 @@ public enum EditIntent: Sendable, Equatable {
     /// `SetTextVisible`. Resolves to nothing to apply when the text already reads this way, and is refused as
     /// `.targetNotFound` when the score carries no such text.
     case setTextVisible(text: ScoreTextID, visible: Bool)
+
+    /// Set or clear one text's or individual note's author color. Whole-chord color is not rendered;
+    /// SetElementColor deliberately excludes it. An unchanged value plans to nil; a missing target is refused.
+    case setElementColor(target: SetElementColor.Target, color: ScoreColor?)
+
+    /// Set or clear authored placement on one text, note, or whole chord. MSCX preserves the override;
+    /// this library's renderer does not yet honor it, including on files authored elsewhere.
+    case setElementPlacement(target: SetElementPlacement.Target, placement: Placement?)
 }

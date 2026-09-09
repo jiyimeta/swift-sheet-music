@@ -141,6 +141,16 @@ extension ScoreEditSession {
             return notationCommand(for: intent, in: score)
         case .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible, .setTextVisible:
             return visibilityCommand(for: intent, in: score)
+        case let .setElementColor(target, color):
+            // Unwrap the carrier, not its optional field: missing targets still reach apply and are refused.
+            if let current = SetElementColor.currentProperties(for: target, in: score), current.color == color {
+                return nil
+            }
+            return SetElementColor(target, color: color)
+        case let .setElementPlacement(target, placement):
+            if let current = SetElementPlacement.currentProperties(for: target, in: score),
+               current.placement == placement { return nil }
+            return SetElementPlacement(target, placement: placement)
         case .setSlur, .setHairpin, .setPedal, .setVolta, .setOttava, .setTextLine, .setTrill, .setVibrato,
              .setPalmMute, .setLetRing, .removeSpanner:
             return spannerCommand(for: intent, in: score)
