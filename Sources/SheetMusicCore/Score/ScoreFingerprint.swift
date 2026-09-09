@@ -21,11 +21,13 @@ import SheetMusicFoundation
 ///   practice) feeds tag 32, the count and each spanner's identity via `combine(_ spanner:)`; a chord with an
 ///   empty array feeds nothing, so every score without slurs hashes as it did before. Added with group 6's
 ///   `SetSlur` / `RemoveSpanner`. See `ScoreFingerprintHasher+Parity.swift`.
-/// - Not covered within the nested types the walk now recurses into: `Arpeggio.elementProperties`,
-///   `Lyric.elementProperties`, and `ChordLine.elementProperties` (visibility/color on those attachments, same
-///   reasoning as the two bullets above), plus `Lyric.properties` (text positioning/formatting) and
-///   `ChordLine.path` (hand-drawn Bezier control points) — all display-only, none of it set by any edit command
-///   in this package today.
+/// - `Lyric.elementProperties` IS covered, by occupants (visible tag 61, color 62) — brought in by
+///   `SetTextVisible` (intent 75), which hides a syllable without touching the chord it hangs from, and would
+///   otherwise be an edit no mirror could disagree about.
+/// - Not covered within the nested types the walk now recurses into: `Arpeggio.elementProperties` and
+///   `ChordLine.elementProperties` (visibility/color on those attachments, same reasoning as the two bullets
+///   above), plus `Lyric.properties` (text positioning/formatting) and `ChordLine.path` (hand-drawn Bezier
+///   control points) — all display-only, none of it set by any edit command in this package today.
 /// - `Measure`'s `startRepeat`, `endRepeatCount`, `measureRepeatCount`, `markers`, `jumps`, `lineBreak`,
 ///   `pageBreak`, `sectionBreak` ARE covered, by occupants — see `ScoreFingerprintHasher+Parity.swift`'s
 ///   `combineFlags(_:)`. `actualLength` and `irregular` were already covered — M3's re-barring writes both — and
@@ -34,8 +36,10 @@ import SheetMusicFoundation
 ///   fields that give each one its musical identity), but the lane's LENGTH is not — an empty `SystemMeasure` and an
 ///   absent one are indistinguishable to this walk, deliberately, so that a score built in memory and the same score
 ///   parsed from MSCX still agree; see `combineSystemLane`. Nor is the display trivia hanging off each element —
-///   `offsetX` / `offsetY`, `properties` (fonts), `elementProperties` (visibility/color), `RehearsalMark.frame`,
-///   `InstrumentChange.isUserInitialized`. Same reasoning as the `Chord` / `Note` bullets above.
+///   `offsetX` / `offsetY`, `properties` (fonts), `RehearsalMark.frame`, `InstrumentChange.isUserInitialized`.
+///   Same reasoning as the `Chord` / `Note` bullets above. The one exception is `elementProperties` on a
+///   rehearsal mark (visible tag 63, color 64) and on a staff / system text (65, 66), which `SetTextVisible`
+///   writes; the lane's other three cases still carry theirs unhashed.
 /// - The walk's own shape: it emits a flat sequence of staff blocks with no part/staff-count delimiter, so two
 ///   scores whose staves are grouped into parts differently — but which total the same number of staves — hash
 ///   identically.
