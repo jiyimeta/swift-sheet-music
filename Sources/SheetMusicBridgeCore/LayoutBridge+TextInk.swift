@@ -4,14 +4,19 @@ import SheetMusicLayout
 
 #if !canImport(CoreGraphics)
     private typealias CGFloat = SheetMusicLayout.CGFloat
-    private typealias CGPoint = SheetMusicLayout.CGPoint
 #endif
 
 extension LayoutBridge {
+    #if canImport(CoreGraphics)
+        typealias TextInkPoint = CGPoint
+    #else
+        typealias TextInkPoint = SheetMusicLayout.CGPoint
+    #endif
+
     /// Converts the same whole-stack/ink anchor the Apple renderer uses into baseline commands.
     /// Newlines never reach a native single-line drawText call; blank lines still move the baseline.
     static func emitAnchoredText(
-        text: String, font: LayoutFont, origin: CGPoint, anchor: CGPoint,
+        text: String, font: LayoutFont, origin: TextInkPoint, anchor: TextInkPoint,
         fontID: DrawProgram.FontID = .textRoman, into out: inout [DrawCommand],
     ) {
         let provider = FontMetrics.provider
@@ -21,7 +26,7 @@ extension LayoutBridge {
     }
 
     static func emitBaselineText(
-        text: String, font: LayoutFont, baseline: CGPoint,
+        text: String, font: LayoutFont, baseline: TextInkPoint,
         fontID: DrawProgram.FontID, into out: inout [DrawCommand],
     ) {
         let provider = FontMetrics.provider
@@ -39,14 +44,14 @@ extension LayoutBridge {
 
     static func emitRoleText(
         text: String, style: TextStyleType, originX: Double, originY: Double,
-        sp: Double, anchor: CGPoint, into out: inout [DrawCommand],
+        sp: Double, anchor: TextInkPoint, into out: inout [DrawCommand],
     ) {
         let font = TextInkGeometry.font(for: style, metrics: StaffMetrics(staffSize: CGFloat(sp) * 4))
         withTextStyle(styleFlags(for: style), into: &out) { out in
             emitAnchoredText(
                 text: text,
                 font: font,
-                origin: CGPoint(x: originX, y: originY),
+                origin: TextInkPoint(x: originX, y: originY),
                 anchor: anchor,
                 into: &out,
             )
