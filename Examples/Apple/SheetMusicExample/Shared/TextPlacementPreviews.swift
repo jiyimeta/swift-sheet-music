@@ -25,7 +25,11 @@
             var rehearsal = RehearsalMark(text: "B\nframe", frame: .circle)
             rehearsal.elementProperties.placement = .below
             let voice = Voice(elements: [
-                .spanner(Spanner(kind: .pedal, rawType: "Pedal", nextFractionsOffset: Fraction(1, 1))),
+                .spanner(Spanner(
+                    kind: .pedal,
+                    rawType: "Pedal",
+                    nextFractionsOffset: Fraction(numerator: 1, denominator: 1),
+                )),
                 .harmony(harmony),
                 .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)], lyrics: [
                     lyric("Up", verse: 0, side: .above, syllabic: .begin),
