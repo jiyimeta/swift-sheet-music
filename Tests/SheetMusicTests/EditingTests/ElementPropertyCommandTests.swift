@@ -62,7 +62,7 @@ struct ElementPropertyCommandTests {
             })
             guard case var .staffText(text) = score.systemMeasures[0].elements[laneIndex].element else { return }
             update(&text.elementProperties)
-            score.systemMeasures[0].elements[laneIndex].element = .staffText(text)
+            score.systemMeasures.updateValue(at: 0) { $0.elements[laneIndex].element = .staffText(text) }
         case 3:
             let slot = VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1)
             guard case var .harmony(value)? = score[slot] else { Issue.record("missing symbol"); return }
@@ -74,7 +74,7 @@ struct ElementPropertyCommandTests {
             })
             guard case var .rehearsalMark(mark) = score.systemMeasures[0].elements[laneIndex].element else { return }
             update(&mark.elementProperties)
-            score.systemMeasures[0].elements[laneIndex].element = .rehearsalMark(mark)
+            score.systemMeasures.updateValue(at: 0) { $0.elements[laneIndex].element = .rehearsalMark(mark) }
         default:
             Issue.record("unknown fixture carrier")
         }
@@ -144,13 +144,13 @@ struct ElementPropertyCommandTests {
         var score = try Self.populated()
         let target = Self.colors[index]
         let clear = EditIntent.setElementColor(target: target, color: nil)
-        #expect(try ScoreEditSession.command(for: clear, in: score, depth: 0) == nil)
+        #expect(try ScoreEditSession.command(for: clear, in: score, ids: EIDAllocator(), depth: 0) == nil)
         let intent = EditIntent.setElementColor(target: target, color: Self.color)
-        let planned = try #require(try ScoreEditSession.command(for: intent, in: score, depth: 0))
+        let planned = try #require(try ScoreEditSession.command(for: intent, in: score, ids: EIDAllocator(), depth: 0))
         #expect(planned is SetElementColor)
         try planned.apply(to: &score)
-        #expect(try ScoreEditSession.command(for: intent, in: score, depth: 0) == nil)
-        #expect(try ScoreEditSession.command(for: clear, in: score, depth: 0) is SetElementColor)
+        #expect(try ScoreEditSession.command(for: intent, in: score, ids: EIDAllocator(), depth: 0) == nil)
+        #expect(try ScoreEditSession.command(for: clear, in: score, ids: EIDAllocator(), depth: 0) is SetElementColor)
     }
 
     @Test("placement planning skips existing values including nil", arguments: 0 ..< 7)
@@ -158,18 +158,20 @@ struct ElementPropertyCommandTests {
         var score = try Self.populated()
         let target = Self.placements[index]
         let clear = EditIntent.setElementPlacement(target: target, placement: nil)
-        #expect(try ScoreEditSession.command(for: clear, in: score, depth: 0) == nil)
+        #expect(try ScoreEditSession.command(for: clear, in: score, ids: EIDAllocator(), depth: 0) == nil)
         let intent = EditIntent.setElementPlacement(target: target, placement: .below)
-        let planned = try #require(try ScoreEditSession.command(for: intent, in: score, depth: 0))
+        let planned = try #require(try ScoreEditSession.command(for: intent, in: score, ids: EIDAllocator(), depth: 0))
         #expect(planned is SetElementPlacement)
         try planned.apply(to: &score)
-        #expect(try ScoreEditSession.command(for: intent, in: score, depth: 0) == nil)
-        #expect(try ScoreEditSession.command(for: clear, in: score, depth: 0) is SetElementPlacement)
+        #expect(try ScoreEditSession.command(for: intent, in: score, ids: EIDAllocator(), depth: 0) == nil)
+        #expect(try ScoreEditSession.command(
+            for: clear, in: score, ids: EIDAllocator(), depth: 0,
+        ) is SetElementPlacement)
     }
 
     @Test("missing targets still plan commands, even when clearing nil")
     func staleTargetsAreRefused() throws {
-        let score = EditingFixtures.twoConsecutiveC4Chords()
+        let score = ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score
         let texts: [ScoreTextID] = [
             .lyric(anchor: Self.chord, verse: 9),
             .staffText(anchor: Self.chord, style: .staffText),
@@ -193,7 +195,9 @@ struct ElementPropertyCommandTests {
         ]
         for intent in intents {
             var scratch = score
-            let command = try #require(try ScoreEditSession.command(for: intent, in: score, depth: 0))
+            let command = try #require(try ScoreEditSession.command(
+                for: intent, in: score, ids: EIDAllocator(), depth: 0,
+            ))
             #expect(throws: SheetMusicError.self) { try command.apply(to: &scratch) }
             #expect(scratch == score)
         }

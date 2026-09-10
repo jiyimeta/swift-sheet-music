@@ -27,12 +27,17 @@ struct LayoutIdentityCacheTests {
         #expect(Self.keys(second).compactMap(\.elementID) == [
             .keySignature(measureIndex: 0), .keySignature(measureIndex: 1),
         ])
-        score.parts[0].staves[0].group = "percussion"
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.group = "percussion"
+            }
+        }
         let third = LayoutEngine.layout(score: score, options: .init(), availableWidth: 1000, cache: cache)
         #expect(cache.systemMisses == third.systems.count)
         #expect(cache.placementMisses == 2)
         #expect(Self.keys(third).count == 2)
-        #expect(Self.keys(third).allSatisfy { $0.elementID == nil })
+        let allMatch1 = Self.keys(third).allSatisfy { $0.elementID == nil }
+        #expect(allMatch1)
         let fourth = LayoutEngine.layout(score: score, options: .init(), availableWidth: 1000, cache: cache)
         #expect(cache.systemHits == fourth.systems.count)
         #expect(cache.systemMisses == 0)
@@ -60,7 +65,8 @@ struct LayoutIdentityCacheTests {
         #expect(collapsed.count == 1)
         let bars = collapsed.flatMap(\.elements).filter { if case .barLine = $0 { true } else { false } }
         #expect(bars.count == 1)
-        #expect(bars.allSatisfy { $0.elementID == nil })
+        let allMatch2 = bars.allSatisfy { $0.elementID == nil }
+        #expect(allMatch2)
     }
 
     @Test("Identity participates in element and render-content equality even with unchanged geometry")

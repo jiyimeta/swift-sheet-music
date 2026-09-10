@@ -23,7 +23,11 @@ struct LayoutElementIdentityTests {
             Part(id: "a", instrument: Instrument(id: "a"), staves: [staff]),
             Part(id: "b", instrument: Instrument(id: "b"), staves: [staff, staff]),
         ])
-        score.parts[1].staves[1].measures[1].voices.append(Voice(elements: elements))
+        score.parts.updateValue(at: 1) { part in
+            part.staves.updateValue(at: 1) { staff in
+                staff.measures[1].voices.append(Voice(elements: elements))
+            }
+        }
         return score
     }
 
@@ -121,7 +125,7 @@ struct LayoutElementIdentityTests {
             let voice = Voice(elements: [
                 .dynamic(Dynamic(subtype: "p", velocity: 49)), separator, Self.chord(),
             ])
-            let run = AdjacentElementSlot.run(.before, of: 2, in: voice.elements)
+            let run = AdjacentElementSlot.run(.before, of: 2, in: voice.elements.values)
             let expected = run.contains(0) ? Self.address(2) : nil
             #expect(LayoutEngine.attachmentAnchor(at: Self.address(0), in: voice) == expected)
         }
@@ -136,7 +140,7 @@ struct LayoutElementIdentityTests {
         let command = SetTempo(anchor: expected, marking: .init(beatsPerSecond: 3))
         _ = try command.apply(to: &score)
         // System marks default to the canonical staff; put this imported mark on the fixture's staff.
-        score.systemMeasures[1].elements[0].originalStaff = Self.staff
+        score.systemMeasures.updateValue(at: 1) { $0.elements[0].originalStaff = Self.staff }
         let tempos = Self.elements(score).filter { if case .textMark(.tempo, _, _) = $0 { true } else { false } }
         #expect(tempos.map(\.elementID) == [.tempo(anchor: command.anchor)])
         #expect(tempos.map(\.elementItemID) == [.element(.tempo(anchor: expected))])

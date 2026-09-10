@@ -18,16 +18,20 @@ enum ElementHitCommandChecks {
             command = SetArticulation(at: anchor, kind: kind, anchor: nil, present: true)
         case let .spanner(anchor, kind):
             // The source slot is 1; a chord at slot 0 proves this is not an inferred head-of-voice address.
-            score.parts[0].staves[0].measures[0].voices[0].elements = [
-                .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
-                .spanner(Spanner(
-                    kind: kind,
-                    rawType: "",
-                    nextMeasuresOffset: 0,
-                    nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
-                )),
-                .chord(Chord(duration: .half, notes: [Note(pitch: 62, tpc: 16)])),
-            ]
+            score.parts.updateValue(at: 0) { part in
+                part.staves.updateValue(at: 0) { staff in
+                    staff.measures[0].voices[0].elements = [
+                        .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+                        .spanner(Spanner(
+                            kind: kind,
+                            rawType: "",
+                            nextMeasuresOffset: 0,
+                            nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
+                        )),
+                        .chord(Chord(duration: .half, notes: [Note(pitch: 62, tpc: 16)])),
+                    ]
+                }
+            }
             command = RemoveSpanner(at: anchor, kind: kind)
         case let .keySignature(measureIndex):
             command = SetKeySignature(measureIndex: measureIndex, concertKey: 3)

@@ -25,7 +25,7 @@ struct SetLyricVerseTests {
             let oldHash = score.stableFingerprint
             let planned = try ScoreEditSession.command(
                 for: .setLyricVerse(text: .lyric(anchor: Self.slot, verse: source), toVerse: destination),
-                in: score, depth: 0,
+                in: score, ids: EIDAllocator(), depth: 0,
             )
             let command = try #require(planned)
             let inverse = try command.apply(to: &score)
@@ -68,7 +68,7 @@ struct SetLyricVerseTests {
         var score = EditingFixtures.chordAtIndex1()
         _ = try SetLyric(at: Self.slot, verse: 1, text: "one").apply(to: &score)
         let same = EditIntent.setLyricVerse(text: .lyric(anchor: Self.slot, verse: 1), toVerse: 1)
-        #expect(try ScoreEditSession.command(for: same, in: score, depth: 0) == nil)
+        #expect(try ScoreEditSession.command(for: same, in: score, ids: EIDAllocator(), depth: 0) == nil)
         let invalid: [(ScoreTextID, Int)] = [
             (.lyric(anchor: Self.slot, verse: 0), 0),
             (.lyric(anchor: Self.slot, verse: -1), 2),
@@ -81,7 +81,7 @@ struct SetLyricVerseTests {
         for (text, destination) in invalid {
             let before = score
             let planned = try ScoreEditSession.command(
-                for: .setLyricVerse(text: text, toVerse: destination), in: score, depth: 0,
+                for: .setLyricVerse(text: text, toVerse: destination), in: score, ids: EIDAllocator(), depth: 0,
             )
             let command = try #require(planned)
             #expect(throws: SheetMusicError.self) { try command.apply(to: &score) }
@@ -98,7 +98,7 @@ struct SetLyricVerseTests {
         let planned = try ScoreEditSession.command(for: .composite([
             .setLyricVerse(text: .lyric(anchor: Self.slot, verse: 0), toVerse: 2),
             .setTextFont(text: destination, patch: .init(face: .set("Edwin"))),
-        ]), in: score, depth: 0)
+        ]), in: score, ids: EIDAllocator(), depth: 0)
         let command = try #require(planned)
         let inverse = try command.apply(to: &score)
         #expect(SetTextFont.current(destination, in: score)?.face == "Edwin")
