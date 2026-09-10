@@ -10,11 +10,12 @@ import SheetMusicFoundation
 ///
 /// C++: subset of `mu::engraving::MStyle` (`engraving/style/style.cpp`).
 public struct ScoreStyle: Sendable, Equatable {
+    /// Optional baseline positions and sides for engraved text roles.
+    public var textPlacement: TextPlacementStyles
     /// Staff space in **millimetres**.
     /// C++: `Sid::spatium` (stored internally in DPI units there;
     /// kept as mm here to match the on-disk XML and avoid surprises).
     /// MuseScore default 1.75 mm.
-    public var textPlacement: TextPlacementStyles
     public var spatium: Double
     public var pageLayout: PageLayout
     public var pageChrome: PageChrome

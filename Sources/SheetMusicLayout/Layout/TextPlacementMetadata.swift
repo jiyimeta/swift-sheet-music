@@ -17,12 +17,19 @@ public struct TextPlacementMetadata: Sendable, Equatable {
     public let autoplace: Bool
     public let verse: Int?
     public let staff: StaffAddress?
+    /// Authored Y offset plus the multiline center adjustment, in layout points.
+    /// Removing it from a syllable's final origin recovers the shared lyric row.
+    public let lyricAnchorCorrectionY: Double?
 
-    public init(side: Placement, autoplace: Bool = true, verse: Int? = nil, staff: StaffAddress? = nil) {
+    public init(
+        side: Placement, autoplace: Bool = true, verse: Int? = nil, staff: StaffAddress? = nil,
+        lyricAnchorCorrectionY: Double? = nil,
+    ) {
         self.side = side
         self.autoplace = autoplace
         self.verse = verse
         self.staff = staff
+        self.lyricAnchorCorrectionY = lyricAnchorCorrectionY
     }
 
     public var row: LyricRow? {

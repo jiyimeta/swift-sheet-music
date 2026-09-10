@@ -58,7 +58,11 @@ extension LayoutDocument {
                       anchor?.staff == voiceElementID.staff else { continue }
                 let y = system.origin.y + measure.origin.y + point.y
                 if anchor == voiceElementID, markVerse == verse { return y }
-                candidates.append((markVerse, metadata?.side ?? .below, y))
+                // Fixed neighbors do not share the target's automatic row displacement.
+                guard elementProperties.autoplace != false, metadata?.autoplace != false else { continue }
+                let rowY = y - CGFloat(metadata?.lyricAnchorCorrectionY ?? 0)
+                    + CGFloat(elementProperties.offset?.y ?? 0) * system.sp
+                candidates.append((markVerse, metadata?.side ?? .below, rowY))
             }
             if let exact = candidates
                 .first(where: { $0.verse == verse && (placementStyle == nil || $0.side == side) })

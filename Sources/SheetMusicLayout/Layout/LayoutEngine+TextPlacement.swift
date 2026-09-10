@@ -49,6 +49,14 @@ extension LayoutEngine {
         return CGPoint(x: origin.x, y: origin.y + CGFloat(row) * metrics.sp * lyricVerseStrideInSpatiums)
     }
 
+    static func lyricAnchorCorrectionY(lyric: Lyric, metrics: StaffMetrics) -> CGFloat {
+        let font = TextInkGeometry.font(for: .lyricsOdd, metrics: metrics)
+        let provider = FontMetrics.provider
+        let extra = TextInkGeometry.typographicSize(text: lyric.text, font: font).height
+            - provider.ascent(font: font) - provider.descent(font: font)
+        return CGFloat(lyric.elementProperties.offset?.y ?? 0) * metrics.sp + extra / 2
+    }
+
     static func harmonyPlacementRole(_ harmony: Harmony) -> TextPlacementRole {
         switch harmony.harmonyType {
         case .standard: .harmonyA

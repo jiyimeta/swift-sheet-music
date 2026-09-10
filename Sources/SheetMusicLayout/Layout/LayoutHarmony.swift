@@ -18,13 +18,14 @@ public struct LayoutHarmony: Sendable, Equatable {
     public var runs: [HarmonyRun]
     /// Total typeset width across all runs, in points.
     public var width: Double
+    /// Resolved text side and automatic-placement policy carried through layout.
+    public var placement: TextPlacementMetadata?
     /// The chord or rest this symbol names — the `VoiceElementID` `SetChordSymbol` takes, not the index of the
     /// `.harmony` voice element itself. The symbol sits immediately before the element it names in the voice
     /// stream (`AdjacentElementSlot`), so this is recovered at emission as the timed element starting at the
     /// symbol's own tick. Carrying it is what lets a caret address one of two symbols with the same name in a
     /// bar. `nil` when no timed element starts at that tick, which is the `<location>`-shifted case no
     /// text-entry command can reach either.
-    public var placement: TextPlacementMetadata?
     public var anchor: VoiceElementID?
 
     public init(

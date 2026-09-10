@@ -167,7 +167,7 @@ struct LayoutDocumentLyricLineYTests {
         #expect(abs((verseTwoY - verseZeroY) - document.metrics.sp * 3.4) < 0.001)
     }
 
-    @Test func higherVerseOnlyMeasureIsNotShiftedByAnotherMeasuresVerseZero() throws {
+    @Test func higherVerseFollowsDistantInnerRowAndCaretUsesItsOwnMark() throws {
         let higherVerse = Self.measure(lyrics: [
             Lyric(text: "", verse: 0),
             Lyric(text: "alto", verse: 1),
@@ -191,8 +191,14 @@ struct LayoutDocumentLyricLineYTests {
             in: besideDeepVerseZero, measureIndex: 0,
         )
 
-        #expect(abs(
-            (aloneMark.y - aloneStaffTop) - (pairedMark.y - pairedStaffTop),
-        ) < 0.001)
+        let innerMark = try #require(Self.lyricMarks(
+            in: besideDeepVerseZero, measureIndex: 1,
+        ).first)
+        // A movable outer row must follow the inner row across the whole system,
+        // including a measure whose syllables have no horizontal overlap.
+        #expect(pairedMark.y - pairedStaffTop > aloneMark.y - aloneStaffTop)
+        #expect(pairedMark.y > innerMark.y)
+        let caretY = try #require(besideDeepVerseZero.lyricLineY(at: Self.elementID(), verse: 1))
+        #expect(abs(caretY - pairedMark.y) < 0.001)
     }
 }

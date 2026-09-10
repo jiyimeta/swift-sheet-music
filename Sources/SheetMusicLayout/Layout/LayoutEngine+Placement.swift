@@ -954,6 +954,7 @@ extension LayoutEngine {
                             autoplace: lyric.elementProperties.autoplace ?? true,
                             verse: verseIdx,
                             staff: staffAddress,
+                            lyricAnchorCorrectionY: Double(lyricAnchorCorrectionY(lyric: lyric, metrics: metrics)),
                         )
                         let row = LyricRow(side: side, verse: verseIdx)
                         let origin = lyricOrigin(

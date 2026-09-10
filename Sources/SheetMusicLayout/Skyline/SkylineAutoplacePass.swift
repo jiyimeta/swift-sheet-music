@@ -139,6 +139,7 @@ enum SkylineAutoplacePass {
         // shorter staff's above/below test tracks its drawn ink.
         let staffMidY = (staffTop + staffBottom) / 2
         var skyline = Skyline(staffTop: staffTop, staffBottom: staffBottom)
+        var lyricRows = LyricRowBands()
 
         // Stable per-(staff, system) identity for the ignore rules.
         var ids: [[Int]] = []
@@ -169,6 +170,9 @@ enum SkylineAutoplacePass {
                       )
                 else { continue }
                 skyline.add(shape)
+                if let row = el.textPlacement?.row, let box = shape.bbox {
+                    lyricRows.add(box, to: row)
+                }
             }
         }
 
@@ -184,19 +188,13 @@ enum SkylineAutoplacePass {
             )
             var lyricObstacles: [LayoutShape] = []
             if case .lyricVerses = category.grouping {
-                for (measure, elements) in measures.enumerated() {
-                    for (index, element) in elements.enumerated() {
-                        if let shape = LayoutElementShape.lyricStemClearance(
-                            for: element, id: ids[measure][index], xOffset: xOffsets[measure], metrics: metrics,
-                        ) { lyricObstacles.append(shape) }
-                    }
-                }
+                lyricObstacles = lyricStemObstacles(measures: measures, ids: ids, xOffsets: xOffsets, metrics: metrics)
             }
             for members in groups {
                 apply(
                     group: members, measures: &measures, ids: ids,
                     xOffsets: xOffsets, staffMidY: staffMidY,
-                    metrics: metrics, extraObstacles: lyricObstacles, skyline: &skyline,
+                    metrics: metrics, extraObstacles: lyricObstacles, lyricRows: &lyricRows, skyline: &skyline,
                 )
             }
         }
@@ -275,6 +273,7 @@ extension SkylineAutoplacePass {
         ids: [[Int]], xOffsets: [CGFloat],
         staffMidY: CGFloat, metrics: StaffMetrics,
         extraObstacles: [LayoutShape],
+        lyricRows: inout LyricRowBands,
         skyline: inout Skyline,
     ) {
         var shapes: [(address: Address, shape: LayoutShape, kind: ShapeItemKind, side: Placement?)] = []
@@ -294,10 +293,20 @@ extension SkylineAutoplacePass {
         for obstacle in extraObstacles {
             querySkyline.add(obstacle)
         }
-        let dy = requiredShift(
+        var dy = requiredShift(
             shapes: shapes, staffMidY: staffMidY,
             metrics: metrics, skyline: querySkyline,
         )
+        if let first = group.first,
+           let row = measures[first.measure][first.index].textPlacement?.row
+        {
+            let box = shapes.compactMap(\.shape.bbox).reduce(CGRect.null) { $0.union($1) }
+            let rowShift = lyricRows.outwardShift(
+                for: row, box: box, minimumGap: AutoplaceRules.minDistance(for: .lyrics, sp: metrics.sp),
+            )
+            dy = row.side == .above ? min(dy, rowShift) : max(dy, rowShift)
+            lyricRows.add(box.offsetBy(dx: 0, dy: dy), to: row)
+        }
         for entry in shapes {
             let m = entry.address.measure
             let i = entry.address.index
@@ -308,6 +317,20 @@ extension SkylineAutoplacePass {
             }
             skyline.add(entry.shape.translatedY(dy))
         }
+    }
+
+    private static func lyricStemObstacles(
+        measures: [[LayoutElement]], ids: [[Int]], xOffsets: [CGFloat], metrics: StaffMetrics,
+    ) -> [LayoutShape] {
+        var shapes: [LayoutShape] = []
+        for (measure, elements) in measures.enumerated() {
+            for (index, element) in elements.enumerated() {
+                if let shape = LayoutElementShape.lyricStemClearance(
+                    for: element, id: ids[measure][index], xOffset: xOffsets[measure], metrics: metrics,
+                ) { shapes.append(shape) }
+            }
+        }
+        return shapes
     }
 
     /// Farthest-from-the-staff shift any member of the group needs.
