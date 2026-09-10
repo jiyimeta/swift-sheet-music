@@ -166,14 +166,24 @@ intents 30–73) emptied this section: every operation the `Score` model
 could express had a named command in §A. It re-opened when engraved text
 became selectable (spec 2026-09-07) and the properties a host wants for a
 selected text turned out to be a different set from the ones a note has.
-`SetTextVisible` (75) closed the first of them. What is left:
+`SetTextVisible` (75) closed the first of them. **The remaining four
+closed on 2026-09-10** (spec `2026-09-10-selection-and-editing-design.md`):
+`SetElementColor` (76), `SetElementPlacement` (77), `SetTextFont` (78)
+and `SetLyricVerse` (79). §B is empty again.
 
-| Property of a selected text | Model field | Why there is no command yet |
-| --- | --- | --- |
-| Color | `elementProperties.color` on `Lyric` / `StaffText` / `RehearsalMark` / `Harmony`, and the renderer already honors it | nothing writes it. The field is there and round-trips, so this is a command-shaped gap, not a model one — the cheapest of these to add, and the one a user asked for first. |
-| Font (face, size, style) | `TextProperties` on all four | nothing writes it, and `TextProperties` is a wider payload than the scalar rule `EditIntent` holds — an intent for it needs a decision about how much of the struct crosses. |
-| Placement (above / below) | `elementProperties.placement`, deliberately outside `Score.stableFingerprint` | a command would have to bring the field into the fingerprint walk first, or two images could disagree undetected. |
-| A lyric's verse | `Lyric.verse`, and the index into `Chord.lyrics` that `SetLyric` owns | moving a syllable between verses is a re-index of the array, not a field write; `SetLyric` owns that invariant and would have to grow the operation. |
+Each of the four carried a surprise, and they are recorded here because
+the next person will otherwise re-derive them:
+
+| Command | What the row above got wrong |
+| --- | --- |
+| `SetElementColor` (76) | The row said the field sits on the four text kinds. It is also on `Note` and `Chord` — but **`Chord.elementProperties.color` reaches nothing**: the layout takes a chord's colour from its notes. Five carriers, not six, and the exclusion is named in the command's doc comment so nobody completes the set later. |
+| `SetElementPlacement` (77) | The row said the only blocker was the fingerprint walk. That was necessary and not sufficient: **no carrier's layout reads `placement` at all**. Only `Spanner` honours it, by another path. So the library reads `<placement>below</placement>` from a MuseScore file, preserves it, and draws the element above — a rendering bug with no editing involved. The command ships because the field is real and round-trips; making the renderer honour it is engraving work with its own design. |
+| `SetTextFont` (78) | The row said "`TextProperties` on all four". True of storage, false of use: only Harmony resolves it, and only `face`, `size` and bold/italic from `style` — not underline, strike, `frameType` or `framePadding`. And **none of the four was hashed** by `stableFingerprint`, so the fingerprint work had to grow before the command could exist. |
+| `SetLyricVerse` (79) | The row said `SetLyric` owns the repair invariant. It does not — repair lives in `LyricInputPlanner` and is driven by the terminator the user typed. A verse move has no terminator, so **neighbours are deliberately not repaired**, and a hyphen or melisma the syllable participated in can be left pointing at a row it no longer occupies. An occupied destination is refused rather than swapped. |
+
+The shape common to all four: the row described what the model
+**stores**, and the work turned on what the system **does** with it.
+Those are different questions and only the second needs a function body.
 
 Apart from those, new commands start with a gap from §C, or with a new
 feature altogether; either way they open a new wire chain rather than

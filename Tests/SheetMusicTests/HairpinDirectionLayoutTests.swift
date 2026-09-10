@@ -45,7 +45,7 @@
             )
             for system in doc.systems {
                 for element in system.spanners {
-                    guard case let .spannerSegment(kind, _, _, _, _, _) =
+                    guard case let .spannerSegment(kind, _, _, _, _, _, _) =
                         element
                     else { continue }
                     if kind == .hairpinOpen || kind == .hairpinClose {

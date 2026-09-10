@@ -35,8 +35,8 @@ package struct FrameWire {
         cursor = ScoreCursorWire(from: value.cursor)
     }
 
-    func decoded() -> PlaybackTimeline.Frame {
-        PlaybackTimeline.Frame(
+    func decoded() throws -> PlaybackTimeline.Frame {
+        try PlaybackTimeline.Frame(
             tick: Int(tick),
             timeSeconds: timeSeconds,
             cursor: cursor.decoded(),

@@ -21,7 +21,7 @@
             for system in doc.systems {
                 for m in system.measures where m.measureIndex == measure {
                     for element in m.elements {
-                        if case let .barLine(subtype, _, _) = element {
+                        if case let .barLine(subtype, _, _, _, _) = element {
                             result.append(subtype)
                         }
                     }

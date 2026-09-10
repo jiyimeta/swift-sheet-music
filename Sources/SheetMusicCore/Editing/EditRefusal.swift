@@ -131,6 +131,8 @@ public struct EditRefusal: Sendable, Hashable {
         /// `SetLyric` refuses rather than let an invalid index reach the chord's lyrics array, under its own name
         /// so a host can distinguish a bad verse selector from a missing chord.
         case invalidVerse(Int)
+        /// Moving a syllable never swaps with or displaces a nonempty destination row.
+        case occupiedLyricVerse(Int)
         /// A lyric whose text is empty (or whitespace only) is not a syllable — it would engrave as nothing.
         /// `SetLyric` refuses rather than write one; removing a syllable is spelled `lyric: nil`. The refusal has
         /// its own name so a host's copy can identify the lyric field rather than report generic empty input.
@@ -245,6 +247,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.emptyStaffText"
         case .emptyChordSymbol:
             "edit.emptyChordSymbol"
+        case .occupiedLyricVerse:
+            "edit.occupiedLyricVerse"
         case .invalidVerse:
             "edit.invalidVerse"
         case .emptyLyricText:
@@ -341,6 +345,8 @@ public struct EditRefusal: Sendable, Hashable {
             "staff text is empty"
         case .emptyChordSymbol:
             "chord symbol text is empty"
+        case let .occupiedLyricVerse(verse):
+            "Lyric verse \(verse) is already occupied."
         case let .invalidVerse(verse):
             "lyric verse must be zero or greater (got \(verse))"
         case .emptyLyricText:

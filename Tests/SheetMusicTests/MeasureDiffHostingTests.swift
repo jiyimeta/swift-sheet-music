@@ -75,6 +75,7 @@
                 elements: original.elements
                     + [.barLine(
                         subtype: token, origin: .zero, halfHeight: 4,
+                        measureIndex: nil, role: .explicit,
                     )],
                 markers: original.markers,
                 jumps: original.jumps,
@@ -122,15 +123,15 @@
             let built = ScoreLayerBuilder.buildSystemWithItems(system, metrics: metrics)
             #expect(system.measures.count >= 2, "fixture needs >=2 measures for this test")
 
-            // Pick one measure with a selectable item to leave untouched,
-            // and a DIFFERENT measure to rebuild.
-            let keepIndex = try #require(
-                built.measureItems.first { !$0.value.isEmpty }?.key,
-            )
+            // Pick a note in layout order, not an arbitrary registered item: a barline has no fill.
+            let keepID = try #require(system.measures.flatMap(\.elements).compactMap { element -> ScoreItemID? in
+                guard case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = element else { return nil }
+                return notes.first.map { .note($0.noteID) }
+            }.first)
+            let keepIndex = keepID.measureIndex
             let rebuildIndex = try #require(
                 system.measures.map(\.measureIndex).first { $0 != keepIndex },
             )
-            let keepID = try #require(built.measureItems[keepIndex]?.keys.first)
 
             let mock = MockHost()
             mock.baseLayer = built.root
@@ -301,7 +302,7 @@
             let (system, metrics) = try firstSystem()
             let built = ScoreLayerBuilder.buildSystemWithItems(system, metrics: metrics)
             let rebuildIndex = try #require(
-                built.measureItems.first { !$0.value.isEmpty }?.key,
+                system.measures.first { built.measureItems[$0.measureIndex]?.isEmpty == false }?.measureIndex,
             )
 
             let mock = MockHost()

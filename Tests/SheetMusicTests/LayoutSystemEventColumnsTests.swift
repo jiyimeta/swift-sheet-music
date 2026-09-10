@@ -69,6 +69,7 @@ struct LayoutSystemEventColumnsTests {
             case .tuplet: "tuplet"
             case .clef: "clef"
             case .text: "text"
+            case .element: "element"
             }
         })
         #expect(kinds == ["note", "rest"])

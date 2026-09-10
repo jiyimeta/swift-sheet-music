@@ -156,6 +156,7 @@ struct FNV1a {
         combine(note.visible)
         combineOccupied(note.fingerings, tag: 36)
         combineOccupied(note.symbols, tag: 46)
+        combineOccupied(note.elementProperties.placement, tag: 84)
         if let color = note.elementProperties.color {
             combine(31)
             combine(color.red)
@@ -194,8 +195,9 @@ struct FNV1a {
         // Brought in by `SetTextVisible` (intent 75): a hidden syllable is a state an edit can now reach, so a
         // mirror that failed to apply the hide has to disagree here. BY OCCUPANTS, so a score whose syllables are
         // all visible and uncolored feeds exactly the bytes it did before — which is what keeps every committed
-        // replay golden and the layout golden unmoved. `Lyric.properties` (fonts) stays out: nothing writes it.
-        combineOccupied(lyric.elementProperties, visibleTag: 61, colorTag: 62)
+        // replay golden and the layout golden unmoved. Font overrides also feed only occupied fields.
+        combineOccupied(lyric.elementProperties, visibleTag: 61, colorTag: 62, placementTag: 80)
+        combineOccupied(lyric.properties, firstTag: 85)
     }
 
     /// Recurses into the grace chord's own notes (via `combine(_ note:)`) rather than hashing a count, so a
@@ -298,7 +300,7 @@ struct FNV1a {
         combine(chord.stemVisible)
         combine(chord.beamVisible)
         combineOccupied(chord.spanners, tag: 32)
-        combineOccupied(chord.elementProperties, visibleTag: 29, colorTag: 30)
+        combineOccupied(chord.elementProperties, visibleTag: 29, colorTag: 30, placementTag: 68)
     }
 
     /// Unlike `combine(_ element: VoiceElement)`'s marker cases, every case here is fed the fields that give the
@@ -306,9 +308,10 @@ struct FNV1a {
     /// rewriting them, and a tag alone cannot tell two same-kind elements that swapped bars apart from two that
     /// stayed put — the position and measure index `combineSystemLane` feeds would be identical either way.
     ///
-    /// What stays out is the display trivia hanging off each one (`offsetX` / `offsetY`, `properties`,
+    /// What stays out is the display trivia hanging off each one (`offsetX` / `offsetY`,
     /// `RehearsalMark.frame`, `InstrumentChange.isUserInitialized`), in the same spirit as this file's other
-    /// exclusions: no edit command in this package writes any of it.
+    /// exclusions. Font properties stay out except on StaffText and RehearsalMark, whose five fields
+    /// SetTextFont writes and which are now included by occupants.
     ///
     /// `elementProperties` was on that list until `SetTextVisible` (intent 75) started writing it on a rehearsal
     /// mark and on a staff / system text. Those two cases now feed it BY OCCUPANTS, so a lane whose marks are all
@@ -324,12 +327,14 @@ struct FNV1a {
         case let .rehearsalMark(mark):
             combine(1)
             combine(mark.text)
-            combineOccupied(mark.elementProperties, visibleTag: 63, colorTag: 64)
+            combineOccupied(mark.elementProperties, visibleTag: 63, colorTag: 64, placementTag: 81)
+            combineOccupied(mark.properties, firstTag: 90)
         case let .staffText(text):
             combine(2)
             combine(text.text)
             combine(text.isSystemText)
-            combineOccupied(text.elementProperties, visibleTag: 65, colorTag: 66)
+            combineOccupied(text.elementProperties, visibleTag: 65, colorTag: 66, placementTag: 82)
+            combineOccupied(text.properties, firstTag: 95)
         case let .swing(swing):
             combine(3)
             combine(swing.text)

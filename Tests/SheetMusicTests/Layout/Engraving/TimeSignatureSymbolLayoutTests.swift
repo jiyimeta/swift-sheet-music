@@ -46,7 +46,7 @@ import Testing
                 .filter { $0.measureIndex == index }
                 .flatMap(\.elements)
                 .compactMap { element in
-                    guard case let .timeSignature(_, _, symbol, _) = element else { return nil }
+                    guard case let .timeSignature(_, _, symbol, _, _) = element else { return nil }
                     return symbol
                 }
         }

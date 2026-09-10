@@ -94,8 +94,43 @@
         /// exactly": injectable margins, inter-staff gap and system
         /// padding would all move y, and no y moved. That claim had
         /// been unverified since it landed.
+        /// **Re-recorded for the selectable-element identity phase.**
+        /// 174 lines changed, and every one of them changed only by
+        /// gaining an identity field — `TextMarkKind.tempo` and
+        /// `.dynamic` acquiring an `anchor:`, and `spannerSegment`
+        /// acquiring its own. Checked the way the previous re-record
+        /// was, but on the axis that matters when the TEXT of a line
+        /// necessarily changes: every coordinate was extracted from
+        /// both documents in order and compared. 4987 geometry values
+        /// before, 4987 after, byte-identical. Identity was added;
+        /// nothing moved.
+        ///
+        /// **The rule this gate cannot tell you on its own.** A green
+        /// digest is silence about any element kind the corpus holds
+        /// no instance of — those lines are ABSENT, not unchanged, and
+        /// absence and agreement look identical from here. So before
+        /// treating a green run as coverage for a kind, grep the
+        /// recorded text for that kind and see whether it appears at
+        /// all. Checking that on the day this was recorded, fermatas,
+        /// breaths and articulations each appeared zero times, so the
+        /// identity work on them rests entirely on
+        /// `LayoutElementIdentityTests` and not at all on this digest.
+        /// Widening the corpus is the better fix than remembering.
+        /// Re-recorded again when key signatures, time signatures,
+        /// barlines and voltas gained identity. Same check, same
+        /// result: every coordinate extracted from both documents in
+        /// order, all of them byte-identical, and the only lines that
+        /// changed were those four kinds gaining an anchor.
+        ///
+        /// A trap worth naming, because it nearly produced a false
+        /// alarm here: a spanner segment's line begins `spanner`, not
+        /// `el`, so a filter written to enumerate `el <kind>(` misses
+        /// voltas entirely and reports them as unchanged when they
+        /// changed. Whatever tool you use to classify a diff of this
+        /// file, check it against a line you KNOW moved before
+        /// believing what it says about the ones you don't.
         private static let expectedDigestSHA256 =
-            "2e354b26d3a1ed0a1af511825f0a83c2fa7ae79db7400460fd7a4d0e9f1355e7"
+            "9b15fd57f1713137f14c431bdccaf291db9ae33767e20ac53065a6ca30b9e6f3"
 
         @Test("write digest")
         func writeDigest() throws {

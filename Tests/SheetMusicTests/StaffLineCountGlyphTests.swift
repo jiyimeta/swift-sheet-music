@@ -292,7 +292,7 @@
             for element in measure.elements {
                 switch element {
                 case let .clef(_, p, _): clefY = clefY ?? p.y
-                case let .timeSignature(_, _, _, p): timeSigY = timeSigY ?? p.y
+                case let .timeSignature(_, _, _, p, _): timeSigY = timeSigY ?? p.y
                 default: continue
                 }
             }
@@ -528,7 +528,7 @@
             let system = try #require(doc.systems.first)
             let origin = try #require(system.staffOrigins.first).y
             let y = try #require(system.spanners.compactMap {
-                if case let .spannerSegment(_, from, _, _, _, _) = $0 {
+                if case let .spannerSegment(_, from, _, _, _, _, _) = $0 {
                     return from.y
                 }
                 return nil

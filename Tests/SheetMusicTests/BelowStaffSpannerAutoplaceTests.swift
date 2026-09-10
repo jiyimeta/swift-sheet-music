@@ -72,7 +72,7 @@
             let system = try #require(doc.systems.first)
             let segment = try #require(
                 system.spanners.compactMap { el -> CGFloat? in
-                    guard case let .spannerSegment(_, from, _, _, _, _)
+                    guard case let .spannerSegment(_, from, _, _, _, _, _)
                         = el else { return nil }
                     return from.y
                 }.first,

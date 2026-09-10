@@ -7,7 +7,7 @@ import SheetMusicFoundation
 ///
 /// - **Measure flags and element properties are fed BY OCCUPANTS.** A field contributes bytes only when it holds a
 ///   non-default value, and always as a unique non-zero tag (21 and up, so no tag can be mistaken for a
-///   `VoiceElement` case tag 0…17 or for a presence byte) followed by its value. The tag is what keeps
+///   `VoiceElement` case tag 0…19 or for a presence byte) followed by its value. The tag is what keeps
 ///   `endRepeatCount = 2` and `measureRepeatCount = 2` apart; the fixed-arity prefix of each measure block is what
 ///   keeps "flag on measure 3" and "flag on measure 4" apart.
 /// - **The marker `VoiceElement` cases are fed their content UNCONDITIONALLY.** A clef has no default type to be
@@ -63,7 +63,7 @@ extension FNV1a {
         combine(ornament.accidentalBelow?.rawValue)
         combineTristate(ornament.startOnUpperNote)
         combineTristate(ornament.plays)
-        combineOccupied(ornament.elementProperties, visibleTag: 34, colorTag: 35)
+        combineOccupied(ornament.elementProperties, visibleTag: 34, colorTag: 35, placementTag: 69)
     }
 
     /// `nil` / `false` / `true` as `0` / `1` / `2`. A plain `combine(_ flag:)`
@@ -83,7 +83,7 @@ extension FNV1a {
     mutating func combine(_ fingering: Fingering) {
         combine(fingering.text)
         combine(fingering.role.mscxToken)
-        combineOccupied(fingering.elementProperties, visibleTag: 37, colorTag: 38)
+        combineOccupied(fingering.elementProperties, visibleTag: 37, colorTag: 38, placementTag: 70)
     }
 
     /// Every modeled symbol field an edit can change. `preservedMarkup` stays
@@ -93,7 +93,7 @@ extension FNV1a {
         combine(symbol.scoreFont)
         combinePresence(symbol.size)
         combinePresence(symbol.angle)
-        combineOccupied(symbol.elementProperties, visibleTag: 47, colorTag: 48)
+        combineOccupied(symbol.elementProperties, visibleTag: 47, colorTag: 48, placementTag: 74)
     }
 
     /// Every case that carries *timing* — i.e. anything that changes how much tick budget an element occupies, or
@@ -231,23 +231,15 @@ extension FNV1a {
         combine(breath.visible)
     }
 
-    mutating func combine(_ harmony: Harmony) {
-        combine(harmony.name)
-        combine(harmony.harmonyType.rawValue)
-        combinePresence(harmony.rootTpc)
-        combinePresence(harmony.bassTpc)
-        combine(harmony.visible)
-    }
-
     mutating func combine(_ sticking: Sticking) {
         combine(sticking.text)
-        combineOccupied(sticking.elementProperties, visibleTag: 39, colorTag: 40)
+        combineOccupied(sticking.elementProperties, visibleTag: 39, colorTag: 40, placementTag: 71)
     }
 
     mutating func combine(_ expression: ExpressionText) {
         combine(expression.text)
         combinePresence(expression.snapToDynamics.map { $0 ? 1 : 0 })
-        combineOccupied(expression.elementProperties, visibleTag: 41, colorTag: 42)
+        combineOccupied(expression.elementProperties, visibleTag: 41, colorTag: 42, placementTag: 72)
     }
 
     mutating func combine(_ capo: Capo) {
@@ -260,7 +252,7 @@ extension FNV1a {
             combine(string)
         }
         combine(capo.text)
-        combineOccupied(capo.elementProperties, visibleTag: 49, colorTag: 50)
+        combineOccupied(capo.elementProperties, visibleTag: 49, colorTag: 50, placementTag: 75)
     }
 
     mutating func combine(_ tunings: StringTunings) {
@@ -272,7 +264,7 @@ extension FNV1a {
         // `StringData` is deliberately omitted, matching `Instrument`: this
         // is a semantic-edit fingerprint rather than a fidelity hash.
         combine(tunings.text)
-        combineOccupied(tunings.elementProperties, visibleTag: 51, colorTag: 52)
+        combineOccupied(tunings.elementProperties, visibleTag: 51, colorTag: 52, placementTag: 76)
     }
 
     /// Every modeled ambitus field an edit can change. `preservedMarkup` stays
@@ -289,7 +281,7 @@ extension FNV1a {
         combinePresence(ambitus.lineWidth)
         combine(ambitus.topAccidental)
         combine(ambitus.bottomAccidental)
-        combineOccupied(ambitus.elementProperties, visibleTag: 53, colorTag: 54)
+        combineOccupied(ambitus.elementProperties, visibleTag: 53, colorTag: 54, placementTag: 77)
     }
 
     /// Every modeled figured-bass field an edit can change. Source-fidelity
@@ -299,7 +291,7 @@ extension FNV1a {
         combine(figuredBass.ticks)
         combine(figuredBass.text)
         combineOccupied(figuredBass.items, tag: 55)
-        combineOccupied(figuredBass.elementProperties, visibleTag: 56, colorTag: 57)
+        combineOccupied(figuredBass.elementProperties, visibleTag: 56, colorTag: 57, placementTag: 78)
     }
 
     mutating func combine(_ item: FiguredBassItem) {
@@ -319,6 +311,7 @@ extension FNV1a {
     mutating func combine(_ diagram: FretDiagram) {
         let hasProperties = !diagram.elementProperties.visible
             || diagram.elementProperties.color != nil
+            || diagram.elementProperties.placement != nil
         guard diagram.stringCount != 6 || diagram.fretCount != 5
             || !diagram.strings.isEmpty || diagram.barre != nil
             || diagram.harmony != nil || hasProperties
@@ -345,7 +338,7 @@ extension FNV1a {
         if let harmony = diagram.harmony {
             combine(harmony)
         }
-        combineOccupied(diagram.elementProperties, visibleTag: 58, colorTag: 59)
+        combineOccupied(diagram.elementProperties, visibleTag: 58, colorTag: 59, placementTag: 79)
     }
 
     mutating func combine(_ repeat: MeasureRepeat) {

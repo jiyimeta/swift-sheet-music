@@ -39,6 +39,7 @@
                     subtype: subtype,
                     origin: CGPoint(x: 40, y: 20),
                     halfHeight: 10,
+                    measureIndex: nil, role: .explicit,
                 )],
             )
             let system = LayoutSystem(

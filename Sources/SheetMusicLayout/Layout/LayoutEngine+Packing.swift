@@ -532,6 +532,7 @@ extension LayoutEngine {
             effectiveMelismaTicks: context.effectiveMelismaTicks,
             melismaContinuationsForRange: melismaForRange,
             drumLineMaps: drumLineMaps,
+            percussionGroups: staves.map { $0.group == "percussion" },
             partLabels: partLabels(of: context.score, isFirstSystem: isFirstSystem),
             totalMeasures: staves.first?.measures.count ?? 0,
             options: context.options,

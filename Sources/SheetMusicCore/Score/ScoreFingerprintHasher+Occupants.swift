@@ -1,9 +1,16 @@
 import SheetMusicFoundation
 
 extension FNV1a {
-    /// `visible == false` and a set `color` are the occupants; a default `ElementProperties` feeds nothing.
-    mutating func combineOccupied(_ properties: ElementProperties, visibleTag: Int, colorTag: Int) {
+    /// Hidden visibility, explicit color and placement are occupants; default properties feed nothing.
+    mutating func combineOccupied(
+        _ properties: ElementProperties, visibleTag: Int, colorTag: Int, placementTag: Int,
+    ) {
         if !properties.visible { combine(visibleTag) }
+        combineOccupied(properties, colorTag: colorTag, placementTag: placementTag)
+    }
+
+    /// Harmony already feeds visibility unconditionally; preserve that byte and append only occupants.
+    mutating func combineOccupied(_ properties: ElementProperties, colorTag: Int, placementTag: Int) {
         if let color = properties.color {
             combine(colorTag)
             combine(color.red)
@@ -11,6 +18,15 @@ extension FNV1a {
             combine(color.blue)
             combine(color.alpha)
         }
+        combineOccupied(properties.placement, tag: placementTag)
+    }
+
+    /// No presence byte for nil: existing default-score fingerprints must not move.
+    /// Spanners retain their older unconditional placement path and never call this helper.
+    mutating func combineOccupied(_ placement: Placement?, tag: Int) {
+        guard let placement else { return }
+        combine(tag)
+        combine(placement.rawValue)
     }
 
     /// Chord-anchored spanner begins (`Chord.spanners` — slurs, in practice), BY OCCUPANTS: an empty array feeds
@@ -71,7 +87,7 @@ extension FNV1a {
         combinePresence(bracket.hookLength)
         combine(bracket.hookPosition?.rawValue)
         combineTristate(bracket.isRightSide)
-        combineOccupied(bracket.elementProperties, visibleTag: 44, colorTag: 45)
+        combineOccupied(bracket.elementProperties, visibleTag: 44, colorTag: 45, placementTag: 73)
     }
 
     /// Figured-bass items, BY OCCUPANTS: an empty item representation feeds

@@ -69,19 +69,19 @@ extension LayoutElementShape {
         for element: LayoutElement, sp: CGFloat,
     ) -> [CGRect] {
         switch element {
-        case let .articulation(artKind, p, isAbove):
+        case let .articulation(artKind, p, isAbove, _):
             return [smuflGlyphRect(
                 codepoint: ArticulationGlyph.codepoint(
                     kind: artKind, isAbove: isAbove,
                 ),
                 center: p, sp: sp,
             )]
-        case let .fermata(subtype, p):
+        case let .fermata(subtype, p, _):
             return [smuflGlyphRect(
                 codepoint: FermataGlyph.codepoint(forSubtype: subtype),
                 center: p, sp: sp,
             )]
-        case let .breath(breathKind, p):
+        case let .breath(breathKind, p, _):
             return [smuflGlyphRect(
                 codepoint: BreathGlyph.codepoint(forKind: breathKind),
                 center: p, sp: sp,
@@ -303,12 +303,12 @@ extension LayoutElementShape {
         var barLineHalfHeight: CGFloat?
         switch element {
         case let .clef(_, origin, _),
-             let .keySignature(_, _, _, _, origin),
-             let .timeSignature(_, _, _, origin),
+             let .keySignature(_, _, _, _, origin, _),
+             let .timeSignature(_, _, _, origin, _),
              let .measureRepeat(_, origin),
              let .multiMeasureRest(_, origin):
             p = origin
-        case let .barLine(_, origin, half):
+        case let .barLine(_, origin, half, _, _):
             p = origin
             barLineHalfHeight = half
         default:

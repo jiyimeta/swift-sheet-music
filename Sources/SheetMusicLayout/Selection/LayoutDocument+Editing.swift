@@ -94,10 +94,12 @@ extension LayoutDocument {
     /// select the first notehead they carry (there's no dedicated selection UI for those geometric elements yet);
     /// `.clef` has no v1 editing UI and is dropped.
     ///
-    /// The four text targets are dropped too, and deliberately: what a click on a lyric MEANS — open a caret,
+    /// Text targets are dropped too, and deliberately: what a click on a lyric MEANS — open a caret,
     /// select the note it hangs from, do nothing — is host policy, and answering with the anchor's note here
     /// would silently move the note selection every time someone aimed at a syllable. A host that wants a text
     /// hit reads it from `ScoreHitTester.hitTest(at:)` directly.
+    /// Engraved-element targets are dropped for the same reason: selecting a dynamic or its marked chord
+    /// is host policy. Once that policy is chosen, `ScoreHitTarget.selectableItem` supplies the total map.
     private static func selectableItem(from target: ScoreHitTarget) -> ScoreItemID? {
         switch target {
         case let .note(id): .note(id)
@@ -105,7 +107,8 @@ extension LayoutDocument {
         case let .tuplet(id): .tuplet(id)
         case let .stem(notes), let .flag(notes), let .beam(notes):
             notes.first.map(ScoreItemID.note)
-        case .clef, .lyric, .staffText, .harmony, .rehearsalMark:
+        case .clef, .lyric, .staffText, .harmony, .rehearsalMark,
+             .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation:
             nil
         }
     }

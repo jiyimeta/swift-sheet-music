@@ -5,7 +5,7 @@ import SheetMusicFoundation
 
 /// Geometry constants and helpers for engraved barlines.
 ///
-/// `LayoutElement.barLine(subtype:origin:halfHeight:)` carries both the
+/// `LayoutElement.barLine` carries both the
 /// stroke's center Y and its half-height, so the vertical span is not
 /// spelled out here: it depends on the staff's line count and is owned
 /// by `StaffLineGeometry.barLineSpanY(sp:)`. A five-line staff still
@@ -80,8 +80,8 @@ public enum BarLineGeometry {
         let barX = bar.x - last.origin.x
         let announcesCourtesy = last.elements.contains { element in
             switch element {
-            case let .keySignature(_, _, _, _, origin),
-                 let .timeSignature(_, _, _, origin):
+            case let .keySignature(_, _, _, _, origin, _),
+                 let .timeSignature(_, _, _, origin, _):
                 origin.x > barX
             default:
                 false

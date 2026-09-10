@@ -26,8 +26,8 @@ import SheetMusicFoundation
 ///   otherwise be an edit no mirror could disagree about.
 /// - Not covered within the nested types the walk now recurses into: `Arpeggio.elementProperties` and
 ///   `ChordLine.elementProperties` (visibility/color on those attachments, same reasoning as the two bullets
-///   above), plus `Lyric.properties` (text positioning/formatting) and `ChordLine.path` (hand-drawn Bezier
-///   control points) — all display-only, none of it set by any edit command in this package today.
+///   above), plus `ChordLine.path` (hand-drawn Bezier control points) — all display-only, none of it set by
+///   any edit command in this package today.
 /// - `Measure`'s `startRepeat`, `endRepeatCount`, `measureRepeatCount`, `markers`, `jumps`, `lineBreak`,
 ///   `pageBreak`, `sectionBreak` ARE covered, by occupants — see `ScoreFingerprintHasher+Parity.swift`'s
 ///   `combineFlags(_:)`. `actualLength` and `irregular` were already covered — M3's re-barring writes both — and
@@ -36,7 +36,9 @@ import SheetMusicFoundation
 ///   fields that give each one its musical identity), but the lane's LENGTH is not — an empty `SystemMeasure` and an
 ///   absent one are indistinguishable to this walk, deliberately, so that a score built in memory and the same score
 ///   parsed from MSCX still agree; see `combineSystemLane`. Nor is the display trivia hanging off each element —
-///   `offsetX` / `offsetY`, `properties` (fonts), `RehearsalMark.frame`, `InstrumentChange.isUserInitialized`.
+///   `offsetX` / `offsetY`, `RehearsalMark.frame`, `InstrumentChange.isUserInitialized`.
+///   TextProperties on lyric, staff/system text, rehearsal mark and harmony are included by occupants
+///   (tags 85...104), including fields not yet drawn, because SetTextFont writes all five overrides.
 ///   Same reasoning as the `Chord` / `Note` bullets above. The one exception is `elementProperties` on a
 ///   rehearsal mark (visible tag 63, color 64) and on a staff / system text (65, 66), which `SetTextVisible`
 ///   writes; the lane's other three cases still carry theirs unhashed.

@@ -2905,6 +2905,7 @@
             case .single(.tuplet): return "tuplet"
             case .single(.clef): return "clef"
             case .single(.text): return "text"
+            case .single(.element): return "element"
             case .range: return "range"
             case .multi: return "multi"
             }
@@ -3081,9 +3082,9 @@
                 selection = .single(.tuplet(id))
             case let .clef(anchor):
                 selection = .single(.clef(anchor))
-            case .text:
-                // The original-PDF geometry indexes notes and rests; it carries no engraved text, so
-                // nothing here can produce one.
+            case .text, .element:
+                // The original-PDF geometry indexes notes and rests; it carries no engraved text or
+                // marking, so nothing here can produce one.
                 selection = .single(item)
             }
         }
@@ -3217,6 +3218,12 @@
                 // a syllable. Opening a caret from here is a later step; for now a text click deselects.
                 selection = .none
                 return
+            case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
+                 .articulation:
+                // An engraved marking selects itself rather than the chord it hangs from, so the renderer
+                // tints the marking. It takes no part in the note-range logic below.
+                selection = target.selectableItem.map { .single($0) } ?? .none
+                return
             }
 
             if shift {
@@ -3279,7 +3286,9 @@
                     kind: .rehearsalMark, at: anchor,
                     controller: controller, ending: lyricSession,
                 )
-            case .note, .rest, .stem, .flag, .beam, .tuplet, .clef:
+            case .note, .rest, .stem, .flag, .beam, .tuplet, .clef,
+                 .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
+                 .articulation:
                 return
             }
             textEntryFocused = true

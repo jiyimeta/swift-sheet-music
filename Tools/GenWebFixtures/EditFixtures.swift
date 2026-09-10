@@ -133,7 +133,12 @@ extension GenWebFixtures {
                 pitch: -1,
                 tpc: 0,
             )
-        default:
+        case .clef:
+            return nil
+        case .text:
+            return nil
+        case .element:
+            // This generator emits web hit fixtures; element-hit fixtures arrive in a later phase.
             return nil
         }
     }

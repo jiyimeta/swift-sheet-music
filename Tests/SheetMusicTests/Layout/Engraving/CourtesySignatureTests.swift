@@ -129,7 +129,7 @@ import Testing
             _ m: LayoutMeasure,
         ) -> [(sharps: Int, flats: Int, naturals: [Int], origin: CGPoint)] {
             m.elements.compactMap { element in
-                guard case let .keySignature(s, f, _, naturals, origin) = element
+                guard case let .keySignature(s, f, _, naturals, origin, _) = element
                 else { return nil }
                 return (s, f, naturals, origin)
             }
@@ -139,7 +139,7 @@ import Testing
             _ m: LayoutMeasure,
         ) -> [(numerator: Int, denominator: Int, origin: CGPoint)] {
             m.elements.compactMap { element in
-                guard case let .timeSignature(n, d, _, origin) = element
+                guard case let .timeSignature(n, d, _, origin, _) = element
                 else { return nil }
                 return (n, d, origin)
             }
@@ -363,14 +363,14 @@ import Testing
             of element: LayoutElement, sp: CGFloat,
         ) -> (left: CGFloat, right: CGFloat)? {
             switch element {
-            case let .keySignature(sharps, flats, _, naturals, origin):
+            case let .keySignature(sharps, flats, _, naturals, origin, _):
                 let count = naturals.count + sharps + flats
                 guard count > 0 else { return nil }
                 let half = KeySignatureSteps.glyphWidth(sp: sp) / 2
                 let stride = KeySignatureSteps.advance(sp: sp)
                     * CGFloat(count - 1)
                 return (origin.x - half, origin.x + stride + half)
-            case let .timeSignature(numerator, denominator, _, origin):
+            case let .timeSignature(numerator, denominator, _, origin, _):
                 let digits = max(
                     String(numerator).count, String(denominator).count,
                 )
@@ -388,7 +388,7 @@ import Testing
         private func barLineX(_ m: LayoutMeasure) -> CGFloat {
             var maxX = -CGFloat.infinity
             for element in m.elements {
-                guard case let .barLine(_, origin, _) = element
+                guard case let .barLine(_, origin, _, _, _) = element
                 else { continue }
                 maxX = max(maxX, origin.x)
             }
@@ -463,10 +463,23 @@ import Testing
             let barX = barLineX(m1)
             #expect(sys.trailingBarLine?.subtype == "double")
             #expect(m1.elements.contains { element in
-                guard case let .barLine(subtype, origin, _) = element
+                guard case let .barLine(subtype, origin, _, _, _) = element
                 else { return false }
                 return origin.x == barX && subtype == "double"
             })
+            let bar = try #require(m1.elements.first { element in
+                guard case let .barLine(subtype, origin, _, _, _) = element else { return false }
+                return origin.x == barX && subtype == "double"
+            })
+            #expect(bar.elementID == .barLine(measureIndex: 1, role: .trailing))
+            let announcements = m1.elements.filter {
+                switch $0 {
+                case .keySignature, .timeSignature: true
+                default: false
+                }
+            }
+            #expect(announcements.count == 2)
+            #expect(announcements.allSatisfy { $0.elementID == nil })
         }
 
         @Test("a time-only courtesy keeps a single end barline")
@@ -503,7 +516,7 @@ import Testing
             var foundRightmostBar = false
             var rightmostSubtype: String?
             for element in m1.elements {
-                guard case let .barLine(subtype, origin, _) = element,
+                guard case let .barLine(subtype, origin, _, _, _) = element,
                       origin.x == barX else { continue }
                 foundRightmostBar = true
                 rightmostSubtype = subtype
@@ -546,8 +559,8 @@ import Testing
             for element in m1.elements {
                 let originX: CGFloat
                 switch element {
-                case let .keySignature(_, _, _, _, origin),
-                     let .timeSignature(_, _, _, origin):
+                case let .keySignature(_, _, _, _, origin, _),
+                     let .timeSignature(_, _, _, origin, _):
                     originX = origin.x
                 default:
                     continue
@@ -599,8 +612,8 @@ import Testing
             for element in m1.elements {
                 let origin: CGPoint
                 switch element {
-                case let .keySignature(_, _, _, _, value),
-                     let .timeSignature(_, _, _, value):
+                case let .keySignature(_, _, _, _, value, _),
+                     let .timeSignature(_, _, _, value, _):
                     origin = value
                 default:
                     continue

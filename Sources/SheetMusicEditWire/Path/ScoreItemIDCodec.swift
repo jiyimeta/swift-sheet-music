@@ -15,6 +15,7 @@ import Wirelet
 /// 2 = tuplet(TupletIDWire), see PathIDCodecs.swift
 /// 3 = clef(ClefAnchorWire), see ClefAnchorCodec.swift
 /// 4 = text(ScoreTextIDWire), below
+/// 5 = element(ScoreElementIDWire), below
 ///
 /// ScoreTextIDWire — case indices matching ScoreTextID's declaration order:
 /// 0 = lyric(LyricTextIDWire)
@@ -28,10 +29,10 @@ import Wirelet
 /// ```
 ///
 /// **`staffText`'s style crosses as a Bool, not as a `TextStyleType`**, matching
-/// `SetStaffTextIntentWire.isSystemText` — the same two-valued choice the command that edits the text
+/// `SetStaffTextIntentWire.isSystemText` — the same style distinction the command that edits the text
 /// takes. That is lossless for every value this case can hold: `ScoreHitTester`'s `textTarget` reports a
 /// `.staffText` target only for `.staffText` and `.systemText` (an `.instrumentChange` shares the layout
-/// case but has no text-entry command and is excluded there), so no third style can reach this wire.
+/// case but has no text-entry command and is excluded there).
 ///
 /// Top-level single: `ScoreItemIDWire` bytes directly. Array: via `Array<T: WireFormat>`'s own encoding
 /// (`varint(count)` + each element's length-delimited encoding).
@@ -49,7 +50,7 @@ public enum ScoreItemIDCodec {
     }
 
     public static func decodeArray(_ data: Data) throws -> [ScoreItemID] {
-        try [ScoreItemIDWire](decoding: data).map { $0.decoded() }
+        try [ScoreItemIDWire](decoding: data).map { try $0.decoded() }
     }
 }
 
@@ -60,6 +61,7 @@ public enum ScoreItemIDWire {
     case tuplet(TupletIDWire)
     case clef(ClefAnchorWire)
     case text(ScoreTextIDWire)
+    case element(ScoreElementIDWire)
 
     public init(from value: ScoreItemID) {
         switch value {
@@ -73,16 +75,19 @@ public enum ScoreItemIDWire {
             self = .clef(ClefAnchorWire(from: anchor))
         case let .text(id):
             self = .text(ScoreTextIDWire(from: id))
+        case let .element(id):
+            self = .element(ScoreElementIDWire(from: id))
         }
     }
 
-    public func decoded() -> ScoreItemID {
+    public func decoded() throws -> ScoreItemID {
         switch self {
         case let .note(wire): return .note(wire.decoded())
         case let .rest(wire): return .rest(wire.decoded())
         case let .tuplet(wire): return .tuplet(wire.decoded())
         case let .clef(wire): return .clef(wire.decoded())
         case let .text(wire): return .text(wire.decoded())
+        case let .element(wire): return try .element(wire.decoded())
         }
     }
 }
@@ -144,6 +149,123 @@ public enum ScoreTextIDWire {
             return .harmony(anchor: wire.decoded())
         case let .rehearsalMark(measureIndex):
             return .rehearsalMark(measureIndex: Int(measureIndex))
+        }
+    }
+}
+
+// MARK: - ScoreElementID
+
+/// Wire projection of the element identity. Case order is persistent; append new cases at the end.
+/// Anchored and bar-addressed cases carry their own payload, so no stored Optional is needed.
+@WireFormatChoice
+public enum ScoreElementIDWire {
+    case dynamic(VoiceElementIDWire)
+    case fermata(VoiceElementIDWire)
+    case breath(VoiceElementIDWire)
+    case tempo(VoiceElementIDWire)
+    /// Uses `Spanner.Kind.rawValue`, matching `RemoveSpannerIntentWire`; this codec does not own its case order.
+    case spanner(anchor: VoiceElementIDWire, kind: String)
+    case keySignature(Int32)
+    case timeSignature(Int32)
+    case barLine(measureIndex: Int32, role: BarLineRoleWire)
+    case articulation(anchor: VoiceElementIDWire, kind: ScoreArticulationKindWire)
+
+    public init(from value: ScoreElementID) {
+        switch value {
+        case let .dynamic(anchor): self = .dynamic(VoiceElementIDWire(from: anchor))
+        case let .fermata(anchor): self = .fermata(VoiceElementIDWire(from: anchor))
+        case let .breath(anchor): self = .breath(VoiceElementIDWire(from: anchor))
+        case let .tempo(anchor): self = .tempo(VoiceElementIDWire(from: anchor))
+        case let .spanner(anchor, kind):
+            self = .spanner(anchor: VoiceElementIDWire(from: anchor), kind: kind.rawValue)
+        case let .keySignature(index): self = .keySignature(Int32(index))
+        case let .timeSignature(index): self = .timeSignature(Int32(index))
+        case let .barLine(index, role):
+            self = .barLine(measureIndex: Int32(index), role: BarLineRoleWire(from: role))
+        case let .articulation(anchor, kind):
+            self = .articulation(anchor: VoiceElementIDWire(from: anchor), kind: ScoreArticulationKindWire(from: kind))
+        }
+    }
+
+    public func decoded() throws -> ScoreElementID {
+        switch self {
+        case let .dynamic(anchor): return .dynamic(anchor: anchor.decoded())
+        case let .fermata(anchor): return .fermata(anchor: anchor.decoded())
+        case let .breath(anchor): return .breath(anchor: anchor.decoded())
+        case let .tempo(anchor): return .tempo(anchor: anchor.decoded())
+        case let .spanner(anchor, kind):
+            guard let decodedKind = Spanner.Kind(rawValue: kind) else {
+                throw WireFormatError.unknownChoiceDiscriminator(0)
+            }
+            return .spanner(anchor: anchor.decoded(), kind: decodedKind)
+        case let .keySignature(index): return .keySignature(measureIndex: Int(index))
+        case let .timeSignature(index): return .timeSignature(measureIndex: Int(index))
+        case let .barLine(index, role): return .barLine(measureIndex: Int(index), role: role.decoded())
+        case let .articulation(anchor, kind): return .articulation(anchor: anchor.decoded(), kind: kind.decoded())
+        }
+    }
+}
+
+/// A closed wire choice whose declaration order is persistent; append new cases at the end.
+@WireFormatChoice
+public enum BarLineRoleWire {
+    case explicit
+    case startRepeat
+    case trailing
+
+    public init(from value: BarLineRole) {
+        switch value {
+        case .explicit: self = .explicit
+        case .startRepeat: self = .startRepeat
+        case .trailing: self = .trailing
+        }
+    }
+
+    public func decoded() -> BarLineRole {
+        switch self {
+        case .explicit: return .explicit
+        case .startRepeat: return .startRepeat
+        case .trailing: return .trailing
+        }
+    }
+}
+
+/// A closed wire choice whose declaration order is persistent; append new cases at the end.
+/// Unknown subtype strings stay distinct from modeled kinds, even when their tokens coincide.
+@WireFormatChoice
+public enum ScoreArticulationKindWire {
+    case staccato
+    case staccatissimo
+    case tenuto
+    case accent
+    case marcato
+    case accentStaccato
+    case marcatoStaccato
+    case unknown(String)
+
+    public init(from value: ChordArticulation.Kind) {
+        switch value {
+        case .staccato: self = .staccato
+        case .staccatissimo: self = .staccatissimo
+        case .tenuto: self = .tenuto
+        case .accent: self = .accent
+        case .marcato: self = .marcato
+        case .accentStaccato: self = .accentStaccato
+        case .marcatoStaccato: self = .marcatoStaccato
+        case let .unknown(subtype): self = .unknown(subtype)
+        }
+    }
+
+    public func decoded() -> ChordArticulation.Kind {
+        switch self {
+        case .staccato: return .staccato
+        case .staccatissimo: return .staccatissimo
+        case .tenuto: return .tenuto
+        case .accent: return .accent
+        case .marcato: return .marcato
+        case .accentStaccato: return .accentStaccato
+        case .marcatoStaccato: return .marcatoStaccato
+        case let .unknown(subtype): return .unknown(subtype: subtype)
         }
     }
 }
