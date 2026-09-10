@@ -126,8 +126,17 @@ public enum FontMetrics {
     /// `nonisolated(unsafe)` is sound here because the provider is
     /// mutated exactly once, at app launch before any layout runs;
     /// every access after that is a read.
-    public nonisolated(unsafe) static var provider: any FontMetricsProvider
+    private nonisolated(unsafe) static var installedProvider: any FontMetricsProvider
         = StubFontMetricsProvider()
+
+    /// A package-scoped override keeps backend verification local to its task.
+    /// Provider caches remain owned by each provider; app installation is unchanged.
+    @TaskLocal package static var scopedProvider: (any FontMetricsProvider)?
+
+    public static var provider: any FontMetricsProvider {
+        get { scopedProvider ?? installedProvider }
+        set { installedProvider = newValue }
+    }
 }
 
 /// Rectangle approximations sized off the requested `pointSize`.

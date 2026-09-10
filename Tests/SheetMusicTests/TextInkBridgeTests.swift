@@ -7,7 +7,7 @@
     import Testing
 
     @Suite("Bridge text ink anchors")
-    struct TextInkBridgeTests {
+    @MainActor struct TextInkBridgeTests {
         private let _installApple = TestSupport.installApple
 
         @Test(arguments: ["A", "A\ng", "A\n\ng"], [TextFrameType.none, .rectangle, .circle])

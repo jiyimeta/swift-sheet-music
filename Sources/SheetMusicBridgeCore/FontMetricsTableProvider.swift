@@ -44,7 +44,8 @@ private struct FontMetricsTableProvider: FontMetricsProvider {
     func renderingTextFont(_ font: LayoutFont) -> LayoutFont {
         LayoutFont(
             face: font.face == SMuFLFamily.bravura ? font.face : "Edwin",
-            pointSize: font.pointSize, weight: font.weight, isItalic: font.isItalic,
+            pointSize: font.pointSize, weight: font.weight == .semibold ? .regular : font.weight,
+            isItalic: font.isItalic,
         )
     }
 

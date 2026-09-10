@@ -104,6 +104,42 @@ struct FontMetricsTableTests {
         ],
     )
 
+    @Test("task-local providers isolate parallel measurements and restore the installed provider")
+    func scopedProvidersAreIsolated() async throws {
+        let font = LayoutFont(face: "Edwin", pointSize: 100)
+        let installedWidth = FontMetrics.provider.typographicWidth(text: "A", font: font)
+        var secondFace = Self.edwinFace
+        secondFace.glyphs[0].advance = 900
+        let first = try makeFontMetricsTableProvider(table: FontMetricsTable
+            .decode(Self.bytes(faces: [Self.edwinFace])))
+        let second = try makeFontMetricsTableProvider(table: FontMetricsTable.decode(Self.bytes(faces: [secondFace])))
+        let widths = await withTaskGroup(of: Double.self, returning: [Double].self) { group in
+            for index in 0 ..< 10 {
+                group.addTask {
+                    await FontMetrics.$scopedProvider.withValue(index.isMultiple(of: 2) ? first : second) {
+                        await Task.yield()
+                        return Double(FontMetrics.provider.typographicWidth(text: "A", font: font))
+                    }
+                }
+            }
+            var result: [Double] = []
+            for await width in group {
+                result.append(width)
+            }
+            return result.sorted()
+        }
+        #expect(widths == Array(repeating: 72.2, count: 5) + Array(repeating: 90, count: 5))
+        #expect(FontMetrics.provider.typographicWidth(text: "A", font: font) == installedWidth)
+        FontMetrics.$scopedProvider.withValue(first) {
+            #expect(FontMetrics.provider.typographicWidth(text: "A", font: font) == 72.2)
+            FontMetrics.$scopedProvider.withValue(second) {
+                #expect(FontMetrics.provider.typographicWidth(text: "A", font: font) == 90)
+            }
+            #expect(FontMetrics.provider.typographicWidth(text: "A", font: font) == 72.2)
+        }
+        #expect(FontMetrics.provider.typographicWidth(text: "A", font: font) == installedWidth)
+    }
+
     @Test("a v3 table, whose header carries one face's metrics, is refused")
     func rejectsVersion3() {
         #expect(throws: FontMetricsTable.DecodeError.unsupportedVersion(3)) {

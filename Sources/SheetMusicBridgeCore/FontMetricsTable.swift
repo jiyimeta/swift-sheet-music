@@ -113,9 +113,8 @@ package struct FontMetricsTable {
     /// existed answers exactly as it always did — regular metrics for a bold request, which is what
     /// every consumer got when nothing could ask for bold in the first place.
     ///
-    /// `.semibold` deliberately does not get its own record. Its one caller is the lyric row
-    /// (`LayoutEngine+Lyrics`) measuring the *system* font, which no table carries anyway, so a
-    /// `"-Semibold"` record would be written by every producer and read by nobody.
+    /// Portable text renderers resolve system semibold requests to bundled regular
+    /// Edwin. They have no separate semibold record or wire style bit.
     func face(for font: LayoutFont) -> Face? {
         if font.isItalic {
             let suffix = font.weight == .bold ? "-bolditalic" : "-italic"

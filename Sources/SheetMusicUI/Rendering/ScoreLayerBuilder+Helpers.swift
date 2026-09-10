@@ -288,7 +288,7 @@ extension ScoreLayerBuilder {
 
     // MARK: - Text layer (system font, via path for vector quality)
 
-    private static func textPath(
+    static func textPath(
         _ text: String, font: CTFont,
     ) -> CGPath? {
         // Split on `\n` so multi-line `<StaffText>` payloads (which

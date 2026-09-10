@@ -103,67 +103,31 @@ extension LayoutBridge {
         sp: Double,
         into out: inout [DrawCommand],
     ) {
-        withTextStyle(styleFlags(for: style), into: &out) { out in
-            emitTextRuns(
-                text: text, style: style,
-                originX: originX, originY: originY, sp: sp, into: &out,
-            )
-        }
-    }
-
-    private static func emitTextRuns(
-        text: String,
-        style: TextStyleType,
-        originX: Double,
-        originY: Double,
-        sp: Double,
-        into out: inout [DrawCommand],
-    ) {
-        let textPt = TextRoleStyle.fontSize(for: style, sp: CGFloat(sp))
-        // Inline music symbols (e.g. metNoteQuarterUp in a tempo) render
-        // at the surrounding text's point size, NOT at the SMuFL 1-em
-        // staff size — MuseScore styles them as inline glyphs so they
-        // sit proportionate to the text characters.
-        let glyphPt = textPt
-        let runs = MusicTextRuns.runs(in: text)
-        let weight = measurementWeight(for: style)
-        // Total advance across runs so the anchor offset is correct.
-        var totalWidth: CGFloat = 0
-        let measured: [(run: MusicTextRuns.Run, width: CGFloat)] = runs.map { run in
-            let width = FontMetrics.provider.typographicWidth(
-                text: run.text,
-                font: fontFor(run: run, textPt: textPt, glyphPt: glyphPt, weight: weight),
-            )
-            totalWidth += width
-            return (run, width)
-        }
-        let anchor = TextRoleStyle.horizontalAnchor(for: style)
-        let anchorDx: Double = switch anchor {
-        case .leading: 0
-        case .center: -Double(totalWidth) / 2
-        case .trailing: -Double(totalWidth)
-        }
-        var cursorX = originX + anchorDx
-        for (run, width) in measured {
-            switch run.kind {
-            case .musicSymbol:
-                out.append(.text(
-                    text: run.text,
-                    x: cursorX * ptToMMScale,
-                    y: originY * ptToMMScale,
-                    size: Double(glyphPt) * ptToMMScale,
-                    fontId: .smufl,
-                ))
-            case .text:
-                out.append(.text(
-                    text: run.text,
-                    x: cursorX * ptToMMScale,
-                    y: originY * ptToMMScale,
-                    size: Double(textPt) * ptToMMScale,
-                    fontId: .textRoman,
-                ))
+        let metrics = StaffMetrics(staffSize: CGFloat(sp) * 4)
+        let origin = CGPoint(x: originX, y: originY)
+        if style == .tempo {
+            for run in TextInkGeometry.tempoRuns(text: text, origin: origin, metrics: metrics) {
+                let flags: UInt8 = (run.font.weight == .bold ? 1 : 0) | (run.font.isItalic ? 2 : 0)
+                withTextStyle(flags, into: &out) { out in
+                    emitBaselineText(
+                        text: run.text,
+                        font: run.font,
+                        baseline: run.baseline,
+                        fontID: run.font.face == SMuFLFamily.bravura ? .smufl : .textRoman,
+                        into: &out,
+                    )
+                }
             }
-            cursorX += Double(width)
+        } else {
+            withTextStyle(styleFlags(for: style), into: &out) { out in
+                emitAnchoredText(
+                    text: text,
+                    font: TextInkGeometry.font(for: style, metrics: metrics),
+                    origin: origin,
+                    anchor: CGPoint(x: 0, y: 0.5),
+                    into: &out,
+                )
+            }
         }
     }
 
@@ -213,19 +177,6 @@ extension LayoutBridge {
             cursorX += Double(FontMetrics.provider.typographicWidth(
                 text: String(scalar), font: font,
             ))
-        }
-    }
-
-    private static func fontFor(
-        run: MusicTextRuns.Run, textPt: CGFloat, glyphPt: CGFloat, weight: FontWeight = .regular,
-    ) -> LayoutFont {
-        switch run.kind {
-        case .musicSymbol:
-            // SMuFL faces have one weight; Bravura has no bold member and MuseScore never asks for
-            // one, so the weight stops at the text runs.
-            return LayoutFont(face: "Bravura", pointSize: glyphPt)
-        case .text:
-            return LayoutFont(face: "Edwin", pointSize: textPt, weight: weight)
         }
     }
 
@@ -1032,45 +983,13 @@ extension LayoutBridge {
         sp: Double,
         into out: inout [DrawCommand],
     ) {
-        guard !text.isEmpty else { return }
-        let textPt = NotationTextStyle.fontSize(
-            for: role, sp: CGFloat(sp),
-        )
-        let font = LayoutFont(face: "Edwin", pointSize: textPt)
-        let advance = Double(FontMetrics.provider.typographicWidth(
-            text: text, font: font,
-        ))
-        let ascent = Double(FontMetrics.provider.ascent(font: font))
-        let descent = Double(FontMetrics.provider.descent(font: font))
-        let anchor = NotationTextStyle.anchor(for: role)
-        let dx: Double
-        let baselineY: Double
-        switch anchor {
-        case .leadingCenter:
-            // SwiftUI `.leading` = `(0, 0.5)`. Vertical center is at
-            // `(ascent - descent) / 2` above the baseline.
-            dx = 0
-            baselineY = originY + (ascent - descent) / 2
-        case .bottomLeading:
-            // SwiftUI `(0, 1)` puts the typographic frame's BOTTOM at
-            // `originY`. The descender hangs below the baseline by
-            // `descent`, so the baseline is `originY - descent`.
-            dx = 0
-            baselineY = originY - descent
-        case .trailingCenter:
-            // SwiftUI `.trailing` = `(1, 0.5)`. Shift the X by the
-            // negative of the advance so the right edge lands at
-            // `originX`.
-            dx = -advance
-            baselineY = originY + (ascent - descent) / 2
+        let font = NotationTextStyle.font(for: role, sp: CGFloat(sp))
+        withTextStyle(font.isItalic ? DrawCommand.TextStyleFlag.italic : 0, into: &out) { out in
+            emitAnchoredText(
+                text: text, font: font, origin: CGPoint(x: originX, y: originY),
+                anchor: NotationTextStyle.anchorPoint(for: role), into: &out,
+            )
         }
-        out.append(.text(
-            text: text,
-            x: (originX + dx) * ptToMMScale,
-            y: baselineY * ptToMMScale,
-            size: Double(textPt) * ptToMMScale,
-            fontId: .textRoman,
-        ))
     }
 
     // MARK: - Rehearsal mark

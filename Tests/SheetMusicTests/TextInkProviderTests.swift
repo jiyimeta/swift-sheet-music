@@ -7,7 +7,7 @@
     import Testing
 
     @Suite("Text ink provider outlines")
-    struct TextInkProviderTests {
+    @MainActor struct TextInkProviderTests {
         private let _installApple = TestSupport.installApple
 
         @Test(arguments: ["g", "A", "A\ng", "A\n\ng", " ", "\n"], [0, 1, 2, 3])

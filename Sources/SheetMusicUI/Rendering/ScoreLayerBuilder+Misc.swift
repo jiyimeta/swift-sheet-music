@@ -273,14 +273,8 @@ extension ScoreLayerBuilder {
                 parent.addSublayer(layer)
             }
         case let .text(label):
-            if let layer = textLayer(
-                text: label, at: origin,
-                size: NotationTextStyle.fontSize(
-                    for: .markerText, sp: metrics.sp,
-                ),
-                italic: NotationTextStyle.isItalic(for: .markerText),
-                anchor: CGPoint(x: 0, y: 0.5),
-                height: height,
+            if let layer = notationTextLayer(
+                text: label, role: .markerText, origin: origin, metrics: metrics, height: height,
             ) {
                 parent.addSublayer(layer)
             }

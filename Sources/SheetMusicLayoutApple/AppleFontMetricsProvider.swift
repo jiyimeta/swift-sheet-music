@@ -94,6 +94,10 @@ public struct AppleFontMetricsProvider: FontMetricsProvider {
         }
     }
 
+    package func renderingFont(for font: LayoutFont) -> CTFont {
+        Lock.shared.with { ctFont(for: font) }
+    }
+
     // MARK: - Private
 
     /// CoreText's `.useGlyphPathBounds` can include control-point extrema that the actual
@@ -133,26 +137,7 @@ public struct AppleFontMetricsProvider: FontMetricsProvider {
     }
 
     private func makeCTFont(font: LayoutFont) -> CTFont {
-        if font.face.isEmpty {
-            // System font with optional weight trait.
-            let weight: CGFloat
-            switch font.weight {
-            case .regular: weight = 0
-            case .semibold: weight = 0.3 // matches UIFont.Weight.semibold
-            case .bold: weight = 0.4 // matches UIFont.Weight.bold
-            }
-            let traits: CFDictionary = [
-                kCTFontWeightTrait: weight,
-            ] as CFDictionary
-            let attributes: CFDictionary = [
-                kCTFontTraitsAttribute: traits,
-                kCTFontSizeAttribute: font.pointSize,
-            ] as CFDictionary
-            let descriptor = CTFontDescriptorCreateWithAttributes(attributes)
-            return CTFontCreateWithFontDescriptor(
-                descriptor, font.pointSize, nil,
-            )
-        }
+        if font.face.isEmpty { return Self.systemFont(for: font) }
         let named = CTFontCreateWithName(
             font.face as CFString, font.pointSize, nil,
         )

@@ -34,50 +34,56 @@ extension TextInkGeometry {
     private static func notationRects(
         text: String, role: NotationTextStyle.Role, origin: CGPoint, metrics: StaffMetrics,
     ) -> [CGRect] {
-        let font = FontMetrics.provider.renderingTextFont(LayoutFont(
-            face: "Edwin", pointSize: NotationTextStyle.fontSize(for: role, sp: metrics.sp),
-            isItalic: NotationTextStyle.isItalic(for: role),
-        ))
-        let anchor = switch NotationTextStyle.anchor(for: role) {
-        case .leadingCenter: CGPoint(x: 0, y: 0.5)
-        case .bottomLeading: CGPoint(x: 0, y: 1)
-        case .trailingCenter: CGPoint(x: 1, y: 0.5)
-        }
+        let font = NotationTextStyle.font(for: role, sp: metrics.sp)
+        let anchor = NotationTextStyle.anchorPoint(for: role)
         return rect(text: text, font: font, origin: origin, anchor: anchor).map { [$0] } ?? []
     }
 
-    /// Tempo's music runs are ink-centered; its text runs use the typographic center.
-    /// Leading spaces between runs survive the otherwise ink-leading horizontal anchor.
+    package struct PositionedRun {
+        package let text: String
+        package let font: LayoutFont
+        package let baseline: CGPoint
+    }
+
     private static func tempoRects(text: String, origin: CGPoint, metrics: StaffMetrics) -> [CGRect] {
+        tempoRuns(text: text, origin: origin, metrics: metrics).compactMap { run in
+            guard let ink = FontMetrics.provider.textInkBounds(text: run.text, font: run.font) else { return nil }
+            return CGRect(
+                x: run.baseline.x + ink.minX,
+                y: run.baseline.y - ink.maxY,
+                width: ink.width,
+                height: ink.height,
+            )
+        }
+    }
+
+    /// Tempo text is typographically centered; music is ink-centered. Preserve
+    /// spaces between runs before applying their individual ink-leading anchors.
+    package static func tempoRuns(text: String, origin: CGPoint, metrics: StaffMetrics) -> [PositionedRun] {
         let provider = FontMetrics.provider
         let textFont = font(for: .tempo, metrics: metrics)
         let glyphFont = LayoutFont(face: SMuFLFamily.bravura, pointSize: textFont.pointSize)
         var pen = origin.x
-        var result: [CGRect] = []
+        var result: [PositionedRun] = []
         for (index, run) in MusicTextRuns.runs(in: text).enumerated() {
             var text = run.text
-            switch run.kind {
-            case .musicSymbol:
-                if let ink = provider.textInkBounds(text: text, font: glyphFont) {
-                    result.append(CGRect(x: pen, y: origin.y - ink.height / 2, width: ink.width, height: ink.height))
-                    pen += provider.typographicWidth(text: text, font: glyphFont)
-                }
-            case .text:
-                if index > 0 {
-                    let spaces = text.prefix { $0 == " " }
-                    pen += provider.typographicWidth(text: String(spaces), font: textFont)
-                    text.removeFirst(spaces.count)
-                }
-                if let ink = rect(
+            let font = run.kind == .musicSymbol ? glyphFont : textFont
+            if run.kind == .text, index > 0 {
+                let spaces = text.prefix { $0 == " " }
+                pen += provider.typographicWidth(text: String(spaces), font: font)
+                text.removeFirst(spaces.count)
+            }
+            guard let ink = provider.textInkBounds(text: text, font: font) else { continue }
+            let baseline = run.kind == .musicSymbol
+                ? CGPoint(x: pen - ink.minX, y: origin.y + ink.midY)
+                : baselineOrigin(
                     text: text,
-                    font: textFont,
+                    font: font,
                     origin: CGPoint(x: pen, y: origin.y),
                     anchor: CGPoint(x: 0, y: 0.5),
-                ) {
-                    result.append(ink)
-                    pen += provider.typographicWidth(text: text, font: textFont)
-                }
-            }
+                )
+            result.append(PositionedRun(text: text, font: font, baseline: baseline))
+            pen += typographicSize(text: text, font: font).width
         }
         return result
     }

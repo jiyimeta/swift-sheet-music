@@ -267,7 +267,13 @@ extension LayoutEngine {
                 text: text,
                 anchor: anchor,
             )
-        case .note, .marker, .jump, .staffName, .tieArc:
+        case let .marker(kind, text, origin, identity):
+            return .marker(kind: kind, text: text, origin: shift(origin), identity: identity)
+        case let .jump(text, origin, identity):
+            return .jump(text: text, origin: shift(origin), identity: identity)
+        case let .staffName(text, origin):
+            return .staffName(text: text, origin: shift(origin))
+        case .note, .tieArc:
             return element
         }
     }

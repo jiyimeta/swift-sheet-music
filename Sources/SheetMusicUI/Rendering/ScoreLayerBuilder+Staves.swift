@@ -278,13 +278,8 @@ extension ScoreLayerBuilder {
     ) {
         for label in system.partLabels {
             guard !label.text.isEmpty else { continue }
-            if let layer = textLayer(
-                text: label.text,
-                at: label.origin,
-                size: metrics.sp * 2.5,
-                italic: false,
-                anchor: CGPoint(x: 1, y: 0.5),
-                height: height,
+            if let layer = notationTextLayer(
+                text: label.text, role: .partLabel, origin: label.origin, metrics: metrics, height: height,
             ) {
                 parent.addSublayer(layer)
             }

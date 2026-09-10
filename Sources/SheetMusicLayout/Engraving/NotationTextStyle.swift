@@ -12,6 +12,23 @@ import SheetMusicFoundation
 /// renderer, and the Android `LayoutBridge` resolve these constants
 /// from a single source of truth.
 public enum NotationTextStyle {
+    /// Apple keeps its system semibold labels. Portable providers resolve that
+    /// request to their bundled text face and supported style.
+    package static func font(for role: Role, sp: CGFloat) -> LayoutFont {
+        FontMetrics.provider.renderingTextFont(LayoutFont(
+            face: "", pointSize: fontSize(for: role, sp: sp), weight: .semibold,
+            isItalic: isItalic(for: role),
+        ))
+    }
+
+    package static func anchorPoint(for role: Role) -> CGPoint {
+        switch anchor(for: role) {
+        case .leadingCenter: CGPoint(x: 0, y: 0.5)
+        case .bottomLeading: CGPoint(x: 0, y: 1)
+        case .trailingCenter: CGPoint(x: 1, y: 0.5)
+        }
+    }
+
     public enum Role: Sendable, Equatable {
         case jump
         /// Fallback text label for non-glyph markers (Fine, D.C.,

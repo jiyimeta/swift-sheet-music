@@ -17,6 +17,14 @@ extension LayoutBridge {
         let provider = FontMetrics.provider
         guard provider.textInkBounds(text: text, font: font) != nil else { return }
         let baseline = TextInkGeometry.baselineOrigin(text: text, font: font, origin: origin, anchor: anchor)
+        emitBaselineText(text: text, font: font, baseline: baseline, fontID: fontID, into: &out)
+    }
+
+    static func emitBaselineText(
+        text: String, font: LayoutFont, baseline: CGPoint,
+        fontID: DrawProgram.FontID, into out: inout [DrawCommand],
+    ) {
+        let provider = FontMetrics.provider
         let stride = provider.ascent(font: font) + provider.descent(font: font) + provider.leading(font: font)
         for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
             where !line.isEmpty
