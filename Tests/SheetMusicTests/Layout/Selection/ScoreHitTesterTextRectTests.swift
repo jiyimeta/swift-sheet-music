@@ -4,6 +4,16 @@
     @testable import SheetMusicLayout
     import Testing
 
+    #if !canImport(CoreGraphics)
+        /// On Android and WebAssembly, SheetMusicCore and SheetMusicLayout both export portable
+        /// `CGFloat` / `CGPoint` shims, so anchor explicitly to SheetMusicLayout's definitions.
+        ///
+        /// `private typealias` keeps these file-scoped — a module-scope alias here would collide
+        /// with the same pattern in every other file in this target that needs it.
+        private typealias CGFloat = SheetMusicLayout.CGFloat
+        private typealias CGPoint = SheetMusicLayout.CGPoint
+    #endif
+
     /// `ScoreHitTester.textHitRect(for:)` — the identity-keyed box behind the four text targets.
     ///
     /// The round trip is the property worth pinning: a target produced by `hitTest(at:)` must hand back a box
@@ -22,14 +32,40 @@
         @available(macOS 15.0, *)
         private func layout(_ score: Score) -> LayoutDocument {
             LayoutEngine.layout(
-                score: score, options: ScoreViewOptions(), availableWidth: 600,
+                score: ScoreEditor(score: score).score, options: ScoreViewOptions(), availableWidth: 600,
             )
+        }
+
+        @Test("Staff text uses the same installed measurement and padding rule as navigation")
+        func installedTextPadding() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let element = LayoutElement.staffText(
+                text: "Fine", origin: ElementHitFixtures.origin, color: nil,
+                style: .staffText, anchor: ElementHitFixtures.anchor,
+            )
+            let kind = try #require(LayoutElementShape.kind(of: element))
+            let raw = try #require(LayoutElementShape.autoplacedRects(
+                for: element, kind: kind, metrics: ElementHitFixtures.metrics,
+            ).first)
+            let box = raw.offsetBy(dx: 50, dy: 50)
+            let padded = box.insetBy(dx: -2.5, dy: -2.5)
+            let target = ScoreHitTarget.staffText(anchor: ElementHitFixtures.anchor, style: .staffText)
+            let tester = ScoreHitTester(document: ElementHitFixtures.document([element]))
+            #expect(tester.textHitRect(for: target) == box)
+            let hit = CGPoint(x: box.minX - 2.4, y: box.midY)
+            #expect(padded.contains(hit))
+            #expect(!box.contains(hit))
+            #expect(tester.hitTest(at: hit) == target)
+            let miss = CGPoint(x: box.minX - 2.6, y: box.midY)
+            #expect(!padded.contains(miss))
+            #expect(tester.hitTest(at: hit) == target)
+            #expect(tester.hitTest(at: miss) == nil)
         }
 
         @Test("A lyric's rect encloses the engraved origin and hit-tests back to the same lyric")
         func lyricRectRoundTrips() throws {
             guard #available(macOS 15.0, *) else { return }
-            var score = EditingFixtures.twoConsecutiveC4Chords()
+            var score = ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score
             _ = try SetLyric(at: Self.anchor, verse: 0, text: "glo").apply(to: &score)
 
             let doc = layout(score)
@@ -50,7 +86,7 @@
         @Test("The rect is the ink box, not the padded click box")
         func rectExcludesTheClickTolerance() throws {
             guard #available(macOS 15.0, *) else { return }
-            var score = EditingFixtures.twoConsecutiveC4Chords()
+            var score = ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score
             _ = try SetLyric(at: Self.anchor, verse: 0, text: "glo").apply(to: &score)
 
             let doc = layout(score)
@@ -87,7 +123,7 @@
         @Test("A staff text's rect round-trips")
         func staffTextRectRoundTrips() throws {
             guard #available(macOS 15.0, *) else { return }
-            var score = EditingFixtures.twoConsecutiveC4Chords()
+            var score = ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score
             _ = try SetStaffText(
                 anchor: Self.anchor, text: "solo", isSystemText: false,
             ).apply(to: &score)
@@ -99,7 +135,7 @@
         @Test("A rehearsal mark's rect round-trips")
         func rehearsalMarkRectRoundTrips() throws {
             guard #available(macOS 15.0, *) else { return }
-            var score = EditingFixtures.twoConsecutiveC4Chords()
+            var score = ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score
             _ = try SetRehearsalMark(measureIndex: 0, text: "A").apply(to: &score)
             try expectRoundTrip(.rehearsalMark(measureIndex: 0), in: score)
         }
@@ -107,7 +143,7 @@
         @Test("A chord symbol's rect round-trips")
         func harmonyRectRoundTrips() throws {
             guard #available(macOS 15.0, *) else { return }
-            var score = EditingFixtures.twoConsecutiveC4Chords()
+            var score = ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score
             _ = try SetChordSymbol(at: Self.anchor, name: "Am7").apply(to: &score)
             // The symbol is spliced in immediately BEFORE the chord it names, so the named chord's element
             // index has shifted by one — and that shifted index is what `LayoutHarmony` carries.
@@ -121,7 +157,7 @@
         @Test("A target no element carries answers nil rather than a neighbouring box")
         func absentTargetsAnswerNil() throws {
             guard #available(macOS 15.0, *) else { return }
-            var score = EditingFixtures.twoConsecutiveC4Chords()
+            var score = ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score
             _ = try SetLyric(at: Self.anchor, verse: 0, text: "glo").apply(to: &score)
 
             let doc = layout(score)
