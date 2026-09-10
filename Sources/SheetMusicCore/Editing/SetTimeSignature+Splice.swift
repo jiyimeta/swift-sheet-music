@@ -105,7 +105,6 @@ enum TimeSignatureRegion {
                 return
             }
             voice.elements.insert(.timeSignature(signature), at: prefix.count, id: ids.next())
-            MeasureStructure.shiftTuplets(in: &voice, by: 1)
         }
     }
 

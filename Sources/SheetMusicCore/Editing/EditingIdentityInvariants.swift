@@ -11,6 +11,7 @@ import SheetMusicFoundation
                     for measure in staff.measures {
                         for voice in measure.voices {
                             result.append(contentsOf: voice.elements.indices.map { voice.elements.eid(at: $0) })
+                            result.append(contentsOf: voice.tuplets.indices.map { voice.tuplets.eid(at: $0) })
                         }
                     }
                 }
@@ -22,6 +23,26 @@ import SheetMusicFoundation
         static func hasUniqueIDs(_ score: Score) -> Bool {
             let ids = identifiers(in: score)
             return Set(ids).count == ids.count
+        }
+
+        /// Mark endpoints are legal; every endpoint must name an ordered member of its owning voice.
+        static func hasValidTupletEndpoints(in score: Score) -> Bool {
+            for part in score.parts {
+                for staff in part.staves {
+                    for measure in staff.measures {
+                        for voice in measure.voices {
+                            for tuplet in voice.tuplets {
+                                guard case let .element(first) = tuplet.first,
+                                      case let .element(last) = tuplet.last,
+                                      let start = voice.elements.index(of: first),
+                                      let end = voice.elements.index(of: last), start <= end
+                                else { return false }
+                            }
+                        }
+                    }
+                }
+            }
+            return true
         }
 
         /// Catches a command payload carrying an identifier minted from an allocator copy, such as
@@ -96,6 +117,7 @@ import SheetMusicFoundation
         static func check(_ score: Score, ids: EIDAllocator, at seam: Seam) {
             assert(hasUniqueIDs(score), "duplicate structural element identifiers")
             assert(allocatorCovers(score, ids), "an identifier was minted outside the live allocator")
+            assert(hasValidTupletEndpoints(in: score), "tuplet endpoints must name ordered members of their voice")
             storage.record(seam)
         }
     }

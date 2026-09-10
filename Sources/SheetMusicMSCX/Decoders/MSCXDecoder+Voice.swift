@@ -22,7 +22,7 @@ extension Voice {
         }
 
         var tuplets: [Tuplet] {
-            voice.tuplets
+            voice.tuplets.values
         }
     }
 

@@ -173,8 +173,8 @@ struct SpannerPlacementTests {
         _ = try CreateTuplet(at: Self.slot(Self.flute, 0, 1), actualNotes: 3, normalNotes: 2).apply(to: &score)
         let range = VoiceElementRange(start: Self.slot(Self.flute, 0, 2), end: Self.slot(Self.flute, 0, 3))
         _ = try Self.add(Self.hairpin(), over: range, in: score).apply(to: &score)
-        #expect(score.parts[0].staves[0].measures[0].voices[0].tuplets
-            == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 4)])
+        #expect(score.parts[0].staves[0].measures[0].voices[0].tupletSpans
+            == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 4)])
     }
 
     @Test("undo restores the score exactly, for both storage forms")

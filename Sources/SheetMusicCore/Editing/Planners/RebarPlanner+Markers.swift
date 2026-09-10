@@ -86,7 +86,6 @@ extension RebarPlanner {
         guard !measure.voices.isEmpty else { return }
         let prefix = MeasureStructure.leadingSignaturePrefix(of: measure.voices[0]).count
         measure.voices[0].elements.insert(element, at: prefix, id: eid)
-        MeasureStructure.shiftTuplets(in: &measure.voices[0], by: 1)
     }
 
     private static func append(_ element: VoiceElement, eid: EID, toTailOf measure: inout Measure) {

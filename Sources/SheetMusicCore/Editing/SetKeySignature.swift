@@ -67,7 +67,7 @@ public struct SetKeySignature: EditCommand {
     /// Set only when this command is the inverse of a `SetKeySignature` / `RemoveKeySignature`: every staff's
     /// voice-0 leading signature run at `measureIndex` as it stood before that edit, indexed
     /// `[partIndex][staffIndexInPart]`.
-    let restoredPrefixes: [[IdentifiedArray<VoiceElement>]]?
+    let restoredPrefixes: [[SignaturePrefixSnapshot]]?
 
     public init(measureIndex: Int, concertKey: Int) {
         self.measureIndex = measureIndex
@@ -75,7 +75,7 @@ public struct SetKeySignature: EditCommand {
         restoredPrefixes = nil
     }
 
-    init(restoringPrefixes prefixes: [[IdentifiedArray<VoiceElement>]], at measureIndex: Int) {
+    init(restoringPrefixes prefixes: [[SignaturePrefixSnapshot]], at measureIndex: Int) {
         self.measureIndex = measureIndex
         concertKey = Self.keyCarried(by: prefixes)
         restoredPrefixes = prefixes
@@ -128,15 +128,14 @@ public struct SetKeySignature: EditCommand {
         }
         let insertion = prefix.firstIndex { if case .timeSignature = $0 { true } else { false } } ?? prefix.count
         voice.elements.insert(.keySignature(KeySignature(concertKey: concertKey)), at: insertion, id: ids.next())
-        MeasureStructure.shiftTuplets(in: &voice, by: 1)
     }
 
     /// The key a captured pre-image declares — the first one any staff's run carries, or C major when none does
     /// (a restore that removes the bar's key again). Read only to keep `concertKey` truthful on the restore path.
-    private static func keyCarried(by prefixes: [[IdentifiedArray<VoiceElement>]]) -> Int {
+    private static func keyCarried(by prefixes: [[SignaturePrefixSnapshot]]) -> Int {
         for part in prefixes {
             for prefix in part {
-                for element in prefix {
+                for element in prefix.elements {
                     if case let .keySignature(key) = element { return key.concertKey }
                 }
             }
@@ -187,26 +186,22 @@ public struct RemoveKeySignature: EditCommand {
         return SetKeySignature(restoringPrefixes: previous, at: measureIndex)
     }
 
-    /// Drops every key signature sitting in `voice`'s LEADING run, reporting whether it found one.
-    ///
-    /// Not `MeasureStructure.removeElements(in:where:)`: that predicate sees values, not positions, so it cannot
-    /// tell the run's key from a mid-bar key change written after a note — and removing the latter would silently
-    /// take a change this command was never asked about. The removals here all fall in the run at the head of the
-    /// element list, so every tuplet (which spans chords and rests, always after the run) shifts by the same
-    /// amount, and `shiftTuplets(in:by:)` is the exact remap — the same reasoning `InsertMeasure` uses when it
-    /// lifts bar 0's whole run out.
+    /// Drops only keys in the leading run; removed tuplet endpoints follow surviving members inward.
     private static func removeKey(from voice: inout Voice) -> Bool {
         let prefixCount = MeasureStructure.leadingSignaturePrefix(of: voice).count
         let indices = voice.elements.indices.prefix(prefixCount).filter {
             if case .keySignature = voice.elements[$0] { true } else { false }
         }
         guard !indices.isEmpty else { return false }
-        for index in indices.reversed() {
-            voice.elements.removeSubrange(index ..< (index + 1))
-        }
-        MeasureStructure.shiftTuplets(in: &voice, by: -indices.count)
+        voice.removeElements(at: Set(indices))
         return true
     }
+}
+
+/// Exact prefix pre-image plus endpoints that a forward removal may have retargeted or dropped.
+struct SignaturePrefixSnapshot: Sendable {
+    let elements: IdentifiedArray<VoiceElement>
+    let tuplets: IdentifiedArray<Tuplet>
 }
 
 /// The prefix splice both key-signature commands share: capture one measure's leading signature runs across the
@@ -215,25 +210,26 @@ enum SignaturePrefixes {
     /// Every staff's voice-0 leading signature run at `measureIndex`, indexed `[partIndex][staffIndexInPart]`. A
     /// staff that is short of that measure — or whose measure has no voices — contributes an empty run, which
     /// `splice` then skips over rather than writing.
-    static func captured(from score: Score, at measureIndex: Int) -> [[IdentifiedArray<VoiceElement>]] {
+    static func captured(from score: Score, at measureIndex: Int) -> [[SignaturePrefixSnapshot]] {
         score.parts.map { part in
             part.staves.map { staff in
                 guard staff.measures.indices.contains(measureIndex),
                       let voice = staff.measures[measureIndex].voices.first
-                else { return [] }
-                return MeasureStructure.leadingSignaturePrefix(of: voice)
+                else { return SignaturePrefixSnapshot(elements: [], tuplets: []) }
+                return SignaturePrefixSnapshot(
+                    elements: MeasureStructure.leadingSignaturePrefix(of: voice), tuplets: voice.tuplets,
+                )
             }
         }
     }
 
-    /// Writes a captured pre-image back over whatever leading run each staff carries now, re-shifting tuplets by
-    /// the length difference.
+    /// Restores each leading run and its tuplets, including slot identities and raw endpoints.
     ///
     /// Whole-value overwrite of the run rather than an arithmetic undo, for the reason
     /// `InsertMeasure.restoredIncomingVoice0` gives: the forward edit can insert, replace or remove within the
     /// run, and only the pre-image knows which — down to the `visible` / `showCourtesy` flags on the element that
     /// was replaced.
-    static func splice(_ prefixes: [[IdentifiedArray<VoiceElement>]], into score: inout Score, at measureIndex: Int) {
+    static func splice(_ prefixes: [[SignaturePrefixSnapshot]], into score: inout Score, at measureIndex: Int) {
         for partIndex in score.parts.indices where prefixes.indices.contains(partIndex) {
             for staffIndex in score.parts[partIndex].staves.indices
                 where prefixes[partIndex].indices.contains(staffIndex)
@@ -242,8 +238,10 @@ enum SignaturePrefixes {
                 let restored = prefixes[partIndex][staffIndex]
                 mutateVoiceZero(of: &score, at: address, measureIndex: measureIndex) { voice in
                     let current = MeasureStructure.leadingSignaturePrefix(of: voice).count
-                    voice.elements.replaceSubrange(0 ..< current, with: restored.identifiedPairs(in: restored.indices))
-                    MeasureStructure.shiftTuplets(in: &voice, by: restored.count - current)
+                    voice.elements.replaceSubrange(
+                        0 ..< current, with: restored.elements.identifiedPairs(in: restored.elements.indices),
+                    )
+                    voice.tuplets = restored.tuplets
                 }
             }
         }

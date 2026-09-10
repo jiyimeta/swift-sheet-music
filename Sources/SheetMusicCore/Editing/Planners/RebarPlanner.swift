@@ -137,8 +137,6 @@ enum RebarPlanner {
                     eid = ids.next()
                 }
                 voice.elements.insert(.timeSignature(signature), at: prefix, id: eid)
-                // Every tuplet in a re-barred bar spans chords, so all of them sit past the prefix.
-                MeasureStructure.shiftTuplets(in: &voice, by: 1)
                 column.staffMeasures[partIndex][staffIndex].voices[0] = voice
             }
         }
@@ -257,7 +255,9 @@ enum RebarPlanner {
     private static func voices(from emitters: [VoiceEmitter], column: Int, ids: inout EIDAllocator) -> [Voice] {
         var result = emitters.map { emitter -> Voice in
             guard let payload = emitter.slots(forColumn: column) else { return Voice(elements: []) }
-            return Voice(elements: VoiceSlot.materialize(payload.elements, using: &ids), tuplets: payload.tuplets)
+            let elements = VoiceSlot.materialize(payload.elements, using: &ids)
+            let tuplets = TupletSlot.materialize(payload.tuplets, elements: elements, using: &ids)
+            return Voice(elements: elements, tuplets: tuplets)
         }
         while result.count > 1, let last = result.last, last.elements.isEmpty, last.tuplets.isEmpty {
             result.removeLast()

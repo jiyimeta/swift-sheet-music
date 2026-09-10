@@ -18,7 +18,7 @@ import SheetMusicFoundation
 ///
 /// Every mutation returns a command: an insert or a remove changes element indices and so is a voice-level
 /// `ReplaceVoiceElements`, whose inverse restores the indices exactly; a replace-in-place is a
-/// `ReplaceVoiceElement`. Tuplet ranges are remapped through `MeasureStructure.remapTuplets`.
+/// `ReplaceVoiceElement`. Tuplet endpoints follow identity, retargeting inward when a member is removed.
 enum AdjacentElementSlot {
     enum Side {
         case before
@@ -73,7 +73,7 @@ enum AdjacentElementSlot {
         side == .before ? anchor : anchor + 1
     }
 
-    /// The voice rewritten with `element` at `index`, tuplets remapped; `nil` when the voice or index does not
+    /// The voice rewritten with `element` at `index`; `nil` when the voice or index does not
     /// exist (`index == count` appends).
     static func inserting(
         _ element: VoiceElement, at index: Int, in ref: VoiceRef, of score: Score,
@@ -83,7 +83,7 @@ enum AdjacentElementSlot {
         elements.insert(VoiceSlot(identity: .fresh, element: element), at: index)
         return ReplaceVoiceElements(
             staff: ref.staff, measureIndex: ref.measureIndex, voiceIndex: ref.voiceIndex,
-            slots: elements, tuplets: MeasureStructure.remapTuplets(voice.tuplets, insertingAt: index),
+            slots: elements, tuplets: voice.tuplets,
         )
     }
 
@@ -96,14 +96,14 @@ enum AdjacentElementSlot {
         )
     }
 
-    /// The voice rewritten without the element at `index`, tuplets remapped; `nil` when there is no such element.
+    /// The voice rewritten without the element at `index`, endpoints moved inward; `nil` for a missing element.
     static func removing(at index: Int, in ref: VoiceRef, of score: Score) -> ReplaceVoiceElements? {
         guard let voice = score[voice: ref], voice.elements.indices.contains(index) else { return nil }
-        var elements = voice.elements.voiceSlots()
-        elements.remove(at: index)
+        var changed = voice
+        changed.removeElements(at: [index])
         return ReplaceVoiceElements(
             staff: ref.staff, measureIndex: ref.measureIndex, voiceIndex: ref.voiceIndex,
-            slots: elements, tuplets: MeasureStructure.remapTuplets(voice.tuplets, removingAt: index),
+            elements: changed.elements, tuplets: changed.tuplets,
         )
     }
 }

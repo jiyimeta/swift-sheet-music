@@ -124,7 +124,7 @@ public struct MoveToVoice: EditCommand {
             let end = tick + ticks
             if end > start, tick < start + length {
                 let id = slot(destination, elementIndex: index)
-                let inTuplet = voice.tuplets.contains { $0.startIndex <= index && index <= $0.endIndex }
+                let inTuplet = voice.tupletSpans.contains { $0.startIndex <= index && index <= $0.endIndex }
                 guard rest.notes.isEmpty, !inTuplet else { throw refused(.destinationNotFree(id)) }
                 if tick < start { return SplitRest(at: id, tickOffset: start - tick) }
                 if end > start + length { return SplitRest(at: id, tickOffset: start + length - tick) }
@@ -137,7 +137,7 @@ public struct MoveToVoice: EditCommand {
     /// The run of rests covering exactly `[start, start + length)` collapsed into `chord`.
     ///
     /// The run can be several elements — `SplitRest` spells a gap as the aligned rests that tile it — so
-    /// collapsing it shortens the element list, and every tuplet after the run has to move left by as much.
+    /// collapsing it shortens the element list; surviving tuplet endpoints follow their members' identities.
     private static func replaceSlot(
         start: Int, length: Int, with chord: Chord, in scratch: Score,
         destination: VoiceRef, measureDuration: Fraction, sourceEID: EID,
@@ -147,7 +147,6 @@ public struct MoveToVoice: EditCommand {
         var elements: [VoiceSlot] = []
         var collapsed = 0
         var collapsedTicks = 0
-        var lastCollapsedIndex = 0
         for (index, element) in voice.elements.enumerated() {
             guard case let .chord(rest) = element else {
                 elements.append(VoiceSlot(identity: .keep(voice.elements.eid(at: index)), element: element))
@@ -158,7 +157,6 @@ public struct MoveToVoice: EditCommand {
                 if collapsed == 0 { elements.append(VoiceSlot(identity: .keep(sourceEID), element: .chord(chord))) }
                 collapsed += 1
                 collapsedTicks += ticks
-                lastCollapsedIndex = index
             } else {
                 elements.append(VoiceSlot(identity: .keep(voice.elements.eid(at: index)), element: element))
             }
@@ -167,12 +165,9 @@ public struct MoveToVoice: EditCommand {
         // Validate the complete destination span before replacing the source. At execution, the source becomes
         // a fresh rest FIRST; an incomplete destination payload would then lose the moved chord entirely.
         guard collapsed > 0, collapsedTicks == length else { throw refused(.destinationNotFree(slot(destination))) }
-        let tuplets = MeasureStructure.shiftTuplets(
-            voice.tuplets, by: -(collapsed - 1), after: lastCollapsedIndex,
-        )
         return ReplaceVoiceElements(
             staff: destination.staff, measureIndex: destination.measureIndex, voiceIndex: destination.voiceIndex,
-            slots: elements, tuplets: tuplets,
+            slots: elements, tuplets: voice.tuplets,
         )
     }
 

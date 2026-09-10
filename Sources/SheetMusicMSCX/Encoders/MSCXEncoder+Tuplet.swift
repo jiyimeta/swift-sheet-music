@@ -2,7 +2,7 @@ import SheetMusicCore
 import SheetMusicFoundation
 import SheetMusicXMLTools
 
-extension Tuplet {
+extension TupletSpan {
     /// Build the `<Tuplet>` opening marker. `baseDuration` is the
     /// "written" duration of each member (the unscaled `NoteDuration`
     /// — e.g. `eighth` for an eighth-note triplet) and is emitted as

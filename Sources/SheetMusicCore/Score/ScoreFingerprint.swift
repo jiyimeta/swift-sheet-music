@@ -66,8 +66,9 @@ extension Score {
                         for element in voice.elements {
                             hash.combine(element)
                         }
-                        hash.combine(voice.tuplets.count)
-                        for tuplet in voice.tuplets {
+                        let tupletSpans = voice.tupletSpans
+                        hash.combine(tupletSpans.count)
+                        for tuplet in tupletSpans {
                             hash.combine(tuplet.actualNotes)
                             hash.combine(tuplet.normalNotes)
                             hash.combine(tuplet.startIndex)

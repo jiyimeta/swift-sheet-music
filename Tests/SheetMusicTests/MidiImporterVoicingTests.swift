@@ -125,7 +125,7 @@ struct MidiImporterVoicingTests {
             quantized: q, measure: measure, division: 480,
         )
         #expect(voice.tuplets.count == 1)
-        let tuplet = voice.tuplets[0]
+        let tuplet = voice.tupletSpans[0]
         // The chords at tuplet.startIndex...tuplet.endIndex must all
         // contain pitch 60/62/64 (the triplet members), not the
         // sustained-note rest chord at tick 240.

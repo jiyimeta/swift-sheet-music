@@ -305,12 +305,15 @@ extension MidiImporter {
                 // so they keep pointing at the same chords (otherwise
                 // the bracket gets drawn over the meta event we just
                 // inserted, or disappears entirely).
-                voice.tuplets = voice.tuplets.map {
-                    Tuplet(
-                        normalNotes: $0.normalNotes,
-                        actualNotes: $0.actualNotes,
-                        startIndex: $0.startIndex + 1,
-                        endIndex: $0.endIndex + 1,
+                voice.tuplets.mapValues { tuplet in
+                    guard case let .index(first) = tuplet.first,
+                          case let .index(last) = tuplet.last
+                    else { preconditionFailure("MIDI assembly requires unresolved tuplet endpoints") }
+                    return Tuplet(
+                        normalNotes: tuplet.normalNotes,
+                        actualNotes: tuplet.actualNotes,
+                        startIndex: first + 1,
+                        endIndex: last + 1,
                     )
                 }
                 staff.measures[measureIdx].voices[0] = voice

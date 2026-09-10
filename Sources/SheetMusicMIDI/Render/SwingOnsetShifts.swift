@@ -88,7 +88,7 @@ extension MidiRenderer {
                         measureDuration: measureDuration, division: division,
                     ),
                     isInTuplet: isChordInTuplet(
-                        elementIndex: elementIndex, voiceTuplets: voice.tuplets,
+                        elementIndex: elementIndex, voiceTuplets: voice.tupletSpans,
                     ),
                     state: swingMap.state(atTick: localTick),
                 )

@@ -41,7 +41,7 @@ public struct RemoveTuplet: EditCommand {
         else {
             throw Self.refused(.targetNotFound(location))
         }
-        guard let tuplet = voice.tuplets.first(where: {
+        guard let tuplet = voice.tupletSpans.first(where: {
             $0.startIndex <= location.elementIndex
                 && location.elementIndex <= $0.endIndex
         }) else {
@@ -83,38 +83,23 @@ public struct RemoveTuplet: EditCommand {
             replacement = .rest(duration: totalDuration)
         }
 
-        var newElements = voice.elements
-        newElements.replaceSubrange(
-            tuplet.startIndex ..< (tuplet.endIndex + 1),
-            with: [(voice.elements.eid(at: sourceIndex), replacement)],
-        )
-        let netDelta = 1 - (tuplet.endIndex - tuplet.startIndex + 1)
-
-        // Drop the removed tuplet; shift any tuplet entirely past
-        // it by netDelta. (No partial overlaps are possible —
-        // tuplets don't nest in our model.)
-        var newTuplets: [Tuplet] = []
-        for t in voice.tuplets {
-            if t.startIndex == tuplet.startIndex
-                && t.endIndex == tuplet.endIndex { continue }
-            if t.startIndex > tuplet.endIndex {
-                newTuplets.append(Tuplet(
-                    normalNotes: t.normalNotes,
-                    actualNotes: t.actualNotes,
-                    startIndex: t.startIndex + netDelta,
-                    endIndex: t.endIndex + netDelta,
-                ))
-            } else {
-                newTuplets.append(t)
+        var changed = voice
+        // Preserve the existing same-span removal rule, including duplicate entries.
+        for (index, span) in voice.tupletSpans.enumerated().reversed() {
+            if span.startIndex == tuplet.startIndex, span.endIndex == tuplet.endIndex {
+                changed.tuplets.remove(eid: voice.tuplets.eid(at: index))
             }
         }
+        changed.replaceElement(at: sourceIndex, with: replacement, id: voice.elements.eid(at: sourceIndex))
+        let removed = Set((tuplet.startIndex ... tuplet.endIndex).filter { $0 != sourceIndex })
+        changed.removeElements(at: removed)
 
         let replace = ReplaceVoiceElements(
             staff: location.staff,
             measureIndex: location.measureIndex,
             voiceIndex: location.voiceIndex,
-            elements: newElements,
-            tuplets: newTuplets,
+            elements: changed.elements,
+            tuplets: changed.tuplets,
         )
         return try replace.apply(to: &score, ids: &ids)
     }

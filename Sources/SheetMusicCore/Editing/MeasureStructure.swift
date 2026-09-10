@@ -45,95 +45,13 @@ enum MeasureStructure {
         ].compactMap(\.self))
     }
 
-    /// Shifts every tuplet's `startIndex`/`endIndex` in `voice` by `delta` — used whenever elements are
-    /// spliced at the head of a voice's element list (the bar-0 signature move on insert, or the
-    /// signature re-home on delete), so tuplet ranges keep pointing at the same notes. Mirrors the remap
-    /// convention `CreateTuplet` uses for its own splice.
-    static func shiftTuplets(in voice: inout Voice, by delta: Int) {
-        guard delta != 0 else { return }
-        for index in voice.tuplets.indices {
-            voice.tuplets[index].startIndex += delta
-            voice.tuplets[index].endIndex += delta
-        }
-    }
-
-    /// Remaps `tuplets` across a splice that replaced the elements up to and including old index `spliceEnd`
-    /// with a run of a different length: every tuplet that starts strictly AFTER `spliceEnd` moves by `delta`,
-    /// and every tuplet that starts before it is left alone. The mid-list counterpart of
-    /// `shiftTuplets(in:by:)`, which shifts the whole list because its splice is always a prefix.
-    ///
-    /// A tuplet that OVERLAPS the splice is not a case this can answer — its members' lengths are the tuplet's
-    /// to decide, so a command must refuse such a splice rather than re-spell it. Both callers do:
-    /// `SplitRest` through `ensureNotInsideTuplet`, `MoveToVoice` through `.destinationNotFree`.
-    static func shiftTuplets(_ tuplets: [Tuplet], by delta: Int, after spliceEnd: Int) -> [Tuplet] {
-        guard delta != 0 else { return tuplets }
-        return tuplets.map { tuplet in
-            guard tuplet.startIndex > spliceEnd else { return tuplet }
-            var shifted = tuplet
-            shifted.startIndex += delta
-            shifted.endIndex += delta
-            return shifted
-        }
-    }
-
-    /// Remaps `tuplets` across the insertion of ONE element at `index`: a tuplet starting at or after the index
-    /// moves whole, a tuplet straddling it keeps its start and grows its end. The general counterpart of
-    /// `shiftTuplets(_:by:after:)`, which can only move tuplets that lie entirely past a splice — a fermata or a
-    /// dynamic inserted before a tuplet's middle member is a splice INSIDE the tuplet's index range, and the
-    /// decoder already produces that shape for a `<Dynamic>` written between two tuplet members.
-    static func remapTuplets(_ tuplets: [Tuplet], insertingAt index: Int) -> [Tuplet] {
-        tuplets.map { tuplet in
-            var shifted = tuplet
-            if tuplet.startIndex >= index { shifted.startIndex += 1 }
-            if tuplet.endIndex >= index { shifted.endIndex += 1 }
-            return shifted
-        }
-    }
-
-    /// The inverse remap of `remapTuplets(_:insertingAt:)`: every endpoint past the removed index moves back by
-    /// one. The removed element is never itself an endpoint — a tuplet spans chords and rests, never a mark.
-    static func remapTuplets(_ tuplets: [Tuplet], removingAt index: Int) -> [Tuplet] {
-        tuplets.map { tuplet in
-            var shifted = tuplet
-            if tuplet.startIndex > index { shifted.startIndex -= 1 }
-            if tuplet.endIndex > index { shifted.endIndex -= 1 }
-            return shifted
-        }
-    }
-
-    /// Removes every element `shouldRemove` accepts from `voice`, remapping each tuplet endpoint past the
-    /// removals that preceded it so tuplet ranges keep pointing at the same elements. `shiftTuplets(in:by:)`
-    /// is the special case where the removals form a uniform prefix; this is the general one, for removals
-    /// that can fall anywhere in the list (a mid-bar key change, say).
-    ///
-    /// Endpoints are assumed to name surviving elements — a tuplet always spans chords/rests, never a
-    /// signature — so a removed endpoint is not a case that needs a policy here.
+    /// Removes matching slots and retargets endpoints inward within their original member span.
+    /// Literal input retains positional endpoints until its score adoption chokepoint.
     static func removeElements(
         in voice: inout Voice, where shouldRemove: (VoiceElement) -> Bool,
     ) {
-        // `removedBefore[i]` = removals strictly before old index `i`, so a survivor at `i` lands on
-        // `i - removedBefore[i]`. Sized `count + 1` so an inclusive end index one past the last element
-        // (an empty voice's degenerate tuplet) still resolves.
-        var removedBefore: [Int] = []
-        removedBefore.reserveCapacity(voice.elements.count + 1)
-        var removed = 0
-        for element in voice.elements {
-            removedBefore.append(removed)
-            if shouldRemove(element) { removed += 1 }
-        }
-        removedBefore.append(removed)
-        guard removed > 0 else { return }
-        voice.elements.removeAll(where: shouldRemove)
-        for index in voice.tuplets.indices {
-            let start = voice.tuplets[index].startIndex
-            let end = voice.tuplets[index].endIndex
-            if removedBefore.indices.contains(start) {
-                voice.tuplets[index].startIndex = start - removedBefore[start]
-            }
-            if removedBefore.indices.contains(end) {
-                voice.tuplets[index].endIndex = end - removedBefore[end]
-            }
-        }
+        let removed = Set(voice.elements.indices.filter { shouldRemove(voice.elements[$0]) })
+        voice.removeElements(at: removed)
     }
 
     static func measureCount(of score: Score) -> Int {

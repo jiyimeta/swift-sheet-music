@@ -188,10 +188,10 @@ struct BlankScoreTests {
         )
         let voice = part.staves[0].measures[0].voices[0]
         #expect(voice.elements.count == 4) // key signature gone, time signature + 3 chords left
-        #expect(voice.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
+        #expect(voice.tupletSpans == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
         // The endpoints still name the first and last member of the same triplet.
-        #expect(voice.elements[voice.tuplets[0].startIndex] == triplet[0])
-        #expect(voice.elements[voice.tuplets[0].endIndex] == triplet[2])
+        #expect(voice.elements[voice.tupletSpans[0].startIndex] == triplet[0])
+        #expect(voice.elements[voice.tupletSpans[0].endIndex] == triplet[2])
     }
 
     @Test("out-of-bounds or empty bracket ranges are ignored")

@@ -101,11 +101,11 @@ public struct Score: Sendable, Equatable {
     }
 
     /// Whether any currently identified collection contains an unassigned slot.
-    /// Covers parts, their staves, every voice slot, and systemMeasures.
+    /// Covers parts, staves, voice members and tuplets, unresolved endpoints, and systemMeasures.
     public var hasUnassignedIDs: Bool {
         parts.hasUnassignedIDs || systemMeasures.hasUnassignedIDs || parts.contains { part in
             part.staves.hasUnassignedIDs || part.staves.contains { staff in
-                staff.measures.contains { $0.voices.contains { $0.elements.hasUnassignedIDs } }
+                staff.measures.contains { $0.voices.contains { $0.hasUnassignedIDs } }
             }
         }
     }
@@ -122,7 +122,7 @@ public struct Score: Sendable, Equatable {
                     part.staves.updateValue(at: staffIndex) { staff in
                         for measureIndex in staff.measures.indices {
                             for voiceIndex in staff.measures[measureIndex].voices.indices {
-                                staff.measures[measureIndex].voices[voiceIndex].elements.assignMissingIDs(using: &ids)
+                                staff.measures[measureIndex].voices[voiceIndex].assignMissingIDs(using: &ids)
                             }
                         }
                     }

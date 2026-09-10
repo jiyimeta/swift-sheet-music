@@ -68,7 +68,7 @@ extension RebarPlanner {
             /// A clef, key, dynamic, harmony, spanner … — carried at its tick, occupying none.
             case untimed
             /// A whole tuplet span, indivisible (rule 4).
-            case tuplet(normalNotes: Int, actualNotes: Int)
+            case tuplet(TupletSlot)
         }
 
         var kind: Kind
@@ -117,22 +117,29 @@ extension RebarPlanner {
         var cursor = base
         var index = 0
         while index < voice.elements.count {
-            if let tuplet = voice.tuplets.first(where: { $0.startIndex <= index && index <= $0.endIndex }),
-               voice.elements.indices.contains(tuplet.startIndex),
-               voice.elements.indices.contains(tuplet.endIndex),
-               tuplet.startIndex <= tuplet.endIndex
-            {
-                let members = Array(voice.elements.voiceSlots()[tuplet.startIndex ... tuplet.endIndex])
-                let ticks = members.reduce(0) {
-                    $0 + ($1.element.tickCount(division: division, in: measureDuration) ?? 0)
+            if let tupletIndex = voice.tupletSpans.firstIndex(where: {
+                $0.startIndex <= index && index <= $0.endIndex
+            }) {
+                let tuplet = voice.tupletSpans[tupletIndex]
+                if
+                    voice.elements.indices.contains(tuplet.startIndex),
+                    voice.elements.indices.contains(tuplet.endIndex),
+                    tuplet.startIndex <= tuplet.endIndex
+                {
+                    let members = Array(voice.elements.voiceSlots()[tuplet.startIndex ... tuplet.endIndex])
+                    let ticks = members.reduce(0) {
+                        $0 + ($1.element.tickCount(division: division, in: measureDuration) ?? 0)
+                    }
+                    flat.items.append(StreamItem(
+                        kind: .tuplet(TupletSlot(
+                            identity: .keep(voice.tuplets.eid(at: tupletIndex)), tuplet: voice.tuplets[tupletIndex],
+                        )),
+                        tick: cursor, ticks: ticks, elements: members, measureIndex: measureIndex,
+                    ))
+                    cursor += ticks
+                    index = tuplet.endIndex + 1
+                    continue
                 }
-                flat.items.append(StreamItem(
-                    kind: .tuplet(normalNotes: tuplet.normalNotes, actualNotes: tuplet.actualNotes),
-                    tick: cursor, ticks: ticks, elements: members, measureIndex: measureIndex,
-                ))
-                cursor += ticks
-                index = tuplet.endIndex + 1
-                continue
             }
             let element = voice.elements[index]
             let slot = VoiceSlot(identity: .keep(voice.elements.eid(at: index)), element: element)
@@ -178,7 +185,7 @@ extension RebarPlanner {
         let geometry: Geometry
         let voiceIndex: Int
         private var elements: [[VoiceSlot]]
-        private var tuplets: [[Tuplet]]
+        private var tuplets: [[TupletSlot]]
         private var cursors: [Int]
         private var present: [Bool]
 
@@ -196,8 +203,8 @@ extension RebarPlanner {
                 switch item.kind {
                 case .untimed:
                     placeUntimed(item)
-                case let .tuplet(normalNotes, actualNotes):
-                    try placeTuplet(item, normalNotes: normalNotes, actualNotes: actualNotes)
+                case let .tuplet(slot):
+                    try placeTuplet(item, slot: slot)
                 case .timed:
                     placeTimed(item)
                 }
@@ -219,7 +226,7 @@ extension RebarPlanner {
             }
         }
 
-        func slots(forColumn column: Int) -> (elements: [VoiceSlot], tuplets: [Tuplet])? {
+        func slots(forColumn column: Int) -> (elements: [VoiceSlot], tuplets: [TupletSlot])? {
             guard voiceIndex == 0 || present[column] else { return nil }
             let built = promotedToMeasureRest(column: column) ?? elements[column]
             return (built, tuplets[column])
@@ -263,7 +270,7 @@ extension RebarPlanner {
         }
 
         private mutating func placeTuplet(
-            _ item: StreamItem, normalNotes: Int, actualNotes: Int,
+            _ item: StreamItem, slot: TupletSlot,
         ) throws {
             let column = geometry.column(containing: item.tick)
             guard item.tick + item.ticks <= geometry.columnEnd(column) else {
@@ -271,10 +278,7 @@ extension RebarPlanner {
             }
             let range = append(item.elements, at: item.tick, ticks: item.ticks, in: column)
             guard !range.isEmpty else { return }
-            tuplets[column].append(Tuplet(
-                normalNotes: normalNotes, actualNotes: actualNotes,
-                startIndex: range.lowerBound, endIndex: range.upperBound - 1,
-            ))
+            tuplets[column].append(slot)
         }
 
         /// An untimed element is anchored, not timed: it lands at its own tick and leaves the cursor where

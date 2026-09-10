@@ -19,8 +19,7 @@ import SheetMusicFoundation
 /// Tuplet handling: the paste's element-index range is
 /// `[location, consumedEnd]`. For each tuplet of the destination
 /// voice we check that range vs. the tuplet's own indices:
-/// - **disjoint** → keep the tuplet untouched (just shift indices
-///   to account for net element count change).
+/// - **disjoint** → keep the tuplet and its endpoint identities untouched.
 /// - **paste fully contains the tuplet** → drop the tuplet (the
 ///   triplet/quintuplet/… is replaced wholesale).
 /// - **partial overlap** → refuse with `invalidEdit` (would split
@@ -115,7 +114,7 @@ public struct PasteVoiceElements: EditCommand {
     }
 
     /// Splice the payload into the voice at `idx`, rebalance the
-    /// tail, and adjust tuplet indices. Returns the new (elements,
+    /// tail, and retain surviving tuplets. Returns the new (elements,
     /// tuplets) pair. Throws on partial-overlap with any tuplet
     /// (the user must clear the tuplet first or paste at a different
     /// location).
@@ -129,7 +128,7 @@ public struct PasteVoiceElements: EditCommand {
         division: Int,
         measureDuration: Fraction,
         baseLocation: VoiceElementID, ids: inout EIDAllocator,
-    ) throws -> (elements: IdentifiedArray<VoiceElement>, tuplets: [Tuplet]) {
+    ) throws -> (elements: IdentifiedArray<VoiceElement>, tuplets: IdentifiedArray<Tuplet>) {
         var newElements = voice.elements
         newElements.replaceSubrange(idx ..< (idx + 1), with: payload.map { (ids.next(), $0) })
         let payloadEndIdx = idx + payload.count - 1
@@ -234,27 +233,12 @@ public struct PasteVoiceElements: EditCommand {
             )
         }
 
-        let netDelta = newElements.count - voice.elements.count
-        let adjustedTuplets: [Tuplet] = voice.tuplets.compactMap { t in
-            let overlapsPaste = idx <= t.endIndex
-                && t.startIndex <= consumedEndOrigIdx
-            if !overlapsPaste {
-                // Disjoint with the paste range. Either entirely
-                // before (keep verbatim) or entirely after (shift
-                // indices by net element-count change).
-                if t.startIndex > consumedEndOrigIdx {
-                    return Tuplet(
-                        normalNotes: t.normalNotes,
-                        actualNotes: t.actualNotes,
-                        startIndex: t.startIndex + netDelta,
-                        endIndex: t.endIndex + netDelta,
-                    )
-                }
-                return t
+        var adjustedTuplets = voice.tuplets
+        for (index, span) in voice.tupletSpans.enumerated().reversed() {
+            // The overlap check above permits only whole-tuplet consumption.
+            if idx <= span.endIndex, span.startIndex <= consumedEndOrigIdx {
+                adjustedTuplets.remove(eid: voice.tuplets.eid(at: index))
             }
-            // Verified above (`checkTupletOverlap`) that the paste
-            // fully contains overlapping tuplets. Drop them.
-            return nil
         }
         return (newElements, adjustedTuplets)
     }
@@ -269,7 +253,7 @@ public struct PasteVoiceElements: EditCommand {
         pasteEnd: Int,
         baseLocation: VoiceElementID,
     ) throws {
-        for t in voice.tuplets {
+        for t in voice.tupletSpans {
             let overlap = pasteStart <= t.endIndex
                 && t.startIndex <= pasteEnd
             if !overlap { continue }

@@ -109,7 +109,7 @@ extension Voice {
         effectiveDuration: Fraction = Fraction(numerator: 4, denominator: 4),
         nextMeasureFirstChordNotes: ChordNotes? = nil,
     ) throws -> (node: XMLTreeNode, carryOut: VoiceTieCarry) {
-        try Self.validateProperlyNested(tuplets)
+        try Self.validateProperlyNested(tupletSpans)
         let plan = makeIterationPlan(
             isStaffHead: isStaffHead,
             effectiveDuration: effectiveDuration,
@@ -166,15 +166,15 @@ extension Voice {
     ) -> IterationPlan {
         // At a given startIndex, push outer tuplets (longer range)
         // before inner ones so the close-side LIFO pops innermost first.
-        var startsByIndex: [Int: [Tuplet]] = [:]
-        for tuplet in tuplets {
+        var startsByIndex: [Int: [TupletSpan]] = [:]
+        for tuplet in tupletSpans {
             startsByIndex[tuplet.startIndex, default: []].append(tuplet)
         }
         for key in startsByIndex.keys {
             startsByIndex[key]?.sort { $0.endIndex > $1.endIndex }
         }
         var endCountByIndex: [Int: Int] = [:]
-        for tuplet in tuplets {
+        for tuplet in tupletSpans {
             endCountByIndex[tuplet.endIndex, default: 0] += 1
         }
         // Index of the last chord-bearing element in this voice. A
@@ -214,7 +214,7 @@ extension Voice {
     /// after factoring out `emitElement`.
     struct EncodeState {
         var children: [XMLTreeNode] = []
-        var stack: [Tuplet] = []
+        var stack: [TupletSpan] = []
         var previousChordDuration: Fraction?
         /// The note list of the same chord `previousChordDuration`
         /// measures — the partner a backward tie's `<notes>` delta is
@@ -312,7 +312,7 @@ extension Voice {
         }
     }
 
-    private static func validateProperlyNested(_ tuplets: [Tuplet]) throws {
+    private static func validateProperlyNested(_ tuplets: [TupletSpan]) throws {
         // A laminar family: every pair is disjoint or fully nested.
         for (i, current) in tuplets.enumerated() {
             for other in tuplets.dropFirst(i + 1) {

@@ -184,8 +184,8 @@ struct RebarPlannerTests {
         let rebuilt = Self.voice0(plan, 0)
         #expect(rebuilt.tuplets.count == 1)
         // Column 0 opens with the new meter, so the members sit at 1...3 again.
-        #expect(rebuilt.tuplets[0].startIndex == 1)
-        #expect(rebuilt.tuplets[0].endIndex == 3)
+        #expect(rebuilt.tupletSpans[0].startIndex == 1)
+        #expect(rebuilt.tupletSpans[0].endIndex == 3)
         #expect(rebuilt.tuplets[0].actualNotes == 3)
         #expect(Self.voice0(plan, 1).tuplets.isEmpty)
     }

@@ -32,11 +32,6 @@ struct SignatureCourtesyFlagTests {
             measureIndex: 1, voiceIndex: 0, slots: slots,
             tuplets: score.parts[0].staves[0].measures[1].voices[0].tuplets,
         ).apply(to: &score)
-        score.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                MeasureStructure.shiftTuplets(in: &staffValue.measures[1].voices[0], by: 1)
-            }
-        }
         let xml = try #require(try String(data: MSCXEncoder.encode(score), encoding: .utf8))
         #expect(xml.contains("<showCourtesySig>0</showCourtesySig>"))
         let reparsed = try MSCXParser.parse(MSCXEncoder.encode(score))
@@ -58,11 +53,6 @@ struct SignatureCourtesyFlagTests {
             measureIndex: 1, voiceIndex: 0, slots: slots,
             tuplets: score.parts[0].staves[0].measures[1].voices[0].tuplets,
         ).apply(to: &score)
-        score.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                MeasureStructure.shiftTuplets(in: &staffValue.measures[1].voices[0], by: 1)
-            }
-        }
         let reparsed = try MSCXParser.parse(MSCXEncoder.encode(score))
         guard case let .timeSignature(decoded) = reparsed.parts[0].staves[0].measures[1].voices[0].elements[0]
         else { Issue.record("no time sig"); return }

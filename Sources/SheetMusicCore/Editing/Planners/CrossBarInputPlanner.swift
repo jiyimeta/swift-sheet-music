@@ -249,7 +249,7 @@ public enum CrossBarInputPlanner {
         over segment: Segment,
         measureDuration: Fraction,
         division: Int,
-    ) -> (elements: [VoiceSlot], tuplets: [Tuplet])? {
+    ) -> (elements: [VoiceSlot], tuplets: IdentifiedArray<Tuplet>)? {
         let elements = voice.elements
         guard elements.indices.contains(segment.startIndex) else { return nil }
         var carried: [VoiceSlot] = []
@@ -279,7 +279,7 @@ public enum CrossBarInputPlanner {
         }
         guard consumed == segment.ticks else { return nil }
         let consumedEnd = index - 1
-        guard !voice.tuplets.contains(where: { $0.startIndex <= consumedEnd && segment.startIndex <= $0.endIndex })
+        guard !voice.tupletSpans.contains(where: { $0.startIndex <= consumedEnd && segment.startIndex <= $0.endIndex })
         else { return nil }
 
         var newElements = Array(elements.voiceSlots()[..<segment.startIndex])
@@ -287,17 +287,7 @@ public enum CrossBarInputPlanner {
         newElements.append(contentsOf: carried)
         newElements.append(contentsOf: leftover)
         newElements.append(contentsOf: elements.voiceSlots()[index...])
-        let delta = newElements.count - elements.count
-        let tuplets = voice.tuplets.map { tuplet in
-            guard tuplet.startIndex > consumedEnd else { return tuplet }
-            return Tuplet(
-                normalNotes: tuplet.normalNotes,
-                actualNotes: tuplet.actualNotes,
-                startIndex: tuplet.startIndex + delta,
-                endIndex: tuplet.endIndex + delta,
-            )
-        }
-        return (newElements, tuplets)
+        return (newElements, voice.tuplets)
     }
 
     /// What is left of an element the chain only partly covers. A chord keeps its pitch as a tied chain, the way

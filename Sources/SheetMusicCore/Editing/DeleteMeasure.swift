@@ -6,9 +6,16 @@ import SheetMusicFoundation
 /// and the incoming bar's pre-merge voice 0 verbatim.
 public struct DeleteMeasure: EditCommand {
     public let measureIndex: Int
+    /// Inverse of a fresh bar-0 insertion: restore tuplets lost or retargeted when its prefix moved away.
+    let restoredFollowingVoice0: [[Voice]]?
 
     public init(measureIndex: Int) {
+        self.init(measureIndex: measureIndex, restoringFollowingVoice0: nil)
+    }
+
+    init(measureIndex: Int, restoringFollowingVoice0: [[Voice]]?) {
         self.measureIndex = measureIndex
+        restoredFollowingVoice0 = restoringFollowingVoice0
     }
 
     public var affectedLocation: VoiceElementID {
@@ -51,6 +58,17 @@ public struct DeleteMeasure: EditCommand {
         }
 
         let restoredIncomingVoice0 = rehomeInitialSignatures(in: &score, deleted: slice)
+        if let restoredFollowingVoice0 {
+            for partIndex in score.parts.indices {
+                score.parts.updateValue(at: partIndex) { part in
+                    for staffIndex in part.staves.indices {
+                        part.staves.updateValue(at: staffIndex) { staff in
+                            staff.measures[0].voices[0] = restoredFollowingVoice0[partIndex][staffIndex]
+                        }
+                    }
+                }
+            }
+        }
 
         return InsertMeasure(
             measureIndex: measureIndex,
@@ -81,13 +99,15 @@ public struct DeleteMeasure: EditCommand {
                 guard merged.count > incomingPrefix.count else { continue }
                 score.parts.updateValue(at: partIndex) { partValue in
                     partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        let removed = Set(incomingPrefix.indices.filter {
+                            merged.index(of: incomingPrefix.eid(at: $0)) == nil
+                        })
+                        staffValue.measures[0].voices[0].removeElements(at: removed)
                         staffValue.measures[0].voices[0].elements
                             .replaceSubrange(
-                                0 ..< incomingPrefix.count, with: merged.identifiedPairs(in: merged.indices),
+                                0 ..< (incomingPrefix.count - removed.count),
+                                with: merged.identifiedPairs(in: merged.indices),
                             )
-                        MeasureStructure.shiftTuplets(
-                            in: &staffValue.measures[0].voices[0], by: merged.count - incomingPrefix.count,
-                        )
                     }
                 }
             }

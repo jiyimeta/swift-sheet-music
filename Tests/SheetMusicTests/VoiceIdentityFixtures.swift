@@ -62,10 +62,32 @@ enum VoiceIdentityFixtures {
         spineIDs(score) + voiceIDs(score).flatMap(\.self)
     }
 
-    static func expectSameScore(_ actual: Score, _ expected: Score) {
+    static func expectSameScore(
+        _ actual: Score, _ expected: Score, sourceLocation: SourceLocation = #_sourceLocation,
+    ) {
         // Value equality includes voice counts and tuplets, but deliberately ignores EIDs.
-        #expect(actual == expected)
-        #expect(voiceIDs(actual) == voiceIDs(expected))
-        #expect(spineIDs(actual) == spineIDs(expected))
+        #expect(actual == expected, sourceLocation: sourceLocation)
+        #expect(voiceIDs(actual) == voiceIDs(expected), sourceLocation: sourceLocation)
+        #expect(spineIDs(actual) == spineIDs(expected), sourceLocation: sourceLocation)
+        let actualTuplets = tupletValues(actual)
+        let expectedTuplets = tupletValues(expected)
+        #expect(actualTuplets.ids == expectedTuplets.ids, sourceLocation: sourceLocation)
+        #expect(actualTuplets.values == expectedTuplets.values, sourceLocation: sourceLocation)
+    }
+
+    private static func tupletValues(_ score: Score) -> (ids: [[EID]], values: [[Tuplet]]) {
+        var ids: [[EID]] = []
+        var values: [[Tuplet]] = []
+        for part in score.parts {
+            for staff in part.staves {
+                for measure in staff.measures {
+                    for voice in measure.voices {
+                        ids.append(voice.tuplets.indices.map { voice.tuplets.eid(at: $0) })
+                        values.append(voice.tuplets.values)
+                    }
+                }
+            }
+        }
+        return (ids, values)
     }
 }

@@ -388,7 +388,7 @@ extension ScoreEditSession {
         else { return false }
         let voices = staff.measures[slot.measureIndex].voices
         guard voices.indices.contains(slot.voiceIndex) else { return false }
-        return voices[slot.voiceIndex].tuplets.contains {
+        return voices[slot.voiceIndex].tupletSpans.contains {
             slot.elementIndex >= $0.startIndex && slot.elementIndex <= $0.endIndex
         }
     }

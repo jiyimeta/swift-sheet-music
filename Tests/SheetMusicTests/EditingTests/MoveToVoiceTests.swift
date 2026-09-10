@@ -104,7 +104,7 @@ struct MoveToVoiceTests {
             .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
             Self.tripletMember, Self.tripletMember, Self.tripletMember,
         ])
-        #expect(v1.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
+        #expect(v1.tupletSpans == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
     }
 
     @Test("undo restores the destination voice's tuplet endpoints")

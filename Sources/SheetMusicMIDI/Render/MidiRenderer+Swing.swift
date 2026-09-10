@@ -261,7 +261,7 @@ extension MidiRenderer {
     /// check in compatmidirender.cpp:172).
     static func isChordInTuplet(
         elementIndex index: Int,
-        voiceTuplets tuplets: [Tuplet],
+        voiceTuplets tuplets: [TupletSpan],
     ) -> Bool {
         tuplets.contains { $0.startIndex <= index && index <= $0.endIndex }
     }

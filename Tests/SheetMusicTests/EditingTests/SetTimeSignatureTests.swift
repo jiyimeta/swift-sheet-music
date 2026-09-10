@@ -461,7 +461,7 @@ struct SetTimeSignatureTests {
         guard case .clef = voice.elements[0] else { Issue.record("the clef must stay first"); return }
         guard case .keySignature = voice.elements[1] else { Issue.record("the key follows the clef"); return }
         #expect(voice.elements[2] == .timeSignature(TimeSignature(numerator: 3, denominator: 4)))
-        #expect(voice.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 3, endIndex: 3)])
+        #expect(voice.tupletSpans == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 3, endIndex: 3)])
         #expect(Self.measureCounts(session.score) == [2])
         #expect(session.score.parts[0].staves[0].measures[0].actualLength
             == Fraction(numerator: 1, denominator: 4))

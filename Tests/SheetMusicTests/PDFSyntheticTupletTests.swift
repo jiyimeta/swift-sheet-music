@@ -333,7 +333,8 @@
                           case .fraction = chord.duration
                     else { continue }
                     scaledMembers += 1
-                    #expect(voice.tuplets.contains { $0.startIndex <= index && index <= $0.endIndex })
+                    let isTupletMember = voice.tupletSpans.contains { $0.startIndex <= index && index <= $0.endIndex }
+                    #expect(isTupletMember)
                 }
             }
             #expect(scaledMembers > 0)

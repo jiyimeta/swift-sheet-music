@@ -10,7 +10,7 @@ extension Voice {
     /// percussion-v3 stem direction and default note head emission.
     func encodeChord(
         chord: Chord,
-        activeTuplets: [Tuplet],
+        activeTuplets: [TupletSpan],
         previousChordDuration: Fraction?,
         isFirstChordOfVoice: Bool,
         isLastChordOfVoice: Bool,

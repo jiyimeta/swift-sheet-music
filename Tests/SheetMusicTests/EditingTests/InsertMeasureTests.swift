@@ -131,8 +131,8 @@ struct InsertMeasureTests {
         // The 2-element signature prefix was removed from this bar (now at measure index 1), so the
         // tuplet's indices must shift down by 2 — asserted right after apply, not only after the round trip,
         // since the bug this guards against is symmetric and would otherwise cancel out invisibly.
-        #expect(score.parts[0].staves[0].measures[1].voices[0].tuplets ==
-            [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2)])
+        #expect(score.parts[0].staves[0].measures[1].voices[0].tupletSpans ==
+            [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2)])
 
         _ = try inverse.apply(to: &score)
         #expect(score == original)

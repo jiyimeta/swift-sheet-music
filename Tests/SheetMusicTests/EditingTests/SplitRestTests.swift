@@ -115,7 +115,7 @@ struct SplitRestTests {
 
         let voice = score.parts[0].staves[0].measures[0].voices[0]
         #expect(voice.elements.count == 6)
-        #expect(voice.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 3, endIndex: 5)])
+        #expect(voice.tupletSpans == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 3, endIndex: 5)])
         #expect(Array(voice.elements[3 ... 5]) == [member, member, member])
     }
 

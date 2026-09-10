@@ -92,8 +92,8 @@ struct DeleteMeasureTests {
         // The incoming bar inherited [key, time] (2 elements) prepended ahead of its tuplet members, so the
         // tuplet's indices must shift up by 2 — asserted right after apply, not only after the round trip.
         for staff in score.parts[0].staves {
-            #expect(staff.measures[0].voices[0].tuplets ==
-                [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)])
+            #expect(staff.measures[0].voices[0].tupletSpans ==
+                [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)])
         }
 
         _ = try inverse.apply(to: &score)

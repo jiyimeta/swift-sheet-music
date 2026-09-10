@@ -37,10 +37,10 @@ public struct ReplaceVoiceElement: EditCommand {
             voice.elements.updateValue(at: location.elementIndex) { $0 = element }
             inverseIdentity = .same
         case .fresh:
-            voice.elements.replace(at: previous, with: element, newEID: ids.next())
+            voice.replaceElement(at: location.elementIndex, with: element, id: ids.next())
             inverseIdentity = .restore(previous)
         case let .restore(restored):
-            voice.elements.replace(at: previous, with: element, newEID: restored)
+            voice.replaceElement(at: location.elementIndex, with: element, id: restored)
             inverseIdentity = .restore(previous)
         }
         score[voice: ref] = voice

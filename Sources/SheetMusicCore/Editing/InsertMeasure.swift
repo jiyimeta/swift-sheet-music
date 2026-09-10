@@ -55,6 +55,8 @@ public struct InsertMeasure: EditCommand {
         // Restore path (inverse of a delete): undo the bar-0 signature merge byte-for-byte, then reinsert
         // the deleted column verbatim.
         if let contents = restoredContents {
+            let priorVoiceZero = measureIndex == 0 && count > 0
+                ? score.parts.map { $0.staves.map { $0.measures[0].voices[0] } } : nil
             if let incomingVoices = restoredIncomingVoice0, measureIndex < count {
                 for partIndex in score.parts.indices {
                     for staffIndex in score.parts[partIndex].staves.indices {
@@ -69,11 +71,13 @@ public struct InsertMeasure: EditCommand {
             }
             insert(contents, into: &score, ids: &ids)
             restoreEndpointSpanners(in: &score)
-            return DeleteMeasure(measureIndex: measureIndex)
+            return DeleteMeasure(measureIndex: measureIndex, restoringFollowingVoice0: priorVoiceZero)
         }
 
         // Blank path.
         var column = MeasureStructure.blankColumn(for: score, ids: &ids)
+        let priorVoiceZero = measureIndex == 0 && count > 0
+            ? score.parts.map { $0.staves.map { $0.measures[0].voices[0] } } : nil
         if measureIndex == 0, count > 0 {
             for partIndex in score.parts.indices {
                 for staffIndex in score.parts[partIndex].staves.indices {
@@ -82,16 +86,7 @@ public struct InsertMeasure: EditCommand {
                     guard !prefix.isEmpty else { continue }
                     score.parts.updateValue(at: partIndex) { partValue in
                         partValue.staves.updateValue(at: staffIndex) { staffValue in
-                            staffValue.measures[0].voices[0].elements
-                                .removeSubrange(0 ..< prefix.count)
-                        }
-                    }
-                    score.parts.updateValue(at: partIndex) { partValue in
-                        partValue.staves.updateValue(at: staffIndex) { staffValue in
-                            MeasureStructure.shiftTuplets(
-                                in: &staffValue.measures[0].voices[0],
-                                by: -prefix.count,
-                            )
+                            staffValue.measures[0].voices[0].removeElements(at: Set(0 ..< prefix.count))
                         }
                     }
                     column.staffMeasures[partIndex][staffIndex].voices[0].elements
@@ -100,7 +95,7 @@ public struct InsertMeasure: EditCommand {
             }
         }
         insert(column, into: &score, ids: &ids)
-        return DeleteMeasure(measureIndex: measureIndex)
+        return DeleteMeasure(measureIndex: measureIndex, restoringFollowingVoice0: priorVoiceZero)
     }
 
     /// Re-widens the spanners the paired delete shrunk at the boundary, each through the storage form its

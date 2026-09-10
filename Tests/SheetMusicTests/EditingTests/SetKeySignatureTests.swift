@@ -43,11 +43,6 @@ struct SetKeySignatureTests {
                 measureIndex: 2, voiceIndex: 0, slots: slots,
                 tuplets: score.parts[part].staves[0].measures[2].voices[0].tuplets,
             ).apply(to: &score)
-            score.parts.updateValue(at: part) { partValue in
-                partValue.staves.updateValue(at: 0) { staffValue in
-                    MeasureStructure.shiftTuplets(in: &staffValue.measures[2].voices[0], by: 1)
-                }
-            }
         }
         return score
     }
@@ -188,7 +183,7 @@ struct SetKeySignatureTests {
         }
         #expect(key.concertKey == -2)
         guard case .timeSignature = voice.elements[2] else { Issue.record("the time signature follows"); return }
-        #expect(voice.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 3, endIndex: 3)])
+        #expect(voice.tupletSpans == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 3, endIndex: 3)])
         #expect(session.undo())
         #expect(session.score == original)
     }
@@ -223,8 +218,8 @@ struct SetKeySignatureTests {
         }
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.removeKeySignature(measureIndex: 2)))
-        #expect(session.score.parts[0].staves[0].measures[2].voices[0].tuplets == [
-            Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 0),
+        #expect(session.score.parts[0].staves[0].measures[2].voices[0].tupletSpans == [
+            TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 0),
         ])
         #expect(session.undo())
         #expect(session.score == original)

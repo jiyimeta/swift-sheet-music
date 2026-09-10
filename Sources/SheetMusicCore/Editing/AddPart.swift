@@ -114,7 +114,7 @@ public struct AddPart: EditCommand {
             part.staves.updateValue(at: staffIndex) { staff in
                 for measureIndex in staff.measures.indices {
                     for voiceIndex in staff.measures[measureIndex].voices.indices {
-                        staff.measures[measureIndex].voices[voiceIndex].elements.assignMissingIDs(using: &ids)
+                        staff.measures[measureIndex].voices[voiceIndex].assignMissingIDs(using: &ids)
                     }
                 }
             }

@@ -196,8 +196,8 @@ struct PasteVoiceElementsTests {
         // [timeSig, half-chord, <tuplet at 2..4>, rest q]
         #expect(voice.elements.count == 6)
         #expect(voice.tuplets.count == 1)
-        #expect(voice.tuplets[0].startIndex == 2)
-        #expect(voice.tuplets[0].endIndex == 4)
+        #expect(voice.tupletSpans[0].startIndex == 2)
+        #expect(voice.tupletSpans[0].endIndex == 4)
     }
 
     @Test("paste fully containing a tuplet drops it")

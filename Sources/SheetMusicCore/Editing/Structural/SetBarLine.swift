@@ -30,21 +30,23 @@ public struct SetBarLine: EditCommand {
         for (address, _) in score.allStaves {
             let ref = VoiceRef(staff: address, measureIndex: measure.measureIndex, voiceIndex: 0)
             guard let voice = score[voice: ref] else { continue }
-            var elements = voice.elements
-            let trailingIndex = Self.trailingBarLineIndex(in: elements.values)
+            var changed = voice
+            let trailingIndex = Self.trailingBarLineIndex(in: voice.elements.values)
             switch (style, trailingIndex) {
             case let (.normal, index?):
-                elements.removeSubrange(index ..< (index + 1))
+                changed.removeElements(at: [index])
             case (.normal, nil):
                 continue
             case let (_, index?):
-                elements.updateValue(at: index) { $0 = .barLine(BarLine(subtype: style.rawValue)) }
+                changed.elements.updateValue(at: index) { $0 = .barLine(BarLine(subtype: style.rawValue)) }
             case (_, nil):
-                elements.insert(.barLine(BarLine(subtype: style.rawValue)), at: elements.count, id: ids.next())
+                changed.elements.insert(
+                    .barLine(BarLine(subtype: style.rawValue)), at: changed.elements.count, id: ids.next(),
+                )
             }
             writes.append(ReplaceVoiceElements(
                 staff: address, measureIndex: measure.measureIndex, voiceIndex: 0,
-                elements: elements, tuplets: voice.tuplets,
+                elements: changed.elements, tuplets: changed.tuplets,
             ))
         }
         return try CompositeEditCommand(commands: writes, location: affectedLocation).apply(to: &score, ids: &ids)

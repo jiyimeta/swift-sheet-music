@@ -23,7 +23,7 @@ import SheetMusicFoundation
 /// given in either order, or one that reaches across staves, narrows rather than refuses.
 ///
 /// Every mutation is returned as a command, never applied here: an insert is a voice-level `ReplaceVoiceElements`
-/// through `AdjacentElementSlot` (tuplets remapped by `MeasureStructure.remapTuplets`, indices restored exactly by
+/// through `AdjacentElementSlot` (tuplet endpoints follow member identities, indices restored exactly by
 /// its inverse), and the chord-anchored form is a `ReplaceVoiceElement`.
 enum SpannerPlacement {
     enum Storage: Equatable {
