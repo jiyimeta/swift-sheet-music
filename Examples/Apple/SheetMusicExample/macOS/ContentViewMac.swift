@@ -37,6 +37,8 @@
         let measureOffset: Int
         let voiceIndex: Int
         let elements: [VoiceElement]
+        /// Original positions, so equal-valued chords earlier in a voice cannot redirect a cut.
+        let sourceElementIndices: [Int]
     }
 
     /// Clipboard payload for a `.range` copy. `cells` is the per-
@@ -89,6 +91,8 @@
         /// entry it includes the pending command applied to a value copy;
         /// exports continue to read the committed `score` below.
         @State private var horizontalScreenScore: Score?
+        /// The previous rendered preview, retained only to follow selections by voice-slot identity.
+        @State private var horizontalEditingAddresses: ScoreEditingAddressMap?
         /// Invalidates the AppKit-hosted score even when a pending keystroke
         /// changes glyph content without changing the document size.
         @State private var horizontalContentVersion = UUID()
@@ -253,6 +257,76 @@
             ScoreTextEntryPreview.identity(
                 lyricSession: lyricSession,
                 textSession: textSession,
+            )
+        }
+
+        /// Selection belongs to the layout; commands and input sessions belong to the full score.
+        private var editingAddresses: ScoreEditingAddressMap? {
+            guard let committed = inputController?.score ?? score else { return nil }
+            let preview = ScoreTextEntryPreview.compose(
+                committed: committed, lyricSession: lyricSession, textSession: textSession,
+            )
+            let hidden = honorAuthoredHiding && layoutMode != .originalPDF
+                ? Self.authoredHiddenStaves(of: preview) : []
+            return ScoreEditingAddressMap(
+                score: committed, hiddenStaves: hidden,
+                previewScore: layoutMode == .horizontal && textEntryPreviewIdentity != nil ? preview : nil,
+            )
+        }
+
+        private func fullEditingItem(_ item: ScoreItemID) -> ScoreItemID? {
+            editingAddresses?.fullItem(forDisplayed: item)
+        }
+
+        private func fullEditingAnchor(_ anchor: VoiceElementID) -> VoiceElementID? {
+            guard case let .text(.harmony(full)) = fullEditingItem(.text(.harmony(anchor: anchor)))
+            else { return nil }
+            return full
+        }
+
+        private func displayedEditingAnchor(_ anchor: VoiceElementID) -> VoiceElementID? {
+            // The shared overlay has already mapped the committed ordinal into its text preview.
+            guard let addresses = editingAddresses,
+                  case let .text(.harmony(displayed)) = ScoreEditingAddressMap(
+                      score: addresses.score, hiddenStaves: addresses.hiddenStaves,
+                  ).displayedItem(
+                      forFull: .text(.harmony(anchor: anchor)),
+                  ) else { return nil }
+            return displayed
+        }
+
+        private func selectFullItem(_ item: ScoreItemID) {
+            selection = editingAddresses?.displayedItem(forFull: item).map { .single($0) } ?? .none
+        }
+
+        private var fullPlaybackSelection: ScoreSelection {
+            Self.translatingSelection(selection, with: fullEditingItem)
+        }
+
+        private static func translatingSelection(
+            _ selection: ScoreSelection, with transform: (ScoreItemID) -> ScoreItemID?,
+        ) -> ScoreSelection {
+            switch selection {
+            case .none: return .none
+            case let .single(item): return transform(item).map { .single($0) } ?? .none
+            case let .range(anchor, target):
+                guard let anchor = transform(anchor), let target = transform(target) else { return .none }
+                return .range(anchor: anchor, target: target)
+            case let .multi(items):
+                let full = items.compactMap(transform)
+                return full.count == items.count ? .multi(Set(full)) : .none
+            }
+        }
+
+        private var displayedPlaybackCursor: ScoreCursor? {
+            guard let addresses = editingAddresses else { return nil }
+            if case let .item(item) = playbackEngine.currentCursor,
+               !addresses.hiddenStaves.contains(item.staff)
+            {
+                return addresses.displayedItem(forFull: item).map(ScoreCursor.item)
+            }
+            return addresses.score.translateCursorForHiddenStaves(
+                playbackEngine.currentCursor, hiddenStaves: addresses.hiddenStaves,
             )
         }
 
@@ -424,10 +498,16 @@
                 rebuildLayoutsForOptionsChange()
             }
             .onChange(of: honorAuthoredHiding) { _, _ in
-                if case .single(.element) = selection {
-                    selection = .none
-                }
+                // Every layout address may shift when visibility changes.
+                selection = .none
+                clefPopover = nil
                 rebuildLayoutsForOptionsChange()
+            }
+            .onChange(of: layoutMode) { oldMode, newMode in
+                if oldMode == .originalPDF || newMode == .originalPDF {
+                    selection = .none
+                    clefPopover = nil
+                }
             }
             .onChange(of: textEntryPreviewIdentity) { _, _ in
                 rebuildHorizontalTextEntryPreview()
@@ -734,7 +814,7 @@
             // a stale mixer state could otherwise silently win.
             playbackEngine.setMuted(forChannel: .metronome, to: !isMetronomeEnabled)
             playbackEngine.togglePlayback(
-                score: score, selection: selection, countIn: isCountInEnabled,
+                score: score, selection: fullPlaybackSelection, countIn: isCountInEnabled,
             )
         }
 
@@ -832,7 +912,7 @@
                 playbackEngine.clearLoop()
                 return
             }
-            guard case let .range(a, b) = selection else { return }
+            guard case let .range(a, b) = fullPlaybackSelection else { return }
             let first = playbackEngine.earliest(of: [a, b]) ?? a
             let last = (first == a) ? b : a
             playbackEngine.setLoop(
@@ -964,10 +1044,11 @@
                    chars.first?.lowercased() == "l"
                 {
                     if case let .single(.note(noteID)) = selection,
-                       let controller = inputController
+                       let controller = inputController,
+                       case let .note(fullID) = fullEditingItem(.note(noteID))
                     {
                         lyricSession.begin(
-                            at: VoiceElementID(noteID),
+                            at: VoiceElementID(fullID),
                             verse: 0,
                             controller: controller,
                             ending: textSession,
@@ -1368,6 +1449,7 @@
                 errorMessage = "Click a rest to insert a note. Current selection: \(describeSelection(selection))."
                 return true
             }
+            guard case let .rest(restID) = fullEditingItem(.rest(restID)) else { return true }
             do {
                 try controller.apply(
                     InputNote(
@@ -1387,7 +1469,7 @@
                     elementIndex: restID.elementIndex,
                     noteIndexInChord: 0,
                 )
-                selection = .single(.note(noteID))
+                selectFullItem(.note(noteID))
                 adoptEditedScore(controller.score)
                 // Match the click-on-note feedback path: brief preview
                 // of the just-inserted pitch via the playback engine.
@@ -1421,6 +1503,7 @@
             mapped: (pitch: Int, tpc: Int),
             controller: NoteInputController,
         ) {
+            guard case let .note(noteID) = fullEditingItem(.note(noteID)) else { return }
             let chordID = VoiceElementID(noteID)
             let activeKey = controller.score.activeKey(at: noteID)
             let accidental: Accidental? = isDrumStaff(
@@ -1461,7 +1544,7 @@
                     elementIndex: noteID.elementIndex,
                     noteIndexInChord: priorNoteCount,
                 )
-                selection = .single(.note(newNoteID))
+                selectFullItem(.note(newNoteID))
                 playbackEngine.playPreview(
                     noteID: newNoteID, in: controller.score,
                 )
@@ -1490,6 +1573,7 @@
             duration: NoteDuration,
             controller: NoteInputController,
         ) {
+            guard case let .note(noteID) = fullEditingItem(.note(noteID)) else { return }
             let chordID = VoiceElementID(noteID)
             do {
                 try controller.apply(
@@ -1511,6 +1595,7 @@
             duration: NoteDuration,
             controller: NoteInputController,
         ) {
+            guard case let .rest(restID) = fullEditingItem(.rest(restID)) else { return }
             let veID = VoiceElementID(restID)
             do {
                 try controller.apply(
@@ -1533,6 +1618,7 @@
             noteID: NoteID,
             controller: NoteInputController,
         ) {
+            guard case let .note(noteID) = fullEditingItem(.note(noteID)) else { return }
             guard let source = controller.score[noteID] else {
                 errorMessage = "Selected note not found in score"
                 return
@@ -1608,6 +1694,14 @@
         private func collectRangePayload(
             anchor: ScoreItemID, target: ScoreItemID, score: Score,
         ) -> RangePayload? {
+            guard let addresses = editingAddresses else { return nil }
+            let committedAddresses = ScoreEditingAddressMap(score: score, hiddenStaves: addresses.hiddenStaves)
+            guard let fullAnchor = addresses.fullItem(forDisplayed: anchor),
+                  let fullTarget = addresses.fullItem(forDisplayed: target),
+                  let anchor = committedAddresses.displayedItem(forFull: fullAnchor),
+                  let target = committedAddresses.displayedItem(forFull: fullTarget)
+            else { return nil }
+            let score = score.filtered(hidingStaves: addresses.hiddenStaves)
             let division = score.division
             guard let anchorStart = elementTickPosition(
                 of: anchor, in: score,
@@ -1620,12 +1714,11 @@
                 )
             else { return nil }
             let allStaves = score.allStaves
-            let anchorFlatIdx = allStaves.firstIndex(where: {
+            guard let anchorFlatIdx = allStaves.firstIndex(where: {
                 $0.address == anchor.staff
-            }) ?? 0
-            let targetFlatIdx = allStaves.firstIndex(where: {
+            }), let targetFlatIdx = allStaves.firstIndex(where: {
                 $0.address == target.staff
-            }) ?? 0
+            }) else { return nil }
             let staffLo = min(anchorFlatIdx, targetFlatIdx)
             let staffHi = max(anchorFlatIdx, targetFlatIdx)
             // (lo, hi) bracket the time region: lo = whichever of the
@@ -1666,8 +1759,9 @@
                         let tickEnd = (measureIdx == timeHi.measure)
                             ? timeHi.tick : measureTotalTicks
                         var captured: [VoiceElement] = []
+                        var capturedIndices: [Int] = []
                         var tick = 0
-                        for el in voice.elements {
+                        for (elementIndex, el) in voice.elements.enumerated() {
                             let elTicks: Int
                             switch el {
                             case let .chord(c):
@@ -1683,6 +1777,7 @@
                             }
                             if tick >= tickStart && tick < tickEnd {
                                 captured.append(el)
+                                capturedIndices.append(elementIndex)
                             }
                             tick += elTicks
                         }
@@ -1693,6 +1788,7 @@
                                 measureIdx - timeLo.measure,
                                 voiceIndex: voiceIdx,
                                 elements: captured,
+                                sourceElementIndices: capturedIndices,
                             ))
                         }
                     }
@@ -1827,7 +1923,7 @@
                         undoManager: undoManager,
                     )
                     adoptEditedScore(controller.score)
-                    selection = .single(.rest(RestID(
+                    selectFullItem(.rest(RestID(
                         staff: id.staff,
                         measureIndex: id.measureIndex,
                         voiceIndex: id.voiceIndex,
@@ -1855,16 +1951,18 @@
                 do {
                     // Bundle every cell's deletes into one composite
                     // command so a single ⌘Z restores the whole range
-                    // at once. Identifying each cell's live element
-                    // index range can't go by reference (VoiceElement
-                    // is a value type) — find it by position.
-                    let cutAllStaves = controller.score.allStaves
-                    let anchorFlatIdx = cutAllStaves.firstIndex(where: {
+                    // at once. Each cell retains the source indices captured
+                    // against this same filtered score, including non-timed gaps.
+                    guard let currentAddresses = editingAddresses else { return true }
+                    let addresses = ScoreEditingAddressMap(
+                        score: controller.score, hiddenStaves: currentAddresses.hiddenStaves,
+                    )
+                    let cutAllStaves = controller.score.filtered(hidingStaves: addresses.hiddenStaves).allStaves
+                    guard let anchorFlatIdx = cutAllStaves.firstIndex(where: {
                         $0.address == anchor.staff
-                    }) ?? 0
-                    let targetFlatIdx = cutAllStaves.firstIndex(where: {
+                    }), let targetFlatIdx = cutAllStaves.firstIndex(where: {
                         $0.address == target.staff
-                    }) ?? 0
+                    }) else { return true }
                     let staffBase = min(anchorFlatIdx, targetFlatIdx)
                     let measureBase = min(
                         anchor.measureIndex, target.measureIndex,
@@ -1874,44 +1972,28 @@
                         let staffFlat = staffBase + cell.staffOffset
                         let measure = measureBase + cell.measureOffset
                         guard cutAllStaves.indices.contains(staffFlat) else {
-                            continue
+                            return true
                         }
-                        let staffAddress = cutAllStaves[staffFlat].address
-                        let staffVal = cutAllStaves[staffFlat].staff
-                        let voice = staffVal
-                            .measures[measure].voices[cell.voiceIndex]
-                        let baseIndices = Self.findContiguousIndices(
-                            of: cell.elements, in: voice.elements.values,
-                        )
-                        guard let (lo, hi) = baseIndices else { continue }
                         // Schedule deletes back-to-front so indices
                         // stay valid as the composite executes.
-                        for elemIdx in stride(
-                            from: hi, through: lo, by: -1,
-                        ) {
-                            let id = VoiceElementID(
-                                staff: staffAddress,
+                        for elemIdx in cell.sourceElementIndices.reversed() {
+                            let displayedID = VoiceElementID(
+                                staff: cutAllStaves[staffFlat].address,
                                 measureIndex: measure,
                                 voiceIndex: cell.voiceIndex,
                                 elementIndex: elemIdx,
                             )
+                            guard case let .text(.harmony(id)) = addresses.fullItem(
+                                forDisplayed: .text(.harmony(anchor: displayedID)),
+                            ) else { return true }
                             subCommands.append(DeleteVoiceElement(at: id))
                         }
                     }
-                    let staffBaseAddress = cutAllStaves.indices
-                        .contains(staffBase)
-                        ? cutAllStaves[staffBase].address
-                        : StaffAddress(partIndex: 0, staffIndexInPart: 0)
+                    guard let affected = subCommands.first?.affectedLocation else { return true }
                     try controller.apply(
                         CompositeEditCommand(
                             commands: subCommands,
-                            location: VoiceElementID(
-                                staff: staffBaseAddress,
-                                measureIndex: measureBase,
-                                voiceIndex: payload.cells.first?
-                                    .voiceIndex ?? 0,
-                                elementIndex: 0,
-                            ),
+                            location: affected,
                         ),
                         undoManager: undoManager,
                     )
@@ -1926,24 +2008,6 @@
             default:
                 return false
             }
-        }
-
-        /// Locate the `[lo...hi]` element index range in `live` whose
-        /// values are `Equatable`-equal to `slice` in order. Returns
-        /// the first such match or nil. Used by range cut to find the
-        /// live position of captured cells (we can't track by reference
-        /// because VoiceElement is a value type).
-        private static func findContiguousIndices(
-            of slice: [VoiceElement], in live: [VoiceElement],
-        ) -> (Int, Int)? {
-            guard !slice.isEmpty else { return nil }
-            outer: for start in 0 ... (live.count - slice.count) {
-                for k in 0 ..< slice.count where live[start + k] != slice[k] {
-                    continue outer
-                }
-                return (start, start + slice.count - 1)
-            }
-            return nil
         }
 
         /// Paste the clipboard onto the currently-selected chord or rest.
@@ -1981,6 +2045,7 @@
                         staffOffset: 0, measureOffset: 0,
                         voiceIndex: id.voiceIndex,
                         elements: [element],
+                        sourceElementIndices: [],
                     )
                     let payload = RangePayload(
                         cells: [singleCell],
@@ -2033,15 +2098,18 @@
                 streams[key, default: []].append(contentsOf: cell.elements)
             }
 
-            let pasteAllStaves = score.allStaves
-            let targetFlatIdx = pasteAllStaves.firstIndex(where: {
-                $0.address == targetID.staff
-            }) ?? 0
+            guard let pasteStaves = editingAddresses?.visibleStaffAddresses,
+                  let targetFlatIdx = pasteStaves.firstIndex(of: targetID.staff)
+            else {
+                throw SheetMusicError.invalidEdit(EditRefusal(
+                    operation: "Paste", reason: .staffNotFound(targetID.staff),
+                ))
+            }
 
             var subCommands: [any EditCommand] = []
             for (key, streamElements) in streams {
                 let destFlatStaff = targetFlatIdx + key.staffOffset
-                guard pasteAllStaves.indices.contains(destFlatStaff) else {
+                guard pasteStaves.indices.contains(destFlatStaff) else {
                     throw SheetMusicError.invalidEdit(EditRefusal(
                         operation: "Paste",
                         reason: .staffNotFound(StaffAddress(
@@ -2050,7 +2118,7 @@
                         )),
                     ))
                 }
-                let destAddress = pasteAllStaves[destFlatStaff].address
+                let destAddress = pasteStaves[destFlatStaff]
                 guard score[destAddress]?.measures
                     .indices.contains(targetID.measureIndex) ?? false
                 else {
@@ -2482,12 +2550,13 @@
         /// advance; the session-based flow has to do it at each caret move.
         private func syncSelectionToLyricCursor() {
             guard let cursor = lyricSession.cursor,
-                  let controller = inputController,
-                  case let .chord(chord) = controller.score[cursor.location],
-                  !chord.notes.isEmpty
+                  let controller = inputController
             else { return }
+            guard case let .chord(chord) = controller.score[cursor.location],
+                  !chord.notes.isEmpty
+            else { selection = .none; return }
             let location = cursor.location
-            selection = .single(.note(NoteID(
+            selectFullItem(.note(NoteID(
                 staff: location.staff,
                 measureIndex: location.measureIndex,
                 voiceIndex: location.voiceIndex,
@@ -2503,7 +2572,7 @@
         ) {
             switch firstElement {
             case let .chord(c) where !c.notes.isEmpty:
-                selection = .single(.note(NoteID(
+                selectFullItem(.note(NoteID(
                     staff: id.staff,
                     measureIndex: id.measureIndex,
                     voiceIndex: id.voiceIndex,
@@ -2512,7 +2581,7 @@
                 )))
             case .chord:
                 // Empty chord = rest.
-                selection = .single(.rest(RestID(
+                selectFullItem(.rest(RestID(
                     staff: id.staff,
                     measureIndex: id.measureIndex,
                     voiceIndex: id.voiceIndex,
@@ -2527,13 +2596,13 @@
         /// when the selection isn't a single chord/rest. Used by
         /// copy / cut / paste so they share the same selection model.
         private func selectedVoiceElementID() -> VoiceElementID? {
-            switch selection {
-            case let .single(.note(n)):
-                return VoiceElementID(n)
-            case let .single(.rest(r)):
-                return VoiceElementID(r)
-            default:
-                return nil
+            guard case let .single(item) = selection,
+                  let full = fullEditingItem(item)
+            else { return nil }
+            switch full {
+            case let .note(note): return VoiceElementID(note)
+            case let .rest(rest): return VoiceElementID(rest)
+            default: return nil
             }
         }
 
@@ -2542,9 +2611,10 @@
         /// staff (where accidentals are meaningless).
         private var isAccidentalActionable: Bool {
             guard case let .single(.note(id)) = selection,
-                  let controller = inputController
+                  let controller = inputController,
+                  case let .note(fullID) = fullEditingItem(.note(id))
             else { return false }
-            return !isDrumStaff(noteID: id, controller: controller)
+            return !isDrumStaff(noteID: fullID, controller: controller)
         }
 
         /// Toolbar button for one accidental value. Emits a `SetAccidental`
@@ -2636,6 +2706,7 @@
             _ accidental: Accidental?, to noteID: NoteID,
         ) {
             guard let controller = inputController else { return }
+            guard case let .note(noteID) = fullEditingItem(.note(noteID)) else { return }
             do {
                 try controller.apply(
                     SetAccidental(at: noteID, accidental: accidental),
@@ -2645,7 +2716,7 @@
                 // The note retained its NoteID — re-anchor selection so
                 // the canvas keeps showing the highlight on the new
                 // pitch / glyph.
-                selection = .single(.note(noteID))
+                selectFullItem(.note(noteID))
                 playbackEngine.playPreview(
                     noteID: noteID, in: controller.score,
                 )
@@ -2663,6 +2734,7 @@
         /// element was deleted before the popover opened).
         private func currentClefRawType(for anchor: ClefAnchor) -> String? {
             guard let score else { return nil }
+            guard case let .clef(anchor) = fullEditingItem(.clef(anchor)) else { return nil }
             switch anchor {
             case let .explicit(veID):
                 if case let .clef(c) = score[veID] {
@@ -2683,6 +2755,7 @@
             _ choice: ClefChoice, for anchor: ClefAnchor,
         ) {
             guard let controller = inputController else { return }
+            guard case let .clef(anchor) = fullEditingItem(.clef(anchor)) else { return }
             do {
                 switch anchor {
                 case let .explicit(veID):
@@ -2723,6 +2796,7 @@
             noteID: NoteID,
             controller: NoteInputController,
         ) {
+            guard case let .note(noteID) = fullEditingItem(.note(noteID)) else { return }
             let veID = VoiceElementID(noteID)
             let priorNoteCount: Int
             if case let .chord(c) = controller.score[veID] {
@@ -2743,7 +2817,7 @@
                         voiceIndex: veID.voiceIndex,
                         elementIndex: veID.elementIndex,
                     )
-                    selection = .single(.rest(newRest))
+                    selectFullItem(.rest(newRest))
                 } else {
                     // Clamp to the new range — removing index N from a
                     // chord of size N+1 leaves indices 0...N-1.
@@ -2761,7 +2835,7 @@
                         elementIndex: noteID.elementIndex,
                         noteIndexInChord: newIdx,
                     )
-                    selection = .single(.note(surviving))
+                    selectFullItem(.note(surviving))
                 }
                 errorMessage = "Removed note"
             } catch {
@@ -2783,7 +2857,8 @@
             // we want the "delete the whole thing" semantic, so chain
             // RemoveTuplet → DeleteVoiceElement under one Composite
             // so a single ⌘Z restores everything.
-            if case let .single(.tuplet(tid)) = selection {
+            if case let .single(.tuplet(filteredID)) = selection {
+                guard case let .tuplet(tid) = fullEditingItem(.tuplet(filteredID)) else { return }
                 let veID = VoiceElementID(
                     staff: tid.staff,
                     measureIndex: tid.measureIndex,
@@ -2802,7 +2877,7 @@
                         undoManager: undoManager,
                     )
                     adoptEditedScore(controller.score)
-                    selection = .single(.rest(RestID(
+                    selectFullItem(.rest(RestID(
                         staff: tid.staff,
                         measureIndex: tid.measureIndex,
                         voiceIndex: tid.voiceIndex,
@@ -2817,9 +2892,11 @@
             let target: VoiceElementID
             switch selection {
             case let .single(.note(noteID)):
-                target = VoiceElementID(noteID)
+                guard case let .note(fullID) = fullEditingItem(.note(noteID)) else { return }
+                target = VoiceElementID(fullID)
             case let .single(.rest(restID)):
-                target = VoiceElementID(restID)
+                guard case let .rest(fullID) = fullEditingItem(.rest(restID)) else { return }
+                target = VoiceElementID(fullID)
             case let .single(.element(id)):
                 deleteEngravedElement(id, controller: controller)
                 return
@@ -2841,7 +2918,7 @@
                     voiceIndex: target.voiceIndex,
                     elementIndex: target.elementIndex,
                 )
-                selection = .single(.rest(newRest))
+                selectFullItem(.rest(newRest))
                 errorMessage = "Deleted"
             } catch {
                 errorMessage = exampleErrorDescription(error)
@@ -2849,14 +2926,7 @@
         }
 
         private func deleteEngravedElement(_ id: ScoreElementID, controller: NoteInputController) {
-            let fullScore = controller.score
-            // Match rebuildHorizontalScreenLayout: hiding is read from the pre-transpose preview score.
-            let preview = ScoreTextEntryPreview.compose(
-                committed: fullScore, lyricSession: lyricSession, textSession: textSession,
-            )
-            let hidden = honorAuthoredHiding ? Self.authoredHiddenStaves(of: preview) : []
-            let cursor = fullScore.engineCursorForFilteredTap(.item(.element(id)), hiddenStaves: hidden)
-            guard case let .item(.element(fullID)) = cursor else {
+            guard case let .element(fullID) = fullEditingItem(.element(id)) else {
                 errorMessage = "This element can't be deleted."
                 return
             }
@@ -2901,6 +2971,7 @@
             by semitones: Int,
             controller: NoteInputController,
         ) {
+            guard case let .note(noteID) = fullEditingItem(.note(noteID)) else { return }
             guard let original = controller.score[noteID] else {
                 errorMessage = "Selected note not found in score"
                 return
@@ -2970,7 +3041,7 @@
                     scoreVersion: scoreVersion,
                     selection: selection,
                     voiceColors: exampleVoiceColors,
-                    playbackCursor: playbackEngine.currentCursor,
+                    playbackCursor: displayedPlaybackCursor,
                     isPlaying: playbackEngine.state == .playing,
                     isMarqueeMode: isMarqueeMode,
                     onTap: { loc, doc in
@@ -2996,7 +3067,7 @@
                         pendingHorizontalScroll: $pendingHorizontalScroll,
                         selection: selection,
                         voiceColors: exampleVoiceColors,
-                        playbackCursor: playbackEngine.currentCursor,
+                        playbackCursor: displayedPlaybackCursor,
                         isMarqueeMode: isMarqueeMode,
                         onTap: { loc in
                             handleTap(at: loc, document: doc)
@@ -3010,7 +3081,7 @@
                         onCursorChange: { newCursor, viewportWidth in
                             autoScrollHorizontalMac(
                                 cursor: newCursor, doc: doc,
-                                score: score,
+                                score: screenScore,
                                 isPlaying: playbackEngine.state == .playing,
                                 viewportWidth: viewportWidth,
                                 magnification: magnification,
@@ -3044,6 +3115,7 @@
                                 onError: { error in
                                     errorMessage = exampleErrorDescription(error)
                                 },
+                                displayedAnchor: displayedEditingAnchor,
                             ))
                         }(),
                         inDocumentOverlayKey: {
@@ -3185,7 +3257,7 @@
             // note while continuing to play; selection (single or
             // range) and any in-flight shift gesture are left alone.
             if playbackEngine.state == .playing {
-                if let id = primaryItemID(of: target) {
+                if let item = primaryItemID(of: target), let id = fullEditingItem(item) {
                     playbackEngine.seek(to: .item(id))
                 }
                 return
@@ -3293,7 +3365,7 @@
                 // brief preview playback of just that note. Skip when
                 // shift is held (extending a range) or for non-note
                 // targets (rests, stems on chords without notes).
-                if case let .note(id) = primary, let score {
+                if case let .note(id) = fullEditingItem(primary), let score {
                     playbackEngine.playPreview(
                         noteID: id, in: score,
                     )
@@ -3311,17 +3383,20 @@
             else { return }
             switch target {
             case let .lyric(anchor, verse):
+                guard let anchor = fullEditingAnchor(anchor) else { return }
                 lyricSession.begin(
                     at: anchor, verse: verse,
                     controller: controller, ending: textSession,
                 )
                 syncSelectionToLyricCursor()
             case let .staffText(anchor, style):
+                guard let anchor = fullEditingAnchor(anchor) else { return }
                 textSession.begin(
                     kind: style == .systemText ? .systemText : .staffText,
                     at: anchor, controller: controller, ending: lyricSession,
                 )
             case let .harmony(anchor):
+                guard let anchor = fullEditingAnchor(anchor) else { return }
                 textSession.begin(
                     kind: .chordSymbol, at: anchor,
                     controller: controller, ending: lyricSession,
@@ -3350,7 +3425,7 @@
         private func rehearsalMarkAnchor(
             measureIndex: Int, controller: NoteInputController,
         ) -> VoiceElementID? {
-            let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+            guard let address = editingAddresses?.visibleStaffAddresses.first else { return nil }
             let before = VoiceElementID(
                 staff: address, measureIndex: measureIndex,
                 voiceIndex: 0, elementIndex: -1,
@@ -3560,6 +3635,25 @@
                 textSession: textSession,
             )
             let screenScore = laidOut(preview)
+            let addresses = ScoreEditingAddressMap(
+                score: committed,
+                hiddenStaves: honorAuthoredHiding ? Self.authoredHiddenStaves(of: preview) : [],
+                previewScore: preview,
+            )
+            if renderedTextEntryPreview != nil || textEntryPreviewIdentity != nil,
+               let previous = horizontalEditingAddresses
+            {
+                // Only preview lifecycle changes follow existing EIDs. Ordinary positional edits
+                // retain their command-specific selection policy below and at the call sites.
+                let committedAddresses = ScoreEditingAddressMap(
+                    score: committed, hiddenStaves: previous.hiddenStaves,
+                    previewScore: previous.previewScore ?? previous.score,
+                )
+                selection = Self.translatingSelection(selection) { item in
+                    guard let full = committedAddresses.fullItem(forDisplayed: item) else { return nil }
+                    return addresses.displayedItem(forFull: full)
+                }
+            }
             let hOpts = horizontalOptions
             // Reuse the previously-laid-out total width. The cache rejects
             // the edited measure but retains every unchanged measure, which
@@ -3577,6 +3671,7 @@
             )
             let layoutMs = Date().timeIntervalSince(tLayoutStart) * 1000
             horizontalScreenScore = screenScore
+            horizontalEditingAddresses = addresses
             horizontalDoc = document
             horizontalContentVersion = UUID()
             renderedTextEntryPreview = textEntryPreviewIdentity

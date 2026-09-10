@@ -56,13 +56,8 @@ extension Score {
                 // Bar addresses have no staff field to re-stamp; this is not a deferred remapping.
                 return cursor
             }
-        case .clef:
-            // Deliberately NOT re-addressed — but only because nothing produces a `.clef` cursor today:
-            // `editingHitTest` drops clef hits (no clef editing UI in v1) and the playback engine never
-            // parks on one. The day clef selection becomes real, `.clef` must be re-stamped here exactly
-            // like `.tuplet` above — an un-re-addressed pass-through is what made a tuplet tap name the
-            // wrong staff once a hidden staff sat ahead of it.
-            return cursor
+        case let .clef(anchor):
+            return .item(.clef(anchor.withStaff(full)))
         }
     }
 
@@ -191,10 +186,8 @@ extension Score {
                 // Bar addresses have no staff field to re-stamp; this is not a deferred remapping.
                 return cursor
             }
-        case .clef:
-            // Same deliberate gap as `engineCursorForFilteredTap`'s `.clef` case (see the comment there):
-            // no producer exists, and any future one must re-stamp instead of passing through.
-            return cursor
+        case let .clef(anchor):
+            return .item(.clef(anchor.withStaff(filteredStaff)))
         }
     }
 }
@@ -204,8 +197,7 @@ extension ScoreTextID {
     ///
     /// A rehearsal mark is returned unchanged: it is addressed by bar, carries no staff, and
     /// `ScoreItemID.staff`'s answer for it is the top-staff approximation rather than a stored value, so
-    /// there is nothing to re-stamp. That is not the `.clef` pass-through's deliberate gap — it is the
-    /// absence of a field.
+    /// there is nothing to re-stamp.
     func withStaff(_ staff: StaffAddress) -> ScoreTextID {
         switch self {
         case let .lyric(anchor, verse):
@@ -216,6 +208,15 @@ extension ScoreTextID {
             return .harmony(anchor: anchor.withStaff(staff))
         case .rehearsalMark:
             return self
+        }
+    }
+}
+
+extension ClefAnchor {
+    fileprivate func withStaff(_ staff: StaffAddress) -> ClefAnchor {
+        switch self {
+        case let .explicit(anchor): .explicit(anchor.withStaff(staff))
+        case .staffDefault: .staffDefault(staff)
         }
     }
 }

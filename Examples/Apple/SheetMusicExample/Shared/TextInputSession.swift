@@ -50,15 +50,22 @@ final class TextInputSession {
             at: current,
             text: text.isEmpty ? nil : text,
         )
+        let identity = controller.score.eid(at: current)
         try controller.apply(command, undoManager: undoManager)
-
-        guard advance else { return current }
+        // Harmony insertion/removal shifts its chord's ordinal. Advance from that same chord,
+        // not from the slot that now holds the new harmony or the following chord.
+        guard let identity, let committedAnchor = controller.score.position(of: identity) else {
+            end()
+            return nil
+        }
+        anchor = committedAnchor
+        guard advance else { return committedAnchor }
         anchor = TextInputPlanner.nextAnchor(
-            kind, after: current, in: controller.score,
+            kind, after: committedAnchor, in: controller.score,
         )
         guard anchor != nil else {
             end()
-            return current
+            return committedAnchor
         }
         refill(controller: controller)
         return anchor

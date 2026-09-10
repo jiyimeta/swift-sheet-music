@@ -266,13 +266,22 @@ struct ScoreTextEntryOverlayHost: View {
     let focus: FocusState<Bool>.Binding
     let onApplied: (Score, VoiceElementID?) -> Void
     let onError: (Error) -> Void
+    /// Receives full-preview anchors after ordinal mapping. Hosts inject only their staff filtering.
+    var displayedAnchor: (VoiceElementID) -> VoiceElementID? = { $0 }
 
     var body: some View {
         @Bindable var lyricSession = lyricSession
         @Bindable var textSession = textSession
+        let addresses = ScoreEditingAddressMap(
+            score: controller.score, hiddenStaves: [],
+            previewScore: ScoreTextEntryPreview.compose(
+                committed: controller.score, lyricSession: lyricSession, textSession: textSession,
+            ),
+        )
 
         if let cursor = lyricSession.cursor,
-           let origin = document.lyricEntryOrigin(at: cursor)
+           let location = displayedLocation(cursor.location, using: addresses),
+           let origin = document.lyricEntryOrigin(at: .init(location: location, verse: cursor.verse))
         {
             ScoreTextEntryOverlay(
                 document: document,
@@ -285,9 +294,10 @@ struct ScoreTextEntryOverlayHost: View {
             )
             .id(ScoreTextEntryOverlayIdentity.lyric(cursor))
         } else if let anchor = textSession.anchor,
+                  let location = displayedLocation(anchor, using: addresses),
                   let origin = document.textEntryOrigin(
                       kind: textSession.kind,
-                      at: anchor,
+                      at: location,
                       text: textSession.text,
                   )
         {
@@ -305,6 +315,14 @@ struct ScoreTextEntryOverlayHost: View {
                 anchor: anchor,
             ))
         }
+    }
+
+    private func displayedLocation(
+        _ anchor: VoiceElementID, using addresses: ScoreEditingAddressMap,
+    ) -> VoiceElementID? {
+        guard let previewAnchor = addresses.displayedItem(forFull: .text(.harmony(anchor: anchor)))?.textID?.anchor
+        else { return nil }
+        return displayedAnchor(previewAnchor)
     }
 
     private func submitLyric() {
