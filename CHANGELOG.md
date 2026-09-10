@@ -9,6 +9,41 @@ and this project adheres to
 
 ### Added
 
+- **Ties, slurs, jumps and markers are selectable and tinted on Apple.**
+  Ties and chord-attached slurs keep one identity across split-system
+  segments; standalone slurs name their own voice slot. Tie and slur hits
+  measure distance to the rendered curve's centerline, with a **0.7 sp**
+  tolerance. Jump text and text-family markers use the same text rectangles
+  and 0.25 sp padding as shipped text kinds; glyph-family markers use glyph
+  ink, with no text-rectangle fallback.
+
+  `RemoveTie`, `RemoveSlur`, `RemoveJump` and `RemoveMarker` remove one
+  addressed element and return an inverse that restores its prior values.
+  `ScoreElementID.removalCommand` resolves these four kinds without a score
+  lookup; older engraved-element kinds return nil. `RemoveTie` also clears
+  half-present links, and clearing already-absent links is a no-op.
+  `RemoveSlur` counts only slur entries, including hidden ones, on a chord
+  or rest, or removes a standalone slur slot. `RemoveSpanner` is unchanged
+  and still removes every matching chord slur. Navigation removal affects
+  only the addressed staff; duplicate copies on other staves remain.
+
+  The Mac example supports click-and-Delete through the Core resolver.
+  Selection stays in layout coordinates for tint; element Delete maps its
+  staff addresses back to the full score, uses the existing undo/redo path,
+  and clears selection after success. A stale-address failure leaves the
+  selection in place and displays the error; unsupported kinds get a
+  kind-specific message.
+
+  **Identities are positional.** Removal renumbers later list entries or
+  voice slots, so hosts must drop or re-derive a held selection. Navigation
+  marks can still share an origin: at overlapping ink only the first-emitted
+  mark is point-hittable, an existing engraving defect. Authored colours on
+  these kinds are not rendered, so colour editing for them is not supported
+  yet. The current Android/Web editing paths do not select engraved
+  elements, and these four commands have no `EditIntent` / edit-command wire
+  cases yet. The golden corpus contains no standalone slur; that storage
+  form's coverage comes from unit tests.
+
 - **Twelve engraved elements other than text are now selectable.** A click
   reports, and a selection tints, dynamics, fermatas, breath marks, tempo
   marks, articulations, hairpins, pedals, octave lines, key signatures,
