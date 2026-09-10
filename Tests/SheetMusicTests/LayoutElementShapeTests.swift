@@ -37,12 +37,12 @@ struct LayoutElementShapeTests {
         )) == nil)
         #expect(LayoutElementShape.kind(of: .spannerSegment(
             kind: .slur, fromOrigin: .zero, toOrigin: .zero,
-            continuesLeft: false, continuesRight: false, text: "",
+            continuesLeft: false, continuesRight: false, text: "", anchor: nil,
         )) == nil)
         #expect(LayoutElementShape.kind(of: .spannerSegment(
             kind: .vibrato(.guitarVibrato),
             fromOrigin: .zero, toOrigin: .zero,
-            continuesLeft: false, continuesRight: false, text: "",
+            continuesLeft: false, continuesRight: false, text: "", anchor: nil,
         )) == nil)
     }
 
@@ -157,7 +157,7 @@ struct LayoutElementShapeTests {
     /// carried through nine tasks before it was caught.
     @Test func fermataShapeInkMatchesGlyphMetrics() throws {
         let fermata = LayoutElement.fermata(
-            subtype: "fermataAbove", origin: CGPoint(x: 40, y: 0),
+            subtype: "fermataAbove", origin: CGPoint(x: 40, y: 0), anchor: nil,
         )
         let shape = try #require(LayoutElementShape.shape(
             for: fermata, id: 0, xOffset: 0, metrics: metrics,
@@ -288,7 +288,7 @@ struct LayoutElementAutoplacedShapeTests {
     /// toward the width.
     @Test func tempoRectUsesMixedRunWidths() throws {
         let el = LayoutElement.textMark(
-            kind: .tempo, text: "\u{E1D5} = 120",
+            kind: .tempo(anchor: nil), text: "\u{E1D5} = 120",
             origin: CGPoint(x: 20, y: -14),
         )
         let shape = try #require(LayoutElementShape.shape(
@@ -324,7 +324,7 @@ struct LayoutElementAutoplacedShapeTests {
     /// own origin and collided with the neighbouring staff's text.
     @Test func dynamicRectIsGlyphInkNotTheBravuraEmBox() throws {
         let el = LayoutElement.textMark(
-            kind: .dynamic, text: "mf",
+            kind: .dynamic(anchor: nil), text: "mf",
             origin: CGPoint(x: 10, y: 40),
         )
         let shape = try #require(LayoutElementShape.shape(
@@ -368,7 +368,7 @@ struct LayoutElementAutoplacedShapeTests {
     /// fails the moment one platform's text metrics drift from another's.
     @Test func tempoRectDoesNotInheritTheBravuraEmBox() throws {
         let el = LayoutElement.textMark(
-            kind: .tempo, text: "\u{E1D5} = 120",
+            kind: .tempo(anchor: nil), text: "\u{E1D5} = 120",
             origin: CGPoint(x: 20, y: -14),
         )
         let shape = try #require(LayoutElementShape.shape(
@@ -405,7 +405,7 @@ struct LayoutElementAutoplacedShapeTests {
             kind: .hairpinOpen,
             fromOrigin: CGPoint(x: 10, y: 60),
             toOrigin: CGPoint(x: 100, y: 60),
-            continuesLeft: false, continuesRight: false, text: "",
+            continuesLeft: false, continuesRight: false, text: "", anchor: nil,
         )
         let shape = try #require(LayoutElementShape.shape(
             for: hairpin, id: 0, xOffset: 5, metrics: metrics,

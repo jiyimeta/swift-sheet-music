@@ -153,7 +153,7 @@ public struct LayoutSystem: Sendable, Equatable {
         var rightmostX: CGFloat = -.infinity
         var rightmostSubtype: String?
         for el in last.elements {
-            if case let .barLine(s, p, _) = el, p.x > rightmostX {
+            if case let .barLine(s, p, _, _, _) = el, p.x > rightmostX {
                 rightmostX = p.x
                 rightmostSubtype = s
             }

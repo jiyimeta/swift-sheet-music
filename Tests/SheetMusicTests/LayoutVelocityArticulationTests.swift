@@ -48,7 +48,7 @@
             guard let measure = doc.systems.first?.measures.first
             else { return [] }
             return measure.elements.compactMap { el in
-                if case let .articulation(kind, _, _) = el { return kind }
+                if case let .articulation(kind, _, _, _) = el { return kind }
                 return nil
             }
         }

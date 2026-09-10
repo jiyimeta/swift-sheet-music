@@ -25,6 +25,18 @@ extension ScoreLayerBuilder {
         func shift(_ p: CGPoint) -> CGPoint {
             CGPoint(x: base.x + p.x, y: base.y + p.y)
         }
+        let firstLayerIndex = parent.sublayers?.count ?? 0
+        defer {
+            // Register only this element's newly drawn ink, including every stroke, dot and text run.
+            // The shared identity predicate is also the hit tester's eligibility rule.
+            if let itemID = element.elementItemID {
+                for layer in (parent.sublayers ?? []).dropFirst(firstLayerIndex) {
+                    if let ink = layer as? CAShapeLayer {
+                        context.attach(ink, to: itemID)
+                    }
+                }
+            }
+        }
         switch element {
         case let .clef(raw, p, anchor):
             let layer = drawClef(
@@ -34,19 +46,19 @@ extension ScoreLayerBuilder {
             if let layer, let anchor {
                 context.attach(layer, to: .clef(anchor))
             }
-        case let .keySignature(s, f, clef, naturals, p):
+        case let .keySignature(s, f, clef, naturals, p, _):
             drawKeySignature(
                 sharps: s, flats: f, clef: clef, naturals: naturals,
                 origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .timeSignature(n, d, symbol, p):
+        case let .timeSignature(n, d, symbol, p, _):
             drawTimeSignature(
                 numerator: n, denominator: d, symbol: symbol,
                 origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .barLine(s, p, halfHeight):
+        case let .barLine(s, p, halfHeight, _, _):
             drawBarLine(
                 subtype: s, origin: shift(p), halfHeight: halfHeight,
                 metrics: metrics, height: height, into: parent,
@@ -215,17 +227,17 @@ extension ScoreLayerBuilder {
                 color: beamColor.map(scoreColorToCGColor) ?? inkColor,
                 metrics: metrics, height: height, into: parent,
             )
-        case let .fermata(subtype, p):
+        case let .fermata(subtype, p, _):
             drawFermata(
                 subtype: subtype, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .breath(kind, p):
+        case let .breath(kind, p, _):
             drawBreath(
                 kind: kind, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .articulation(kind, p, isAbove):
+        case let .articulation(kind, p, isAbove, _):
             drawArticulation(
                 kind: kind, isAbove: isAbove,
                 origin: shift(p),
@@ -242,7 +254,7 @@ extension ScoreLayerBuilder {
                 metrics: metrics, height: height, into: parent,
             )
         case let .spannerSegment(
-            kind, from, to, cl, cr, text,
+            kind, from, to, cl, cr, text, _,
         ):
             drawSpanner(
                 kind: kind, from: shift(from), to: shift(to),

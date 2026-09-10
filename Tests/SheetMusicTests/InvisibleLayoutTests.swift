@@ -275,7 +275,7 @@ struct InvisibleLayoutTests { // swiftlint:disable:this type_body_length
         doc.systems.flatMap(\.measures)
             .flatMap { inInvisible ? $0.invisibleElements : $0.elements }
             .filter {
-                if case let .barLine(subtype, _, _) = $0,
+                if case let .barLine(subtype, _, _, _, _) = $0,
                    subtype == "double"
                 {
                     true

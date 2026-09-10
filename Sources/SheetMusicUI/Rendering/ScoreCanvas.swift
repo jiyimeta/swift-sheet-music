@@ -177,18 +177,18 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, rawType: raw,
                 origin: shift(p), metrics: metrics,
             )
-        case let .keySignature(s, f, clef, naturals, p):
+        case let .keySignature(s, f, clef, naturals, p, _):
             KeySignatureRenderer.draw(
                 context: &context, sharps: s, flats: f, clef: clef,
                 naturals: naturals,
                 origin: shift(p), metrics: metrics,
             )
-        case let .timeSignature(n, d, symbol, p):
+        case let .timeSignature(n, d, symbol, p, _):
             TimeSignatureRenderer.draw(
                 context: &context, numerator: n, denominator: d,
                 symbol: symbol, origin: shift(p), metrics: metrics,
             )
-        case let .barLine(s, p, halfHeight):
+        case let .barLine(s, p, halfHeight, _, _):
             BarLineRenderer.draw(
                 context: &context, subtype: s,
                 origin: shift(p), halfHeight: halfHeight,
@@ -268,17 +268,17 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 color: beamColor.map { Color(scoreColor: $0) } ?? .primary,
                 metrics: metrics,
             )
-        case let .fermata(subtype, p):
+        case let .fermata(subtype, p, _):
             FermataRenderer.draw(
                 context: &context, subtype: subtype,
                 origin: shift(p), metrics: metrics,
             )
-        case let .breath(kind, p):
+        case let .breath(kind, p, _):
             BreathRenderer.draw(
                 context: &context, kind: kind,
                 origin: shift(p), metrics: metrics,
             )
-        case let .articulation(kind, p, isAbove):
+        case let .articulation(kind, p, isAbove, _):
             ArticulationRenderer.draw(
                 context: &context, kind: kind,
                 isAbove: isAbove, origin: shift(p),
@@ -301,7 +301,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             to,
             cl,
             cr,
-            text,
+            text, _,
         ):
             SpannerRenderer.draw(
                 context: &context, kind: kind,

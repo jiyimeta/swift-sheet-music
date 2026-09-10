@@ -17,6 +17,7 @@
                     .barLine(
                         subtype: nil, origin: CGPoint(x: barlineX, y: 5),
                         halfHeight: 4,
+                        measureIndex: nil, role: .explicit,
                     ),
                 ],
             )

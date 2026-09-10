@@ -240,6 +240,7 @@ extension LayoutEngine {
                     ? keys[staffIdx]
                     : nil
                 let part = context.score.parts[allStaves[staffIdx].address.partIndex]
+                let isPitchedStaff = !part.instrument.useDrumset && staff.group != "percussion"
                 let drumMap: [Int: Int]? =
                     part.instrument.useDrumset
                         ? part.instrument.drumLineMap
@@ -268,6 +269,7 @@ extension LayoutEngine {
                 )
                 let placementInputs = LayoutCache.PlacementInputs(
                     measure: m,
+                    isPitchedStaff: isPitchedStaff,
                     width: w,
                     metricsSp: metrics.sp,
                     activeClef: clefs[staffIdx],
@@ -311,6 +313,7 @@ extension LayoutEngine {
                         measure: m,
                         staffAddress: allStaves[staffIdx].address,
                         measureIndex: measureIdx,
+                        isPitchedStaff: isPitchedStaff,
                         width: w,
                         metrics: metrics,
                         options: context.options,
@@ -379,13 +382,15 @@ extension LayoutEngine {
                     if !courtesy.keys.isEmpty,
                        let index = synthesizedEndBarLineIndices[staffIdx],
                        let element = perStaff[staffIdx]?[index],
-                       case let .barLine(subtype, origin, halfHeight) = element,
+                       case let .barLine(subtype, origin, halfHeight, measureIndex, role) = element,
                        subtype == nil
                     {
                         perStaff[staffIdx]?[index] = .barLine(
                             subtype: "double",
                             origin: origin,
                             halfHeight: halfHeight,
+                            measureIndex: measureIndex,
+                            role: role,
                         )
                     }
                     perStaff[staffIdx, default: []].append(
@@ -963,6 +968,9 @@ extension LayoutEngine {
                             x: um.contentWidth, y: staffCenterY,
                         ),
                         halfHeight: (barSpan.bottom - barSpan.top) / 2,
+                        // Collapsed-run proxy geometry has no source LayoutElement to propagate.
+                        measureIndex: nil,
+                        role: .trailing,
                     ))
                 }
                 let sourceMeasure = um.staff0Measure
@@ -1256,7 +1264,7 @@ extension LayoutEngine {
         var out: [LayoutMeasure.DynamicExtent] = []
         for element in elements {
             guard case let .textMark(kind, _, origin) = element,
-                  kind == .dynamic,
+                  case .dynamic = kind,
                   let tick = dynamicTick(
                       anchorX: origin.x + metrics.sp,
                       tickColumns: tickColumns,

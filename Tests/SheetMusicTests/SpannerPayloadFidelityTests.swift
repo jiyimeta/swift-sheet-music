@@ -72,7 +72,7 @@
             var out: [Segment] = []
             for system in doc.systems {
                 for el in system.spanners {
-                    guard case let .spannerSegment(kind, from, _, _, _, text) = el
+                    guard case let .spannerSegment(kind, from, _, _, _, text, _) = el
                     else { continue }
                     out.append(Segment(kind: kind, from: from, text: text))
                 }
@@ -187,7 +187,7 @@
                 score: score, options: .init(), availableWidth: 800,
             )
             let kinds = doc.systems.flatMap(\.spanners).compactMap { el in
-                if case let .spannerSegment(kind, _, _, _, _, _) = el {
+                if case let .spannerSegment(kind, _, _, _, _, _, _) = el {
                     return kind
                 }
                 return LayoutElement.SpannerKind?.none

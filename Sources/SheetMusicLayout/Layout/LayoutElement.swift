@@ -57,9 +57,10 @@ public enum LayoutElement: Sendable, Equatable {
     /// on C while a non-zero key was in force — see
     /// `KeySignatureSteps.cancellationNaturals`. In that case `sharps`
     /// and `flats` are both 0 and the naturals are the only glyphs.
+    /// `measureIndex` names an editable declaration; unaddressable keys and restatements pass `nil`.
     case keySignature(
         sharps: Int, flats: Int, clef: NotatedClef,
-        naturals: [Int] = [], origin: CGPoint,
+        naturals: [Int] = [], origin: CGPoint, measureIndex: Int?,
     )
     /// `symbol` decides the SHAPE: `.numeric` is the two numbers
     /// stacked around `origin`, anything else is one glyph centered on
@@ -67,9 +68,11 @@ public enum LayoutElement: Sendable, Equatable {
     /// `denominator` ride along either way — the meter is what they say
     /// even when the page draws a C — so a renderer that has no glyph
     /// for a symbol can still fall back to the numbers.
+    /// `measureIndex` names the bar's meter, including declarations outside its leading run.
+    /// Courtesy announcements and context restatements deliberately pass `nil`.
     case timeSignature(
         numerator: Int, denominator: Int,
-        symbol: TimeSignatureSymbol = .numeric, origin: CGPoint,
+        symbol: TimeSignatureSymbol = .numeric, origin: CGPoint, measureIndex: Int?,
     )
     /// `origin.y` is the vertical center of the barline's stroke — for
     /// a staff with more than one line that is the staff's own center,
@@ -83,7 +86,12 @@ public enum LayoutElement: Sendable, Equatable {
     /// every renderer just strokes `origin.y ± halfHeight`.
     /// C++: `dom/barline.cpp:253-266`,
     /// `BARLINE_SPAN_1LINESTAFF_FROM` / `_TO` (`dom/barline.h:37-38`).
-    case barLine(subtype: String?, origin: CGPoint, halfHeight: CGFloat)
+    /// `role` records the glyph source. `measureIndex` is deliberately `nil` for explicit bars
+    /// outside the command's reach and unaddressed collapsed-run proxy geometry.
+    case barLine(
+        subtype: String?, origin: CGPoint, halfHeight: CGFloat,
+        measureIndex: Int?, role: BarLineRole,
+    )
     /// One ledger-line stroke, fully resolved by `LedgerLinePass`.
     /// Endpoints are in the same coordinate space as the chord the
     /// stroke belongs to, and `thickness` already carries that chord's
@@ -204,7 +212,8 @@ public enum LayoutElement: Sendable, Equatable {
     /// and run structure are computed at layout time so renderers
     /// just walk the runs.
     case harmony(LayoutHarmony)
-    case fermata(subtype: String, origin: CGPoint)
+    /// `anchor` names the chord or rest accepted by `SetFermata`, or explicitly has no command address.
+    case fermata(subtype: String, origin: CGPoint, anchor: VoiceElementID?)
     /// A breath mark or caesura between two chords. `kind` selects the
     /// SMuFL glyph (`BreathGlyph.codepoint(forKind:)`); `origin` is the
     /// glyph anchor (`.center`) in measure-local coordinates. Placement
@@ -214,7 +223,8 @@ public enum LayoutElement: Sendable, Equatable {
     /// `Breath.visible == false`, the element is routed into the
     /// `invisibleElements` overlay (only laid out when
     /// `ScoreViewOptions.showsInvisibleElements` is on).
-    case breath(kind: Breath.Kind, origin: CGPoint)
+    /// `anchor` names the preceding chord accepted by `SetBreath(after:)`, not the next visible chord.
+    case breath(kind: Breath.Kind, origin: CGPoint, anchor: VoiceElementID?)
     /// Per-chord articulation glyph (staccato dot / staccatissimo wedge /
     /// tenuto bar). Emitted from `placeMeasureElements` for each
     /// `ChordArticulation` whose `kind` is in scope; round-trip-only
@@ -222,10 +232,13 @@ public enum LayoutElement: Sendable, Equatable {
     /// `origin` is the SMuFL glyph anchor in measure-local coords;
     /// `isAbove` selects the above-vs-below glyph variant and is also
     /// used by the YBounds pass.
+    /// `anchor` is the owning chord. Duplicate entries of one kind share its identity,
+    /// matching `SetArticulation`, which replaces or removes every entry of that kind.
     case articulation(
         kind: ArticulationKind,
         origin: CGPoint,
         isAbove: Bool,
+        anchor: VoiceElementID?,
     )
     case marker(kind: Marker.Kind, text: String, origin: CGPoint)
     /// Rehearsal letter / number drawn above the top staff at the
@@ -273,6 +286,8 @@ public enum LayoutElement: Sendable, Equatable {
     /// left, with the text free to overflow the pane's white box if
     /// the name is long.
     case staffName(text: String, origin: CGPoint)
+    /// `anchor` names the source spanner slot, shared by every system segment.
+    /// Unsupported identities are explicitly absent; geometry and continuation flags never name a spanner.
     case spannerSegment(
         kind: SpannerKind,
         fromOrigin: CGPoint,
@@ -280,6 +295,7 @@ public enum LayoutElement: Sendable, Equatable {
         continuesLeft: Bool,
         continuesRight: Bool,
         text: String,
+        anchor: VoiceElementID?,
     )
     case tieArc(
         fromOrigin: CGPoint,
@@ -392,8 +408,10 @@ public enum LayoutElement: Sendable, Equatable {
     }
 
     public enum TextMarkKind: Sendable, Equatable {
-        case dynamic
-        case tempo
+        /// The chord with notes accepted by `SetDynamic`, not the marking slot.
+        case dynamic(anchor: VoiceElementID?)
+        /// The timed element accepted by `SetTempo`, or nil when the lane tick has no onset.
+        case tempo(anchor: VoiceElementID?)
         /// Lyric syllable. Carries the author-supplied color
         /// (`<Lyrics><color>`) from `Lyric.elementProperties.color`
         /// and the lyric-array index used as its verse. `anchor`

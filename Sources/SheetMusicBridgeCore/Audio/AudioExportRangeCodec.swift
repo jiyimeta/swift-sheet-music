@@ -53,16 +53,16 @@ package enum AudioExportRangeWire {
         }
     }
 
-    func decoded() -> AudioExportRange {
+    func decoded() throws -> AudioExportRange {
         switch self {
         case .full:
             return .full
         case .currentLoop:
             return .currentLoop
         case let .region(from, to):
-            return .region(from: from.decoded(), to: to.decoded())
+            return try .region(from: from.decoded(), to: to.decoded())
         case let .regionThroughEnd(from, last):
-            return .regionThroughEnd(from: from.decoded(), last: last.decoded())
+            return try .regionThroughEnd(from: from.decoded(), last: last.decoded())
         }
     }
 }

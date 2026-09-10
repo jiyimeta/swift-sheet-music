@@ -185,5 +185,7 @@ private func editHitItem(from item: ScoreItemID, in score: Score) -> EditHitItem
         )
     case .clef, .text:
         return nil
+    case .element:
+        return nil
     }
 }

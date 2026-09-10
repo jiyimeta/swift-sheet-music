@@ -26,6 +26,7 @@ public struct SetLyric: EditCommand {
     /// Melisma length in ticks; `0` for none. Ignored when `text` is `nil`.
     public let ticks: Int
     private let restoredLyrics: [Lyric]?
+    private let destinationVerse: Int?
 
     public init(
         at location: VoiceElementID,
@@ -40,6 +41,7 @@ public struct SetLyric: EditCommand {
         self.syllabic = syllabic
         self.ticks = ticks
         restoredLyrics = nil
+        destinationVerse = nil
     }
 
     private init(restoring lyrics: [Lyric], at location: VoiceElementID, verse: Int) {
@@ -50,6 +52,18 @@ public struct SetLyric: EditCommand {
         syllabic = lyric?.syllabic ?? .single
         ticks = lyric?.ticks ?? 0
         restoredLyrics = lyrics
+        destinationVerse = nil
+    }
+
+    /// The verse move shares this command's padding, trimming, and exact-array inverse.
+    init(moving verse: Int, to destination: Int, at location: VoiceElementID) {
+        self.location = location
+        self.verse = verse
+        text = nil
+        syllabic = .single
+        ticks = 0
+        restoredLyrics = nil
+        destinationVerse = destination
     }
 
     public var affectedLocation: VoiceElementID {
@@ -74,14 +88,28 @@ public struct SetLyric: EditCommand {
             throw Self.refused(.invalidVerse(verse))
         }
 
-        if let text {
+        if let destinationVerse {
+            guard destinationVerse >= 0 else { throw Self.refused(.invalidVerse(destinationVerse)) }
+            guard chord.lyrics.indices.contains(verse), !chord.lyrics[verse].text.isEmpty else {
+                throw Self.refused(.targetNotFound(location))
+            }
+            if destinationVerse != verse {
+                if chord.lyrics.indices.contains(destinationVerse), !chord.lyrics[destinationVerse].text.isEmpty {
+                    throw Self.refused(.occupiedLyricVerse(destinationVerse))
+                }
+                var moved = chord.lyrics[verse]
+                moved.verse = destinationVerse
+                Self.pad(&chord.lyrics, through: destinationVerse)
+                chord.lyrics[verse] = Lyric(text: "", verse: verse)
+                chord.lyrics[destinationVerse] = moved
+                Self.trim(&chord.lyrics)
+            }
+        } else if let text {
             let trimmed = text.trimmingWhitespaceAndNewlines()
             guard !trimmed.isEmpty else {
                 throw Self.refused(.emptyLyricText)
             }
-            while chord.lyrics.count <= verse {
-                chord.lyrics.append(Lyric(text: "", verse: chord.lyrics.count))
-            }
+            Self.pad(&chord.lyrics, through: verse)
             var lyric = chord.lyrics[verse]
             lyric.text = trimmed
             lyric.syllabic = syllabic
@@ -90,13 +118,23 @@ public struct SetLyric: EditCommand {
             chord.lyrics[verse] = lyric
         } else if chord.lyrics.indices.contains(verse) {
             chord.lyrics[verse] = Lyric(text: "", verse: verse)
-            while chord.lyrics.last?.text.isEmpty == true {
-                chord.lyrics.removeLast()
-            }
+            Self.trim(&chord.lyrics)
         }
 
         score[location] = .chord(chord)
         return SetLyric(restoring: previous, at: location, verse: verse)
+    }
+
+    private static func pad(_ lyrics: inout [Lyric], through verse: Int) {
+        while lyrics.count <= verse {
+            lyrics.append(Lyric(text: "", verse: lyrics.count))
+        }
+    }
+
+    private static func trim(_ lyrics: inout [Lyric]) {
+        while lyrics.last?.text.isEmpty == true {
+            lyrics.removeLast()
+        }
     }
 
     /// The lyric array entry at `verse`, including an empty padding entry, or `nil` when none exists.

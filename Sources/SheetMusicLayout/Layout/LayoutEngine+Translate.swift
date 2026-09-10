@@ -16,19 +16,20 @@ extension LayoutEngine {
         switch element {
         case let .clef(t, p, anchor):
             return .clef(rawType: t, origin: shift(p), anchor: anchor)
-        case let .keySignature(s, f, clef, naturals, p):
+        case let .keySignature(s, f, clef, naturals, p, measureIndex):
             return .keySignature(
                 sharps: s, flats: f, clef: clef, naturals: naturals,
-                origin: shift(p),
+                origin: shift(p), measureIndex: measureIndex,
             )
-        case let .timeSignature(n, d, symbol, p):
+        case let .timeSignature(n, d, symbol, p, measureIndex):
             return .timeSignature(
                 numerator: n, denominator: d, symbol: symbol,
-                origin: shift(p),
+                origin: shift(p), measureIndex: measureIndex,
             )
-        case let .barLine(s, p, halfHeight):
+        case let .barLine(s, p, halfHeight, measureIndex, role):
             return .barLine(
                 subtype: s, origin: shift(p), halfHeight: halfHeight,
+                measureIndex: measureIndex, role: role,
             )
         case let .ledgerLine(from, to, thickness):
             return .ledgerLine(
@@ -85,15 +86,16 @@ extension LayoutEngine {
             )
         case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))
-        case let .fermata(s, p):
-            return .fermata(subtype: s, origin: shift(p))
-        case let .breath(kind, p):
-            return .breath(kind: kind, origin: shift(p))
-        case let .articulation(kind, p, isAbove):
+        case let .fermata(s, p, anchor):
+            return .fermata(subtype: s, origin: shift(p), anchor: anchor)
+        case let .breath(kind, p, anchor):
+            return .breath(kind: kind, origin: shift(p), anchor: anchor)
+        case let .articulation(kind, p, isAbove, anchor):
             return .articulation(
                 kind: kind,
                 origin: shift(p),
                 isAbove: isAbove,
+                anchor: anchor,
             )
         case let .measureRepeat(c, p):
             return .measureRepeat(count: c, origin: shift(p))
@@ -251,7 +253,7 @@ extension LayoutEngine {
             // shift onto the system's actual top-staff y.
             return .measureNumber(text: text, origin: shift(p))
         case let .spannerSegment(
-            kind, from, to, continuesLeft, continuesRight, text,
+            kind, from, to, continuesLeft, continuesRight, text, anchor,
         ):
             // Both endpoints share one anchor Y, but shifting them
             // independently is what keeps this correct if a sloped
@@ -263,6 +265,7 @@ extension LayoutEngine {
                 continuesLeft: continuesLeft,
                 continuesRight: continuesRight,
                 text: text,
+                anchor: anchor,
             )
         case .note, .marker, .jump, .staffName, .tieArc:
             return element

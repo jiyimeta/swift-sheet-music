@@ -23,11 +23,9 @@ import java.io.File
  * them with the generated Kotlin codec and re-encoding must reproduce the same bytes; that is the
  * only assertion that says the two languages spell one wire format.
  *
- * Two chains' worth: 87 steps spanning `EditIntent` cases 30…73 (the edit-command parity project's
- * frozen chain) plus 5 steps carrying case 74 (`setLyricSyllables`, the macOS score-text-entry
- * project's chain) — 92 in total, which makes this a far wider sweep of the vocabulary than any
- * hand-written fixture set would be. `standard`'s chain (cases 0…4, 12…13) is deliberately not
- * included: it predates this codec's cases and adds no vocabulary the two above do not already cover.
+ * Three chains cover `EditIntent` cases 30…73 (parity), 74…75 (lyrics), and 76…79 (properties).
+ * `standard` is deliberately not included: it predates this codec's cases and adds no vocabulary
+ * these chains do not already cover. Undo steps have no binary asset and do not count toward a floor.
  */
 class EditIntentCodecTest {
 
@@ -36,7 +34,7 @@ class EditIntentCodecTest {
          * Each chain's committed steps, relative to this module's directory, keyed by its asset
          * directory name — read from the sibling module's `androidTest` assets rather than copied
          * here, so a third copy of these opaque binaries is not a third thing to keep in step with
-         * chains that are either frozen (`parity`) or, for `lyrics`, recorded by the Swift host only.
+         * chains recorded by the Swift host only.
          *
          * The value is the floor `the fixtures are present` checks that chain's directory against.
          * Per-chain rather than one combined floor over `steps().size`: a healthy `parity` directory
@@ -47,6 +45,8 @@ class EditIntentCodecTest {
         val STEP_DIR_FLOORS = mapOf(
             "editReplay-parity" to 80,
             "editReplay-lyrics" to 13,
+            // Eleven scripted steps minus two undos (zero-based indices 5 and 9).
+            "editReplay-properties" to 9,
         )
 
         fun stepsIn(chain: String): List<File> {
@@ -105,7 +105,7 @@ class EditIntentCodecTest {
 
     @Test
     fun `the vocabulary the chains exercise is wide`() {
-        // The parity chain spans EditIntent cases 30…73; the lyrics chain adds cases 74 and 75. If a future
+        // Parity spans cases 30…73, lyrics adds 74/75, and properties adds 76…79. If a future
         // codegen change silently collapsed several cases into one, every assertion above would still
         // pass — the bytes would round trip through whatever single case they all decoded to. Counting
         // distinct decoded case types is what notices.

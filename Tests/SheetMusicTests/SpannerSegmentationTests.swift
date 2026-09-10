@@ -105,12 +105,12 @@
             let measure = system?.measures.first
             // Ottava segment is the only attached spanner.
             let ottavaSegment = system?.spanners.first { el in
-                if case .spannerSegment(.ottava, _, _, _, _, _) = el {
+                if case .spannerSegment(.ottava, _, _, _, _, _, _) = el {
                     return true
                 }
                 return false
             }
-            guard case let .spannerSegment(_, fromOrigin, _, _, _, _) =
+            guard case let .spannerSegment(_, fromOrigin, _, _, _, _, _) =
                 ottavaSegment, let m = measure
             else {
                 Issue.record("expected ottava segment in system")
@@ -178,12 +178,12 @@
                 return
             }
             let ottavaSegment = system.spanners.first { el in
-                if case .spannerSegment(.ottava, _, _, _, _, _) = el {
+                if case .spannerSegment(.ottava, _, _, _, _, _, _) = el {
                     return true
                 }
                 return false
             }
-            guard case let .spannerSegment(_, fromOrigin, _, _, _, _) =
+            guard case let .spannerSegment(_, fromOrigin, _, _, _, _, _) =
                 ottavaSegment
             else {
                 Issue.record("expected ottava segment")

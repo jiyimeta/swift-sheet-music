@@ -41,10 +41,10 @@ package enum ScoreCursorWire {
         }
     }
 
-    func decoded() -> ScoreCursor {
+    func decoded() throws -> ScoreCursor {
         switch self {
         case let .item(wire):
-            return .item(wire.decoded())
+            return try .item(wire.decoded())
         case let .beat(measureIndex, tickInMeasure):
             return .beat(
                 measureIndex: Int(measureIndex),

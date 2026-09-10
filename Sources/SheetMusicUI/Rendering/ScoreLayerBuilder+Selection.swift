@@ -193,7 +193,7 @@ extension ScoreLayerBuilder {
     /// barline was emitted at all.
     private static func trailingBarLineX(of measure: LayoutMeasure) -> CGFloat {
         var localX: CGFloat?
-        for case let .barLine(_, origin, _) in measure.elements {
+        for case let .barLine(_, origin, _, _, _) in measure.elements {
             localX = max(localX ?? origin.x, origin.x)
         }
         return measure.origin.x + (localX ?? measure.width)

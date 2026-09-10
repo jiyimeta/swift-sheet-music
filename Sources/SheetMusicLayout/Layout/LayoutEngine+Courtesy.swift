@@ -300,6 +300,7 @@ extension LayoutEngine {
                     x: contentWidth + courtesy.keyOriginDx,
                     y: staffMidY,
                 ),
+                measureIndex: nil,
             ))
         }
         if let time = courtesy.time {
@@ -312,6 +313,7 @@ extension LayoutEngine {
                     y: staffMidY
                         + metrics.sp * lineGeometry.centerOffsetSp,
                 ),
+                measureIndex: nil,
             ))
         }
         return out

@@ -80,5 +80,10 @@ func primaryItemID(of target: ScoreHitTarget?) -> ScoreItemID? {
         // tap-to-seek jump on a click aimed at a syllable. Same answer the library's own
         // `LayoutDocument.editingHitTest` gives.
         return nil
+    case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
+         .articulation:
+        // An engraved marking is selectable, but seeking to the chord it hangs from would move the
+        // playhead on a click aimed at the marking — the same reasoning as text above.
+        return nil
     }
 }

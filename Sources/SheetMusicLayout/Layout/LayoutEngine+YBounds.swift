@@ -54,13 +54,13 @@ extension LayoutEngine {
     ) -> [CGFloat] {
         switch element {
         case let .clef(_, p, _),
-             let .keySignature(_, _, _, _, p),
-             let .timeSignature(_, _, _, p),
-             let .barLine(_, p, _),
+             let .keySignature(_, _, _, _, p, _),
+             let .timeSignature(_, _, _, p, _),
+             let .barLine(_, p, _, _, _),
              let .textMark(_, _, p),
-             let .fermata(_, p),
-             let .breath(_, p),
-             let .articulation(_, p, _),
+             let .fermata(_, p, _),
+             let .breath(_, p, _),
+             let .articulation(_, p, _, _),
              let .marker(_, _, p),
              let .jump(_, p),
              let .measureRepeat(_, p),
@@ -86,7 +86,7 @@ extension LayoutEngine {
             // bars stack a fraction of sp away and are accounted for
             // by the generic glyphPad in elementYBounds.
             return [from.y, to.y]
-        case let .spannerSegment(kind, from, to, _, _, _):
+        case let .spannerSegment(kind, from, to, _, _, _, _):
             return spannerSegmentYPoints(
                 kind: kind, from: from, to: to, sp: sp,
             )

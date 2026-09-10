@@ -213,7 +213,7 @@
                 var spans: [(top: CGFloat, bottom: CGFloat)] = []
                 for measure in system.measures {
                     for element in measure.elements {
-                        guard case let .barLine(_, origin, halfHeight) = element
+                        guard case let .barLine(_, origin, halfHeight, _, _) = element
                         else { continue }
                         spans.append((
                             origin.y - halfHeight - topLineY,

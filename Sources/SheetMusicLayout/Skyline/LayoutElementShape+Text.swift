@@ -216,7 +216,7 @@ extension LayoutElementShape {
             )]
         case let .lyricsMelisma(from, to), let .lyricHyphen(from, to):
             return [spanRect(from, to, thickness: sp * 0.3)]
-        case let .spannerSegment(spannerKind, from, to, _, _, _):
+        case let .spannerSegment(spannerKind, from, to, _, _, _, _):
             return [spannerRect(
                 kind: spannerKind, from: from, to: to, sp: sp,
             )]

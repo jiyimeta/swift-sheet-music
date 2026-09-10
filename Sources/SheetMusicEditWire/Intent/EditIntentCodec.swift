@@ -109,6 +109,10 @@ import Wirelet
 /// 73 = setChordSymbol(SetChordSymbolIntentWire)
 /// 74 = setLyricSyllables(SetLyricSyllablesIntentWire)
 /// 75 = setTextVisible(SetTextVisibleIntentWire)
+/// 76 = setElementColor(SetElementColorIntentWire), see EditIntentPayloads+Properties.swift
+/// 77 = setElementPlacement(SetElementPlacementIntentWire), see EditIntentPayloads+Properties.swift
+/// 78 = setTextFont(SetTextFontIntentWire), see EditIntentPayloads+TextFont.swift
+/// 79 = setLyricVerse(SetLyricVerseIntentWire), see EditIntentPayloads+TextFont.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -1058,6 +1062,12 @@ public enum EditIntentWire {
     /// Appended for the macOS score-text-entry project (spec 2026-09-07) — index 75. Never renumber anything above
     /// it.
     case setTextVisible(SetTextVisibleIntentWire)
+    /// Appended for selection and editing — index 76. Never renumber anything above it.
+    case setElementColor(SetElementColorIntentWire)
+    /// Appended for selection and editing — index 77. Never renumber anything above it.
+    case setElementPlacement(SetElementPlacementIntentWire)
+    case setTextFont(SetTextFontIntentWire)
+    case setLyricVerse(SetLyricVerseIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1248,6 +1258,14 @@ public enum EditIntentWire {
             self = .setLyricSyllables(SetLyricSyllablesIntentWire(writes: writes))
         case let .setTextVisible(text, visible):
             self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
+        case let .setElementColor(target, color):
+            self = .setElementColor(SetElementColorIntentWire(target: target, color: color))
+        case let .setElementPlacement(target, placement):
+            self = .setElementPlacement(SetElementPlacementIntentWire(target: target, placement: placement))
+        case let .setTextFont(text, patch):
+            self = .setTextFont(SetTextFontIntentWire(text: text, patch: patch))
+        case let .setLyricVerse(text, destination):
+            self = .setLyricVerse(SetLyricVerseIntentWire(text: text, toVerse: destination))
         }
     }
 
@@ -1496,6 +1514,18 @@ public enum EditIntentWire {
         case let .setTextVisible(wire):
             let decoded = wire.decoded()
             return .setTextVisible(text: decoded.text, visible: decoded.visible)
+        case let .setElementColor(wire):
+            let decoded = try wire.decoded()
+            return .setElementColor(target: decoded.target, color: decoded.color)
+        case let .setElementPlacement(wire):
+            let decoded = try wire.decoded()
+            return .setElementPlacement(target: decoded.target, placement: decoded.placement)
+        case let .setTextFont(wire):
+            let decoded = try wire.decoded()
+            return .setTextFont(text: decoded.text, patch: decoded.patch)
+        case let .setLyricVerse(wire):
+            let decoded = try wire.decoded()
+            return .setLyricVerse(text: decoded.text, toVerse: decoded.toVerse)
         }
     }
 }

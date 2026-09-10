@@ -168,6 +168,7 @@ extension LayoutEngine {
                     continuesLeft: clip.continuesLeft,
                     continuesRight: clip.continuesRight,
                     text: layoutLabel(anchor: anchor),
+                    anchor: anchor.selectionAnchor,
                 ))
         }
     }
@@ -256,7 +257,7 @@ extension LayoutEngine {
                 for el in els {
                     guard case let .spannerSegment(
                         kind, from, to, continuesLeft, continuesRight,
-                        text,
+                        text, anchor,
                     ) = el else {
                         kept.append(el)
                         continue
@@ -272,6 +273,7 @@ extension LayoutEngine {
                         continuesLeft: continuesLeft,
                         continuesRight: continuesRight,
                         text: text,
+                        anchor: anchor,
                     ))
                 }
                 untranslated[idx].perStaffElements[staffIdx] = kept

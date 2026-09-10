@@ -35,7 +35,7 @@ struct SpannerSegmentPlumbingTests {
             toOrigin: CGPoint(x: 90, y: y),
             continuesLeft: false,
             continuesRight: true,
-            text: "8",
+            text: "8", anchor: nil,
         )
     }
 
@@ -45,7 +45,7 @@ struct SpannerSegmentPlumbingTests {
             element: Self.segment(y: 40), dy: 7,
         )
         guard case let .spannerSegment(
-            kind, from, to, continuesLeft, continuesRight, text,
+            kind, from, to, continuesLeft, continuesRight, text, _,
         ) = moved else {
             Issue.record("expected a spannerSegment, got \(moved)")
             return

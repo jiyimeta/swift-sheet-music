@@ -20,7 +20,7 @@ public struct ChordArticulation: Sendable, Equatable {
         self.anchor = anchor
     }
 
-    public enum Kind: Sendable, Equatable {
+    public enum Kind: Sendable, Hashable {
         case staccato
         case staccatissimo
         case tenuto

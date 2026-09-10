@@ -50,7 +50,7 @@ struct VibratoAutoplaceTests {
     /// Find the vibrato spannerSegment in a system.
     private static func vibratoY(in system: LayoutSystem) -> CGFloat? {
         for el in system.spanners {
-            if case let .spannerSegment(.vibrato, fromOrigin, _, _, _, _) = el {
+            if case let .spannerSegment(.vibrato, fromOrigin, _, _, _, _, _) = el {
                 return fromOrigin.y
             }
         }

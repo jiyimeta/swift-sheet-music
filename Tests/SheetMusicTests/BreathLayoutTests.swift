@@ -84,7 +84,7 @@ struct BreathLayoutTests {
             for measure in system.measures {
                 for el in measure.elements {
                     switch el {
-                    case let .breath(kind, origin):
+                    case let .breath(kind, origin, _):
                         visibleBreaths.append((kind, origin))
                     case let .chord(_, _, _, stemOrigin, _, _, _, _, _, _, _):
                         chordXs.append(stemOrigin.x)
@@ -93,7 +93,7 @@ struct BreathLayoutTests {
                     }
                 }
                 for el in measure.invisibleElements {
-                    if case let .breath(kind, origin) = el {
+                    if case let .breath(kind, origin, _) = el {
                         invisibleBreaths.append((kind, origin))
                     }
                 }

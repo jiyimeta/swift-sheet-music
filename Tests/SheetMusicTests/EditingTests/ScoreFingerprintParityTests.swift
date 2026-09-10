@@ -143,8 +143,10 @@ struct ScoreFingerprintParityTests {
         #expect(score.stableFingerprint == before)
     }
 
-    @Test("element placement stays out of the fingerprint")
+    @Test("element placement moves the fingerprint, and clearing it moves it back")
     func elementPlacementIsDisplayTrivia() {
+        // Inverted in selection-and-editing Phase 0 (2026-09-10): placement is editable state,
+        // so treating it as display trivia would let a replay mirror pass after a failed write.
         let plain = EditingFixtures.chordAtIndex1()
         var placed = plain
         guard case var .chord(chord) = placed[Self.slot] else {
@@ -153,7 +155,52 @@ struct ScoreFingerprintParityTests {
         }
         chord.elementProperties.placement = Placement.above
         placed[Self.slot] = .chord(chord)
+        let above = placed.stableFingerprint
+        #expect(above != plain.stableFingerprint)
+        chord.elementProperties.placement = Placement.below
+        placed[Self.slot] = .chord(chord)
+        #expect(placed.stableFingerprint != plain.stableFingerprint)
+        #expect(placed.stableFingerprint != above)
+        chord.elementProperties.placement = nil
+        placed[Self.slot] = .chord(chord)
         #expect(placed.stableFingerprint == plain.stableFingerprint)
+    }
+
+    @Test("harmony color moves the fingerprint, and clearing it moves it back")
+    func harmonyColorIsCovered() {
+        var score = EditingFixtures.fourQuarterRests()
+        var harmony = Harmony(name: "C")
+        score[Self.slot] = .harmony(harmony)
+        let before = score.stableFingerprint
+        var seen: Set<Int64> = [before]
+        for color in [
+            ScoreColor(red: 0, green: 0, blue: 0, alpha: 0),
+            ScoreColor(red: 1, green: 0, blue: 0, alpha: 0),
+            ScoreColor(red: 0, green: 1, blue: 0, alpha: 0),
+            ScoreColor(red: 0, green: 0, blue: 1, alpha: 0),
+            ScoreColor(red: 0, green: 0, blue: 0, alpha: 1),
+        ] {
+            harmony.color = color
+            score[Self.slot] = .harmony(harmony)
+            #expect(seen.insert(score.stableFingerprint).inserted, "presence and every RGBA channel must count")
+        }
+        harmony.color = nil
+        score[Self.slot] = .harmony(harmony)
+        #expect(score.stableFingerprint == before)
+    }
+
+    @Test("placement alone reaches an otherwise default fret diagram")
+    func defaultFretDiagramPlacementIsCovered() {
+        var score = EditingFixtures.fourQuarterRests()
+        var diagram = FretDiagram()
+        score[Self.slot] = .fretDiagram(diagram)
+        let before = score.stableFingerprint
+        diagram.elementProperties.placement = .above
+        score[Self.slot] = .fretDiagram(diagram)
+        #expect(score.stableFingerprint != before)
+        diagram.elementProperties.placement = nil
+        score[Self.slot] = .fretDiagram(diagram)
+        #expect(score.stableFingerprint == before)
     }
 
     /// Every kind `SetTextVisible` (intent 75) can hide moves the fingerprint, and showing it again moves it

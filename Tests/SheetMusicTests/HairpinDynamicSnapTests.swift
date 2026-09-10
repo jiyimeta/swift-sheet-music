@@ -76,7 +76,7 @@
             _ system: LayoutSystem,
         ) -> (from: CGFloat, to: CGFloat)? {
             for element in system.spanners {
-                if case let .spannerSegment(_, from, to, _, _, _) = element {
+                if case let .spannerSegment(_, from, to, _, _, _, _) = element {
                     return (from.x, to.x)
                 }
             }

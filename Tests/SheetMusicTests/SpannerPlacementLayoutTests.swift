@@ -61,7 +61,7 @@
             for system in doc.systems {
                 let staffTop = system.staffOrigins.first?.y ?? 0
                 for el in system.spanners {
-                    guard case let .spannerSegment(kind, from, _, _, _, _) = el
+                    guard case let .spannerSegment(kind, from, _, _, _, _, _) = el
                     else { continue }
                     return (kind, from.y > staffTop + doc.metrics.staffHeight)
                 }

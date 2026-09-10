@@ -1,0 +1,60 @@
+{
+  "fingerprints" : [
+    "-4059957878035358318",
+    "4688663597897805570",
+    "-9073526482598602808",
+    "-4019732337478546133",
+    "-4945787845951108204",
+    "-5367002690657294704",
+    "-4945787845951108204",
+    "-5367002690657294704",
+    "6896807649686055273",
+    "-2837842629013091225",
+    "6896807649686055273",
+    "-2837842629013091225"
+  ],
+  "steps" : [
+    {
+      "base64" : "IEoKHQobGgoMCgQIABAAEAAYACACEAAYASICbGEoADAA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "KEwKJQoWAAoTAAoQCgwKBAgAEAAQABgAIAIQABABGgkIIhBEGGYgiAE=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "JkwKIwoRAQoOCgQIABAAEAAYACACKAAQARoMCKoBEMwBGO4BIJAC",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "P04KPAoTAAoQCgwKBAgAEAAQABgAIAIQABACGgVFZHdpbiACKQAAAAAAAChAMAI4AkAASABQAFkAAAAAAAAAAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "QE4KPQoTAAoQCgwKBAgAEAAQABgAIAIQABACGgZMZWxhbmQgASkAAAAAAAAAADAAOABAAEgAUABZAAAAAAAAAAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "QE4KPQoTAAoQCgwKBAgAEAAQABgAIAIQABACGgZMZWxhbmQgASkAAAAAAAAAADAAOABAAEgAUABZAAAAAAAAAAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "Gk8KFwoTAAoQCgwKBAgAEAAQABgAIAIQABAE",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "H00KHAoWAAoTAAoQCgwKBAgAEAAQABgAIAIQBBABGAE=",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "H00KHAoWAAoTAAoQCgwKBAgAEAAQABgAIAIQBBABGAE=",
+      "op" : "intentBytes"
+    }
+  ]
+}

@@ -73,7 +73,7 @@ import Testing
             _ m: LayoutMeasure, sp: CGFloat,
         ) throws -> (left: CGFloat, right: CGFloat) {
             for element in m.elements {
-                guard case let .keySignature(sharps, flats, _, naturals, origin)
+                guard case let .keySignature(sharps, flats, _, naturals, origin, _)
                     = element else { continue }
                 let count = naturals.count + sharps + flats
                 guard count > 0 else { continue }
@@ -89,7 +89,7 @@ import Testing
             _ m: LayoutMeasure, sp: CGFloat,
         ) throws -> (left: CGFloat, right: CGFloat) {
             for element in m.elements {
-                guard case let .timeSignature(numerator, denominator, _, origin)
+                guard case let .timeSignature(numerator, denominator, _, origin, _)
                     = element else { continue }
                 let digits = max(
                     String(numerator).count, String(denominator).count,
