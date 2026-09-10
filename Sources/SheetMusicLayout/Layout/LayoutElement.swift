@@ -240,7 +240,10 @@ public enum LayoutElement: Sendable, Equatable {
         isAbove: Bool,
         anchor: VoiceElementID?,
     )
-    case marker(kind: Marker.Kind, text: String, origin: CGPoint)
+    /// Navigation owned by the first drawn staff's measure list, in the input score's coordinates.
+    /// Same-origin marks retain distinct identities. At overlapping ink, only the first is
+    /// point-hittable until engraving separates them; the hit tester visits storage order.
+    case marker(kind: Marker.Kind, text: String, origin: CGPoint, identity: ScoreElementID? = nil)
     /// Rehearsal letter / number drawn above the top staff at the
     /// start of its containing measure. `frame` controls whether
     /// the text is boxed, circled, or unframed.
@@ -262,7 +265,10 @@ public enum LayoutElement: Sendable, Equatable {
         color: ScoreColor?,
         measureIndex: Int,
     )
-    case jump(text: String, origin: CGPoint)
+    /// Navigation owned by the first drawn staff's measure list, in the input score's coordinates.
+    /// Same-origin jumps retain distinct identities. At overlapping ink, only the first is
+    /// point-hittable until engraving separates them; the hit tester visits storage order.
+    case jump(text: String, origin: CGPoint, identity: ScoreElementID? = nil)
     case measureRepeat(count: Int, origin: CGPoint)
     /// Multi-measure rest H-bar with a count printed above. Replaces
     /// the `count` consecutive rest measures starting at this layout

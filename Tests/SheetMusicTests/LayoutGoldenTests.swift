@@ -148,8 +148,14 @@
         /// left `nil`. The corpus holds no standalone slur, so that
         /// storage form rests on `LayoutSpannerIdentityTests` alone. The
         /// sample line again matched the one derived by hand.
+        ///
+        /// **Re-recorded when jumps and markers gained identity.** 8 of
+        /// 3890 lines changed — 4 `mk marker(` and 4 `jp jump(` lines —
+        /// each only by an appended `identity:` naming the drawn staff,
+        /// the measure and the list index; no other line moved. Both
+        /// sample lines matched the ones derived by hand before the run.
         private static let expectedDigestSHA256 =
-            "9348885316010f5f39e3a93876d8684d132d5d71d93567cab5c5419e46780fe0"
+            "364bcd9eb6259684505776d925e3efde6f8adbdd5ab41e2b4502cce12d9dc14e"
 
         @Test("write digest")
         func writeDigest() throws {

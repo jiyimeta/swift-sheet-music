@@ -302,7 +302,7 @@ extension ScoreLayerBuilder {
                 metrics: metrics, height: height,
                 context: &context, into: parent,
             )
-        case let .marker(kind, text, p):
+        case let .marker(kind, text, p, _):
             drawMarker(
                 kind: kind, text: text, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
@@ -319,7 +319,7 @@ extension ScoreLayerBuilder {
             ) {
                 attachText(element, layer, context: &context)
             }
-        case let .jump(text, p):
+        case let .jump(text, p, _):
             if !text.isEmpty,
                let layer = textLayer(
                    text: text, at: shift(p),

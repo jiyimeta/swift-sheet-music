@@ -582,7 +582,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .marker(kind, text, origin):
+        case let .marker(kind, text, origin, _):
             switch MarkerGlyph.variant(for: kind, text: text) {
             case let .glyph(codepoint):
                 emitCenterAnchoredGlyph(
@@ -613,7 +613,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .jump(text, origin):
+        case let .jump(text, origin, _):
             encodeNotationText(
                 text: text, role: .jump,
                 originX: mox + Double(origin.x),

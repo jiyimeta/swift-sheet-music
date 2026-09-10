@@ -357,7 +357,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 isAbove: above,
                 metrics: metrics,
             )
-        case let .marker(kind, text, p):
+        case let .marker(kind, text, p, _):
             MarkerRenderer.draw(
                 context: &context, kind: kind, text: text,
                 origin: shift(p), metrics: metrics,
@@ -368,7 +368,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 origin: shift(p), frame: frame, color: color,
                 metrics: metrics,
             )
-        case let .jump(text, p):
+        case let .jump(text, p, _):
             JumpRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,

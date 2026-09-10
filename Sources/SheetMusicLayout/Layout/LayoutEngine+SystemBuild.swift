@@ -1090,7 +1090,7 @@ extension LayoutEngine {
             // staff. A piano grand staff repeats the same marker
             // on both staves in MSCX; we draw it once above the
             // top staff to match engraving convention.
-            if let m = um.staff0Measure {
+            if let m = um.staff0Measure, let sourceStaff = allStaves.first?.address {
                 let staffTopY = staffOrigins[0].y
                 // Jump text hangs 1 sp below staff 0. It has to clear
                 // the staff's INK, and noteheads keep occupying the
@@ -1103,7 +1103,7 @@ extension LayoutEngine {
                 let staffBottomY = staffTopY + max(
                     staffHeights.first ?? 0, metrics.staffHeight,
                 )
-                for marker in m.markers {
+                for (index, marker) in m.markers.enumerated() {
                     let labelText = marker.text.isEmpty
                         ? marker.label : marker.text
                     markers.append(.marker(
@@ -1112,15 +1112,17 @@ extension LayoutEngine {
                         origin: CGPoint(
                             x: 4, y: staffTopY - metrics.sp,
                         ),
+                        identity: .marker(staff: sourceStaff, measureIndex: measureIdx, index: index),
                     ))
                 }
-                for jump in m.jumps {
+                for (index, jump) in m.jumps.enumerated() {
                     jumps.append(.jump(
                         text: jump.text,
                         origin: CGPoint(
                             x: w - metrics.sp * 4,
                             y: staffBottomY + metrics.sp,
                         ),
+                        identity: .jump(staff: sourceStaff, measureIndex: measureIdx, index: index),
                     ))
                 }
             }
