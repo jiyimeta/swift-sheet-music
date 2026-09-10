@@ -25,13 +25,13 @@ public struct SetHairpin: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let template = Spanner(
             kind: .hairpin, rawType: Spanner.Kind.hairpin.rawValue, hairpin: .init(subtype: subtype),
         )
         return try SpannerPlacement.add(
             template, over: range, in: score, operation: String(describing: Self.self),
-        ).apply(to: &score)
+        ).apply(to: &score, ids: &ids)
     }
 }
 
@@ -48,11 +48,11 @@ public struct SetPedal: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let template = Spanner(kind: .pedal, rawType: Spanner.Kind.pedal.rawValue)
         return try SpannerPlacement.add(
             template, over: range, in: score, operation: String(describing: Self.self),
-        ).apply(to: &score)
+        ).apply(to: &score, ids: &ids)
     }
 }
 
@@ -71,13 +71,13 @@ public struct SetOttava: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let template = Spanner(
             kind: .ottava, rawType: Spanner.Kind.ottava.rawValue, ottava: .init(subtype: subtype),
         )
         return try SpannerPlacement.add(
             template, over: range, in: score, operation: String(describing: Self.self),
-        ).apply(to: &score)
+        ).apply(to: &score, ids: &ids)
     }
 }
 
@@ -101,7 +101,7 @@ public struct SetTextLine: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let trimmed = text?.trimmingWhitespaceAndNewlines()
         let template = Spanner(
             kind: .textLine, rawType: Spanner.Kind.textLine.rawValue,
@@ -109,7 +109,7 @@ public struct SetTextLine: EditCommand {
         )
         return try SpannerPlacement.add(
             template, over: range, in: score, operation: String(describing: Self.self),
-        ).apply(to: &score)
+        ).apply(to: &score, ids: &ids)
     }
 }
 
@@ -128,13 +128,13 @@ public struct SetTrill: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let template = Spanner(
             kind: .trill, rawType: Spanner.Kind.trill.rawValue, trill: .init(type: type),
         )
         return try SpannerPlacement.add(
             template, over: range, in: score, operation: String(describing: Self.self),
-        ).apply(to: &score)
+        ).apply(to: &score, ids: &ids)
     }
 }
 
@@ -153,13 +153,13 @@ public struct SetVibrato: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let template = Spanner(
             kind: .vibrato, rawType: Spanner.Kind.vibrato.rawValue, vibrato: .init(type: type),
         )
         return try SpannerPlacement.add(
             template, over: range, in: score, operation: String(describing: Self.self),
-        ).apply(to: &score)
+        ).apply(to: &score, ids: &ids)
     }
 }
 
@@ -176,11 +176,11 @@ public struct SetPalmMute: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let template = Spanner(kind: .palmMute, rawType: Spanner.Kind.palmMute.rawValue)
         return try SpannerPlacement.add(
             template, over: range, in: score, operation: String(describing: Self.self),
-        ).apply(to: &score)
+        ).apply(to: &score, ids: &ids)
     }
 }
 
@@ -197,10 +197,10 @@ public struct SetLetRing: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let template = Spanner(kind: .letRing, rawType: Spanner.Kind.letRing.rawValue)
         return try SpannerPlacement.add(
             template, over: range, in: score, operation: String(describing: Self.self),
-        ).apply(to: &score)
+        ).apply(to: &score, ids: &ids)
     }
 }

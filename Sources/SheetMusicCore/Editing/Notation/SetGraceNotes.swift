@@ -21,11 +21,26 @@ public struct SetGraceNotes: EditCommand {
     public let location: VoiceElementID
     public let before: [GraceChord]
     public let after: [GraceChord]
+    private let restoration: Snapshot?
+
+    private struct Snapshot: Sendable {
+        let before: IdentifiedArray<GraceChord>
+        let after: IdentifiedArray<GraceChord>
+    }
 
     public init(at location: VoiceElementID, before: [GraceChord], after: [GraceChord]) {
         self.location = location
         self.before = before
         self.after = after
+        restoration = nil
+    }
+
+    /// Undo and redo restore captured slots verbatim, never re-match their values.
+    private init(at location: VoiceElementID, restoring chord: Chord) {
+        self.location = location
+        before = chord.graceNotesBefore.values
+        after = chord.graceNotesAfter.values
+        restoration = Snapshot(before: chord.graceNotesBefore, after: chord.graceNotesAfter)
     }
 
     public var affectedLocation: VoiceElementID {
@@ -35,23 +50,40 @@ public struct SetGraceNotes: EditCommand {
     /// The chord's two grace lists, or `nil` when `location` names no chord — what the planner compares against.
     static func current(at location: VoiceElementID, in score: Score) -> (before: [GraceChord], after: [GraceChord])? {
         guard case let .chord(chord)? = score[location], !chord.notes.isEmpty else { return nil }
-        return (before: chord.graceNotesBefore, after: chord.graceNotesAfter)
+        return (before: chord.graceNotesBefore.values, after: chord.graceNotesAfter.values)
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let element = score[location] else {
             throw Self.refused(.targetNotFound(location))
         }
         guard case var .chord(chord) = element, !chord.notes.isEmpty else {
             throw Self.refused(.wrongElementKind(at: location, expected: .chord))
         }
-        let inverse = SetGraceNotes(
-            at: location, before: chord.graceNotesBefore, after: chord.graceNotesAfter,
-        )
-        chord.graceNotesBefore = before
-        chord.graceNotesAfter = after
+        let inverse = SetGraceNotes(at: location, restoring: chord)
+        if let restoration {
+            chord.graceNotesBefore = restoration.before
+            chord.graceNotesAfter = restoration.after
+        } else {
+            chord.graceNotesBefore = Self.match(before, against: chord.graceNotesBefore, using: &ids)
+            chord.graceNotesAfter = Self.match(after, against: chord.graceNotesAfter, using: &ids)
+        }
         score[location] = .chord(chord)
         return inverse
+    }
+
+    /// First unused equal value wins; duplicate values consume distinct current slots in order.
+    private static func match(
+        _ wanted: [GraceChord], against current: IdentifiedArray<GraceChord>, using ids: inout EIDAllocator,
+    ) -> IdentifiedArray<GraceChord> {
+        var used: Set<Int> = []
+        return IdentifiedArray(wanted.map { grace in
+            if let index = current.indices.first(where: { !used.contains($0) && current[$0] == grace }) {
+                used.insert(index)
+                return (current.eid(at: index), grace)
+            }
+            return (ids.next(), grace)
+        })
     }
 }

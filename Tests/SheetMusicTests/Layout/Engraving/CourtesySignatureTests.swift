@@ -85,7 +85,7 @@ import Testing
         ) -> Score {
             Score(
                 division: 480,
-                parts: clefTypes.enumerated().map { idx, clefType in
+                parts: IdentifiedArray(clefTypes.enumerated().map { idx, clefType in
                     Part(
                         id: "P\(idx)",
                         instrument: Instrument(id: "voice\(idx)"),
@@ -98,7 +98,7 @@ import Testing
                             clefType: clefType,
                         )],
                     )
-                },
+                }),
             )
         }
 

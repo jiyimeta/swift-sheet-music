@@ -48,7 +48,7 @@
             ]
             let score = Score(
                 division: 480, parts: [part],
-                systemMeasures: systemMeasures,
+                systemMeasures: IdentifiedArray(systemMeasures),
             )
             let opts = ScoreViewOptions(
                 staffSize: 28, systemGap: 40, wrapToViewWidth: false,

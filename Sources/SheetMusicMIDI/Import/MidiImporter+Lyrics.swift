@@ -54,7 +54,7 @@ extension MidiImporter {
             if !chord.notes.isEmpty, let lyrics = lyricsByTick[cursor] {
                 var updated = chord
                 updated.lyrics = lyrics
-                voice.elements[elementIndex] = .chord(updated)
+                voice.elements.updateValue(at: elementIndex) { $0 = .chord(updated) }
                 changed = true
             }
             cursor += chord.duration

@@ -52,7 +52,7 @@ public struct SetTimeSignature: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         // One place states the range, for the same reason `SetKeySignature` does: the answer is the same whether
         // the command is reached through an intent or built directly.
         guard measureIndex >= 0, measureIndex < MeasureStructure.measureCount(of: score), !score.parts.isEmpty
@@ -72,7 +72,7 @@ public struct SetTimeSignature: EditCommand {
         return try TimeSignatureRegion.rebar(
             &score, from: measureIndex,
             to: TimeSignature(numerator: numerator, denominator: denominator, symbol: symbol),
-            declaringAtHead: true,
+            declaringAtHead: true, ids: &ids,
         )
     }
 }
@@ -107,7 +107,7 @@ public struct RemoveTimeSignature: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard measureIndex >= 0, measureIndex < MeasureStructure.measureCount(of: score), !score.parts.isEmpty
         else { throw Self.refused(.targetNotFound(affectedLocation)) }
         guard measureIndex > 0 else { throw Self.refused(.cannotRemoveInitialSignature) }
@@ -117,7 +117,7 @@ public struct RemoveTimeSignature: EditCommand {
         return try TimeSignatureRegion.rebar(
             &score, from: measureIndex,
             to: TimeSignatureRegion.signature(inForceBefore: measureIndex, in: score),
-            declaringAtHead: false,
+            declaringAtHead: false, ids: &ids,
         )
     }
 }
@@ -144,14 +144,14 @@ struct RestoreTimeSignatureRegion: EditCommand {
     }
 
     @discardableResult
-    func apply(to score: inout Score) throws -> any EditCommand {
+    func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard range.lowerBound >= 0, range.upperBound <= MeasureStructure.measureCount(of: score),
               !score.parts.isEmpty
         else { throw Self.refused(.targetNotFound(affectedLocation)) }
 
-        let previousColumns = TimeSignatureRegion.capturedColumns(of: score, over: range)
+        let previousColumns = TimeSignatureRegion.capturedColumns(of: score, over: range, ids: &ids)
         let previousEndpoints = TimeSignatureRegion.currentEndpoints(for: spannerEndpoints, in: score)
-        TimeSignatureRegion.splice(columns, into: &score, replacing: range)
+        TimeSignatureRegion.splice(columns, into: &score, replacing: range, ids: &ids)
         TimeSignatureRegion.writeEndpoints(spannerEndpoints, into: &score)
         return RestoreTimeSignatureRegion(
             range: range.lowerBound ..< range.lowerBound + columns.count,
@@ -172,6 +172,7 @@ extension TimeSignatureRegion {
     /// the score exactly as it was.
     static func rebar(
         _ score: inout Score, from measureIndex: Int, to signature: TimeSignature, declaringAtHead: Bool,
+        ids: inout EIDAllocator,
     ) throws -> RestoreTimeSignatureRegion {
         let end = nextExplicitChange(after: measureIndex, in: score)
             ?? MeasureStructure.measureCount(of: score)
@@ -181,23 +182,23 @@ extension TimeSignatureRegion {
             region: region, in: score,
             numerator: signature.numerator, denominator: signature.denominator,
             symbol: signature.symbol,
-            emitsLeadingSignature: declaringAtHead && !headIsIrregular,
+            emitsLeadingSignature: declaringAtHead && !headIsIrregular, ids: &ids,
         ).columns
         if headIsIrregular, !columns.isEmpty {
             if declaringAtHead {
-                declare(signature, in: &columns[0])
+                declare(signature, in: &columns[0], ids: &ids)
             } else {
                 removeSignatures(from: &columns[0])
             }
         }
 
-        let previousColumns = capturedColumns(of: score, over: region)
+        let previousColumns = capturedColumns(of: score, over: region, ids: &ids)
         // Rewrites the inside-anchored spanners in `columns` and hands back the outside-anchored ones, whose
         // addresses only become writable once the splice has happened.
         let endpoints = restatingSpannerEndpoints(
             &columns, region: region, signature: signature, in: score,
         )
-        splice(columns, into: &score, replacing: region)
+        splice(columns, into: &score, replacing: region, ids: &ids)
         writeEndpoints(endpoints.map(\.restated), into: &score)
         return RestoreTimeSignatureRegion(
             range: measureIndex ..< measureIndex + columns.count,

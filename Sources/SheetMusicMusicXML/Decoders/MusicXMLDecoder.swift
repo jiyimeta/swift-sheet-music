@@ -43,13 +43,16 @@ extension Score {
         // Hard-code division = 480 ticks per quarter, matching MuseScore's default
         // and the `*_ref.mscx` fixtures we semantic-compare against. MusicXML's
         // own `<divisions>` is part-local and would vary per fixture.
-        return Score(
+        var score = Score(
             division: 480,
-            parts: parts,
-            systemMeasures: systemMeasures,
+            parts: IdentifiedArray(parts),
+            systemMeasures: IdentifiedArray(systemMeasures),
             metaTags: metaTags,
             source: .musicXML,
         )
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        return score
     }
 
     /// MusicXML carries metadata in `<work>`, `<identification>`, and `<credit>`.
@@ -136,25 +139,25 @@ extension Score {
         let measureCount = perStaffSystemElements
             .map(\.perMeasure.count)
             .max() ?? 0
-        var systemMeasures = Array(
-            repeating: SystemMeasure(),
+        var laneElements = Array(
+            repeating: [PositionedSystemElement](),
             count: measureCount,
         )
         for entry in perStaffSystemElements {
             for (measureIndex, elements) in entry.perMeasure.enumerated() {
-                guard measureIndex < systemMeasures.count else { continue }
+                guard measureIndex < laneElements.count else { continue }
                 for var element in elements {
                     element.originalStaff = entry.address
-                    systemMeasures[measureIndex].elements.append(element)
+                    laneElements[measureIndex].append(element)
                 }
             }
         }
-        for index in systemMeasures.indices {
-            systemMeasures[index].elements.sort {
+        for index in laneElements.indices {
+            laneElements[index].sort {
                 $0.position < $1.position
             }
         }
-        return (parts: parts, systemMeasures: systemMeasures)
+        return (parts: parts, systemMeasures: laneElements.map { SystemMeasure(elements: $0) })
     }
 
     /// Decode a single top-level `<part>` into its `Part` plus the
@@ -210,7 +213,7 @@ extension Score {
             id: partTemplate.id,
             trackName: partTemplate.trackName,
             instrument: partTemplate.instrument,
-            staves: populatedStaves,
+            staves: IdentifiedArray(populatedStaves),
         )
         var staffElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])] = []
         for (staffIndex, perMeasure) in walker.systemElementsByStaffMeasure.enumerated() {

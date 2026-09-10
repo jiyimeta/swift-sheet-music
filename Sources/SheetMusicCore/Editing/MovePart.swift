@@ -1,6 +1,6 @@
 import SheetMusicFoundation
 
-/// Moves the part at `fromIndex` to `toIndex` — a removal followed by an insertion of the same `Part` value, which
+/// Moves the part at `fromIndex` to `toIndex`, retaining the part and its slot identifier, which
 /// is what "drag this instrument up two rows" means: the parts between the two indices shift one place the other
 /// way, and nothing else in the column order changes.
 ///
@@ -81,7 +81,7 @@ public struct MovePart: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.parts.indices.contains(fromIndex), score.parts.indices.contains(toIndex) else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
@@ -104,8 +104,10 @@ public struct MovePart: EditCommand {
             : nil
         let outgoingFlags = canonicalChanges ? MeasureFlagsHoist.column(of: Score.canonicalStaff, in: score) : nil
 
-        let part = score.parts.remove(at: fromIndex)
-        score.parts.insert(part, at: toIndex)
+        let movedID = score.parts.eid(at: fromIndex)
+        let anchor: EID? = toIndex == 0 ? nil
+            : score.parts.eid(at: fromIndex < toIndex ? toIndex : toIndex - 1)
+        score.parts.move(eid: movedID, after: anchor)
         restampSystemElements(in: &score)
         Self.writeBack(rebased, to: &score)
         restore(&score)
@@ -168,13 +170,17 @@ public struct MovePart: EditCommand {
         // The permutation is stated over the PRE-move indices, so this reads each address once and writes the
         // answer — re-stamping in place against the already-permuted parts would compose the map with itself.
         for measureIndex in score.systemMeasures.indices {
-            for elementIndex in score.systemMeasures[measureIndex].elements.indices {
-                guard let address = score.systemMeasures[measureIndex].elements[elementIndex].originalStaff
-                else { continue }
-                score.systemMeasures[measureIndex].elements[elementIndex].originalStaff = StaffAddress(
-                    partIndex: permuted(address.partIndex),
-                    staffIndexInPart: address.staffIndexInPart,
-                )
+            score.systemMeasures.updateValue(at: measureIndex) { column in
+                for elementIndex in column.elements.indices {
+                    guard let address = column.elements[elementIndex].originalStaff
+                    else { continue }
+                    column.elements.updateValue(at: elementIndex) {
+                        $0.originalStaff = StaffAddress(
+                            partIndex: permuted(address.partIndex),
+                            staffIndexInPart: address.staffIndexInPart,
+                        )
+                    }
+                }
             }
         }
     }
@@ -188,11 +194,19 @@ public struct MovePart: EditCommand {
     ) {
         for part in score.parts.indices {
             for staff in score.parts[part].staves.indices {
-                score.parts[part].staves[staff].brackets = []
+                score.parts.updateValue(at: part) { partValue in
+                    partValue.staves.updateValue(at: staff) { staffValue in
+                        staffValue.brackets = []
+                    }
+                }
             }
         }
         for entry in entries {
-            score.parts[entry.part].staves[entry.staff].brackets.append(entry.bracket)
+            score.parts.updateValue(at: entry.part) { partValue in
+                partValue.staves.updateValue(at: entry.staff) { staffValue in
+                    staffValue.brackets.append(entry.bracket)
+                }
+            }
         }
     }
 
@@ -210,7 +224,11 @@ public struct MovePart: EditCommand {
                 for staff in score.parts[part].staves.indices
                     where restoredBrackets[part].indices.contains(staff)
                 {
-                    score.parts[part].staves[staff].brackets = restoredBrackets[part][staff]
+                    score.parts.updateValue(at: part) { partValue in
+                        partValue.staves.updateValue(at: staff) { staffValue in
+                            staffValue.brackets = restoredBrackets[part][staff]
+                        }
+                    }
                 }
             }
         }
@@ -218,11 +236,14 @@ public struct MovePart: EditCommand {
         for measureIndex in score.systemMeasures.indices
             where restoredOriginalStaves.indices.contains(measureIndex)
         {
-            for elementIndex in score.systemMeasures[measureIndex].elements.indices
-                where restoredOriginalStaves[measureIndex].indices.contains(elementIndex)
-            {
-                score.systemMeasures[measureIndex].elements[elementIndex].originalStaff =
-                    restoredOriginalStaves[measureIndex][elementIndex]
+            score.systemMeasures.updateValue(at: measureIndex) { column in
+                for elementIndex in column.elements.indices
+                    where restoredOriginalStaves[measureIndex].indices.contains(elementIndex)
+                {
+                    column.elements.updateValue(at: elementIndex) {
+                        $0.originalStaff = restoredOriginalStaves[measureIndex][elementIndex]
+                    }
+                }
             }
         }
     }

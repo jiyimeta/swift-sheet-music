@@ -125,13 +125,13 @@ extension MidiRenderer {
         let mainTicks = playedTicksOverride
             ?? chord.duration.ticks(division: division)
         let stealFromPrev = totalStealFromPrev(
-            chord.graceNotesBefore, division: division,
+            chord.graceNotesBefore.values, division: division,
         )
         let stealFromHead = totalStealFromMainHead(
-            chord.graceNotesBefore, mainTicks: mainTicks, division: division,
+            chord.graceNotesBefore.values, mainTicks: mainTicks, division: division,
         )
         let stealFromTail = totalStealFromMainTail(
-            chord.graceNotesAfter, mainTicks: mainTicks, division: division,
+            chord.graceNotesAfter.values, mainTicks: mainTicks, division: division,
         )
 
         // 1. Pull preceding noteOffs (this voice / channel only) back
@@ -352,10 +352,10 @@ extension MidiRenderer {
         guard semitones != 0 else { return chord }
         var result = chord
         result.notes = ChordNotes(chord.notes.map { transpose($0, by: semitones) })
-        result.graceNotesBefore = chord.graceNotesBefore.map {
+        result.graceNotesBefore.mapValues {
             transpose($0, by: semitones)
         }
-        result.graceNotesAfter = chord.graceNotesAfter.map {
+        result.graceNotesAfter.mapValues {
             transpose($0, by: semitones)
         }
         return result

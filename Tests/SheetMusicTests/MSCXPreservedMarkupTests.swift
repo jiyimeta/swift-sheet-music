@@ -247,12 +247,30 @@ struct MSCXPreservedMarkupTests {
         let source = try MSCXFixtureLoader.mscxData("grace_after")
         var score = try MSCXParser.parse(source)
         let marker = PreservedXML(name: "unknown")
-        score.parts[0].preservedMarkup = [marker]
-        score.parts[0].instrument.preservedMarkup = [marker]
-        score.parts[0].instrument.channels[0].preservedMarkup = [marker]
-        score.parts[0].staves[0].preservedMarkup = [marker]
-        score.parts[0].staves[0].staffTypePreservedMarkup = [marker]
-        score.parts[0].staves[0].measures[0].preservedMarkup = [marker]
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.preservedMarkup = [marker]
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.instrument.preservedMarkup = [marker]
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.instrument.channels[0].preservedMarkup = [marker]
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.preservedMarkup = [marker]
+            }
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.staffTypePreservedMarkup = [marker]
+            }
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].preservedMarkup = [marker]
+            }
+        }
         Self.installTask6Markup(marker, in: &score)
         let stripped = score.strippingPreservedMarkup()
         #expect(stripped.preservedMarkup.isEmpty)
@@ -293,8 +311,9 @@ struct MSCXPreservedMarkupTests {
                     instrument.channels[channelIndex].preservedMarkup = [marker]
                 }
                 change.instrument = instrument
-                score.systemMeasures[measureIndex].elements[elementIndex].element =
-                    .instrumentChange(change)
+                score.systemMeasures.updateValue(at: measureIndex) { column in
+                    column.elements.updateValue(at: elementIndex) { $0.element = .instrumentChange(change) }
+                }
                 seeded += 1
             }
         }
@@ -383,11 +402,15 @@ struct MSCXPreservedMarkupTests {
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
                 for measureIndex in score.parts[partIndex].staves[staffIndex].measures.indices {
-                    seedGraceFingerings(
-                        marker,
-                        in: &score.parts[partIndex].staves[staffIndex].measures[measureIndex],
-                        count: &seeded,
-                    )
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            seedGraceFingerings(
+                                marker,
+                                in: &staffValue.measures[measureIndex],
+                                count: &seeded,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -407,20 +430,22 @@ struct MSCXPreservedMarkupTests {
                 else { continue }
                 seedGraceFingerings(marker, in: &chord.graceNotesBefore, count: &count)
                 seedGraceFingerings(marker, in: &chord.graceNotesAfter, count: &count)
-                measure.voices[voiceIndex].elements[elementIndex] = .chord(chord)
+                measure.voices[voiceIndex].elements.updateValue(at: elementIndex) { $0 = .chord(chord) }
             }
         }
     }
 
     private func seedGraceFingerings(
-        _ marker: PreservedXML, in graces: inout [GraceChord], count: inout Int,
+        _ marker: PreservedXML, in graces: inout IdentifiedArray<GraceChord>, count: inout Int,
     ) {
         for graceIndex in graces.indices {
-            for noteIndex in graces[graceIndex].notes.indices {
-                graces[graceIndex].notes[noteIndex].fingerings = [
-                    Fingering(text: "1", preservedMarkup: [marker]),
-                ]
-                count += 1
+            graces.updateValue(at: graceIndex) { grace in
+                for noteIndex in grace.notes.indices {
+                    grace.notes[noteIndex].fingerings = [
+                        Fingering(text: "1", preservedMarkup: [marker]),
+                    ]
+                    count += 1
+                }
             }
         }
     }
@@ -539,7 +564,11 @@ extension MSCXPreservedMarkupTests {
                 preservedMarkup: [marker],
             )),
         ]
-        score.parts[0].staves[0].measures[0] = measure
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0] = measure
+            }
+        }
     }
 
     fileprivate static func task6Markup(in score: Score) -> [PreservedXML] {

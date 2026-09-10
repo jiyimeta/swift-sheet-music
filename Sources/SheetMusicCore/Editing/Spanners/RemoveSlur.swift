@@ -18,7 +18,7 @@ public struct RemoveSlur: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let anchor = id.anchor
         guard let element = score[anchor] else {
             throw Self.refused(.targetNotFound(anchor))
@@ -33,7 +33,7 @@ public struct RemoveSlur: EditCommand {
                 throw Self.refused(.noSpannerAtLocation(anchor))
             }
             chord.spanners.remove(at: indices[ordinal])
-            return try ReplaceVoiceElement(at: anchor, with: .chord(chord)).apply(to: &score)
+            return try ReplaceVoiceElement(at: anchor, with: .chord(chord)).apply(to: &score, ids: &ids)
         case .voice:
             guard case let .spanner(spanner) = element else {
                 throw Self.refused(.wrongElementKind(at: anchor, expected: .spanner))
@@ -46,7 +46,7 @@ public struct RemoveSlur: EditCommand {
             ) else {
                 throw Self.refused(.targetNotFound(anchor))
             }
-            return try command.apply(to: &score)
+            return try command.apply(to: &score, ids: &ids)
         }
     }
 }

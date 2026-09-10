@@ -37,7 +37,7 @@ public struct SetClef: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let element = score[target] else { throw Self.refused(.targetNotFound(target)) }
         guard case .chord = element else { throw Self.refused(.wrongElementKind(at: target, expected: .timed)) }
         guard target.voiceIndex == 0 else {
@@ -48,13 +48,13 @@ public struct SetClef: EditCommand {
         }
         let ref = VoiceRef(target)
         guard let elements = score[voice: ref]?.elements else { throw Self.refused(.targetNotFound(target)) }
-        let run = AdjacentElementSlot.run(.before, of: target.elementIndex, in: elements)
+        let run = AdjacentElementSlot.run(.before, of: target.elementIndex, in: elements.values)
         if let index = run.first(where: { if case .clef = elements[$0] { true } else { false } }),
            case var .clef(existing) = elements[index]
         {
             existing.concertClefType = clef.rawType
             existing.transposingClefType = nil
-            return try AdjacentElementSlot.replacing(.clef(existing), at: index, in: ref).apply(to: &score)
+            return try AdjacentElementSlot.replacing(.clef(existing), at: index, in: ref).apply(to: &score, ids: &ids)
         }
         let index = run.lowerBound == 0
             ? 0
@@ -62,7 +62,7 @@ public struct SetClef: EditCommand {
         guard let insert = AdjacentElementSlot.inserting(
             .clef(Clef(concertClefType: clef.rawType)), at: index, in: ref, of: score,
         ) else { throw Self.refused(.targetNotFound(target)) }
-        return try insert.apply(to: &score)
+        return try insert.apply(to: &score, ids: &ids)
     }
 }
 
@@ -83,12 +83,12 @@ public struct RemoveClef: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let element = score[location] else { throw Self.refused(.targetNotFound(location)) }
         guard case .clef = element else { throw Self.refused(.wrongElementKind(at: location, expected: .clef)) }
         guard let removal = AdjacentElementSlot.removing(
             at: location.elementIndex, in: VoiceRef(location), of: score,
         ) else { throw Self.refused(.targetNotFound(location)) }
-        return try removal.apply(to: &score)
+        return try removal.apply(to: &score, ids: &ids)
     }
 }

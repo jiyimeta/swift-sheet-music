@@ -36,7 +36,7 @@ struct TupletOnsetTests {
         let written = try Self.tripletScore()
         let read = try MSCXParser.parse(MSCXEncoder.encode(written))
         let voice = read.parts[0].staves[0].measures[0].voices[0]
-        #expect(voice.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
+        #expect(voice.tupletSpans == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
         #expect(read.onset(of: Self.slot(4)) == written.onset(of: Self.slot(4)))
         #expect(voice.elements[1].tickCount(division: 480) == 160)
     }

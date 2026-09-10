@@ -39,7 +39,7 @@ public struct SetVolta: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let label = text?.trimmingWhitespaceAndNewlines()
         let template = Spanner(
             kind: .volta, rawType: Spanner.Kind.volta.rawValue, voltaEndings: endings,
@@ -47,6 +47,6 @@ public struct SetVolta: EditCommand {
         )
         return try SpannerPlacement.add(
             template, over: range, in: score, operation: String(describing: Self.self),
-        ).apply(to: &score)
+        ).apply(to: &score, ids: &ids)
     }
 }

@@ -9,7 +9,7 @@ extension LayoutEngine {
     /// number-only based on whether every member sits inside the same
     /// beam group (MuseScore's simplified auto-bracket rule).
     static func emitTupletLabel( // swiftlint:disable:this function_body_length
-        tuplet: Tuplet,
+        tuplet: TupletSpan,
         voice: Voice,
         voiceChordOutIndex: [Int: Int],
         voiceRestOutIndex: [Int: Int],

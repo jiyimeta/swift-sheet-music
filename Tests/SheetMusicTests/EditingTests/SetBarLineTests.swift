@@ -49,7 +49,13 @@ struct SetBarLineTests {
     @Test("a mid-measure barline is left alone")
     func midMeasureUntouched() throws {
         var score = EditingFixtures.parityFixture()
-        score.parts[0].staves[0].measures[0].voices[0].elements.insert(.barLine(BarLine(subtype: "dashed")), at: 3)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(.barLine(BarLine(subtype: "dashed")), at: 3)
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
+            }
+        }
         _ = try SetBarLine(at: MeasureRef(measureIndex: 0), style: .double).apply(to: &score)
         let elements = score.parts[0].staves[0].measures[0].voices[0].elements
         guard case let .barLine(mid) = elements[3], case let .barLine(trailing) = elements[6] else {

@@ -38,7 +38,7 @@ public struct SetDots: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let element = score[location] else {
             throw Self.refused(.targetNotFound(location))
         }
@@ -50,7 +50,7 @@ public struct SetDots: EditCommand {
         }
         let duration = decomposed.base.dotted(dots)
         return chord.notes.isEmpty
-            ? try SetRestDuration(at: location, duration: duration).apply(to: &score)
-            : try SetChordDuration(at: location, duration: duration).apply(to: &score)
+            ? try SetRestDuration(at: location, duration: duration).apply(to: &score, ids: &ids)
+            : try SetChordDuration(at: location, duration: duration).apply(to: &score, ids: &ids)
     }
 }

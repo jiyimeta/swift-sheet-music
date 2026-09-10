@@ -93,19 +93,18 @@ enum TimeSignatureRegion {
     /// none.
     ///
     /// Only ever called on an IRREGULAR head column. Everywhere else the declaration is `RebarPlanner`'s, which
-    /// drops every old signature in the run and writes one fresh — the responsibility stays there.
-    static func declare(_ signature: TimeSignature, in column: inout MeasureSlice) {
+    /// replaces the declaration while carrying its identity when present — the responsibility stays there.
+    static func declare(_ signature: TimeSignature, in column: inout MeasureSlice, ids: inout EIDAllocator) {
         mutateVoiceZero(of: &column) { voice in
             let prefix = MeasureStructure.leadingSignaturePrefix(of: voice)
             let existing = prefix.firstIndex { if case .timeSignature = $0 { true } else { false } }
             if let existing, case var .timeSignature(current) = voice.elements[existing] {
                 current.numerator = signature.numerator
                 current.denominator = signature.denominator
-                voice.elements[existing] = .timeSignature(current)
+                voice.elements.updateValue(at: existing) { $0 = .timeSignature(current) }
                 return
             }
-            voice.elements.insert(.timeSignature(signature), at: prefix.count)
-            MeasureStructure.shiftTuplets(in: &voice, by: 1)
+            voice.elements.insert(.timeSignature(signature), at: prefix.count, id: ids.next())
         }
     }
 
@@ -132,28 +131,37 @@ enum TimeSignatureRegion {
     // MARK: - Capture and splice
 
     /// `region`'s measure columns exactly as they stand — every staff plus the parallel `SystemMeasure`.
-    static func capturedColumns(of score: Score, over region: Range<Int>) -> [MeasureSlice] {
+    static func capturedColumns(of score: Score, over region: Range<Int>, ids: inout EIDAllocator) -> [MeasureSlice] {
         region.map { measureIndex in
             MeasureSlice(
                 staffMeasures: score.parts.map { part in
                     part.staves.map { staff in
                         staff.measures.indices.contains(measureIndex)
                             ? staff.measures[measureIndex]
-                            : Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
+                            : Measure(voices: [MeasureStructure.freshMeasureRest(using: &ids)])
                     }
                 },
                 systemMeasure: score.systemMeasures.indices.contains(measureIndex)
                     ? score.systemMeasures[measureIndex] : SystemMeasure(),
+                systemMeasureEID: score.systemMeasures.indices.contains(measureIndex)
+                    ? score.systemMeasures.eid(at: measureIndex) : nil,
             )
         }
     }
 
     /// Replaces `range` with `columns` on every staff, and in the system lane when that lane is parallel.
     ///
+    /// A verbatim or restored lane column keeps its EID wherever it lands; a planned column takes over the
+    /// EID the planner assigned. Only a column with no EID gets one minted, in column order. The lane must
+    /// already be assigned, as every editing entry point ensures before `apply`: an unassigned identifier read
+    /// off it is passed through as is and trips `replaceSubrange`'s assert.
+    ///
     /// A staff too short to cover `range` is skipped whole rather than padded — the same conservatism
     /// `InsertMeasure.insert` applies to `systemMeasures`, and for the same reason: a score that never held the
     /// invariant must come back out of an undo exactly as it went in, not partially patched into it.
-    static func splice(_ columns: [MeasureSlice], into score: inout Score, replacing range: Range<Int>) {
+    static func splice(
+        _ columns: [MeasureSlice], into score: inout Score, replacing range: Range<Int>, ids: inout EIDAllocator,
+    ) {
         let parallelLane = score.systemMeasures.count == MeasureStructure.measureCount(of: score)
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
@@ -164,13 +172,18 @@ enum TimeSignatureRegion {
                     column.staffMeasures.indices.contains(partIndex)
                         && column.staffMeasures[partIndex].indices.contains(staffIndex)
                         ? column.staffMeasures[partIndex][staffIndex]
-                        : Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
+                        : Measure(voices: [MeasureStructure.freshMeasureRest(using: &ids)])
                 }
-                score.parts[partIndex].staves[staffIndex].measures
-                    .replaceSubrange(range, with: replacement)
+                score.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        staffValue.measures
+                            .replaceSubrange(range, with: replacement)
+                    }
+                }
             }
         }
         guard parallelLane, score.systemMeasures.count >= range.upperBound else { return }
-        score.systemMeasures.replaceSubrange(range, with: columns.map(\.systemMeasure))
+        let pairs = columns.map { ($0.systemMeasureEID ?? ids.next(), $0.systemMeasure) }
+        score.systemMeasures.replaceSubrange(range, with: pairs)
     }
 }

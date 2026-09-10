@@ -46,7 +46,7 @@ public struct SetBeamVisible: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let element = score[location] else { throw Self.refused(.targetNotFound(location)) }
         guard case var .chord(chord) = element, !chord.notes.isEmpty else {
             throw Self.refused(.wrongElementKind(at: location, expected: .chord))
@@ -62,7 +62,7 @@ public struct SetBeamVisible: EditCommand {
             // Clearing an orphaned flag: the self-inverse's `.notBeamed` precondition depends on sibling
             // elements, not on `location`, so it can go unmet at undo time even under LIFO ordering (see the
             // doc comment above). The pre-image has no such precondition.
-            return ReplaceVoiceElement(at: location, with: element)
+            return ReplaceVoiceElement(at: location, with: element, identity: .same)
         }
         return SetBeamVisible(at: location, visible: old)
     }

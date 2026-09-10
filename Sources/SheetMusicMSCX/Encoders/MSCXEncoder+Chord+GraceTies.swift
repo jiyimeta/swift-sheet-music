@@ -23,7 +23,7 @@ extension Chord {
     /// map and encodes byte-identically to a chord that never had any.
     func graceBeforeTieBackEndpoints() -> [Int: TieEndpoint] {
         graceTieEndpoints(
-            graces: graceNotesBefore,
+            graces: graceNotesBefore.values,
             fileOrdinal: mscxGraceIndex(ofBeforeGraceAt:),
             graceSideHasTie: { $0.tieForward != nil },
             mainSideHasTie: { $0.tieBack != nil },
@@ -43,7 +43,7 @@ extension Chord {
     /// ahead of its owner, the ordinal is now well defined.
     func graceAfterTieForwardEndpoints() -> [Int: TieEndpoint] {
         graceTieEndpoints(
-            graces: graceNotesAfter,
+            graces: graceNotesAfter.values,
             fileOrdinal: mscxGraceIndex(ofAfterGraceAt:),
             graceSideHasTie: { $0.tieBack != nil },
             mainSideHasTie: { $0.tieForward != nil },

@@ -24,30 +24,32 @@ public struct SetBarLine: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.contains(measure) else { throw Self.refused(.targetNotFound(affectedLocation)) }
         var writes: [any EditCommand] = []
         for (address, _) in score.allStaves {
             let ref = VoiceRef(staff: address, measureIndex: measure.measureIndex, voiceIndex: 0)
             guard let voice = score[voice: ref] else { continue }
-            var elements = voice.elements
-            let trailingIndex = Self.trailingBarLineIndex(in: elements)
+            var changed = voice
+            let trailingIndex = Self.trailingBarLineIndex(in: voice.elements.values)
             switch (style, trailingIndex) {
             case let (.normal, index?):
-                elements.remove(at: index)
+                changed.removeElements(at: [index])
             case (.normal, nil):
                 continue
             case let (_, index?):
-                elements[index] = .barLine(BarLine(subtype: style.rawValue))
+                changed.elements.updateValue(at: index) { $0 = .barLine(BarLine(subtype: style.rawValue)) }
             case (_, nil):
-                elements.append(.barLine(BarLine(subtype: style.rawValue)))
+                changed.elements.insert(
+                    .barLine(BarLine(subtype: style.rawValue)), at: changed.elements.count, id: ids.next(),
+                )
             }
             writes.append(ReplaceVoiceElements(
                 staff: address, measureIndex: measure.measureIndex, voiceIndex: 0,
-                elements: elements, tuplets: voice.tuplets,
+                elements: changed.elements, tuplets: changed.tuplets,
             ))
         }
-        return try CompositeEditCommand(commands: writes, location: affectedLocation).apply(to: &score)
+        return try CompositeEditCommand(commands: writes, location: affectedLocation).apply(to: &score, ids: &ids)
     }
 
     /// Index of the `.barLine` that follows the last chord or rest of `elements`, if any.

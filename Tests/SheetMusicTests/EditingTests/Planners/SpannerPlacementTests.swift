@@ -13,7 +13,7 @@ struct SpannerPlacementTests {
     }
 
     private static func elements(_ score: Score, _ staff: Int, _ measure: Int) -> [VoiceElement] {
-        score.parts[staff].staves[0].measures[measure].voices[0].elements
+        score.parts[staff].staves[0].measures[measure].voices[0].elements.values
     }
 
     private static func reason(of error: SheetMusicError?) -> EditRefusal.Reason? {
@@ -64,7 +64,7 @@ struct SpannerPlacementTests {
     /// i.e. 1/2 into the bar — the mid-measure spelling.
     @Test("a line spanner is inserted before the first chord and ends at the last element's end tick")
     func lineSpanner() throws {
-        var score = EditingFixtures.parityFixture()
+        var score = ScoreEditor(score: EditingFixtures.parityFixture()).score
         let range = VoiceElementRange(start: Self.slot(Self.flute, 0, 1), end: Self.slot(Self.flute, 0, 2))
         _ = try Self.add(Self.hairpin(), over: range, in: score).apply(to: &score)
         let elements = Self.elements(score, 0, 0)
@@ -80,7 +80,7 @@ struct SpannerPlacementTests {
     /// ONSET (1/2), not its end — the slur / line-spanner difference, in one assertion.
     @Test("a slur is stored on the start chord and points at the end chord's onset")
     func slur() throws {
-        var score = EditingFixtures.parityFixture()
+        var score = ScoreEditor(score: EditingFixtures.parityFixture()).score
         let range = VoiceElementRange(start: Self.slot(Self.flute, 2, 0), end: Self.slot(Self.flute, 2, 1))
         _ = try Self.add(Spanner(kind: .slur, rawType: "Slur"), over: range, in: score)
             .apply(to: &score)
@@ -95,7 +95,7 @@ struct SpannerPlacementTests {
     /// The bounds may be given in either order, and a range naming two staves narrows to the earlier bound's.
     @Test("the range is normalized and narrowed to one voice")
     func rangeNormalization() throws {
-        var score = EditingFixtures.parityFixture()
+        var score = ScoreEditor(score: EditingFixtures.parityFixture()).score
         let reversed = VoiceElementRange(start: Self.slot(Self.flute, 0, 2), end: Self.slot(Self.flute, 0, 1))
         _ = try Self.add(Self.hairpin(), over: reversed, in: score).apply(to: &score)
         guard case let .spanner(written) = Self.elements(score, 0, 0)[1] else {
@@ -106,9 +106,10 @@ struct SpannerPlacementTests {
         #expect(written.nextMeasuresOffset == 0)
         #expect(written.nextFractionsOffset == Fraction(numerator: 1, denominator: 2))
 
-        var crossStaff = EditingFixtures.parityFixture()
+        var crossStaff = ScoreEditor(score: EditingFixtures.parityFixture()).score
         let across = VoiceElementRange(start: Self.slot(Self.flute, 0, 1), end: Self.slot(Self.cello, 0, 1))
         _ = try Self.add(Self.hairpin(), over: across, in: crossStaff).apply(to: &crossStaff)
+        // A value comparison: equality ignores identity, so the reference fixture needs none.
         #expect(Self.elements(crossStaff, 1, 0) == Self.elements(EditingFixtures.parityFixture(), 1, 0))
         // Narrowed to the flute's voice 0, the run is `[C4, D4, r, r]` — the whole bar, so the end tick rolls
         // onto bar 1's downbeat and the spelling is `(1, nil)`, not the `(0, 1/2)` of the two chords alone.
@@ -124,7 +125,7 @@ struct SpannerPlacementTests {
     /// `Spanner.offsets` applies — `(0, 1/1)`, not `(1, nil)`.
     @Test("a volta is measure-granular on the canonical staff, and the last bar takes the score-end spelling")
     func volta() throws {
-        var score = EditingFixtures.parityFixture()
+        var score = ScoreEditor(score: EditingFixtures.parityFixture()).score
         let midRange = VoiceElementRange(start: Self.slot(Self.cello, 1, 0), end: Self.slot(Self.cello, 1, 0))
         _ = try Self.add(
             Spanner(kind: .volta, rawType: "Volta", voltaEndings: [1]), over: midRange, in: score,
@@ -135,7 +136,7 @@ struct SpannerPlacementTests {
         #expect(mid.nextMeasuresOffset == 1)
         #expect(mid.nextFractionsOffset == nil)
 
-        var last = EditingFixtures.parityFixture()
+        var last = ScoreEditor(score: EditingFixtures.parityFixture()).score
         let lastRange = VoiceElementRange(start: Self.slot(Self.flute, 3, 0), end: Self.slot(Self.flute, 3, 0))
         _ = try Self.add(
             Spanner(kind: .volta, rawType: "Volta", voltaEndings: [2]), over: lastRange, in: last,
@@ -154,7 +155,7 @@ struct SpannerPlacementTests {
     /// staff's measure duration table — so it must be pinned separately.
     @Test("a line spanner over the last bar's measure rest also takes the score-end spelling")
     func lineSpannerOverLastBarMeasureRest() throws {
-        var score = EditingFixtures.parityFixture()
+        var score = ScoreEditor(score: EditingFixtures.parityFixture()).score
         let range = VoiceElementRange(start: Self.slot(Self.flute, 3, 0), end: Self.slot(Self.flute, 3, 0))
         _ = try Self.add(Self.hairpin(), over: range, in: score).apply(to: &score)
         let elements = Self.elements(score, 0, 3)
@@ -168,18 +169,18 @@ struct SpannerPlacementTests {
 
     @Test("a tuplet straddling the insertion point keeps its start and grows its end")
     func tupletRemap() throws {
-        var score = EditingFixtures.fourQuarterRests()
+        var score = ScoreEditor(score: EditingFixtures.fourQuarterRests()).score
         _ = try CreateTuplet(at: Self.slot(Self.flute, 0, 1), actualNotes: 3, normalNotes: 2).apply(to: &score)
         let range = VoiceElementRange(start: Self.slot(Self.flute, 0, 2), end: Self.slot(Self.flute, 0, 3))
         _ = try Self.add(Self.hairpin(), over: range, in: score).apply(to: &score)
-        #expect(score.parts[0].staves[0].measures[0].voices[0].tuplets
-            == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 4)])
+        #expect(score.parts[0].staves[0].measures[0].voices[0].tupletSpans
+            == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 4)])
     }
 
     @Test("undo restores the score exactly, for both storage forms")
     func undoIsExact() throws {
         for template in [Self.hairpin(), Spanner(kind: .slur, rawType: "Slur")] {
-            var score = EditingFixtures.parityFixture()
+            var score = ScoreEditor(score: EditingFixtures.parityFixture()).score
             let before = score
             let range = VoiceElementRange(start: Self.slot(Self.flute, 2, 0), end: Self.slot(Self.flute, 2, 1))
             let inverse = try Self.add(template, over: range, in: score).apply(to: &score)
@@ -192,7 +193,7 @@ struct SpannerPlacementTests {
     @Test("remove takes the element back off, for both storage forms, and its inverse puts it back")
     func removeRoundTrips() throws {
         for template in [Self.hairpin(), Spanner(kind: .slur, rawType: "Slur")] {
-            var score = EditingFixtures.parityFixture()
+            var score = ScoreEditor(score: EditingFixtures.parityFixture()).score
             let plain = score
             let range = VoiceElementRange(start: Self.slot(Self.flute, 2, 0), end: Self.slot(Self.flute, 2, 1))
             _ = try Self.add(template, over: range, in: score).apply(to: &score)
@@ -207,7 +208,7 @@ struct SpannerPlacementTests {
 
     @Test("a second spanner of the same kind at the same position is refused, found by walking the whole run")
     func duplicate() throws {
-        var score = EditingFixtures.parityFixture()
+        var score = ScoreEditor(score: EditingFixtures.parityFixture()).score
         let range = VoiceElementRange(start: Self.slot(Self.flute, 2, 0), end: Self.slot(Self.flute, 2, 1))
         _ = try Self.add(Self.hairpin(), over: range, in: score).apply(to: &score)
         let firstWrite = Self.elements(score, 0, 2)[0]
@@ -239,7 +240,7 @@ struct SpannerPlacementTests {
     and a removal of the wrong kind
     """)
     func refusals() throws {
-        let score = EditingFixtures.parityFixture()
+        let score = ScoreEditor(score: EditingFixtures.parityFixture()).score
         let single = VoiceElementRange(start: Self.slot(Self.flute, 2, 0), end: Self.slot(Self.flute, 2, 0))
         let lonely = #expect(throws: SheetMusicError.self) {
             _ = try Self.add(Spanner(kind: .slur, rawType: "Slur"), over: single, in: score)
@@ -263,7 +264,7 @@ struct SpannerPlacementTests {
         #expect(Self.reason(of: notAnElement)
             == .wrongElementKind(at: Self.slot(Self.flute, 0, 0), expected: .spanner))
         // A `.spanner` element IS there, but of a different kind — the line-spanner-storage wrong-kind shape.
-        var withHairpin = EditingFixtures.parityFixture()
+        var withHairpin = ScoreEditor(score: EditingFixtures.parityFixture()).score
         let hairpinRange = VoiceElementRange(start: Self.slot(Self.flute, 2, 0), end: Self.slot(Self.flute, 2, 1))
         _ = try Self.add(Self.hairpin(), over: hairpinRange, in: withHairpin).apply(to: &withHairpin)
         let wrongKind = #expect(throws: SheetMusicError.self) {

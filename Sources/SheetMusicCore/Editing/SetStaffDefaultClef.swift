@@ -24,7 +24,7 @@ public struct SetStaffDefaultClef: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.parts.indices.contains(staff.partIndex),
               score.parts[staff.partIndex].staves.indices
                   .contains(staff.staffIndexInPart)
@@ -34,7 +34,11 @@ public struct SetStaffDefaultClef: EditCommand {
         let p = staff.partIndex
         let s = staff.staffIndexInPart
         let previous = score.parts[p].staves[s].defaultClefType
-        score.parts[p].staves[s].defaultClefType = newRawType
+        score.parts.updateValue(at: p) { partValue in
+            partValue.staves.updateValue(at: s) { staffValue in
+                staffValue.defaultClefType = newRawType
+            }
+        }
         return SetStaffDefaultClef(staff: staff, newRawType: previous)
     }
 }

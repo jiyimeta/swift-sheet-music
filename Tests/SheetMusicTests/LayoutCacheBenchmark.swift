@@ -87,7 +87,9 @@
                 measures[editIdx] = bumpFirstChord(in: original)
                 var editedParts = score.parts
                 if !editedParts.isEmpty && !editedParts[0].staves.isEmpty {
-                    editedParts[0].staves[0] = Staff(measures: measures)
+                    editedParts.updateValue(at: 0) { part in
+                        part.staves.updateValue(at: 0) { $0 = Staff(measures: measures) }
+                    }
                 }
                 let edited = Score(
                     division: score.division,
@@ -142,7 +144,7 @@
                             pitch: n.pitch == 60 ? 62 : 60,
                             tpc: n.pitch == 60 ? 16 : 14,
                         )
-                        elements[ei] = .chord(c)
+                        elements.updateValue(at: ei) { $0 = .chord(c) }
                         voices[vi] = Voice(elements: elements)
                         return Measure(
                             voices: voices,

@@ -102,7 +102,7 @@ enum MusicXMLMeasureWalker {
             }
             guard !chord.notes.isEmpty else { continue }
             chord.notes[0].glissando = attach.glissando
-            voice.elements[attach.elementIndex] = .chord(chord)
+            voice.elements.updateValue(at: attach.elementIndex) { $0 = .chord(chord) }
             measure.voices[attach.voiceIndex] = voice
             result[attach.staffIndex][attach.measureIndex] = measure
         }

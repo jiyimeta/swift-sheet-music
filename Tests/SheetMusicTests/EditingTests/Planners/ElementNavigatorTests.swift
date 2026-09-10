@@ -24,9 +24,13 @@ struct ElementNavigatorTests {
 
     @Test func `continues into the next measure's same voice`() {
         var score = EditingFixtures.fourQuarterRests()
-        score.parts[0].staves[0].measures.append(
-            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures.append(
+                    Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+                )
+            }
+        }
         let after = VoiceElementID(staff: EditingFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 4)
 
         let next = ElementNavigator.nextTimedElement(after: after, in: score)
@@ -58,9 +62,13 @@ struct ElementNavigatorTests {
 
     @Test func `continues back into the previous measure's same voice`() {
         var score = EditingFixtures.fourQuarterRests()
-        score.parts[0].staves[0].measures.append(
-            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures.append(
+                    Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+                )
+            }
+        }
         let before = VoiceElementID(staff: EditingFixtures.staff0, measureIndex: 1, voiceIndex: 0, elementIndex: 0)
 
         let previous = ElementNavigator.previousTimedElement(before: before, in: score)
@@ -78,7 +86,11 @@ struct ElementNavigatorTests {
                 .rest(duration: .quarter),
             ]),
         ])
-        score.parts[0].staves[0].measures.append(secondMeasure)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures.append(secondMeasure)
+            }
+        }
         let before = VoiceElementID(staff: EditingFixtures.staff0, measureIndex: 1, voiceIndex: 0, elementIndex: 1)
 
         let previous = ElementNavigator.previousTimedElement(before: before, in: score)
@@ -92,9 +104,13 @@ struct ElementNavigatorTests {
     /// Walking forward and back must land where you started — the pad's ← and → keys are each other's inverse.
     @Test func `next and previous are inverses`() {
         var score = EditingFixtures.fourQuarterRests()
-        score.parts[0].staves[0].measures.append(
-            Measure(voices: [Voice(elements: [.rest(duration: .quarter), .rest(duration: .quarter)])]),
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures.append(
+                    Measure(voices: [Voice(elements: [.rest(duration: .quarter), .rest(duration: .quarter)])]),
+                )
+            }
+        }
         let start = VoiceElementID(staff: EditingFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 2)
 
         let next = try? #require(ElementNavigator.nextTimedElement(after: start, in: score))
@@ -111,7 +127,11 @@ struct ElementNavigatorTests {
                 .rest(duration: .quarter),
             ]),
         ])
-        score.parts[0].staves[0].measures.append(secondMeasure)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures.append(secondMeasure)
+            }
+        }
         let after = VoiceElementID(staff: EditingFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 4)
 
         let next = ElementNavigator.nextTimedElement(after: after, in: score)

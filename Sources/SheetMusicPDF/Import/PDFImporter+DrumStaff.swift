@@ -59,9 +59,15 @@ extension PDFImporter {
                 where staffIsPercussion(parts[partIndex].staves[staffIndex])
             {
                 partHasPercussion = true
-                parts[partIndex].staves[staffIndex].group = "percussion"
-                parts[partIndex].staves[staffIndex].staffType = "perc5Line"
-                parts[partIndex].staves[staffIndex].defaultClefType = "PERC"
+                parts[partIndex].staves.updateValue(at: staffIndex) { staffValue in
+                    staffValue.group = "percussion"
+                }
+                parts[partIndex].staves.updateValue(at: staffIndex) { staffValue in
+                    staffValue.staffType = "perc5Line"
+                }
+                parts[partIndex].staves.updateValue(at: staffIndex) { staffValue in
+                    staffValue.defaultClefType = "PERC"
+                }
             }
             guard partHasPercussion else { continue }
             var instrument = parts[partIndex].instrument

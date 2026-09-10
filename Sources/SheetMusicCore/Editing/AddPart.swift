@@ -44,7 +44,7 @@ public struct AddPart: EditCommand {
     public let plan: BlankScoreTemplate.PartPlan?
     /// Set only when this command is the inverse of a `RemovePart`: the removed part, whole, rather than one
     /// rebuilt from a plan.
-    let restoredPart: Part?
+    let restoredPart: (eid: EID, part: Part)?
     /// Also inverse-only: every staff's `brackets` array as it stood before the removal, indexed
     /// `[partIndex][staffIndexInPart]` over the PRE-removal parts. Restoring by whole-value overwrite is exact
     /// even though the removal's re-anchor pass is not a simple span decrement — a bracket whose anchor staff was
@@ -70,6 +70,7 @@ public struct AddPart: EditCommand {
 
     init(
         restoring part: Part,
+        eid: EID,
         at partIndex: Int,
         brackets: [[[BracketItem]]],
         originalStaves: [[StaffAddress?]],
@@ -77,7 +78,7 @@ public struct AddPart: EditCommand {
     ) {
         self.partIndex = partIndex
         plan = nil
-        restoredPart = part
+        restoredPart = (eid: eid, part: part)
         restoredBrackets = brackets
         restoredOriginalStaves = originalStaves
         restoredCanonicalFlags = canonicalFlags
@@ -91,7 +92,7 @@ public struct AddPart: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         // `!parts.isEmpty` for the same reason `InsertMeasure` requires it: a partless score has no reference
         // staff to take the signature skeleton or the measure count from, and nothing sensible to build against.
         guard partIndex >= 0, partIndex <= score.parts.count, !score.parts.isEmpty else {
@@ -99,16 +100,29 @@ public struct AddPart: EditCommand {
         }
 
         if let restoredPart {
-            score.parts.insert(restoredPart, at: partIndex)
+            let restored = restoredPart.part
+            let anchor = partIndex == 0 ? nil : score.parts.eid(at: partIndex - 1)
+            score.parts.insert(restored, after: anchor, id: restoredPart.eid)
             restore(&score)
             return RemovePart(partIndex: partIndex)
         }
 
         guard let plan else { throw Self.refused(.emptyPayload) }
-        let part = Self.builtPart(from: plan, joining: score)
+        var part = Self.builtPart(from: plan, joining: score)
+        part.staves.assignMissingIDs(using: &ids)
+        for staffIndex in part.staves.indices {
+            part.staves.updateValue(at: staffIndex) { staff in
+                for measureIndex in staff.measures.indices {
+                    for voiceIndex in staff.measures[measureIndex].voices.indices {
+                        staff.measures[measureIndex].voices[voiceIndex].assignMissingIDs(using: &ids)
+                    }
+                }
+            }
+        }
         Self.growBracketsCrossing(partIndex, in: &score, byStaves: part.staves.count)
         Self.restampSystemElements(in: &score, fromPartIndex: partIndex)
-        score.parts.insert(part, at: partIndex)
+        let anchor = partIndex == 0 ? nil : score.parts.eid(at: partIndex - 1)
+        score.parts.insert(part, after: anchor, id: ids.next())
         return RemovePart(partIndex: partIndex)
     }
 
@@ -121,7 +135,11 @@ public struct AddPart: EditCommand {
                 for staff in score.parts[part].staves.indices
                     where restoredBrackets[part].indices.contains(staff)
                 {
-                    score.parts[part].staves[staff].brackets = restoredBrackets[part][staff]
+                    score.parts.updateValue(at: part) { partValue in
+                        partValue.staves.updateValue(at: staff) { staffValue in
+                            staffValue.brackets = restoredBrackets[part][staff]
+                        }
+                    }
                 }
             }
         }
@@ -129,11 +147,14 @@ public struct AddPart: EditCommand {
         for measureIndex in score.systemMeasures.indices
             where restoredOriginalStaves.indices.contains(measureIndex)
         {
-            for elementIndex in score.systemMeasures[measureIndex].elements.indices
-                where restoredOriginalStaves[measureIndex].indices.contains(elementIndex)
-            {
-                score.systemMeasures[measureIndex].elements[elementIndex].originalStaff =
-                    restoredOriginalStaves[measureIndex][elementIndex]
+            score.systemMeasures.updateValue(at: measureIndex) { column in
+                for elementIndex in column.elements.indices
+                    where restoredOriginalStaves[measureIndex].indices.contains(elementIndex)
+                {
+                    column.elements.updateValue(at: elementIndex) {
+                        $0.originalStaff = restoredOriginalStaves[measureIndex][elementIndex]
+                    }
+                }
             }
         }
         if let restoredCanonicalFlags, partIndex == 0 {
@@ -204,7 +225,11 @@ public struct AddPart: EditCommand {
                 for bracket in score.parts[part].staves[staff].brackets.indices {
                     let span = score.parts[part].staves[staff].brackets[bracket].span
                     guard boundary <= globalIndex + span - 1 else { continue }
-                    score.parts[part].staves[staff].brackets[bracket].span = span + staffCount
+                    score.parts.updateValue(at: part) { partValue in
+                        partValue.staves.updateValue(at: staff) { staffValue in
+                            staffValue.brackets[bracket].span = span + staffCount
+                        }
+                    }
                 }
                 globalIndex += 1
             }
@@ -215,14 +240,18 @@ public struct AddPart: EditCommand {
     /// keeps naming the staff it was written on.
     private static func restampSystemElements(in score: inout Score, fromPartIndex partIndex: Int) {
         for measureIndex in score.systemMeasures.indices {
-            for elementIndex in score.systemMeasures[measureIndex].elements.indices {
-                guard let address = score.systemMeasures[measureIndex].elements[elementIndex].originalStaff,
-                      address.partIndex >= partIndex
-                else { continue }
-                score.systemMeasures[measureIndex].elements[elementIndex].originalStaff = StaffAddress(
-                    partIndex: address.partIndex + 1,
-                    staffIndexInPart: address.staffIndexInPart,
-                )
+            score.systemMeasures.updateValue(at: measureIndex) { column in
+                for elementIndex in column.elements.indices {
+                    guard let address = column.elements[elementIndex].originalStaff,
+                          address.partIndex >= partIndex
+                    else { continue }
+                    column.elements.updateValue(at: elementIndex) {
+                        $0.originalStaff = StaffAddress(
+                            partIndex: address.partIndex + 1,
+                            staffIndexInPart: address.staffIndexInPart,
+                        )
+                    }
+                }
             }
         }
     }

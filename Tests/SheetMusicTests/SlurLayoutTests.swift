@@ -432,9 +432,9 @@
         /// baseline the fixture delta is measured against.
         private static func strippingChordSpanners(_ score: Score) -> Score {
             var stripped = score
-            stripped.parts = score.parts.map { part in
+            stripped.parts.mapValues { part in
                 var part = part
-                part.staves = part.staves.map { staff in
+                part.staves.mapValues { staff in
                     var staff = staff
                     staff.measures = staff.measures.map(strippingMeasure)
                     return staff
@@ -448,7 +448,7 @@
             var measure = measure
             measure.voices = measure.voices.map { voice in
                 var voice = voice
-                voice.elements = voice.elements.map { element in
+                voice.elements.mapValues { element in
                     guard case let .chord(chord) = element else { return element }
                     var bare = chord
                     bare.spanners = []

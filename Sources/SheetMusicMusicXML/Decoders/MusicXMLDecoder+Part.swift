@@ -44,7 +44,7 @@ extension Part {
             // so leave Part.trackName nil for parity with `*_ref.mscx`.
             trackName: nil,
             instrument: instrument,
-            staves: staves,
+            staves: IdentifiedArray(staves),
         )
         return (part, drumTable, instrumentByID)
     }

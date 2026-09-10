@@ -46,7 +46,7 @@ public struct InsertMeasure: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let count = MeasureStructure.measureCount(of: score)
         guard measureIndex >= 0, measureIndex <= count, !score.parts.isEmpty else {
             throw Self.refused(.targetNotFound(affectedLocation))
@@ -55,40 +55,47 @@ public struct InsertMeasure: EditCommand {
         // Restore path (inverse of a delete): undo the bar-0 signature merge byte-for-byte, then reinsert
         // the deleted column verbatim.
         if let contents = restoredContents {
+            let priorVoiceZero = measureIndex == 0 && count > 0
+                ? score.parts.map { $0.staves.map { $0.measures[0].voices[0] } } : nil
             if let incomingVoices = restoredIncomingVoice0, measureIndex < count {
                 for partIndex in score.parts.indices {
                     for staffIndex in score.parts[partIndex].staves.indices {
-                        score.parts[partIndex].staves[staffIndex].measures[measureIndex].voices[0] =
-                            incomingVoices[partIndex][staffIndex]
+                        score.parts.updateValue(at: partIndex) { partValue in
+                            partValue.staves.updateValue(at: staffIndex) { staffValue in
+                                staffValue.measures[measureIndex].voices[0] =
+                                    incomingVoices[partIndex][staffIndex]
+                            }
+                        }
                     }
                 }
             }
-            insert(contents, into: &score)
+            insert(contents, into: &score, ids: &ids)
             restoreEndpointSpanners(in: &score)
-            return DeleteMeasure(measureIndex: measureIndex)
+            return DeleteMeasure(measureIndex: measureIndex, restoringFollowingVoice0: priorVoiceZero)
         }
 
         // Blank path.
-        var column = MeasureStructure.blankColumn(for: score)
+        var column = MeasureStructure.blankColumn(for: score, ids: &ids)
+        let priorVoiceZero = measureIndex == 0 && count > 0
+            ? score.parts.map { $0.staves.map { $0.measures[0].voices[0] } } : nil
         if measureIndex == 0, count > 0 {
             for partIndex in score.parts.indices {
                 for staffIndex in score.parts[partIndex].staves.indices {
                     let oldVoice = score.parts[partIndex].staves[staffIndex].measures[0].voices[0]
                     let prefix = MeasureStructure.leadingSignaturePrefix(of: oldVoice)
                     guard !prefix.isEmpty else { continue }
-                    score.parts[partIndex].staves[staffIndex].measures[0].voices[0].elements
-                        .removeFirst(prefix.count)
-                    MeasureStructure.shiftTuplets(
-                        in: &score.parts[partIndex].staves[staffIndex].measures[0].voices[0],
-                        by: -prefix.count,
-                    )
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            staffValue.measures[0].voices[0].removeElements(at: Set(0 ..< prefix.count))
+                        }
+                    }
                     column.staffMeasures[partIndex][staffIndex].voices[0].elements
-                        .insert(contentsOf: prefix, at: 0)
+                        .insert(contentsOf: prefix.identifiedPairs(in: prefix.indices), at: 0)
                 }
             }
         }
-        insert(column, into: &score)
-        return DeleteMeasure(measureIndex: measureIndex)
+        insert(column, into: &score, ids: &ids)
+        return DeleteMeasure(measureIndex: measureIndex, restoringFollowingVoice0: priorVoiceZero)
     }
 
     /// Re-widens the spanners the paired delete shrunk at the boundary, each through the storage form its
@@ -113,20 +120,32 @@ public struct InsertMeasure: EditCommand {
         }
     }
 
-    private func insert(_ column: MeasureSlice, into score: inout Score) {
+    private func insert(_ column: MeasureSlice, into score: inout Score, ids: inout EIDAllocator) {
         let preInsertMeasureCount = MeasureStructure.measureCount(of: score)
         MeasureStructure.adjustSpannerOffsets(in: &score, forInsertionAt: measureIndex)
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
-                score.parts[partIndex].staves[staffIndex].measures
-                    .insert(column.staffMeasures[partIndex][staffIndex], at: measureIndex)
+                score.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        staffValue.measures
+                            .insert(column.staffMeasures[partIndex][staffIndex], at: measureIndex)
+                    }
+                }
             }
         }
         // Only keep `systemMeasures` parallel when it was already tracking every measure — a score that
         // never maintained the invariant (see `MeasureSlice`'s `EditingFixtures` callout) must come back
         // out exactly as empty as it went in, not partially patched.
         if score.systemMeasures.count == preInsertMeasureCount {
-            score.systemMeasures.insert(column.systemMeasure, at: measureIndex)
+            let eid: EID
+            if let restoredContents {
+                guard let restoredID = restoredContents.systemMeasureEID else { return }
+                eid = restoredID
+            } else {
+                eid = ids.next()
+            }
+            let anchor = measureIndex == 0 ? nil : score.systemMeasures.eid(at: measureIndex - 1)
+            score.systemMeasures.insert(column.systemMeasure, after: anchor, id: eid)
         }
     }
 }

@@ -75,8 +75,14 @@ enum ScoreSemanticMetrics {
         let bNoteful = scoreB.parts.filter { partNoteCount($0) > 0 }
         let paired = min(aNoteful.count, bNoteful.count)
         var out = PartAlignment(scoreA: scoreA, scoreB: scoreB)
-        out.scoreA.parts = aNoteful
-        out.scoreB.parts = bNoteful
+        out.scoreA.parts = IdentifiedArray(scoreA.parts.indices.compactMap { index in
+            let part = scoreA.parts[index]
+            return partNoteCount(part) > 0 ? (scoreA.parts.eid(at: index), part) : nil
+        })
+        out.scoreB.parts = IdentifiedArray(scoreB.parts.indices.compactMap { index in
+            let part = scoreB.parts[index]
+            return partNoteCount(part) > 0 ? (scoreB.parts.eid(at: index), part) : nil
+        })
         out.partLossNotes = aNoteful.dropFirst(paired)
             .reduce(0) { $0 + partNoteCount($1) }
         out.partGainNotes = bNoteful.dropFirst(paired)

@@ -75,7 +75,13 @@ struct InsertMeasureTests {
     func spannerOffsetStretches() throws {
         var score = twoBarScore()
         let spanner = Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 1)
-        score.parts[0].staves[0].measures[0].voices[0].elements.append(.spanner(spanner))
+        var slots = score.parts[0].staves[0].measures[0].voices[0].elements.voiceSlots()
+        slots.append(VoiceSlot(identity: .fresh, element: .spanner(spanner)))
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, slots: slots,
+            tuplets: score.parts[0].staves[0].measures[0].voices[0].tuplets,
+        ).apply(to: &score)
 
         let inverse = try InsertMeasure(measureIndex: 1).apply(to: &score)
 
@@ -104,10 +110,20 @@ struct InsertMeasureTests {
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])),
         ]
         // Bar 0 was [key, time, rest]; replace the rest (index 2) with 3 triplet members.
-        score.parts[0].staves[0].measures[0].voices[0].elements.replaceSubrange(2 ..< 3, with: members)
-        score.parts[0].staves[0].measures[0].voices[0].tuplets = [
-            Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4),
-        ]
+        var slots = score.parts[0].staves[0].measures[0].voices[0].elements.voiceSlots()
+        slots.replaceSubrange(2 ..< 3, with: members.map { VoiceSlot(identity: .fresh, element: $0) })
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, slots: slots,
+            tuplets: score.parts[0].staves[0].measures[0].voices[0].tuplets,
+        ).apply(to: &score)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].tuplets = [
+                    Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4),
+                ]
+            }
+        }
         let original = score
 
         let inverse = try InsertMeasure(measureIndex: 0).apply(to: &score)
@@ -115,8 +131,8 @@ struct InsertMeasureTests {
         // The 2-element signature prefix was removed from this bar (now at measure index 1), so the
         // tuplet's indices must shift down by 2 — asserted right after apply, not only after the round trip,
         // since the bug this guards against is symmetric and would otherwise cancel out invisibly.
-        #expect(score.parts[0].staves[0].measures[1].voices[0].tuplets ==
-            [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2)])
+        #expect(score.parts[0].staves[0].measures[1].voices[0].tupletSpans ==
+            [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2)])
 
         _ = try inverse.apply(to: &score)
         #expect(score == original)

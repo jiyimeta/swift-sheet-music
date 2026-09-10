@@ -24,6 +24,10 @@ public final class ScoreEditSession {
         partIDBaseline = score.parts.map(\.id)
     }
 
+    public var idAllocator: EIDAllocator {
+        editor.idAllocator
+    }
+
     public var score: Score {
         editor.score
     }
@@ -53,9 +57,12 @@ public final class ScoreEditSession {
     /// step by doing nothing too.
     @discardableResult
     public func apply(_ intent: EditIntent) -> Bool {
+        var planningScore = editor.score
+        var planningIDs = idAllocator
+        planningScore.assignMissingIDs(using: &planningIDs)
         let planned: (any EditCommand)?
         do {
-            planned = try Self.command(for: intent, in: editor.score, depth: 0)
+            planned = try Self.command(for: intent, in: planningScore, ids: planningIDs, depth: 0)
         } catch {
             lastRefusal = Self.refusal(for: error, operation: "apply")
             return false
@@ -65,7 +72,7 @@ public final class ScoreEditSession {
             return false
         }
         do {
-            try editor.apply(Self.renotatingAccidentals(planned, from: editor.score))
+            try editor.apply(Self.renotatingAccidentals(planned, from: planningScore, ids: planningIDs))
         } catch {
             lastRefusal = Self.refusal(for: error, operation: "apply")
             return false
@@ -84,12 +91,23 @@ public final class ScoreEditSession {
     ///
     /// The repairs are planned against the POST-edit score, so the command is applied to a throwaway copy first.
     /// That copy is also what tells us a refused edit needs no repairs at all.
-    private static func renotatingAccidentals(_ command: any EditCommand, from score: Score) -> any EditCommand {
+    private static func renotatingAccidentals(
+        _ command: any EditCommand, from score: Score, ids: EIDAllocator,
+    ) -> any EditCommand {
+        renotationPlan(command, from: score, ids: ids)?.command ?? command
+    }
+
+    /// Retains the preview and allocator that produced the diff-driven repairs; a refused preview has no plan.
+    static func renotationPlan(
+        _ command: any EditCommand, from score: Score, ids: EIDAllocator,
+    ) -> AccidentalRenotationPlan? {
+        var scratch = ids
         var preview = score
-        guard (try? command.apply(to: &preview)) != nil else { return command }
+        guard (try? command.apply(to: &preview, ids: &scratch)) != nil else { return nil }
         let repairs = MeasureAccidentals.renotationCommands(in: preview, changedFrom: score)
-        guard !repairs.isEmpty else { return command }
-        return CompositeEditCommand(commands: [command] + repairs, location: command.affectedLocation)
+        let repaired: any EditCommand = repairs.isEmpty
+            ? command : CompositeEditCommand(commands: [command] + repairs, location: command.affectedLocation)
+        return AccidentalRenotationPlan(command: repaired, preview: preview, idAllocator: scratch, repairs: repairs)
     }
 
     /// Preserves an edit refusal directly and wraps any escaped foreign error.

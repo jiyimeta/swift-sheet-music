@@ -223,7 +223,7 @@ extension Voice {
 
     private func encode(
         element: VoiceElement,
-        activeTuplets: [Tuplet],
+        activeTuplets: [TupletSpan],
         previousChordDuration: Fraction?,
         isFirstChordOfVoice: Bool,
         isLastChordOfVoice: Bool,

@@ -12,9 +12,15 @@ struct SetElementVisibleTests {
     /// `[ts, dynamic, C4, r, r, r]` — a chord wearing a dynamic, so both a timed and an untimed target exist.
     private static func dressedScore() -> Score {
         var score = EditingFixtures.chordAtIndex1()
-        score.parts[0].staves[0].measures[0].voices[0].elements.insert(
-            .dynamic(Dynamic(subtype: "p", velocity: 49)), at: 1,
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(
+                    .dynamic(Dynamic(subtype: "p", velocity: 49)), at: 1,
+                )
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
+            }
+        }
         return score
     }
 
@@ -66,8 +72,13 @@ struct SetElementVisibleTests {
     @Test("a measure repeat, a location shift and a missing slot are refused")
     func refusals() throws {
         var score = EditingFixtures.fourQuarterRests()
-        score.parts[0].staves[0].measures[0].voices[0].elements[1] =
-            .locationShift(delta: Fraction(numerator: 1, denominator: 4))
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.updateValue(at: 1) {
+                    $0 = .locationShift(delta: Fraction(numerator: 1, denominator: 4))
+                }
+            }
+        }
         let before = score
         let shift = #expect(throws: SheetMusicError.self) {
             _ = try SetElementVisible(at: Self.slot(1), visible: false).apply(to: &score)

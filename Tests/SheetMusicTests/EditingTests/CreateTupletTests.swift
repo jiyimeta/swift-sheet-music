@@ -20,7 +20,7 @@ struct CreateTupletTests {
         // [timeSig, chord(1/12), rest(1/12), rest(1/12), rest(q) × 3].
         #expect(voice.elements.count == 7)
         #expect(voice.tuplets.count == 1)
-        let t = voice.tuplets[0]
+        let t = voice.tupletSpans[0]
         #expect(t.actualNotes == 3)
         #expect(t.normalNotes == 2)
         #expect(t.startIndex == 1)
@@ -68,7 +68,7 @@ struct CreateTupletTests {
         _ = try cmd.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
         #expect(voice.tuplets[0].actualNotes == 5)
-        #expect(voice.tuplets[0].endIndex - voice.tuplets[0].startIndex == 4)
+        #expect(voice.tupletSpans[0].endIndex - voice.tupletSpans[0].startIndex == 4)
         guard case let .chord(c) = voice.elements[1] else {
             Issue.record("expected chord"); return
         }
@@ -148,8 +148,8 @@ struct CreateTupletTests {
         .apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
         #expect(voice.tuplets.count == 2)
-        let first = voice.tuplets[0]
-        let second = voice.tuplets[1]
+        let first = voice.tupletSpans[0]
+        let second = voice.tupletSpans[1]
         #expect(first.startIndex == 1 && first.endIndex == 3)
         #expect(second.startIndex == 4 && second.endIndex == 6)
     }

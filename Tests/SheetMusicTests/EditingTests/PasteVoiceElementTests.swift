@@ -64,7 +64,11 @@ struct PasteVoiceElementTests {
             .rest(duration: .quarter),
             .rest(duration: .quarter),
         ]
-        score.parts[0].staves[0].measures[0].voices[0] = v
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = v
+            }
+        }
         let halfRestID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1,

@@ -69,11 +69,14 @@ struct MovePartTests {
     @Test("a system element's anchor follows its part through the permutation")
     func moveRestampsSystemElementAddresses() throws {
         var score = duet()
-        score.systemMeasures[1].elements.append(PositionedSystemElement(
-            position: .start,
-            element: .tempo(Tempo(beatsPerSecond: 3)),
-            originalStaff: StaffAddress(partIndex: 1, staffIndexInPart: 1),
-        ))
+        score.systemMeasures.updateValue(at: 1) { column in
+            let pairs = column.elements.indices.map { (column.elements.eid(at: $0), column.elements[$0]) }
+            column.elements = IdentifiedArray(pairs + [(.invalid, PositionedSystemElement(
+                position: .start,
+                element: .tempo(Tempo(beatsPerSecond: 3)),
+                originalStaff: StaffAddress(partIndex: 1, staffIndexInPart: 1),
+            ))])
+        }
         let original = score
         let inverse = try MovePart(from: 0, to: 1).apply(to: &score)
         // The flute was part 0 and is now part 1; the piano was part 1 and is now part 0.

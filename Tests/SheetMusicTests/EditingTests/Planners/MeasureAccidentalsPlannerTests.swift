@@ -29,7 +29,9 @@ struct MeasureAccidentalsPlannerTests {
     /// A bar whose first C is flipped to natural leaves the SECOND C reading natural to the eye while it still
     /// sounds sharp. The renotation pass is what repairs that.
     @Test func `renotation repairs a later note in the same bar`() {
-        var previous = EditingFixtures.twoMeasuresOfQuarterRests(key: 2)
+        // Identified first: a repair carries every slot of its voice by identity, and only a score from a
+        // producing entry point (here the editor) has identities to carry.
+        var previous = ScoreEditor(score: EditingFixtures.twoMeasuresOfQuarterRests(key: 2)).score
         // Two C#5 quarters in bar 0 (elements 2 and 3), then flatten the first to C natural.
         let first = VoiceElementID(EditingFixtures.restID(element: 2))
         let second = VoiceElementID(EditingFixtures.restID(element: 3))
@@ -59,13 +61,24 @@ struct MeasureAccidentalsPlannerTests {
         ))
         for m in 0 ..< 2 {
             let slot = m == 0 ? 2 : 0
-            score.parts[0].staves[0].measures[m].voices[0].elements[slot] =
-                .chord(Chord(duration: .whole, notes: [Note(pitch: 66, tpc: 20)])) // F♯4, in-key in G major
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[m].voices[0].elements.updateValue(at: slot) {
+                        $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 66, tpc: 20)]))
+                    } // F♯4, in-key in G major
+                }
+            }
         }
         // Flip the stored key to C major the way SetKeySignature will: rewrite the measure-0 element.
         guard case .keySignature = score.parts[0].staves[0].measures[0].voices[0].elements[0]
         else { Issue.record("expected key sig at [0]"); return }
-        score.parts[0].staves[0].measures[0].voices[0].elements[0] = .keySignature(KeySignature(concertKey: 0))
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.updateValue(at: 0) {
+                    $0 = .keySignature(KeySignature(concertKey: 0))
+                }
+            }
+        }
 
         let repairs = MeasureAccidentals.renotationCommands(in: score, measureRange: 0 ..< 2)
         #expect(repairs.count == 2) // BOTH measures need a repair — the diff-based path would only find bar 0

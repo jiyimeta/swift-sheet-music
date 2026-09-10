@@ -35,10 +35,14 @@ extension Score {
         let division = copy.division
         for partIndex in copy.parts.indices {
             for staffIndex in copy.parts[partIndex].staves.indices {
-                Self.suppressInStaff(
-                    &copy.parts[partIndex].staves[staffIndex],
-                    division: division,
-                )
+                copy.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        Self.suppressInStaff(
+                            &staffValue,
+                            division: division,
+                        )
+                    }
+                }
             }
         }
         return copy
@@ -151,7 +155,7 @@ extension Score {
                     var mutated = chord
                     mutated.notes[ref.note].accidental = nil
                     mutated.notes[ref.note].accidentalBracket = .none
-                    measure.voices[ref.voice].elements[ref.element] = .chord(mutated)
+                    measure.voices[ref.voice].elements.updateValue(at: ref.element) { $0 = .chord(mutated) }
                 }
                 // Otherwise the accidental is needed, USER-forced, or
                 // non-standard — keep it.

@@ -44,7 +44,7 @@ public struct SetElementPlacement: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         if case let .note(id) = target, score[id] == nil { throw Self.refused(.noteNotFound(id)) }
         if case let .chord(id) = target {
             guard let element = score[id] else { throw Self.refused(.targetNotFound(id)) }
@@ -110,7 +110,9 @@ public struct SetElementPlacement: EditCommand {
             ), case var .staffText(mark) = score.systemMeasures[slot.measureIndex].elements[slot.elementIndex].element
             else { throw Self.refused(.targetNotFound(affectedLocation)) }
             mark.elementProperties.placement = placement
-            score.systemMeasures[slot.measureIndex].elements[slot.elementIndex].element = .staffText(mark)
+            score.systemMeasures.updateValue(at: slot.measureIndex) {
+                $0.elements.updateValue(at: slot.elementIndex) { $0.element = .staffText(mark) }
+            }
         case let .harmony(anchor):
             guard let slot = SetChordSymbol.harmonySlot(at: anchor, in: score),
                   case var .harmony(harmony)? = score[slot]
@@ -123,7 +125,9 @@ public struct SetElementPlacement: EditCommand {
                   case var .rehearsalMark(mark) = score.systemMeasures[index].elements[slot].element
             else { throw Self.refused(.targetNotFound(affectedLocation)) }
             mark.elementProperties.placement = placement
-            score.systemMeasures[index].elements[slot].element = .rehearsalMark(mark)
+            score.systemMeasures.updateValue(at: index) {
+                $0.elements.updateValue(at: slot) { $0.element = .rehearsalMark(mark) }
+            }
         }
     }
 }

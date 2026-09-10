@@ -18,7 +18,7 @@ public struct SetStaffText: EditCommand {
     /// The text to write, trimmed by `apply`; `nil` removes. Ignored on the restore path.
     public let text: String?
     public let isSystemText: Bool
-    let restoredLane: [SystemMeasure]?
+    let restoredLane: IdentifiedArray<SystemMeasure>?
 
     public init(anchor: VoiceElementID, text: String?, isSystemText: Bool) {
         self.anchor = anchor
@@ -27,7 +27,7 @@ public struct SetStaffText: EditCommand {
         restoredLane = nil
     }
 
-    init(restoringLane lane: [SystemMeasure], anchor: VoiceElementID, isSystemText: Bool) {
+    init(restoringLane lane: IdentifiedArray<SystemMeasure>, anchor: VoiceElementID, isSystemText: Bool) {
         self.anchor = anchor
         text = nil
         self.isSystemText = isSystemText
@@ -39,7 +39,7 @@ public struct SetStaffText: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         // The restore branch is decided BEFORE the anchor is resolved, for `SetTempo`'s reason: the pre-image
         // lane needs no beat, and an inverse must never refuse.
         let previous = score.systemMeasures
@@ -53,14 +53,18 @@ public struct SetStaffText: EditCommand {
         if let text {
             let trimmed = text.trimmingWhitespaceAndNewlines()
             guard !trimmed.isEmpty else { throw Self.refused(.emptyStaffText) }
-            RehearsalMarkLane.pad(&score)
-            write(trimmed, at: position, into: &score.systemMeasures[anchor.measureIndex])
+            RehearsalMarkLane.pad(&score, ids: &ids)
+            score.systemMeasures.updateValue(at: anchor.measureIndex) {
+                write(trimmed, at: position, into: &$0, ids: &ids)
+            }
         } else {
             guard Self.current(at: anchor, isSystemText: isSystemText, in: score) != nil else {
                 throw Self.refused(.targetNotFound(anchor))
             }
-            score.systemMeasures[anchor.measureIndex].elements.removeAll {
-                $0.position == position && matches($0)
+            score.systemMeasures.updateValue(at: anchor.measureIndex) { measure in
+                measure.elements.removeAll {
+                    $0.position == position && matches($0)
+                }
             }
         }
         return SetStaffText(restoringLane: previous, anchor: anchor, isSystemText: isSystemText)
@@ -102,15 +106,20 @@ public struct SetStaffText: EditCommand {
         return isSystemText || (positioned.originalStaff ?? Score.canonicalStaff) == anchor.staff
     }
 
-    private func write(_ trimmed: String, at position: MeasurePosition, into measure: inout SystemMeasure) {
+    private func write(
+        _ trimmed: String, at position: MeasurePosition, into measure: inout SystemMeasure, ids: inout EIDAllocator,
+    ) {
         if let index = SystemLaneSlot.firstIndex(in: measure, at: position, where: matches),
            case var .staffText(existing) = measure.elements[index].element
         {
             existing.text = trimmed
-            measure.elements[index].element = .staffText(existing)
-            var rest = Array(measure.elements[(index + 1)...])
-            rest.removeAll { $0.position == position && matches($0) }
-            measure.elements.replaceSubrange((index + 1)..., with: rest)
+            measure.elements.updateValue(at: index) { $0.element = .staffText(existing) }
+            for duplicate in measure.elements.indices.reversed() where duplicate > index {
+                let element = measure.elements[duplicate]
+                if element.position == position, matches(element) {
+                    measure.elements.removeSubrange(duplicate ..< duplicate + 1)
+                }
+            }
             return
         }
         measure.elements.insert(
@@ -120,6 +129,7 @@ public struct SetStaffText: EditCommand {
                 originalStaff: isSystemText ? nil : anchor.staff,
             ),
             at: SystemLaneSlot.insertionIndex(in: measure, for: position),
+            id: ids.next(),
         )
     }
 }

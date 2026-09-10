@@ -160,7 +160,7 @@ extension Part {
                 transposeDiatonic: plan.transposeDiatonic,
                 transposeChromatic: plan.transposeChromatic,
             ),
-            staves: staves,
+            staves: IdentifiedArray(staves),
         )
     }
 }
@@ -218,13 +218,16 @@ extension Score {
             frameTexts.append(FrameText(style: .composer, text: composer))
         }
 
-        return Score(
+        var score = Score(
             division: 480,
-            parts: parts,
-            systemMeasures: systemMeasures,
+            parts: IdentifiedArray(parts),
+            systemMeasures: IdentifiedArray(systemMeasures),
             metaTags: metaTags,
             titleFrame: ScoreFrame(heightSp: 10, texts: frameTexts),
         )
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        return score
     }
 
     /// Anchors one `.normal` bracket per group on the top staff of the group's first part, spanning every
@@ -248,9 +251,11 @@ extension Score {
             guard span > 1, !parts[group.lowerBound].staves.isEmpty else { continue }
             let existing = parts[group.lowerBound].staves[0].brackets
             let column = existing.isEmpty ? 0 : (existing.map(\.column).max() ?? 0) + 1
-            parts[group.lowerBound].staves[0].brackets.append(
-                BracketItem(type: .normal, span: span, column: column),
-            )
+            parts[group.lowerBound].staves.updateValue(at: 0) { staffValue in
+                staffValue.brackets.append(
+                    BracketItem(type: .normal, span: span, column: column),
+                )
+            }
         }
     }
 }

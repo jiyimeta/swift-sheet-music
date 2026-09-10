@@ -57,7 +57,7 @@ public struct SetTextVisible: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let old = Self.current(text, in: score) else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
@@ -75,19 +75,23 @@ public struct SetTextVisible: EditCommand {
                 .element
             else { throw Self.refused(.targetNotFound(affectedLocation)) }
             mark.visible = visible
-            score.systemMeasures[slot.measureIndex].elements[slot.elementIndex].element = .staffText(mark)
+            score.systemMeasures.updateValue(at: slot.measureIndex) {
+                $0.elements.updateValue(at: slot.elementIndex) { $0.element = .staffText(mark) }
+            }
         case let .harmony(anchor):
             guard let slot = SetChordSymbol.harmonySlot(at: anchor, in: score) else {
                 throw Self.refused(.targetNotFound(affectedLocation))
             }
-            try SetElementVisible(at: slot, visible: visible).apply(to: &score)
+            try SetElementVisible(at: slot, visible: visible).apply(to: &score, ids: &ids)
         case let .rehearsalMark(measureIndex):
             guard score.systemMeasures.indices.contains(measureIndex),
                   let index = RehearsalMarkLane.markIndex(in: score.systemMeasures[measureIndex]),
                   case var .rehearsalMark(mark) = score.systemMeasures[measureIndex].elements[index].element
             else { throw Self.refused(.targetNotFound(affectedLocation)) }
             mark.visible = visible
-            score.systemMeasures[measureIndex].elements[index].element = .rehearsalMark(mark)
+            score.systemMeasures.updateValue(at: measureIndex) {
+                $0.elements.updateValue(at: index) { $0.element = .rehearsalMark(mark) }
+            }
         }
         return SetTextVisible(text, visible: old)
     }

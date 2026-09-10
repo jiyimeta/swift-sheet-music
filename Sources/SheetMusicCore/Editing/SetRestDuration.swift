@@ -29,7 +29,7 @@ public struct SetRestDuration: EditCommand {
 
     @discardableResult
     // swiftlint:disable:next function_body_length
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let voice = DurationChangeAlgorithm
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)
@@ -78,6 +78,7 @@ public struct SetRestDuration: EditCommand {
                 division: division,
                 baseLocation: location,
                 operation: "SetRestDuration",
+                targetEID: voice.elements.eid(at: location.elementIndex), ids: &ids,
             )
         let replace = ReplaceVoiceElements(
             staff: location.staff,
@@ -86,6 +87,6 @@ public struct SetRestDuration: EditCommand {
             elements: newElements,
             tuplets: newTuplets,
         )
-        return try replace.apply(to: &score)
+        return try replace.apply(to: &score, ids: &ids)
     }
 }

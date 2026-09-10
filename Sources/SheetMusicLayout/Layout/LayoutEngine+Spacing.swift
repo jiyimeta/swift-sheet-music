@@ -614,7 +614,7 @@ extension LayoutEngine {
                     switch el {
                     case let .chord(c) where !c.notes.isEmpty:
                         let nextLyrics = nextChordLyrics(
-                            in: voice.elements, after: idx,
+                            in: voice.elements.values, after: idx,
                         )
                         // Reserve column width for grace clusters whose
                         // glyphs live inside THIS column's horizontal
@@ -627,7 +627,7 @@ extension LayoutEngine {
                         //     from THIS tick to the next tick IS this
                         //     column's weight in the proportional spacer).
                         let nextBeforeCount = nextChordBeforeGraceCount(
-                            in: voice.elements, after: idx,
+                            in: voice.elements.values, after: idx,
                         )
                         let graceBudget = LayoutEngine.graceWidth(sp: metrics.sp)
                             * CGFloat(c.graceNotesAfter.count + nextBeforeCount)
@@ -641,7 +641,7 @@ extension LayoutEngine {
                             anchorSteps: spacingSteps(of: c),
                             previousSteps: previousChord.map(spacingSteps(of:)),
                             nextSteps: nextSpacingChord(
-                                in: voice.elements, after: idx,
+                                in: voice.elements.values, after: idx,
                             ).map(spacingSteps(of:)),
                             metrics: metrics,
                         )
@@ -952,7 +952,7 @@ extension LayoutEngine {
                 case let .chord(c) where !c.notes.isEmpty:
                     let tickW = durationWidth(c.duration, metrics: metrics)
                     let nextLyrics = nextChordLyrics(
-                        in: voice.elements, after: idx,
+                        in: voice.elements.values, after: idx,
                     )
                     let lyricW = lyricsPairWidth(
                         currentLyrics: c.lyrics,

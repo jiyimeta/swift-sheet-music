@@ -306,8 +306,12 @@
         var s = score
         for p in s.parts.indices {
             for st in s.parts[p].staves.indices {
-                s.parts[p].staves[st].measures =
-                    Array(s.parts[p].staves[st].measures.prefix(count))
+                s.parts.updateValue(at: p) { partValue in
+                    partValue.staves.updateValue(at: st) { staffValue in
+                        staffValue.measures =
+                            Array(staffValue.measures.prefix(count))
+                    }
+                }
             }
         }
         return s
@@ -322,7 +326,11 @@
                 let measures = s.parts[p].staves[st].measures
                 let clamped = max(0, min(start, measures.count))
                 let end = min(start + count, measures.count)
-                s.parts[p].staves[st].measures = Array(measures[clamped ..< end])
+                s.parts.updateValue(at: p) { partValue in
+                    partValue.staves.updateValue(at: st) { staffValue in
+                        staffValue.measures = Array(measures[clamped ..< end])
+                    }
+                }
             }
         }
         return s

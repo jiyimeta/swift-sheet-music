@@ -67,18 +67,26 @@ struct MoveToVoiceTests {
     /// The tuplet's endpoints index elements 2...4 and must survive the collapse of elements 0 and 1 into one.
     private static func tripletDestinationScore() -> Score {
         var score = EditingFixtures.parityFixture()
-        score.parts[0].staves[0].measures[1].voices[0] = Voice(elements: [
-            .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
-            .rest(duration: .quarter),
-            .rest(duration: .quarter),
-        ])
-        score.parts[0].staves[0].measures[1].voices[1] = Voice(
-            elements: [
-                .rest(duration: .quarter), .rest(duration: .quarter),
-                tripletMember, tripletMember, tripletMember,
-            ],
-            tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)],
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[0] = Voice(elements: [
+                    .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
+                    .rest(duration: .quarter),
+                    .rest(duration: .quarter),
+                ])
+            }
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[1] = Voice(
+                    elements: [
+                        .rest(duration: .quarter), .rest(duration: .quarter),
+                        tripletMember, tripletMember, tripletMember,
+                    ],
+                    tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)],
+                )
+            }
+        }
         return score
     }
 
@@ -96,7 +104,7 @@ struct MoveToVoiceTests {
             .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
             Self.tripletMember, Self.tripletMember, Self.tripletMember,
         ])
-        #expect(v1.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
+        #expect(v1.tupletSpans == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
     }
 
     @Test("undo restores the destination voice's tuplet endpoints")
@@ -114,7 +122,11 @@ struct MoveToVoiceTests {
     func refusesDestinationShorterThanTheSpan() throws {
         var score = EditingFixtures.parityFixture()
         // A legal partial voice: voice 1 of bar 1 holds one quarter rest on beat 1 and stops there.
-        score.parts[0].staves[0].measures[1].voices[1] = Voice(elements: [.rest(duration: .quarter)])
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].voices[1] = Voice(elements: [.rest(duration: .quarter)])
+            }
+        }
         score[Self.slot(1, 2)] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 65, tpc: 13)]))
         let before = score
 
@@ -132,15 +144,19 @@ struct MoveToVoiceTests {
         var score = EditingFixtures.parityFixture()
         // A half-note triplet (three members of 1/6 = 320 ticks) fills beats 1-2; C4 sits at tick 960.
         let member = VoiceElement.rest(duration: .fraction(Fraction(numerator: 1, denominator: 6)))
-        score.parts[0].staves[0].measures[0].voices[0] = Voice(
-            elements: [
-                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-                member, member, member,
-                .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
-                .rest(duration: .quarter),
-            ],
-            tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)],
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = Voice(
+                    elements: [
+                        .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                        member, member, member,
+                        .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+                        .rest(duration: .quarter),
+                    ],
+                    tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)],
+                )
+            }
+        }
         let before = score
 
         let inverse = try MoveToVoice(at: Self.slot(0, 4), to: Self.voiceOne(0)).apply(to: &score)

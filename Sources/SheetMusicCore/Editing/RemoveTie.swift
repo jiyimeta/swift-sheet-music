@@ -20,12 +20,13 @@ public struct RemoveTie: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let source = score[start] else { throw Self.refused(.noteNotFound(start)) }
         guard let target = score[end] else { throw Self.refused(.noteNotFound(end)) }
         guard source.tieForward != nil, source.tieForward == target.tieBack else {
             throw Self.refused(.noTieBetween(start: start, end: end))
         }
-        return try SetTie(from: start, to: end, sourceTieForward: nil, targetTieBack: nil).apply(to: &score)
+        return try SetTie(from: start, to: end, sourceTieForward: nil, targetTieBack: nil)
+            .apply(to: &score, ids: &ids)
     }
 }

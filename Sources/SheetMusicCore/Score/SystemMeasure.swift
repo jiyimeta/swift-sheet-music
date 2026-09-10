@@ -11,9 +11,13 @@ import SheetMusicFoundation
 /// actual length, irregular) still live on per-staff `Measure`
 /// as of this commit; see the follow-up tracking issue.
 public struct SystemMeasure: Sendable, Equatable {
-    public var elements: [PositionedSystemElement]
+    public var elements: IdentifiedArray<PositionedSystemElement>
 
     public init(elements: [PositionedSystemElement] = []) {
+        self.elements = IdentifiedArray(elements)
+    }
+
+    public init(elements: IdentifiedArray<PositionedSystemElement>) {
         self.elements = elements
     }
 }

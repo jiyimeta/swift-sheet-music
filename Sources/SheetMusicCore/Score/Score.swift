@@ -3,7 +3,7 @@ import SheetMusicFoundation
 /// Root of the parsed MuseScore document. C++: `mu::engraving::MasterScore`/`Score`.
 public struct Score: Sendable, Equatable {
     public var division: Int
-    public var parts: [Part]
+    public var parts: IdentifiedArray<Part>
     /// System-level content for each measure, indexed positionally:
     /// `systemMeasures[i]` corresponds to measure index `i` across
     /// every part/staff. Holds tempo / rehearsal mark / system text
@@ -15,7 +15,7 @@ public struct Score: Sendable, Equatable {
     /// `measures.count` for any part/staff with non-empty content.
     /// Parsers (MSCX, MusicXML, MIDI import) and edit commands that
     /// add/remove measures must maintain this alignment.
-    public var systemMeasures: [SystemMeasure]
+    public var systemMeasures: IdentifiedArray<SystemMeasure>
     public var metaTags: [String: String]
     /// Score-level boxes in their document order among measures.
     public var blocks: [PositionedScoreBlock]
@@ -70,8 +70,8 @@ public struct Score: Sendable, Equatable {
 
     public init(
         division: Int,
-        parts: [Part] = [],
-        systemMeasures: [SystemMeasure] = [],
+        parts: IdentifiedArray<Part> = [],
+        systemMeasures: IdentifiedArray<SystemMeasure> = [],
         metaTags: [String: String] = [:],
         titleFrame: ScoreFrame? = nil,
         blocks: [PositionedScoreBlock] = [],
@@ -100,6 +100,41 @@ public struct Score: Sendable, Equatable {
         self.preservedMarkup = preservedMarkup
     }
 
+    /// Whether any currently identified collection contains an unassigned slot.
+    /// Covers parts, staves, voice members, graces, tuplets, endpoints, columns, and lane occupants.
+    public var hasUnassignedIDs: Bool {
+        parts.hasUnassignedIDs || systemMeasures.hasUnassignedIDs
+            || systemMeasures.contains { $0.elements.hasUnassignedIDs } || parts.contains { part in
+                part.staves.hasUnassignedIDs || part.staves.contains { staff in
+                    staff.measures.contains { $0.voices.contains { $0.hasUnassignedIDs } }
+                }
+            }
+    }
+
+    /// Fills only missing IDs on entry, preserving all assigned identifiers.
+    /// Visits each part's staves and voice contents, then all columns, then their lane occupants.
+    public mutating func assignMissingIDs(using ids: inout EIDAllocator) {
+        parts.assignMissingIDs(using: &ids)
+        for index in parts.indices {
+            parts.updateValue(at: index) { part in
+                part.staves.assignMissingIDs(using: &ids)
+                for staffIndex in part.staves.indices {
+                    part.staves.updateValue(at: staffIndex) { staff in
+                        for measureIndex in staff.measures.indices {
+                            for voiceIndex in staff.measures[measureIndex].voices.indices {
+                                staff.measures[measureIndex].voices[voiceIndex].assignMissingIDs(using: &ids)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        systemMeasures.assignMissingIDs(using: &ids)
+        for index in systemMeasures.indices {
+            systemMeasures.updateValue(at: index) { $0.elements.assignMissingIDs(using: &ids) }
+        }
+    }
+
     /// Return a copy without source-only XML carried for MSCX
     /// fidelity. As more model layers gain preserved markup, their
     /// clearing passes are added here.
@@ -121,23 +156,41 @@ public struct Score: Sendable, Equatable {
             }
         }
         for measureIndex in stripped.systemMeasures.indices {
-            for elementIndex in stripped.systemMeasures[measureIndex].elements.indices {
-                stripPreservedMarkup(
-                    from: &stripped.systemMeasures[measureIndex].elements[elementIndex].element,
-                )
+            stripped.systemMeasures.updateValue(at: measureIndex) { column in
+                for elementIndex in column.elements.indices {
+                    column.elements.updateValue(at: elementIndex) {
+                        stripPreservedMarkup(from: &$0.element)
+                    }
+                }
             }
         }
         for partIndex in stripped.parts.indices {
-            stripped.parts[partIndex].preservedMarkup = []
-            stripPreservedMarkup(from: &stripped.parts[partIndex].instrument)
+            stripped.parts.updateValue(at: partIndex) { partValue in
+                partValue.preservedMarkup = []
+            }
+            stripped.parts.updateValue(at: partIndex) { partValue in
+                stripPreservedMarkup(from: &partValue.instrument)
+            }
             for staffIndex in stripped.parts[partIndex].staves.indices {
-                stripped.parts[partIndex].staves[staffIndex].staffTypePreservedMarkup = []
-                stripped.parts[partIndex].staves[staffIndex].preservedMarkup = []
+                stripped.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        staffValue.staffTypePreservedMarkup = []
+                    }
+                }
+                stripped.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        staffValue.preservedMarkup = []
+                    }
+                }
                 for measureIndex in stripped.parts[partIndex].staves[staffIndex].measures.indices {
-                    stripPreservedMarkup(
-                        from: &stripped.parts[partIndex].staves[staffIndex]
-                            .measures[measureIndex],
-                    )
+                    stripped.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            stripPreservedMarkup(
+                                from: &staffValue
+                                    .measures[measureIndex],
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -207,9 +260,9 @@ private func stripPreservedMarkup(from measure: inout Measure) {
             return false
         }
         for elementIndex in measure.voices[voiceIndex].elements.indices {
-            measure.voices[voiceIndex].elements[elementIndex] = strippingPreservedMarkup(
-                from: measure.voices[voiceIndex].elements[elementIndex],
-            )
+            measure.voices[voiceIndex].elements.updateValue(at: elementIndex) {
+                $0 = strippingPreservedMarkup(from: $0)
+            }
         }
     }
 }
@@ -284,11 +337,13 @@ private func strippingPreservedMarkup(from source: Chord) -> Chord {
 }
 
 /// Clear grace-chord bags and the note bags they contain.
-private func stripPreservedMarkup(from graces: inout [GraceChord]) {
+private func stripPreservedMarkup(from graces: inout IdentifiedArray<GraceChord>) {
     for graceIndex in graces.indices {
-        graces[graceIndex].preservedMarkup = []
-        for noteIndex in graces[graceIndex].notes.indices {
-            stripPreservedMarkup(from: &graces[graceIndex].notes[noteIndex])
+        graces.updateValue(at: graceIndex) { grace in
+            grace.preservedMarkup = []
+            for noteIndex in grace.notes.indices {
+                stripPreservedMarkup(from: &grace.notes[noteIndex])
+            }
         }
     }
 }

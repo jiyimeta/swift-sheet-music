@@ -25,6 +25,8 @@ enum RangeEditPlanner {
         /// The score every command in `commands` has been applied to, in order. Range commands that need a second
         /// pass (`DeleteRange`'s full-measure collapse) plan it against this.
         var result: Score
+        /// The allocator after the planned steps, for scratch passes that continue this plan.
+        var idAllocator: EIDAllocator
 
         var composite: CompositeEditCommand {
             CompositeEditCommand(commands: commands, location: location)
@@ -33,21 +35,23 @@ enum RangeEditPlanner {
 
     /// `nil` when the range resolves to nothing or every step produced nothing — the planner's "restating is nil".
     static func plan(
-        over range: VoiceElementRange, in score: Score,
+        over range: VoiceElementRange, in score: Score, ids: EIDAllocator,
         step: (_ target: VoiceElementID, _ working: Score) throws -> [any EditCommand],
     ) throws -> Plan? {
+        var scratch = ids
         let targets = score.voiceElements(in: range)
         guard let first = targets.first else { return nil }
-        var plan = Plan(commands: [], location: first, result: score)
+        var plan = Plan(commands: [], location: first, result: score, idAllocator: scratch)
         for target in targets {
             guard let onset = score.onset(of: target),
                   let index = plan.result.timedElementIndex(startingAt: onset.tick, in: VoiceRef(target))
             else { continue }
             for command in try step(target.withElementIndex(index), plan.result) {
-                _ = try command.apply(to: &plan.result)
+                _ = try command.apply(to: &plan.result, ids: &scratch)
                 plan.commands.append(command)
             }
         }
+        plan.idAllocator = scratch
         return plan.commands.isEmpty ? nil : plan
     }
 

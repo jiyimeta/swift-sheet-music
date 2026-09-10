@@ -44,9 +44,17 @@ struct ScoreFingerprintParityTests {
     private func boolFlagsAreCovered(flag: MeasureFlagKeyPath) {
         var score = EditingFixtures.fourQuarterRests()
         let before = score.stableFingerprint
-        score.parts[0].staves[0].measures[0][keyPath: flag.path] = true
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0][keyPath: flag.path] = true
+            }
+        }
         #expect(score.stableFingerprint != before)
-        score.parts[0].staves[0].measures[0][keyPath: flag.path] = false
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0][keyPath: flag.path] = false
+            }
+        }
         #expect(score.stableFingerprint == before)
     }
 
@@ -54,23 +62,59 @@ struct ScoreFingerprintParityTests {
     func countsMarkersJumps() {
         var score = EditingFixtures.fourQuarterRests()
         let before = score.stableFingerprint
-        score.parts[0].staves[0].measures[0].endRepeatCount = 2
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].endRepeatCount = 2
+            }
+        }
         let endRepeat = score.stableFingerprint
         #expect(endRepeat != before)
-        score.parts[0].staves[0].measures[0].endRepeatCount = nil
-        score.parts[0].staves[0].measures[0].measureRepeatCount = 2
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].endRepeatCount = nil
+            }
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].measureRepeatCount = 2
+            }
+        }
         #expect(score.stableFingerprint != endRepeat, "same value under a different tag must differ")
-        score.parts[0].staves[0].measures[0].measureRepeatCount = nil
-        score.parts[0].staves[0].measures[0].markers = [Marker(kind: .coda, label: "codab")]
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].measureRepeatCount = nil
+            }
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].markers = [Marker(kind: .coda, label: "codab")]
+            }
+        }
         let coda = score.stableFingerprint
-        score.parts[0].staves[0].measures[0].markers = [Marker(kind: .segno, label: "segno")]
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].markers = [Marker(kind: .segno, label: "segno")]
+            }
+        }
         #expect(score.stableFingerprint != coda)
-        score.parts[0].staves[0].measures[0].markers = []
-        score.parts[0].staves[0].measures[0].jumps = [
-            Jump(jumpTo: "start", playUntil: "fine", continueAt: "", playRepeats: false, text: "D.C."),
-        ]
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].markers = []
+            }
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].jumps = [
+                    Jump(jumpTo: "start", playUntil: "fine", continueAt: "", playRepeats: false, text: "D.C."),
+                ]
+            }
+        }
         #expect(score.stableFingerprint != before)
-        score.parts[0].staves[0].measures[0].jumps = []
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].jumps = []
+            }
+        }
         #expect(score.stableFingerprint == before)
     }
 
@@ -83,14 +127,24 @@ struct ScoreFingerprintParityTests {
         let before = score.stableFingerprint
         var seen: Set<Int64> = [before]
         for symbol in TimeSignatureSymbol.allCases where symbol != .numeric {
-            score.parts[0].staves[0].measures[0].voices[0].elements[0] =
-                .timeSignature(TimeSignature(numerator: 4, denominator: 4, symbol: symbol))
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[0].voices[0].elements.updateValue(at: 0) {
+                        $0 = .timeSignature(TimeSignature(numerator: 4, denominator: 4, symbol: symbol))
+                    }
+                }
+            }
             let hash = score.stableFingerprint
             #expect(!seen.contains(hash), "\(symbol) must hash unlike every symbol before it")
             seen.insert(hash)
         }
-        score.parts[0].staves[0].measures[0].voices[0].elements[0] =
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4))
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.updateValue(at: 0) {
+                    $0 = .timeSignature(TimeSignature(numerator: 4, denominator: 4))
+                }
+            }
+        }
         #expect(score.stableFingerprint == before)
     }
 
@@ -98,8 +152,16 @@ struct ScoreFingerprintParityTests {
     func flagsArePositional() {
         var a = EditingFixtures.twoMeasuresOfQuarterRests(key: 0)
         var b = a
-        a.parts[0].staves[0].measures[0].lineBreak = true
-        b.parts[0].staves[0].measures[1].lineBreak = true
+        a.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].lineBreak = true
+            }
+        }
+        b.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[1].lineBreak = true
+            }
+        }
         #expect(a.stableFingerprint != b.stableFingerprint)
     }
 

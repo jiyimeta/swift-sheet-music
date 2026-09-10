@@ -80,15 +80,15 @@ extension MidiRenderer {
                     startTick: localTick,
                     chordTicks: chordTicks,
                     prevChordTicks: previousChordTicks(
-                        in: voice.elements, before: elementIndex,
+                        in: voice.elements.values, before: elementIndex,
                         measureDuration: measureDuration, division: division,
                     ),
                     nextChordTicks: nextChordTicks(
-                        in: voice.elements, after: elementIndex,
+                        in: voice.elements.values, after: elementIndex,
                         measureDuration: measureDuration, division: division,
                     ),
                     isInTuplet: isChordInTuplet(
-                        elementIndex: elementIndex, voiceTuplets: voice.tuplets,
+                        elementIndex: elementIndex, voiceTuplets: voice.tupletSpans,
                     ),
                     state: swingMap.state(atTick: localTick),
                 )

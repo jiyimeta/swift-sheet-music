@@ -42,7 +42,7 @@ public struct SetTie: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let oldSource = score[sourceID] else {
             throw Self.refused(.noteNotFound(sourceID))
         }

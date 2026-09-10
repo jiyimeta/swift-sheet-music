@@ -25,10 +25,10 @@ public struct SetSlur: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let template = Spanner(kind: .slur, rawType: Spanner.Kind.slur.rawValue)
         return try SpannerPlacement.add(
             template, over: range, in: score, operation: String(describing: Self.self),
-        ).apply(to: &score)
+        ).apply(to: &score, ids: &ids)
     }
 }

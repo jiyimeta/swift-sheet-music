@@ -111,8 +111,8 @@ extension Voice {
     /// degenerate tuplets (empty range or non-chord/rest member) and
     /// for durations that cannot be expressed as a named base.
     func tupletBaseDuration(
-        opening: Tuplet,
-        activeTuplets: [Tuplet],
+        opening: TupletSpan,
+        activeTuplets: [TupletSpan],
     ) -> NoteDuration? {
         guard opening.startIndex < elements.count else { return nil }
         guard case let .chord(chord) = elements[opening.startIndex] else {
@@ -126,7 +126,7 @@ extension Voice {
     /// so the decoder's positional scaling reproduces the original
     /// fraction.
     func unscaledDuration(
-        _ duration: NoteDuration, in tuplets: [Tuplet],
+        _ duration: NoteDuration, in tuplets: [TupletSpan],
     ) throws -> NoteDuration {
         guard !tuplets.isEmpty else { return duration }
         // A `.measure` rest is never inside a tuplet; bail before

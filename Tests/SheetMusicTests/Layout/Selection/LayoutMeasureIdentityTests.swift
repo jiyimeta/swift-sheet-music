@@ -68,13 +68,26 @@ struct LayoutMeasureIdentityTests {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let key = VoiceElement.keySignature(KeySignature(concertKey: 2))
         var score = Self.score([key, Self.chord(.whole)])
-        score.parts[0].staves[0].group = "percussion"
-        score.parts[1].instrument.useDrumset = true
-        score.parts[0].staves[0].measures[1].voices.append(Voice(elements: [key, Self.chord(.whole)]))
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.group = "percussion"
+            }
+        }
+        score.parts.updateValue(at: 1) { $0.instrument.useDrumset = true }
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[1].voices.append(Voice(elements: [key, Self.chord(.whole)]))
+            }
+        }
         let keys = Self.elements(score).filter { if case .keySignature = $0 { true } else { false } }
         #expect(!keys.isEmpty)
-        #expect(keys.allSatisfy { $0.elementID == nil })
-        score.parts[0].staves[0].group = "pitched"
+        let allMatch1 = keys.allSatisfy { $0.elementID == nil }
+        #expect(allMatch1)
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.group = "pitched"
+            }
+        }
         let pitchedKeys = Self.elements(score).filter { if case .keySignature = $0 { true } else { false } }
         #expect(pitchedKeys.compactMap(\.elementID) == [.keySignature(measureIndex: 1)])
     }
@@ -88,7 +101,8 @@ struct LayoutMeasureIdentityTests {
         ])
         let keys = Self.elements(score).filter { if case .keySignature = $0 { true } else { false } }
         #expect(keys.count == 2)
-        #expect(keys.allSatisfy { $0.elementID == nil })
+        let allMatch2 = keys.allSatisfy { $0.elementID == nil }
+        #expect(allMatch2)
     }
 
     @Test("A system-head key restatement does not acquire a new measure identity")
@@ -96,10 +110,20 @@ struct LayoutMeasureIdentityTests {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         var score = Self.score([Self.chord(.whole)])
         for partIndex in score.parts.indices {
-            score.parts[partIndex].staves[0].measures[0].voices[0].elements.insert(
-                .keySignature(KeySignature(concertKey: 2)), at: 0,
-            )
-            score.parts[partIndex].staves[0].measures[0].lineBreak = true
+            score.parts.updateValue(at: partIndex) { part in
+                part.staves.updateValue(at: 0) { staff in
+                    var elements = staff.measures[0].voices[0].elements.values
+                    elements.insert(
+                        .keySignature(KeySignature(concertKey: 2)), at: 0,
+                    )
+                    staff.measures[0].voices[0].elements = IdentifiedArray(elements)
+                }
+            }
+            score.parts.updateValue(at: partIndex) { part in
+                part.staves.updateValue(at: 0) { staff in
+                    staff.measures[0].lineBreak = true
+                }
+            }
         }
         let doc = LayoutEngine.layout(score: ScoreEditor(score: score).score, options: .init(), availableWidth: 1000)
         #expect(doc.systems.count == 2)
@@ -107,7 +131,8 @@ struct LayoutMeasureIdentityTests {
             if case .keySignature = $0 { true } else { false }
         }
         #expect(keys.count == 2)
-        #expect(keys.allSatisfy { $0.elementID == nil })
+        let allMatch3 = keys.allSatisfy { $0.elementID == nil }
+        #expect(allMatch3)
     }
 
     @Test("Time declarations after notes in any voice name the bar the command re-bars", arguments: [0, 1])
@@ -118,9 +143,13 @@ struct LayoutMeasureIdentityTests {
         ])
         if voiceIndex == 1 {
             for partIndex in score.parts.indices {
-                score.parts[partIndex].staves[0].measures[1].voices.insert(
-                    Voice(elements: [Self.chord(.whole)]), at: 0,
-                )
+                score.parts.updateValue(at: partIndex) { part in
+                    part.staves.updateValue(at: 0) { staff in
+                        staff.measures[1].voices.insert(
+                            Voice(elements: [Self.chord(.whole)]), at: 0,
+                        )
+                    }
+                }
             }
         }
         let meters = Self.elements(score).filter { if case .timeSignature = $0 { true } else { false } }
@@ -130,7 +159,8 @@ struct LayoutMeasureIdentityTests {
         #expect(command.measureIndex == 1)
         score = ScoreEditor(score: score).score
         _ = try command.apply(to: &score)
-        #expect(score.parts.allSatisfy { $0.staves[0].measures.count == 3 })
+        let allMatch4 = score.parts.allSatisfy { $0.staves[0].measures.count == 3 }
+        #expect(allMatch4)
         #expect(TimeSignatureRegion.explicitSignature(in: score, measureIndex: 1)?.numerator == 2)
         for meter in meters {
             #expect(LayoutEngine.translate(element: meter, dy: 17).elementID == meter.elementID)
@@ -144,9 +174,13 @@ struct LayoutMeasureIdentityTests {
             Self.chord(), .barLine(BarLine(subtype: "dashed")), Self.chord(),
             .barLine(BarLine(subtype: "double")), .barLine(BarLine(subtype: "end")),
         ])
-        score.parts[1].staves[0].measures[1].voices.append(Voice(elements: [
-            Self.chord(.whole), .barLine(BarLine(subtype: "dotted")),
-        ]))
+        score.parts.updateValue(at: 1) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[1].voices.append(Voice(elements: [
+                    Self.chord(.whole), .barLine(BarLine(subtype: "dotted")),
+                ]))
+            }
+        }
         let bars = Self.elements(score).filter { if case .barLine = $0 { true } else { false } }
         let expected = ScoreElementID.barLine(measureIndex: 1, role: .explicit)
         #expect(bars.count == 7)
@@ -299,7 +333,10 @@ extension LayoutMeasureIdentityTests {
     func navigationAfterEmptyPart() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         var fixture = Self.navigationScore(measureIndex: 0)
-        fixture.parts.insert(Part(id: "empty", instrument: Instrument(id: "x"), staves: []), at: 0)
+        // The fixture is already assigned by one editor's actor; minting from any other actor keeps
+        // the new part's identifier from colliding with it.
+        var ids = EIDAllocator(actor: fixture.parts.eid(at: 0).first == 42 ? 43 : 42)
+        fixture.parts.insert(Part(id: "empty", instrument: Instrument(id: "x"), staves: []), at: 0, id: ids.next())
         let score = ScoreEditor(score: fixture).score
         let measure = try Self.navigationMeasure(score, index: 0)
         let owner = StaffAddress(partIndex: 1, staffIndexInPart: 0)
@@ -317,7 +354,11 @@ extension LayoutMeasureIdentityTests {
     func emptyNavigationEntries() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         var fixture = Self.navigationScore(measureIndex: 0)
-        fixture.parts[0].staves[0].measures[0].markers[0] = Marker(kind: .other)
+        fixture.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].markers[0] = Marker(kind: .other)
+            }
+        }
         let score = ScoreEditor(score: fixture).score
         let measure = try Self.navigationMeasure(score, index: 0)
         let owner = StaffAddress(partIndex: 0, staffIndexInPart: 0)
@@ -347,7 +388,7 @@ extension LayoutMeasureIdentityTests {
             return Staff(measures: measures)
         }
         return ScoreEditor(score: Score(division: 480, parts: [
-            Part(id: "navigation", instrument: Instrument(id: "x"), staves: staves),
+            Part(id: "navigation", instrument: Instrument(id: "x"), staves: IdentifiedArray(staves)),
         ])).score
     }
 

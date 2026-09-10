@@ -32,12 +32,14 @@ public struct SetDrumsetEntry: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.parts.indices.contains(partIndex) else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
         let previous = score.parts[partIndex].instrument.drumset[pitch]
-        score.parts[partIndex].instrument.drumset[pitch] = entry
+        score.parts.updateValue(at: partIndex) { partValue in
+            partValue.instrument.drumset[pitch] = entry
+        }
         return SetDrumsetEntry(partIndex: partIndex, pitch: pitch, entry: previous)
     }
 }

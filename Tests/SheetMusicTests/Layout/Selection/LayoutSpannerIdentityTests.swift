@@ -32,16 +32,20 @@ struct LayoutSpannerIdentityTests {
         ])
         // Starts at tick 480 in measure 1, voice 1, slot 1. Two measure offsets plus
         // a quarter-note offset end at tick 960 in measure 3, crossing the middle system.
-        score.parts[1].staves[1].measures[1].voices.append(Voice(elements: [
-            .rest(duration: .quarter),
-            .spanner(Spanner(
-                kind: kind,
-                rawType: "",
-                nextMeasuresOffset: 2,
-                nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
-            )),
-            .chord(Chord(duration: .half.dotted(1), notes: [Note(pitch: 60, tpc: 14)])),
-        ]))
+        score.parts.updateValue(at: 1) { part in
+            part.staves.updateValue(at: 1) { staff in
+                staff.measures[1].voices.append(Voice(elements: [
+                    .rest(duration: .quarter),
+                    .spanner(Spanner(
+                        kind: kind,
+                        rawType: "",
+                        nextMeasuresOffset: 2,
+                        nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
+                    )),
+                    .chord(Chord(duration: .half.dotted(1), notes: [Note(pitch: 60, tpc: 14)])),
+                ]))
+            }
+        }
         return ScoreEditor(score: score).score
     }
 
@@ -105,9 +109,15 @@ struct LayoutSpannerIdentityTests {
         #expect(first.systems.flatMap(\.spanners).compactMap(\.elementID) == [
             .spanner(anchor: inserted, kind: .volta),
         ])
-        score.parts[0].staves[0].measures[1].voices[0].elements.insert(
-            .keySignature(KeySignature(concertKey: 2)), at: 0,
-        )
+        let voice = score.parts[0].staves[0].measures[1].voices[0]
+        var slots = voice.elements.indices.map {
+            VoiceSlot(identity: .keep(voice.elements.eid(at: $0)), element: voice.elements[$0])
+        }
+        slots.insert(VoiceSlot(identity: .fresh, element: .keySignature(KeySignature(concertKey: 2))), at: 0)
+        try ReplaceVoiceElements(
+            staff: Score.canonicalStaff, measureIndex: 1, voiceIndex: 0,
+            slots: slots, tuplets: voice.tuplets,
+        ).apply(to: &score)
         let moved = VoiceElementID(
             staff: Score.canonicalStaff, measureIndex: 1, voiceIndex: 0, elementIndex: 1,
         )
@@ -158,7 +168,8 @@ struct LayoutSpannerIdentityTests {
             ),
             .barLine(subtype: "normal", origin: .zero, halfHeight: 14, measureIndex: nil, role: .explicit),
         ]
-        #expect(elements.allSatisfy { $0.elementID == nil && $0.elementItemID == nil })
+        let allMatch1 = elements.allSatisfy { $0.elementID == nil && $0.elementItemID == nil }
+        #expect(allMatch1)
     }
 }
 

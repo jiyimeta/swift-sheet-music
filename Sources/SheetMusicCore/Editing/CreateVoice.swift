@@ -16,11 +16,20 @@ public struct CreateVoice: EditCommand {
     public let staff: StaffAddress
     public let measureIndex: Int
     public let voiceIndex: Int
+    private let restoredVoice: Voice?
 
     public init(staff: StaffAddress, measureIndex: Int, voiceIndex: Int) {
         self.staff = staff
         self.measureIndex = measureIndex
         self.voiceIndex = voiceIndex
+        restoredVoice = nil
+    }
+
+    init(restoring voice: Voice, staff: StaffAddress, measureIndex: Int, voiceIndex: Int) {
+        self.staff = staff
+        self.measureIndex = measureIndex
+        self.voiceIndex = voiceIndex
+        restoredVoice = voice
     }
 
     public var affectedLocation: VoiceElementID {
@@ -28,7 +37,7 @@ public struct CreateVoice: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.parts.indices.contains(staff.partIndex),
               score.parts[staff.partIndex].staves.indices.contains(staff.staffIndexInPart)
         else {
@@ -48,9 +57,13 @@ public struct CreateVoice: EditCommand {
         guard voiceIndex == voiceCount else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
-        score.parts[p].staves[s].measures[measureIndex].voices.append(
-            Voice(elements: [.rest(duration: .measure)]),
-        )
+        score.parts.updateValue(at: p) { partValue in
+            partValue.staves.updateValue(at: s) { staffValue in
+                staffValue.measures[measureIndex].voices.append(
+                    restoredVoice ?? MeasureStructure.freshMeasureRest(using: &ids),
+                )
+            }
+        }
         return RemoveVoice(staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex)
     }
 }
@@ -71,7 +84,7 @@ struct RemoveVoice: EditCommand {
     }
 
     @discardableResult
-    func apply(to score: inout Score) throws -> any EditCommand {
+    func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.parts.indices.contains(staff.partIndex),
               score.parts[staff.partIndex].staves.indices.contains(staff.staffIndexInPart)
         else {
@@ -85,7 +98,12 @@ struct RemoveVoice: EditCommand {
         else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
-        score.parts[p].staves[s].measures[measureIndex].voices.removeLast()
-        return CreateVoice(staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex)
+        let removed = score.parts[p].staves[s].measures[measureIndex].voices[voiceIndex]
+        score.parts.updateValue(at: p) { partValue in
+            partValue.staves.updateValue(at: s) { staffValue in
+                staffValue.measures[measureIndex].voices.removeLast()
+            }
+        }
+        return CreateVoice(restoring: removed, staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex)
     }
 }

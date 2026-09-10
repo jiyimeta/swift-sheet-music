@@ -18,8 +18,13 @@ struct TransposingInstrumentRoundTripTests {
             )],
             measureCount: 1,
         ))
-        score.parts[0].staves[0].measures[0].voices[0].elements[2] =
-            .chord(Chord(duration: .whole, notes: [Note(pitch: 70, tpc: 12)]))
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.updateValue(at: 2) {
+                    $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 70, tpc: 12)]))
+                }
+            }
+        }
         return score
     }
 
@@ -84,8 +89,12 @@ struct TransposingInstrumentRoundTripTests {
     @Test("non-transposing parts keep their existing byte shape")
     func nonTransposingPartIsUnchanged() throws {
         var score = Self.clarinetScore()
-        score.parts[0].instrument.transposeDiatonic = 0
-        score.parts[0].instrument.transposeChromatic = 0
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.instrument.transposeDiatonic = 0
+        }
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.instrument.transposeChromatic = 0
+        }
         let xml = try Self.encodedXML(score)
         #expect(!xml.contains("<tpc2>"))
         #expect(!xml.contains("<transposeChromatic>"))
@@ -269,8 +278,13 @@ struct TransposingInstrumentRoundTripTests {
             measureCount: 1,
         ))
         // A snare hit, written the way a drum staff carries one.
-        score.parts[0].staves[0].measures[0].voices[0].elements[1] =
-            .chord(Chord(duration: .whole, notes: [Note(pitch: 38, tpc: 16)]))
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.updateValue(at: 1) {
+                    $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 38, tpc: 16)]))
+                }
+            }
+        }
         #expect(score.parts[0].instrument.useDrumset)
         #expect(score.parts[0].instrument.writtenFifthsOffset != 0)
 

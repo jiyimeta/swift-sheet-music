@@ -7,7 +7,7 @@ extension Voice {
     /// so the main encode function stays under the function-body-length
     /// limit after sys-element interleaving was added.
     struct IterationPlan {
-        let startsByIndex: [Int: [Tuplet]]
+        let startsByIndex: [Int: [TupletSpan]]
         let endCountByIndex: [Int: Int]
         let lastChordIndex: Int?
         let voiceBarLength: Fraction

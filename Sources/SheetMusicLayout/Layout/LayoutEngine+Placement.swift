@@ -947,7 +947,7 @@ extension LayoutEngine {
                             staffMidY: staffMidY,
                             metrics: metrics,
                             currentClef: currentClef,
-                            currentVoiceElements: voice.elements,
+                            currentVoiceElements: voice.elements.values,
                             currentVoiceElemIdx: voiceElemIdx,
                             currentTick: tickCursor,
                             measureDuration: measureDuration,
@@ -1923,7 +1923,7 @@ extension LayoutEngine {
             // MuseScore drops the bracket and shows just the number
             // above/below the beam). Otherwise draw a square bracket
             // with hooks.
-            for tuplet in voice.tuplets {
+            for tuplet in voice.tupletSpans {
                 guard tuplet.startIndex >= 0,
                       tuplet.endIndex < voice.elements.count,
                       tuplet.startIndex <= tuplet.endIndex

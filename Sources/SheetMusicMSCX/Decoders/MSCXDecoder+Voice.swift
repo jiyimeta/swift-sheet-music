@@ -18,11 +18,11 @@ extension Voice {
         /// and other consumers that only care about voice-bound
         /// content don't have to thread `.voice` through.
         var elements: [VoiceElement] {
-            voice.elements
+            voice.elements.values
         }
 
         var tuplets: [Tuplet] {
-            voice.tuplets
+            voice.tuplets.values
         }
     }
 
@@ -184,13 +184,12 @@ extension Voice {
                     // See `Chord.mscxFileOrderedGraces` for the citation
                     // trail, including the upstream playback test that
                     // pins the after-run's reversal.
-                    chord.graceNotesBefore = pendingGraces
-                        .filter { !$0.graceType.isAfter }
-                    chord.graceNotesAfter = Array(
+                    chord.graceNotesBefore = IdentifiedArray(pendingGraces.filter { !$0.graceType.isAfter })
+                    chord.graceNotesAfter = IdentifiedArray(Array(
                         pendingGraces
                             .filter(\.graceType.isAfter)
                             .reversed(),
-                    )
+                    ))
                     pendingGraces.removeAll(keepingCapacity: true)
                 }
                 chord.beamVisible = takePendingBeamVisible()

@@ -240,7 +240,7 @@ func assembleParts( // swiftlint:disable:this function_body_length
             id: dp.partID,
             trackName: dp.trackName,
             instrument: dp.instrument,
-            staves: assembled,
+            staves: IdentifiedArray(assembled),
             isVisibleInScore: dp.isVisibleInScore,
             preservedMarkup: dp.preservedMarkup,
         ))
@@ -260,16 +260,16 @@ func assembleParts( // swiftlint:disable:this function_body_length
     let measureCount = perStaffSystemElements
         .map(\.perMeasure.count)
         .max() ?? 0
-    var systemMeasures = Array(
-        repeating: SystemMeasure(),
+    var laneElements = Array(
+        repeating: [PositionedSystemElement](),
         count: measureCount,
     )
     for entry in perStaffSystemElements {
         for (measureIndex, elements) in entry.perMeasure.enumerated() {
-            guard measureIndex < systemMeasures.count else { continue }
+            guard measureIndex < laneElements.count else { continue }
             for var element in elements {
                 element.originalStaff = entry.address
-                systemMeasures[measureIndex].elements.append(element)
+                laneElements[measureIndex].append(element)
             }
         }
     }
@@ -278,10 +278,10 @@ func assembleParts( // swiftlint:disable:this function_body_length
     // needing to re-sort. Elements from different staves at the
     // same position keep their relative insertion order
     // (top-down staff iteration above).
-    for index in systemMeasures.indices {
-        systemMeasures[index].elements.sort {
+    for index in laneElements.indices {
+        laneElements[index].sort {
             $0.position < $1.position
         }
     }
-    return MSCXAssembledParts(parts: parts, systemMeasures: systemMeasures)
+    return MSCXAssembledParts(parts: parts, systemMeasures: laneElements.map { SystemMeasure(elements: $0) })
 }

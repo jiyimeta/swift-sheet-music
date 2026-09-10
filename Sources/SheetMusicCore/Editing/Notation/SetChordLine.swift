@@ -39,7 +39,7 @@ public struct SetChordLine: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let element = score[location] else {
             throw Self.refused(.targetNotFound(location))
         }
@@ -48,7 +48,7 @@ public struct SetChordLine: EditCommand {
         }
         // The pre-image is the inverse's whole payload: a chord that carried two lines, or one carrying fields this
         // command does not name, has no single `SetChordLine` that restores it.
-        let inverse = ReplaceVoiceElement(at: location, with: element)
+        let inverse = ReplaceVoiceElement(at: location, with: element, identity: .same)
         chord.chordLines = kind.map { [ChordLine(kind: $0, isStraight: isStraight)] } ?? []
         score[location] = .chord(chord)
         return inverse
@@ -82,7 +82,7 @@ public struct SetNoteParentheses: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let oldNote = score[location] else {
             throw Self.refused(.noteNotFound(location))
         }

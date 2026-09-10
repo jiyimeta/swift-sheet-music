@@ -143,7 +143,11 @@ struct SpannerOffsetsTests {
         var score = EditingFixtures.parityFixture()
         var head = Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])
         head.spanners = [Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 2)]
-        score.parts[0].staves[0].measures[0].voices[0].elements[1] = .chord(head)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.updateValue(at: 1) { $0 = .chord(head) }
+            }
+        }
         _ = try InsertMeasure(measureIndex: 1).apply(to: &score)
         guard case let .chord(after) = score.parts[0].staves[0].measures[0].voices[0].elements[1] else {
             Issue.record("expected the slurred chord at 1")

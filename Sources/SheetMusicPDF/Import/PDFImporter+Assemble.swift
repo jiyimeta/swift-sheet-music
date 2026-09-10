@@ -27,9 +27,7 @@ extension PDFImporter {
         geometry: PDFGeometryCollector? = nil,
         rasterPages: Set<Int>? = nil,
     ) -> Score {
-        guard !systems.isEmpty else {
-            return Score(division: 480, source: .pdf)
-        }
+        guard !systems.isEmpty else { return Score(division: 480, source: .pdf) }
         // Derive the global part shape from the RICHEST system (max total
         // staves), not blindly from systems[0]. The first system is often a
         // title-page system whose staff detection is degenerate (fewer
@@ -116,13 +114,15 @@ extension PDFImporter {
             systems: systems, texts: texts,
             measureCount: assembledParts.first?.staves.first?.measures.count ?? 0,
         )
-        return Score(
-            division: 480,
-            parts: assembledParts,
-            systemMeasures: systemMeasures,
+        var score = Score(
+            division: 480, parts: IdentifiedArray(assembledParts),
+            systemMeasures: IdentifiedArray(systemMeasures),
             titleFrame: titleFrame,
             source: .pdf,
         )
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        return score
     }
 
     /// Distribute each slot's measure array back into its Part's staff, and
@@ -137,7 +137,9 @@ extension PDFImporter {
         var slotToStaff: [Int: StaffAddress] = [:]
         for (partIdx, slots) in shape.slotsByPartIndex {
             for (staffIdx, slot) in slots.enumerated() {
-                parts[partIdx].staves[staffIdx].measures = stavesContent[slot]
+                parts[partIdx].staves.updateValue(at: staffIdx) { staffValue in
+                    staffValue.measures = stavesContent[slot]
+                }
                 slotToStaff[slot] = StaffAddress(
                     partIndex: partIdx, staffIndexInPart: staffIdx,
                 )
@@ -527,7 +529,7 @@ extension PDFImporter {
         if let time { leading.append(.timeSignature(time)) }
         var out = voices.isEmpty ? [Voice(elements: [])] : voices
         if !leading.isEmpty {
-            out[0] = Voice(elements: leading + out[0].elements)
+            out[0] = Voice(elements: leading + out[0].elements.values)
         }
         return (out, leading.count)
     }

@@ -28,7 +28,7 @@ enum RemovalRoundTripFixtures {
             Part(id: "hidden", instrument: Instrument(id: "x"), staves: [blank]),
             Part(id: "visible", instrument: Instrument(id: "x"), staves: [blank, owner]),
         ] : [Part(id: "visible", instrument: Instrument(id: "x"), staves: [owner])]
-        return ScoreEditor(score: Score(division: 480, parts: parts)).score
+        return ScoreEditor(score: Score(division: 480, parts: IdentifiedArray(parts))).score
     }
 
     static func tie(filtered: Bool) -> Score {

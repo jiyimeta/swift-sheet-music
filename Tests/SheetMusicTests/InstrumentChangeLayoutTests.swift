@@ -93,13 +93,17 @@ struct InstrumentChangeLayoutTests {
         // under the identical per-staff Y translate applied when
         // they're lifted into system space, so their DIFFERENCE below
         // is exact regardless of that (unrelated) transform.
-        score.systemMeasures[0].elements.append(
-            PositionedSystemElement(
-                position: .start,
-                element: .staffText(StaffText(text: "pizz.")),
-                originalStaff: anchorStaff,
-            ),
-        )
+        score.systemMeasures.updateValue(at: 0) { column in
+            let pairs = column.elements.indices.map { (column.elements.eid(at: $0), column.elements[$0]) }
+            column.elements = IdentifiedArray(pairs + [(
+                .invalid,
+                PositionedSystemElement(
+                    position: .start,
+                    element: .staffText(StaffText(text: "pizz.")),
+                    originalStaff: anchorStaff,
+                ),
+            )])
+        }
         let document = LayoutEngine.layout(
             score: score, options: ScoreViewOptions(), availableWidth: 800,
         )
@@ -144,8 +148,9 @@ struct InstrumentChangeLayoutTests {
                     score.systemMeasures[measureIndex].elements[elementIndex].element
                 else { continue }
                 change.visible = false
-                score.systemMeasures[measureIndex].elements[elementIndex].element =
-                    .instrumentChange(change)
+                score.systemMeasures.updateValue(at: measureIndex) { column in
+                    column.elements.updateValue(at: elementIndex) { $0.element = .instrumentChange(change) }
+                }
             }
         }
         let document = LayoutEngine.layout(

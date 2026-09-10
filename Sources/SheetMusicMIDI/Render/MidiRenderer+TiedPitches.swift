@@ -29,9 +29,13 @@ extension MidiRenderer {
         var score = score
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
-                resolveTiedPitches(
-                    in: &score.parts[partIndex].staves[staffIndex],
-                )
+                score.parts.updateValue(at: partIndex) { partValue in
+                    partValue.staves.updateValue(at: staffIndex) { staffValue in
+                        resolveTiedPitches(
+                            in: &staffValue,
+                        )
+                    }
+                }
             }
         }
         return score
@@ -105,7 +109,7 @@ extension MidiRenderer {
         }
         if newChord != chord {
             staff.measures[measureIndex]
-                .voices[voiceIndex].elements[elementIndex] = .chord(newChord)
+                .voices[voiceIndex].elements.updateValue(at: elementIndex) { $0 = .chord(newChord) }
         }
         return outgoing
     }

@@ -18,7 +18,7 @@ extension ScoreEditSession {
     /// whose members all planned to nothing, or a `.movePart` that would not move anything. Throws when a nested
     /// `.composite` exceeds `maxCompositeIntentDepth`.
     static func command( // swiftlint:disable:this function_body_length
-        for intent: EditIntent, in score: Score, depth: Int,
+        for intent: EditIntent, in score: Score, ids: EIDAllocator, depth: Int,
     ) throws -> (any EditCommand)? {
         switch intent {
         case let .inputNote(location, pitch, tpc, duration):
@@ -90,7 +90,7 @@ extension ScoreEditSession {
             //
             // The scratch score is a value copy and never leaves this function; a member that throws while being
             // planned forward is left to throw again for real at apply time, where the refusal is recorded.
-            let commands = try compositeCommands(for: intents, in: score, depth: depth)
+            let commands = try compositeCommands(for: intents, in: score, ids: ids, depth: depth)
             guard let first = commands.first else { return nil }
             guard commands.count > 1 else { return first }
             return CompositeEditCommand(commands: commands, location: first.affectedLocation)
@@ -104,7 +104,7 @@ extension ScoreEditSession {
             // declares, and the rehearsal mark it carries. Factored into `structuralCommand` for the same reason the
             // six note edits below are factored into `directNoteEditCommand`: to keep this switch under SwiftLint's
             // body budget.
-            return try structuralCommand(for: intent, in: score)
+            return try structuralCommand(for: intent, in: score, ids: ids)
         case let .setTimeSignature(measureIndex, numerator, denominator, symbol):
             // Dispatched from this switch rather than folded into `structuralCommand` alongside the other
             // shape-changing intents: that fold is a chain of `if case`s ending in `return nil`, where a case
@@ -132,7 +132,7 @@ extension ScoreEditSession {
             return structuralParityCommand(for: intent, in: score)
         case .transposeRange, .addIntervalToSelection, .deleteRange, .setAccidentalsInRange, .setDurationInRange,
              .respellRange:
-            return rangeCommand(for: intent, in: score)
+            return rangeCommand(for: intent, in: score, ids: ids)
         case .setClef, .removeClef, .setTempo, .setStaffText, .setDynamic, .setFermata, .setBreath, .setJumps,
              .setMarkers, .setChordSymbol, .setLyricSyllables:
             return markCommand(for: intent, in: score)
@@ -182,13 +182,14 @@ extension ScoreEditSession {
     /// forward is left to throw again for real at apply time, where the refusal is recorded and the composite rolls
     /// back.
     private static func compositeCommands(
-        for intents: [EditIntent], in score: Score, depth: Int,
+        for intents: [EditIntent], in score: Score, ids: EIDAllocator, depth: Int,
     ) throws -> [any EditCommand] {
+        var scratch = ids
         var working = score
         var commands: [any EditCommand] = []
         for intent in intents {
-            guard let planned = try command(for: intent, in: working, depth: depth + 1) else { continue }
-            _ = try? planned.apply(to: &working)
+            guard let planned = try command(for: intent, in: working, ids: scratch, depth: depth + 1) else { continue }
+            _ = try? planned.apply(to: &working, ids: &scratch)
             commands.append(planned)
         }
         return commands
@@ -387,7 +388,7 @@ extension ScoreEditSession {
         else { return false }
         let voices = staff.measures[slot.measureIndex].voices
         guard voices.indices.contains(slot.voiceIndex) else { return false }
-        return voices[slot.voiceIndex].tuplets.contains {
+        return voices[slot.voiceIndex].tupletSpans.contains {
             slot.elementIndex >= $0.startIndex && slot.elementIndex <= $0.endIndex
         }
     }

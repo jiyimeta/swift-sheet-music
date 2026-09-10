@@ -22,7 +22,9 @@ extension Score {
         }
         set {
             guard let newValue, parts.indices.contains(ref.partIndex) else { return }
-            parts[ref.partIndex] = newValue
+            parts.updateValue(at: ref.partIndex) { partValue in
+                partValue = newValue
+            }
         }
     }
 
@@ -37,7 +39,11 @@ extension Score {
                   parts[address.partIndex].staves[address.staffIndexInPart].measures.indices
                       .contains(ref.measureIndex)
             else { return }
-            parts[address.partIndex].staves[address.staffIndexInPart].measures[ref.measureIndex] = newValue
+            parts.updateValue(at: address.partIndex) { partValue in
+                partValue.staves.updateValue(at: address.staffIndexInPart) { staffValue in
+                    staffValue.measures[ref.measureIndex] = newValue
+                }
+            }
         }
     }
 
@@ -66,7 +72,7 @@ extension Score {
         }
         set {
             guard let newValue, systemMeasures.indices.contains(ref.measureIndex) else { return }
-            systemMeasures[ref.measureIndex] = newValue
+            systemMeasures.updateValue(at: ref.measureIndex) { $0 = newValue }
         }
     }
 }

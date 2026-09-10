@@ -199,7 +199,7 @@ struct MidiImporterPipelineTests {
         // elements (not at the meta `.tempo` / `.keySignature` /
         // `.timeSignature` we just inserted at the front).
         #expect(voice.tuplets.count == 1)
-        guard let tuplet = voice.tuplets.first else { return }
+        guard let tuplet = voice.tupletSpans.first else { return }
         for i in tuplet.startIndex ... tuplet.endIndex {
             guard i < voice.elements.count else {
                 Issue.record("tuplet index \(i) out of bounds"); return

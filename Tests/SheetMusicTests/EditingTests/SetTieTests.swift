@@ -83,9 +83,15 @@ struct RemoveTieTests {
             id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [Measure(voices: [voice])])],
         )])
         let stale = RemoveTie(start: Self.note(1), end: Self.note(2))
-        literal.parts[0].staves[0].measures[0].voices[0].elements.insert(
-            .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])), at: 1, // X
-        )
+        literal.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                var elements = staff.measures[0].voices[0].elements.values
+                elements.insert(
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])), at: 1, // X
+                )
+                staff.measures[0].voices[0].elements = IdentifiedArray(elements)
+            }
+        }
         var score = ScoreEditor(score: literal).score
         let before = score
         let error = #expect(throws: SheetMusicError.self) { _ = try stale.apply(to: &score) }

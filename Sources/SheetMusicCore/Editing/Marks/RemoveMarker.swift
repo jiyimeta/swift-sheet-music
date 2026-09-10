@@ -22,7 +22,7 @@ public struct RemoveMarker: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let measure = MeasureRef(measureIndex: measureIndex)
         guard var target = score[measure: measure, staff: staff], target.markers.indices.contains(index) else {
             throw Self.refused(.targetNotFound(affectedLocation))
@@ -43,7 +43,7 @@ private struct RestoreMarkerList: EditCommand {
         VoiceElementID(staff: staff, measureIndex: measureIndex, voiceIndex: 0, elementIndex: 0)
     }
 
-    func apply(to score: inout Score) throws -> any EditCommand {
+    func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         let measure = MeasureRef(measureIndex: measureIndex)
         guard var target = score[measure: measure, staff: staff] else {
             throw Self.refused(.targetNotFound(affectedLocation))

@@ -11,7 +11,7 @@ enum RehearsalMarkLane {
     /// every bar it touches.
     static func mark(in score: Score, measureIndex: Int) -> RehearsalMark? {
         guard score.systemMeasures.indices.contains(measureIndex) else { return nil }
-        return mark(in: score.systemMeasures, measureIndex: measureIndex)
+        return mark(in: score.systemMeasures.values, measureIndex: measureIndex)
     }
 
     /// The same read against a captured lane, for the inverse's `text`.
@@ -40,12 +40,14 @@ enum RehearsalMarkLane {
     /// `SetTimeSignature`'s splice all test for (`systemMeasures.count == measureCount`) before they will maintain
     /// it. Growing only as far as the bar being written would leave the lane short, and those commands would then
     /// silently stop keeping it aligned with the measures.
-    static func pad(_ score: inout Score) {
+    static func pad(_ score: inout Score, ids: inout EIDAllocator) {
         let count = MeasureStructure.measureCount(of: score)
         guard score.systemMeasures.count < count else { return }
-        score.systemMeasures.append(
-            contentsOf: Array(repeating: SystemMeasure(), count: count - score.systemMeasures.count),
-        )
+        while score.systemMeasures.count < count {
+            let anchor = score.systemMeasures.isEmpty ? nil
+                : score.systemMeasures.eid(at: score.systemMeasures.count - 1)
+            score.systemMeasures.insert(SystemMeasure(), after: anchor, id: ids.next())
+        }
     }
 
     /// Replaces the mark `measure` already carries, or inserts one at the bar's start when it carries none.
@@ -68,20 +70,23 @@ enum RehearsalMarkLane {
     /// of it. Re-binding needs a second match that the compiler cannot see is the same one, so it needs a failure
     /// branch — and the only honest thing such a branch could do here is silently skip the write, which would turn
     /// a future disagreement between the two matches into a no-op instead of something a test could catch.
-    static func write(_ text: String, into measure: inout SystemMeasure) {
+    static func write(_ text: String, into measure: inout SystemMeasure, ids: inout EIDAllocator) {
         for index in measure.elements.indices {
             guard var existing = mark(of: measure.elements[index].element) else { continue }
             existing.text = text
-            measure.elements[index].element = .rehearsalMark(existing)
-            var rest = Array(measure.elements[(index + 1)...])
-            rest.removeAll { mark(of: $0.element) != nil }
-            measure.elements.replaceSubrange((index + 1)..., with: rest)
+            measure.elements.updateValue(at: index) { $0.element = .rehearsalMark(existing) }
+            for duplicate in measure.elements.indices.reversed() where duplicate > index {
+                if mark(of: measure.elements[duplicate].element) != nil {
+                    measure.elements.removeSubrange(duplicate ..< duplicate + 1)
+                }
+            }
             return
         }
         let insertion = measure.elements.firstIndex { $0.position > .start } ?? measure.elements.count
         measure.elements.insert(
             PositionedSystemElement(position: .start, element: .rehearsalMark(RehearsalMark(text: text))),
             at: insertion,
+            id: ids.next(),
         )
     }
 
@@ -118,7 +123,7 @@ public struct SetRehearsalMark: EditCommand {
     public let text: String
     /// Set only when this command is the inverse of a `SetRehearsalMark` / `RemoveRehearsalMark`: the score's whole
     /// system lane as it stood before that edit.
-    let restoredLane: [SystemMeasure]?
+    let restoredLane: IdentifiedArray<SystemMeasure>?
 
     public init(measureIndex: Int, text: String) {
         self.measureIndex = measureIndex
@@ -126,10 +131,10 @@ public struct SetRehearsalMark: EditCommand {
         restoredLane = nil
     }
 
-    init(restoringLane lane: [SystemMeasure], at measureIndex: Int) {
+    init(restoringLane lane: IdentifiedArray<SystemMeasure>, at measureIndex: Int) {
         self.measureIndex = measureIndex
         restoredLane = lane
-        text = RehearsalMarkLane.mark(in: lane, measureIndex: measureIndex)?.text ?? ""
+        text = RehearsalMarkLane.mark(in: lane.values, measureIndex: measureIndex)?.text ?? ""
     }
 
     /// A rehearsal mark belongs to the system rather than to a staff, so there is no voice element to name. Part 0 /
@@ -143,7 +148,7 @@ public struct SetRehearsalMark: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         // One place states the range, for the same reason `SetKeySignature` does: the answer is the same whether
         // the command is reached through an intent or built directly.
         guard measureIndex >= 0, measureIndex < MeasureStructure.measureCount(of: score), !score.parts.isEmpty
@@ -157,8 +162,10 @@ public struct SetRehearsalMark: EditCommand {
             // is absent from `FoundationEssentials`, so the Foundation spelling does not build for wasm.
             let trimmed = text.trimmingWhitespaceAndNewlines()
             guard !trimmed.isEmpty else { throw Self.refused(.emptyRehearsalMarkText) }
-            RehearsalMarkLane.pad(&score)
-            RehearsalMarkLane.write(trimmed, into: &score.systemMeasures[measureIndex])
+            RehearsalMarkLane.pad(&score, ids: &ids)
+            score.systemMeasures.updateValue(at: measureIndex) {
+                RehearsalMarkLane.write(trimmed, into: &$0, ids: &ids)
+            }
         }
         return SetRehearsalMark(restoringLane: previous, at: measureIndex)
     }
@@ -188,7 +195,7 @@ public struct RemoveRehearsalMark: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard measureIndex >= 0, measureIndex < MeasureStructure.measureCount(of: score), !score.parts.isEmpty,
               score.systemMeasures.indices.contains(measureIndex)
         else { throw Self.refused(.targetNotFound(affectedLocation)) }
@@ -200,7 +207,7 @@ public struct RemoveRehearsalMark: EditCommand {
         else { throw Self.refused(.targetNotFound(affectedLocation)) }
 
         let previous = score.systemMeasures
-        RehearsalMarkLane.removeMarks(from: &score.systemMeasures[measureIndex])
+        score.systemMeasures.updateValue(at: measureIndex) { RehearsalMarkLane.removeMarks(from: &$0) }
         return SetRehearsalMark(restoringLane: previous, at: measureIndex)
     }
 }

@@ -409,7 +409,11 @@
             // "pitched" would leave every codec test green.
             var score = try loadFixtureScore()
             #expect(score.parts[0].staves[0].group == "pitched")
-            score.parts[0].staves[0].group = "percussion"
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.group = "percussion"
+                }
+            }
             let decoded = try StaffParamsCodec.decodeArray(
                 AudioMidiBridge.staffParams(score: score),
             )

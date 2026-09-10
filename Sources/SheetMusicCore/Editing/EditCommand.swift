@@ -23,10 +23,30 @@ public protocol EditCommand: Sendable {
     /// command — applying the inverse to the post-edit `score`
     /// must restore the pre-edit state byte-for-byte.
     @discardableResult
-    func apply(to score: inout Score) throws -> any EditCommand
+    func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand
 }
 
 extension EditCommand {
+    /// Applies one command to a bare score for callers that own no editing session.
+    ///
+    /// A fresh per-process actor keeps minted identifiers globally unique (spec D6),
+    /// but this allocator is not continuous with any `ScoreEditor`'s allocator.
+    /// Never call this convenience from another command's `apply`: spec D5's replay
+    /// determinism depends on recording the allocator value the command started from.
+    /// A sub-command using a throwaway allocator breaks reproducibility, not uniqueness.
+    @discardableResult
+    public func apply(to score: inout Score) throws -> any EditCommand {
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        let inverse = try apply(to: &score, ids: &ids)
+        assert(!score.hasUnassignedIDs, "command dropped element identifiers")
+        #if DEBUG
+            // Gate 5's coverage and deliberate low-level test bypass are documented at check(_:ids:at:).
+            EditingIdentityInvariants.check(score, ids: ids, at: .bare)
+        #endif
+        return inverse
+    }
+
     /// Stamps the conforming command's type name as the refusal operation.
     public static func refused(_ reason: EditRefusal.Reason) -> SheetMusicError {
         .invalidEdit(EditRefusal(

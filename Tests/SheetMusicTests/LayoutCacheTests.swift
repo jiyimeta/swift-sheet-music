@@ -147,14 +147,16 @@
                 idx < score.systemMeasures.count
                     ? score.systemMeasures[idx] : SystemMeasure()
             }
-            lane[measureIndex].elements.append(PositionedSystemElement(
+            let elements = lane[measureIndex].elements
+            let pairs = elements.indices.map { (elements.eid(at: $0), elements[$0]) }
+            lane[measureIndex].elements = IdentifiedArray(pairs + [(.invalid, PositionedSystemElement(
                 position: .start,
                 element: .rehearsalMark(RehearsalMark(text: text)),
-            ))
+            ))])
             return Score(
                 division: score.division,
                 parts: score.parts,
-                systemMeasures: lane,
+                systemMeasures: IdentifiedArray(lane),
             )
         }
 
@@ -211,13 +213,17 @@
         func partRenameMisses() {
             guard #available(macOS 15.0, *) else { return }
             var score = Self.sampleScore()
-            score.parts[0].instrument.longName = "Flute"
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.instrument.longName = "Flute"
+            }
             let cache = LayoutCache()
             _ = LayoutEngine.layout(
                 score: score, options: .init(),
                 availableWidth: 800, cache: cache,
             )
-            score.parts[0].instrument.longName = "なおき"
+            score.parts.updateValue(at: 0) { partValue in
+                partValue.instrument.longName = "なおき"
+            }
             let after = LayoutEngine.layout(
                 score: score, options: .init(),
                 availableWidth: 800, cache: cache,

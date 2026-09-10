@@ -45,7 +45,7 @@ public struct SetPartNames: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.parts.indices.contains(partIndex) else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
@@ -53,8 +53,12 @@ public struct SetPartNames: EditCommand {
         let previousLongName = score.parts[partIndex].instrument.longName
         let previousShortName = score.parts[partIndex].instrument.shortName
 
-        score.parts[partIndex].instrument.longName = longName
-        score.parts[partIndex].instrument.shortName = shortName
+        score.parts.updateValue(at: partIndex) { partValue in
+            partValue.instrument.longName = longName
+        }
+        score.parts.updateValue(at: partIndex) { partValue in
+            partValue.instrument.shortName = shortName
+        }
 
         return SetPartNames(
             partIndex: partIndex,

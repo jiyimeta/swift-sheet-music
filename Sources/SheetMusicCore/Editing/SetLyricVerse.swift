@@ -28,10 +28,10 @@ public struct SetLyricVerse: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard case let .lyric(anchor, verse) = text else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
-        return try SetLyric(moving: verse, to: toVerse, at: anchor).apply(to: &score)
+        return try SetLyric(moving: verse, to: toVerse, at: anchor).apply(to: &score, ids: &ids)
     }
 }

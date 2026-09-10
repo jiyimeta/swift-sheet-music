@@ -130,8 +130,8 @@ extension Score {
             : systemMeasures
         return Score(
             division: division,
-            parts: parts,
-            systemMeasures: resolvedSystemMeasures,
+            parts: IdentifiedArray(parts),
+            systemMeasures: IdentifiedArray(resolvedSystemMeasures),
             metaTags: metaTags,
             blocks: blocks,
             style: style,
@@ -185,11 +185,13 @@ extension Score {
             for staffIndex in part.staves.indices {
                 for measureIndex in part.staves[staffIndex].measures.indices {
                     for voiceIndex in part.staves[staffIndex].measures[measureIndex].voices.indices {
-                        rewriteKeys(
-                            in: &part.staves[staffIndex].measures[measureIndex]
-                                .voices[voiceIndex].elements,
-                            offset: offset,
-                        )
+                        part.staves.updateValue(at: staffIndex) { staffValue in
+                            rewriteKeys(
+                                in: &staffValue.measures[measureIndex]
+                                    .voices[voiceIndex].elements,
+                                offset: offset,
+                            )
+                        }
                     }
                 }
             }
@@ -197,11 +199,11 @@ extension Score {
         }
     }
 
-    private static func rewriteKeys(in elements: inout [VoiceElement], offset: Int) {
+    private static func rewriteKeys(in elements: inout IdentifiedArray<VoiceElement>, offset: Int) {
         for index in elements.indices {
             guard case var .keySignature(key) = elements[index] else { continue }
             key.concertKey = respelledKey(key.concertKey - offset)
-            elements[index] = .keySignature(key)
+            elements.updateValue(at: index) { $0 = .keySignature(key) }
         }
     }
 

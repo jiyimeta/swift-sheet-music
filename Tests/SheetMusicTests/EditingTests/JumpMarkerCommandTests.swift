@@ -36,10 +36,14 @@ struct NavigationRemovalTests {
         ))
         let inverse = try command.apply(to: &score)
         var expected = before
-        if marker {
-            expected.parts[0].staves[staffIndex].measures[0].markers = [Self.segno]
-        } else {
-            expected.parts[0].staves[staffIndex].measures[0].jumps = [Self.dalSegno]
+        expected.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: staffIndex) { staff in
+                if marker {
+                    staff.measures[0].markers = [Self.segno]
+                } else {
+                    staff.measures[0].jumps = [Self.dalSegno]
+                }
+            }
         }
         #expect(score == expected)
         #expect(score.parts[0].staves[1 - staffIndex] == before.parts[0].staves[1 - staffIndex])

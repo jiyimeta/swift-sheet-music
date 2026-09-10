@@ -350,7 +350,7 @@
             }
             return Score(
                 division: base.division,
-                parts: parts,
+                parts: IdentifiedArray(parts),
                 metaTags: base.metaTags,
                 titleFrame: base.titleFrame,
                 style: base.style,
@@ -374,7 +374,7 @@
                                 pitch: n.pitch == 60 ? 62 : 60,
                                 tpc: n.pitch == 60 ? 16 : 14,
                             )
-                            elements[ei] = .chord(c)
+                            elements.updateValue(at: ei) { $0 = .chord(c) }
                             voices[vi] = Voice(elements: elements)
                             changed = true
                             break outer
@@ -387,7 +387,11 @@
                         lineBreak: measures[mi].lineBreak,
                         pageBreak: measures[mi].pageBreak,
                     )
-                    parts[0].staves[0] = Staff(measures: measures)
+                    parts.updateValue(at: 0) { partValue in
+                        partValue.staves.updateValue(at: 0) { staffValue in
+                            staffValue = Staff(measures: measures)
+                        }
+                    }
                     return Score(
                         division: score.division,
                         parts: parts,

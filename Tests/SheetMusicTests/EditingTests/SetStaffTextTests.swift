@@ -58,9 +58,13 @@ struct SetStaffTextTests {
         let before = score
         let writeInverse = try SetStaffText(anchor: Self.slot(Self.flute, 2, 0), text: "a", isSystemText: false)
             .apply(to: &score)
-        score.systemMeasures[2].elements[0].element = .staffText(StaffText(
-            text: "a", offsetX: 2, color: ScoreColor(red: 255, green: 0, blue: 0),
-        ))
+        score.systemMeasures.updateValue(at: 2) { column in
+            column.elements.updateValue(at: 0) {
+                $0.element = .staffText(StaffText(
+                    text: "a", offsetX: 2, color: ScoreColor(red: 255, green: 0, blue: 0),
+                ))
+            }
+        }
         let seeded = score
         _ = try SetStaffText(anchor: Self.slot(Self.flute, 2, 0), text: "b", isSystemText: false).apply(to: &score)
         guard case let .staffText(renamed)? = score.systemMeasures[2].elements.first?.element else {
@@ -87,7 +91,12 @@ struct SetStaffTextTests {
         let anchor = Self.slot(Self.flute, 1, 3)
         let inverse = try SetStaffText(anchor: anchor, text: "pizz.", isSystemText: false).apply(to: &score)
         // A later edit shortened the bar, so the anchor's slot is gone: an undo must still put the lane back.
-        score.parts[0].staves[0].measures[1].voices[0].elements.removeLast(2)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                let count = staffValue.measures[1].voices[0].elements.count
+                staffValue.measures[1].voices[0].elements.removeSubrange((count - 2) ..< count)
+            }
+        }
         #expect(SystemLaneSlot.position(of: anchor, in: score) == nil)
         _ = try inverse.apply(to: &score)
         #expect(score.systemMeasures == before.systemMeasures)

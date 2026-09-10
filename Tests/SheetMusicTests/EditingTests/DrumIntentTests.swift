@@ -33,12 +33,16 @@ struct DrumIntentTests {
     @Test("splitRest makes a slot boundary at the caret's tick")
     func splitRestApplies() {
         var score = EditingFixtures.fourQuarterRests()
-        score.parts[0].staves[0].measures[0].voices[0].elements = [
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .rest(duration: .half),
-            .rest(duration: .quarter),
-            .rest(duration: .quarter),
-        ]
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements = [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .rest(duration: .half),
+                    .rest(duration: .quarter),
+                    .rest(duration: .quarter),
+                ]
+            }
+        }
         let session = ScoreEditSession(score: score)
 
         #expect(session.apply(.splitRest(at: Self.slot(element: 1), tickOffset: 480)))

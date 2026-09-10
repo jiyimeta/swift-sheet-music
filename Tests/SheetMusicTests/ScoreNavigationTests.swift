@@ -44,7 +44,7 @@ struct ScoreNavigationTests {
         let part = Part(
             id: "P0",
             instrument: Instrument(id: "i", channels: [InstrumentChannel(program: 0)]),
-            staves: staves.map { Staff(measures: $0) },
+            staves: IdentifiedArray(staves.map { Staff(measures: $0) }),
         )
         return Score(division: division, parts: [part])
     }

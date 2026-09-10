@@ -63,16 +63,18 @@ struct SetTextFontTests {
                 frameType: .set(.rectangle), framePadding: .set(2),
             )
             _ = try SetTextFont(id, patch: all).apply(to: &score)
-            #expect(try ScoreEditSession.command(for: .setTextFont(text: id, patch: all), in: score, depth: 0) == nil)
+            #expect(try ScoreEditSession.command(
+                for: .setTextFont(text: id, patch: all), in: score, ids: EIDAllocator(), depth: 0,
+            ) == nil)
             #expect(try ScoreEditSession.command(
                 for: .setTextFont(text: id, patch: .init()),
                 in: score,
-                depth: 0,
+                ids: EIDAllocator(), depth: 0,
             ) == nil)
             let before = score
             let clear = SetTextFont.Patch(size: .clear)
             let planned = try ScoreEditSession.command(
-                for: .setTextFont(text: id, patch: clear), in: score, depth: 0,
+                for: .setTextFont(text: id, patch: clear), in: score, ids: EIDAllocator(), depth: 0,
             )
             let command = try #require(planned)
             let undo = try command.apply(to: &score)
@@ -88,10 +90,10 @@ struct SetTextFontTests {
     @Test("an empty patch on a missing carrier still refuses and never edits its anchor")
     func missingTargets() throws {
         for id in Self.ids {
-            var score = EditingFixtures.twoConsecutiveC4Chords()
+            var score = ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score
             let before = score
             let planned = try ScoreEditSession.command(
-                for: .setTextFont(text: id, patch: .init()), in: score, depth: 0,
+                for: .setTextFont(text: id, patch: .init()), in: score, ids: EIDAllocator(), depth: 0,
             )
             let command = try #require(planned)
             #expect(throws: SheetMusicError.self) { try command.apply(to: &score) }
@@ -107,7 +109,7 @@ struct SetTextFontTests {
             let before = score
             let negativeZero = SetTextFont.Patch(size: .set(-0.0), framePadding: .set(-0.0))
             let planned = try ScoreEditSession.command(
-                for: .setTextFont(text: id, patch: negativeZero), in: score, depth: 0,
+                for: .setTextFont(text: id, patch: negativeZero), in: score, ids: EIDAllocator(), depth: 0,
             )
             let command = try #require(planned)
             let inverse = try command.apply(to: &score)
@@ -119,7 +121,7 @@ struct SetTextFontTests {
             #expect(try ScoreEditSession.command(
                 for: .setTextFont(text: id, patch: nan),
                 in: score,
-                depth: 0,
+                ids: EIDAllocator(), depth: 0,
             ) == nil)
         }
     }
@@ -142,7 +144,7 @@ struct SetTextFontTests {
         _ = try SetTextFont(id, patch: .init(face: .set("\u{E9}"))).apply(to: &score)
         let before = score.stableFingerprint
         let planned = try ScoreEditSession.command(
-            for: .setTextFont(text: id, patch: .init(face: .set("e\u{301}"))), in: score, depth: 0,
+            for: .setTextFont(text: id, patch: .init(face: .set("e\u{301}"))), in: score, ids: EIDAllocator(), depth: 0,
         )
         let command = try #require(planned)
         let inverse = try command.apply(to: &score)

@@ -33,14 +33,15 @@ public struct RemoveTuplet: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand { // swiftlint:disable:this function_body_length
+    // swiftlint:disable:next function_body_length
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let voice = DurationChangeAlgorithm
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)
         else {
             throw Self.refused(.targetNotFound(location))
         }
-        guard let tuplet = voice.tuplets.first(where: {
+        guard let tuplet = voice.tupletSpans.first(where: {
             $0.startIndex <= location.elementIndex
                 && location.elementIndex <= $0.endIndex
         }) else {
@@ -62,6 +63,10 @@ public struct RemoveTuplet: EditCommand {
         // Pick the first chord with notes (if any) inside the
         // tuplet — its content survives in the single replacement
         // element. Otherwise the replacement is a plain rest.
+        let sourceIndex = (tuplet.startIndex ... tuplet.endIndex).first { index in
+            if case let .chord(chord) = voice.elements[index] { return !chord.notes.isEmpty }
+            return false
+        } ?? tuplet.startIndex
         let replacement: VoiceElement
         if let firstChord = (tuplet.startIndex ... tuplet.endIndex)
             .compactMap({ idx -> Chord? in
@@ -78,39 +83,24 @@ public struct RemoveTuplet: EditCommand {
             replacement = .rest(duration: totalDuration)
         }
 
-        var newElements = voice.elements
-        newElements.replaceSubrange(
-            tuplet.startIndex ... tuplet.endIndex,
-            with: [replacement],
-        )
-        let netDelta = 1 - (tuplet.endIndex - tuplet.startIndex + 1)
-
-        // Drop the removed tuplet; shift any tuplet entirely past
-        // it by netDelta. (No partial overlaps are possible —
-        // tuplets don't nest in our model.)
-        var newTuplets: [Tuplet] = []
-        for t in voice.tuplets {
-            if t.startIndex == tuplet.startIndex
-                && t.endIndex == tuplet.endIndex { continue }
-            if t.startIndex > tuplet.endIndex {
-                newTuplets.append(Tuplet(
-                    normalNotes: t.normalNotes,
-                    actualNotes: t.actualNotes,
-                    startIndex: t.startIndex + netDelta,
-                    endIndex: t.endIndex + netDelta,
-                ))
-            } else {
-                newTuplets.append(t)
+        var changed = voice
+        // Preserve the existing same-span removal rule, including duplicate entries.
+        for (index, span) in voice.tupletSpans.enumerated().reversed() {
+            if span.startIndex == tuplet.startIndex, span.endIndex == tuplet.endIndex {
+                changed.tuplets.remove(eid: voice.tuplets.eid(at: index))
             }
         }
+        changed.replaceElement(at: sourceIndex, with: replacement, id: voice.elements.eid(at: sourceIndex))
+        let removed = Set((tuplet.startIndex ... tuplet.endIndex).filter { $0 != sourceIndex })
+        changed.removeElements(at: removed)
 
         let replace = ReplaceVoiceElements(
             staff: location.staff,
             measureIndex: location.measureIndex,
             voiceIndex: location.voiceIndex,
-            elements: newElements,
-            tuplets: newTuplets,
+            elements: changed.elements,
+            tuplets: changed.tuplets,
         )
-        return try replace.apply(to: &score)
+        return try replace.apply(to: &score, ids: &ids)
     }
 }

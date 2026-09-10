@@ -22,8 +22,8 @@ extension MidiImporter {
             slicesPerTrack[track.trackIndex, default: 0] += 1
         }
         var parts: [Part] = []
-        var systemMeasures: [SystemMeasure] = Array(
-            repeating: SystemMeasure(),
+        var systemMeasures: [[PositionedSystemElement]] = Array(
+            repeating: [],
             count: timeline.bars.count,
         )
         for (trackIdx, measures) in perTrackMeasures.enumerated() {
@@ -71,8 +71,8 @@ extension MidiImporter {
         let meta = resolveTitle(file: file, sourceFilename: sourceFilename)
         return Score(
             division: file.division,
-            parts: parts,
-            systemMeasures: systemMeasures,
+            parts: IdentifiedArray(parts),
+            systemMeasures: IdentifiedArray(systemMeasures.map { SystemMeasure(elements: $0) }),
             metaTags: meta,
             source: .midi,
         )
@@ -146,7 +146,7 @@ extension MidiImporter {
                         notesArray[idx].glissando = att.glissando
                     }
                     chord.notes = ChordNotes(notesArray)
-                    voiceVal.elements[ei] = .chord(chord)
+                    voiceVal.elements.updateValue(at: ei) { $0 = .chord(chord) }
                     break
                 }
             }
@@ -248,7 +248,7 @@ extension MidiImporter {
         file: MidiFile,
         timeline: BarTimeline,
         into staff: inout Staff,
-        systemMeasures: inout [SystemMeasure],
+        systemMeasures: inout [[PositionedSystemElement]],
         staffAddress: StaffAddress,
         includeTempo: Bool,
         includeKeySignature: Bool,
@@ -280,7 +280,7 @@ extension MidiImporter {
                 // of voice 0" approach landed at the same effective
                 // position (cursor 0 of the measure).
                 if measureIdx < systemMeasures.count {
-                    systemMeasures[measureIdx].elements.append(
+                    systemMeasures[measureIdx].append(
                         PositionedSystemElement(
                             position: .start,
                             element: .tempo(Tempo(beatsPerSecond: bps)),
@@ -298,19 +298,22 @@ extension MidiImporter {
                 element = nil
             }
             if let el = element, var voice = staff.measures[measureIdx].voices.first {
-                voice.elements.insert(el, at: 0)
+                voice.elements = IdentifiedArray([el] + voice.elements.values)
                 // Voice.tuplets references chord indices in
                 // `elements`. Inserting at index 0 shifts every
                 // subsequent index by one — bump the tuplet ranges
                 // so they keep pointing at the same chords (otherwise
                 // the bracket gets drawn over the meta event we just
                 // inserted, or disappears entirely).
-                voice.tuplets = voice.tuplets.map {
-                    Tuplet(
-                        normalNotes: $0.normalNotes,
-                        actualNotes: $0.actualNotes,
-                        startIndex: $0.startIndex + 1,
-                        endIndex: $0.endIndex + 1,
+                voice.tuplets.mapValues { tuplet in
+                    guard case let .index(first) = tuplet.first,
+                          case let .index(last) = tuplet.last
+                    else { preconditionFailure("MIDI assembly requires unresolved tuplet endpoints") }
+                    return Tuplet(
+                        normalNotes: tuplet.normalNotes,
+                        actualNotes: tuplet.actualNotes,
+                        startIndex: first + 1,
+                        endIndex: last + 1,
                     )
                 }
                 staff.measures[measureIdx].voices[0] = voice

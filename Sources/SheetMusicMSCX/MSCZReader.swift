@@ -233,10 +233,14 @@ public enum MSCZReader {
                 !result.parts[partIdx].instrument.useDrumset
             else { continue }
             if let program = preset.program {
-                result.parts[partIdx].instrument.channels[0].program = program
+                result.parts.updateValue(at: partIdx) { partValue in
+                    partValue.instrument.channels[0].program = program
+                }
             }
             if let bank = preset.bank {
-                result.parts[partIdx].instrument.channels[0].bank = bank
+                result.parts.updateValue(at: partIdx) { partValue in
+                    partValue.instrument.channels[0].bank = bank
+                }
             }
         }
         return result

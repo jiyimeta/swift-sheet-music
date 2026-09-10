@@ -55,12 +55,24 @@ struct SignatureChangeRoundTripTests {
         for (partIndex, part) in score.parts.enumerated() {
             for staffIndex in part.staves.indices {
                 for (measureIndex, voice) in Self.content().enumerated() {
-                    score.parts[partIndex].staves[staffIndex].measures[measureIndex + 1].voices[0] = voice
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            staffValue.measures[measureIndex + 1].voices[0] = voice
+                        }
+                    }
                 }
                 if pickup {
-                    score.parts[partIndex].staves[staffIndex].measures[0].actualLength =
-                        Fraction(numerator: 1, denominator: 4)
-                    score.parts[partIndex].staves[staffIndex].measures[0].irregular = true
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            staffValue.measures[0].actualLength =
+                                Fraction(numerator: 1, denominator: 4)
+                        }
+                    }
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            staffValue.measures[0].irregular = true
+                        }
+                    }
                 }
             }
         }

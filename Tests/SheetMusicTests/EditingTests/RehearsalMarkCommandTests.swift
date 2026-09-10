@@ -42,12 +42,14 @@ struct RehearsalMarkCommandTests {
     @Test("renaming preserves the mark's frame, color and offsets")
     func renamePreservesStyling() throws {
         var score = Self.blankScore()
-        score.systemMeasures = Array(repeating: SystemMeasure(), count: 4)
+        score.systemMeasures = IdentifiedArray(Array(repeating: SystemMeasure(), count: 4))
         var styled = RehearsalMark(text: "A", offsetX: 1.5, offsetY: -2, frame: .circle)
         styled.visible = false
-        score.systemMeasures[1].elements = [
-            PositionedSystemElement(position: .start, element: .rehearsalMark(styled)),
-        ]
+        score.systemMeasures.updateValue(at: 1) { column in
+            column.elements = [
+                PositionedSystemElement(position: .start, element: .rehearsalMark(styled)),
+            ]
+        }
         try SetRehearsalMark(measureIndex: 1, text: "Coda").apply(to: &score)
         let mark = try #require(RehearsalMarkLane.mark(in: score, measureIndex: 1))
         #expect(mark.text == "Coda")
@@ -85,11 +87,13 @@ struct RehearsalMarkCommandTests {
     @Test("a removal drops every mark the bar carries")
     func removeDropsEveryMark() throws {
         var score = Self.blankScore()
-        score.systemMeasures = Array(repeating: SystemMeasure(), count: 4)
-        score.systemMeasures[1].elements = [
-            PositionedSystemElement(position: .start, element: .rehearsalMark(RehearsalMark(text: "A"))),
-            PositionedSystemElement(position: .start, element: .rehearsalMark(RehearsalMark(text: "B"))),
-        ]
+        score.systemMeasures = IdentifiedArray(Array(repeating: SystemMeasure(), count: 4))
+        score.systemMeasures.updateValue(at: 1) { column in
+            column.elements = [
+                PositionedSystemElement(position: .start, element: .rehearsalMark(RehearsalMark(text: "A"))),
+                PositionedSystemElement(position: .start, element: .rehearsalMark(RehearsalMark(text: "B"))),
+            ]
+        }
         try RemoveRehearsalMark(measureIndex: 1).apply(to: &score)
         let remaining = score.systemMeasures[1].elements.filter {
             if case .rehearsalMark = $0.element { true } else { false }
@@ -102,16 +106,18 @@ struct RehearsalMarkCommandTests {
     /// and nothing else.
     private static func twoMarkScore() -> Score {
         var score = blankScore()
-        score.systemMeasures = Array(repeating: SystemMeasure(), count: 4)
-        score.systemMeasures[1].elements = [
-            PositionedSystemElement(
-                position: .start, element: .rehearsalMark(RehearsalMark(text: "A", offsetX: 3, frame: .circle)),
-            ),
-            PositionedSystemElement(position: .start, element: .tempo(Tempo(beatsPerSecond: 2))),
-            PositionedSystemElement(
-                position: .start, element: .rehearsalMark(RehearsalMark(text: "B", offsetX: -7, frame: .none)),
-            ),
-        ]
+        score.systemMeasures = IdentifiedArray(Array(repeating: SystemMeasure(), count: 4))
+        score.systemMeasures.updateValue(at: 1) { column in
+            column.elements = [
+                PositionedSystemElement(
+                    position: .start, element: .rehearsalMark(RehearsalMark(text: "A", offsetX: 3, frame: .circle)),
+                ),
+                PositionedSystemElement(position: .start, element: .tempo(Tempo(beatsPerSecond: 2))),
+                PositionedSystemElement(
+                    position: .start, element: .rehearsalMark(RehearsalMark(text: "B", offsetX: -7, frame: .none)),
+                ),
+            ]
+        }
         return score
     }
 
@@ -180,16 +186,18 @@ struct RehearsalMarkCommandTests {
     @Test("the collapse is keyed to the surviving mark's own index, not to the bar's start")
     func collapseWhenTheMarkIsNotTheFirstElement() throws {
         var score = Self.blankScore()
-        score.systemMeasures = Array(repeating: SystemMeasure(), count: 4)
-        score.systemMeasures[1].elements = [
-            PositionedSystemElement(position: .start, element: .tempo(Tempo(beatsPerSecond: 2))),
-            PositionedSystemElement(
-                position: .start, element: .rehearsalMark(RehearsalMark(text: "A", offsetX: 3, frame: .circle)),
-            ),
-            PositionedSystemElement(
-                position: .start, element: .rehearsalMark(RehearsalMark(text: "B", offsetX: -7, frame: .none)),
-            ),
-        ]
+        score.systemMeasures = IdentifiedArray(Array(repeating: SystemMeasure(), count: 4))
+        score.systemMeasures.updateValue(at: 1) { column in
+            column.elements = [
+                PositionedSystemElement(position: .start, element: .tempo(Tempo(beatsPerSecond: 2))),
+                PositionedSystemElement(
+                    position: .start, element: .rehearsalMark(RehearsalMark(text: "A", offsetX: 3, frame: .circle)),
+                ),
+                PositionedSystemElement(
+                    position: .start, element: .rehearsalMark(RehearsalMark(text: "B", offsetX: -7, frame: .none)),
+                ),
+            ]
+        }
         try SetRehearsalMark(measureIndex: 1, text: "Coda").apply(to: &score)
         #expect(score.systemMeasures[1].elements.count == 2)
         let remaining = Self.marks(in: score, measureIndex: 1)

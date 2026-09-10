@@ -11,7 +11,6 @@ public enum SelectionExpansion {
         _ id: ScoreItemID, in score: Score,
     ) -> Set<ScoreItemID> {
         guard case let .tuplet(tid) = id,
-              let tuplet = score[tid],
               let staffForTuplet = score[tid.staff]
         else { return [id] }
         let measures = staffForTuplet.measures
@@ -20,7 +19,10 @@ public enum SelectionExpansion {
         let voices = measures[tid.measureIndex].voices
         guard voices.indices.contains(tid.voiceIndex)
         else { return [id] }
-        let elements = voices[tid.voiceIndex].elements
+        let voice = voices[tid.voiceIndex]
+        guard let tuplet = voice.tupletSpans.first(where: { $0.startIndex == tid.startElementIndex })
+        else { return [id] }
+        let elements = voice.elements
         var out: Set<ScoreItemID> = [id]
         for j in tuplet.startIndex ... tuplet.endIndex {
             guard elements.indices.contains(j),

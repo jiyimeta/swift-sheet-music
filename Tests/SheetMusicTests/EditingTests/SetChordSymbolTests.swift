@@ -12,7 +12,7 @@ struct SetChordSymbolTests {
     }
 
     private static func elements(_ score: Score, _ measure: Int) -> [VoiceElement] {
-        score.parts[0].staves[0].measures[measure].voices[0].elements
+        score.parts[0].staves[0].measures[measure].voices[0].elements.values
     }
 
     @Test("a symbol is inserted right before its chord, with nil tpcs")
@@ -38,10 +38,18 @@ struct SetChordSymbolTests {
     @Test("a file-authored symbol is replaced in place: parens and offsets survive, the tpcs do not")
     func replacesInPlace() throws {
         var score = EditingFixtures.parityFixture()
-        score.parts[0].staves[0].measures[0].voices[0].elements.insert(
-            .harmony(Harmony(name: "m7", rootTpc: 13, bassTpc: 12, leftParen: true, rightParen: true, offsetX: 1)),
-            at: 1,
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(
+                    .harmony(Harmony(
+                        name: "m7", rootTpc: 13, bassTpc: 12, leftParen: true, rightParen: true, offsetX: 1,
+                    )),
+                    at: 1,
+                )
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
+            }
+        }
         // [ts, harmony, C4, D4, r, r]
         _ = try SetChordSymbol(at: Self.slot(0, 2), name: " Cmaj7 ", harmonyType: .standard).apply(to: &score)
         let elements = Self.elements(score, 0)
@@ -52,9 +60,15 @@ struct SetChordSymbolTests {
     @Test("the symbol is found past a dynamic in the same run")
     func findsThroughTheRun() throws {
         var score = EditingFixtures.parityFixture()
-        score.parts[0].staves[0].measures[0].voices[0].elements.insert(
-            contentsOf: [.harmony(Harmony(name: "C")), .dynamic(Dynamic(subtype: "p", velocity: 49))], at: 1,
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(
+                    contentsOf: [.harmony(Harmony(name: "C")), .dynamic(Dynamic(subtype: "p", velocity: 49))], at: 1,
+                )
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
+            }
+        }
         // [ts, harmony, dyn, C4, D4, r, r]
         _ = try SetChordSymbol(at: Self.slot(0, 3), name: nil, harmonyType: .standard).apply(to: &score)
         let elements = Self.elements(score, 0)

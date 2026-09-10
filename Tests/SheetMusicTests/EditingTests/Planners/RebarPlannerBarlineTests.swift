@@ -19,11 +19,11 @@ struct RebarPlannerBarlineTests {
     private static func score(_ measures: [Measure]) -> Score {
         let staff = Staff(measures: measures)
         let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])
-        return Score(
+        return ScoreEditor(score: Score(
             division: division,
             parts: [part],
-            systemMeasures: Array(repeating: SystemMeasure(), count: measures.count),
-        )
+            systemMeasures: IdentifiedArray(Array(repeating: SystemMeasure(), count: measures.count)),
+        )).score
     }
 
     private static func note(_ pitch: Int = 72, tieForward: Int? = nil, tieBack: Int? = nil) -> Note {
@@ -117,8 +117,9 @@ struct RebarPlannerBarlineTests {
 
     @Test("an end repeat that stays on a new boundary re-homes onto the column that ends there")
     func endRepeatSurvivesOnBoundary() throws {
+        var ids = EIDAllocator()
         let score = Self.threeWholeNotesIn44 { $0.endRepeatCount = 2 }
-        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 2, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 2, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 6)
         // Bar 2 ends at 3840, which is where column 3 ends: the repeat closes that column instead.
         #expect(plan.columns.map { $0.staffMeasures[0][0].endRepeatCount }
@@ -127,9 +128,10 @@ struct RebarPlannerBarlineTests {
 
     @Test("an end repeat the new barring would displace is refused")
     func endRepeatDisplacedRefused() {
+        var ids = EIDAllocator()
         let score = Self.threeWholeNotesIn44 { $0.endRepeatCount = 2 }
         let reason = Self.refusalReason {
-            _ = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4)
+            _ = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4, ids: &ids)
         }
         #expect(reason == .rebarWouldDisplaceBarlineMarker(measureIndex: 1))
     }
@@ -138,13 +140,14 @@ struct RebarPlannerBarlineTests {
 
     @Test("a Segno and a D.C. re-home onto the columns that open and close their bar")
     func markerAndJumpSurviveOnBoundary() throws {
+        var ids = EIDAllocator()
         let segno = Marker(kind: .segno, label: "segno", text: "Segno")
         let daCapo = Jump(jumpTo: "start", playUntil: "end", text: "D.C.")
         let score = Self.threeWholeNotesIn44 {
             $0.markers = [segno]
             $0.jumps = [daCapo]
         }
-        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 2, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 2, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 6)
         // A Marker is anchored at the bar's LEFT edge (1920 = the head of column 2), a Jump at its RIGHT
         // one (3840 = the end of column 3).
@@ -154,20 +157,22 @@ struct RebarPlannerBarlineTests {
 
     @Test("a Segno the new barring would displace is refused")
     func markerDisplacedRefused() {
+        var ids = EIDAllocator()
         let score = Self.threeWholeNotesIn44 { $0.markers = [Marker(kind: .segno, label: "segno")] }
         let reason = Self.refusalReason {
-            _ = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4)
+            _ = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4, ids: &ids)
         }
         #expect(reason == .rebarWouldDisplaceBarlineMarker(measureIndex: 1))
     }
 
     @Test("a D.C. the new barring would displace is refused")
     func jumpDisplacedRefused() {
+        var ids = EIDAllocator()
         let score = Self.threeWholeNotesIn44 {
             $0.jumps = [Jump(jumpTo: "start", playUntil: "end", text: "D.C.")]
         }
         let reason = Self.refusalReason {
-            _ = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4)
+            _ = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4, ids: &ids)
         }
         #expect(reason == .rebarWouldDisplaceBarlineMarker(measureIndex: 1))
     }
@@ -176,6 +181,7 @@ struct RebarPlannerBarlineTests {
 
     @Test("a special barline re-homes to the head or the tail of the column at its own tick")
     func specialBarLineSurvivesOnBoundary() throws {
+        var ids = EIDAllocator()
         let opening = VoiceElement.barLine(BarLine(subtype: "start-repeat"))
         let double = VoiceElement.barLine(BarLine(subtype: "double"))
         let score = Self.score([
@@ -184,7 +190,7 @@ struct RebarPlannerBarlineTests {
             Measure(voices: [Voice(elements: [Self.timeSignature44, opening, Self.chord(.whole), double])]),
             Measure(voices: [Voice(elements: [Self.chord(.whole)])]),
         ])
-        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 2, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 2, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 4)
         // The opening barline sits at tick 0 — the run's own start, which nothing has moved under.
         #expect(Self.content(plan, 0).first == opening)
@@ -195,6 +201,7 @@ struct RebarPlannerBarlineTests {
 
     @Test("a special barline the new barring would displace is refused")
     func specialBarLineDisplacedRefused() {
+        var ids = EIDAllocator()
         let score = Self.score([
             Measure(voices: [Voice(elements: [
                 Self.timeSignature44, Self.chord(.whole), .barLine(BarLine(subtype: "double")),
@@ -204,7 +211,7 @@ struct RebarPlannerBarlineTests {
         ])
         // 3/4 columns fall at 1440 / 2880 / 4320; the barline is at 1920.
         let reason = Self.refusalReason {
-            _ = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4)
+            _ = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4, ids: &ids)
         }
         #expect(reason == .rebarWouldDisplaceBarlineMarker(measureIndex: 0))
     }
@@ -213,27 +220,30 @@ struct RebarPlannerBarlineTests {
 
     @Test("a line break with no new boundary at its tick re-homes best-effort instead of refusing")
     func lineBreakOffBoundaryRehomesWithoutRefusing() throws {
+        var ids = EIDAllocator()
         let score = Self.threeWholeNotesIn44 { $0.lineBreak = true }
         // 3/4 has no barline at bar 2's end (3840) — a repeat or a Jump there would be refused. A layout
         // break is a typesetting hint, not a navigation landmark, so it lands on the column holding the
         // tick just inside its bar: 3839 is in column 2 (2880 ..< 4320).
-        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 4)
         #expect(plan.columns.map { $0.staffMeasures[0][0].lineBreak } == [false, false, true, false])
     }
 
     @Test("a section break off the new grid re-homes the same best-effort way")
     func sectionBreakOffBoundaryRehomesWithoutRefusing() throws {
+        var ids = EIDAllocator()
         let score = Self.threeWholeNotesIn44 { $0.sectionBreak = true }
-        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4, ids: &ids)
         #expect(plan.columns.map { $0.staffMeasures[0][0].sectionBreak } == [false, false, true, false])
     }
 
     @Test("a measure-repeat count off the new grid re-homes to the column holding its bar's start")
     func measureRepeatCountOffBoundaryRehomesWithoutRefusing() throws {
+        var ids = EIDAllocator()
         let score = Self.threeWholeNotesIn44 { $0.measureRepeatCount = 2 }
         // Bar 2 starts at 1920, inside column 1 (1440 ..< 2880): start-anchored, and NOT in the hard set.
-        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4, ids: &ids)
         #expect(plan.columns.map { $0.staffMeasures[0][0].measureRepeatCount } == [nil, 2, nil, nil])
     }
 
@@ -241,6 +251,7 @@ struct RebarPlannerBarlineTests {
 
     @Test("a whole note re-barred into 3/8 comes out as one tied chain across three columns")
     func chordCrossingSeveralNewBarlines() throws {
+        var ids = EIDAllocator()
         let grace = GraceChord(graceType: .grace16after, duration: .sixteenth, notes: [Self.note(74)])
         var tied = Chord(duration: .whole, notes: [Self.note(tieBack: 1)])
         tied.lyrics = [Lyric(text: "ah")]
@@ -251,7 +262,7 @@ struct RebarPlannerBarlineTests {
         ])
         // Only bar 2 is re-barred, so its chord really is tied in from OUTSIDE the region. 1920 ticks at
         // 720 per column is three columns, cut at 720 and again at 1440 — two new barlines, not one.
-        let plan = try RebarPlanner.rebar(region: 1 ..< 2, in: score, numerator: 3, denominator: 8)
+        let plan = try RebarPlanner.rebar(region: 1 ..< 2, in: score, numerator: 3, denominator: 8, ids: &ids)
         #expect(plan.columns.count == 3)
         #expect(Self.durations(Self.content(plan, 0)) == Self.aligned(720, from: 0))
         #expect(Self.durations(Self.content(plan, 1)) == Self.aligned(720, from: 0))

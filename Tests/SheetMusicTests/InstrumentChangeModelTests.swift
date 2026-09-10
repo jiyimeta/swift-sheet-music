@@ -98,13 +98,15 @@ struct InstrumentChangeModelTests {
     @Test("a text-only change contributes no point")
     func textOnlyChangeIsNotATimelinePoint() {
         var score = twoPartScore()
-        score.systemMeasures[1].elements = [
-            PositionedSystemElement(
-                position: MeasurePosition(offset: Fraction(numerator: 0, denominator: 1)),
-                element: .instrumentChange(InstrumentChange(text: "no instrument")),
-                originalStaff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
-            ),
-        ]
+        score.systemMeasures.updateValue(at: 1) { column in
+            column.elements = [
+                PositionedSystemElement(
+                    position: MeasurePosition(offset: Fraction(numerator: 0, denominator: 1)),
+                    element: .instrumentChange(InstrumentChange(text: "no instrument")),
+                    originalStaff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                ),
+            ]
+        }
         #expect(score.instrumentTimeline(forPart: 0).count == 1)
     }
 

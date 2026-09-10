@@ -185,9 +185,13 @@ struct MSCXIdempotencyTests {
             for staffIndex in score.parts[partIndex].staves.indices {
                 let measures = score.parts[partIndex].staves[staffIndex].measures
                 for measureIndex in measures.indices {
-                    hidden += Self.hideFirstBeam(
-                        in: &score.parts[partIndex].staves[staffIndex].measures[measureIndex],
-                    )
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            hidden += Self.hideFirstBeam(
+                                in: &staffValue.measures[measureIndex],
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -203,7 +207,7 @@ struct MSCXIdempotencyTests {
             for elementIndex in elements.indices {
                 guard case var .chord(chord) = elements[elementIndex], chord.beamVisible else { continue }
                 chord.beamVisible = false
-                measure.voices[voiceIndex].elements[elementIndex] = .chord(chord)
+                measure.voices[voiceIndex].elements.updateValue(at: elementIndex) { $0 = .chord(chord) }
                 return 1
             }
         }

@@ -53,14 +53,15 @@ public struct CreateTuplet: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand { // swiftlint:disable:this function_body_length
+    // swiftlint:disable:next function_body_length
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let voice = DurationChangeAlgorithm
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)
         else {
             throw Self.refused(.targetNotFound(location))
         }
-        if voice.tuplets.contains(where: {
+        if voice.tupletSpans.contains(where: {
             $0.startIndex <= location.elementIndex
                 && location.elementIndex <= $0.endIndex
         }) {
@@ -101,35 +102,22 @@ public struct CreateTuplet: EditCommand {
 
         var newElements = voice.elements
         newElements.replaceSubrange(
-            location.elementIndex ... location.elementIndex,
-            with: members,
+            location.elementIndex ..< (location.elementIndex + 1),
+            with: members.enumerated().map { index, element in
+                (index == 0 ? voice.elements.eid(at: location.elementIndex) : ids.next(), element)
+            },
         )
 
-        // Tuplets entirely past the spliced region shift by the
-        // net element-count change; tuplets entirely before stay
-        // put. The earlier guard ensured no existing tuplet
-        // overlaps the target, so partial-overlap can't occur.
-        let netDelta = actualNotes - 1
-        var newTuplets: [Tuplet] = voice.tuplets.map { t in
-            if t.startIndex > location.elementIndex {
-                return Tuplet(
-                    normalNotes: t.normalNotes,
-                    actualNotes: t.actualNotes,
-                    startIndex: t.startIndex + netDelta,
-                    endIndex: t.endIndex + netDelta,
-                )
-            }
-            return t
-        }
-        newTuplets.append(Tuplet(
+        var newTuplets = voice.tuplets
+        newTuplets.insert(Tuplet(
             normalNotes: normalNotes,
             actualNotes: actualNotes,
-            startIndex: location.elementIndex,
-            endIndex: location.elementIndex + actualNotes - 1,
-        ))
-        // Sort by startIndex so downstream code that assumes ordered
-        // tuplets doesn't break.
-        newTuplets.sort { $0.startIndex < $1.startIndex }
+            first: newElements.eid(at: location.elementIndex),
+            last: newElements.eid(at: location.elementIndex + actualNotes - 1),
+        ), at: newTuplets.count, id: ids.next())
+        let spans = Voice(elements: newElements, tuplets: newTuplets).tupletSpans
+        let ordered = newTuplets.indices.sorted { spans[$0].startIndex < spans[$1].startIndex }
+        newTuplets = IdentifiedArray(ordered.map { (newTuplets.eid(at: $0), newTuplets[$0]) })
 
         let replace = ReplaceVoiceElements(
             staff: location.staff,
@@ -138,6 +126,6 @@ public struct CreateTuplet: EditCommand {
             elements: newElements,
             tuplets: newTuplets,
         )
-        return try replace.apply(to: &score)
+        return try replace.apply(to: &score, ids: &ids)
     }
 }

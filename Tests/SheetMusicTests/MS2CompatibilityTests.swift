@@ -295,7 +295,7 @@ struct MS2CompatibilityTests {
         // The tuplet should be recorded against the first three
         // elements only.
         #expect(voice.tuplets.count == 1)
-        let tuplet = voice.tuplets[0]
+        let tuplet = voice.tupletSpans[0]
         #expect(tuplet.normalNotes == 2)
         #expect(tuplet.actualNotes == 3)
         #expect(tuplet.startIndex == 0)
@@ -345,10 +345,10 @@ struct MS2CompatibilityTests {
         #expect(durations.count == 6)
         #expect(durations.allSatisfy { $0 == Fraction(numerator: 1, denominator: 12) })
         #expect(voice.tuplets.count == 2)
-        #expect(voice.tuplets[0].startIndex == 0)
-        #expect(voice.tuplets[0].endIndex == 2)
-        #expect(voice.tuplets[1].startIndex == 3)
-        #expect(voice.tuplets[1].endIndex == 5)
+        #expect(voice.tupletSpans[0].startIndex == 0)
+        #expect(voice.tupletSpans[0].endIndex == 2)
+        #expect(voice.tupletSpans[1].startIndex == 3)
+        #expect(voice.tupletSpans[1].endIndex == 5)
     }
 
     @Test func ms2TieAndEndSpannerOnNotes() throws {

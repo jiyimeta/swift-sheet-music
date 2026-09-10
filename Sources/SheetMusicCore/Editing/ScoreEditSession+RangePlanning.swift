@@ -9,26 +9,26 @@ import SheetMusicFoundation
 /// again at apply time, where the session records it. An empty resolved range is such a refusal
 /// (`.targetNotFound`), never a silent nothing: the intent named something that is not there.
 extension ScoreEditSession {
-    static func rangeCommand(for intent: EditIntent, in score: Score) -> (any EditCommand)? {
+    static func rangeCommand(for intent: EditIntent, in score: Score, ids: EIDAllocator) -> (any EditCommand)? {
         switch intent {
         case let .transposeRange(range, semitones, respellInKey):
             let command = TransposeRange(over: range, semitones: semitones, respellInKey: respellInKey)
-            return unlessInert(command, in: score) { try command.plan(in: $0) }
+            return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
         case let .addIntervalToSelection(range, steps):
             let command = AddIntervalToSelection(over: range, steps: steps)
-            return unlessInert(command, in: score) { try command.plan(in: $0) }
+            return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
         case let .deleteRange(range):
             let command = DeleteRange(over: range)
-            return unlessInert(command, in: score) { try command.plan(in: $0) }
+            return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
         case let .setAccidentalsInRange(range, accidental):
             let command = SetAccidentalsInRange(over: range, accidental: accidental)
-            return unlessInert(command, in: score) { try command.plan(in: $0) }
+            return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
         case let .setDurationInRange(range, duration):
             let command = SetDurationInRange(over: range, duration: duration)
-            return unlessInert(command, in: score) { try command.plan(in: $0) }
+            return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
         case let .respellRange(range, mode):
             let command = RespellRange(over: range, mode: mode)
-            return unlessInert(command, in: score) { try command.plan(in: $0) }
+            return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.

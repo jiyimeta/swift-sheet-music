@@ -39,7 +39,9 @@ struct SetPartNamesTests {
     @Test("leaves the instrument id and the track name alone")
     func leavesIdentityAlone() throws {
         var score = fixture()
-        score.parts[0].trackName = "Flute"
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.trackName = "Flute"
+        }
         _ = try SetPartNames(partIndex: 0, longName: "Solo", shortName: "S.").apply(to: &score)
 
         #expect(score.parts[0].instrument.id == "flute")
@@ -84,12 +86,12 @@ struct SetPartNamesTests {
     func noOpPlansToNothing() throws {
         let score = fixture()
         let unchanged = try ScoreEditSession.command(
-            for: .setPartNames(at: 0, longName: "Flute", shortName: "Fl."), in: score, depth: 0,
+            for: .setPartNames(at: 0, longName: "Flute", shortName: "Fl."), in: score, ids: EIDAllocator(), depth: 0,
         )
         #expect(unchanged == nil)
 
         let changed = try ScoreEditSession.command(
-            for: .setPartNames(at: 0, longName: "Flute", shortName: nil), in: score, depth: 0,
+            for: .setPartNames(at: 0, longName: "Flute", shortName: nil), in: score, ids: EIDAllocator(), depth: 0,
         )
         #expect(changed != nil)
     }

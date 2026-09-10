@@ -75,7 +75,12 @@
         @Test func alignNotefulPartsDropsEmptyParts() {
             var a = Self.makeScore([[60, 62, 64, 65]])
             let emptyStaff = Staff(measures: [Measure(voices: [Voice(elements: [])])])
-            a.parts.append(Part(id: "2", instrument: Instrument(id: "y"), staves: [emptyStaff]))
+            var ids = EIDAllocator(actor: 42)
+            a.assignMissingIDs(using: &ids)
+            a.parts.insert(
+                Part(id: "2", instrument: Instrument(id: "y"), staves: [emptyStaff]),
+                after: a.parts.eid(at: a.parts.count - 1), id: ids.next(),
+            )
             let b = Self.makeScore([[60, 62, 64, 65]])
             let aligned = ScoreSemanticMetrics.alignNotefulParts(scoreA: a, scoreB: b)
             #expect(aligned.scoreA.parts.count == 1)

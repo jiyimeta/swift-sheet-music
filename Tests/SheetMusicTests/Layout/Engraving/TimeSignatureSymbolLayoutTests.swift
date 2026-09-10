@@ -60,8 +60,13 @@ import Testing
         @Test("the opening signature's symbol reaches the renderers too")
         func openingSignatureCarriesTheSymbol() {
             var opening = Self.score(change: TimeSignature(numerator: 3, denominator: 4))
-            opening.parts[0].staves[0].measures[0].voices[0].elements[2] =
-                .timeSignature(TimeSignature(numerator: 4, denominator: 4, symbol: .common))
+            opening.parts.updateValue(at: 0) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[0].voices[0].elements.updateValue(at: 2) {
+                        $0 = .timeSignature(TimeSignature(numerator: 4, denominator: 4, symbol: .common))
+                    }
+                }
+            }
             #expect(symbols(inMeasure: 0, of: opening) == [.common])
         }
 

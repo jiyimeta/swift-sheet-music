@@ -169,6 +169,69 @@ and this project adheres to
   to `SetElementVisible`, where the write already existed and only the address was missing — and that
   address is an `internal` slot search, so no host could have supplied it. Wire index 75.
 
+### Changed
+
+- **Score elements carry stable identifiers, and every edit command takes the allocator that mints
+  them. This is source-breaking for hosts that define commands or write into the score directly.**
+  An `EID` is carried by each of these elements:
+  - parts, staves and measure columns;
+  - voice elements and tuplets;
+  - grace chords;
+  - system-lane elements (tempo, rehearsal marks, staff and system text, swing, instrument changes).
+
+  The identifier survives an edit that moves the element, such as a re-barring, a part move or an
+  inserted measure, and undo and redo restore it exactly. Equality and `stableFingerprint` still see values
+  only: two parses of one file compare equal, and no golden moved. Identifiers are not persisted yet (MSCX
+  `<eid>` is later work) and no wire format carries them, so every load mints fresh ones.
+
+  **What breaks at compile time, and how to migrate:**
+
+  - **`EditCommand`'s requirement is now `apply(to:ids:)`.** A command that implements only `apply(to:)` no
+    longer conforms. To migrate:
+    - rename the method;
+    - pass `&ids` into every nested `apply`;
+    - mint new slots with `ids.next()`.
+
+    `apply(to:)` survives as a convenience that runs the command with a fresh allocator. Use it for a
+    one-off call, never inside another command's `apply`.
+  - **These collections are now `IdentifiedArray`s:** `Score.parts`, `Score.systemMeasures`, `Part.staves`,
+    `Voice.elements`, `Voice.tuplets`, `Chord.graceNotesBefore` / `graceNotesAfter` and
+    `SystemMeasure.elements`. Reads are unchanged, but the subscript is get-only.
+    - To change an element, use `updateValue(at:_:)`, nested once per identified level.
+    - To get a plain array, use `.values`.
+    - To restructure, use `insert(_:at:id:)`, `replaceSubrange(_:with:)`, `removeSubrange(_:)`,
+      `removeAll(where:)` or `remove(eid:)`.
+
+    `Staff.measures` and `Measure.voices` stay plain arrays. `Score.init` and `Part.init` now take
+    `IdentifiedArray` too: an array literal still works, but a `[Part]` variable needs `IdentifiedArray(parts)`.
+  - **`Tuplet` stores `first` / `last: TupletEndpoint` instead of `startIndex` / `endIndex`.** An endpoint is
+    `.index` before identifiers are assigned and `.element(EID)` after.
+    - The index initializer remains.
+    - Read positions from `Voice.tupletSpans`, and compare tuplets through it too: `Tuplet`'s own `==`
+      distinguishes the two endpoint forms.
+  - **`ReplaceVoiceElements` takes `slots: [VoiceSlot]` and `tupletSlots: [TupletSlot]`.** Each slot says
+    whether it keeps an existing identifier (`.keep(eid)`) or is new (`.fresh`). Its `elements` and `tuplets`
+    properties are gone.
+
+  **Lookup by identifier:**
+  - `score[eid:]`, `position(of:)` and `eid(at:)` translate between an identifier and the positional
+    addresses that hit-testing and selection still produce. They cover top-level voice elements only.
+  - Positions move under edits: to follow an element across one, take `eid(at:)` before the edit and
+    `position(of:)` after it.
+  - Identifiers are assigned on entry by `ScoreEditor`, `ScoreEditSession`, `ScoreLoader`, the MusicXML
+    parser, PDF import and `Score.blank`.
+  - `MSCXParser`, `MSCZReader` and `MidiImporter` called directly leave them unassigned until an editor
+    adopts the score. Until then, `eid(at:)` returns nil.
+
+  **Debug builds check every editing seam.** They assert that:
+  - no identifier is duplicated;
+  - no identifier was minted outside the live allocator;
+  - undo and redo restore the identifier set;
+  - tuplet endpoints name ordered members of their voice.
+
+  A host command trips these assertions if it rebuilds a voice from a plain array or mints from a snapshot of
+  `ScoreEditor.idAllocator`. Release builds carry no checks.
+
 ### Fixed
 
 - **`stableFingerprint` can see colour, placement and text properties.**

@@ -138,7 +138,12 @@ struct ScoreEditSessionTests {
         var score = EditingFixtures.twoMeasuresOfQuarterRests()
         let slot = VoiceElementID(EditingFixtures.restID(measure: 1, element: 0))
         score[slot] = .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)]))
-        score.parts[0].staves[0].measures[1].voices[0].elements.removeSubrange(1...)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                let count = staffValue.measures[1].voices[0].elements.count
+                staffValue.measures[1].voices[0].elements.removeSubrange(1 ..< count)
+            }
+        }
         let session = ScoreEditSession(score: score)
         #expect(session.apply(.delete(at: slot)))
         let elements = session.score.parts[0].staves[0].measures[1].voices[0].elements

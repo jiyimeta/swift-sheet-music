@@ -36,7 +36,7 @@ public struct RemovePart: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.parts.indices.contains(partIndex) else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
@@ -45,6 +45,7 @@ public struct RemovePart: EditCommand {
         }
 
         let removed = score.parts[partIndex]
+        let removedID = score.parts.eid(at: partIndex)
         let brackets = score.parts.map { $0.staves.map(\.brackets) }
         let originalStaves = score.systemMeasures.map { $0.elements.map(\.originalStaff) }
 
@@ -65,16 +66,24 @@ public struct RemovePart: EditCommand {
                     (part < partIndex ? part : part - 1, staff)
             }
         }
-        let rebased = Score.reanchoredBrackets(in: score.parts, survivorLocations: survivorLocations)
+        let rebased = Score.reanchoredBrackets(in: score.parts.values, survivorLocations: survivorLocations)
 
-        score.parts.remove(at: partIndex)
+        score.parts.remove(eid: removedID)
         for part in score.parts.indices {
             for staff in score.parts[part].staves.indices {
-                score.parts[part].staves[staff].brackets = []
+                score.parts.updateValue(at: part) { partValue in
+                    partValue.staves.updateValue(at: staff) { staffValue in
+                        staffValue.brackets = []
+                    }
+                }
             }
         }
         for entry in rebased {
-            score.parts[entry.part].staves[entry.staff].brackets.append(entry.bracket)
+            score.parts.updateValue(at: entry.part) { partValue in
+                partValue.staves.updateValue(at: entry.staff) { staffValue in
+                    staffValue.brackets.append(entry.bracket)
+                }
+            }
         }
         reanchorSystemElements(in: &score)
 
@@ -82,7 +91,7 @@ public struct RemovePart: EditCommand {
             MeasureFlagsHoist.write(removedFlags, to: Score.canonicalStaff, in: &score)
         }
         return AddPart(
-            restoring: removed, at: partIndex,
+            restoring: removed, eid: removedID, at: partIndex,
             brackets: brackets, originalStaves: originalStaves, canonicalFlags: canonicalFlagsBefore,
         )
     }
@@ -92,17 +101,22 @@ public struct RemovePart: EditCommand {
     /// part survives.
     private func reanchorSystemElements(in score: inout Score) {
         for measureIndex in score.systemMeasures.indices {
-            for elementIndex in score.systemMeasures[measureIndex].elements.indices {
-                guard let address = score.systemMeasures[measureIndex].elements[elementIndex].originalStaff
-                else { continue }
-                if address.partIndex == partIndex {
-                    score.systemMeasures[measureIndex].elements[elementIndex].originalStaff =
-                        StaffAddress(partIndex: 0, staffIndexInPart: 0)
-                } else if address.partIndex > partIndex {
-                    score.systemMeasures[measureIndex].elements[elementIndex].originalStaff = StaffAddress(
-                        partIndex: address.partIndex - 1,
-                        staffIndexInPart: address.staffIndexInPart,
-                    )
+            score.systemMeasures.updateValue(at: measureIndex) { column in
+                for elementIndex in column.elements.indices {
+                    guard let address = column.elements[elementIndex].originalStaff
+                    else { continue }
+                    if address.partIndex == partIndex {
+                        column.elements.updateValue(at: elementIndex) {
+                            $0.originalStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+                        }
+                    } else if address.partIndex > partIndex {
+                        column.elements.updateValue(at: elementIndex) {
+                            $0.originalStaff = StaffAddress(
+                                partIndex: address.partIndex - 1,
+                                staffIndexInPart: address.staffIndexInPart,
+                            )
+                        }
+                    }
                 }
             }
         }

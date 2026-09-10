@@ -16,9 +16,7 @@ public enum DurationChangeAlgorithm {
     /// - `srcTicks` / `dstTicks`: old / new duration in ticks.
     /// - `targetRtick`: tick offset of `idx` within the measure.
     /// - `division`: score PPQ (`Score.division`).
-    /// - returns: the recomputed `elements` + tuplet list (with any
-    ///   tuplet ranges past `idx` shifted by the net change in
-    ///   element count).
+    /// - returns: the recomputed elements and surviving identified tuplets.
     /// - throws: `SheetMusicError.invalidEdit` when the change would
     ///   cross a measure boundary, consume past a non-timed element,
     ///   or overlap a downstream tuplet.
@@ -32,13 +30,13 @@ public enum DurationChangeAlgorithm {
         division: Int,
         baseLocation: VoiceElementID,
         operation: String,
-    ) throws -> (elements: [VoiceElement], tuplets: [Tuplet]) {
-        var newElements = voice.elements
-        newElements[idx] = mutatedTarget
+        targetEID: EID, ids: inout EIDAllocator,
+    ) throws -> (elements: IdentifiedArray<VoiceElement>, tuplets: IdentifiedArray<Tuplet>) {
+        var changed = voice
+        changed.replaceElement(at: idx, with: mutatedTarget, id: targetEID)
+        var newElements = changed.elements
         // For shortening, no consumption happens — `consumedEndIdx`
-        // stays at `idx` so the post-loop tuplet adjustment treats
-        // every downstream tuplet as "after the modified region"
-        // and just shifts it by the inserted-rest delta.
+        // stays at `idx`; downstream tuplets retain their endpoint identities.
         var consumedEndIdx = idx
         if dstTicks < srcTicks {
             let leftover = srcTicks - dstTicks
@@ -47,7 +45,7 @@ public enum DurationChangeAlgorithm {
                 rtickStart: targetRtick + dstTicks,
                 division: division,
             )
-            newElements.insert(contentsOf: rests, at: idx + 1)
+            newElements.insert(contentsOf: rests.map { (ids.next(), $0) }, at: idx + 1)
         } else if dstTicks > srcTicks {
             let needed = dstTicks - srcTicks
             var consumed = 0
@@ -68,7 +66,7 @@ public enum DurationChangeAlgorithm {
                 // wholesale, the gap accumulates the tuplet's full
                 // tick length, and the overshoot is filled with
                 // rests via `setRest`).
-                if let containing = voice.tuplets.first(where: {
+                if let containing = voice.tupletSpans.first(where: {
                     $0.startIndex <= i && i <= $0.endIndex
                 }) {
                     var tupletTicks = 0
@@ -134,7 +132,7 @@ public enum DurationChangeAlgorithm {
             }
             consumedEndIdx = lastConsumedIdx
             let lastEl = newElements[lastConsumedIdx]
-            newElements.removeSubrange((idx + 1) ... lastConsumedIdx)
+            newElements.removeSubrange((idx + 1) ..< (lastConsumedIdx + 1))
             if partial > 0 {
                 let durations = alignedDurations(
                     forTicks: partial,
@@ -162,35 +160,16 @@ public enum DurationChangeAlgorithm {
                     }
                 }
                 newElements.insert(
-                    contentsOf: pieces, at: idx + 1,
+                    contentsOf: pieces.map { (ids.next(), $0) }, at: idx + 1,
                 )
             }
         }
-        let netDelta = newElements.count - voice.elements.count
-        // Tuplets entirely inside the consumed range are gone (we
-        // tore them down whole during the lengthen walk); ones
-        // strictly past the consumed tail shift by the net change in
-        // element count; ones before stay put.
-        let adjustedTuplets: [Tuplet] = voice.tuplets.compactMap { t in
-            if t.endIndex < idx + 1 {
-                return t
+        // Preserve the existing whole-consumption and partial-overlap removal policy.
+        var adjustedTuplets = changed.tuplets
+        for (index, span) in voice.tupletSpans.enumerated().reversed() {
+            if span.endIndex >= idx + 1, span.startIndex <= consumedEndIdx {
+                adjustedTuplets.remove(eid: voice.tuplets.eid(at: index))
             }
-            if t.startIndex >= idx + 1
-                && t.endIndex <= consumedEndIdx
-            {
-                return nil
-            }
-            if t.startIndex > consumedEndIdx {
-                return Tuplet(
-                    normalNotes: t.normalNotes,
-                    actualNotes: t.actualNotes,
-                    startIndex: t.startIndex + netDelta,
-                    endIndex: t.endIndex + netDelta,
-                )
-            }
-            // Partial overlap — should not occur given our
-            // tuplet-as-unit consumption rule.
-            return nil
         }
         return (newElements, adjustedTuplets)
     }
@@ -322,7 +301,7 @@ public enum DurationChangeAlgorithm {
         at location: VoiceElementID,
         operation: String,
     ) throws {
-        if voice.tuplets.contains(where: {
+        if voice.tupletSpans.contains(where: {
             $0.startIndex <= location.elementIndex
                 && location.elementIndex <= $0.endIndex
         }) {

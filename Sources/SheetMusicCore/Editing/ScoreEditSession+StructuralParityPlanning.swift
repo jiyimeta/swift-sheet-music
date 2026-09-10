@@ -23,7 +23,7 @@ extension ScoreEditSession {
             let voiceRef = VoiceRef(staff: Score.canonicalStaff, measureIndex: measure.measureIndex, voiceIndex: 0)
             let voice = score[voice: voiceRef]
             let current = voice.flatMap { v -> String? in
-                guard let index = SetBarLine.trailingBarLineIndex(in: v.elements),
+                guard let index = SetBarLine.trailingBarLineIndex(in: v.elements.values),
                       case let .barLine(bar) = v.elements[index] else { return nil }
                 return bar.subtype
             }

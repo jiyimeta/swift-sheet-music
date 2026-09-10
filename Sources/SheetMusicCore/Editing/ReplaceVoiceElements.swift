@@ -12,21 +12,44 @@ public struct ReplaceVoiceElements: EditCommand {
     public let staff: StaffAddress
     public let measureIndex: Int
     public let voiceIndex: Int
-    public let elements: [VoiceElement]
-    public let tuplets: [Tuplet]
+    public let slots: [VoiceSlot]
+    public let tupletSlots: [TupletSlot]
 
     public init(
         staff: StaffAddress,
         measureIndex: Int,
         voiceIndex: Int,
-        elements: [VoiceElement],
-        tuplets: [Tuplet] = [],
+        slots: [VoiceSlot],
+        tupletSlots: [TupletSlot] = [],
     ) {
         self.staff = staff
         self.measureIndex = measureIndex
         self.voiceIndex = voiceIndex
-        self.elements = elements
-        self.tuplets = tuplets
+        self.slots = slots
+        self.tupletSlots = tupletSlots
+    }
+
+    public init(
+        staff: StaffAddress, measureIndex: Int, voiceIndex: Int,
+        slots: [VoiceSlot], tuplets: IdentifiedArray<Tuplet>,
+    ) {
+        self.init(
+            staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex,
+            slots: slots, tupletSlots: tuplets.tupletSlots(),
+        )
+    }
+
+    public init(
+        staff: StaffAddress, measureIndex: Int, voiceIndex: Int,
+        elements: IdentifiedArray<VoiceElement>, tuplets: IdentifiedArray<Tuplet> = [],
+    ) {
+        self.init(
+            staff: staff,
+            measureIndex: measureIndex,
+            voiceIndex: voiceIndex,
+            slots: elements.voiceSlots(),
+            tupletSlots: tuplets.tupletSlots(),
+        )
     }
 
     public var affectedLocation: VoiceElementID {
@@ -39,7 +62,7 @@ public struct ReplaceVoiceElements: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard score.parts.indices.contains(staff.partIndex),
               score.parts[staff.partIndex].staves.indices
                   .contains(staff.staffIndexInPart)
@@ -61,11 +84,17 @@ public struct ReplaceVoiceElements: EditCommand {
         }
         let priorVoice = score.parts[p].staves[s]
             .measures[measureIndex].voices[voiceIndex]
-        score.parts[p].staves[s]
-            .measures[measureIndex]
-            .voices[voiceIndex] = Voice(
-                elements: elements, tuplets: tuplets,
-            )
+        let elements = VoiceSlot.materialize(slots, using: &ids)
+        let tuplets = TupletSlot.materialize(tupletSlots, elements: elements, using: &ids)
+        score.parts.updateValue(at: p) { partValue in
+            partValue.staves.updateValue(at: s) { staffValue in
+                staffValue
+                    .measures[measureIndex]
+                    .voices[voiceIndex] = Voice(
+                        elements: elements, tuplets: tuplets,
+                    )
+            }
+        }
         return ReplaceVoiceElements(
             staff: staff,
             measureIndex: measureIndex,

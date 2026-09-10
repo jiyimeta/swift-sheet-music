@@ -95,9 +95,13 @@ struct ScoreHitTesterRemovalTests {
         let point = try Self.arcPoint(document, id: selected)
         let inverse = try Self.remove(at: point, in: document, expected: selected, fullID: selected, score: &score)
         let old = before.parts[0].staves[0].measures[0].voices[0].elements
-        #expect(score.parts[0].staves[0].measures[0].voices[0].elements == Array(old.dropFirst()))
+        #expect(score.parts[0].staves[0].measures[0].voices[0].elements.values == Array(old.dropFirst()))
         var expected = before
-        expected.parts[0].staves[0].measures[0].voices[0].elements.removeSubrange(0 ..< 1)
+        expected.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[0].elements.removeSubrange(0 ..< 1)
+            }
+        }
         #expect(score == expected)
         #expect(score[F.slot(2)] == .spanner(later))
         let after = Self.layout(score)

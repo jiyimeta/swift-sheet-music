@@ -19,8 +19,13 @@ struct WrittenPitchViewTests {
             measureCount: 1,
         ))
         for partIndex in score.parts.indices {
-            score.parts[partIndex].staves[0].measures[0].voices[0].elements[2] =
-                .chord(Chord(duration: .whole, notes: [Note(pitch: 70, tpc: 12)]))
+            score.parts.updateValue(at: partIndex) { partValue in
+                partValue.staves.updateValue(at: 0) { staffValue in
+                    staffValue.measures[0].voices[0].elements.updateValue(at: 2) {
+                        $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 70, tpc: 12)]))
+                    }
+                }
+            }
         }
         return score
     }
@@ -88,15 +93,20 @@ struct WrittenPitchViewTests {
     /// guard is never reached.
     @Test func drumsetPartIsNotShifted() {
         var score = ensemble()
-        score.parts[1].instrument.useDrumset = true
+        score.parts.updateValue(at: 1) { partValue in
+            partValue.instrument.useDrumset = true
+        }
         var hornStaff = score.parts[0].staves[0]
-        hornStaff.measures[0].voices[0].elements[2] =
-            .chord(Chord(duration: .whole, notes: [Note(pitch: 70, tpc: 12)]))
-        score.parts.append(Part(
+        hornStaff.measures[0].voices[0].elements.updateValue(at: 2) {
+            $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 70, tpc: 12)]))
+        }
+        var ids = EIDAllocator(actor: 42)
+        score.assignMissingIDs(using: &ids)
+        score.parts.insert(Part(
             id: "3",
             instrument: Instrument(id: "horn", transposeDiatonic: -4, transposeChromatic: -7),
             staves: [hornStaff],
-        ))
+        ), after: score.parts.eid(at: score.parts.count - 1), id: ids.next())
 
         let written = score.writtenPitchView()
         // The drumset clarinet is untouched — pitch, spelling and key signature all stay concert.
@@ -112,17 +122,26 @@ struct WrittenPitchViewTests {
 
     @Test func percussionStaffIsNotShifted() {
         var score = ensemble()
-        score.parts[1].staves[0].group = "percussion"
+        score.parts.updateValue(at: 1) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.group = "percussion"
+            }
+        }
         let written = score.writtenPitchView()
         #expect(chord(written, part: 1, measure: 0, element: 2)?.notes.first?.pitch == 70)
         #expect(key(written, part: 1, measure: 0, element: 0) == 0)
     }
 
     /// Chord symbols move with the notes so a lead sheet's symbols keep naming what is written under them.
-    @Test func harmonyMovesWithTheNotes() {
+    @Test func harmonyMovesWithTheNotes() throws {
         var score = ensemble()
-        score.parts[1].staves[0].measures[0].voices[0].elements
-            .append(.harmony(Harmony(name: "7", rootTpc: 12, bassTpc: 12)))
+        var slots = score.parts[1].staves[0].measures[0].voices[0].elements.voiceSlots()
+        slots.append(VoiceSlot(identity: .fresh, element: .harmony(Harmony(name: "7", rootTpc: 12, bassTpc: 12))))
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 1, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, slots: slots,
+            tuplets: score.parts[1].staves[0].measures[0].voices[0].tuplets,
+        ).apply(to: &score)
         let written = score.writtenPitchView()
         guard case let .harmony(h) = written.parts[1].staves[0].measures[0].voices[0].elements[3]
         else {
@@ -137,7 +156,7 @@ struct WrittenPitchViewTests {
     /// Resolving it against the partially rewritten copy reads a key that has already been shifted once and shifts
     /// it again: here measure 2 inherits B major (+5); the correct written key context is +7 (fifthsDelta +2, D →
     /// E), while a copy-resolved read would see +7 already, respell 9 → −3 and move the note by −10 fifths instead.
-    @Test func midScoreKeyChangeIsResolvedAgainstTheOriginalScore() {
+    @Test func midScoreKeyChangeIsResolvedAgainstTheOriginalScore() throws {
         var score = Score.blank(BlankScoreTemplate(
             title: "T",
             // writtenFifthsOffset == +2
@@ -150,10 +169,20 @@ struct WrittenPitchViewTests {
             concertKey: 3, measureCount: 3,
         ))
         // Measure 1 modulates to B major (+5); measure 2 inherits it and carries the note.
-        score.parts[0].staves[0].measures[1].voices[0].elements
-            .insert(.keySignature(KeySignature(concertKey: 5)), at: 0)
-        score.parts[0].staves[0].measures[2].voices[0].elements[0] =
-            .chord(Chord(duration: .whole, notes: [Note(pitch: 74, tpc: 16)])) // concert D5
+        var slots = score.parts[0].staves[0].measures[1].voices[0].elements.voiceSlots()
+        slots.insert(VoiceSlot(identity: .fresh, element: .keySignature(KeySignature(concertKey: 5))), at: 0)
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 1, voiceIndex: 0, slots: slots,
+            tuplets: score.parts[0].staves[0].measures[1].voices[0].tuplets,
+        ).apply(to: &score)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[2].voices[0].elements.updateValue(at: 0) {
+                    $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 74, tpc: 16)]))
+                } // concert D5
+            }
+        }
 
         let written = score.writtenPitchView()
         #expect(key(written, part: 0, measure: 0, element: 0) == 5) // A → B

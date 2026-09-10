@@ -52,10 +52,10 @@ extension PDFImporter {
                 id: "P\(partIdx + 1)",
                 trackName: nil,
                 instrument: Instrument(id: "voice"),
-                staves: Array(
+                staves: IdentifiedArray(Array(
                     repeating: SheetMusicCore.Staff(staffType: "stdNormal", group: "pitched"),
                     count: staffCount,
-                ),
+                )),
             )
             parts.append(part)
             var slots: [Int] = []

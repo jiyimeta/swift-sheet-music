@@ -19,8 +19,7 @@ import SheetMusicFoundation
 /// Tuplet handling: the paste's element-index range is
 /// `[location, consumedEnd]`. For each tuplet of the destination
 /// voice we check that range vs. the tuplet's own indices:
-/// - **disjoint** → keep the tuplet untouched (just shift indices
-///   to account for net element count change).
+/// - **disjoint** → keep the tuplet and its endpoint identities untouched.
 /// - **paste fully contains the tuplet** → drop the tuplet (the
 ///   triplet/quintuplet/… is replaced wholesale).
 /// - **partial overlap** → refuse with `invalidEdit` (would split
@@ -49,7 +48,7 @@ public struct PasteVoiceElements: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard !elements.isEmpty else {
             throw Self.refused(.emptyPayload)
         }
@@ -88,7 +87,7 @@ public struct PasteVoiceElements: EditCommand {
             targetRtick: targetRtick,
             division: division,
             measureDuration: measureDuration,
-            baseLocation: location,
+            baseLocation: location, ids: &ids,
         )
         let replace = ReplaceVoiceElements(
             staff: location.staff,
@@ -97,7 +96,7 @@ public struct PasteVoiceElements: EditCommand {
             elements: newElements,
             tuplets: newTuplets,
         )
-        return try replace.apply(to: &score)
+        return try replace.apply(to: &score, ids: &ids)
     }
 
     private static func ticks(
@@ -115,7 +114,7 @@ public struct PasteVoiceElements: EditCommand {
     }
 
     /// Splice the payload into the voice at `idx`, rebalance the
-    /// tail, and adjust tuplet indices. Returns the new (elements,
+    /// tail, and retain surviving tuplets. Returns the new (elements,
     /// tuplets) pair. Throws on partial-overlap with any tuplet
     /// (the user must clear the tuplet first or paste at a different
     /// location).
@@ -128,10 +127,16 @@ public struct PasteVoiceElements: EditCommand {
         targetRtick: Int,
         division: Int,
         measureDuration: Fraction,
-        baseLocation: VoiceElementID,
-    ) throws -> (elements: [VoiceElement], tuplets: [Tuplet]) {
+        baseLocation: VoiceElementID, ids: inout EIDAllocator,
+    ) throws -> (elements: IdentifiedArray<VoiceElement>, tuplets: IdentifiedArray<Tuplet>) {
         var newElements = voice.elements
-        newElements.replaceSubrange(idx ... idx, with: payload)
+        let pasted = payload.map { source in
+            let eid = ids.next()
+            var element = source.clearingGraceIDsForCopy()
+            element.assignMissingGraceIDs(using: &ids)
+            return (eid, element)
+        }
+        newElements.replaceSubrange(idx ..< (idx + 1), with: pasted)
         let payloadEndIdx = idx + payload.count - 1
         let payloadInsertDelta = payload.count - 1
         // The paste's effective element-index range in the ORIGINAL
@@ -147,7 +152,7 @@ public struct PasteVoiceElements: EditCommand {
                 division: division,
             )
             newElements.insert(
-                contentsOf: rests, at: payloadEndIdx + 1,
+                contentsOf: rests.map { (ids.next(), $0) }, at: payloadEndIdx + 1,
             )
         } else if payloadTicks > targetTicks {
             let needed = payloadTicks - targetTicks
@@ -198,7 +203,7 @@ public struct PasteVoiceElements: EditCommand {
             )
 
             newElements.removeSubrange(
-                (payloadEndIdx + 1) ... lastConsumedIdx,
+                (payloadEndIdx + 1) ..< (lastConsumedIdx + 1),
             )
             if partial > 0, let lastEl = lastConsumedEl {
                 let durations = DurationChangeAlgorithm.alignedDurations(
@@ -216,7 +221,7 @@ public struct PasteVoiceElements: EditCommand {
                     pieces = durations.map { .rest(duration: $0) }
                 }
                 newElements.insert(
-                    contentsOf: pieces, at: payloadEndIdx + 1,
+                    contentsOf: pieces.map { (ids.next(), $0) }, at: payloadEndIdx + 1,
                 )
             }
         }
@@ -234,27 +239,12 @@ public struct PasteVoiceElements: EditCommand {
             )
         }
 
-        let netDelta = newElements.count - voice.elements.count
-        let adjustedTuplets: [Tuplet] = voice.tuplets.compactMap { t in
-            let overlapsPaste = idx <= t.endIndex
-                && t.startIndex <= consumedEndOrigIdx
-            if !overlapsPaste {
-                // Disjoint with the paste range. Either entirely
-                // before (keep verbatim) or entirely after (shift
-                // indices by net element-count change).
-                if t.startIndex > consumedEndOrigIdx {
-                    return Tuplet(
-                        normalNotes: t.normalNotes,
-                        actualNotes: t.actualNotes,
-                        startIndex: t.startIndex + netDelta,
-                        endIndex: t.endIndex + netDelta,
-                    )
-                }
-                return t
+        var adjustedTuplets = voice.tuplets
+        for (index, span) in voice.tupletSpans.enumerated().reversed() {
+            // The overlap check above permits only whole-tuplet consumption.
+            if idx <= span.endIndex, span.startIndex <= consumedEndOrigIdx {
+                adjustedTuplets.remove(eid: voice.tuplets.eid(at: index))
             }
-            // Verified above (`checkTupletOverlap`) that the paste
-            // fully contains overlapping tuplets. Drop them.
-            return nil
         }
         return (newElements, adjustedTuplets)
     }
@@ -269,7 +259,7 @@ public struct PasteVoiceElements: EditCommand {
         pasteEnd: Int,
         baseLocation: VoiceElementID,
     ) throws {
-        for t in voice.tuplets {
+        for t in voice.tupletSpans {
             let overlap = pasteStart <= t.endIndex
                 && t.startIndex <= pasteEnd
             if !overlap { continue }

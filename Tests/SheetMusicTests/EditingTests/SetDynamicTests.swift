@@ -10,7 +10,7 @@ struct SetDynamicTests {
     }
 
     private static func elements(_ score: Score, _ measure: Int) -> [VoiceElement] {
-        score.parts[0].staves[0].measures[measure].voices[0].elements
+        score.parts[0].staves[0].measures[measure].voices[0].elements.values
     }
 
     @Test("a dynamic is inserted right before its chord, with MuseScore's default velocity")
@@ -27,9 +27,15 @@ struct SetDynamicTests {
     @Test("a dynamic already before the chord is replaced in place, keeping its font overrides")
     func replacesInPlace() throws {
         var score = EditingFixtures.parityFixture()
-        score.parts[0].staves[0].measures[0].voices[0].elements.insert(
-            .dynamic(Dynamic(subtype: "p", velocity: 49, properties: TextProperties(size: 14))), at: 1,
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(
+                    .dynamic(Dynamic(subtype: "p", velocity: 49, properties: TextProperties(size: 14))), at: 1,
+                )
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
+            }
+        }
         // [ts, dyn, C4, D4, r, r]
         _ = try SetDynamic(at: Self.slot(0, 2), subtype: "mf").apply(to: &score)
         let elements = Self.elements(score, 0)
@@ -40,10 +46,18 @@ struct SetDynamicTests {
     @Test("the dynamic is found past a fermata in the same run")
     func findsThroughTheRun() throws {
         var score = EditingFixtures.parityFixture()
-        score.parts[0].staves[0].measures[0].voices[0].elements.insert(
-            contentsOf: [.dynamic(Dynamic(subtype: "p", velocity: 49)), .fermata(Fermata(subtype: "fermataAbove"))],
-            at: 1,
-        )
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(
+                    contentsOf: [
+                        .dynamic(Dynamic(subtype: "p", velocity: 49)), .fermata(Fermata(subtype: "fermataAbove")),
+                    ],
+                    at: 1,
+                )
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
+            }
+        }
         // [ts, dyn, fermata, C4, D4, r, r]
         _ = try SetDynamic(at: Self.slot(0, 3), subtype: nil).apply(to: &score)
         let elements = Self.elements(score, 0)

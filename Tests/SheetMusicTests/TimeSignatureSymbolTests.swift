@@ -73,7 +73,11 @@ struct TimeSignatureSymbolTests {
         var score = Score.blank(pianoTemplate(measures: 1))
         let elements = score.parts[0].staves[0].measures[0].voices[0].elements
         let index = try #require(elements.firstIndex { if case .timeSignature = $0 { true } else { false } })
-        score.parts[0].staves[0].measures[0].voices[0].elements[index] = .timeSignature(signature)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.updateValue(at: index) { $0 = .timeSignature(signature) }
+            }
+        }
         return score
     }
 

@@ -99,10 +99,14 @@ struct RemoveSlurTests {
             oldVoice.elements[3],
             oldVoice.elements[4],
         ])
-        #expect(voice.tuplets == [Tuplet(normalNotes: 3, actualNotes: 2, startIndex: 1, endIndex: 2)])
+        #expect(voice.tupletSpans == [TupletSpan(normalNotes: 3, actualNotes: 2, startIndex: 1, endIndex: 2)])
         #expect(score[Self.slot(3)] == .spanner(pedal))
         var expected = before
-        expected.parts[0].staves[0].measures[0].voices[0] = voice
+        expected.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[0] = voice
+            }
+        }
         #expect(score == expected)
         #expect(score.stableFingerprint != before.stableFingerprint)
         let removed = score
@@ -193,7 +197,11 @@ struct RemoveSpannerTests {
             survivor,
             Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 1),
         ]
-        score.parts[0].staves[0].measures[0].voices[0].elements[1] = .chord(head)
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0].elements.updateValue(at: 1) { $0 = .chord(head) }
+            }
+        }
         _ = try RemoveSpanner(at: Self.slot(0, 1), kind: .slur).apply(to: &score)
         guard case let .chord(stripped) = score.parts[0].staves[0].measures[0].voices[0].elements[1] else {
             Issue.record("expected the C4"); return

@@ -247,12 +247,12 @@ extension ScoreElementSelectionIdentityTests {
 
     private static func remapScore(staffCounts: [Int], voices: [Voice] = [Voice(elements: [])]) -> Score {
         let measures = Array(repeating: Measure(voices: voices), count: 8)
-        return Score(division: 480, parts: staffCounts.enumerated().map { index, count in
+        return Score(division: 480, parts: IdentifiedArray(staffCounts.enumerated().map { index, count in
             Part(
                 id: "P\(index)", instrument: Instrument(id: "piano", longName: "Piano"),
-                staves: Array(repeating: Staff(measures: measures), count: count),
+                staves: IdentifiedArray(Array(repeating: Staff(measures: measures), count: count)),
             )
-        })
+        }))
     }
 
     private static func remapNote(_ part: Int, _ staff: Int, end: Bool = false) -> NoteID {

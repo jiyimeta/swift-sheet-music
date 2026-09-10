@@ -25,7 +25,7 @@ enum SkylineFixtures {
                 instrument: Instrument(id: "voice"),
                 staves: [Staff(measures: measures)],
             )],
-            systemMeasures: systemMeasures,
+            systemMeasures: IdentifiedArray(systemMeasures),
         )
     }
 

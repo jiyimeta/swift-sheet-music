@@ -39,7 +39,7 @@ public struct InputNote: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let rest = score[location] else {
             throw Self.refused(.targetNotFound(VoiceElementID(location)))
         }
@@ -52,7 +52,7 @@ public struct InputNote: EditCommand {
             notes: [Note(pitch: pitch, tpc: tpc)],
         )
         let veID = VoiceElementID(location)
-        score[veID] = .chord(chord)
-        return ReplaceVoiceElement(at: veID, with: .chord(rest))
+        return try ReplaceVoiceElement(at: veID, with: .chord(chord), identity: .fresh)
+            .apply(to: &score, ids: &ids)
     }
 }

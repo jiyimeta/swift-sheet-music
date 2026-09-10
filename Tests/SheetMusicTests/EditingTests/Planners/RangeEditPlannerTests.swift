@@ -11,10 +11,12 @@ struct RangeEditPlannerTests {
 
     @Test("an onset consumed by an earlier lengthening is skipped, and later targets are re-found by tick")
     func skipsConsumedOnsets() throws {
-        let score = EditingFixtures.fourQuarterRests() // [ts, r q, r q, r q, r q]
+        // Identified first: the planner applies its steps to a scratch copy with `apply(to:ids:)`, which does not
+        // fill slots on entry — only a score from a producing entry point (here the editor) is identified.
+        let score = ScoreEditor(score: EditingFixtures.fourQuarterRests()).score // [ts, r q, r q, r q, r q]
         var visited: [VoiceElementID] = []
         let plan = try RangeEditPlanner.plan(
-            over: VoiceElementRange(start: Self.id(0, 1), end: Self.id(0, 4)), in: score,
+            over: VoiceElementRange(start: Self.id(0, 1), end: Self.id(0, 4)), in: score, ids: EIDAllocator(),
         ) { target, _ in
             visited.append(target)
             return [SetRestDuration(at: target, duration: .half)]
@@ -34,7 +36,7 @@ struct RangeEditPlannerTests {
         _ = try CreateVoice(staff: Self.staff0, measureIndex: 0, voiceIndex: 1).apply(to: &score)
         var visited: [VoiceElementID] = []
         _ = try RangeEditPlanner.plan(
-            over: VoiceElementRange(start: Self.id(0, 1), end: Self.id(0, 4)), in: score,
+            over: VoiceElementRange(start: Self.id(0, 1), end: Self.id(0, 4)), in: score, ids: EIDAllocator(),
         ) { target, _ in
             visited.append(target)
             return []
@@ -50,7 +52,7 @@ struct RangeEditPlannerTests {
         let score = EditingFixtures.chordAtIndex1()
         #expect(throws: SheetMusicError.self) {
             _ = try RangeEditPlanner.plan(
-                over: VoiceElementRange(start: Self.id(0, 1), end: Self.id(0, 1)), in: score,
+                over: VoiceElementRange(start: Self.id(0, 1), end: Self.id(0, 1)), in: score, ids: EIDAllocator(),
             ) { target, _ in
                 [SetRestDuration(at: target, duration: .half)]
             }
@@ -61,9 +63,9 @@ struct RangeEditPlannerTests {
     func nothingIsNil() throws {
         let score = EditingFixtures.fourQuarterRests()
         let unresolvable = VoiceElementRange(start: Self.id(0, 1), end: Self.id(3, 0))
-        #expect(try RangeEditPlanner.plan(over: unresolvable, in: score) { _, _ in [] } == nil)
+        #expect(try RangeEditPlanner.plan(over: unresolvable, in: score, ids: EIDAllocator()) { _, _ in [] } == nil)
         let inert = VoiceElementRange(start: Self.id(0, 1), end: Self.id(0, 4))
-        #expect(try RangeEditPlanner.plan(over: inert, in: score) { _, _ in [] } == nil)
+        #expect(try RangeEditPlanner.plan(over: inert, in: score, ids: EIDAllocator()) { _, _ in [] } == nil)
     }
 
     @Test("timedElementIndex finds the element that starts at a tick and nothing else")

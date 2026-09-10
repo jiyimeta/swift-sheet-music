@@ -18,16 +18,20 @@ struct AdjacentElementSlotTests {
     /// `[ts, dynamic, fermata, C4, breath, r, r, r]` — a chord wearing two attachments and a breath.
     private static func dressedScore() -> Score {
         var score = EditingFixtures.fourQuarterRests()
-        score.parts[0].staves[0].measures[0].voices[0] = Voice(elements: [
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            dynamic, fermata, chord, breath,
-            .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
-        ])
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.staves.updateValue(at: 0) { staffValue in
+                staffValue.measures[0].voices[0] = Voice(elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    dynamic, fermata, chord, breath,
+                    .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+                ])
+            }
+        }
         return score
     }
 
     private static func elements(_ score: Score) -> [VoiceElement] {
-        score.parts[0].staves[0].measures[0].voices[0].elements
+        score.parts[0].staves[0].measures[0].voices[0].elements.values
     }
 
     @Test("the run before a chord spans its attachments and signatures; the run after it spans breaths")
@@ -69,6 +73,8 @@ struct AdjacentElementSlotTests {
     @Test("insert lands nearest the chord, and its inverse restores the indices exactly")
     func insertAndUndo() throws {
         var score = EditingFixtures.chordAtIndex1() // [ts, C4, r, r, r]
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
         let before = score
         let insert = try #require(AdjacentElementSlot.inserting(
             Self.dynamic, at: AdjacentElementSlot.insertionIndex(.before, of: 1), in: Self.voice0, of: score,
@@ -86,15 +92,15 @@ struct AdjacentElementSlotTests {
         _ = try CreateTuplet(at: Self.slot(1), actualNotes: 3, normalNotes: 2).apply(to: &score)
         // [ts, m, m, m, r, r, r] with the triplet at 1...3.
         let middle = try #require(AdjacentElementSlot.inserting(Self.fermata, at: 2, in: Self.voice0, of: score))
-        #expect(middle.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 4)])
+        #expect(payloadSpans(middle) == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 4)])
         let first = try #require(AdjacentElementSlot.inserting(Self.fermata, at: 1, in: Self.voice0, of: score))
-        #expect(first.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)])
+        #expect(payloadSpans(first) == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)])
         // At the endIndex itself the mark still lands INSIDE the tuplet — before its last member — so the end
         // grows. One past it (`4`) is outside, and the tuplet is left alone.
         let last = try #require(AdjacentElementSlot.inserting(Self.fermata, at: 3, in: Self.voice0, of: score))
-        #expect(last.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 4)])
+        #expect(payloadSpans(last) == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 4)])
         let after = try #require(AdjacentElementSlot.inserting(Self.fermata, at: 4, in: Self.voice0, of: score))
-        #expect(after.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
+        #expect(payloadSpans(after) == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)])
     }
 
     @Test("remove drops one element and shifts the tuplets after it back")
@@ -105,8 +111,8 @@ struct AdjacentElementSlotTests {
         _ = try #require(AdjacentElementSlot.inserting(Self.dynamic, at: 1, in: Self.voice0, of: score))
             .apply(to: &score)
         let removal = try #require(AdjacentElementSlot.removing(at: 1, in: Self.voice0, of: score))
-        #expect(removal.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)])
-        #expect(removal.elements.count == 7)
+        #expect(payloadSpans(removal) == [TupletSpan(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)])
+        #expect(removal.slots.count == 7)
         #expect(AdjacentElementSlot.removing(at: 9, in: Self.voice0, of: score) == nil)
     }
 
@@ -119,4 +125,11 @@ struct AdjacentElementSlotTests {
         _ = try inverse.apply(to: &score)
         #expect(Self.elements(score)[1] == Self.dynamic)
     }
+}
+
+private func payloadSpans(_ command: ReplaceVoiceElements) -> [TupletSpan] {
+    var ids = EIDAllocator()
+    let elements = VoiceSlot.materialize(command.slots, using: &ids)
+    let tuplets = TupletSlot.materialize(command.tupletSlots, elements: elements, using: &ids)
+    return Voice(elements: elements, tuplets: tuplets).tupletSpans
 }

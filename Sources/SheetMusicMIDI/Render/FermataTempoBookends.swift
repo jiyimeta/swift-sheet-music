@@ -87,7 +87,7 @@ extension MidiRenderer {
             ranges: FermataRanges.dedupeMaxStretch(ranges),
             timeline: TempoTimeline.build(
                 measures: measures,
-                systemMeasures: score.systemMeasures,
+                systemMeasures: score.systemMeasures.values,
                 division: division,
             ),
         )

@@ -34,7 +34,9 @@ extension PDFImporter {
     static func propagateTiePitches(parts: inout [Part]) {
         for pi in parts.indices {
             for si in parts[pi].staves.indices {
-                propagateTiePitches(staff: &parts[pi].staves[si])
+                parts[pi].staves.updateValue(at: si) { staffValue in
+                    propagateTiePitches(staff: &staffValue)
+                }
             }
         }
     }
@@ -147,6 +149,6 @@ extension PDFImporter {
             note.pitch = source.pitch
             note.tpc = source.tpc
         }
-        staff.measures[addr.measure].voices[addr.voice].elements[addr.element] = .chord(c)
+        staff.measures[addr.measure].voices[addr.voice].elements.updateValue(at: addr.element) { $0 = .chord(c) }
     }
 }

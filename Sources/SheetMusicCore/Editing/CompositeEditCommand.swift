@@ -31,17 +31,17 @@ public struct CompositeEditCommand: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         var inverses: [any EditCommand] = []
         for cmd in commands {
             do {
-                let inv = try cmd.apply(to: &score)
+                let inv = try cmd.apply(to: &score, ids: &ids)
                 inverses.append(inv)
             } catch {
                 // Roll back what we did so the partial edit isn't
                 // visible to the caller.
                 for prior in inverses.reversed() {
-                    _ = try? prior.apply(to: &score)
+                    _ = try? prior.apply(to: &score, ids: &ids)
                 }
                 throw error
             }

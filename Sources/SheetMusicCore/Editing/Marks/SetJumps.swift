@@ -18,7 +18,7 @@ public struct SetJumps: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard var target = score[measure: measure, staff: Score.canonicalStaff] else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
@@ -46,7 +46,7 @@ public struct SetMarkers: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard var target = score[measure: measure, staff: Score.canonicalStaff] else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }

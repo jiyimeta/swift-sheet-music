@@ -47,7 +47,7 @@ public struct SetArticulation: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
         guard let element = score[location] else {
             throw Self.refused(.targetNotFound(location))
         }
@@ -56,7 +56,7 @@ public struct SetArticulation: EditCommand {
         }
         // The pre-image is the inverse's whole payload: a chord that carried the same kind twice, or carried it
         // with an anchor this command does not name, has no single `SetArticulation` that restores it.
-        let inverse = ReplaceVoiceElement(at: location, with: element)
+        let inverse = ReplaceVoiceElement(at: location, with: element, identity: .same)
         chord.articulations.removeAll { $0.kind == kind }
         if present {
             chord.articulations.append(ChordArticulation(kind: kind, anchor: anchor))
