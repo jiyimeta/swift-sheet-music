@@ -61,8 +61,8 @@ extension LayoutEngine {
              let .fermata(_, p, _),
              let .breath(_, p, _),
              let .articulation(_, p, _, _),
-             let .marker(_, _, p),
-             let .jump(_, p),
+             let .marker(_, _, p, _),
+             let .jump(_, p, _),
              let .measureRepeat(_, p),
              let .multiMeasureRest(_, p),
              let .measureNumber(_, p),
@@ -90,7 +90,7 @@ extension LayoutEngine {
             return spannerSegmentYPoints(
                 kind: kind, from: from, to: to, sp: sp,
             )
-        case let .tieArc(from, to, _),
+        case let .tieArc(from, to, _, _),
              let .glissandoLine(from, to, _, _),
              let .lyricsMelisma(from, to),
              let .lyricHyphen(from, to),

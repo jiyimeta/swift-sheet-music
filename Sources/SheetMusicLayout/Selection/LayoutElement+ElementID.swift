@@ -7,6 +7,8 @@ extension LayoutElement {
     /// The command's identity, independent of geometry, clipping, and continuation flags.
     public var elementID: ScoreElementID? {
         switch self {
+        case let .tieArc(_, _, _, identity): return identity
+        case let .marker(_, _, _, identity), let .jump(_, _, identity): return identity
         case let .keySignature(_, _, _, _, _, measureIndex):
             return measureIndex.map { .keySignature(measureIndex: $0) }
         case let .timeSignature(_, _, _, _, measureIndex):
@@ -30,7 +32,8 @@ extension LayoutElement {
             case .pedal: return .spanner(anchor: anchor, kind: .pedal)
             case .ottava: return .spanner(anchor: anchor, kind: .ottava)
             case .volta: return .spanner(anchor: anchor, kind: .volta)
-            case .slur, .vibrato, .trill, .textLine, .palmMute, .letRing: return nil
+            case .slur: return .slur(.voice(anchor))
+            case .vibrato, .trill, .textLine, .palmMute, .letRing: return nil
             }
         default:
             return nil

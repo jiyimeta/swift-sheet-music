@@ -129,13 +129,39 @@ own substantive logic.
 | `SetVibrato` | not in the example — host command registry | sugar |
 | `SetPalmMute` | not in the example — host command registry | sugar |
 | `SetLetRing` | not in the example — host command registry | sugar |
-| `RemoveSpanner` | not in the example — host command registry | sugar |
+| `RemoveSpanner` — unchanged: removes every matching slur in the chord's spanners list, not one ordinal; other kinds remove their standalone slot | not in the example — host command registry | sugar |
 | `SetChordSymbol` | not in the example — host command registry | sugar |
 | `SetTextVisible` | not in the example — a host's properties panel, on a selected text | partly sugar |
+| `RemoveTie(start:end:)` — clears only a non-nil matching start-forward/end-back pair, preserving other links; absent, half-present or mismatched links are refused as `noTieBetween` | Backspace / forward Delete on a selected tie | validated sugar over `SetTie` |
+| `RemoveSlur(_:)` — removes one chord/rest slur by slur-only ordinal (hidden entries included), or one standalone voice slot; does not remove sibling slurs | Backspace / forward Delete on a selected slur | sugar over `ReplaceVoiceElement` / `ReplaceVoiceElements` |
+| `RemoveJump(staff:measureIndex:index:)` — removes one entry from that staff's jumps list; other staves' duplicate copies remain | Backspace / forward Delete on a selected jump | staff-scoped read–replace–write sugar |
+| `RemoveMarker(staff:measureIndex:index:)` — removes one entry from that staff's markers list; other staves' duplicate copies remain | Backspace / forward Delete on a selected marker | staff-scoped read–replace–write sugar |
+| `ScoreElementID.removalCommand` — resolves only tie, slur, jump and marker identities; returns nil for the previous twelve visual kinds, including legacy `.spanner` identities | selected-element Delete dispatch | factory, not an `EditCommand` |
 | `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
 command).
+
+The four individual removal commands have no `EditIntent` or edit-command
+wire cases yet. The current Android/Web editing paths do not select engraved
+elements: `LayoutDocument+Editing.swift` drops their hit targets and the
+wasm `EditEntry+Geometry.swift` DTO drops `.element`. Identity wire support
+does not make those hosts selectable. The Core commands and resolver are
+available directly; the resolver takes no score and leaves stale-address
+validation to `apply`.
+
+Every accepted removal's inverse restores the prior values: matching tie
+links exactly as they were, a chord/rest slur at its original
+raw list index, a standalone slur with the voice's tuplet ranges, and a
+navigation list on the same owning staff. `SetJumps` / `SetMarkers` remain
+canonical-staff setters and are not used to remove another staff's entry.
+`affectedLocation` is the tie's start slot, the slur's anchor, or the supplied
+navigation staff/measure at voice 0 and element 0, respectively.
+Identities are positional: removing an earlier list entry or voice slot
+renumbers later entries, so a host must drop or re-derive its held selection.
+The Mac example keeps layout-space selection for tint, re-addresses only
+element Delete through `engineCursorForFilteredTap`, and clears the selection
+after a successful removal.
 
 Every command from `SetLayoutBreak` through `SetChordSymbol` is also an
 `EditIntent` case (wire indices 30–73, `EditIntentCodec.swift`'s case
@@ -228,7 +254,6 @@ else is known to be missing:
 | Ties on added-interval notes | `AddIntervalToSelection` adds notes without ties even where the source note is tied. |
 | Arpeggio stretch, `userLen1`, wavy chord line | `Arpeggio.timeStretch` / `userLen1` and `ChordLine.isWavy` are on the model and round-trip, but the v1 wire keeps intents scalar and carries none of them; reachable only by building the command (or a `ReplaceVoiceElement`) directly. |
 | A second chord line on one chord | `SetChordLine` writes one line per chord and drops a second one a file may legitimately carry. |
-| Removing one slur of a chord that carries two | `RemoveSpanner` takes every entry of `Chord.spanners` at the target; a caller that means only the inner or the outer one writes the `ReplaceVoiceElement` directly. |
 
 ---
 

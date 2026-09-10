@@ -5,6 +5,16 @@
     @testable import SheetMusicMSCX
     import Testing
 
+    #if !canImport(CoreGraphics)
+        /// On Android and WebAssembly, SheetMusicCore and SheetMusicLayout both export portable
+        /// `CGFloat` / `CGPoint` shims, so anchor explicitly to SheetMusicLayout's definitions.
+        ///
+        /// `private typealias` keeps these file-scoped — a module-scope alias here would collide
+        /// with the same pattern in every other file in this target that needs it.
+        private typealias CGFloat = SheetMusicLayout.CGFloat
+        private typealias CGPoint = SheetMusicLayout.CGPoint
+    #endif
+
     /// The resolve / attach pass that turns `Chord.spanners` slurs into
     /// `LayoutElement.tieArc` — the same element (and the same attach body)
     /// ties use, since a slur pair is structurally a `TiePair`.
@@ -357,17 +367,17 @@
         }
 
         private static func score(measures: [Measure]) -> Score {
-            Score(division: 480, parts: [Part(
+            ScoreEditor(score: Score(division: 480, parts: [Part(
                 id: "1", instrument: Instrument(id: "x"),
                 staves: [Staff(measures: measures)],
-            )])
+            )])).score
         }
 
         private static func arcs(
             in system: LayoutSystem,
         ) -> [(from: CGPoint, to: CGPoint, above: Bool)] {
             system.spanners.compactMap { element in
-                guard case let .tieArc(from, to, above) = element else {
+                guard case let .tieArc(from, to, above, _) = element else {
                     return nil
                 }
                 return (from: from, to: to, above: above)

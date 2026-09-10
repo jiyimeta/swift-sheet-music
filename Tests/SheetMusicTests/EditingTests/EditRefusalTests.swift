@@ -20,7 +20,7 @@ struct EditRefusalTests {
 
     @Test("DeleteVoiceElement reports a typed targetNotFound refusal")
     func deleteVoiceElementReportsTargetNotFound() {
-        var score = EditingFixtures.fourQuarterRests()
+        var score = ScoreEditor(score: EditingFixtures.fourQuarterRests()).score
         let outOfRange = VoiceElementID(
             staff: Self.staff,
             measureIndex: 99,
@@ -108,6 +108,7 @@ struct EditRefusalTests {
             .duplicateSpanner(at: voiceID, kind: .hairpin),
             .noSpannerAtLocation(voiceID),
             .unexpected(description: "boom"),
+            .noTieBetween(start: noteID, end: noteID),
         ]
     }
 }

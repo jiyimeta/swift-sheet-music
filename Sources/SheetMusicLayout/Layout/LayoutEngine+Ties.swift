@@ -13,6 +13,7 @@ extension LayoutEngine {
         let fromOrigin: CGPoint // absolute (system + measure + note origin)
         let toOrigin: CGPoint
         let above: Bool // arc curves above (true) or below (false)
+        var identity: ScoreElementID?
     }
 
     /// Pair up ties across the fully-laid-out document. Walk each system's
@@ -24,7 +25,7 @@ extension LayoutEngine {
         score: Score,
     ) -> [TiePair] {
         var pairs: [TiePair] = []
-        // For open ties: store (origin, above) so the arc direction is
+        // For open ties: retain the source note ID alongside origin and direction, so identity and side are
         // consistent between the start note and the end note.
         // Keyed by (tieNumber, pitch, staffIndex) — all three are
         // needed to prevent cross-staff / cross-voice mis-matching:
@@ -58,7 +59,7 @@ extension LayoutEngine {
         func tieDiscriminator(_ n: LayoutChordNote) -> Int {
             score[n.noteID]?.pitch ?? n.step
         }
-        var open: [TieKey: (origin: CGPoint, above: Bool)] = [:]
+        var open: [TieKey: (origin: CGPoint, above: Bool, noteID: NoteID)] = [:]
         let sp = document.metrics.sp
         // REFERENCE frame, not staff extent: the candidate below is
         // compared against `noteMidYLocal`, a notehead's Y walked back
@@ -136,6 +137,7 @@ extension LayoutEngine {
                                     fromOrigin: openTie.origin,
                                     toOrigin: absolute,
                                     above: openTie.above,
+                                    identity: .tie(start: openTie.noteID, end: n.noteID),
                                 ))
                                 open[key] = nil
                             }
@@ -145,7 +147,7 @@ extension LayoutEngine {
                                 number: fwd, pitch: tieDiscriminator(n),
                                 staffIndex: staffIndex,
                             )
-                            open[key] = (absolute, above)
+                            open[key] = (absolute, above, n.noteID)
                         }
                     }
                 }
@@ -204,6 +206,7 @@ extension LayoutEngine {
                     fromOrigin: localFrom,
                     toOrigin: localTo,
                     above: pair.above,
+                    identity: pair.identity,
                 ))
             } else if let from = fromSysIdx, let to = toSysIdx {
                 let fromSys = systems[from]
@@ -225,6 +228,7 @@ extension LayoutEngine {
                         y: pair.fromOrigin.y - fromSys.origin.y,
                     ),
                     above: pair.above,
+                    identity: pair.identity,
                 ))
                 // END segment (start of target system): MuseScore
                 // anchors p1 at `system->firstNoteRestSegmentX(true)`
@@ -254,6 +258,7 @@ extension LayoutEngine {
                         y: pair.toOrigin.y - toSys.origin.y,
                     ),
                     above: pair.above,
+                    identity: pair.identity,
                 ))
             }
         }

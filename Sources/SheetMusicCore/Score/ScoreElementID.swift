@@ -54,20 +54,31 @@ public enum ScoreElementID: Hashable, Sendable {
     /// Duplicate articulations of the same kind are indistinguishable, as they are to `SetArticulation`.
     case articulation(anchor: VoiceElementID, kind: ChordArticulation.Kind)
 
-    /// The element or owner anchor, or `nil` for an identity addressed by bar.
+    /// A tie owned by its two endpoint notes.
+    case tie(start: NoteID, end: NoteID)
+    /// A chord-attached or standalone slur; see `SlurID`.
+    case slur(SlurID)
+    /// One entry in the owning staff's measure-level jumps list.
+    case jump(staff: StaffAddress, measureIndex: Int, index: Int)
+    /// One entry in the owning staff's measure-level markers list.
+    case marker(staff: StaffAddress, measureIndex: Int, index: Int)
+
+    /// The voice-element owner anchor, or `nil` for bar and staff-owned navigation lists.
     public var anchor: VoiceElementID? {
         switch self {
         case let .dynamic(anchor), let .fermata(anchor), let .breath(anchor), let .tempo(anchor),
              let .spanner(anchor, _), let .articulation(anchor, _): return anchor
-        case .keySignature, .timeSignature, .barLine: return nil
+        case let .tie(start, _): return VoiceElementID(start)
+        case let .slur(id): return id.anchor
+        case .keySignature, .timeSignature, .barLine, .jump, .marker: return nil
         }
     }
 
-    /// The bar address, or `nil` when the identity is addressed through an anchor.
+    /// A staff-independent bar address, or `nil` for anchored and staff-owned navigation identities.
     public var measureIndexIfAddressedByBar: Int? {
         switch self {
         case let .keySignature(index), let .timeSignature(index), let .barLine(index, _): return index
-        case .dynamic, .fermata, .breath, .tempo, .spanner, .articulation: return nil
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .articulation, .tie, .slur, .jump, .marker: return nil
         }
     }
 }

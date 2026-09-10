@@ -6,6 +6,16 @@
     @testable import SheetMusicMSCX
     import Testing
 
+    #if !canImport(CoreGraphics)
+        /// On Android and WebAssembly, SheetMusicCore and SheetMusicLayout both export portable
+        /// `CGFloat` / `CGPoint` shims, so anchor explicitly to SheetMusicLayout's definitions.
+        ///
+        /// `private typealias` keeps these file-scoped — a module-scope alias here would collide
+        /// with the same pattern in every other file in this target that needs it.
+        private typealias CGFloat = SheetMusicLayout.CGFloat
+        private typealias CGPoint = SheetMusicLayout.CGPoint
+    #endif
+
     /// The glyphs and bands MuseScore measures against the staff's OWN
     /// height rather than against the five-line reference frame `step`
     /// lives in — and, just as important, the ones it deliberately does
@@ -44,7 +54,7 @@
         ) throws -> [(element: LayoutElement, dy: CGFloat)] {
             guard #available(macOS 15.0, *) else { return [] }
             let doc = LayoutEngine.layout(
-                score: score(lineCount: lineCount, clef: clef),
+                score: ScoreEditor(score: score(lineCount: lineCount, clef: clef)).score,
                 options: .init(wrapToViewWidth: false),
                 availableWidth: 900,
             )
@@ -201,7 +211,7 @@
                 staves: [Staff(lineCount: lineCount, measures: [measure])],
             )])
             let doc = LayoutEngine.layout(
-                score: score,
+                score: ScoreEditor(score: score).score,
                 options: .init(wrapToViewWidth: false),
                 availableWidth: 900,
             )
@@ -271,7 +281,7 @@
             guard #available(macOS 15.0, *) else { return }
             let score = Self.score(lineCount: lineCount, clef: "PERC")
             let doc = LayoutEngine.layout(
-                score: score,
+                score: ScoreEditor(score: score).score,
                 options: .init(wrapToViewWidth: false),
                 availableWidth: 900,
             )
@@ -341,7 +351,7 @@
                     )],
                 )])
                 let doc = LayoutEngine.layout(
-                    score: score,
+                    score: ScoreEditor(score: score).score,
                     options: .init(wrapToViewWidth: false),
                     availableWidth: 900,
                 )
@@ -349,7 +359,7 @@
                 let origin = try #require(system.staffOrigins.first).y
                 let y = try #require(
                     system.measures.flatMap(\.jumps).compactMap {
-                        if case let .jump(_, p) = $0 { return p.y }
+                        if case let .jump(_, p, _) = $0 { return p.y }
                         return nil
                     }.first,
                 )
@@ -413,7 +423,7 @@
                 ],
             )
             let doc = LayoutEngine.layout(
-                score: score,
+                score: ScoreEditor(score: score).score,
                 options: .init(wrapToViewWidth: false),
                 availableWidth: 900,
             )

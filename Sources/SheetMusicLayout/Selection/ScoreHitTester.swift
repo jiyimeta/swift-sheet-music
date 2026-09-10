@@ -92,7 +92,8 @@ public struct ScoreHitTester: Sendable {
         case let .rest(id): return .rest(id)
         case let .tuplet(id): return .tuplet(id)
         case let .clef(anchor): return .clef(anchor)
-        case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation:
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
+             .tie, .slur, .jump, .marker:
             return target.elementID.map(ScoreItemID.element)
         case .stem, .flag, .beam, .lyric, .staffText, .harmony, .rehearsalMark:
             return nil

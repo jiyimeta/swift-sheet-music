@@ -142,4 +142,32 @@ struct ScoreHitTesterElementLadderTests {
         #expect(ScoreHitTester(document: ElementHitFixtures.document([hairpin, bar])).hitTest(at: point)
             == .spanner(anchor: ElementHitFixtures.anchor, kind: .hairpin))
     }
+
+    @Test("An earlier measure's arc cannot steal a later note or rest", arguments: [false, true])
+    func arcAfterNoteAndRest(isRest: Bool) {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let rest = RestID(staff: ElementHitFixtures.anchor.staff, measureIndex: 1, voiceIndex: 0, elementIndex: 1)
+        let element = isRest ? LayoutElement.rest(
+            duration: .quarter, origin: ElementHitFixtures.origin, voiceIndex: 0, restID: rest, hasLegerLine: false,
+        ) : ElementHitFixtures.chord()
+        let id = SlurID.chord(anchor: ElementHitFixtures.anchor, ordinal: 0)
+        // A 100-point arc has a 15-point apex lift. Baseline y=95 puts its apex at (180,80).
+        let arc = LayoutElement.tieArc(
+            fromOrigin: CGPoint(x: 130, y: 95), toOrigin: CGPoint(x: 230, y: 95),
+            above: true, identity: .slur(id),
+        )
+        let system = LayoutSystem(
+            origin: .zero, size: .init(width: 400, height: 200),
+            measures: [
+                LayoutMeasure(measureIndex: 0, origin: .zero, width: 170, elements: [arc]),
+                LayoutMeasure(measureIndex: 1, origin: CGPoint(x: 100, y: 0), width: 200, elements: [element]),
+            ], staffOrigins: [], partLabels: [], spanners: [], sp: 10,
+        )
+        let tester = ScoreHitTester(document: LayoutDocument(
+            size: system.size, systems: [system], metrics: ElementHitFixtures.metrics,
+        ))
+        let point = CGPoint(x: 180, y: 80)
+        #expect(tester.hitElement(at: point) == .slur(id))
+        #expect(tester.hitTest(at: point) == (isRest ? .rest(rest) : .note(ElementHitFixtures.noteID)))
+    }
 }

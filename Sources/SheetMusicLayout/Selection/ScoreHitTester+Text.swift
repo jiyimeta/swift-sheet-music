@@ -34,6 +34,10 @@ extension ScoreHitTester {
     /// first one emitted, which is a resolution policy this pass does not have and is out of scope here.
     static let textHitTolerance: CGFloat = 0.25
 
+    /// Maximum distance from the rendered arc centerline, in spatium units.
+    /// Chosen to match the local beam-segment threshold in `ScoreHitTester`.
+    static let curveHitToleranceSp: CGFloat = 0.7
+
     /// The text element under `point`, or `nil`. `base` is the measure's document-space origin.
     ///
     /// Every box comes from `LayoutElementShape.autoplacedRects(for:kind:metrics:)`, measured under the kind

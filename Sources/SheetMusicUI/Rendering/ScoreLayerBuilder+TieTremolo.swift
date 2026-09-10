@@ -18,38 +18,17 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        let headClearance = metrics.sp * 0.6
+        let points = TieArcGeometry.controlPoints(
+            from: from, to: to, above: above,
+            heightSp: TieArcGeometry.shoulderHeightSp(tieLengthSp: abs(to.x - from.x) / metrics.sp),
+            sp: metrics.sp,
+        )
+        let startPt = points.p0
+        let endPt = points.p3
+        let ctrl1 = points.p1
+        let ctrl2 = points.p2
         let vertSign: CGFloat = above ? -1 : 1
-        let startPt = CGPoint(
-            x: from.x,
-            y: from.y + headClearance * vertSign,
-        )
-        let endPt = CGPoint(
-            x: to.x,
-            y: to.y + headClearance * vertSign,
-        )
-
-        let minShoulder = metrics.sp * 0.3
-        let maxShoulder = metrics.sp * 2.0
-        let tieLen = abs(endPt.x - startPt.x)
-        let tieLenSp = max(tieLen / metrics.sp, 1.0)
-        let shoulderH: CGFloat = {
-            let raw = minShoulder
-                + metrics.sp * 0.3 * sqrt(tieLenSp - 1)
-            return min(max(raw, minShoulder), maxShoulder)
-        }()
         let midThickness = metrics.sp * 0.15
-
-        let dx = endPt.x - startPt.x
-        let dy = endPt.y - startPt.y
-        let ctrl1 = CGPoint(
-            x: startPt.x + dx * 0.2,
-            y: startPt.y + dy * 0.2 + shoulderH * vertSign,
-        )
-        let ctrl2 = CGPoint(
-            x: startPt.x + dx * 0.8,
-            y: startPt.y + dy * 0.8 + shoulderH * vertSign,
-        )
         let thickDy = midThickness * vertSign * -1
 
         let path = CGMutablePath()

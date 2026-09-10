@@ -95,6 +95,14 @@ public enum ScoreHitTarget: Hashable, Sendable {
     case barLine(measureIndex: Int, role: BarLineRole)
     /// An owning chord's articulation kind, addressed by `SetArticulation`. See `ScoreElementID.articulation`.
     case articulation(anchor: VoiceElementID, kind: ChordArticulation.Kind)
+    /// A tie owned by its two endpoint notes.
+    case tie(start: NoteID, end: NoteID)
+    /// A chord-attached or standalone slur; see `SlurID`.
+    case slur(SlurID)
+    /// One entry in the owning staff's measure-level jumps list.
+    case jump(staff: StaffAddress, measureIndex: Int, index: Int)
+    /// One entry in the owning staff's measure-level markers list.
+    case marker(staff: StaffAddress, measureIndex: Int, index: Int)
 }
 
 extension ScoreHitTarget {
@@ -130,7 +138,8 @@ extension ScoreHitTarget {
             return .rehearsalMark(measureIndex: measureIndex)
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef:
             return nil
-        case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation:
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
+             .tie, .slur, .jump, .marker:
             return nil
         }
     }
@@ -152,7 +161,8 @@ extension ScoreHitTarget {
             return notes.first.map(ScoreItemID.note)
         case .lyric, .staffText, .harmony, .rehearsalMark:
             return textID.map(ScoreItemID.text)
-        case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation:
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
+             .tie, .slur, .jump, .marker:
             return elementID.map(ScoreItemID.element)
         }
     }
@@ -178,6 +188,12 @@ extension ScoreHitTarget {
             self = .barLine(measureIndex: measureIndex, role: role)
         case let .articulation(anchor, kind):
             self = .articulation(anchor: anchor, kind: kind)
+        case let .tie(start, end): self = .tie(start: start, end: end)
+        case let .slur(id): self = .slur(id)
+        case let .jump(staff, measureIndex, index):
+            self = .jump(staff: staff, measureIndex: measureIndex, index: index)
+        case let .marker(staff, measureIndex, index):
+            self = .marker(staff: staff, measureIndex: measureIndex, index: index)
         }
     }
 
@@ -202,6 +218,12 @@ extension ScoreHitTarget {
             return .barLine(measureIndex: measureIndex, role: role)
         case let .articulation(anchor, kind):
             return .articulation(anchor: anchor, kind: kind)
+        case let .tie(start, end): return .tie(start: start, end: end)
+        case let .slur(id): return .slur(id)
+        case let .jump(staff, measureIndex, index):
+            return .jump(staff: staff, measureIndex: measureIndex, index: index)
+        case let .marker(staff, measureIndex, index):
+            return .marker(staff: staff, measureIndex: measureIndex, index: index)
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef,
              .lyric, .staffText, .harmony, .rehearsalMark:
             return nil

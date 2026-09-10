@@ -17,7 +17,7 @@ extension LayoutEngine {
         /// Other spanners have no selection address in this phase.
         var selectionAnchor: VoiceElementID? {
             switch kind {
-            case .hairpin, .pedal, .ottava, .volta:
+            case .hairpin, .pedal, .ottava, .volta, .slur:
                 VoiceElementID(
                     staff: staffAddress, measureIndex: startMeasure,
                     voiceIndex: voiceIndex, elementIndex: elementIndex,

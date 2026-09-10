@@ -15,46 +15,17 @@ enum TieRenderer {
         above: Bool,
         metrics: StaffMetrics,
     ) {
-        // Vertical offset so the arc clears the notehead ink.
-        let headClearance = metrics.sp * 0.6
+        let points = TieArcGeometry.controlPoints(
+            from: from, to: to, above: above,
+            heightSp: TieArcGeometry.shoulderHeightSp(tieLengthSp: abs(to.x - from.x) / metrics.sp),
+            sp: metrics.sp,
+        )
+        let startPt = points.p0
+        let endPt = points.p3
+        let ctrl1 = points.p1
+        let ctrl2 = points.p2
         let vertSign: CGFloat = above ? -1 : 1
-
-        let startPt = CGPoint(
-            x: from.x,
-            y: from.y + headClearance * vertSign,
-        )
-        let endPt = CGPoint(
-            x: to.x,
-            y: to.y + headClearance * vertSign,
-        )
-
-        // Shoulder height scales with sqrt(tie length) via the shared
-        // `TieArcGeometry.shoulderHeightSp` (also used by the Android
-        // bridge) so long ties flatten instead of ballooning.
-        let tieLenSp = abs(endPt.x - startPt.x) / metrics.sp
-        let shoulderH = metrics.sp
-            * TieArcGeometry.shoulderHeightSp(tieLengthSp: tieLenSp)
-
-        // Mid-thickness (half the total width at the peak). MuseScore
-        // uses ~0.15 sp for normal ties.
         let midThickness = metrics.sp * 0.15
-
-        // Control points — two cubic Bézier anchors at ≈ 20% and 80%
-        // of the span, both at shoulderH above/below the baseline.
-        let dx = endPt.x - startPt.x
-        let dy = endPt.y - startPt.y
-        let ctrl1 = CGPoint(
-            x: startPt.x + dx * 0.2,
-            y: startPt.y + dy * 0.2 + shoulderH * vertSign,
-        )
-        let ctrl2 = CGPoint(
-            x: startPt.x + dx * 0.8,
-            y: startPt.y + dy * 0.8 + shoulderH * vertSign,
-        )
-
-        // Thickness offset — perpendicular to the tie baseline.
-        // For roughly-horizontal ties, vertical ±midThickness is a
-        // good approximation.
         let thickDy = midThickness * vertSign * -1
 
         // Outer curve (further from notes).

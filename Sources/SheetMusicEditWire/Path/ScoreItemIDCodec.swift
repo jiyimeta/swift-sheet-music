@@ -156,7 +156,9 @@ public enum ScoreTextIDWire {
 // MARK: - ScoreElementID
 
 /// Wire projection of the element identity. Case order is persistent; append new cases at the end.
-/// Anchored and bar-addressed cases carry their own payload, so no stored Optional is needed.
+/// Anchored, bar-addressed, and staff-owned list cases carry their own payload.
+/// New choices: 9 = tie (start/end), 10 = slur, 11 = jump, 12 = marker.
+/// Navigation tags are 1 = staff, 2 = measureIndex, 3 = list index; existing payloads are unchanged.
 @WireFormatChoice
 public enum ScoreElementIDWire {
     case dynamic(VoiceElementIDWire)
@@ -169,6 +171,10 @@ public enum ScoreElementIDWire {
     case timeSignature(Int32)
     case barLine(measureIndex: Int32, role: BarLineRoleWire)
     case articulation(anchor: VoiceElementIDWire, kind: ScoreArticulationKindWire)
+    case tie(start: NoteIDWire, end: NoteIDWire)
+    case slur(SlurIDWire)
+    case jump(staff: StaffAddressWire, measureIndex: Int32, index: Int32)
+    case marker(staff: StaffAddressWire, measureIndex: Int32, index: Int32)
 
     public init(from value: ScoreElementID) {
         switch value {
@@ -184,6 +190,13 @@ public enum ScoreElementIDWire {
             self = .barLine(measureIndex: Int32(index), role: BarLineRoleWire(from: role))
         case let .articulation(anchor, kind):
             self = .articulation(anchor: VoiceElementIDWire(from: anchor), kind: ScoreArticulationKindWire(from: kind))
+        case let .tie(start, end):
+            self = .tie(start: NoteIDWire(from: start), end: NoteIDWire(from: end))
+        case let .slur(id): self = .slur(SlurIDWire(from: id))
+        case let .jump(staff, measureIndex, index):
+            self = .jump(staff: StaffAddressWire(from: staff), measureIndex: Int32(measureIndex), index: Int32(index))
+        case let .marker(staff, measureIndex, index):
+            self = .marker(staff: StaffAddressWire(from: staff), measureIndex: Int32(measureIndex), index: Int32(index))
         }
     }
 
@@ -202,6 +215,12 @@ public enum ScoreElementIDWire {
         case let .timeSignature(index): return .timeSignature(measureIndex: Int(index))
         case let .barLine(index, role): return .barLine(measureIndex: Int(index), role: role.decoded())
         case let .articulation(anchor, kind): return .articulation(anchor: anchor.decoded(), kind: kind.decoded())
+        case let .tie(start, end): return .tie(start: start.decoded(), end: end.decoded())
+        case let .slur(id): return .slur(id.decoded())
+        case let .jump(staff, measureIndex, index):
+            return .jump(staff: staff.decoded(), measureIndex: Int(measureIndex), index: Int(index))
+        case let .marker(staff, measureIndex, index):
+            return .marker(staff: staff.decoded(), measureIndex: Int(measureIndex), index: Int(index))
         }
     }
 }
@@ -266,6 +285,31 @@ public enum ScoreArticulationKindWire {
         case .accentStaccato: return .accentStaccato
         case .marcatoStaccato: return .marcatoStaccato
         case let .unknown(subtype): return .unknown(subtype: subtype)
+        }
+    }
+}
+
+// MARK: - SlurID
+
+/// Storage-form choice: 0 = chord (anchor tag 1, slur-only ordinal tag 2), 1 = voice (anchor tag 1).
+@WireFormatChoice
+public enum SlurIDWire {
+    case chord(anchor: VoiceElementIDWire, ordinal: Int32)
+    case voice(VoiceElementIDWire)
+
+    public init(from value: SlurID) {
+        switch value {
+        case let .chord(anchor, ordinal):
+            self = .chord(anchor: VoiceElementIDWire(from: anchor), ordinal: Int32(ordinal))
+        case let .voice(anchor):
+            self = .voice(VoiceElementIDWire(from: anchor))
+        }
+    }
+
+    public func decoded() -> SlurID {
+        switch self {
+        case let .chord(anchor, ordinal): return .chord(anchor: anchor.decoded(), ordinal: Int(ordinal))
+        case let .voice(anchor): return .voice(anchor.decoded())
         }
     }
 }

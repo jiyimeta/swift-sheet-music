@@ -29,10 +29,20 @@ extension ScoreHitTester {
         return nil
     }
 
+    /// First matching ink wins in emission order. Navigation marks currently share origins;
+    /// overlapping ink therefore selects the first mark until engraving separates those marks.
     private func hitElement(elements: [LayoutElement], base: CGPoint, point: CGPoint) -> ScoreHitTarget? {
         for element in elements {
             guard let id = element.elementID else { continue }
-            for rect in elementRects(element) where rect.offsetBy(dx: base.x, dy: base.y).contains(point) {
+            if let contains = arcContains(element, point: CGPoint(x: point.x - base.x, y: point.y - base.y)) {
+                if contains { return ScoreHitTarget(elementID: id) }
+                continue
+            }
+            let padding = navigationUsesText(element) ? document.metrics.sp * Self.textHitTolerance : 0
+            for rect in elementRects(element) where rect
+                .offsetBy(dx: base.x, dy: base.y)
+                .insetBy(dx: -padding, dy: -padding).contains(point)
+            {
                 return ScoreHitTarget(elementID: id)
             }
         }
@@ -76,10 +86,13 @@ extension ScoreHitTester {
     }
 
     /// Barlines use stroke/dot ink bounds; pedals, key signatures and time signatures use glyph ink bounds.
+    /// Navigation uses unpadded shipped text rectangles or centered glyph ink, according to its renderer.
     /// Remaining kinds use skyline measurements: fermatas, breaths and articulations use glyph path bounds
     /// with the skyline helper's fallback; dynamics and tempo mix glyph and font metrics; hairpins, ottavas
     /// and voltas use coarse span reservations. No universal ink-coverage claim follows.
     private func elementRects(_ element: LayoutElement) -> [CGRect] {
+        if let rects = arcInkRects(element) { return rects }
+        if let rects = navigationRects(element) { return rects }
         switch element {
         case let .barLine(subtype, origin, halfHeight, _, _):
             return barLineInkRects(subtype: subtype, origin: origin, halfHeight: halfHeight)
@@ -147,7 +160,7 @@ extension ScoreHitTester {
 
     /// Matches the renderer's text-band vertical anchor and ink-width horizontal anchor.
     /// Missing glyph bounds produce no guessed box.
-    private func glyphInkRects(_ glyphs: [(UInt32, CGPoint)], anchorX: CGFloat = 0.5) -> [CGRect] {
+    func glyphInkRects(_ glyphs: [(UInt32, CGPoint)], anchorX: CGFloat = 0.5) -> [CGRect] {
         let font = LayoutFont(face: SMuFLFamily.bravura, pointSize: document.metrics.glyphFontSize)
         let provider = FontMetrics.provider
         let baselineOffset = (provider.ascent(font: font) - provider.descent(font: font)) / 2
