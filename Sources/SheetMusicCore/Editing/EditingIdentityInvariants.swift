@@ -17,6 +17,14 @@ import SheetMusicFoundation
             return Set(ids).count == ids.count
         }
 
+        /// Catches a command payload carrying an identifier minted from an allocator copy, such as
+        /// a planner's scratch value, that the live apply never advanced past. The next edit would
+        /// reissue that counter; this catches it where it lands, before a duplicate exists.
+        /// Uses `identifiers(in:)`, so coverage widens automatically when that traversal expands.
+        static func allocatorCovers(_ score: Score, _ ids: EIDAllocator) -> Bool {
+            identifiers(in: score).allSatisfy { $0.first != ids.actor || $0.second <= ids.counter }
+        }
+
         static func restoresIDs(_ before: Set<EID>, after: Set<EID>) -> Bool {
             before == after
         }
@@ -78,8 +86,9 @@ import SheetMusicFoundation
         /// this file's own guard test is what measures the reach.
         ///
         /// Called beside the out-assert at each of the four seams; no checks or counters exist in release.
-        static func check(_ score: Score, at seam: Seam) {
+        static func check(_ score: Score, ids: EIDAllocator, at seam: Seam) {
             assert(hasUniqueIDs(score), "duplicate structural element identifiers")
+            assert(allocatorCovers(score, ids), "an identifier was minted outside the live allocator")
             storage.record(seam)
         }
     }

@@ -58,8 +58,8 @@ public final class ScoreEditor {
         let inverse = try command.apply(to: &score, ids: &ids)
         assert(!score.hasUnassignedIDs, "command dropped element identifiers")
         #if DEBUG
-            // Gate 5's reach and low-level bypass are documented at check(_:at:).
-            EditingIdentityInvariants.check(score, at: .apply)
+            // Gate 5's reach and low-level bypass are documented at check(_:ids:at:).
+            EditingIdentityInvariants.check(score, ids: ids, at: .apply)
             undoIdentityStack.append(previousIDs)
         #endif
         undoStack.append(inverse)
@@ -95,7 +95,7 @@ public final class ScoreEditor {
                 undoIdentityStack[undoIdentityStack.count - 1],
                 after: Set(EditingIdentityInvariants.identifiers(in: score)),
             ), "undo changed the structural identifier set")
-            EditingIdentityInvariants.check(score, at: .undo)
+            EditingIdentityInvariants.check(score, ids: ids, at: .undo)
             undoIdentityStack.removeLast()
         #endif
         undoStack.removeLast()
@@ -119,7 +119,7 @@ public final class ScoreEditor {
         let inverse = try command.apply(to: &score, ids: &ids)
         assert(!score.hasUnassignedIDs, "command dropped element identifiers")
         #if DEBUG
-            EditingIdentityInvariants.check(score, at: .redo)
+            EditingIdentityInvariants.check(score, ids: ids, at: .redo)
             undoIdentityStack.append(previousIDs)
         #endif
         redoStack.removeLast()

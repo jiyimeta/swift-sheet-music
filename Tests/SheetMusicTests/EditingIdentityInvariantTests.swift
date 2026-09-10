@@ -30,11 +30,19 @@ struct EditingIdentityInvariantTests {
     #if DEBUG
         @Test func duplicateCheckerRejectsRealDuplicateSlots() {
             let eid = EID(first: 42, second: 1)
-            let duplicate = Score(division: 480, systemMeasures: IdentifiedArray([
-                (eid, SystemMeasure()), (eid, SystemMeasure()),
+            let duplicate = Score(division: 480, parts: IdentifiedArray([
+                (EID(first: 42, second: 2), Part(
+                    id: "1", instrument: Instrument(id: "piano"),
+                    staves: IdentifiedArray([(eid, Staff())]),
+                )),
+                (EID(first: 42, second: 3), Part(
+                    id: "2", instrument: Instrument(id: "piano"),
+                    staves: IdentifiedArray([(eid, Staff())]),
+                )),
             ]))
-            // Two real slots, one distinct ID: the checker must reject this score.
-            #expect(duplicate.systemMeasures.count == 2)
+            // Pair initialization refuses within-array duplicates; the gate must catch cross-array duplicates.
+            #expect(duplicate.parts[0].staves.count == 1)
+            #expect(duplicate.parts[1].staves.count == 1)
             #expect(!EditingIdentityInvariants.hasUniqueIDs(duplicate))
             let unique = Score(division: 480, systemMeasures: IdentifiedArray([
                 (eid, SystemMeasure()), (EID(first: 42, second: 2), SystemMeasure()),

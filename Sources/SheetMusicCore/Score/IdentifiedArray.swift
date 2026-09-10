@@ -36,6 +36,10 @@ public struct IdentifiedArray<Value: Sendable & Equatable>: Sendable {
     }
 
     public init(_ pairs: [(EID, Value)]) {
+        assert(
+            Set(pairs.map(\.0).filter(\.isValid)).count == pairs.filter(\.0.isValid).count,
+            "duplicate assigned identifiers",
+        )
         ids = pairs.map(\.0)
         values = pairs.map(\.1)
     }
@@ -118,6 +122,53 @@ extension IdentifiedArray {
 // MARK: - Restructuring
 
 extension IdentifiedArray {
+    /// Insert a slot with the caller's identifier, keeping every existing slot's identity.
+    public mutating func insert(_ value: Value, at index: Int, id: EID) {
+        assert(id.isValid, "insert requires an assigned identifier")
+        assert(self.index(of: id) == nil, "identifier already present — inserting it would duplicate")
+        values.insert(value, at: index)
+        ids.insert(id, at: index)
+    }
+
+    /// Insert slots with the supplied identifiers, keeping existing slots' identities.
+    public mutating func insert(contentsOf pairs: [(EID, Value)], at index: Int) {
+        replaceSubrange(index ..< index, with: pairs)
+    }
+
+    /// Assign the supplied identities, allowing reuse from the replaced range and keeping survivors' identities.
+    public mutating func replaceSubrange(_ range: Range<Int>, with pairs: [(EID, Value)]) {
+        assert(pairs.allSatisfy(\.0.isValid), "replacement requires assigned identifiers")
+        assert(Set(pairs.map(\.0)).count == pairs.count, "duplicate supplied identifiers")
+        assert(pairs.allSatisfy { pair in
+            guard let position = index(of: pair.0) else { return true }
+            return range.contains(position)
+        }, "identifier already present outside the replaced range")
+        values.replaceSubrange(range, with: pairs.map(\.1))
+        ids.replaceSubrange(range, with: pairs.map(\.0))
+    }
+
+    /// Remove slots and their identifiers, keeping survivors' identities.
+    public mutating func removeSubrange(_ range: Range<Int>) {
+        values.removeSubrange(range)
+        ids.removeSubrange(range)
+    }
+
+    /// Remove matching slots and their identifiers, keeping even unassigned survivors' identities.
+    public mutating func removeAll(where shouldBeRemoved: (Value) -> Bool) {
+        var destination = 0
+        for source in values.indices where !shouldBeRemoved(values[source]) {
+            values[destination] = values[source]
+            ids[destination] = ids[source]
+            destination += 1
+        }
+        removeSubrange(destination ..< values.endIndex)
+    }
+
+    /// Return the preceding slot's identifier, or nil for insertion at the front.
+    public func anchor(before index: Int) -> EID? {
+        index == 0 ? nil : eid(at: index - 1)
+    }
+
     /// The anchor-resolution rule shared by `insert` and `move`: after the
     /// named slot, at the front when `target` is nil, or at the end when the
     /// anchor identifier is not present.
