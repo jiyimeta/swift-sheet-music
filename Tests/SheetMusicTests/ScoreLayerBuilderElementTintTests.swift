@@ -8,6 +8,16 @@
         import SwiftUI
         import Testing
 
+        #if !canImport(CoreGraphics)
+            /// On Android and WebAssembly, SheetMusicCore and SheetMusicLayout both export portable
+            /// `CGFloat` / `CGPoint` shims, so anchor explicitly to SheetMusicLayout's definitions.
+            ///
+            /// `private typealias` keeps these file-scoped — a module-scope alias here would collide
+            /// with the same pattern in every other file in this target that needs it.
+            private typealias CGFloat = SheetMusicLayout.CGFloat
+            private typealias CGPoint = SheetMusicLayout.CGPoint
+        #endif
+
         @Suite("ScoreLayerBuilder — element ink and tint")
         struct ScoreLayerBuilderElementTintTests {
             private let _installApple = TestSupport.installApple
@@ -56,7 +66,8 @@
                 let beforeFill = layers.map(\.fillColor)
                 let beforeStroke = layers.map(\.strokeColor)
                 let state = SelectionRenderState.make(
-                    selection: .single(item), voiceColors: [0: .red], score: EditingFixtures.twoConsecutiveC4Chords(),
+                    selection: .single(item), voiceColors: [0: .red],
+                    score: ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score,
                 )
                 let tint = try #require(state.voiceColors[0])
                 ScoreLayerBuilder.applySelection(items: built.items, previousSelection: .empty, newSelection: state)
@@ -84,7 +95,8 @@
                 var context = ScoreLayerBuilder.BuildContext()
                 context.attach(layer, to: item)
                 let state = SelectionRenderState.make(
-                    selection: .single(item), voiceColors: [0: .red], score: EditingFixtures.twoConsecutiveC4Chords(),
+                    selection: .single(item), voiceColors: [0: .red],
+                    score: ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score,
                 )
                 let tint = try #require(state.voiceColors[0])
                 ScoreLayerBuilder.applySelection(items: context.items, previousSelection: .empty, newSelection: state)
@@ -236,6 +248,168 @@
 
             private enum InkProbeError: Error {
                 case noInterior
+            }
+        }
+
+        extension ScoreLayerBuilderElementTintTests {
+            @Test(
+                "Selection-3 ink registers, tints and restores without touching neighbors",
+                arguments: ElementHitFixtures.selection3Samples,
+            )
+            func selection3Tint(_ sample: ElementHitFixtures.Sample) throws {
+                guard #available(macOS 15.0, *) else { return }
+                let parent = CALayer()
+                let neighbor = CAShapeLayer()
+                neighbor.fillColor = CGColor(red: 0, green: 0.5, blue: 0, alpha: 1)
+                parent.addSublayer(neighbor)
+                var context = ScoreLayerBuilder.BuildContext()
+                context.attach(neighbor, to: .note(ElementHitFixtures.noteID))
+                ScoreLayerBuilder.drawElement(
+                    sample.element, base: .zero, metrics: ElementHitFixtures.metrics,
+                    height: 200, context: &context, into: parent,
+                )
+                let item = ScoreItemID.element(sample.id)
+                let layers = try #require(context.items[item])
+                // Each lens, slur stroke, single-line text path or marker glyph emits exactly one layer.
+                try #require(layers.count == 1)
+                #expect(context.items.count == 2)
+                #expect(parent.sublayers?.count == 2)
+                #expect(layers[0] === parent.sublayers?.last)
+                if case .spannerSegment(.slur, _, _, _, _, _, _) = sample.element {
+                    #expect(layers[0].fillColor == nil && layers[0].strokeColor != nil)
+                } else {
+                    #expect(layers[0].fillColor != nil && layers[0].strokeColor == nil)
+                }
+                try checkSelection3Tint(items: context.items, item: item, count: 1, neighbors: [neighbor])
+            }
+
+            @Test(
+                "Unaddressed Selection-3 ink still draws and is never registered",
+                arguments: ElementHitFixtures.selection3Samples,
+            )
+            func selection3WithoutIdentity(_ sample: ElementHitFixtures.Sample) throws {
+                guard #available(macOS 15.0, *) else { return }
+                let element: LayoutElement
+                switch sample.element {
+                case let .tieArc(from, to, above, _):
+                    element = .tieArc(fromOrigin: from, toOrigin: to, above: above)
+                case let .spannerSegment(kind, from, to, left, right, text, _):
+                    element = .spannerSegment(
+                        kind: kind, fromOrigin: from, toOrigin: to, continuesLeft: left,
+                        continuesRight: right, text: text, anchor: nil,
+                    )
+                case let .jump(text, origin, _):
+                    element = .jump(text: text, origin: origin)
+                case let .marker(kind, text, origin, _):
+                    element = .marker(kind: kind, text: text, origin: origin)
+                default:
+                    Issue.record("Unexpected Selection-3 sample")
+                    return
+                }
+                let parent = CALayer()
+                var context = ScoreLayerBuilder.BuildContext()
+                ScoreLayerBuilder.drawElement(
+                    element, base: .zero, metrics: ElementHitFixtures.metrics,
+                    height: 200, context: &context, into: parent,
+                )
+                let unaddressed = try #require(parent.sublayers?.first as? CAShapeLayer)
+                #expect(parent.sublayers?.count == 1)
+                #expect(context.items.isEmpty)
+                ScoreLayerBuilder.drawElement(
+                    sample.element, base: .zero, metrics: ElementHitFixtures.metrics,
+                    height: 200, context: &context, into: parent,
+                )
+                try checkSelection3Tint(
+                    items: context.items, item: .element(sample.id), count: 1, neighbors: [unaddressed],
+                )
+            }
+
+            @Test("Both split-system tie and chord-slur lenses tint under one identity", arguments: [false, true])
+            func selection3SplitSegments(isSlur: Bool) throws {
+                guard #available(macOS 15.0, *) else { return }
+                let sample = ElementHitFixtures.selection3Samples[isSlur ? 1 : 0]
+                let systems: [LayoutSystem] = [CGFloat(0), 200].map { y in
+                    LayoutSystem(
+                        origin: CGPoint(x: 0, y: y), size: .init(width: 200, height: 100), measures: [],
+                        staffOrigins: [], partLabels: [], spanners: [], sp: 10,
+                    )
+                }
+                let pairs: [LayoutEngine.TiePair] = [.init(
+                    staff: 0, fromOrigin: CGPoint(x: 80, y: 80), toOrigin: CGPoint(x: 180, y: 280),
+                    above: true, identity: sample.id,
+                )]
+                let attached = LayoutEngine.attachArcs(
+                    to: systems, pairs: pairs, metrics: ElementHitFixtures.metrics,
+                )
+                let item = ScoreItemID.element(sample.id)
+                var items: [ScoreItemID: [CAShapeLayer]] = [:]
+                for system in attached {
+                    let built = ScoreLayerBuilder.buildSystemWithItems(system, metrics: ElementHitFixtures.metrics)
+                    let layers = try #require(built.items[item])
+                    #expect(layers.count == 1)
+                    #expect(built.items.count == 1)
+                    for (id, ink) in built.items {
+                        items[id, default: []].append(contentsOf: ink)
+                    }
+                }
+                #expect(items.count == 1)
+                // attachArcs emits one BEGIN and one END lens: two filled layers for one selection key.
+                try checkSelection3Tint(items: items, item: item, count: 2, neighbors: [])
+                // Also exercise append-under-an-existing-key within one renderer BuildContext.
+                let combined = ElementHitFixtures.document([], spanners: attached.flatMap(\.spanners))
+                let built = try ScoreLayerBuilder.buildSystemWithItems(
+                    #require(combined.systems.first), metrics: combined.metrics,
+                )
+                #expect(built.items.count == 1)
+                try checkSelection3Tint(items: built.items, item: item, count: 2, neighbors: [])
+            }
+
+            @Test(
+                "Selection-3 identities restore supplied nondefault ink at the registration boundary",
+                arguments: ElementHitFixtures.selection3Samples,
+            )
+            func selection3SuppliedInk(_ sample: ElementHitFixtures.Sample) throws {
+                guard #available(macOS 15.0, *) else { return }
+                // These layout payloads carry no authored color. This tests the shared restoration
+                // contract, not a model-to-renderer color path that does not exist for these kinds.
+                let layer = CAShapeLayer()
+                layer.fillColor = CGColor(red: 0, green: 0.5, blue: 0, alpha: 1)
+                layer.strokeColor = CGColor(red: 0.5, green: 0, blue: 0.5, alpha: 1)
+                let item = ScoreItemID.element(sample.id)
+                var context = ScoreLayerBuilder.BuildContext()
+                context.attach(layer, to: item)
+                try checkSelection3Tint(items: context.items, item: item, count: 1, neighbors: [])
+            }
+
+            @available(macOS 15.0, *)
+            private func checkSelection3Tint(
+                items: [ScoreItemID: [CAShapeLayer]], item: ScoreItemID, count: Int, neighbors: [CAShapeLayer],
+            ) throws {
+                let layers = try #require(items[item])
+                try #require(layers.count == count)
+                #expect(layers.allSatisfy { layer in !neighbors.contains { $0 === layer } })
+                let fills = layers.map(\.fillColor)
+                let strokes = layers.map(\.strokeColor)
+                let neighborFills = neighbors.map(\.fillColor)
+                let neighborStrokes = neighbors.map(\.strokeColor)
+                let state = SelectionRenderState.make(
+                    selection: .single(item), voiceColors: [0: .red],
+                    score: ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score,
+                )
+                let tint = try #require(state.voiceColors[0])
+                ScoreLayerBuilder.applySelection(items: items, previousSelection: .empty, newSelection: state)
+                for (index, layer) in layers.enumerated() {
+                    #expect(fills[index] != nil || strokes[index] != nil)
+                    if fills[index] != nil { #expect(layer.fillColor == tint) }
+                    if strokes[index] != nil { #expect(layer.strokeColor == tint) }
+                }
+                #expect(neighbors.map(\.fillColor) == neighborFills)
+                #expect(neighbors.map(\.strokeColor) == neighborStrokes)
+                ScoreLayerBuilder.applySelection(items: items, previousSelection: state, newSelection: .empty)
+                #expect(layers.map(\.fillColor) == fills)
+                #expect(layers.map(\.strokeColor) == strokes)
+                #expect(neighbors.map(\.fillColor) == neighborFills)
+                #expect(neighbors.map(\.strokeColor) == neighborStrokes)
             }
         }
     #endif

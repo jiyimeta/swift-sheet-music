@@ -54,6 +54,7 @@ extension LayoutEngine {
     struct SlurPairing: Equatable {
         let start: ChordRestRef
         let end: ChordRestRef
+        let identity: SlurID
         /// Authored `<placement>` override, or `nil` to compute the side.
         let placement: Spanner.Placement?
         /// `true` when any measure the slur spans carries more than one
@@ -135,15 +136,21 @@ extension LayoutEngine {
         startTick: Int,
         division: Int,
     ) -> [SlurPairing] {
-        chord.spanners.compactMap { spanner in
-            guard spanner.kind == .slur, spanner.visible else { return nil }
+        var result: [SlurPairing] = []
+        var ordinal = 0
+        for spanner in chord.spanners {
+            guard spanner.kind == .slur else { continue }
+            let currentOrdinal = ordinal
+            ordinal += 1
+            // Hidden and unresolved slurs still occupy an ordinal in their owner's storage.
+            guard spanner.visible else { continue }
             guard let end = slurEnd(
                 spanner: spanner, staff: staff,
                 startMeasureIndex: start.measureIndex,
                 startTick: startTick,
                 voiceIndex: start.voiceIndex,
                 division: division,
-            ) else { return nil }
+            ) else { continue }
             let endRef = ChordRestRef(
                 staff: start.staff,
                 measureIndex: end.measureIndex,
@@ -152,18 +159,26 @@ extension LayoutEngine {
             )
             // An end that resolves back onto the start chord is a
             // zero-length arc — drop it rather than draw a dot.
-            guard endRef != start else { return nil }
-            return SlurPairing(
+            guard endRef != start else { continue }
+            result.append(SlurPairing(
                 start: start,
                 end: endRef,
+                identity: .chord(
+                    anchor: VoiceElementID(
+                        staff: start.staff, measureIndex: start.measureIndex,
+                        voiceIndex: start.voiceIndex, elementIndex: start.elementIndex,
+                    ),
+                    ordinal: currentOrdinal,
+                ),
                 placement: spanner.placement,
                 multiVoice: hasVoices(
                     staff: staff,
                     from: start.measureIndex,
                     to: end.measureIndex,
                 ),
-            )
+            ))
         }
+        return result
     }
 
     /// The chord/rest a slur's `<next><location>` lands on, as (measure
@@ -422,6 +437,7 @@ extension LayoutEngine {
                 fromOrigin: fromOrigin,
                 toOrigin: toOrigin,
                 above: above,
+                identity: .slur(pairing.identity),
             )
         }
     }

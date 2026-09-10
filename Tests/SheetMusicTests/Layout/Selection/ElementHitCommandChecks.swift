@@ -2,10 +2,18 @@
 import Testing
 
 enum ElementHitCommandChecks {
+    static func remove(_ id: ScoreElementID, from score: inout Score) throws -> any EditCommand {
+        let command = try #require(id.removalCommand)
+        return try command.apply(to: &score)
+    }
+
     static func apply(_ id: ScoreElementID) throws {
-        var score = EditingFixtures.twoConsecutiveC4Chords()
+        var score = ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score
         let command: any EditCommand
         switch id {
+        case .tie, .slur, .jump, .marker:
+            Issue.record("Use remove(_:from:) with the real layout's score for selection-3 identities")
+            return
         case let .dynamic(anchor):
             command = SetDynamic(at: anchor, subtype: "ff")
         case let .fermata(anchor):
@@ -41,9 +49,10 @@ enum ElementHitCommandChecks {
                 command = SetBarLine(at: measure, style: .double)
             }
         }
-        let expected = id.anchor == nil ? VoiceElementID(
-            staff: ElementHitFixtures.anchor.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 0,
-        ) : ElementHitFixtures.anchor
+        let item = ScoreItemID.element(id)
+        let expected = id.anchor ?? VoiceElementID(
+            staff: item.staff, measureIndex: item.measureIndex, voiceIndex: 0, elementIndex: 0,
+        )
         #expect(command.affectedLocation == expected)
         let before = score.stableFingerprint
         let inverse = try command.apply(to: &score)

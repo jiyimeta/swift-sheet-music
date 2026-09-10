@@ -81,7 +81,7 @@ func primaryItemID(of target: ScoreHitTarget?) -> ScoreItemID? {
         // `LayoutDocument.editingHitTest` gives.
         return nil
     case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-         .articulation:
+         .articulation, .tie, .slur, .jump, .marker:
         // An engraved marking is selectable, but seeking to the chord it hangs from would move the
         // playhead on a click aimed at the marking — the same reasoning as text above.
         return nil

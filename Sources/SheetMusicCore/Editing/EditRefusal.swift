@@ -174,6 +174,7 @@ public struct EditRefusal: Sendable, Hashable {
         /// `ScoreEditSession.refusal(for:operation:)`; the free text is a
         /// stringified foreign error, not authored prose.
         case unexpected(description: String)
+        case noTieBetween(start: NoteID, end: NoteID)
     }
 
     /// Stable dotted identifier under the `edit.` namespace.
@@ -267,6 +268,8 @@ public struct EditRefusal: Sendable, Hashable {
             "edit.noSpannerAtLocation"
         case .unexpected:
             "edit.unexpected"
+        case .noTieBetween:
+            "edit.noTieBetween"
         }
     }
 
@@ -365,6 +368,8 @@ public struct EditRefusal: Sendable, Hashable {
             "no spanner to remove at \(location)"
         case let .unexpected(description):
             "unexpected error: \(description)"
+        case let .noTieBetween(start, end):
+            "no tie between \(start) and \(end)"
         }
     }
 }

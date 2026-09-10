@@ -41,6 +41,17 @@ extension Score {
                 return .item(.element(.spanner(anchor: anchor.withStaff(full), kind: kind)))
             case let .articulation(anchor, kind):
                 return .item(.element(.articulation(anchor: anchor.withStaff(full), kind: kind)))
+            case let .tie(start, end):
+                guard let endStaff = unfilterStaffAddress(end.staff, hidingStaves: hidden) else { return cursor }
+                return .item(.element(.tie(start: start.withStaff(full), end: end.withStaff(endStaff))))
+            case let .slur(.chord(anchor, ordinal)):
+                return .item(.element(.slur(.chord(anchor: anchor.withStaff(full), ordinal: ordinal))))
+            case let .slur(.voice(anchor)):
+                return .item(.element(.slur(.voice(anchor.withStaff(full)))))
+            case let .jump(_, measureIndex, index):
+                return .item(.element(.jump(staff: full, measureIndex: measureIndex, index: index)))
+            case let .marker(_, measureIndex, index):
+                return .item(.element(.marker(staff: full, measureIndex: measureIndex, index: index)))
             case .keySignature, .timeSignature, .barLine:
                 // Bar addresses have no staff field to re-stamp; this is not a deferred remapping.
                 return cursor
@@ -120,6 +131,9 @@ extension Score {
     /// `.beat` cursors and visible-staff `.item` values whose full and filtered addresses already match pass
     /// through unchanged. This is the playback-side mirror of `engineCursorForFilteredTap` (tap → engine).
     /// Bar-addressed element identities also pass through: their approximate staff is not a field to remap.
+    /// Jump and marker identities instead own a staff's list and follow the existing staff remap and
+    /// hidden-owner fallback. A list index is not a voice slot; tick lookup uses voice 0 / slot 0.
+    /// A tie's two endpoints are re-stamped separately, before the start-only staff guard below.
     public func translateCursorForHiddenStaves(
         _ cursor: ScoreCursor?, hiddenStaves hidden: Set<StaffAddress>,
     ) -> ScoreCursor? {
@@ -131,15 +145,15 @@ extension Score {
             guard let tick = resolveTickInMeasure(for: id) else { return cursor }
             return .beat(measureIndex: id.measureIndex, tickInMeasure: tick)
         }
+        if case let .element(.tie(start, end)) = id {
+            return filteredTieCursor(start: start, end: end, hiding: hidden) ?? cursor
+        }
         guard let filteredStaff = filterStaffAddress(id.staff, hidingStaves: hidden),
               filteredStaff != id.staff
         else { return cursor }
         switch id {
         case let .note(noteID):
-            return .item(.note(NoteID(
-                staff: filteredStaff, measureIndex: noteID.measureIndex, voiceIndex: noteID.voiceIndex,
-                elementIndex: noteID.elementIndex, noteIndexInChord: noteID.noteIndexInChord,
-            )))
+            return .item(.note(noteID.withStaff(filteredStaff)))
         case let .rest(restID):
             return .item(.rest(RestID(
                 staff: filteredStaff, measureIndex: restID.measureIndex, voiceIndex: restID.voiceIndex,
@@ -162,6 +176,17 @@ extension Score {
                 return .item(.element(.spanner(anchor: anchor.withStaff(filteredStaff), kind: kind)))
             case let .articulation(anchor, kind):
                 return .item(.element(.articulation(anchor: anchor.withStaff(filteredStaff), kind: kind)))
+            case .tie:
+                // Both endpoints were handled before the start-only staff equality guard.
+                return cursor
+            case let .slur(.chord(anchor, ordinal)):
+                return .item(.element(.slur(.chord(anchor: anchor.withStaff(filteredStaff), ordinal: ordinal))))
+            case let .slur(.voice(anchor)):
+                return .item(.element(.slur(.voice(anchor.withStaff(filteredStaff)))))
+            case let .jump(_, measureIndex, index):
+                return .item(.element(.jump(staff: filteredStaff, measureIndex: measureIndex, index: index)))
+            case let .marker(_, measureIndex, index):
+                return .item(.element(.marker(staff: filteredStaff, measureIndex: measureIndex, index: index)))
             case .keySignature, .timeSignature, .barLine:
                 // Bar addresses have no staff field to re-stamp; this is not a deferred remapping.
                 return cursor
@@ -195,11 +220,34 @@ extension ScoreTextID {
     }
 }
 
+extension Score {
+    /// A tie's end can move even when its start does not, so each endpoint is filtered on its own. `nil` when
+    /// either endpoint's staff has no filtered address; the caller keeps the cursor, as the generic staff
+    /// lookup does, rather than inventing a surviving endpoint.
+    private func filteredTieCursor(
+        start: NoteID, end: NoteID, hiding hidden: Set<StaffAddress>,
+    ) -> ScoreCursor? {
+        guard let startStaff = filterStaffAddress(start.staff, hidingStaves: hidden),
+              let endStaff = filterStaffAddress(end.staff, hidingStaves: hidden)
+        else { return nil }
+        return .item(.element(.tie(start: start.withStaff(startStaff), end: end.withStaff(endStaff))))
+    }
+}
+
 extension VoiceElementID {
     fileprivate func withStaff(_ staff: StaffAddress) -> VoiceElementID {
         VoiceElementID(
             staff: staff, measureIndex: measureIndex,
             voiceIndex: voiceIndex, elementIndex: elementIndex,
+        )
+    }
+}
+
+extension NoteID {
+    fileprivate func withStaff(_ staff: StaffAddress) -> NoteID {
+        NoteID(
+            staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex,
+            elementIndex: elementIndex, noteIndexInChord: noteIndexInChord,
         )
     }
 }

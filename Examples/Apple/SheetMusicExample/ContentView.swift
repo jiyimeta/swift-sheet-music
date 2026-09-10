@@ -480,7 +480,7 @@
                 // tap on engraved text reads as a deselect.
                 selection = .none
             case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature,
-                 .barLine, .articulation:
+                 .barLine, .articulation, .tie, .slur, .jump, .marker:
                 // An engraved marking selects itself, so the renderer
                 // tints it; there is nothing to edit it with on iOS yet.
                 selection = target.selectableItem.map { .single($0) } ?? .none

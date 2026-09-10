@@ -193,7 +193,7 @@ extension LayoutElementShape {
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,
             )]
-        case let .marker(_, text, origin), let .jump(text, origin):
+        case let .marker(_, text, origin, _), let .jump(text, origin, _):
             return [textRect(
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .leadingCenter,
