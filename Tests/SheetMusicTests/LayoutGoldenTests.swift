@@ -140,8 +140,16 @@
         /// against a line known to move: its sample tie line matched,
         /// character for character, the line derived by hand before the
         /// run.
+        ///
+        /// **Re-recorded when chord slurs gained identity.** The same 14
+        /// slur arcs that were `identity: nil` above now name their owner
+        /// and slur ordinal; 14 of 3890 lines changed, each only by that
+        /// `nil` becoming a `.slur(.chord(...))` value, and no arc line is
+        /// left `nil`. The corpus holds no standalone slur, so that
+        /// storage form rests on `LayoutSpannerIdentityTests` alone. The
+        /// sample line again matched the one derived by hand.
         private static let expectedDigestSHA256 =
-            "3ebcda1ddb0c5e415e85ffea40734160037c3bdf25161d213e04f5b1af078ad6"
+            "9348885316010f5f39e3a93876d8684d132d5d71d93567cab5c5419e46780fe0"
 
         @Test("write digest")
         func writeDigest() throws {
