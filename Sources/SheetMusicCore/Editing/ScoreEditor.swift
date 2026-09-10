@@ -25,6 +25,7 @@ public final class ScoreEditor {
     private var redoStack: [any EditCommand] = []
     #if DEBUG
         private var undoIdentityStack: [Set<EID>] = []
+        private var redoIdentityStack: [Set<EID>] = []
     #endif
     /// Voice-element slot most recently touched (by `apply`,
     /// `undo`, or `redo`). Hosts use this to scroll the affected
@@ -61,6 +62,7 @@ public final class ScoreEditor {
             // Gate 5's reach and low-level bypass are documented at check(_:ids:at:).
             EditingIdentityInvariants.check(score, ids: ids, at: .apply)
             undoIdentityStack.append(previousIDs)
+            redoIdentityStack.removeAll()
         #endif
         undoStack.append(inverse)
         redoStack.removeAll()
@@ -87,6 +89,9 @@ public final class ScoreEditor {
             ))
         }
         score.assignMissingIDs(using: &ids)
+        #if DEBUG
+            let postApplyIDs = Set(EditingIdentityInvariants.identifiers(in: score))
+        #endif
         let redo = try inverse.apply(to: &score, ids: &ids)
         assert(!score.hasUnassignedIDs, "command dropped element identifiers")
         #if DEBUG
@@ -97,6 +102,7 @@ public final class ScoreEditor {
             ), "undo changed the structural identifier set")
             EditingIdentityInvariants.check(score, ids: ids, at: .undo)
             undoIdentityStack.removeLast()
+            redoIdentityStack.append(postApplyIDs)
         #endif
         undoStack.removeLast()
         redoStack.append(redo)
@@ -105,6 +111,9 @@ public final class ScoreEditor {
 
     /// Symmetric counterpart of `undo()`; see its doc comment for
     /// why the pop is deferred until after a successful `apply`.
+    ///
+    /// Debug gate 7b catches an inverse-of-an-inverse that re-mints identifiers instead of restoring
+    /// the undone edit's identifier set. Like gate 7a, it cannot see a bare inverse applied by hand.
     public func redo() throws {
         guard let command = redoStack.last else {
             throw SheetMusicError.invalidEdit(EditRefusal(
@@ -119,7 +128,12 @@ public final class ScoreEditor {
         let inverse = try command.apply(to: &score, ids: &ids)
         assert(!score.hasUnassignedIDs, "command dropped element identifiers")
         #if DEBUG
+            assert(EditingIdentityInvariants.restoresIDs(
+                redoIdentityStack[redoIdentityStack.count - 1],
+                after: Set(EditingIdentityInvariants.identifiers(in: score)),
+            ), "redo changed the identifier set the undone edit produced")
             EditingIdentityInvariants.check(score, ids: ids, at: .redo)
+            redoIdentityStack.removeLast()
             undoIdentityStack.append(previousIDs)
         #endif
         redoStack.removeLast()

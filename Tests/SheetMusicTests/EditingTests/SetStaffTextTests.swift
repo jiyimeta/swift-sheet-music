@@ -91,7 +91,8 @@ struct SetStaffTextTests {
         // A later edit shortened the bar, so the anchor's slot is gone: an undo must still put the lane back.
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[1].voices[0].elements.removeLast(2)
+                let count = staffValue.measures[1].voices[0].elements.count
+                staffValue.measures[1].voices[0].elements.removeSubrange((count - 2) ..< count)
             }
         }
         #expect(SystemLaneSlot.position(of: anchor, in: score) == nil)

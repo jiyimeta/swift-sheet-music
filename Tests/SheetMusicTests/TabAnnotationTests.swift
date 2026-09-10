@@ -27,7 +27,7 @@ private func tabAnnotationScore(_ inner: String) throws -> Score {
 }
 
 private func firstTabVoiceElements(in score: Score) -> [VoiceElement] {
-    score.parts[0].staves[0].measures[0].voices[0].elements
+    score.parts[0].staves[0].measures[0].voices[0].elements.values
 }
 
 /// These fragments need a score envelope because capo and string tunings are

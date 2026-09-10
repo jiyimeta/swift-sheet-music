@@ -14,9 +14,11 @@ struct SetElementVisibleTests {
         var score = EditingFixtures.chordAtIndex1()
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.insert(
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(
                     .dynamic(Dynamic(subtype: "p", velocity: 49)), at: 1,
                 )
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
             }
         }
         return score
@@ -72,8 +74,9 @@ struct SetElementVisibleTests {
         var score = EditingFixtures.fourQuarterRests()
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements[1] =
-                    .locationShift(delta: Fraction(numerator: 1, denominator: 4))
+                staffValue.measures[0].voices[0].elements.updateValue(at: 1) {
+                    $0 = .locationShift(delta: Fraction(numerator: 1, denominator: 4))
+                }
             }
         }
         let before = score

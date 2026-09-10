@@ -109,7 +109,7 @@ extension MidiRenderer {
         }
         if newChord != chord {
             staff.measures[measureIndex]
-                .voices[voiceIndex].elements[elementIndex] = .chord(newChord)
+                .voices[voiceIndex].elements.updateValue(at: elementIndex) { $0 = .chord(newChord) }
         }
         return outgoing
     }

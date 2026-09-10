@@ -18,7 +18,7 @@ extension Voice {
         /// and other consumers that only care about voice-bound
         /// content don't have to thread `.voice` through.
         var elements: [VoiceElement] {
-            voice.elements
+            voice.elements.values
         }
 
         var tuplets: [Tuplet] {

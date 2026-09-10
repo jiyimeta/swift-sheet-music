@@ -9,105 +9,13 @@ struct RebarPlannerTests {
     private static let division = 480
     private static let staff0 = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-    // MARK: - Fixtures
-
-    private static func score(
-        _ measures: [Measure], systemMeasures: [SystemMeasure]? = nil,
-    ) -> Score {
-        let staff = Staff(measures: measures)
-        let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])
-        return Score(
-            division: division,
-            parts: [part],
-            systemMeasures: IdentifiedArray(systemMeasures
-                ?? Array(repeating: SystemMeasure(), count: measures.count)),
-        )
-    }
-
-    private static func note(_ pitch: Int = 72, tieForward: Int? = nil, tieBack: Int? = nil) -> Note {
-        Note(pitch: pitch, tpc: 14, tieForward: tieForward, tieBack: tieBack)
-    }
-
-    private static func chord(
-        _ duration: NoteDuration, pitch: Int = 72, tieForward: Int? = nil, tieBack: Int? = nil,
-    ) -> VoiceElement {
-        .chord(Chord(
-            duration: duration,
-            notes: [note(pitch, tieForward: tieForward, tieBack: tieBack)],
-        ))
-    }
-
-    private static let timeSignature44 = VoiceElement.timeSignature(
-        TimeSignature(numerator: 4, denominator: 4),
-    )
-
-    /// Two 4/4 bars, each a single whole note. Bar 0 declares the meter.
-    private static func twoWholeNotesIn44() -> Score {
-        score([
-            Measure(voices: [Voice(elements: [timeSignature44, chord(.whole)])]),
-            Measure(voices: [Voice(elements: [chord(.whole)])]),
-        ])
-    }
-
-    // MARK: - Readers
-
-    private static func voice0(_ rebarred: RebarPlanner.Rebarred, _ column: Int) -> Voice {
-        rebarred.columns[column].staffMeasures[0][0].voices[0]
-    }
-
-    /// Elements of a column's voice 0 with the leading signature run stripped — the timed content alone.
-    private static func content(_ rebarred: RebarPlanner.Rebarred, _ column: Int) -> [VoiceElement] {
-        let elements = voice0(rebarred, column).elements
-        return Array(elements.drop(while: MeasureStructure.isLeadingSignature))
-    }
-
-    private static func durations(_ elements: [VoiceElement]) -> [NoteDuration] {
-        elements.compactMap {
-            if case let .chord(chord) = $0 { chord.duration } else { nil }
-        }
-    }
-
-    private static func aligned(_ ticks: Int, from rtickStart: Int) -> [NoteDuration] {
-        DurationChangeAlgorithm.alignedDurations(
-            forTicks: ticks, rtickStart: rtickStart, division: division,
-        )
-    }
-
-    private static func alignedRests(_ ticks: Int, from rtickStart: Int) -> [VoiceElement] {
-        DurationChangeAlgorithm.alignedRests(
-            forTicks: ticks, rtickStart: rtickStart, division: division,
-        )
-    }
-
-    /// A `<location>` jog, written the way the MSCX decoder writes one: a fraction-of-a-whole-note delta.
-    private static func jog(_ numerator: Int, _ denominator: Int) -> VoiceElement {
-        .locationShift(delta: Fraction(numerator: numerator, denominator: denominator))
-    }
-
-    private static func shifts(_ elements: [VoiceElement]) -> [Fraction] {
-        elements.compactMap {
-            if case let .locationShift(delta) = $0 { delta } else { nil }
-        }
-    }
-
-    private static func refusalReason(_ body: () throws -> Void) -> EditRefusal.Reason? {
-        do {
-            try body()
-            return nil
-        } catch let SheetMusicError.invalidEdit(refusal) {
-            return refusal.reason
-        } catch {
-            Issue.record("unexpected error: \(error)")
-            return nil
-        }
-    }
-
     // MARK: - Shrink
 
     @Test("4/4 to 3/4 re-bars two bars into three beat-aligned columns")
     func shrinkFourFourToThreeFour() throws {
+        var ids = EIDAllocator()
         let plan = try RebarPlanner.rebar(
-            region: 0 ..< 2, in: Self.twoWholeNotesIn44(), numerator: 3, denominator: 4,
+            region: 0 ..< 2, in: Self.twoWholeNotesIn44(), numerator: 3, denominator: 4, ids: &ids,
         )
         #expect(plan.columns.count == 3)
 
@@ -127,8 +35,9 @@ struct RebarPlannerTests {
 
     @Test("the first regular column declares the new meter, and old ones are dropped")
     func firstColumnDeclaresNewMeter() throws {
+        var ids = EIDAllocator()
         let plan = try RebarPlanner.rebar(
-            region: 0 ..< 2, in: Self.twoWholeNotesIn44(), numerator: 3, denominator: 4,
+            region: 0 ..< 2, in: Self.twoWholeNotesIn44(), numerator: 3, denominator: 4, ids: &ids,
         )
         #expect(Self.voice0(plan, 0).elements.first == .timeSignature(
             TimeSignature(numerator: 3, denominator: 4),
@@ -141,12 +50,13 @@ struct RebarPlannerTests {
 
     @Test("emitsLeadingSignature false writes no meter at all, with identical partitioning")
     func suppressedLeadingSignature() throws {
+        var ids = EIDAllocator()
         let score = Self.twoWholeNotesIn44()
         let withSignature = try RebarPlanner.rebar(
-            region: 0 ..< 2, in: score, numerator: 3, denominator: 4,
+            region: 0 ..< 2, in: score, numerator: 3, denominator: 4, ids: &ids,
         )
         let without = try RebarPlanner.rebar(
-            region: 0 ..< 2, in: score, numerator: 3, denominator: 4, emitsLeadingSignature: false,
+            region: 0 ..< 2, in: score, numerator: 3, denominator: 4, emitsLeadingSignature: false, ids: &ids,
         )
         let signatures = without.columns.flatMap { column in
             column.staffMeasures.flatMap { $0.flatMap { $0.voices.flatMap(\.elements) } }
@@ -163,6 +73,7 @@ struct RebarPlannerTests {
 
     @Test("3/4 to 4/4 splits a tied chain further instead of merging it")
     func growThreeFourToFourFourKeepsTieChain() throws {
+        var ids = EIDAllocator()
         let score = Self.score([
             Measure(voices: [Voice(elements: [
                 .timeSignature(TimeSignature(numerator: 3, denominator: 4)),
@@ -174,7 +85,7 @@ struct RebarPlannerTests {
                 Self.chord(.quarter),
             ])]),
         ])
-        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 4, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 4, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 2)
 
         // The chain's two halves are never fused into a whole: bar 1's half stays where it is, and bar 2's
@@ -192,11 +103,12 @@ struct RebarPlannerTests {
 
     @Test("a chord tied in from before the region keeps its tieBack on the head piece")
     func headPieceKeepsIncomingTie() throws {
+        var ids = EIDAllocator()
         let score = Self.score([
             Measure(voices: [Voice(elements: [Self.timeSignature44, Self.chord(.whole, tieForward: 1)])]),
             Measure(voices: [Voice(elements: [Self.chord(.whole, tieBack: 1)])]),
         ])
-        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 3, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 3, denominator: 4, ids: &ids)
         // Bar 2's whole note starts at 1920, inside column 1 (1440..<2880); its first piece is the head of
         // that chord's new chain and must still be tied back to bar 1.
         let column1 = Self.content(plan, 1)
@@ -210,6 +122,7 @@ struct RebarPlannerTests {
 
     @Test("a split chord keeps its decorations on the head and its after-graces on the tail")
     func splitChordKeepsDecorations() throws {
+        var ids = EIDAllocator()
         let grace = GraceChord(graceType: .grace16after, duration: .sixteenth, notes: [Self.note(74)])
         var decorated = Chord(duration: .whole, notes: [Self.note()])
         decorated.lyrics = [Lyric(text: "ah")]
@@ -218,7 +131,7 @@ struct RebarPlannerTests {
             Measure(voices: [Voice(elements: [Self.timeSignature44, .chord(decorated)])]),
             Measure(voices: [Voice(elements: [Self.chord(.whole)])]),
         ])
-        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 3, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 3, denominator: 4, ids: &ids)
         // The whole note is cut at 1440 and again nowhere else: two pieces, in columns 0 and 1.
         guard case let .chord(head) = Self.content(plan, 0)[0],
               case let .chord(tail) = Self.content(plan, 1)[0]
@@ -235,11 +148,12 @@ struct RebarPlannerTests {
 
     @Test("an all-rest region re-bars to measure rests in every column")
     func restPromotion() throws {
+        var ids = EIDAllocator()
         let score = Self.score([
             Measure(voices: [Voice(elements: [Self.timeSignature44, .rest(duration: .measure)])]),
             Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
         ])
-        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 2, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 2, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 4)
         for column in plan.columns.indices {
             #expect(Self.content(plan, column) == [.rest(duration: .measure)])
@@ -250,6 +164,7 @@ struct RebarPlannerTests {
 
     @Test("a tuplet that fits inside a new bar survives with re-based indices")
     func tupletSurvivesInsideNewBar() throws {
+        var ids = EIDAllocator()
         let triplet = VoiceElement.rest(
             duration: .fraction(Fraction(numerator: 1, denominator: 12)),
         )
@@ -263,7 +178,7 @@ struct RebarPlannerTests {
         )
         let plan = try RebarPlanner.rebar(
             region: 0 ..< 1, in: Self.score([Measure(voices: [voice])]),
-            numerator: 2, denominator: 4,
+            numerator: 2, denominator: 4, ids: &ids,
         )
         #expect(plan.columns.count == 2)
         let rebuilt = Self.voice0(plan, 0)
@@ -277,6 +192,7 @@ struct RebarPlannerTests {
 
     @Test("a tuplet the new barring would straddle is refused")
     func tupletStraddleRefused() {
+        var ids = EIDAllocator()
         let triplet = VoiceElement.rest(
             duration: .fraction(Fraction(numerator: 1, denominator: 12)),
         )
@@ -292,7 +208,7 @@ struct RebarPlannerTests {
         let score = Self.score([Measure(voices: [voice])])
         // 3/8 bars fall at 720; the triplet spans 480..<960.
         let reason = Self.refusalReason {
-            _ = try RebarPlanner.rebar(region: 0 ..< 1, in: score, numerator: 3, denominator: 8)
+            _ = try RebarPlanner.rebar(region: 0 ..< 1, in: score, numerator: 3, denominator: 8, ids: &ids)
         }
         #expect(reason == .rebarWouldSplitTuplet(measureIndex: 0))
     }
@@ -301,6 +217,7 @@ struct RebarPlannerTests {
 
     @Test("an actualLength pickup passes through verbatim and splits the region")
     func pickupPreserved() throws {
+        var ids = EIDAllocator()
         let pickup = Measure(
             voices: [Voice(elements: [Self.timeSignature44, .rest(duration: .measure)])],
             actualLength: Fraction(numerator: 1, denominator: 4),
@@ -311,7 +228,7 @@ struct RebarPlannerTests {
             Measure(voices: [Voice(elements: [Self.chord(.whole)])]),
             Measure(voices: [Voice(elements: [Self.chord(.whole)])]),
         ])
-        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 3, in: score, numerator: 3, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 4)
         #expect(plan.columns[0].staffMeasures[0][0] == pickup)
         // The new meter goes on the first REGULAR column, not on the pickup.
@@ -324,6 +241,7 @@ struct RebarPlannerTests {
 
     @Test("a mid-region key change and clef land at their own tick")
     func midRegionSignaturesCarried() throws {
+        var ids = EIDAllocator()
         let score = Self.score([
             Measure(voices: [Voice(elements: [Self.timeSignature44, Self.chord(.whole)])]),
             Measure(voices: [Voice(elements: [
@@ -333,7 +251,7 @@ struct RebarPlannerTests {
             ])]),
         ])
         // 2/4 columns fall at 960; bar 2 starts at 1920, exactly the head of column 2.
-        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 2, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 2, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 4)
         let head = Self.voice0(plan, 2).elements
         #expect(head[0] == .keySignature(KeySignature(concertKey: 2)))
@@ -344,13 +262,14 @@ struct RebarPlannerTests {
 
     @Test("a second voice present in one bar only leaves no phantom rests later")
     func secondVoiceGap() throws {
+        var ids = EIDAllocator()
         let upper = Voice(elements: [Self.timeSignature44, Self.chord(.whole)])
         let lower = Voice(elements: (0 ..< 4).map { _ in Self.chord(.quarter, pitch: 55) })
         let score = Self.score([
             Measure(voices: [upper, lower]),
             Measure(voices: [Voice(elements: [Self.chord(.whole)])]),
         ])
-        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 3, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 3, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 3)
 
         let first = plan.columns[0].staffMeasures[0][0]
@@ -370,6 +289,7 @@ struct RebarPlannerTests {
     /// untimed element is jogged out to its own tick and straight back, so the voice cursor never moves.
     @Test("a jog-out/jog-back pair around a dynamic leaves the voice cursor where it was")
     func untimedJogPairKeepsTheCursor() throws {
+        var ids = EIDAllocator()
         let dynamic = VoiceElement.dynamic(Dynamic(subtype: "f", velocity: 96))
         let score = Self.score([
             Measure(voices: [Voice(elements: [
@@ -383,7 +303,7 @@ struct RebarPlannerTests {
                 Self.chord(.quarter, pitch: 65),
             ])]),
         ])
-        let plan = try RebarPlanner.rebar(region: 0 ..< 1, in: score, numerator: 3, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 1, in: score, numerator: 3, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 2)
 
         // The dynamic is anchored at tick 960 while the cursor sits at 480, so it is written as +1/4, the
@@ -404,11 +324,12 @@ struct RebarPlannerTests {
 
     @Test("a leading gap in a higher voice survives re-barring as a locationShift")
     func higherVoiceLeadingShiftPreserved() throws {
+        var ids = EIDAllocator()
         let upper = Voice(elements: [Self.timeSignature44, Self.chord(.whole)])
         // Voice 2 enters a quarter late: MuseScore spells that lead-in as a `<location>`, not as a rest.
         let lower = Voice(elements: [Self.jog(1, 4), Self.chord(.half, pitch: 55)])
         let score = Self.score([Measure(voices: [upper, lower])])
-        let plan = try RebarPlanner.rebar(region: 0 ..< 1, in: score, numerator: 3, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 1, in: score, numerator: 3, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 2)
 
         let first = plan.columns[0].staffMeasures[0][0]
@@ -424,6 +345,7 @@ struct RebarPlannerTests {
     /// Every other gap (a higher voice, or any backwards jog) keeps its shift; see the two tests above.
     @Test("a forward gap in voice 0 materializes as rests, not as a locationShift")
     func voiceZeroGapMaterializesAsRests() throws {
+        var ids = EIDAllocator()
         let score = Self.score([
             Measure(voices: [Voice(elements: [
                 Self.timeSignature44,
@@ -433,7 +355,7 @@ struct RebarPlannerTests {
             ])]),
         ])
         // 2/4 columns fall at 960; the second chord sits at 1440, half a bar past the first one's end.
-        let plan = try RebarPlanner.rebar(region: 0 ..< 1, in: score, numerator: 2, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 1, in: score, numerator: 2, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 2)
 
         #expect(Self.content(plan, 0)
@@ -441,7 +363,7 @@ struct RebarPlannerTests {
         #expect(Self.content(plan, 1)
             == Self.alignedRests(480, from: 0) + [Self.chord(.quarter, pitch: 62)])
         for column in plan.columns.indices {
-            #expect(Self.shifts(Self.voice0(plan, column).elements).isEmpty)
+            #expect(Self.shifts(Self.voice0(plan, column).elements.values).isEmpty)
         }
     }
 
@@ -449,6 +371,7 @@ struct RebarPlannerTests {
 
     @Test("a mid-region tempo re-homes into the column that holds its tick")
     func systemElementRehomed() throws {
+        var ids = EIDAllocator()
         let tempo = PositionedSystemElement(
             position: MeasurePosition(numerator: 1, denominator: 4),
             element: .tempo(Tempo(beatsPerSecond: 2.0)),
@@ -460,7 +383,7 @@ struct RebarPlannerTests {
             ],
             systemMeasures: [SystemMeasure(), SystemMeasure(elements: [tempo])],
         )
-        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 3, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 3, denominator: 4, ids: &ids)
         // Absolute tick 1920 + 480 = 2400; column 1 spans 1440..<2880, so the offset is 960 ticks = 1/2.
         #expect(plan.columns[0].systemMeasure.elements.isEmpty)
         #expect(plan.columns[1].systemMeasure.elements.count == 1)
@@ -474,24 +397,121 @@ struct RebarPlannerTests {
 
     @Test("a startRepeat that stays on a new boundary re-homes onto it")
     func startRepeatSurvivesOnBoundary() throws {
+        var ids = EIDAllocator()
         let score = Self.score([
             Measure(voices: [Voice(elements: [Self.timeSignature44, Self.chord(.whole)])]),
             Measure(voices: [Voice(elements: [Self.chord(.whole)])], startRepeat: true),
         ])
-        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 2, denominator: 4)
+        let plan = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 2, denominator: 4, ids: &ids)
         #expect(plan.columns.count == 4)
         #expect(plan.columns.map { $0.staffMeasures[0][0].startRepeat } == [false, false, true, false])
     }
 
     @Test("a startRepeat the new barring would displace is refused")
     func startRepeatDisplacedRefused() {
+        var ids = EIDAllocator()
         let score = Self.score([
             Measure(voices: [Voice(elements: [Self.timeSignature44, Self.chord(.whole)])]),
             Measure(voices: [Voice(elements: [Self.chord(.whole)])], startRepeat: true),
         ])
         let reason = Self.refusalReason {
-            _ = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 3, denominator: 4)
+            _ = try RebarPlanner.rebar(region: 0 ..< 2, in: score, numerator: 3, denominator: 4, ids: &ids)
         }
         #expect(reason == .rebarWouldDisplaceBarlineMarker(measureIndex: 1))
+    }
+}
+
+extension RebarPlannerTests {
+    // MARK: - Fixtures
+
+    fileprivate static func score(
+        _ measures: [Measure], systemMeasures: [SystemMeasure]? = nil,
+    ) -> Score {
+        let staff = Staff(measures: measures)
+        let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])
+        return ScoreEditor(score: Score(
+            division: division,
+            parts: [part],
+            systemMeasures: IdentifiedArray(systemMeasures
+                ?? Array(repeating: SystemMeasure(), count: measures.count)),
+        )).score
+    }
+
+    fileprivate static func note(_ pitch: Int = 72, tieForward: Int? = nil, tieBack: Int? = nil) -> Note {
+        Note(pitch: pitch, tpc: 14, tieForward: tieForward, tieBack: tieBack)
+    }
+
+    fileprivate static func chord(
+        _ duration: NoteDuration, pitch: Int = 72, tieForward: Int? = nil, tieBack: Int? = nil,
+    ) -> VoiceElement {
+        .chord(Chord(
+            duration: duration,
+            notes: [note(pitch, tieForward: tieForward, tieBack: tieBack)],
+        ))
+    }
+
+    fileprivate static let timeSignature44 = VoiceElement.timeSignature(
+        TimeSignature(numerator: 4, denominator: 4),
+    )
+
+    /// Two 4/4 bars, each a single whole note. Bar 0 declares the meter.
+    fileprivate static func twoWholeNotesIn44() -> Score {
+        score([
+            Measure(voices: [Voice(elements: [timeSignature44, chord(.whole)])]),
+            Measure(voices: [Voice(elements: [chord(.whole)])]),
+        ])
+    }
+
+    // MARK: - Readers
+
+    fileprivate static func voice0(_ rebarred: RebarPlanner.Rebarred, _ column: Int) -> Voice {
+        rebarred.columns[column].staffMeasures[0][0].voices[0]
+    }
+
+    /// Elements of a column's voice 0 with the leading signature run stripped — the timed content alone.
+    fileprivate static func content(_ rebarred: RebarPlanner.Rebarred, _ column: Int) -> [VoiceElement] {
+        let elements = voice0(rebarred, column).elements
+        return Array(elements.drop(while: MeasureStructure.isLeadingSignature))
+    }
+
+    fileprivate static func durations(_ elements: [VoiceElement]) -> [NoteDuration] {
+        elements.compactMap {
+            if case let .chord(chord) = $0 { chord.duration } else { nil }
+        }
+    }
+
+    fileprivate static func aligned(_ ticks: Int, from rtickStart: Int) -> [NoteDuration] {
+        DurationChangeAlgorithm.alignedDurations(
+            forTicks: ticks, rtickStart: rtickStart, division: division,
+        )
+    }
+
+    fileprivate static func alignedRests(_ ticks: Int, from rtickStart: Int) -> [VoiceElement] {
+        DurationChangeAlgorithm.alignedRests(
+            forTicks: ticks, rtickStart: rtickStart, division: division,
+        )
+    }
+
+    /// A `<location>` jog, written the way the MSCX decoder writes one: a fraction-of-a-whole-note delta.
+    fileprivate static func jog(_ numerator: Int, _ denominator: Int) -> VoiceElement {
+        .locationShift(delta: Fraction(numerator: numerator, denominator: denominator))
+    }
+
+    fileprivate static func shifts(_ elements: [VoiceElement]) -> [Fraction] {
+        elements.compactMap {
+            if case let .locationShift(delta) = $0 { delta } else { nil }
+        }
+    }
+
+    fileprivate static func refusalReason(_ body: () throws -> Void) -> EditRefusal.Reason? {
+        do {
+            try body()
+            return nil
+        } catch let SheetMusicError.invalidEdit(refusal) {
+            return refusal.reason
+        } catch {
+            Issue.record("unexpected error: \(error)")
+            return nil
+        }
     }
 }

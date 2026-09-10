@@ -29,7 +29,9 @@ struct MeasureAccidentalsPlannerTests {
     /// A bar whose first C is flipped to natural leaves the SECOND C reading natural to the eye while it still
     /// sounds sharp. The renotation pass is what repairs that.
     @Test func `renotation repairs a later note in the same bar`() {
-        var previous = EditingFixtures.twoMeasuresOfQuarterRests(key: 2)
+        // Identified first: a repair carries every slot of its voice by identity, and only a score from a
+        // producing entry point (here the editor) has identities to carry.
+        var previous = ScoreEditor(score: EditingFixtures.twoMeasuresOfQuarterRests(key: 2)).score
         // Two C#5 quarters in bar 0 (elements 2 and 3), then flatten the first to C natural.
         let first = VoiceElementID(EditingFixtures.restID(element: 2))
         let second = VoiceElementID(EditingFixtures.restID(element: 3))
@@ -61,8 +63,9 @@ struct MeasureAccidentalsPlannerTests {
             let slot = m == 0 ? 2 : 0
             score.parts.updateValue(at: 0) { partValue in
                 partValue.staves.updateValue(at: 0) { staffValue in
-                    staffValue.measures[m].voices[0].elements[slot] =
-                        .chord(Chord(duration: .whole, notes: [Note(pitch: 66, tpc: 20)])) // F♯4, in-key in G major
+                    staffValue.measures[m].voices[0].elements.updateValue(at: slot) {
+                        $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 66, tpc: 20)]))
+                    } // F♯4, in-key in G major
                 }
             }
         }
@@ -71,7 +74,9 @@ struct MeasureAccidentalsPlannerTests {
         else { Issue.record("expected key sig at [0]"); return }
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements[0] = .keySignature(KeySignature(concertKey: 0))
+                staffValue.measures[0].voices[0].elements.updateValue(at: 0) {
+                    $0 = .keySignature(KeySignature(concertKey: 0))
+                }
             }
         }
 

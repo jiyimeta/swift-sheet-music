@@ -95,7 +95,7 @@ struct VisibilityMidiInvariantTests {
                                     partValue.staves.updateValue(at: staffIdx) { staffValue in
                                         staffValue
                                             .measures[measureIdx].voices[voiceIdx]
-                                            .elements[elemIdx] = .chord(chord)
+                                            .elements.updateValue(at: elemIdx) { $0 = .chord(chord) }
                                     }
                                 }
                             }
@@ -152,7 +152,7 @@ struct VisibilityMidiInvariantTests {
                                     partValue.staves.updateValue(at: staffIdx) { staffValue in
                                         staffValue
                                             .measures[measureIdx].voices[voiceIdx]
-                                            .elements[elemIdx] = .dynamic(dynamic)
+                                            .elements.updateValue(at: elemIdx) { $0 = .dynamic(dynamic) }
                                     }
                                 }
                                 flippedAny = true

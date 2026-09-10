@@ -72,8 +72,9 @@
             }
             score.parts.updateValue(at: 0) { partValue in
                 partValue.staves.updateValue(at: 0) { staffValue in
-                    staffValue.measures[2].voices[0].elements
-                        .append(.barLine(BarLine(subtype: "end-repeat")))
+                    var elements = staffValue.measures[2].voices[0].elements.values
+                    elements.append(.barLine(BarLine(subtype: "end-repeat")))
+                    staffValue.measures[2].voices[0].elements = IdentifiedArray(elements)
                 }
             }
             let doc = LayoutEngine.layout(

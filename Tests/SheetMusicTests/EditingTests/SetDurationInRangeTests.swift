@@ -24,7 +24,7 @@ struct SetDurationInRangeTests {
     }
 
     private static func elements(_ score: Score) -> [VoiceElement] {
-        score.parts[0].staves[0].measures[0].voices[0].elements
+        score.parts[0].staves[0].measures[0].voices[0].elements.values
     }
 
     private static let range = VoiceElementRange(start: slot(1), end: slot(4))

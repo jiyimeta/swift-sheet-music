@@ -223,7 +223,7 @@ struct MSCXEncoderMS3Tests {
             .keySignature(KeySignature(concertKey: 0)),
         ]
         newElements.append(contentsOf: withoutKeySig)
-        voice.elements = newElements
+        voice.elements = IdentifiedArray(newElements)
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
                 staffValue.measures[0].voices[0] = voice
@@ -252,7 +252,7 @@ struct MSCXEncoderMS3Tests {
             .keySignature(KeySignature(concertKey: 0)),
         ]
         newElements.append(contentsOf: withoutKeySig)
-        voice.elements = newElements
+        voice.elements = IdentifiedArray(newElements)
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
                 staffValue.measures[0].voices[0] = voice
@@ -275,7 +275,7 @@ struct MSCXEncoderMS3Tests {
         // Need at least two measures in staff 0 to test mid-piece change.
         guard score.parts[0].staves[0].measures.count >= 2 else { return }
         var v = score.parts[0].staves[0].measures[1].voices[0]
-        v.elements.insert(.keySignature(KeySignature(concertKey: 2)), at: 0)
+        v.elements = IdentifiedArray([.keySignature(KeySignature(concertKey: 2))] + v.elements.values)
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
                 staffValue.measures[1].voices[0] = v
@@ -304,7 +304,7 @@ struct MSCXEncoderMS3Tests {
             .keySignature(KeySignature(concertKey: 3)),
         ]
         newElements.append(contentsOf: withoutKeySig)
-        voice.elements = newElements
+        voice.elements = IdentifiedArray(newElements)
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
                 staffValue.measures[0].voices[0] = voice
@@ -336,7 +336,7 @@ struct MSCXEncoderMS3Tests {
             .keySignature(KeySignature(concertKey: 2)),
         ]
         newElements.append(contentsOf: withoutKeySig)
-        voice.elements = newElements
+        voice.elements = IdentifiedArray(newElements)
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
                 staffValue.measures[0].voices[0] = voice
@@ -403,7 +403,7 @@ struct MSCXEncoderMS3Tests {
             .keySignature(KeySignature(concertKey: 2)),
         ]
         newElements.append(contentsOf: withoutKeySig)
-        voice.elements = newElements
+        voice.elements = IdentifiedArray(newElements)
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
                 staffValue.measures[0].voices[0] = voice

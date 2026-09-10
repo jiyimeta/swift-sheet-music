@@ -31,7 +31,7 @@ struct AdjacentElementSlotTests {
     }
 
     private static func elements(_ score: Score) -> [VoiceElement] {
-        score.parts[0].staves[0].measures[0].voices[0].elements
+        score.parts[0].staves[0].measures[0].voices[0].elements.values
     }
 
     @Test("the run before a chord spans its attachments and signatures; the run after it spans breaths")
@@ -73,6 +73,8 @@ struct AdjacentElementSlotTests {
     @Test("insert lands nearest the chord, and its inverse restores the indices exactly")
     func insertAndUndo() throws {
         var score = EditingFixtures.chordAtIndex1() // [ts, C4, r, r, r]
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
         let before = score
         let insert = try #require(AdjacentElementSlot.inserting(
             Self.dynamic, at: AdjacentElementSlot.insertionIndex(.before, of: 1), in: Self.voice0, of: score,
@@ -110,7 +112,7 @@ struct AdjacentElementSlotTests {
             .apply(to: &score)
         let removal = try #require(AdjacentElementSlot.removing(at: 1, in: Self.voice0, of: score))
         #expect(removal.tuplets == [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 2, endIndex: 4)])
-        #expect(removal.elements.count == 7)
+        #expect(removal.slots.count == 7)
         #expect(AdjacentElementSlot.removing(at: 9, in: Self.voice0, of: score) == nil)
     }
 

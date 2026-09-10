@@ -144,7 +144,7 @@
                             pitch: n.pitch == 60 ? 62 : 60,
                             tpc: n.pitch == 60 ? 16 : 14,
                         )
-                        elements[ei] = .chord(c)
+                        elements.updateValue(at: ei) { $0 = .chord(c) }
                         voices[vi] = Voice(elements: elements)
                         return Measure(
                             voices: voices,

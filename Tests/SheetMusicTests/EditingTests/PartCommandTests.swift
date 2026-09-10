@@ -6,7 +6,7 @@ struct PartCommandTests {
     /// Two-part score — flute (one staff) and piano (grand staff) — 3 measures, a mid-score key change on
     /// measure 1 of every staff, and a whole-note chord on the flute's first bar so content survival is
     /// observable across an add / undo round trip.
-    private func fixture() -> Score {
+    private func fixture() throws -> Score {
         var score = Score.blank(BlankScoreTemplate(
             title: "t",
             parts: [
@@ -21,19 +21,21 @@ struct PartCommandTests {
         ))
         for partIndex in score.parts.indices {
             for staffIndex in score.parts[partIndex].staves.indices {
-                score.parts.updateValue(at: partIndex) { partValue in
-                    partValue.staves.updateValue(at: staffIndex) { staffValue in
-                        staffValue.measures[1].voices[0].elements
-                            .insert(.keySignature(KeySignature(concertKey: 2)), at: 0)
-                    }
-                }
+                var slots = score.parts[partIndex].staves[staffIndex].measures[1].voices[0].elements.voiceSlots()
+                slots.insert(VoiceSlot(identity: .fresh, element: .keySignature(KeySignature(concertKey: 2))), at: 0)
+                try ReplaceVoiceElements(
+                    staff: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex),
+                    measureIndex: 1, voiceIndex: 0, slots: slots,
+                    tuplets: score.parts[partIndex].staves[staffIndex].measures[1].voices[0].tuplets,
+                ).apply(to: &score)
             }
         }
         // A natural C, so `MeasureAccidentals` has no glyph repair to bundle onto the edit under test.
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements[2] =
-                    .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)]))
+                staffValue.measures[0].voices[0].elements.updateValue(at: 2) {
+                    $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)]))
+                }
             }
         }
         return score
@@ -57,8 +59,8 @@ struct PartCommandTests {
     // MARK: - AddPart
 
     @Test("insert lands a rest column with the score's signature skeleton, and shifts the parts after it")
-    func addPartInsertsRestColumnEverywhere() {
-        let session = ScoreEditSession(score: fixture())
+    func addPartInsertsRestColumnEverywhere() throws {
+        let session = try ScoreEditSession(score: fixture())
         let original = session.score
         #expect(session.apply(.addPart(plan: Self.clarinet, at: 1)))
         let score = session.score
@@ -92,8 +94,8 @@ struct PartCommandTests {
     }
 
     @Test("the flute's chord survives the insert and the undo")
-    func addPartLeavesExistingContentAlone() {
-        let session = ScoreEditSession(score: fixture())
+    func addPartLeavesExistingContentAlone() throws {
+        let session = try ScoreEditSession(score: fixture())
         let original = session.score
         let chord = original.parts[0].staves[0].measures[0].voices[0].elements[2]
         #expect(session.apply(.addPart(plan: Self.clarinet, at: 0)))
@@ -104,8 +106,8 @@ struct PartCommandTests {
     }
 
     @Test("undo restores the exact score, at every insertion index", arguments: [0, 1, 2])
-    func addPartUndoRestoresExactScore(index: Int) {
-        let original = fixture()
+    func addPartUndoRestoresExactScore(index: Int) throws {
+        let original = try fixture()
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.addPart(plan: Self.clarinet, at: index)))
         #expect(session.score != original)
@@ -114,8 +116,8 @@ struct PartCommandTests {
     }
 
     @Test("the new part's id is unique against every id already in the score")
-    func addPartGeneratesUniquePartID() {
-        let session = ScoreEditSession(score: fixture())
+    func addPartGeneratesUniquePartID() throws {
+        let session = try ScoreEditSession(score: fixture())
         #expect(session.apply(.addPart(plan: Self.clarinet, at: 2)))
         #expect(Set(session.score.parts.map(\.id)).count == session.score.parts.count)
         #expect(session.score.parts[2].id == "3")
@@ -124,8 +126,8 @@ struct PartCommandTests {
     /// Ids in a loaded file need not be dense, or even numeric — the next id has to clear the maximum, not
     /// the count.
     @Test("the new id clears the highest existing numeric id, not the part count")
-    func addPartIDClearsTheHighestExistingID() {
-        var score = fixture()
+    func addPartIDClearsTheHighestExistingID() throws {
+        var score = try fixture()
         score.parts.updateValue(at: 0) { partValue in
             partValue.id = "9"
         }
@@ -139,7 +141,7 @@ struct PartCommandTests {
 
     @Test("a system element anchored at or after the insertion point is re-stamped one part down")
     func addPartRestampsSystemElementAddresses() throws {
-        let session = ScoreEditSession(score: fixture())
+        let session = try ScoreEditSession(score: fixture())
         #expect(session.apply(.addPart(plan: Self.clarinet, at: 0)))
         let tempo = try #require(session.score.systemMeasures[0].elements.first)
         let anchor = try #require(tempo.originalStaff)
@@ -149,8 +151,8 @@ struct PartCommandTests {
     }
 
     @Test("a percussion plan's bars carry the time signature but never a key")
-    func addPartBuildsPercussionBarsWithoutKeySignatures() {
-        let session = ScoreEditSession(score: fixture())
+    func addPartBuildsPercussionBarsWithoutKeySignatures() throws {
+        let session = try ScoreEditSession(score: fixture())
         let drums = BlankScoreTemplate.PartPlan(
             instrumentID: "drumset", longName: "Drum Kit",
             staves: [.init(clefType: "PERC", isPercussion: true)], isDrums: true,
@@ -164,8 +166,8 @@ struct PartCommandTests {
     }
 
     @Test("an out-of-range index is refused as a missing target", arguments: [-1, 4])
-    func addPartOutOfRangeIsRefused(index: Int) {
-        let session = ScoreEditSession(score: fixture())
+    func addPartOutOfRangeIsRefused(index: Int) throws {
+        let session = try ScoreEditSession(score: fixture())
         #expect(!session.apply(.addPart(plan: Self.clarinet, at: index)))
         guard case .targetNotFound? = session.lastRefusal?.reason else {
             Issue.record("expected .targetNotFound, got \(String(describing: session.lastRefusal?.reason))")
@@ -174,8 +176,8 @@ struct PartCommandTests {
     }
 
     @Test("appending at parts.count is in range")
-    func addPartAppends() {
-        let session = ScoreEditSession(score: fixture())
+    func addPartAppends() throws {
+        let session = try ScoreEditSession(score: fixture())
         #expect(session.apply(.addPart(plan: Self.clarinet, at: 2)))
         #expect(session.score.parts.count == 3)
         #expect(session.score.parts[2].instrument.id == "clarinet-bb")
@@ -238,7 +240,7 @@ struct PartCommandTests {
 
     @Test("removing a part drops its column and re-indexes the ones after it")
     func removePartDropsTheColumn() throws {
-        var score = fixture()
+        var score = try fixture()
         let original = score
         let inverse = try RemovePart(partIndex: 0).apply(to: &score)
         #expect(score.parts.count == 1)
@@ -251,7 +253,7 @@ struct PartCommandTests {
     /// silently take the score's tempo with the instrument.
     @Test("a system element anchored into the removed part re-anchors on the first staff")
     func removePartReanchorsSystemElementsPointingIntoIt() throws {
-        var score = fixture()
+        var score = try fixture()
         score.systemMeasures.updateValue(at: 1) { column in
             column.elements.append(PositionedSystemElement(
                 position: .start,
@@ -341,8 +343,8 @@ struct PartCommandTests {
     }
 
     @Test("an out-of-range part index is refused")
-    func removePartOutOfRangeIsRefused() {
-        var score = fixture()
+    func removePartOutOfRangeIsRefused() throws {
+        var score = try fixture()
         #expect(throws: SheetMusicError.self) {
             try RemovePart(partIndex: 7).apply(to: &score)
         }
@@ -377,7 +379,7 @@ struct PartCommandTests {
     /// The refusal has to be distinguishable from "that part index does not exist" — a host showing "no such
     /// part" when the user tried to delete their only instrument is telling them something untrue.
     @Test("the last-part refusal is not the out-of-range one")
-    func removingTheLastPartRefusesForItsOwnReason() {
+    func removingTheLastPartRefusesForItsOwnReason() throws {
         var score = Score.blank(BlankScoreTemplate(
             title: "t", parts: [.init(instrumentID: "piano", staves: [.init(clefType: "G")])],
             measureCount: 1,

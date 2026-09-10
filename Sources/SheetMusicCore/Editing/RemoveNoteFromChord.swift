@@ -55,6 +55,6 @@ public struct RemoveNoteFromChord: EditCommand {
             chord.bracket = nil
         }
         score[veID] = .chord(chord)
-        return ReplaceVoiceElement(at: veID, with: .chord(original))
+        return ReplaceVoiceElement(at: veID, with: .chord(original), identity: .same)
     }
 }

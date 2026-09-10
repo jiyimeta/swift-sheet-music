@@ -67,7 +67,7 @@ public struct SetKeySignature: EditCommand {
     /// Set only when this command is the inverse of a `SetKeySignature` / `RemoveKeySignature`: every staff's
     /// voice-0 leading signature run at `measureIndex` as it stood before that edit, indexed
     /// `[partIndex][staffIndexInPart]`.
-    let restoredPrefixes: [[[VoiceElement]]]?
+    let restoredPrefixes: [[IdentifiedArray<VoiceElement>]]?
 
     public init(measureIndex: Int, concertKey: Int) {
         self.measureIndex = measureIndex
@@ -75,7 +75,7 @@ public struct SetKeySignature: EditCommand {
         restoredPrefixes = nil
     }
 
-    init(restoringPrefixes prefixes: [[[VoiceElement]]], at measureIndex: Int) {
+    init(restoringPrefixes prefixes: [[IdentifiedArray<VoiceElement>]], at measureIndex: Int) {
         self.measureIndex = measureIndex
         concertKey = Self.keyCarried(by: prefixes)
         restoredPrefixes = prefixes
@@ -101,7 +101,7 @@ public struct SetKeySignature: EditCommand {
         } else {
             for address in KeySignatureStaves.addresses(in: score) {
                 SignaturePrefixes.mutateVoiceZero(of: &score, at: address, measureIndex: measureIndex) { voice in
-                    Self.write(concertKey, into: &voice)
+                    Self.write(concertKey, into: &voice, ids: &ids)
                 }
             }
         }
@@ -118,22 +118,22 @@ public struct SetKeySignature: EditCommand {
     ///
     /// The replace path mutates the key in place rather than substituting a fresh `KeySignature`, so an invisible
     /// or courtesy-suppressed signature stays that way — this intent states which key, not how it is drawn.
-    private static func write(_ concertKey: Int, into voice: inout Voice) {
+    private static func write(_ concertKey: Int, into voice: inout Voice, ids: inout EIDAllocator) {
         let prefix = MeasureStructure.leadingSignaturePrefix(of: voice)
         if let existing = prefix.firstIndex(where: { if case .keySignature = $0 { true } else { false } }) {
             guard case var .keySignature(key) = voice.elements[existing] else { return }
             key.concertKey = concertKey
-            voice.elements[existing] = .keySignature(key)
+            voice.elements.updateValue(at: existing) { $0 = .keySignature(key) }
             return
         }
         let insertion = prefix.firstIndex { if case .timeSignature = $0 { true } else { false } } ?? prefix.count
-        voice.elements.insert(.keySignature(KeySignature(concertKey: concertKey)), at: insertion)
+        voice.elements.insert(.keySignature(KeySignature(concertKey: concertKey)), at: insertion, id: ids.next())
         MeasureStructure.shiftTuplets(in: &voice, by: 1)
     }
 
     /// The key a captured pre-image declares — the first one any staff's run carries, or C major when none does
     /// (a restore that removes the bar's key again). Read only to keep `concertKey` truthful on the restore path.
-    private static func keyCarried(by prefixes: [[[VoiceElement]]]) -> Int {
+    private static func keyCarried(by prefixes: [[IdentifiedArray<VoiceElement>]]) -> Int {
         for part in prefixes {
             for prefix in part {
                 for element in prefix {
@@ -202,7 +202,7 @@ public struct RemoveKeySignature: EditCommand {
         }
         guard !indices.isEmpty else { return false }
         for index in indices.reversed() {
-            voice.elements.remove(at: index)
+            voice.elements.removeSubrange(index ..< (index + 1))
         }
         MeasureStructure.shiftTuplets(in: &voice, by: -indices.count)
         return true
@@ -215,7 +215,7 @@ enum SignaturePrefixes {
     /// Every staff's voice-0 leading signature run at `measureIndex`, indexed `[partIndex][staffIndexInPart]`. A
     /// staff that is short of that measure — or whose measure has no voices — contributes an empty run, which
     /// `splice` then skips over rather than writing.
-    static func captured(from score: Score, at measureIndex: Int) -> [[[VoiceElement]]] {
+    static func captured(from score: Score, at measureIndex: Int) -> [[IdentifiedArray<VoiceElement>]] {
         score.parts.map { part in
             part.staves.map { staff in
                 guard staff.measures.indices.contains(measureIndex),
@@ -233,7 +233,7 @@ enum SignaturePrefixes {
     /// `InsertMeasure.restoredIncomingVoice0` gives: the forward edit can insert, replace or remove within the
     /// run, and only the pre-image knows which — down to the `visible` / `showCourtesy` flags on the element that
     /// was replaced.
-    static func splice(_ prefixes: [[[VoiceElement]]], into score: inout Score, at measureIndex: Int) {
+    static func splice(_ prefixes: [[IdentifiedArray<VoiceElement>]], into score: inout Score, at measureIndex: Int) {
         for partIndex in score.parts.indices where prefixes.indices.contains(partIndex) {
             for staffIndex in score.parts[partIndex].staves.indices
                 where prefixes[partIndex].indices.contains(staffIndex)
@@ -242,7 +242,7 @@ enum SignaturePrefixes {
                 let restored = prefixes[partIndex][staffIndex]
                 mutateVoiceZero(of: &score, at: address, measureIndex: measureIndex) { voice in
                     let current = MeasureStructure.leadingSignaturePrefix(of: voice).count
-                    voice.elements.replaceSubrange(0 ..< current, with: restored)
+                    voice.elements.replaceSubrange(0 ..< current, with: restored.identifiedPairs(in: restored.indices))
                     MeasureStructure.shiftTuplets(in: &voice, by: restored.count - current)
                 }
             }

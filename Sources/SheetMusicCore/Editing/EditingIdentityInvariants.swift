@@ -1,12 +1,19 @@
 import SheetMusicFoundation
 
 #if DEBUG
-    /// Debug-only structural-spine gates; extend the traversal when later phases identify more lanes.
+    /// Debug-only identity gates for the structural spine and every voice slot.
     enum EditingIdentityInvariants {
         static func identifiers(in score: Score) -> [EID] {
             var result = score.parts.indices.map { score.parts.eid(at: $0) }
             for part in score.parts {
                 result.append(contentsOf: part.staves.indices.map { part.staves.eid(at: $0) })
+                for staff in part.staves {
+                    for measure in staff.measures {
+                        for voice in measure.voices {
+                            result.append(contentsOf: voice.elements.indices.map { voice.elements.eid(at: $0) })
+                        }
+                    }
+                }
             }
             result.append(contentsOf: score.systemMeasures.indices.map { score.systemMeasures.eid(at: $0) })
             return result

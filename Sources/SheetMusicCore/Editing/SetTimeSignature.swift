@@ -149,7 +149,7 @@ struct RestoreTimeSignatureRegion: EditCommand {
               !score.parts.isEmpty
         else { throw Self.refused(.targetNotFound(affectedLocation)) }
 
-        let previousColumns = TimeSignatureRegion.capturedColumns(of: score, over: range)
+        let previousColumns = TimeSignatureRegion.capturedColumns(of: score, over: range, ids: &ids)
         let previousEndpoints = TimeSignatureRegion.currentEndpoints(for: spannerEndpoints, in: score)
         TimeSignatureRegion.splice(columns, into: &score, replacing: range, ids: &ids)
         TimeSignatureRegion.writeEndpoints(spannerEndpoints, into: &score)
@@ -182,17 +182,17 @@ extension TimeSignatureRegion {
             region: region, in: score,
             numerator: signature.numerator, denominator: signature.denominator,
             symbol: signature.symbol,
-            emitsLeadingSignature: declaringAtHead && !headIsIrregular,
+            emitsLeadingSignature: declaringAtHead && !headIsIrregular, ids: &ids,
         ).columns
         if headIsIrregular, !columns.isEmpty {
             if declaringAtHead {
-                declare(signature, in: &columns[0])
+                declare(signature, in: &columns[0], ids: &ids)
             } else {
                 removeSignatures(from: &columns[0])
             }
         }
 
-        let previousColumns = capturedColumns(of: score, over: region)
+        let previousColumns = capturedColumns(of: score, over: region, ids: &ids)
         // Rewrites the inside-anchored spanners in `columns` and hands back the outside-anchored ones, whose
         // addresses only become writable once the splice has happened.
         let endpoints = restatingSpannerEndpoints(

@@ -129,8 +129,9 @@ struct ScoreFingerprintParityTests {
         for symbol in TimeSignatureSymbol.allCases where symbol != .numeric {
             score.parts.updateValue(at: 0) { partValue in
                 partValue.staves.updateValue(at: 0) { staffValue in
-                    staffValue.measures[0].voices[0].elements[0] =
-                        .timeSignature(TimeSignature(numerator: 4, denominator: 4, symbol: symbol))
+                    staffValue.measures[0].voices[0].elements.updateValue(at: 0) {
+                        $0 = .timeSignature(TimeSignature(numerator: 4, denominator: 4, symbol: symbol))
+                    }
                 }
             }
             let hash = score.stableFingerprint
@@ -139,8 +140,9 @@ struct ScoreFingerprintParityTests {
         }
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements[0] =
-                    .timeSignature(TimeSignature(numerator: 4, denominator: 4))
+                staffValue.measures[0].voices[0].elements.updateValue(at: 0) {
+                    $0 = .timeSignature(TimeSignature(numerator: 4, denominator: 4))
+                }
             }
         }
         #expect(score.stableFingerprint == before)

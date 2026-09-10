@@ -145,7 +145,7 @@ struct SpannerOffsetsTests {
         head.spanners = [Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 2)]
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements[1] = .chord(head)
+                staffValue.measures[0].voices[0].elements.updateValue(at: 1) { $0 = .chord(head) }
             }
         }
         _ = try InsertMeasure(measureIndex: 1).apply(to: &score)

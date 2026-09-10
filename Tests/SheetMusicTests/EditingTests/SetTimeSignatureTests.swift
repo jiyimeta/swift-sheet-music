@@ -38,42 +38,10 @@ struct SetTimeSignatureTests {
                     let slot = measure == 0 ? 2 : 0
                     score.parts.updateValue(at: partIndex) { partValue in
                         partValue.staves.updateValue(at: staffIndex) { staffValue in
-                            staffValue.measures[measure].voices[0].elements[slot] =
-                                .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                            staffValue.measures[measure].voices[0].elements.updateValue(at: slot) {
+                                $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                            }
                         }
-                    }
-                }
-            }
-        }
-        return score
-    }
-
-    /// `uniform44()`'s shape with an explicit 3/4 at bar 2: bars 0–1 hold their whole notes, bars 2–3 keep the
-    /// measure rest that 3/4 now sizes at three quarters.
-    private func changeAtBarTwo() -> Score {
-        var score = Score.blank(BlankScoreTemplate(
-            title: "T",
-            parts: [
-                .init(instrumentID: "piano", longName: "Piano", staves: [.init(clefType: "G"), .init(clefType: "F")]),
-                .init(instrumentID: "clarinet-bb", longName: "Clarinet", staves: [.init(clefType: "G")]),
-            ],
-            concertKey: 0, measureCount: 4,
-        ))
-        for (partIndex, part) in score.parts.enumerated() {
-            for staffIndex in part.staves.indices {
-                for measure in 0 ..< 2 {
-                    let slot = measure == 0 ? 2 : 0
-                    score.parts.updateValue(at: partIndex) { partValue in
-                        partValue.staves.updateValue(at: staffIndex) { staffValue in
-                            staffValue.measures[measure].voices[0].elements[slot] =
-                                .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
-                        }
-                    }
-                }
-                score.parts.updateValue(at: partIndex) { partValue in
-                    partValue.staves.updateValue(at: staffIndex) { staffValue in
-                        staffValue.measures[2].voices[0].elements
-                            .insert(.timeSignature(TimeSignature(numerator: 3, denominator: 4)), at: 0)
                     }
                 }
             }
@@ -151,8 +119,8 @@ struct SetTimeSignatureTests {
     }
 
     @Test("a mid-piece change re-bars only its own span and leaves the bars before it byte-identical")
-    func setMidPieceRebarsOnlyThatSpan() {
-        let original = changeAtBarTwo()
+    func setMidPieceRebarsOnlyThatSpan() throws {
+        let original = try changeAtBarTwo()
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setTimeSignature(measureIndex: 2, numerator: 2, denominator: 4)))
         let score = session.score
@@ -248,8 +216,8 @@ struct SetTimeSignatureTests {
     // MARK: - .removeTimeSignature
 
     @Test("removing a change re-bars its span back to the prevailing meter, and undo puts it back exactly")
-    func removeRevertsToPrevailingAndRoundTrips() {
-        let original = changeAtBarTwo()
+    func removeRevertsToPrevailingAndRoundTrips() throws {
+        let original = try changeAtBarTwo()
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.removeTimeSignature(measureIndex: 2)))
         let score = session.score
@@ -277,16 +245,18 @@ struct SetTimeSignatureTests {
     /// gap in the fix: a chord-anchored slur anchored before the removed region, asserted on the same
     /// ABSOLUTE-TICK invariant `SetTimeSignatureChordSpannerTests` uses throughout.
     @Test("removing a change also restates a chord-anchored slur's endpoint, not just an element-shaped one")
-    func removeTimeSignatureRestatesAChordAnchoredSlurToo() {
-        var original = changeAtBarTwo()
+    func removeTimeSignatureRestatesAChordAnchoredSlurToo() throws {
+        var original = try changeAtBarTwo()
         // The slur's chord sits in bar 0, which `.removeTimeSignature(measureIndex: 2)` never touches — only
         // how many bars lie between it and the moment it reaches, exactly the shape the reported defect was.
         original.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements[2] = .chord(Chord(
-                    duration: .whole, notes: [Note(pitch: 72, tpc: 14)],
-                    spanners: [Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 3)],
-                ))
+                staffValue.measures[0].voices[0].elements.updateValue(at: 2) {
+                    $0 = .chord(Chord(
+                        duration: .whole, notes: [Note(pitch: 72, tpc: 14)],
+                        spanners: [Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 3)],
+                    ))
+                }
             }
         }
         let endTick = original.effectiveMeasureDurations().prefix(3)
@@ -313,8 +283,8 @@ struct SetTimeSignatureTests {
     }
 
     @Test("the score's opening meter cannot be removed")
-    func removeAtZeroRefused() {
-        let score = changeAtBarTwo()
+    func removeAtZeroRefused() throws {
+        let score = try changeAtBarTwo()
         let session = ScoreEditSession(score: score)
         #expect(!session.apply(.removeTimeSignature(measureIndex: 0)))
         #expect(session.lastRefusal?.reason == .cannotRemoveInitialSignature)
@@ -345,8 +315,8 @@ struct SetTimeSignatureTests {
     }
 
     @Test("removing where no explicit change exists resolves to nothing to apply")
-    func removeWhereNoChangePlansToNothing() {
-        let score = changeAtBarTwo()
+    func removeWhereNoChangePlansToNothing() throws {
+        let score = try changeAtBarTwo()
         let session = ScoreEditSession(score: score)
         #expect(!session.apply(.removeTimeSignature(measureIndex: 1)))
         #expect(session.lastRefusal?.reason == .nothingToApply)
@@ -415,15 +385,17 @@ struct SetTimeSignatureTests {
         // replacement has to be a value edit of the element already there rather than a fresh one.
         original.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements[1] =
-                    .timeSignature(TimeSignature(numerator: 4, denominator: 4, showCourtesy: false))
+                staffValue.measures[0].voices[0].elements.updateValue(at: 1) {
+                    $0 = .timeSignature(TimeSignature(numerator: 4, denominator: 4, showCourtesy: false))
+                }
             }
         }
         for measure in 1 ..< 3 {
             original.parts.updateValue(at: 0) { partValue in
                 partValue.staves.updateValue(at: 0) { staffValue in
-                    staffValue.measures[measure].voices[0].elements[0] =
-                        .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                    staffValue.measures[measure].voices[0].elements.updateValue(at: 0) {
+                        $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                    }
                 }
             }
         }
@@ -496,5 +468,45 @@ struct SetTimeSignatureTests {
         #expect(Self.declared(session.score, 0, 0, 1) == nil)
         #expect(session.undo())
         #expect(session.score == original)
+    }
+}
+
+extension SetTimeSignatureTests {
+    /// `uniform44()`'s shape with an explicit 3/4 at bar 2: bars 0–1 hold their whole notes, bars 2–3 keep the
+    /// measure rest that 3/4 now sizes at three quarters.
+    private func changeAtBarTwo() throws -> Score {
+        var score = Score.blank(BlankScoreTemplate(
+            title: "T",
+            parts: [
+                .init(instrumentID: "piano", longName: "Piano", staves: [.init(clefType: "G"), .init(clefType: "F")]),
+                .init(instrumentID: "clarinet-bb", longName: "Clarinet", staves: [.init(clefType: "G")]),
+            ],
+            concertKey: 0, measureCount: 4,
+        ))
+        for (partIndex, part) in score.parts.enumerated() {
+            for staffIndex in part.staves.indices {
+                for measure in 0 ..< 2 {
+                    let slot = measure == 0 ? 2 : 0
+                    score.parts.updateValue(at: partIndex) { partValue in
+                        partValue.staves.updateValue(at: staffIndex) { staffValue in
+                            staffValue.measures[measure].voices[0].elements.updateValue(at: slot) {
+                                $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                            }
+                        }
+                    }
+                }
+                var slots = score.parts[partIndex].staves[staffIndex].measures[2].voices[0].elements.voiceSlots()
+                slots.insert(
+                    VoiceSlot(identity: .fresh, element: .timeSignature(TimeSignature(numerator: 3, denominator: 4))),
+                    at: 0,
+                )
+                try ReplaceVoiceElements(
+                    staff: StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex),
+                    measureIndex: 2, voiceIndex: 0, slots: slots,
+                    tuplets: score.parts[partIndex].staves[staffIndex].measures[2].voices[0].tuplets,
+                ).apply(to: &score)
+            }
+        }
+        return score
     }
 }

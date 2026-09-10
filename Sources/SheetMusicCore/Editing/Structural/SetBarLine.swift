@@ -31,16 +31,16 @@ public struct SetBarLine: EditCommand {
             let ref = VoiceRef(staff: address, measureIndex: measure.measureIndex, voiceIndex: 0)
             guard let voice = score[voice: ref] else { continue }
             var elements = voice.elements
-            let trailingIndex = Self.trailingBarLineIndex(in: elements)
+            let trailingIndex = Self.trailingBarLineIndex(in: elements.values)
             switch (style, trailingIndex) {
             case let (.normal, index?):
-                elements.remove(at: index)
+                elements.removeSubrange(index ..< (index + 1))
             case (.normal, nil):
                 continue
             case let (_, index?):
-                elements[index] = .barLine(BarLine(subtype: style.rawValue))
+                elements.updateValue(at: index) { $0 = .barLine(BarLine(subtype: style.rawValue)) }
             case (_, nil):
-                elements.append(.barLine(BarLine(subtype: style.rawValue)))
+                elements.insert(.barLine(BarLine(subtype: style.rawValue)), at: elements.count, id: ids.next())
             }
             writes.append(ReplaceVoiceElements(
                 staff: address, measureIndex: measure.measureIndex, voiceIndex: 0,

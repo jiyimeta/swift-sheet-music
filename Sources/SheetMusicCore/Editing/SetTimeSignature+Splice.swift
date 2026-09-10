@@ -93,18 +93,18 @@ enum TimeSignatureRegion {
     /// none.
     ///
     /// Only ever called on an IRREGULAR head column. Everywhere else the declaration is `RebarPlanner`'s, which
-    /// drops every old signature in the run and writes one fresh — the responsibility stays there.
-    static func declare(_ signature: TimeSignature, in column: inout MeasureSlice) {
+    /// replaces the declaration while carrying its identity when present — the responsibility stays there.
+    static func declare(_ signature: TimeSignature, in column: inout MeasureSlice, ids: inout EIDAllocator) {
         mutateVoiceZero(of: &column) { voice in
             let prefix = MeasureStructure.leadingSignaturePrefix(of: voice)
             let existing = prefix.firstIndex { if case .timeSignature = $0 { true } else { false } }
             if let existing, case var .timeSignature(current) = voice.elements[existing] {
                 current.numerator = signature.numerator
                 current.denominator = signature.denominator
-                voice.elements[existing] = .timeSignature(current)
+                voice.elements.updateValue(at: existing) { $0 = .timeSignature(current) }
                 return
             }
-            voice.elements.insert(.timeSignature(signature), at: prefix.count)
+            voice.elements.insert(.timeSignature(signature), at: prefix.count, id: ids.next())
             MeasureStructure.shiftTuplets(in: &voice, by: 1)
         }
     }
@@ -132,14 +132,14 @@ enum TimeSignatureRegion {
     // MARK: - Capture and splice
 
     /// `region`'s measure columns exactly as they stand — every staff plus the parallel `SystemMeasure`.
-    static func capturedColumns(of score: Score, over region: Range<Int>) -> [MeasureSlice] {
+    static func capturedColumns(of score: Score, over region: Range<Int>, ids: inout EIDAllocator) -> [MeasureSlice] {
         region.map { measureIndex in
             MeasureSlice(
                 staffMeasures: score.parts.map { part in
                     part.staves.map { staff in
                         staff.measures.indices.contains(measureIndex)
                             ? staff.measures[measureIndex]
-                            : Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
+                            : Measure(voices: [MeasureStructure.freshMeasureRest(using: &ids)])
                     }
                 },
                 systemMeasure: score.systemMeasures.indices.contains(measureIndex)
@@ -168,7 +168,7 @@ enum TimeSignatureRegion {
                     column.staffMeasures.indices.contains(partIndex)
                         && column.staffMeasures[partIndex].indices.contains(staffIndex)
                         ? column.staffMeasures[partIndex][staffIndex]
-                        : Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
+                        : Measure(voices: [MeasureStructure.freshMeasureRest(using: &ids)])
                 }
                 score.parts.updateValue(at: partIndex) { partValue in
                     partValue.staves.updateValue(at: staffIndex) { staffValue in

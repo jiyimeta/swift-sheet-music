@@ -12,7 +12,7 @@ struct SetClefTests {
     }
 
     private static func elements(_ score: Score, _ measure: Int) -> [VoiceElement] {
-        score.parts[0].staves[0].measures[measure].voices[0].elements
+        score.parts[0].staves[0].measures[measure].voices[0].elements.values
     }
 
     private static func clefType(_ element: VoiceElement) -> String? {
@@ -46,7 +46,9 @@ struct SetClefTests {
         hidden.visible = false
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.insert(.clef(hidden), at: 2)
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(.clef(hidden), at: 2)
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
             }
         }
         // [ts, C4, clef, D4, r, r] — the D4 is element 3 now.
@@ -64,12 +66,14 @@ struct SetClefTests {
         var score = EditingFixtures.parityFixture()
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.insert(
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(
                     contentsOf: [
                         .keySignature(KeySignature(concertKey: 2)), .dynamic(Dynamic(subtype: "p", velocity: 49)),
                     ],
                     at: 2,
                 )
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
             }
         }
         // [ts, C4, key, dynamic, D4, r, r]

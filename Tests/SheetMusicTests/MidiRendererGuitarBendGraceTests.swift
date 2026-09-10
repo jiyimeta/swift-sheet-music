@@ -271,7 +271,7 @@ struct MidiRendererGuitarBendGraceTests {
             MSCXFixtureLoader.mscxData("guitarbend_release_twice"),
         )
         let elements = score.parts[0].staves[0].measures[0].voices[0].elements
-        let slots = MidiRenderer.guitarBendChains(voiceElements: elements)
+        let slots = MidiRenderer.guitarBendChains(voiceElements: elements.values)
         #expect(slots.count == 2)
 
         let first = try #require(slots[3])

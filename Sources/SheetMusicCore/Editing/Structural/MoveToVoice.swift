@@ -73,7 +73,7 @@ public struct MoveToVoice: EditCommand {
             start: start, length: length, with: chord, in: scratch,
             destination: destination, measureDuration: measureDuration,
         ))
-        steps.append(ReplaceVoiceElement(at: location, with: .rest(duration: chord.duration)))
+        steps.append(ReplaceVoiceElement(at: location, with: .rest(duration: chord.duration), identity: .fresh))
         return try CompositeEditCommand(commands: steps, location: location).apply(to: &score, ids: &ids)
     }
 
@@ -131,23 +131,23 @@ public struct MoveToVoice: EditCommand {
     ) throws -> ReplaceVoiceElements {
         guard let voice = scratch[voice: destination] else { throw refused(.targetNotFound(slot(destination))) }
         var tick = 0
-        var elements: [VoiceElement] = []
+        var elements: [VoiceSlot] = []
         var collapsed = 0
         var collapsedTicks = 0
         var lastCollapsedIndex = 0
         for (index, element) in voice.elements.enumerated() {
             guard case let .chord(rest) = element else {
-                elements.append(element)
+                elements.append(VoiceSlot(identity: .keep(voice.elements.eid(at: index)), element: element))
                 continue
             }
             let ticks = rest.duration.resolved(in: measureDuration).ticks(division: scratch.division)
             if tick >= start, tick + ticks <= start + length {
-                if collapsed == 0 { elements.append(.chord(chord)) }
+                if collapsed == 0 { elements.append(VoiceSlot(identity: .fresh, element: .chord(chord))) }
                 collapsed += 1
                 collapsedTicks += ticks
                 lastCollapsedIndex = index
             } else {
-                elements.append(element)
+                elements.append(VoiceSlot(identity: .keep(voice.elements.eid(at: index)), element: element))
             }
             tick += ticks
         }
@@ -160,7 +160,7 @@ public struct MoveToVoice: EditCommand {
         )
         return ReplaceVoiceElements(
             staff: destination.staff, measureIndex: destination.measureIndex, voiceIndex: destination.voiceIndex,
-            elements: elements, tuplets: tuplets,
+            slots: elements, tuplets: tuplets,
         )
     }
 

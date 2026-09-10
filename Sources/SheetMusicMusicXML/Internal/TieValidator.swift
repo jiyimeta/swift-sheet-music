@@ -136,7 +136,7 @@ enum TieValidator {
             }
             updated.notes[ref.noteIndex] = note
             var voice = out[ref.measureIndex].voices[ref.voiceIndex]
-            voice.elements[ref.elementIndex] = .chord(updated)
+            voice.elements.updateValue(at: ref.elementIndex) { $0 = .chord(updated) }
             out[ref.measureIndex].voices[ref.voiceIndex] = voice
         }
         return out

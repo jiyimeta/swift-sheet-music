@@ -438,7 +438,7 @@
             var measure = measure
             measure.voices = measure.voices.map { voice in
                 var voice = voice
-                voice.elements = voice.elements.map { element in
+                voice.elements.mapValues { element in
                     guard case let .chord(chord) = element else { return element }
                     var bare = chord
                     bare.spanners = []

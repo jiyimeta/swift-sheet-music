@@ -78,6 +78,7 @@ public struct SetChordDuration: EditCommand {
                 division: division,
                 baseLocation: location,
                 operation: "SetChordDuration",
+                targetEID: voice.elements.eid(at: location.elementIndex), ids: &ids,
             )
         let replace = ReplaceVoiceElements(
             staff: location.staff,

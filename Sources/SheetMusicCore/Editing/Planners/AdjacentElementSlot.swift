@@ -65,7 +65,7 @@ enum AdjacentElementSlot {
               elements.indices.contains(anchor.elementIndex),
               case .chord = elements[anchor.elementIndex]
         else { return nil }
-        return run(side, of: anchor.elementIndex, in: elements).first { matches(elements[$0]) }
+        return run(side, of: anchor.elementIndex, in: elements.values).first { matches(elements[$0]) }
     }
 
     /// Where an insertion nearest the timed element at `anchor` lands.
@@ -79,11 +79,11 @@ enum AdjacentElementSlot {
         _ element: VoiceElement, at index: Int, in ref: VoiceRef, of score: Score,
     ) -> ReplaceVoiceElements? {
         guard let voice = score[voice: ref], (0 ... voice.elements.count).contains(index) else { return nil }
-        var elements = voice.elements
-        elements.insert(element, at: index)
+        var elements = voice.elements.voiceSlots()
+        elements.insert(VoiceSlot(identity: .fresh, element: element), at: index)
         return ReplaceVoiceElements(
             staff: ref.staff, measureIndex: ref.measureIndex, voiceIndex: ref.voiceIndex,
-            elements: elements, tuplets: MeasureStructure.remapTuplets(voice.tuplets, insertingAt: index),
+            slots: elements, tuplets: MeasureStructure.remapTuplets(voice.tuplets, insertingAt: index),
         )
     }
 
@@ -92,18 +92,18 @@ enum AdjacentElementSlot {
             at: VoiceElementID(
                 staff: ref.staff, measureIndex: ref.measureIndex, voiceIndex: ref.voiceIndex, elementIndex: index,
             ),
-            with: element,
+            with: element, identity: .same,
         )
     }
 
     /// The voice rewritten without the element at `index`, tuplets remapped; `nil` when there is no such element.
     static func removing(at index: Int, in ref: VoiceRef, of score: Score) -> ReplaceVoiceElements? {
         guard let voice = score[voice: ref], voice.elements.indices.contains(index) else { return nil }
-        var elements = voice.elements
+        var elements = voice.elements.voiceSlots()
         elements.remove(at: index)
         return ReplaceVoiceElements(
             staff: ref.staff, measureIndex: ref.measureIndex, voiceIndex: ref.voiceIndex,
-            elements: elements, tuplets: MeasureStructure.remapTuplets(voice.tuplets, removingAt: index),
+            slots: elements, tuplets: MeasureStructure.remapTuplets(voice.tuplets, removingAt: index),
         )
     }
 }

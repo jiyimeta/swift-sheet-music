@@ -20,8 +20,9 @@ struct TransposingInstrumentRoundTripTests {
         ))
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements[2] =
-                    .chord(Chord(duration: .whole, notes: [Note(pitch: 70, tpc: 12)]))
+                staffValue.measures[0].voices[0].elements.updateValue(at: 2) {
+                    $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 70, tpc: 12)]))
+                }
             }
         }
         return score
@@ -279,8 +280,9 @@ struct TransposingInstrumentRoundTripTests {
         // A snare hit, written the way a drum staff carries one.
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements[1] =
-                    .chord(Chord(duration: .whole, notes: [Note(pitch: 38, tpc: 16)]))
+                staffValue.measures[0].voices[0].elements.updateValue(at: 1) {
+                    $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 38, tpc: 16)]))
+                }
             }
         }
         #expect(score.parts[0].instrument.useDrumset)

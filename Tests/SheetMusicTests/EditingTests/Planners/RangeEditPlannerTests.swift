@@ -11,7 +11,9 @@ struct RangeEditPlannerTests {
 
     @Test("an onset consumed by an earlier lengthening is skipped, and later targets are re-found by tick")
     func skipsConsumedOnsets() throws {
-        let score = EditingFixtures.fourQuarterRests() // [ts, r q, r q, r q, r q]
+        // Identified first: the planner applies its steps to a scratch copy with `apply(to:ids:)`, which does not
+        // fill slots on entry — only a score from a producing entry point (here the editor) is identified.
+        let score = ScoreEditor(score: EditingFixtures.fourQuarterRests()).score // [ts, r q, r q, r q, r q]
         var visited: [VoiceElementID] = []
         let plan = try RangeEditPlanner.plan(
             over: VoiceElementRange(start: Self.id(0, 1), end: Self.id(0, 4)), in: score, ids: EIDAllocator(),

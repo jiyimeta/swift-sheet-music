@@ -32,8 +32,9 @@ struct SetTimeSignatureChordSpannerTests {
             let slot = measure == 0 ? 2 : 0
             score.parts.updateValue(at: 0) { partValue in
                 partValue.staves.updateValue(at: 0) { staffValue in
-                    staffValue.measures[measure].voices[0].elements[slot] =
-                        .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                    staffValue.measures[measure].voices[0].elements.updateValue(at: slot) {
+                        $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                    }
                 }
             }
         }
@@ -60,7 +61,9 @@ struct SetTimeSignatureChordSpannerTests {
                 chord.spanners = spanners
                 score.parts.updateValue(at: 0) { partValue in
                     partValue.staves.updateValue(at: 0) { staffValue in
-                        staffValue.measures[measure].voices[voiceIndex].elements[index] = .chord(chord)
+                        staffValue.measures[measure].voices[voiceIndex].elements.updateValue(at: index) {
+                            $0 = .chord(chord)
+                        }
                     }
                 }
                 return
@@ -216,14 +219,16 @@ struct SetTimeSignatureChordSpannerTests {
     /// answering exactly as it did before the walks learned about chords, and the two shapes do not interfere —
     /// each is restated against its own anchor.
     @Test("an element-shaped spanner across the same re-bar is unaffected by the chord walk")
-    func elementShapedSpannerStillWorksAlongsideAChordAnchoredOne() {
+    func elementShapedSpannerStillWorksAlongsideAChordAnchoredOne() throws {
         var original = uniform44()
         Self.attach([Self.slur(measures: 3)], toChordIn: 0, of: &original)
-        original.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.append(Self.hairpin(measures: 3))
-            }
-        }
+        var slots = original.parts[0].staves[0].measures[0].voices[0].elements.voiceSlots()
+        slots.append(VoiceSlot(identity: .fresh, element: Self.hairpin(measures: 3)))
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, slots: slots,
+            tuplets: original.parts[0].staves[0].measures[0].voices[0].tuplets,
+        ).apply(to: &original)
         let endTick = Self.absoluteStart(of: 3, in: original)
 
         let session = ScoreEditSession(score: original)

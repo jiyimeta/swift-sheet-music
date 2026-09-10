@@ -32,9 +32,10 @@ public enum DurationChangeAlgorithm {
         division: Int,
         baseLocation: VoiceElementID,
         operation: String,
-    ) throws -> (elements: [VoiceElement], tuplets: [Tuplet]) {
+        targetEID: EID, ids: inout EIDAllocator,
+    ) throws -> (elements: IdentifiedArray<VoiceElement>, tuplets: [Tuplet]) {
         var newElements = voice.elements
-        newElements[idx] = mutatedTarget
+        newElements.replace(at: newElements.eid(at: idx), with: mutatedTarget, newEID: targetEID)
         // For shortening, no consumption happens — `consumedEndIdx`
         // stays at `idx` so the post-loop tuplet adjustment treats
         // every downstream tuplet as "after the modified region"
@@ -47,7 +48,7 @@ public enum DurationChangeAlgorithm {
                 rtickStart: targetRtick + dstTicks,
                 division: division,
             )
-            newElements.insert(contentsOf: rests, at: idx + 1)
+            newElements.insert(contentsOf: rests.map { (ids.next(), $0) }, at: idx + 1)
         } else if dstTicks > srcTicks {
             let needed = dstTicks - srcTicks
             var consumed = 0
@@ -134,7 +135,7 @@ public enum DurationChangeAlgorithm {
             }
             consumedEndIdx = lastConsumedIdx
             let lastEl = newElements[lastConsumedIdx]
-            newElements.removeSubrange((idx + 1) ... lastConsumedIdx)
+            newElements.removeSubrange((idx + 1) ..< (lastConsumedIdx + 1))
             if partial > 0 {
                 let durations = alignedDurations(
                     forTicks: partial,
@@ -162,7 +163,7 @@ public enum DurationChangeAlgorithm {
                     }
                 }
                 newElements.insert(
-                    contentsOf: pieces, at: idx + 1,
+                    contentsOf: pieces.map { (ids.next(), $0) }, at: idx + 1,
                 )
             }
         }

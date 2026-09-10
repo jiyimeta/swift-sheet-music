@@ -88,7 +88,7 @@ public struct PasteVoiceElements: EditCommand {
             targetRtick: targetRtick,
             division: division,
             measureDuration: measureDuration,
-            baseLocation: location,
+            baseLocation: location, ids: &ids,
         )
         let replace = ReplaceVoiceElements(
             staff: location.staff,
@@ -128,10 +128,10 @@ public struct PasteVoiceElements: EditCommand {
         targetRtick: Int,
         division: Int,
         measureDuration: Fraction,
-        baseLocation: VoiceElementID,
-    ) throws -> (elements: [VoiceElement], tuplets: [Tuplet]) {
+        baseLocation: VoiceElementID, ids: inout EIDAllocator,
+    ) throws -> (elements: IdentifiedArray<VoiceElement>, tuplets: [Tuplet]) {
         var newElements = voice.elements
-        newElements.replaceSubrange(idx ... idx, with: payload)
+        newElements.replaceSubrange(idx ..< (idx + 1), with: payload.map { (ids.next(), $0) })
         let payloadEndIdx = idx + payload.count - 1
         let payloadInsertDelta = payload.count - 1
         // The paste's effective element-index range in the ORIGINAL
@@ -147,7 +147,7 @@ public struct PasteVoiceElements: EditCommand {
                 division: division,
             )
             newElements.insert(
-                contentsOf: rests, at: payloadEndIdx + 1,
+                contentsOf: rests.map { (ids.next(), $0) }, at: payloadEndIdx + 1,
             )
         } else if payloadTicks > targetTicks {
             let needed = payloadTicks - targetTicks
@@ -198,7 +198,7 @@ public struct PasteVoiceElements: EditCommand {
             )
 
             newElements.removeSubrange(
-                (payloadEndIdx + 1) ... lastConsumedIdx,
+                (payloadEndIdx + 1) ..< (lastConsumedIdx + 1),
             )
             if partial > 0, let lastEl = lastConsumedEl {
                 let durations = DurationChangeAlgorithm.alignedDurations(
@@ -216,7 +216,7 @@ public struct PasteVoiceElements: EditCommand {
                     pieces = durations.map { .rest(duration: $0) }
                 }
                 newElements.insert(
-                    contentsOf: pieces, at: payloadEndIdx + 1,
+                    contentsOf: pieces.map { (ids.next(), $0) }, at: payloadEndIdx + 1,
                 )
             }
         }

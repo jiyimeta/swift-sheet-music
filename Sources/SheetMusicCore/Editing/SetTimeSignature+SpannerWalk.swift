@@ -96,10 +96,9 @@ extension TimeSignatureRegion {
         guard measure.voices.indices.contains(found.voiceIndex),
               measure.voices[found.voiceIndex].elements.indices.contains(found.elementIndex)
         else { return }
-        setOffsets(
-            endpoint, at: found.spannerIndex,
-            in: &measure.voices[found.voiceIndex].elements[found.elementIndex],
-        )
+        measure.voices[found.voiceIndex].elements.updateValue(at: found.elementIndex) {
+            setOffsets(endpoint, at: found.spannerIndex, in: &$0)
+        }
         column.staffMeasures[found.partIndex][found.staffIndex] = measure
     }
 

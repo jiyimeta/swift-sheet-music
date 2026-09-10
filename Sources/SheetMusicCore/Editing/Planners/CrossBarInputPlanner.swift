@@ -169,6 +169,7 @@ public enum CrossBarInputPlanner {
         )
     }
 
+    /// The first piece keeps the target EID for rest-to-rest edits or unchanged chord content.
     private static func plan(
         segments: [Segment],
         content: Content,
@@ -182,13 +183,24 @@ public enum CrossBarInputPlanner {
             guard let voice = voice(
                 in: room.staff, measureIndex: segment.measureIndex, voiceIndex: location.voiceIndex,
             ) else { return nil }
+            let keepsHead = switch content {
+            case .rest: voice.elements[segment.startIndex].isRest
+            case let .chord(source): voice.elements[segment.startIndex] == .chord(source)
+            }
             let pieces = segment.durations.enumerated().map { offset, duration in
-                piece(
+                let element = piece(
                     duration: duration,
                     content: content,
                     isFirst: written + offset == 0,
                     isLast: written + offset == pieceCount - 1,
                 )
+                let identity: SlotIdentity
+                if written + offset == 0, keepsHead {
+                    identity = .keep(voice.elements.eid(at: segment.startIndex))
+                } else {
+                    identity = .fresh
+                }
+                return VoiceSlot(identity: identity, element: element)
             }
             guard let spliced = splice(
                 pieces,
@@ -201,7 +213,7 @@ public enum CrossBarInputPlanner {
                 staff: location.staff,
                 measureIndex: segment.measureIndex,
                 voiceIndex: location.voiceIndex,
-                elements: spliced.elements,
+                slots: spliced.elements,
                 tuplets: spliced.tuplets,
             ))
             written += segment.durations.count
@@ -232,23 +244,23 @@ public enum CrossBarInputPlanner {
     /// the engine refuses the equivalent single-slot edit for the same reason), or the measure holds less music
     /// than the segment claims.
     private static func splice(
-        _ pieces: [VoiceElement],
+        _ pieces: [VoiceSlot],
         into voice: Voice,
         over segment: Segment,
         measureDuration: Fraction,
         division: Int,
-    ) -> (elements: [VoiceElement], tuplets: [Tuplet])? {
+    ) -> (elements: [VoiceSlot], tuplets: [Tuplet])? {
         let elements = voice.elements
         guard elements.indices.contains(segment.startIndex) else { return nil }
-        var carried: [VoiceElement] = []
-        var leftover: [VoiceElement] = []
+        var carried: [VoiceSlot] = []
+        var leftover: [VoiceSlot] = []
         var consumed = 0
         var index = segment.startIndex
         while consumed < segment.ticks, index < elements.count {
             guard let ticks = elements[index].tickCount(division: division, in: measureDuration) else {
                 // A chord symbol, a dynamic, a mid-bar clef: nothing is dropped, it just collapses to the end of
                 // the span the new note now covers — there is no tick position left inside it to hold.
-                carried.append(elements[index])
+                carried.append(VoiceSlot(identity: .keep(elements.eid(at: index)), element: elements[index]))
                 index += 1
                 continue
             }
@@ -260,7 +272,7 @@ public enum CrossBarInputPlanner {
                     ticks: consumed + ticks - segment.ticks,
                     rtickStart: segment.startRtick + segment.ticks,
                     division: division,
-                )
+                ).map { VoiceSlot(identity: .fresh, element: $0) }
                 consumed = segment.ticks
             }
             index += 1
@@ -270,11 +282,11 @@ public enum CrossBarInputPlanner {
         guard !voice.tuplets.contains(where: { $0.startIndex <= consumedEnd && segment.startIndex <= $0.endIndex })
         else { return nil }
 
-        var newElements = Array(elements[..<segment.startIndex])
+        var newElements = Array(elements.voiceSlots()[..<segment.startIndex])
         newElements.append(contentsOf: pieces)
         newElements.append(contentsOf: carried)
         newElements.append(contentsOf: leftover)
-        newElements.append(contentsOf: elements[index...])
+        newElements.append(contentsOf: elements.voiceSlots()[index...])
         let delta = newElements.count - elements.count
         let tuplets = voice.tuplets.map { tuplet in
             guard tuplet.startIndex > consumedEnd else { return tuplet }

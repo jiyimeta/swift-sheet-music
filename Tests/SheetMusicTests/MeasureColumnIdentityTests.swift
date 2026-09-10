@@ -69,7 +69,7 @@ struct MeasureColumnIdentityTests {
         var ids = EIDAllocator(actor: 42, counter: 2)
         try InsertMeasure(measureIndex: 0).apply(to: &score, ids: &ids)
         #expect(score.systemMeasures.values == [SystemMeasure(), column(1), column(2)])
-        #expect(score.systemMeasures.eid(at: 0) == EID(first: 42, second: 3))
+        #expect(score.systemMeasures.eid(at: 0) == EID(first: 42, second: 4))
         #expect(score.systemMeasures.eid(at: 1) == firstID)
         #expect(score.systemMeasures.eid(at: 2) == secondID)
     }
@@ -81,7 +81,7 @@ struct MeasureColumnIdentityTests {
         #expect(score.systemMeasures.values == [column(1), column(2), SystemMeasure()])
         #expect(score.systemMeasures.eid(at: 0) == firstID)
         #expect(score.systemMeasures.eid(at: 1) == secondID)
-        #expect(score.systemMeasures.eid(at: 2) == EID(first: 42, second: 3))
+        #expect(score.systemMeasures.eid(at: 2) == EID(first: 42, second: 4))
     }
 
     @Test func bareCommandFillsUnassignedColumnsOnEntry() throws {

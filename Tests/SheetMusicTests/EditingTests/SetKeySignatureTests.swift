@@ -7,7 +7,7 @@ import Testing
 struct SetKeySignatureTests {
     /// Piano + B♭ clarinet + drum kit, 4 bars, G major (1 sharp), an F♯ chord in every bar of the pitched parts,
     /// and an existing explicit key change to D (2 sharps) at bar 2.
-    private func fixture() -> Score {
+    private func fixture() throws -> Score {
         var score = Score.blank(BlankScoreTemplate(
             title: "T",
             parts: [
@@ -30,17 +30,19 @@ struct SetKeySignatureTests {
                 let slot = measure == 0 ? 2 : 0
                 score.parts.updateValue(at: part) { partValue in
                     partValue.staves.updateValue(at: 0) { staffValue in
-                        staffValue.measures[measure].voices[0].elements[slot] =
-                            .chord(Chord(duration: .whole, notes: [Note(pitch: 66, tpc: 20)]))
+                        staffValue.measures[measure].voices[0].elements.updateValue(at: slot) {
+                            $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 66, tpc: 20)]))
+                        }
                     }
                 }
             }
-            score.parts.updateValue(at: part) { partValue in
-                partValue.staves.updateValue(at: 0) { staffValue in
-                    staffValue.measures[2].voices[0].elements
-                        .insert(.keySignature(KeySignature(concertKey: 2)), at: 0)
-                }
-            }
+            var slots = score.parts[part].staves[0].measures[2].voices[0].elements.voiceSlots()
+            slots.insert(VoiceSlot(identity: .fresh, element: .keySignature(KeySignature(concertKey: 2))), at: 0)
+            try ReplaceVoiceElements(
+                staff: StaffAddress(partIndex: part, staffIndexInPart: 0),
+                measureIndex: 2, voiceIndex: 0, slots: slots,
+                tuplets: score.parts[part].staves[0].measures[2].voices[0].tuplets,
+            ).apply(to: &score)
             score.parts.updateValue(at: part) { partValue in
                 partValue.staves.updateValue(at: 0) { staffValue in
                     MeasureStructure.shiftTuplets(in: &staffValue.measures[2].voices[0], by: 1)
@@ -72,8 +74,8 @@ struct SetKeySignatureTests {
     // MARK: - .setKeySignature
 
     @Test("the key lands on every pitched staff, skips percussion, and re-spells its own span")
-    func setKeyWritesAllStavesSkipsPercussionAndRenotatesTheSpan() {
-        let session = ScoreEditSession(score: fixture())
+    func setKeyWritesAllStavesSkipsPercussionAndRenotatesTheSpan() throws {
+        let session = try ScoreEditSession(score: fixture())
         #expect(session.apply(.setKeySignature(measureIndex: 0, concertKey: 0))) // G → C major
         let score = session.score
         for part in [0, 1] {
@@ -95,8 +97,8 @@ struct SetKeySignatureTests {
     }
 
     @Test("the write and its re-spelling are one undo step, and the round trip is byte-exact")
-    func setKeyIsOneUndoStepAndRoundTrips() {
-        let original = fixture()
+    func setKeyIsOneUndoStepAndRoundTrips() throws {
+        let original = try fixture()
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setKeySignature(measureIndex: 0, concertKey: -3))) // G → E♭ major
         // Intermediate state, asserted before the undo: a symmetric bug in apply and its inverse cancels invisibly
@@ -109,8 +111,8 @@ struct SetKeySignatureTests {
     }
 
     @Test("writing the key already in force resolves to nothing to apply")
-    func setSameKeyPlansToNothing() {
-        let score = fixture()
+    func setSameKeyPlansToNothing() throws {
+        let score = try fixture()
         let session = ScoreEditSession(score: score)
         #expect(!session.apply(.setKeySignature(measureIndex: 0, concertKey: 1)))
         #expect(session.lastRefusal?.reason == .nothingToApply)
@@ -119,8 +121,8 @@ struct SetKeySignatureTests {
     }
 
     @Test("a mid-piece write replaces the change already there and leaves the span before it alone")
-    func midPieceSetReplacesTheExistingChange() {
-        let session = ScoreEditSession(score: fixture())
+    func midPieceSetReplacesTheExistingChange() throws {
+        let session = try ScoreEditSession(score: fixture())
         #expect(session.apply(.setKeySignature(measureIndex: 2, concertKey: -1))) // D → F major at bar 2
         #expect(session.score.activeKey(staff: Self.pianoStaff, measureIndex: 3) == -1)
         #expect(session.score.activeKey(staff: Self.pianoStaff, measureIndex: 1) == 1) // span before untouched
@@ -135,8 +137,8 @@ struct SetKeySignatureTests {
     }
 
     @Test("a bar that declares no key of its own gets one inserted, and undo takes it back out")
-    func setKeyAtBarWithoutOneInsertsIt() {
-        let original = fixture()
+    func setKeyAtBarWithoutOneInsertsIt() throws {
+        let original = try fixture()
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setKeySignature(measureIndex: 1, concertKey: -2))) // B♭ major from bar 1
         for part in [0, 1] {
@@ -159,19 +161,17 @@ struct SetKeySignatureTests {
     /// it — including the ones a tuplet holds. And it has to land in MuseScore's structural order (clef, key, time)
     /// rather than simply at index 0, or the bar engraves its key before its own clef.
     @Test("an inserted key lands after the clef, before the time signature, and carries tuplets with it")
-    func insertedKeyTakesTheCanonicalPositionAndShiftsTuplets() {
-        var original = fixture()
-        original.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[1].voices[0].elements.insert(
-                    contentsOf: [
-                        .clef(Clef(concertClefType: "G")),
-                        .timeSignature(TimeSignature(numerator: 3, denominator: 4)),
-                    ],
-                    at: 0,
-                )
-            }
-        }
+    func insertedKeyTakesTheCanonicalPositionAndShiftsTuplets() throws {
+        var original = try fixture()
+        var slots = original.parts[0].staves[0].measures[1].voices[0].elements.voiceSlots()
+        slots.insert(contentsOf: [
+            VoiceSlot(identity: .fresh, element: .clef(Clef(concertClefType: "G"))),
+            VoiceSlot(identity: .fresh, element: .timeSignature(TimeSignature(numerator: 3, denominator: 4))),
+        ], at: 0)
+        try ReplaceVoiceElements(
+            staff: Self.pianoStaff, measureIndex: 1, voiceIndex: 0, slots: slots,
+            tuplets: original.parts[0].staves[0].measures[1].voices[0].tuplets,
+        ).apply(to: &original)
         original.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
                 staffValue.measures[1].voices[0].tuplets = [
@@ -196,8 +196,8 @@ struct SetKeySignatureTests {
     // MARK: - .removeKeySignature
 
     @Test("removing a change reverts its span to the prevailing key, and undo puts it back exactly")
-    func removeKeyRevertsToPrevailingAndRoundTrips() {
-        let original = fixture()
+    func removeKeyRevertsToPrevailingAndRoundTrips() throws {
+        let original = try fixture()
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.removeKeySignature(measureIndex: 2)))
         #expect(session.score.activeKey(staff: Self.pianoStaff, measureIndex: 3) == 1) // back to G major
@@ -212,8 +212,8 @@ struct SetKeySignatureTests {
     /// The mirror of the insertion's tuplet shift: dropping the key moves every element behind it one index down,
     /// and a tuplet still has to point at the same notes afterwards.
     @Test("removing a key shifts the tuplets behind it back, and undo restores their indices")
-    func removalShiftsTupletsBack() {
-        var original = fixture()
+    func removalShiftsTupletsBack() throws {
+        var original = try fixture()
         original.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
                 staffValue.measures[2].voices[0].tuplets = [
@@ -231,8 +231,8 @@ struct SetKeySignatureTests {
     }
 
     @Test("the score's opening signature cannot be removed")
-    func removeAtMeasureZeroIsRefused() {
-        let score = fixture()
+    func removeAtMeasureZeroIsRefused() throws {
+        let score = try fixture()
         let session = ScoreEditSession(score: score)
         #expect(!session.apply(.removeKeySignature(measureIndex: 0)))
         #expect(session.lastRefusal?.reason == .cannotRemoveInitialSignature)
@@ -241,8 +241,8 @@ struct SetKeySignatureTests {
     }
 
     @Test("removing where no explicit change exists resolves to nothing to apply")
-    func removeWhereNoChangeExistsPlansToNothing() {
-        let score = fixture()
+    func removeWhereNoChangeExistsPlansToNothing() throws {
+        let score = try fixture()
         let session = ScoreEditSession(score: score)
         #expect(!session.apply(.removeKeySignature(measureIndex: 1)))
         #expect(session.lastRefusal?.reason == .nothingToApply)

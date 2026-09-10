@@ -16,11 +16,20 @@ public struct CreateVoice: EditCommand {
     public let staff: StaffAddress
     public let measureIndex: Int
     public let voiceIndex: Int
+    private let restoredVoice: Voice?
 
     public init(staff: StaffAddress, measureIndex: Int, voiceIndex: Int) {
         self.staff = staff
         self.measureIndex = measureIndex
         self.voiceIndex = voiceIndex
+        restoredVoice = nil
+    }
+
+    init(restoring voice: Voice, staff: StaffAddress, measureIndex: Int, voiceIndex: Int) {
+        self.staff = staff
+        self.measureIndex = measureIndex
+        self.voiceIndex = voiceIndex
+        restoredVoice = voice
     }
 
     public var affectedLocation: VoiceElementID {
@@ -51,7 +60,7 @@ public struct CreateVoice: EditCommand {
         score.parts.updateValue(at: p) { partValue in
             partValue.staves.updateValue(at: s) { staffValue in
                 staffValue.measures[measureIndex].voices.append(
-                    Voice(elements: [.rest(duration: .measure)]),
+                    restoredVoice ?? MeasureStructure.freshMeasureRest(using: &ids),
                 )
             }
         }
@@ -89,11 +98,12 @@ struct RemoveVoice: EditCommand {
         else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
+        let removed = score.parts[p].staves[s].measures[measureIndex].voices[voiceIndex]
         score.parts.updateValue(at: p) { partValue in
             partValue.staves.updateValue(at: s) { staffValue in
                 staffValue.measures[measureIndex].voices.removeLast()
             }
         }
-        return CreateVoice(staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex)
+        return CreateVoice(restoring: removed, staff: staff, measureIndex: measureIndex, voiceIndex: voiceIndex)
     }
 }

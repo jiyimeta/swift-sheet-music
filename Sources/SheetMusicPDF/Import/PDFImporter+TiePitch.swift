@@ -149,6 +149,6 @@ extension PDFImporter {
             note.pitch = source.pitch
             note.tpc = source.tpc
         }
-        staff.measures[addr.measure].voices[addr.voice].elements[addr.element] = .chord(c)
+        staff.measures[addr.measure].voices[addr.voice].elements.updateValue(at: addr.element) { $0 = .chord(c) }
     }
 }

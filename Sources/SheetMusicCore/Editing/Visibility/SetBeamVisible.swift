@@ -62,7 +62,7 @@ public struct SetBeamVisible: EditCommand {
             // Clearing an orphaned flag: the self-inverse's `.notBeamed` precondition depends on sibling
             // elements, not on `location`, so it can go unmet at undo time even under LIFO ordering (see the
             // doc comment above). The pre-image has no such precondition.
-            return ReplaceVoiceElement(at: location, with: element)
+            return ReplaceVoiceElement(at: location, with: element, identity: .same)
         }
         return SetBeamVisible(at: location, visible: old)
     }

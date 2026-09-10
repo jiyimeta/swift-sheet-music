@@ -177,13 +177,14 @@ extension MidiRenderer {
                 idx -= 1
                 continue
             }
-            let stripped = candidate.elements.filter {
-                switch $0 {
+            let survivors = candidate.elements.indices.filter {
+                switch candidate.elements[$0] {
                 case .chord, .dynamic: true
                 default: false
                 }
             }
-            return Voice(elements: stripped)
+            let pairs = survivors.map { (candidate.elements.eid(at: $0), candidate.elements[$0]) }
+            return Voice(elements: IdentifiedArray(pairs))
         }
         return Voice(elements: [])
     }

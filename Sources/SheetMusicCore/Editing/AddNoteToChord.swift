@@ -58,7 +58,7 @@ public struct AddNoteToChord: EditCommand {
         }
         score[location] = .chord(chord)
         return ReplaceVoiceElement(
-            at: location, with: .chord(original),
+            at: location, with: .chord(original), identity: .same,
         )
     }
 }

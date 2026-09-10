@@ -922,7 +922,7 @@ extension LayoutEngine {
                             staffMidY: staffMidY,
                             metrics: metrics,
                             currentClef: currentClef,
-                            currentVoiceElements: voice.elements,
+                            currentVoiceElements: voice.elements.values,
                             currentVoiceElemIdx: voiceElemIdx,
                             currentTick: tickCursor,
                             measureDuration: measureDuration,

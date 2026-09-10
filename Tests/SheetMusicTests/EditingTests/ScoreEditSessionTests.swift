@@ -140,7 +140,8 @@ struct ScoreEditSessionTests {
         score[slot] = .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)]))
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[1].voices[0].elements.removeSubrange(1...)
+                let count = staffValue.measures[1].voices[0].elements.count
+                staffValue.measures[1].voices[0].elements.removeSubrange(1 ..< count)
             }
         }
         let session = ScoreEditSession(score: score)

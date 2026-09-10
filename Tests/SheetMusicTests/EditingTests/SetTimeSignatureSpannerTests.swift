@@ -28,8 +28,9 @@ struct SetTimeSignatureSpannerTests {
             let slot = measure == 0 ? 2 : 0
             score.parts.updateValue(at: 0) { partValue in
                 partValue.staves.updateValue(at: 0) { staffValue in
-                    staffValue.measures[measure].voices[0].elements[slot] =
-                        .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                    staffValue.measures[measure].voices[0].elements.updateValue(at: slot) {
+                        $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                    }
                 }
             }
         }
@@ -40,7 +41,7 @@ struct SetTimeSignatureSpannerTests {
     ///
     /// The point of this one is that a re-bar of bar 1 alone cannot divide evenly: 1920 ticks at 1440 a bar is two
     /// columns, so the region comes out 960 ticks LONGER and bar 2 onward moves later by that much.
-    private func changeAtBarTwo() -> Score {
+    private func changeAtBarTwo() throws -> Score {
         var score = Score.blank(BlankScoreTemplate(
             title: "T",
             parts: [.init(instrumentID: "piano", longName: "Piano", staves: [.init(clefType: "G")])],
@@ -50,17 +51,22 @@ struct SetTimeSignatureSpannerTests {
             let slot = measure == 0 ? 2 : 0
             score.parts.updateValue(at: 0) { partValue in
                 partValue.staves.updateValue(at: 0) { staffValue in
-                    staffValue.measures[measure].voices[0].elements[slot] =
-                        .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                    staffValue.measures[measure].voices[0].elements.updateValue(at: slot) {
+                        $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                    }
                 }
             }
         }
-        score.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[2].voices[0].elements
-                    .insert(.timeSignature(TimeSignature(numerator: 3, denominator: 4)), at: 0)
-            }
-        }
+        var slots = score.parts[0].staves[0].measures[2].voices[0].elements.voiceSlots()
+        slots.insert(
+            VoiceSlot(identity: .fresh, element: .timeSignature(TimeSignature(numerator: 3, denominator: 4))),
+            at: 0,
+        )
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 2, voiceIndex: 0, slots: slots,
+            tuplets: score.parts[0].staves[0].measures[2].voices[0].tuplets,
+        ).apply(to: &score)
         return score
     }
 
@@ -106,13 +112,15 @@ struct SetTimeSignatureSpannerTests {
     /// A spanner stores a MEASURE distance, so a re-bar that changes how many bars its span covers has to restate
     /// it — otherwise a hairpin drawn to bar 3 silently ends somewhere else.
     @Test("a spanner anchored before the region keeps its endpoint's tick across a re-bar")
-    func spannerAcrossRegionKeepsItsEndpoints() {
+    func spannerAcrossRegionKeepsItsEndpoints() throws {
         var original = uniform44()
-        original.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.append(Self.hairpin(measures: 3))
-            }
-        }
+        var slots = original.parts[0].staves[0].measures[0].voices[0].elements.voiceSlots()
+        slots.append(VoiceSlot(identity: .fresh, element: Self.hairpin(measures: 3)))
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, slots: slots,
+            tuplets: original.parts[0].staves[0].measures[0].voices[0].tuplets,
+        ).apply(to: &original)
         let endTick = Self.absoluteStart(of: 3, in: original)
 
         let session = ScoreEditSession(score: original)
@@ -135,13 +143,15 @@ struct SetTimeSignatureSpannerTests {
     /// a barline of the old grid can land mid-bar in the new one, and leaving the fraction at `nil` would put the
     /// end back on the nearest new barline instead — here, 960 ticks early.
     @Test("an outside-anchored endpoint landing mid-bar gets its fractions offset re-derived")
-    func outsideAnchoredEndpointLandingMidBarGetsAFraction() {
+    func outsideAnchoredEndpointLandingMidBarGetsAFraction() throws {
         var original = uniform44()
-        original.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.append(Self.hairpin(measures: 3))
-            }
-        }
+        var slots = original.parts[0].staves[0].measures[0].voices[0].elements.voiceSlots()
+        slots.append(VoiceSlot(identity: .fresh, element: Self.hairpin(measures: 3)))
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, slots: slots,
+            tuplets: original.parts[0].staves[0].measures[0].voices[0].tuplets,
+        ).apply(to: &original)
         let endTick = Self.absoluteStart(of: 3, in: original)
 
         let session = ScoreEditSession(score: original)
@@ -166,14 +176,16 @@ struct SetTimeSignatureSpannerTests {
     /// element into whichever new column holds its tick, so the anchor lands right while the offset still counts
     /// bars of the OLD grid — and for a volta that is the span of a repeat ending, which changes what plays.
     @Test("a spanner anchored inside the region has its endpoint restated too")
-    func spannerAnchoredInsideRegionIsRestated() {
+    func spannerAnchoredInsideRegionIsRestated() throws {
         var original = uniform44()
         // At the head of bar 1, so its own tick is the bar's — the anchor stays on the new bar 1.
-        original.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[1].voices[0].elements.insert(Self.hairpin(measures: 2), at: 0)
-            }
-        }
+        var slots = original.parts[0].staves[0].measures[1].voices[0].elements.voiceSlots()
+        slots.insert(VoiceSlot(identity: .fresh, element: Self.hairpin(measures: 2)), at: 0)
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 1, voiceIndex: 0, slots: slots,
+            tuplets: original.parts[0].staves[0].measures[1].voices[0].tuplets,
+        ).apply(to: &original)
         let endTick = Self.absoluteStart(of: 3, in: original)
 
         let session = ScoreEditSession(score: original)
@@ -195,18 +207,20 @@ struct SetTimeSignatureSpannerTests {
     /// The same, the other way round: longer bars mean fewer of them, so the offset has to SHRINK — and this one
     /// lands mid-bar, which pins the inside-anchored branch's fraction derivation as well.
     @Test("a spanner anchored inside the region survives a re-bar to longer measures")
-    func spannerAnchoredInsideRegionSurvivesAGrow() {
+    func spannerAnchoredInsideRegionSurvivesAGrow() throws {
         var original = Score.blank(BlankScoreTemplate(
             title: "T",
             parts: [.init(instrumentID: "piano", longName: "Piano", staves: [.init(clefType: "G")])],
             concertKey: 0, timeNumerator: 3, timeDenominator: 4, measureCount: 4,
         ))
         // After the key and time signature, before the bar's rest, so the anchor's tick is 0.
-        original.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.insert(Self.hairpin(measures: 3), at: 2)
-            }
-        }
+        var slots = original.parts[0].staves[0].measures[0].voices[0].elements.voiceSlots()
+        slots.insert(VoiceSlot(identity: .fresh, element: Self.hairpin(measures: 3)), at: 2)
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, slots: slots,
+            tuplets: original.parts[0].staves[0].measures[0].voices[0].tuplets,
+        ).apply(to: &original)
         let endTick = Self.absoluteStart(of: 3, in: original)
 
         let session = ScoreEditSession(score: original)
@@ -237,13 +251,15 @@ struct SetTimeSignatureSpannerTests {
     /// Both fixtures here re-bar bar 1 alone from 4/4 to 3/4: 1920 ticks becomes two 1440-tick columns, 960 ticks
     /// of padding, and the explicit 3/4 at bar 2 is what keeps the region that short.
     @Test("an outside-anchored endpoint past a padded region follows the bar it named, not its old tick")
-    func outsideAnchoredEndpointPastPaddedRegionFollowsItsBar() {
-        var original = changeAtBarTwo()
-        original.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.append(Self.hairpin(measures: 2))
-            }
-        }
+    func outsideAnchoredEndpointPastPaddedRegionFollowsItsBar() throws {
+        var original = try changeAtBarTwo()
+        var slots = original.parts[0].staves[0].measures[0].voices[0].elements.voiceSlots()
+        slots.append(VoiceSlot(identity: .fresh, element: Self.hairpin(measures: 2)))
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, slots: slots,
+            tuplets: original.parts[0].staves[0].measures[0].voices[0].tuplets,
+        ).apply(to: &original)
         let oldEndBar = 2
         let oldMeasureCount = Self.measureCount(original)
 
@@ -266,14 +282,16 @@ struct SetTimeSignatureSpannerTests {
     /// The same defect reached through the inside-anchored path, which shares the one derivation: the anchor is in
     /// the region being padded and the endpoint is past it, so both ends move and only the bar identity survives.
     @Test("an inside-anchored endpoint past a padded region follows the bar it named")
-    func insideAnchoredEndpointPastPaddedRegionFollowsItsBar() {
-        var original = changeAtBarTwo()
+    func insideAnchoredEndpointPastPaddedRegionFollowsItsBar() throws {
+        var original = try changeAtBarTwo()
         // At the head of bar 1 — the bar the re-bar splits in two — reaching the downbeat of bar 2.
-        original.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[1].voices[0].elements.insert(Self.hairpin(measures: 1), at: 0)
-            }
-        }
+        var slots = original.parts[0].staves[0].measures[1].voices[0].elements.voiceSlots()
+        slots.insert(VoiceSlot(identity: .fresh, element: Self.hairpin(measures: 1)), at: 0)
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 1, voiceIndex: 0, slots: slots,
+            tuplets: original.parts[0].staves[0].measures[1].voices[0].tuplets,
+        ).apply(to: &original)
         let oldEndBar = 2
         let oldMeasureCount = Self.measureCount(original)
 
@@ -299,15 +317,17 @@ struct SetTimeSignatureSpannerTests {
     /// inside its own bar, which stays true however that bar is re-cut. Deriving it from a tick would resolve it
     /// to the start of the anchor's OLD bar and hand back a backwards offset.
     @Test("a spanner with no endpoint offsets at all is left exactly as it is")
-    func spannerWithoutOffsetsIsLeftAlone() {
+    func spannerWithoutOffsetsIsLeftAlone() throws {
         var original = uniform44()
         // Mid-bar on purpose: after the whole note, so the anchor's tick is a new barline's and a tick-derived
         // endpoint would land in an EARLIER column than the anchor.
-        original.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[1].voices[0].elements.append(Self.hairpin(measures: 0))
-            }
-        }
+        var slots = original.parts[0].staves[0].measures[1].voices[0].elements.voiceSlots()
+        slots.append(VoiceSlot(identity: .fresh, element: Self.hairpin(measures: 0)))
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 1, voiceIndex: 0, slots: slots,
+            tuplets: original.parts[0].staves[0].measures[1].voices[0].tuplets,
+        ).apply(to: &original)
 
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setTimeSignature(measureIndex: 1, numerator: 2, denominator: 4)))
@@ -327,15 +347,20 @@ struct SetTimeSignatureSpannerTests {
     /// derivation would come back with a perfectly plausible offset 0 and rewrite the element to say `nil`;
     /// elsewhere in the bar the very same input yields a negative offset.
     @Test("a zero-valued fractions offset counts as no endpoint, like an absent one")
-    func spannerWithZeroFractionIsLeftAlone() {
+    func spannerWithZeroFractionIsLeftAlone() throws {
         var original = uniform44()
-        original.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[1].voices[0].elements.insert(
-                    Self.hairpin(measures: 0, fractions: Fraction(numerator: 0, denominator: 1)), at: 0,
-                )
-            }
-        }
+        var slots = original.parts[0].staves[0].measures[1].voices[0].elements.voiceSlots()
+        slots.insert(
+            VoiceSlot(identity: .fresh, element: Self.hairpin(
+                measures: 0, fractions: Fraction(numerator: 0, denominator: 1),
+            )),
+            at: 0,
+        )
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 1, voiceIndex: 0, slots: slots,
+            tuplets: original.parts[0].staves[0].measures[1].voices[0].tuplets,
+        ).apply(to: &original)
 
         let session = ScoreEditSession(score: original)
         #expect(session.apply(.setTimeSignature(measureIndex: 1, numerator: 2, denominator: 4)))

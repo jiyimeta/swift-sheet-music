@@ -74,7 +74,7 @@ extension RebarPlanner {
         var kind: Kind
         var tick: Int
         var ticks: Int
-        var elements: [VoiceElement]
+        var elements: [VoiceSlot]
         /// The PRE-EDIT bar this came from — what a refusal points the host at.
         var measureIndex: Int
     }
@@ -82,6 +82,7 @@ extension RebarPlanner {
     struct BarLineMarker {
         var tick: Int
         var element: VoiceElement
+        var eid: EID
         var measureIndex: Int
     }
 
@@ -121,9 +122,9 @@ extension RebarPlanner {
                voice.elements.indices.contains(tuplet.endIndex),
                tuplet.startIndex <= tuplet.endIndex
             {
-                let members = Array(voice.elements[tuplet.startIndex ... tuplet.endIndex])
+                let members = Array(voice.elements.voiceSlots()[tuplet.startIndex ... tuplet.endIndex])
                 let ticks = members.reduce(0) {
-                    $0 + ($1.tickCount(division: division, in: measureDuration) ?? 0)
+                    $0 + ($1.element.tickCount(division: division, in: measureDuration) ?? 0)
                 }
                 flat.items.append(StreamItem(
                     kind: .tuplet(normalNotes: tuplet.normalNotes, actualNotes: tuplet.actualNotes),
@@ -134,6 +135,8 @@ extension RebarPlanner {
                 continue
             }
             let element = voice.elements[index]
+            let slot = VoiceSlot(identity: .keep(voice.elements.eid(at: index)), element: element)
+            let eid = voice.elements.eid(at: index)
             index += 1
             switch element {
             case .timeSignature:
@@ -141,7 +144,7 @@ extension RebarPlanner {
                 continue
             case .barLine:
                 flat.barLines.append(BarLineMarker(
-                    tick: cursor, element: element, measureIndex: measureIndex,
+                    tick: cursor, element: element, eid: eid, measureIndex: measureIndex,
                 ))
                 continue
             case let .locationShift(delta):
@@ -155,13 +158,13 @@ extension RebarPlanner {
             if let ticks = element.tickCount(division: division, in: measureDuration) {
                 flat.items.append(StreamItem(
                     kind: .timed, tick: cursor, ticks: ticks,
-                    elements: [element], measureIndex: measureIndex,
+                    elements: [slot], measureIndex: measureIndex,
                 ))
                 cursor += ticks
             } else {
                 flat.items.append(StreamItem(
                     kind: .untimed, tick: cursor, ticks: 0,
-                    elements: [element], measureIndex: measureIndex,
+                    elements: [slot], measureIndex: measureIndex,
                 ))
             }
         }
@@ -174,7 +177,7 @@ extension RebarPlanner {
     struct VoiceEmitter {
         let geometry: Geometry
         let voiceIndex: Int
-        private var elements: [[VoiceElement]]
+        private var elements: [[VoiceSlot]]
         private var tuplets: [[Tuplet]]
         private var cursors: [Int]
         private var present: [Bool]
@@ -210,16 +213,16 @@ extension RebarPlanner {
                     forTicks: geometry.columnEnd(column) - cursors[column],
                     rtickStart: cursors[column] - geometry.columnStart(column),
                     division: geometry.division,
-                ))
+                ).map { VoiceSlot(identity: .fresh, element: $0) })
                 cursors[column] = geometry.columnEnd(column)
                 present[column] = true
             }
         }
 
-        func voice(forColumn column: Int) -> Voice? {
+        func slots(forColumn column: Int) -> (elements: [VoiceSlot], tuplets: [Tuplet])? {
             guard voiceIndex == 0 || present[column] else { return nil }
             let built = promotedToMeasureRest(column: column) ?? elements[column]
-            return Voice(elements: built, tuplets: tuplets[column])
+            return (built, tuplets[column])
         }
 
         // MARK: Placement
@@ -230,7 +233,7 @@ extension RebarPlanner {
             // A note the new barring leaves alone is left alone. Only a note the new grid actually cuts is
             // re-spelled, so re-barring never re-writes rhythms it didn't have to touch — the exception is
             // a `.measure` rest, whose length is the BAR's and so has to be restated against the new one.
-            if segments.count == 1, !RebarPlanner.hasMeasureDuration(item.elements[0]) {
+            if segments.count == 1, !RebarPlanner.hasMeasureDuration(item.elements[0].element) {
                 _ = append(item.elements, at: item.tick, ticks: item.ticks, in: first.column)
                 return
             }
@@ -243,7 +246,10 @@ extension RebarPlanner {
             }
             // ONE chain over every piece, not one per column: the ties at the interior joints are the
             // chain's, and re-starting it at each barline would clear the head's incoming tie each time.
-            let pieces = RebarPlanner.pieces(of: item.elements[0], durations: perSegment.flatMap(\.self))
+            let pieces = RebarPlanner.pieces(of: item.elements[0].element, durations: perSegment.flatMap(\.self))
+                .enumerated().map { index, element in
+                    VoiceSlot(identity: index == 0 ? item.elements[0].identity : .fresh, element: element)
+                }
             var written = 0
             for (index, segment) in segments.enumerated() {
                 let count = perSegment[index].count
@@ -278,11 +284,15 @@ extension RebarPlanner {
             let column = geometry.column(containing: item.tick)
             let delta = item.tick - cursors[column]
             if delta != 0 {
-                elements[column].append(.locationShift(delta: geometry.fraction(ofTicks: delta)))
+                elements[column].append(VoiceSlot(
+                    identity: .fresh, element: .locationShift(delta: geometry.fraction(ofTicks: delta)),
+                ))
             }
             elements[column].append(contentsOf: item.elements)
             if delta != 0 {
-                elements[column].append(.locationShift(delta: geometry.fraction(ofTicks: -delta)))
+                elements[column].append(VoiceSlot(
+                    identity: .fresh, element: .locationShift(delta: geometry.fraction(ofTicks: -delta)),
+                ))
             }
             present[column] = true
         }
@@ -290,7 +300,7 @@ extension RebarPlanner {
         /// Appends timed content at `tick`, closing whatever distance separates it from the column's cursor
         /// first. Returns where the content landed, so a tuplet can name its own members.
         private mutating func append(
-            _ pieces: [VoiceElement], at tick: Int, ticks: Int, in column: Int,
+            _ pieces: [VoiceSlot], at tick: Int, ticks: Int, in column: Int,
         ) -> Range<Int> {
             closeGap(to: tick, in: column)
             let start = elements[column].count
@@ -311,25 +321,29 @@ extension RebarPlanner {
                     forTicks: tick - cursor,
                     rtickStart: cursor - geometry.columnStart(column),
                     division: geometry.division,
-                ))
+                ).map { VoiceSlot(identity: .fresh, element: $0) })
             } else {
-                elements[column].append(.locationShift(delta: geometry.fraction(ofTicks: tick - cursor)))
+                elements[column].append(VoiceSlot(
+                    identity: .fresh, element: .locationShift(delta: geometry.fraction(ofTicks: tick - cursor)),
+                ))
             }
             cursors[column] = tick
         }
 
         /// Rule 5's tail: a new bar covered end to end by rests is one measure rest, whatever the rests
         /// beat-alignment produced. Signatures at the head stay; anything else in the bar blocks it.
-        private func promotedToMeasureRest(column: Int) -> [VoiceElement]? {
+        private func promotedToMeasureRest(column: Int) -> [VoiceSlot]? {
             guard tuplets[column].isEmpty else { return nil }
-            let prefix = elements[column].prefix(while: MeasureStructure.isLeadingSignature).count
+            let prefix = elements[column].prefix { MeasureStructure.isLeadingSignature($0.element) }.count
             let body = elements[column].dropFirst(prefix)
-            guard !body.isEmpty, body.allSatisfy(\.isRest) else { return nil }
+            guard !body.isEmpty, body.allSatisfy(\.element.isRest) else { return nil }
             let ticks = body.reduce(0) {
-                $0 + ($1.tickCount(division: geometry.division, in: geometry.newDuration) ?? 0)
+                $0 + ($1.element.tickCount(division: geometry.division, in: geometry.newDuration) ?? 0)
             }
             guard ticks == geometry.newTicks else { return nil }
-            return Array(elements[column].prefix(prefix)) + [.rest(duration: .measure)]
+            return Array(elements[column].prefix(prefix)) + [VoiceSlot(
+                identity: body.first?.identity ?? .fresh, element: .rest(duration: .measure),
+            )]
         }
     }
 

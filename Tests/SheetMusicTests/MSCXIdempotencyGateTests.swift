@@ -207,7 +207,7 @@ struct MSCXIdempotencyTests {
             for elementIndex in elements.indices {
                 guard case var .chord(chord) = elements[elementIndex], chord.beamVisible else { continue }
                 chord.beamVisible = false
-                measure.voices[voiceIndex].elements[elementIndex] = .chord(chord)
+                measure.voices[voiceIndex].elements.updateValue(at: elementIndex) { $0 = .chord(chord) }
                 return 1
             }
         }

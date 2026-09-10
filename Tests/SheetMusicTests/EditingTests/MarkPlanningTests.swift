@@ -88,9 +88,11 @@ struct MarkPlanningTests {
         var authored = EditingFixtures.parityFixture()
         authored.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[3].voices[0].elements.insert(
+                var elements = staffValue.measures[3].voices[0].elements.values
+                elements.insert(
                     .harmony(Harmony(name: "m7", rootTpc: 13)), at: 0,
                 )
+                staffValue.measures[3].voices[0].elements = IdentifiedArray(elements)
             }
         }
         let second = ScoreEditSession(score: authored)

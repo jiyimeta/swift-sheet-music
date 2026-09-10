@@ -30,7 +30,7 @@ private func ambitusScore(_ inner: String) throws -> Score {
 }
 
 private func firstAmbitusVoiceElements(in score: Score) -> [VoiceElement] {
-    score.parts[0].staves[0].measures[0].voices[0].elements
+    score.parts[0].staves[0].measures[0].voices[0].elements.values
 }
 
 private func ambitusVoiceElements(_ inner: String) throws -> [VoiceElement] {

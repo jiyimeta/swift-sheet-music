@@ -75,11 +75,13 @@ struct InsertMeasureTests {
     func spannerOffsetStretches() throws {
         var score = twoBarScore()
         let spanner = Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 1)
-        score.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.append(.spanner(spanner))
-            }
-        }
+        var slots = score.parts[0].staves[0].measures[0].voices[0].elements.voiceSlots()
+        slots.append(VoiceSlot(identity: .fresh, element: .spanner(spanner)))
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, slots: slots,
+            tuplets: score.parts[0].staves[0].measures[0].voices[0].tuplets,
+        ).apply(to: &score)
 
         let inverse = try InsertMeasure(measureIndex: 1).apply(to: &score)
 
@@ -108,11 +110,13 @@ struct InsertMeasureTests {
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])),
         ]
         // Bar 0 was [key, time, rest]; replace the rest (index 2) with 3 triplet members.
-        score.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.replaceSubrange(2 ..< 3, with: members)
-            }
-        }
+        var slots = score.parts[0].staves[0].measures[0].voices[0].elements.voiceSlots()
+        slots.replaceSubrange(2 ..< 3, with: members.map { VoiceSlot(identity: .fresh, element: $0) })
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, slots: slots,
+            tuplets: score.parts[0].staves[0].measures[0].voices[0].tuplets,
+        ).apply(to: &score)
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
                 staffValue.measures[0].voices[0].tuplets = [

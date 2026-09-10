@@ -17,8 +17,9 @@ struct NextChordProbeTests {
         // m0: [ts, C4, D4, r, r] -> [ts, C4, dynamic, D4, r, r]
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements
-                    .insert(.dynamic(Dynamic(subtype: "p", velocity: 49)), at: 2)
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(.dynamic(Dynamic(subtype: "p", velocity: 49)), at: 2)
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
             }
         }
         let next = NextChordProbe.nextTimedElement(after: Self.slot(0, 1), in: score)

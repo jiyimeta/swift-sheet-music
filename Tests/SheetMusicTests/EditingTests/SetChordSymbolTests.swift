@@ -12,7 +12,7 @@ struct SetChordSymbolTests {
     }
 
     private static func elements(_ score: Score, _ measure: Int) -> [VoiceElement] {
-        score.parts[0].staves[0].measures[measure].voices[0].elements
+        score.parts[0].staves[0].measures[measure].voices[0].elements.values
     }
 
     @Test("a symbol is inserted right before its chord, with nil tpcs")
@@ -40,12 +40,14 @@ struct SetChordSymbolTests {
         var score = EditingFixtures.parityFixture()
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.insert(
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(
                     .harmony(Harmony(
                         name: "m7", rootTpc: 13, bassTpc: 12, leftParen: true, rightParen: true, offsetX: 1,
                     )),
                     at: 1,
                 )
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
             }
         }
         // [ts, harmony, C4, D4, r, r]
@@ -60,9 +62,11 @@ struct SetChordSymbolTests {
         var score = EditingFixtures.parityFixture()
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.insert(
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(
                     contentsOf: [.harmony(Harmony(name: "C")), .dynamic(Dynamic(subtype: "p", velocity: 49))], at: 1,
                 )
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
             }
         }
         // [ts, harmony, dyn, C4, D4, r, r]

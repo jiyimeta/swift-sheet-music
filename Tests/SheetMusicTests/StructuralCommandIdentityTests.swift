@@ -22,6 +22,8 @@ struct StructuralCommandIdentityTests {
         var score = score()
         var ids = EIDAllocator(actor: 42)
         score.assignMissingIDs(using: &ids)
+        let counter = ids.counter
+        #expect(counter == 23)
         let originalIDs = partIDs(score)
         let inverse = try MovePart(from: from, to: to).apply(to: &score, ids: &ids)
         #expect(score.parts.map(\.id) == expected)
@@ -31,7 +33,7 @@ struct StructuralCommandIdentityTests {
         #expect(score.parts.map(\.id) == ["A", "B", "C", "D"])
         #expect(partIDs(score) == originalIDs)
         #expect(Set(partIDs(score)) == Set(originalIDs))
-        #expect(ids.counter == 11)
+        #expect(ids.counter == counter)
     }
 
     @Test func forwardMoveCarriesIdentityAndItsInverseRestoresIt() throws {
@@ -50,19 +52,23 @@ struct StructuralCommandIdentityTests {
         var score = score()
         var ids = EIDAllocator(actor: 42)
         score.assignMissingIDs(using: &ids)
+        let counter = ids.counter
+        #expect(counter == 23)
         let original = columnIDs(score)
         let inverse = try DeleteMeasure(measureIndex: 1).apply(to: &score, ids: &ids)
         #expect(columnIDs(score) == [original[0], original[2]])
         try inverse.apply(to: &score, ids: &ids)
         #expect(columnIDs(score) == original)
         #expect(Set(columnIDs(score)) == Set(original))
-        #expect(ids.counter == 11)
+        #expect(ids.counter == counter)
     }
 
     @Test func removeInverseRestoresPartIdentifiersInOrderAndAsASet() throws {
         var score = score()
         var ids = EIDAllocator(actor: 42)
         score.assignMissingIDs(using: &ids)
+        let counter = ids.counter
+        #expect(counter == 23)
         let original = partIDs(score)
         let inverse = try RemovePart(partIndex: 1).apply(to: &score, ids: &ids)
         #expect(partIDs(score) == [original[0], original[2], original[3]])
@@ -70,19 +76,22 @@ struct StructuralCommandIdentityTests {
         #expect(score.parts.map(\.id) == ["A", "B", "C", "D"])
         #expect(partIDs(score) == original)
         #expect(Set(partIDs(score)) == Set(original))
-        #expect(ids.counter == 11)
+        #expect(ids.counter == counter)
     }
 
-    @Test func blankInsertMintsOnlyTheNewColumn() throws {
+    @Test func blankInsertMintsTheNewColumnAndItsRests() throws {
         var score = score()
         var ids = EIDAllocator(actor: 42)
         score.assignMissingIDs(using: &ids)
+        let counter = ids.counter
+        #expect(counter == 23)
         let original = columnIDs(score)
         try InsertMeasure(measureIndex: 1).apply(to: &score, ids: &ids)
-        let inserted = EID(first: 42, second: 12)
+        let inserted = EID(first: 42, second: counter + 5)
         #expect(columnIDs(score) == [original[0], inserted, original[1], original[2]])
         #expect(!Set(original).contains(inserted))
-        #expect(ids.counter == 12)
+        // Four staff rests are minted before the new system column.
+        #expect(ids.counter == counter + 5)
     }
 
     @Test func deleteInverseKeepsAnAbsentSystemLaneAbsent() throws {
@@ -90,12 +99,14 @@ struct StructuralCommandIdentityTests {
         score.systemMeasures = []
         var ids = EIDAllocator(actor: 42)
         score.assignMissingIDs(using: &ids)
+        let counter = ids.counter
+        #expect(counter == 20)
         let inverse = try DeleteMeasure(measureIndex: 1).apply(to: &score, ids: &ids)
         #expect(score.systemMeasures.isEmpty)
         #expect(MeasureStructure.measureCount(of: score) == 2)
         try inverse.apply(to: &score, ids: &ids)
         #expect(score.systemMeasures.isEmpty)
         #expect(MeasureStructure.measureCount(of: score) == 3)
-        #expect(ids.counter == 8)
+        #expect(ids.counter == counter)
     }
 }

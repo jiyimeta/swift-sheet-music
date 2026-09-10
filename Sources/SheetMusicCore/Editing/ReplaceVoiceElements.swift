@@ -12,21 +12,34 @@ public struct ReplaceVoiceElements: EditCommand {
     public let staff: StaffAddress
     public let measureIndex: Int
     public let voiceIndex: Int
-    public let elements: [VoiceElement]
+    public let slots: [VoiceSlot]
     public let tuplets: [Tuplet]
 
     public init(
         staff: StaffAddress,
         measureIndex: Int,
         voiceIndex: Int,
-        elements: [VoiceElement],
+        slots: [VoiceSlot],
         tuplets: [Tuplet] = [],
     ) {
         self.staff = staff
         self.measureIndex = measureIndex
         self.voiceIndex = voiceIndex
-        self.elements = elements
+        self.slots = slots
         self.tuplets = tuplets
+    }
+
+    public init(
+        staff: StaffAddress, measureIndex: Int, voiceIndex: Int,
+        elements: IdentifiedArray<VoiceElement>, tuplets: [Tuplet] = [],
+    ) {
+        self.init(
+            staff: staff,
+            measureIndex: measureIndex,
+            voiceIndex: voiceIndex,
+            slots: elements.voiceSlots(),
+            tuplets: tuplets,
+        )
     }
 
     public var affectedLocation: VoiceElementID {
@@ -61,6 +74,7 @@ public struct ReplaceVoiceElements: EditCommand {
         }
         let priorVoice = score.parts[p].staves[s]
             .measures[measureIndex].voices[voiceIndex]
+        let elements = VoiceSlot.materialize(slots, using: &ids)
         score.parts.updateValue(at: p) { partValue in
             partValue.staves.updateValue(at: s) { staffValue in
                 staffValue

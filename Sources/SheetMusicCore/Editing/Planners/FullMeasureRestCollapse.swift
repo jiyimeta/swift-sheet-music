@@ -40,28 +40,31 @@ public enum FullMeasureRestCollapse {
             if case let .chord(chord) = element, !chord.notes.isEmpty { return nil }
         }
 
-        var elements: [VoiceElement] = []
+        var elements: [VoiceSlot] = []
         var restElementIndex: Int?
-        for element in voice.elements {
+        for (index, element) in voice.elements.enumerated() {
             guard case .chord = element else {
-                elements.append(element)
+                elements.append(VoiceSlot(identity: .keep(voice.elements.eid(at: index)), element: element))
                 continue
             }
             if restElementIndex == nil {
                 restElementIndex = elements.count
-                elements.append(.rest(duration: .measure))
+                elements.append(VoiceSlot(
+                    identity: element.isRest ? .keep(voice.elements.eid(at: index)) : .fresh,
+                    element: .rest(duration: .measure),
+                ))
             }
         }
         guard let restElementIndex else { return nil }
         // Nothing to do when the measure already reads as one full-measure rest.
-        guard elements != voice.elements || !voice.tuplets.isEmpty else { return nil }
+        guard elements.map(\.element) != voice.elements.values || !voice.tuplets.isEmpty else { return nil }
 
         return Plan(
             command: ReplaceVoiceElements(
                 staff: location.staff,
                 measureIndex: location.measureIndex,
                 voiceIndex: location.voiceIndex,
-                elements: elements,
+                slots: elements,
                 tuplets: [],
             ),
             restElementIndex: restElementIndex,

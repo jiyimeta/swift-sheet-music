@@ -155,7 +155,7 @@ extension Score {
                     var mutated = chord
                     mutated.notes[ref.note].accidental = nil
                     mutated.notes[ref.note].accidentalBracket = .none
-                    measure.voices[ref.voice].elements[ref.element] = .chord(mutated)
+                    measure.voices[ref.voice].elements.updateValue(at: ref.element) { $0 = .chord(mutated) }
                 }
                 // Otherwise the accidental is needed, USER-forced, or
                 // non-standard — keep it.

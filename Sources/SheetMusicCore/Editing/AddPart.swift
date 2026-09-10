@@ -100,8 +100,7 @@ public struct AddPart: EditCommand {
         }
 
         if let restoredPart {
-            var restored = restoredPart.part
-            restored.staves.assignMissingIDs(using: &ids)
+            let restored = restoredPart.part
             let anchor = partIndex == 0 ? nil : score.parts.eid(at: partIndex - 1)
             score.parts.insert(restored, after: anchor, id: restoredPart.eid)
             restore(&score)
@@ -111,6 +110,15 @@ public struct AddPart: EditCommand {
         guard let plan else { throw Self.refused(.emptyPayload) }
         var part = Self.builtPart(from: plan, joining: score)
         part.staves.assignMissingIDs(using: &ids)
+        for staffIndex in part.staves.indices {
+            part.staves.updateValue(at: staffIndex) { staff in
+                for measureIndex in staff.measures.indices {
+                    for voiceIndex in staff.measures[measureIndex].voices.indices {
+                        staff.measures[measureIndex].voices[voiceIndex].elements.assignMissingIDs(using: &ids)
+                    }
+                }
+            }
+        }
         Self.growBracketsCrossing(partIndex, in: &score, byStaves: part.staves.count)
         Self.restampSystemElements(in: &score, fromPartIndex: partIndex)
         let anchor = partIndex == 0 ? nil : score.parts.eid(at: partIndex - 1)

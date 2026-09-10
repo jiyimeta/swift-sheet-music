@@ -63,7 +63,10 @@ public struct SplitRest: EditCommand {
         )
 
         var elements = voice.elements
-        elements.replaceSubrange(location.elementIndex ... location.elementIndex, with: head + tail)
+        let pieces = (head + tail).enumerated().map { index, element in
+            (index == 0 ? voice.elements.eid(at: location.elementIndex) : ids.next(), element)
+        }
+        elements.replaceSubrange(location.elementIndex ..< (location.elementIndex + 1), with: pieces)
         // One element became `head + tail`, so every tuplet that starts after it has to move right by the
         // difference or it would keep pointing at the elements the splice pushed along.
         let tuplets = MeasureStructure.shiftTuplets(

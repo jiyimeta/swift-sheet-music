@@ -146,7 +146,7 @@ extension MidiImporter {
                         notesArray[idx].glissando = att.glissando
                     }
                     chord.notes = ChordNotes(notesArray)
-                    voiceVal.elements[ei] = .chord(chord)
+                    voiceVal.elements.updateValue(at: ei) { $0 = .chord(chord) }
                     break
                 }
             }
@@ -298,7 +298,7 @@ extension MidiImporter {
                 element = nil
             }
             if let el = element, var voice = staff.measures[measureIdx].voices.first {
-                voice.elements.insert(el, at: 0)
+                voice.elements = IdentifiedArray([el] + voice.elements.values)
                 // Voice.tuplets references chord indices in
                 // `elements`. Inserting at index 0 shifts every
                 // subsequent index by one — bump the tuplet ranges

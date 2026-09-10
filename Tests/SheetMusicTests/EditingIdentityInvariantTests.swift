@@ -14,11 +14,14 @@ struct EditingIdentityInvariantTests {
     @Test func shrinkingRebarUndoRestoresColumnIdentifiersInOrderAndAsASet() throws {
         let editor = ScoreEditor(score: score())
         let original = editor.score.systemMeasures.indices.map { editor.score.systemMeasures.eid(at: $0) }
-        let counter = editor.idAllocator.counter
+        let initialCounter = editor.idAllocator.counter
         try editor.apply(SetTimeSignature(measureIndex: 0, numerator: 8, denominator: 4))
         // Two whole-note bars become one 8/4 bar; the first column survives.
         #expect(editor.score.systemMeasures.count == 1)
         #expect(editor.score.systemMeasures.eid(at: 0) == original[0])
+        let counter = editor.idAllocator.counter
+        // The collapsed rest keeps its onset ID; only the new time signature is minted.
+        #expect(counter == initialCounter + 1)
         try editor.undo()
         let restored = editor.score.systemMeasures.indices.map { editor.score.systemMeasures.eid(at: $0) }
         // Restoration reuses both original IDs and consumes no allocator counter.

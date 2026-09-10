@@ -102,8 +102,10 @@ public struct CreateTuplet: EditCommand {
 
         var newElements = voice.elements
         newElements.replaceSubrange(
-            location.elementIndex ... location.elementIndex,
-            with: members,
+            location.elementIndex ..< (location.elementIndex + 1),
+            with: members.enumerated().map { index, element in
+                (index == 0 ? voice.elements.eid(at: location.elementIndex) : ids.next(), element)
+            },
         )
 
         // Tuplets entirely past the spliced region shift by the

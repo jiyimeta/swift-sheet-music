@@ -101,19 +101,33 @@ public struct Score: Sendable, Equatable {
     }
 
     /// Whether any currently identified collection contains an unassigned slot.
-    /// Covers parts, their staves, and systemMeasures. P2b/P3 extend this
-    /// traversal to the remaining identified collections.
+    /// Covers parts, their staves, every voice slot, and systemMeasures.
     public var hasUnassignedIDs: Bool {
-        parts.hasUnassignedIDs || parts.contains { $0.staves.hasUnassignedIDs } || systemMeasures.hasUnassignedIDs
+        parts.hasUnassignedIDs || systemMeasures.hasUnassignedIDs || parts.contains { part in
+            part.staves.hasUnassignedIDs || part.staves.contains { staff in
+                staff.measures.contains { $0.voices.contains { $0.elements.hasUnassignedIDs } }
+            }
+        }
     }
 
     /// Fills only missing IDs on entry, preserving all assigned identifiers.
-    /// P2b/P3 extend this traversal alongside hasUnassignedIDs as they identify
-    /// voice contents and chord notes.
+    /// Includes every voice slot; later phases extend this alongside hasUnassignedIDs
+    /// when they identify nested collections.
     public mutating func assignMissingIDs(using ids: inout EIDAllocator) {
         parts.assignMissingIDs(using: &ids)
         for index in parts.indices {
-            parts.updateValue(at: index) { $0.staves.assignMissingIDs(using: &ids) }
+            parts.updateValue(at: index) { part in
+                part.staves.assignMissingIDs(using: &ids)
+                for staffIndex in part.staves.indices {
+                    part.staves.updateValue(at: staffIndex) { staff in
+                        for measureIndex in staff.measures.indices {
+                            for voiceIndex in staff.measures[measureIndex].voices.indices {
+                                staff.measures[measureIndex].voices[voiceIndex].elements.assignMissingIDs(using: &ids)
+                            }
+                        }
+                    }
+                }
+            }
         }
         systemMeasures.assignMissingIDs(using: &ids)
     }
@@ -243,9 +257,9 @@ private func stripPreservedMarkup(from measure: inout Measure) {
             return false
         }
         for elementIndex in measure.voices[voiceIndex].elements.indices {
-            measure.voices[voiceIndex].elements[elementIndex] = strippingPreservedMarkup(
-                from: measure.voices[voiceIndex].elements[elementIndex],
-            )
+            measure.voices[voiceIndex].elements.updateValue(at: elementIndex) {
+                $0 = strippingPreservedMarkup(from: $0)
+            }
         }
     }
 }

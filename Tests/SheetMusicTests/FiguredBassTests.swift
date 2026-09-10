@@ -32,7 +32,7 @@ private func figuredBassScore(_ inner: String) throws -> Score {
 }
 
 private func firstFiguredBassVoiceElements(in score: Score) -> [VoiceElement] {
-    score.parts[0].staves[0].measures[0].voices[0].elements
+    score.parts[0].staves[0].measures[0].voices[0].elements.values
 }
 
 private func figuredBassVoiceElements(_ inner: String) throws -> [VoiceElement] {

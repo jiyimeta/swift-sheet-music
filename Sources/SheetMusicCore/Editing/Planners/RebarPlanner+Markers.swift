@@ -17,13 +17,13 @@ extension RebarPlanner {
         for marker in barLines {
             // A barline written at the run's own start opens the first column — nothing has moved under it.
             if marker.tick <= 0 {
-                insert(marker.element, atHeadOf: &columns[0])
+                insert(marker.element, eid: marker.eid, atHeadOf: &columns[0])
                 continue
             }
             guard let column = geometry.columnForEnd(marker.tick) else {
                 throw refused(.rebarWouldDisplaceBarlineMarker(measureIndex: marker.measureIndex))
             }
-            append(marker.element, toTailOf: &columns[column])
+            append(marker.element, eid: marker.eid, toTailOf: &columns[column])
         }
     }
 
@@ -82,16 +82,16 @@ extension RebarPlanner {
 
     /// A `.barLine` element rides in voice 0 — after the bar's signatures at the head, or after everything
     /// at the tail, which is where the decoder reads one from and the encoder writes it back to.
-    private static func insert(_ element: VoiceElement, atHeadOf measure: inout Measure) {
+    private static func insert(_ element: VoiceElement, eid: EID, atHeadOf measure: inout Measure) {
         guard !measure.voices.isEmpty else { return }
         let prefix = MeasureStructure.leadingSignaturePrefix(of: measure.voices[0]).count
-        measure.voices[0].elements.insert(element, at: prefix)
+        measure.voices[0].elements.insert(element, at: prefix, id: eid)
         MeasureStructure.shiftTuplets(in: &measure.voices[0], by: 1)
     }
 
-    private static func append(_ element: VoiceElement, toTailOf measure: inout Measure) {
+    private static func append(_ element: VoiceElement, eid: EID, toTailOf measure: inout Measure) {
         guard !measure.voices.isEmpty else { return }
-        measure.voices[0].elements.append(element)
+        measure.voices[0].elements.insert(element, at: measure.voices[0].elements.count, id: eid)
     }
 }
 

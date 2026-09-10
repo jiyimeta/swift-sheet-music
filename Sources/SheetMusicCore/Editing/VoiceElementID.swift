@@ -55,6 +55,8 @@ public struct VoiceElementID: Hashable, Sendable {
 }
 
 extension Score {
+    /// Assigning changes the same element and keeps its slot's EID.
+    /// Replacing it with a different thing requires an explicit identity command.
     public subscript(id: VoiceElementID) -> VoiceElement? {
         get {
             guard let staff = self[id.staff],
@@ -87,7 +89,7 @@ extension Score {
                     staffValue
                         .measures[id.measureIndex]
                         .voices[id.voiceIndex]
-                        .elements[id.elementIndex] = newValue
+                        .elements.updateValue(at: id.elementIndex) { $0 = newValue }
                 }
             }
         }

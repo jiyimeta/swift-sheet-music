@@ -10,7 +10,7 @@ struct SetFermataTests {
     }
 
     private static func elements(_ score: Score, _ measure: Int) -> [VoiceElement] {
-        score.parts[0].staves[0].measures[measure].voices[0].elements
+        score.parts[0].staves[0].measures[measure].voices[0].elements.values
     }
 
     @Test("a fermata is inserted before its chord and resolves to it as a hold")
@@ -42,7 +42,9 @@ struct SetFermataTests {
         hidden.visible = false
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[2].voices[0].elements.insert(.fermata(hidden), at: 0)
+                var elements = staffValue.measures[2].voices[0].elements.values
+                elements.insert(.fermata(hidden), at: 0)
+                staffValue.measures[2].voices[0].elements = IdentifiedArray(elements)
             }
         }
         _ = try SetFermata(at: Self.slot(2, 1), subtype: "fermataShortAbove", timeStretch: 1.25).apply(to: &score)

@@ -25,11 +25,13 @@ struct SignatureCourtesyFlagTests {
         // A mid-piece key change with courtesy suppressed, at the head of measure 1.
         var key = KeySignature(concertKey: 3)
         key.showCourtesy = false
-        score.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[1].voices[0].elements.insert(.keySignature(key), at: 0)
-            }
-        }
+        var slots = score.parts[0].staves[0].measures[1].voices[0].elements.voiceSlots()
+        slots.insert(VoiceSlot(identity: .fresh, element: .keySignature(key)), at: 0)
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 1, voiceIndex: 0, slots: slots,
+            tuplets: score.parts[0].staves[0].measures[1].voices[0].tuplets,
+        ).apply(to: &score)
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
                 MeasureStructure.shiftTuplets(in: &staffValue.measures[1].voices[0], by: 1)
@@ -49,11 +51,13 @@ struct SignatureCourtesyFlagTests {
         var score = Score.blank(pianoTemplate(measures: 2))
         var time = TimeSignature(numerator: 6, denominator: 8)
         time.showCourtesy = false
-        score.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[1].voices[0].elements.insert(.timeSignature(time), at: 0)
-            }
-        }
+        var slots = score.parts[0].staves[0].measures[1].voices[0].elements.voiceSlots()
+        slots.insert(VoiceSlot(identity: .fresh, element: .timeSignature(time)), at: 0)
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 1, voiceIndex: 0, slots: slots,
+            tuplets: score.parts[0].staves[0].measures[1].voices[0].tuplets,
+        ).apply(to: &score)
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
                 MeasureStructure.shiftTuplets(in: &staffValue.measures[1].voices[0], by: 1)

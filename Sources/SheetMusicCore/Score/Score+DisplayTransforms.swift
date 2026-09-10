@@ -136,15 +136,17 @@ extension Score {
                 switch m.voices[voiceIndex].elements[elementIndex] {
                 case var .keySignature(k):
                     k.concertKey = Self.respelledKey(k.concertKey + keyShift)
-                    m.voices[voiceIndex].elements[elementIndex] = .keySignature(k)
+                    m.voices[voiceIndex].elements.updateValue(at: elementIndex) { $0 = .keySignature(k) }
                 case let .chord(c):
-                    m.voices[voiceIndex].elements[elementIndex] = .chord(transposedChord(
-                        c, semitones: semitones, fifthsDelta: fifthsDelta, key: key,
-                    ))
+                    m.voices[voiceIndex].elements.updateValue(at: elementIndex) {
+                        $0 = .chord(transposedChord(
+                            c, semitones: semitones, fifthsDelta: fifthsDelta, key: key,
+                        ))
+                    }
                 case let .harmony(h):
-                    m.voices[voiceIndex].elements[elementIndex] = .harmony(
-                        transposedHarmony(h, fifthsDelta: fifthsDelta),
-                    )
+                    m.voices[voiceIndex].elements.updateValue(at: elementIndex) {
+                        $0 = .harmony(transposedHarmony(h, fifthsDelta: fifthsDelta))
+                    }
                 default:
                     break
                 }
@@ -368,8 +370,9 @@ extension Score {
             {
                 copy.parts.updateValue(at: p) { partValue in
                     partValue.staves.updateValue(at: s) { staffValue in
-                        staffValue.measures[0].voices[0].elements[0] =
-                            .clef(Clef(concertClefType: rawType))
+                        staffValue.measures[0].voices[0].elements.updateValue(at: 0) {
+                            $0 = .clef(Clef(concertClefType: rawType))
+                        }
                     }
                 }
             } else {

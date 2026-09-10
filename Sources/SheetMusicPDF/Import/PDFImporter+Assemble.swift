@@ -529,7 +529,7 @@ extension PDFImporter {
         if let time { leading.append(.timeSignature(time)) }
         var out = voices.isEmpty ? [Voice(elements: [])] : voices
         if !leading.isEmpty {
-            out[0] = Voice(elements: leading + out[0].elements)
+            out[0] = Voice(elements: leading + out[0].elements.values)
         }
         return (out, leading.count)
     }

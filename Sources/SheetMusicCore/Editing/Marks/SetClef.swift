@@ -48,7 +48,7 @@ public struct SetClef: EditCommand {
         }
         let ref = VoiceRef(target)
         guard let elements = score[voice: ref]?.elements else { throw Self.refused(.targetNotFound(target)) }
-        let run = AdjacentElementSlot.run(.before, of: target.elementIndex, in: elements)
+        let run = AdjacentElementSlot.run(.before, of: target.elementIndex, in: elements.values)
         if let index = run.first(where: { if case .clef = elements[$0] { true } else { false } }),
            case var .clef(existing) = elements[index]
         {

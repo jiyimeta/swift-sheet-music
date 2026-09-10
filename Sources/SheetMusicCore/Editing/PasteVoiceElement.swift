@@ -60,13 +60,13 @@ public struct PasteVoiceElement: EditCommand {
         // — there's no tick obligation to balance and no following
         // elements to consume from.
         guard let src = srcTicks, let dst = dstTicks else {
-            score[location] = element
-            return ReplaceVoiceElement(at: location, with: original)
+            return try ReplaceVoiceElement(at: location, with: element, identity: .fresh)
+                .apply(to: &score, ids: &ids)
         }
         // Same duration: still a verbatim swap, no rebalance needed.
         if src == dst {
-            score[location] = element
-            return ReplaceVoiceElement(at: location, with: original)
+            return try ReplaceVoiceElement(at: location, with: element, identity: .fresh)
+                .apply(to: &score, ids: &ids)
         }
         // Different durations — defer to the shorten / lengthen
         // algorithm.  Refuse first when the target is inside a
@@ -84,6 +84,7 @@ public struct PasteVoiceElement: EditCommand {
         // `srcTicks` in DurationChangeAlgorithm = the OLD duration
         // at idx (i.e., the target we're replacing); `dstTicks` =
         // the NEW duration (i.e., the pasted element).
+        let pastedEID = ids.next()
         let (newElements, newTuplets) = try DurationChangeAlgorithm
             .compute(
                 in: voice,
@@ -95,6 +96,7 @@ public struct PasteVoiceElement: EditCommand {
                 division: division,
                 baseLocation: location,
                 operation: "PasteVoiceElement",
+                targetEID: pastedEID, ids: &ids,
             )
         let replace = ReplaceVoiceElements(
             staff: location.staff,

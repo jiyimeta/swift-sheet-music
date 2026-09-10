@@ -51,7 +51,9 @@ struct SetBarLineTests {
         var score = EditingFixtures.parityFixture()
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.insert(.barLine(BarLine(subtype: "dashed")), at: 3)
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(.barLine(BarLine(subtype: "dashed")), at: 3)
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
             }
         }
         _ = try SetBarLine(at: MeasureRef(measureIndex: 0), style: .double).apply(to: &score)

@@ -29,8 +29,9 @@ struct SetTimeSignatureSymbolTests {
                     let slot = measure == 0 ? 2 : 0
                     score.parts.updateValue(at: partIndex) { partValue in
                         partValue.staves.updateValue(at: staffIndex) { staffValue in
-                            staffValue.measures[measure].voices[0].elements[slot] =
-                                .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                            staffValue.measures[measure].voices[0].elements.updateValue(at: slot) {
+                                $0 = .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+                            }
                         }
                     }
                 }

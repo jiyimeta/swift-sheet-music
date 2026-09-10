@@ -120,7 +120,7 @@ extension MidiRenderer {
             // cannot be taken element by element. Keyed by element index the
             // way `glissandoEndPitch` is resolved per element below.
             let bendChainSlots = guitarBendChains(
-                voiceElements: effectiveVoice.elements,
+                voiceElements: effectiveVoice.elements.values,
             )
 
             // When a new iteration loops back to original measure 0 (e.g. volta
@@ -241,7 +241,7 @@ extension MidiRenderer {
                     try renderTremoloChord(
                         chord,
                         elementIndex: elementIndex,
-                        voiceElements: effectiveVoice.elements,
+                        voiceElements: effectiveVoice.elements.values,
                         measureDuration: measureDuration,
                         localTick: &localTick,
                         velocity: velocity,
@@ -259,7 +259,7 @@ extension MidiRenderer {
                     element,
                     elementIndex: elementIndex,
                     bendChainSlots: bendChainSlots[elementIndex],
-                    voiceElements: effectiveVoice.elements,
+                    voiceElements: effectiveVoice.elements.values,
                     voiceTuplets: effectiveVoice.tuplets,
                     measures: staff.measures,
                     measureIndex: entry.measureIndex,

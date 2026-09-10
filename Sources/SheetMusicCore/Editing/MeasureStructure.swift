@@ -19,8 +19,9 @@ enum MeasureStructure {
     }
 
     /// The run of leading signature elements at the head of `voice`'s element list.
-    static func leadingSignaturePrefix(of voice: Voice) -> [VoiceElement] {
-        Array(voice.elements.prefix(while: isLeadingSignature))
+    static func leadingSignaturePrefix(of voice: Voice) -> IdentifiedArray<VoiceElement> {
+        let count = voice.elements.prefix(while: isLeadingSignature).count
+        return IdentifiedArray(voice.elements.identifiedPairs(in: 0 ..< count))
     }
 
     /// Builds bar 0's merged leading-signature run in MuseScore's structural order — clef, then key
@@ -30,16 +31,18 @@ enum MeasureStructure {
     /// declaration of a kind always wins over `deleted`'s — a bar that already declares its own key/time/
     /// clef never inherits that kind from the deleted bar.
     static func mergedLeadingSignatures(
-        inheritingFrom deleted: [VoiceElement], into incoming: [VoiceElement],
-    ) -> [VoiceElement] {
-        func resolve(_ matches: (VoiceElement) -> Bool) -> VoiceElement? {
-            incoming.first(where: matches) ?? deleted.first(where: matches)
+        inheritingFrom deleted: IdentifiedArray<VoiceElement>, into incoming: IdentifiedArray<VoiceElement>,
+    ) -> IdentifiedArray<VoiceElement> {
+        func resolve(_ matches: (VoiceElement) -> Bool) -> (EID, VoiceElement)? {
+            if let index = incoming.firstIndex(where: matches) { return (incoming.eid(at: index), incoming[index]) }
+            if let index = deleted.firstIndex(where: matches) { return (deleted.eid(at: index), deleted[index]) }
+            return nil
         }
-        return [
+        return IdentifiedArray([
             resolve { if case .clef = $0 { true } else { false } },
             resolve { if case .keySignature = $0 { true } else { false } },
             resolve { if case .timeSignature = $0 { true } else { false } },
-        ].compactMap(\.self)
+        ].compactMap(\.self))
     }
 
     /// Shifts every tuplet's `startIndex`/`endIndex` in `voice` by `delta` — used whenever elements are
@@ -137,14 +140,19 @@ enum MeasureStructure {
         score.parts.first?.staves.first?.measures.count ?? 0
     }
 
-    static func blankColumn(for score: Score) -> MeasureSlice {
+    static func blankColumn(for score: Score, ids: inout EIDAllocator) -> MeasureSlice {
         MeasureSlice(
             staffMeasures: score.parts.map { part in
-                part.staves.map { _ in Measure(voices: [Voice(elements: [.rest(duration: .measure)])]) }
+                part.staves.map { _ in Measure(voices: [freshMeasureRest(using: &ids)]) }
             },
             systemMeasure: SystemMeasure(),
             systemMeasureEID: nil,
         )
+    }
+
+    /// A new rest built inside an executing apply; carried voices never go through a fill pass.
+    static func freshMeasureRest(using ids: inout EIDAllocator) -> Voice {
+        Voice(elements: IdentifiedArray([(ids.next(), VoiceElement.rest(duration: .measure))]))
     }
 
     /// Spanners store a relative forward measure distance; a structural change between a spanner's anchor and its
@@ -195,7 +203,9 @@ enum MeasureStructure {
                                 score.parts.updateValue(at: partIndex) { partValue in
                                     partValue.staves.updateValue(at: staffIndex) { staffValue in
                                         staffValue.measures[measureIndex]
-                                            .voices[voiceIndex].elements[elementIndex] = .spanner(spanner)
+                                            .voices[voiceIndex].elements.updateValue(at: elementIndex) {
+                                                $0 = .spanner(spanner)
+                                            }
                                     }
                                 }
                             case var .chord(chord) where !chord.spanners.isEmpty:
@@ -211,7 +221,9 @@ enum MeasureStructure {
                                 score.parts.updateValue(at: partIndex) { partValue in
                                     partValue.staves.updateValue(at: staffIndex) { staffValue in
                                         staffValue.measures[measureIndex]
-                                            .voices[voiceIndex].elements[elementIndex] = .chord(chord)
+                                            .voices[voiceIndex].elements.updateValue(at: elementIndex) {
+                                                $0 = .chord(chord)
+                                            }
                                     }
                                 }
                             default:

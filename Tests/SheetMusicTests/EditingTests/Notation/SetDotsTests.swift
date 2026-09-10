@@ -22,7 +22,7 @@ struct SetDotsTests {
     }
 
     private static func elements(_ score: Score, _ measure: Int) -> [VoiceElement] {
-        score.parts[0].staves[0].measures[measure].voices[0].elements
+        score.parts[0].staves[0].measures[measure].voices[0].elements.values
     }
 
     @Test("one dot on the second quarter lengthens it and shortens what follows")

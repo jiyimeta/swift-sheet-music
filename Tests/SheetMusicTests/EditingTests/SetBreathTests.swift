@@ -10,7 +10,7 @@ struct SetBreathTests {
     }
 
     private static func elements(_ score: Score, _ measure: Int) -> [VoiceElement] {
-        score.parts[0].staves[0].measures[measure].voices[0].elements
+        score.parts[0].staves[0].measures[measure].voices[0].elements.values
     }
 
     @Test("a breath is inserted right after its chord")
@@ -42,7 +42,9 @@ struct SetBreathTests {
         hidden.visible = false
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.insert(.breath(hidden), at: 2)
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(.breath(hidden), at: 2)
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
             }
         }
         _ = try SetBreath(after: Self.slot(0, 1), kind: .caesura(.thick), pause: 0.75).apply(to: &score)

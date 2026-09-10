@@ -22,7 +22,7 @@ struct SetRestDurationTests {
     }
 
     private func first(_ score: Score) -> [VoiceElement] {
-        score.parts[0].staves[0].measures[0].voices[0].elements
+        score.parts[0].staves[0].measures[0].voices[0].elements.values
     }
 
     private static let restID = VoiceElementID(

@@ -48,7 +48,7 @@ public struct SetChordLine: EditCommand {
         }
         // The pre-image is the inverse's whole payload: a chord that carried two lines, or one carrying fields this
         // command does not name, has no single `SetChordLine` that restores it.
-        let inverse = ReplaceVoiceElement(at: location, with: element)
+        let inverse = ReplaceVoiceElement(at: location, with: element, identity: .same)
         chord.chordLines = kind.map { [ChordLine(kind: $0, isStraight: isStraight)] } ?? []
         score[location] = .chord(chord)
         return inverse

@@ -28,10 +28,12 @@ struct TextInputPlannerTests {
         var score = EditingFixtures.parityFixture()
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.insert(
+                var elements = staffValue.measures[0].voices[0].elements.values
+                elements.insert(
                     .harmony(Harmony(name: "C")),
                     at: 1,
                 )
+                staffValue.measures[0].voices[0].elements = IdentifiedArray(elements)
             }
         }
         let chord = Self.anchor(measure: 0, element: 2)

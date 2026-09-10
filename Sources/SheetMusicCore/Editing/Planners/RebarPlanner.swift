@@ -1,7 +1,7 @@
 import SheetMusicFoundation
 
-/// Re-partitions one measure region into bars of a new nominal duration. Pure planning: it reads the score,
-/// returns the replacement columns, and mutates nothing — `SetTimeSignature` is what writes them back.
+/// Re-partitions one measure region into bars of a new nominal duration. Called inside `SetTimeSignature.apply`:
+/// it reads the score and mints new slot identifiers from that apply's allocator before returning the columns.
 ///
 /// The region is cut into RUNS of regular bars separated by irregular ones (`actualLength != nil`, i.e. a
 /// pickup or a deliberately short bar). An irregular column passes through verbatim and each run either side
@@ -25,11 +25,12 @@ enum RebarPlanner {
     /// With `emitsLeadingSignature` the first REGULAR column's voice-0 prefix declares the new meter on every
     /// staff; without it nothing is declared at all — the shape `RemoveTimeSignature` needs, where the region
     /// re-bars to the meter it inherits and must be left carrying no explicit signature of its own. Either
-    /// way every `.timeSignature` already inside a re-barred run is dropped.
+    /// way old declarations inside the run disappear; an updated head declaration keeps its original identity.
     static func rebar(
         region: Range<Int>, in score: Score, numerator: Int, denominator: Int,
         symbol: TimeSignatureSymbol = .numeric,
         emitsLeadingSignature: Bool = true,
+        ids: inout EIDAllocator,
     ) throws -> Rebarred {
         let measureCount = MeasureStructure.measureCount(of: score)
         let newDuration = Fraction(numerator: numerator, denominator: denominator)
@@ -45,11 +46,11 @@ enum RebarPlanner {
         for run in runs(in: region, of: score) {
             switch run {
             case let .irregular(measureIndex):
-                columns.append(verbatimColumn(at: measureIndex, of: score))
+                columns.append(verbatimColumn(at: measureIndex, of: score, ids: &ids))
             case let .regular(range):
-                var produced = try rebar(run: range, of: score, newTicks: newTicks)
+                var produced = try rebar(run: range, of: score, newTicks: newTicks, ids: &ids)
                 if let signature = pendingSignature, !produced.isEmpty {
-                    declare(signature, in: &produced[0])
+                    declare(signature, in: &produced[0], source: score, measureIndex: range.lowerBound, ids: &ids)
                     pendingSignature = nil
                 }
                 columns.append(contentsOf: produced)
@@ -99,13 +100,13 @@ enum RebarPlanner {
         }
     }
 
-    private static func verbatimColumn(at measureIndex: Int, of score: Score) -> MeasureSlice {
+    private static func verbatimColumn(at measureIndex: Int, of score: Score, ids: inout EIDAllocator) -> MeasureSlice {
         MeasureSlice(
             staffMeasures: score.parts.map { part in
                 part.staves.map { staff in
                     staff.measures.indices.contains(measureIndex)
                         ? staff.measures[measureIndex]
-                        : Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
+                        : Measure(voices: [MeasureStructure.freshMeasureRest(using: &ids)])
                 }
             },
             systemMeasure: score.systemMeasures.indices.contains(measureIndex)
@@ -117,13 +118,25 @@ enum RebarPlanner {
 
     /// Writes `signature` into every staff's voice-0 leading-signature run, after whatever clef and key that
     /// bar already carries — MuseScore's structural order, the same one `MeasureStructure` merges into.
-    private static func declare(_ signature: TimeSignature, in column: inout MeasureSlice) {
+    private static func declare(
+        _ signature: TimeSignature, in column: inout MeasureSlice, source: Score, measureIndex: Int,
+        ids: inout EIDAllocator,
+    ) {
         for partIndex in column.staffMeasures.indices {
             for staffIndex in column.staffMeasures[partIndex].indices {
                 guard !column.staffMeasures[partIndex][staffIndex].voices.isEmpty else { continue }
                 var voice = column.staffMeasures[partIndex][staffIndex].voices[0]
                 let prefix = MeasureStructure.leadingSignaturePrefix(of: voice).count
-                voice.elements.insert(.timeSignature(signature), at: prefix)
+                let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
+                let original = source[voice: VoiceRef(staff: address, measureIndex: measureIndex, voiceIndex: 0)]
+                let existing = original?.elements.firstIndex { if case .timeSignature = $0 { true } else { false } }
+                let eid: EID
+                if let original, let existing {
+                    eid = original.elements.eid(at: existing)
+                } else {
+                    eid = ids.next()
+                }
+                voice.elements.insert(.timeSignature(signature), at: prefix, id: eid)
                 // Every tuplet in a re-barred bar spans chords, so all of them sit past the prefix.
                 MeasureStructure.shiftTuplets(in: &voice, by: 1)
                 column.staffMeasures[partIndex][staffIndex].voices[0] = voice
@@ -133,14 +146,16 @@ enum RebarPlanner {
 
     // MARK: - One regular run
 
-    private static func rebar(run: Range<Int>, of score: Score, newTicks: Int) throws -> [MeasureSlice] {
+    private static func rebar(
+        run: Range<Int>, of score: Score, newTicks: Int, ids: inout EIDAllocator,
+    ) throws -> [MeasureSlice] {
         let geometry = geometry(run: run, score: score, newTicks: newTicks)
         assertStavesAgree(on: geometry, in: score)
         var staffColumns: [[[Measure]]] = []
         for part in score.parts {
             var perStaff: [[Measure]] = []
             for staff in part.staves {
-                try perStaff.append(measures(of: staff, geometry: geometry))
+                try perStaff.append(measures(of: staff, geometry: geometry, ids: &ids))
             }
             staffColumns.append(perStaff)
         }
@@ -210,7 +225,7 @@ enum RebarPlanner {
 
     // MARK: - One staff
 
-    private static func measures(of staff: Staff, geometry: Geometry) throws -> [Measure] {
+    private static func measures(of staff: Staff, geometry: Geometry, ids: inout EIDAllocator) throws -> [Measure] {
         var emitters: [VoiceEmitter] = []
         var barLines: [BarLineMarker] = []
         for voiceIndex in 0 ..< voiceCount(of: staff, geometry: geometry) {
@@ -222,7 +237,7 @@ enum RebarPlanner {
             barLines.append(contentsOf: flat.barLines)
         }
         var built = (0 ..< geometry.columnCount).map { column in
-            Measure(voices: voices(from: emitters, column: column))
+            Measure(voices: voices(from: emitters, column: column, ids: &ids))
         }
         try rehome(barLines: barLines, into: &built, geometry: geometry)
         try rehomeMeasureProperties(of: staff, into: &built, geometry: geometry)
@@ -239,8 +254,11 @@ enum RebarPlanner {
     /// Voice 0 is always written; a higher voice appears only where the run actually put something in it, so
     /// a bar that is pure gap for that voice simply doesn't declare it. Interior holes keep the array dense
     /// (voice index is positional); trailing empties are trimmed away.
-    private static func voices(from emitters: [VoiceEmitter], column: Int) -> [Voice] {
-        var result = emitters.map { $0.voice(forColumn: column) ?? Voice(elements: []) }
+    private static func voices(from emitters: [VoiceEmitter], column: Int, ids: inout EIDAllocator) -> [Voice] {
+        var result = emitters.map { emitter -> Voice in
+            guard let payload = emitter.slots(forColumn: column) else { return Voice(elements: []) }
+            return Voice(elements: VoiceSlot.materialize(payload.elements, using: &ids), tuplets: payload.tuplets)
+        }
         while result.count > 1, let last = result.last, last.elements.isEmpty, last.tuplets.isEmpty {
             result.removeLast()
         }

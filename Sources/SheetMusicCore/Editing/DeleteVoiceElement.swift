@@ -41,12 +41,15 @@ public struct DeleteVoiceElement: EditCommand {
             throw Self.refused(.targetNotFound(location))
         }
         let duration: NoteDuration
+        let identity: ElementIdentity
         switch original {
-        case let .chord(c): duration = c.duration
+        case let .chord(c):
+            duration = c.duration
+            identity = c.notes.isEmpty ? .same : .fresh
         default:
             throw Self.refused(.wrongElementKind(at: location, expected: .chordOrRest))
         }
-        score[location] = .rest(duration: duration)
-        return ReplaceVoiceElement(at: location, with: original)
+        return try ReplaceVoiceElement(at: location, with: .rest(duration: duration), identity: identity)
+            .apply(to: &score, ids: &ids)
     }
 }

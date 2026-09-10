@@ -199,11 +199,11 @@ extension Score {
         }
     }
 
-    private static func rewriteKeys(in elements: inout [VoiceElement], offset: Int) {
+    private static func rewriteKeys(in elements: inout IdentifiedArray<VoiceElement>, offset: Int) {
         for index in elements.indices {
             guard case var .keySignature(key) = elements[index] else { continue }
             key.concertKey = respelledKey(key.concertKey - offset)
-            elements[index] = .keySignature(key)
+            elements.updateValue(at: index) { $0 = .keySignature(key) }
         }
     }
 

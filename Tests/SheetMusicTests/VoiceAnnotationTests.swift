@@ -27,7 +27,7 @@ private func voiceScore(_ inner: String) throws -> Score {
 }
 
 private func firstVoiceElements(in score: Score) -> [VoiceElement] {
-    score.parts[0].staves[0].measures[0].voices[0].elements
+    score.parts[0].staves[0].measures[0].voices[0].elements.values
 }
 
 /// Voice fragments use a whole-score envelope because sticking and expression

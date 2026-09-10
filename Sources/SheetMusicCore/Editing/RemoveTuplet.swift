@@ -63,6 +63,10 @@ public struct RemoveTuplet: EditCommand {
         // Pick the first chord with notes (if any) inside the
         // tuplet — its content survives in the single replacement
         // element. Otherwise the replacement is a plain rest.
+        let sourceIndex = (tuplet.startIndex ... tuplet.endIndex).first { index in
+            if case let .chord(chord) = voice.elements[index] { return !chord.notes.isEmpty }
+            return false
+        } ?? tuplet.startIndex
         let replacement: VoiceElement
         if let firstChord = (tuplet.startIndex ... tuplet.endIndex)
             .compactMap({ idx -> Chord? in
@@ -81,8 +85,8 @@ public struct RemoveTuplet: EditCommand {
 
         var newElements = voice.elements
         newElements.replaceSubrange(
-            tuplet.startIndex ... tuplet.endIndex,
-            with: [replacement],
+            tuplet.startIndex ..< (tuplet.endIndex + 1),
+            with: [(voice.elements.eid(at: sourceIndex), replacement)],
         )
         let netDelta = 1 - (tuplet.endIndex - tuplet.startIndex + 1)
 

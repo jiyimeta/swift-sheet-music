@@ -75,7 +75,7 @@ struct TimeSignatureSymbolTests {
         let index = try #require(elements.firstIndex { if case .timeSignature = $0 { true } else { false } })
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements[index] = .timeSignature(signature)
+                staffValue.measures[0].voices[0].elements.updateValue(at: index) { $0 = .timeSignature(signature) }
             }
         }
         return score

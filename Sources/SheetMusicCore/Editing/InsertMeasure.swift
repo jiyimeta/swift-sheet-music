@@ -73,7 +73,7 @@ public struct InsertMeasure: EditCommand {
         }
 
         // Blank path.
-        var column = MeasureStructure.blankColumn(for: score)
+        var column = MeasureStructure.blankColumn(for: score, ids: &ids)
         if measureIndex == 0, count > 0 {
             for partIndex in score.parts.indices {
                 for staffIndex in score.parts[partIndex].staves.indices {
@@ -83,7 +83,7 @@ public struct InsertMeasure: EditCommand {
                     score.parts.updateValue(at: partIndex) { partValue in
                         partValue.staves.updateValue(at: staffIndex) { staffValue in
                             staffValue.measures[0].voices[0].elements
-                                .removeFirst(prefix.count)
+                                .removeSubrange(0 ..< prefix.count)
                         }
                     }
                     score.parts.updateValue(at: partIndex) { partValue in
@@ -95,7 +95,7 @@ public struct InsertMeasure: EditCommand {
                         }
                     }
                     column.staffMeasures[partIndex][staffIndex].voices[0].elements
-                        .insert(contentsOf: prefix, at: 0)
+                        .insert(contentsOf: prefix.identifiedPairs(in: prefix.indices), at: 0)
                 }
             }
         }

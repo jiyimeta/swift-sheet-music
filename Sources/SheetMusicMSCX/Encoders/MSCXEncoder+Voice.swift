@@ -203,7 +203,7 @@ extension Voice {
                 writtenFifthsOffset: writtenFifthsOffset,
             ),
             forwardTiePartnerNotes: Self.forwardTiePartnerNotes(
-                in: elements,
+                in: elements.values,
                 nextMeasureFirstChordNotes: nextMeasureFirstChordNotes,
             ),
         )

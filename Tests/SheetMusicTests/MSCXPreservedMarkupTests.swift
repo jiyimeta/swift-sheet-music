@@ -431,7 +431,7 @@ struct MSCXPreservedMarkupTests {
                 else { continue }
                 seedGraceFingerings(marker, in: &chord.graceNotesBefore, count: &count)
                 seedGraceFingerings(marker, in: &chord.graceNotesAfter, count: &count)
-                measure.voices[voiceIndex].elements[elementIndex] = .chord(chord)
+                measure.voices[voiceIndex].elements.updateValue(at: elementIndex) { $0 = .chord(chord) }
             }
         }
     }

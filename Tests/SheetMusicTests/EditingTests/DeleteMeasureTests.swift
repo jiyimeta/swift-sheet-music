@@ -43,12 +43,13 @@ struct DeleteMeasureTests {
         // Give bar 1 its own key change; deleting bar 0 must keep it and only inherit the time signature —
         // ahead of it, per MuseScore's structural clef→key→time order, not wherever a blind prepend lands it.
         for staffIndex in score.parts[0].staves.indices {
-            score.parts.updateValue(at: 0) { partValue in
-                partValue.staves.updateValue(at: staffIndex) { staffValue in
-                    staffValue.measures[1].voices[0].elements
-                        .insert(.keySignature(KeySignature(concertKey: 3)), at: 0)
-                }
-            }
+            var slots = score.parts[0].staves[staffIndex].measures[1].voices[0].elements.voiceSlots()
+            slots.insert(VoiceSlot(identity: .fresh, element: .keySignature(KeySignature(concertKey: 3))), at: 0)
+            try ReplaceVoiceElements(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: staffIndex),
+                measureIndex: 1, voiceIndex: 0, slots: slots,
+                tuplets: score.parts[0].staves[staffIndex].measures[1].voices[0].tuplets,
+            ).apply(to: &score)
         }
         _ = try DeleteMeasure(measureIndex: 0).apply(to: &score)
         for staff in score.parts[0].staves {
@@ -69,11 +70,13 @@ struct DeleteMeasureTests {
         ]
         // Bar 1 (the incoming first bar once bar 0 is deleted) was [rest]; give it 3 triplet members instead.
         for staffIndex in score.parts[0].staves.indices {
-            score.parts.updateValue(at: 0) { partValue in
-                partValue.staves.updateValue(at: staffIndex) { staffValue in
-                    staffValue.measures[1].voices[0].elements.replaceSubrange(0 ..< 1, with: members)
-                }
-            }
+            var slots = score.parts[0].staves[staffIndex].measures[1].voices[0].elements.voiceSlots()
+            slots.replaceSubrange(0 ..< 1, with: members.map { VoiceSlot(identity: .fresh, element: $0) })
+            try ReplaceVoiceElements(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: staffIndex),
+                measureIndex: 1, voiceIndex: 0, slots: slots,
+                tuplets: score.parts[0].staves[staffIndex].measures[1].voices[0].tuplets,
+            ).apply(to: &score)
             score.parts.updateValue(at: 0) { partValue in
                 partValue.staves.updateValue(at: staffIndex) { staffValue in
                     staffValue.measures[1].voices[0].tuplets = [
@@ -104,11 +107,13 @@ struct DeleteMeasureTests {
         // generic insertion predicate can't distinguish from "never touched this spanner" once the delete
         // has already shrunk the offset.
         let spanner = Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 1)
-        score.parts.updateValue(at: 0) { partValue in
-            partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements.append(.spanner(spanner))
-            }
-        }
+        var slots = score.parts[0].staves[0].measures[0].voices[0].elements.voiceSlots()
+        slots.append(VoiceSlot(identity: .fresh, element: .spanner(spanner)))
+        try ReplaceVoiceElements(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0, voiceIndex: 0, slots: slots,
+            tuplets: score.parts[0].staves[0].measures[0].voices[0].tuplets,
+        ).apply(to: &score)
         let original = score
 
         let inverse = try DeleteMeasure(measureIndex: 1).apply(to: &score)
@@ -132,7 +137,7 @@ struct DeleteMeasureTests {
         }
         score.parts.updateValue(at: 0) { partValue in
             partValue.staves.updateValue(at: 0) { staffValue in
-                staffValue.measures[0].voices[0].elements[2] = .chord(head)
+                staffValue.measures[0].voices[0].elements.updateValue(at: 2) { $0 = .chord(head) }
             }
         }
         return score
