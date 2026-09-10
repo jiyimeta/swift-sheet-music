@@ -1,15 +1,11 @@
 // Generates the font-metrics table the WebAssembly bridge installs through
 // `installSMuFLMetrics`.
 //
-// macOS-only, and deliberately so. The layout engine needs Bravura's geometric
-// glyph bounds; the browser's only measurement API, Canvas2D's
-// `measureText().actualBoundingBox*`, reports rasterized ink instead —
-// `FontMetricsBuilder.kt` documents that quantity disagreeing with the
-// geometric bounds by up to 1 sp at typical staff sizes, which is why Android
-// uses `Paint.getTextPath` rather than `getTextBounds`. CoreText's
-// `CTFontCreatePathForGlyph().boundingBox` is the reference Android was matched
-// to, so generating from it here makes the browser agree with both other
-// platforms by construction rather than by luck.
+// macOS-only: measures the bundled outlines through CoreText. Text records use
+// tight path bounds. Web bold is an explicit 1/32 em round stroke applied before
+// the italic shear, matching render/canvas.ts. Bravura retains the established
+// control-polygon bounds used by the glyph anchor contract.
+// Android builds a separate table from its actual Paint outlines at runtime.
 //
 // The output is committed to `Web/sheet-music-web/assets/sheet-music.smft`, so
 // a normal build never runs this. Re-run it when either bundled face is
@@ -20,7 +16,8 @@
 // Byte layout: see `SheetMusicBridgeCore/FontMetricsTable.swift`. SMFT v4,
 // little-endian, values in points at a 1000 pt reference size.
 //
-// TWO faces, since v4. Bravura's ascent and descent went into the table in v3
+// Two families, since v4 (Edwin has regular, bold, italic and bold-italic records).
+// Bravura's ascent and descent went into the table in v3
 // because `(ascent − descent) / 2` is how every glyph-centring call site finds
 // its baseline, and without the pair the provider fell back to the stub's
 // 0.85 / 0.25 em and centred articulations 1.2 sp off. The same argument
@@ -113,9 +110,11 @@ enum GenFontMetrics {
         keepBlanks: Bool,
         minimumGlyphs: Int,
         weight: FontWeight = .regular,
+        italic: Bool = false,
         recordName: String? = nil,
     ) -> MeasuredFace {
-        let ct = CTFontCreateWithName(face as CFString, referenceSize, nil)
+        let base = CTFontCreateWithName(face as CFString, referenceSize, nil)
+        let ct = base
         let resolved = CTFontCopyFamilyName(ct) as String
         guard resolved == face else {
             fail(
@@ -125,7 +124,7 @@ enum GenFontMetrics {
             )
         }
         let provider = AppleFontMetricsProvider()
-        let font = LayoutFont(face: face, pointSize: referenceSize, weight: weight)
+        let font = LayoutFont(face: face, pointSize: referenceSize)
 
         var entries: [Entry] = []
         entries.reserveCapacity(2048)
@@ -135,9 +134,8 @@ enum GenFontMetrics {
             let advance = Double(
                 provider.typographicWidth(text: String(scalar), font: font),
             )
-            let bbox = provider.glyphPathBoundingBox(
-                font: font, codepoint: UInt16(codepoint),
-            )
+            let bbox = keepBlanks ? textGlyphBounds(codepoint, font: ct, bold: weight == .bold, italic: italic)
+                : provider.glyphPathBoundingBox(font: font, codepoint: UInt16(codepoint))
             if keepBlanks {
                 // A text face's blanks carry the advances that space out a
                 // lyric; dropping them would send every space back to the
@@ -187,6 +185,25 @@ enum GenFontMetrics {
         )
     }
 
+    static func textGlyphBounds(_ codepoint: UInt32, font: CTFont, bold: Bool, italic: Bool) -> CGRect? {
+        guard let glyph = mappedGlyph(codepoint, in: font),
+              let path = CTFontCreatePathForGlyph(font, glyph, nil), !path.isEmpty else { return nil }
+        // Web draws bundled regular outlines with an explicit round stroke, then
+        // shears them. Match those operations, independent of CSS synthetic fonts.
+        let outline = CGMutablePath()
+        outline.addPath(path)
+        if bold {
+            outline.addPath(path.copy(
+                strokingWithWidth: referenceSize / 32,
+                lineCap: .round,
+                lineJoin: .round,
+                miterLimit: 0,
+            ))
+        }
+        var transform = CGAffineTransform(a: 1, b: 0, c: italic ? 0.25 : 0, d: 1, tx: 0, ty: 0)
+        return outline.copy(using: &transform)?.boundingBoxOfPath
+    }
+
     @available(macOS 15.0, *)
     static func measureAll() -> [MeasuredFace] {
         guard BravuraFont.register else {
@@ -211,17 +228,32 @@ enum GenFontMetrics {
                 keepBlanks: true,
                 minimumGlyphs: 500,
             ),
-            // NO BOLD RECORD, matching `FontMetricsBuilder` on Android and for the same measured
-            // reason. This repo's Edwin is `Edwin-Roman.otf` — one face, no bold member — so
-            // `CTFontCreateCopyWithSymbolicTraits(..., .boldTrait, ...)` has nothing to resolve to
-            // and the advances come back identical to the regular face's. On the Android side the
-            // equivalent attempt was run on a device and produced 721.9961 for 'A' against the
-            // regular face's 721.9961.
-            //
-            // A record would therefore be a duplicate, and `FontMetricsTable.face(for:)`'s fallback
-            // already answers a bold request with those numbers — correctly, since a synthetic bold
-            // advances by the same amounts it measures. The `"<face>-Bold"` convention stays for a
-            // host that ships a real bold file and measures THAT.
+            measure(
+                face: edwinFamilyName,
+                candidates: textRange,
+                keepBlanks: true,
+                minimumGlyphs: 500,
+                weight: .bold,
+                recordName: "Edwin-Bold",
+            ),
+            measure(
+                face: edwinFamilyName,
+                candidates: textRange,
+                keepBlanks: true,
+                minimumGlyphs: 500,
+                italic: true,
+                recordName: "Edwin-Italic",
+            ),
+            measure(
+                face: edwinFamilyName,
+                candidates: textRange,
+                keepBlanks: true,
+                minimumGlyphs: 500,
+                weight: .bold,
+                italic: true,
+                recordName: "Edwin-BoldItalic",
+            ),
+            // Styled records measure ink independently even when their advances are identical.
         ]
     }
 

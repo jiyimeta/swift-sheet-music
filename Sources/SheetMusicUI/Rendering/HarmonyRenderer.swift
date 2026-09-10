@@ -1,3 +1,4 @@
+import CoreText
 import SheetMusicCore
 import SheetMusicLayout
 import SheetMusicLayoutApple
@@ -22,11 +23,11 @@ enum HarmonyRenderer {
         )
         let textColor: Color = lh.harmony.color.map(swiftUIColor)
             ?? .primary
-        let glyphFont = Font.custom(
-            BravuraFont.familyName,
-            size: HarmonyRendering.glyphPointSize(
+        let glyphFont = CTFontCreateWithName(
+            BravuraFont.familyName as CFString,
+            HarmonyRendering.glyphPointSize(
                 for: lh.harmony, metrics: metrics,
-            ),
+            ), nil,
         )
         for run in lh.runs {
             let p = CGPoint(
@@ -35,19 +36,15 @@ enum HarmonyRenderer {
             )
             switch run.kind {
             case .text:
-                let resolved = context.resolve(
-                    Text(run.content)
-                        .font(style.font)
-                        .foregroundColor(textColor),
+                TextInkRenderer.draw(
+                    context: &context, text: run.content, font: style.ctFont,
+                    origin: p, anchor: CGPoint(x: 0, y: 0.5), color: textColor,
                 )
-                context.draw(resolved, at: p, anchor: .leading)
             case let .accidental(acc):
-                let resolved = context.resolve(
-                    Text(String(acc.codepoint))
-                        .font(glyphFont)
-                        .foregroundColor(textColor),
+                TextInkRenderer.draw(
+                    context: &context, text: String(acc.codepoint), font: glyphFont,
+                    origin: p, anchor: CGPoint(x: 0, y: 0.5), color: textColor,
                 )
-                context.draw(resolved, at: p, anchor: .leading)
             }
         }
     }

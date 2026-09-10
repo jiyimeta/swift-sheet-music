@@ -165,6 +165,18 @@ describe("drawPage", () => {
     expect(calls).toContainEqual(["fillText", "Allegro", 1, 2]);
   });
 
+  it("preserves the existing style path for Bravura glyphs", () => {
+    const { ctx, calls, state } = fakeContext();
+    drawPage(ctx, pageWith([
+      { kind: "setTextStyle", flags: 3 },
+      { kind: "glyph", codepoint: 0xe050, x: 10, y: 20, size: 4, fontId: 1 },
+    ]), 1, fonts);
+    expect(state.font).toBe('bold 4px "Bravura"');
+    expect(calls).toContainEqual(["transform", 1, 0, 0.25, 1, -5, 0]);
+    expect(calls).toContainEqual(["fillText", "\u{e050}", 10, 20]);
+    expect(countOf(calls, "strokeText")).toBe(0);
+  });
+
   it("fills rectangles in device pixels", () => {
     const { ctx, calls } = fakeContext();
     drawPage(ctx, pageWith([{ kind: "fillRect", x: 1, y: 2, w: 3, h: 4 }]), 2, fonts);

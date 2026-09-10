@@ -11,15 +11,18 @@ public struct LayoutFont: Hashable, Sendable {
     public let face: String
     public let pointSize: CGFloat
     public let weight: FontWeight
+    public let isItalic: Bool
 
     public init(
         face: String,
         pointSize: CGFloat,
         weight: FontWeight = .regular,
+        isItalic: Bool = false,
     ) {
         self.face = face
         self.pointSize = pointSize
         self.weight = weight
+        self.isItalic = isItalic
     }
 }
 
@@ -68,6 +71,11 @@ public protocol FontMetricsProvider: Sendable {
         text: String, font: LayoutFont,
     ) -> CGFloat
     func inkBounds(text: String, font: LayoutFont) -> InkBounds
+    /// Actual ink relative to the first line's baseline, in Y-up points. Later lines
+    /// descend by ascent + descent + leading; empty lines still occupy a line. No ink is nil.
+    func textInkBounds(text: String, font: LayoutFont) -> CGRect?
+    /// Font the host can actually draw. Table-backed hosts only expose bundled text faces.
+    func renderingTextFont(_ font: LayoutFont) -> LayoutFont
     /// Extra vertical space the face asks for BETWEEN consecutive lines,
     /// on top of `ascent + descent`. Only multi-line text consults it —
     /// see `LayoutElementShape.textRect`.
@@ -75,6 +83,30 @@ public protocol FontMetricsProvider: Sendable {
 }
 
 extension FontMetricsProvider {
+    public func renderingTextFont(_ font: LayoutFont) -> LayoutFont {
+        font
+    }
+
+    /// Source-compatible approximation for existing providers and the stub. Uses horizontal
+    /// ink and a typographic vertical band; providers with glyph paths should override it.
+    public func textInkBounds(text: String, font: LayoutFont) -> CGRect? {
+        let ascent = ascent(font: font)
+        let descent = descent(font: font)
+        let stride = ascent + descent + leading(font: font)
+        var result: CGRect?
+        for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            guard line.contains(where: { !$0.isWhitespace }) else { continue }
+            let ink = inkBounds(text: String(line), font: font)
+            guard ink.width > 0 else { continue }
+            let box = CGRect(
+                x: ink.leftBearing, y: -descent - CGFloat(index) * stride,
+                width: ink.width, height: ascent + descent,
+            )
+            result = result.map { $0.union(box) } ?? box
+        }
+        return result
+    }
+
     /// Providers that have no notion of line gap (the stub, and the
     /// `FontMetricsTable`-backed provider Android and the browser install)
     /// stack lines at `ascent + descent`. Their multi-line boxes come out

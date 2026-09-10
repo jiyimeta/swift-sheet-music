@@ -80,7 +80,48 @@ public struct AppleFontMetricsProvider: FontMetricsProvider {
         }
     }
 
+    public func textInkBounds(text: String, font: LayoutFont) -> CGRect? {
+        Lock.shared.with {
+            let ct = ctFont(for: font)
+            let stride = CTFontGetAscent(ct) + CTFontGetDescent(ct) + CTFontGetLeading(ct)
+            var result: CGRect?
+            for (index, line) in text.components(separatedBy: "\n").enumerated() {
+                guard let bounds = lineInkBounds(ctLine(text: line, font: font), fallbackFont: ct) else { continue }
+                let box = bounds.offsetBy(dx: 0, dy: -CGFloat(index) * stride)
+                result = result.map { $0.union(box) } ?? box
+            }
+            return result
+        }
+    }
+
     // MARK: - Private
+
+    /// CoreText's `.useGlyphPathBounds` can include control-point extrema that the actual
+    /// outline never reaches (Helvetica's `g` is one example). Bound the drawn outlines.
+    private func lineInkBounds(_ line: CTLine, fallbackFont: CTFont) -> CGRect? {
+        guard let runs = CTLineGetGlyphRuns(line) as? [CTRun] else { return nil }
+        var result: CGRect?
+        for run in runs {
+            let count = CTRunGetGlyphCount(run)
+            var glyphs = [CGGlyph](repeating: 0, count: count)
+            var positions = [CGPoint](repeating: .zero, count: count)
+            CTRunGetGlyphs(run, CFRange(location: 0, length: count), &glyphs)
+            CTRunGetPositions(run, CFRange(location: 0, length: count), &positions)
+            let attributes = CTRunGetAttributes(run) as? [String: Any]
+            let font: CTFont
+            if let value = attributes?[kCTFontAttributeName as String] {
+                font = unsafeBitCast(value as AnyObject, to: CTFont.self)
+            } else {
+                font = fallbackFont
+            }
+            for index in 0 ..< count {
+                guard let path = CTFontCreatePathForGlyph(font, glyphs[index], nil), !path.isEmpty else { continue }
+                let box = path.boundingBoxOfPath.offsetBy(dx: positions[index].x, dy: positions[index].y)
+                result = result.map { $0.union(box) } ?? box
+            }
+        }
+        return result
+    }
 
     /// Builds (or reuses) a `CTFont` for the requested face/size/weight.
     /// Caller must hold `Lock.shared`.
@@ -115,17 +156,19 @@ public struct AppleFontMetricsProvider: FontMetricsProvider {
         let named = CTFontCreateWithName(
             font.face as CFString, font.pointSize, nil,
         )
-        guard font.weight == .bold else { return named }
+        var traits: CTFontSymbolicTraits = []
+        if font.weight == .bold { traits.insert(.boldTrait) }
+        if font.isItalic { traits.insert(.italicTrait) }
+        guard !traits.isEmpty else { return named }
         // Ask CoreText for the bold member of the same family. This is the identical resolution
         // `ResolvedTextStyle.ctFont` performs for the render path (`.boldTrait`), so what gets
         // measured here is what gets drawn there — a rehearsal mark's frame is sized from this
         // measurement and would otherwise be cut for the wrong weight.
         //
-        // Falls back to `named` when the family has no bold face: CoreText synthesizes the weight at
-        // draw time in that case, and a synthetic bold is close enough to the regular advances that
-        // reporting them beats reporting nothing.
+        // The vector renderer uses the same fallback when no family member is
+        // available; it does not add a synthetic stroke to the returned outline.
         let bolded = CTFontCreateCopyWithSymbolicTraits(
-            named, font.pointSize, nil, .boldTrait, .boldTrait,
+            named, font.pointSize, nil, traits, traits,
         )
         return bolded ?? named
     }

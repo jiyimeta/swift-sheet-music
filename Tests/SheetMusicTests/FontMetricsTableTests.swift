@@ -245,4 +245,47 @@ struct FontMetricsTableTests {
         #expect(provider.descent(font: times) == stub.descent(font: times))
         #expect(provider.leading(font: times) == stub.leading(font: times))
     }
+
+    @Test("two-dimensional ink unions glyph bearings, descenders, advances, and empty lines")
+    func textInkUsesGlyphBoxesAndLineBaselines() throws {
+        var face = Self.edwinFace
+        face.glyphs.append(GlyphBytes(codepoint: 0x67, advance: 520, bboxX: -10, bboxY: -200, bboxW: 500, bboxH: 650))
+        let provider = try makeFontMetricsTableProvider(table: FontMetricsTable.decode(Self.bytes(faces: [face])))
+        let font = LayoutFont(face: "Edwin", pointSize: 10)
+        let box = try #require(provider.textInkBounds(text: "A \ng", font: font))
+        #expect(abs(Double(box.minX) + 0.1) < 1e-9)
+        #expect(abs(Double(box.maxX) - 7) < 1e-9)
+        #expect(abs(Double(box.minY) + 14) < 1e-9)
+        #expect(abs(Double(box.maxY) - 7) < 1e-9)
+        let spaced = try #require(provider.textInkBounds(text: "A g", font: font))
+        #expect(abs(Double(spaced.maxX) - 14.62) < 1e-9)
+        let emptyLine = try #require(provider.textInkBounds(text: "A\n\ng", font: font))
+        #expect(abs(Double(emptyLine.minY) + 26) < 1e-9)
+        #expect(provider.textInkBounds(text: " \n ", font: font) == nil)
+    }
+
+    @Test("ink follows the selected bold and italic face rather than the regular record")
+    func inkSelectsTheRequestedStyle() throws {
+        var bold = Self.edwinFace
+        bold.name = "Edwin-Bold"
+        bold.glyphs[0].bboxW = 800
+        var italic = Self.edwinFace
+        italic.name = "Edwin-Italic"
+        italic.glyphs[0].bboxX = -40
+        let provider = try makeFontMetricsTableProvider(table: FontMetricsTable.decode(Self.bytes(faces: [
+            Self.edwinFace,
+            bold,
+            italic,
+        ])))
+        let boldBox = try #require(provider.textInkBounds(
+            text: "A",
+            font: LayoutFont(face: "Edwin", pointSize: 10, weight: .bold),
+        ))
+        #expect(abs(Double(boldBox.width) - 8) < 1e-9)
+        let italicBox = try #require(provider.textInkBounds(
+            text: "A",
+            font: LayoutFont(face: "Edwin", pointSize: 10, isItalic: true),
+        ))
+        #expect(abs(Double(italicBox.minX) + 0.4) < 1e-9)
+    }
 }

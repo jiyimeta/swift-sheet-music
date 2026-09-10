@@ -404,6 +404,15 @@ extension ScoreLayerBuilder {
                 font = lyricFont(size: size)
             }
         }
+        guard let path = anchoredTextPath(text, font: font, origin: origin, anchor: anchor, rotation: rotation)
+        else { return nil }
+        return fillLayer(path: path, height: height, color: color)
+    }
+
+    /// Y-down vector outlines shared with Canvas so both renderers use identical ink anchors.
+    static func anchoredTextPath(
+        _ text: String, font: CTFont, origin: CGPoint, anchor: CGPoint, rotation: CGFloat = 0,
+    ) -> CGPath? {
         guard let path = textPath(text, font: font) else { return nil }
         let bbox = path.boundingBoxOfPath
 
@@ -438,9 +447,7 @@ extension ScoreLayerBuilder {
             guard let transformed = path.copy(using: &t) else {
                 return nil
             }
-            return fillLayer(
-                path: transformed, height: height, color: color,
-            )
+            return transformed
         }
 
         // Rotation path: build T_origin · R · T_anchor explicitly by
@@ -456,8 +463,6 @@ extension ScoreLayerBuilder {
             ty: origin.y - s * aCTx + c * aCTy,
         )
         guard let transformed = path.copy(using: &t) else { return nil }
-        return fillLayer(
-            path: transformed, height: height, color: color,
-        )
+        return transformed
     }
 }

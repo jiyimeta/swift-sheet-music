@@ -36,17 +36,14 @@
             )
         }
 
-        @Test("Staff text uses the same installed measurement and padding rule as navigation")
+        @Test("Staff text adds click padding only outside its ink highlight")
         func installedTextPadding() throws {
             guard #available(macOS 15.0, *) else { return }
             let element = LayoutElement.staffText(
                 text: "Fine", origin: ElementHitFixtures.origin, color: nil,
                 style: .staffText, anchor: ElementHitFixtures.anchor,
             )
-            let kind = try #require(LayoutElementShape.kind(of: element))
-            let raw = try #require(LayoutElementShape.autoplacedRects(
-                for: element, kind: kind, metrics: ElementHitFixtures.metrics,
-            ).first)
+            let raw = try #require(TextInkGeometry.rects(for: element, metrics: ElementHitFixtures.metrics)?.first)
             let box = raw.offsetBy(dx: 50, dy: 50)
             let padded = box.insetBy(dx: -2.5, dy: -2.5)
             let target = ScoreHitTarget.staffText(anchor: ElementHitFixtures.anchor, style: .staffText)

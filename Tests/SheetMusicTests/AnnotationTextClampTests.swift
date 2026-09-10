@@ -227,11 +227,9 @@
             #expect(abs(rect.width - wide) < 0.01)
         }
 
-        /// Height covers the whole stack, and with `.bottomLeading` the
-        /// second line hangs BELOW the origin — matching how
-        /// `ScoreLayerBuilder+Helpers.textPath` draws it.
+        /// Bottom-leading anchors the whole typographic stack, as the renderer does.
         @available(macOS 15.0, iOS 16.0, *)
-        @Test func heightCoversEveryLineAndHangsBelowTheOrigin() {
+        @Test func heightCoversEveryLineAboveTheBottomAnchor() {
             let provider = FontMetrics.provider
             let ascent = provider.ascent(font: font)
             let descent = provider.descent(font: font)
@@ -244,8 +242,8 @@
             #expect(
                 abs(rect.height - (ascent + descent + lineHeight)) < 0.01,
             )
-            #expect(abs(rect.minY - (100 - ascent - descent)) < 0.01)
-            #expect(abs(rect.maxY - (100 + lineHeight)) < 0.01)
+            #expect(abs(rect.minY - (100 - ascent - descent - lineHeight)) < 0.01)
+            #expect(abs(rect.maxY - 100) < 0.01)
         }
 
         /// Edwin asks for a 0.2 em line gap, so a provider that ignored

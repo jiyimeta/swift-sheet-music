@@ -1,5 +1,8 @@
 package io.github.jiyimeta.sheetmusic
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.util.Log
@@ -66,7 +69,7 @@ class FontMetricsBuilderTest {
         private const val METRIC_TOLERANCE = 0.5f
     }
 
-    private data class Entry(val advance: Float, val w: Float, val h: Float)
+    private data class Entry(val advance: Float, val x: Float, val y: Float, val w: Float, val h: Float)
 
     private data class Face(
         val name: String,
@@ -94,7 +97,7 @@ class FontMetricsBuilderTest {
         Log.i(TAG, "buildTable took $elapsedMillis ms, ${bytes.size} bytes — $summary")
 
 
-        assertEquals("faces: $summary", 2, faces.size)
+        assertEquals("faces: $summary", 5, faces.size)
         val bravura = faces.single { it.name == "Bravura" }
         val edwin = faces.single { it.name == "Edwin" }
 
@@ -119,19 +122,7 @@ class FontMetricsBuilderTest {
         assertEquals("Edwin 'A' advance", EDWIN_A_ADVANCE, a.advance, METRIC_TOLERANCE)
         assertTrue("Edwin 'A' should be inked", a.w > 0 && a.h > 0)
 
-        // Synthetic bold does not change advances on Android, and the bridge relies on it.
-        //
-        // MuseScore's role defaults set tempo marks, rehearsal marks and instrument-change text
-        // bold, and `ScoreCanvas` paints them with `Paint.isFakeBoldText` because Edwin ships here
-        // as a single Roman face. A rehearsal mark's frame is sized from the metrics table, so the
-        // question is whether that box still fits the bold text drawn inside it — and the answer is
-        // yes only because Skia's emboldening thickens strokes without widening advances.
-        //
-        // Measured, not assumed: an `"Edwin-Bold"` face record was built with `isFakeBoldText` and
-        // this test reported 721.9961 for 'A' against the regular face's 721.9961. The record was
-        // dropped as a byte-for-byte duplicate, and this assertion is what stops it coming back —
-        // if a future Android release DOES widen synthetic bold, the frame will start clipping and
-        // this is the only place that would say so.
+        // Equal advances do not imply equal ink; the raster oracle below checks the latter.
         assertEquals("synthetic bold must not change advances", a.advance, boldAdvanceOfA(assets), METRIC_TOLERANCE)
 
         // A space is stored for its advance and must claim no ink, or every trailing space pads a
@@ -143,6 +134,58 @@ class FontMetricsBuilderTest {
         // Edwin has no CJK; a Japanese lyric depends on those codepoints being ABSENT so the Swift
         // provider falls through per scalar to the stub's 1 em per ideograph.
         assertFalse("Edwin should carry no CJK", edwin.entries.containsKey(0x6B4C))
+    }
+
+    @Test
+    fun styledInkRecordsCoverPaintedText() {
+        val assets = InstrumentationRegistry.getInstrumentation().context.assets
+        val faces = decodeFaces(FontMetricsBuilder.buildTable(assets))
+        val bitmap = Bitmap.createBitmap(1800, 1600, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        for ((name, bold, italic) in listOf(
+            Triple("Edwin", false, false), Triple("Edwin-Bold", true, false),
+            Triple("Edwin-Italic", false, true), Triple("Edwin-BoldItalic", true, true),
+        )) {
+            val paint = Paint().apply {
+                typeface = Typeface.createFromAsset(assets, "fonts/Edwin-Roman.otf")
+                textSize = REFERENCE_SIZE.toFloat()
+                isAntiAlias = true
+                isFakeBoldText = bold
+                textSkewX = if (italic) -0.25f else 0f
+                color = Color.BLACK
+            }
+            val face = faces.single { it.name == name }
+            for (label in listOf("A", "g")) {
+                bitmap.eraseColor(Color.TRANSPARENT)
+                canvas.drawText(label, 300f, 1100f, paint)
+                bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                var left = bitmap.width
+                var right = -1
+                var top = bitmap.height
+                var bottom = -1
+                pixels.forEachIndexed { index, pixel ->
+                    if (Color.alpha(pixel) >= 128) {
+                        val x = index % bitmap.width
+                        val y = index / bitmap.width
+                        left = minOf(left, x)
+                        right = maxOf(right, x + 1)
+                        top = minOf(top, y)
+                        bottom = maxOf(bottom, y + 1)
+                    }
+                }
+                assertTrue("no rendered ink: $name $label", right > left && bottom > top)
+                val entry = requireNotNull(face.entries[label[0].code])
+                val expected = floatArrayOf(300 + entry.x, 1100 - entry.y - entry.h,
+                    300 + entry.x + entry.w, 1100 - entry.y)
+                val actual = intArrayOf(left, top, right, bottom)
+                Log.i(TAG, "ink $name $label table=${expected.toList()} raster=${actual.toList()}")
+                for (index in actual.indices) {
+                    assertEquals("$name $label edge $index", expected[index], actual[index].toFloat(), 2f)
+                }
+            }
+        }
+        bitmap.recycle()
     }
 
     /**
@@ -215,11 +258,11 @@ class FontMetricsBuilderTest {
             repeat(glyphCount) {
                 val cp = buf.int
                 val advance = buf.float
-                buf.float // bboxX
-                buf.float // bboxY
+                val x = buf.float
+                val y = buf.float
                 val w = buf.float
                 val h = buf.float
-                entries[cp] = Entry(advance, w, h)
+                entries[cp] = Entry(advance, x, y, w, h)
             }
             faces.add(Face(name, ascent, descent, leading, entries))
         }

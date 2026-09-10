@@ -309,19 +309,6 @@ extension ScoreLayerBuilder {
         // typographic bounds. Bounding the path's ink would clip the
         // descender on letters like "g", and CJK glyphs (e.g. "サビ")
         // exceed any single-row ascent/descent estimate.
-        let attr = NSAttributedString(
-            string: text, attributes: [.font: font],
-        )
-        let line = CTLineCreateWithAttributedString(attr)
-        var ascent: CGFloat = 0
-        var descent: CGFloat = 0
-        var leading: CGFloat = 0
-        let advance = CGFloat(CTLineGetTypographicBounds(
-            line, &ascent, &descent, &leading,
-        ))
-        let textWidth = max(advance, textSize * 0.5)
-        let textHeight = ascent + descent
-
         let pad = RehearsalMarkFrame.paddingSp(sp: metrics.sp)
         let textOrigin = CGPoint(
             x: origin.x + pad, y: origin.y - pad,
@@ -340,9 +327,9 @@ extension ScoreLayerBuilder {
             built.append(layer)
         }
 
-        let boxRect = RehearsalMarkFrame.boxRect(
-            textWidth: textWidth, textHeight: textHeight,
-            origin: origin, pad: pad,
+        let boxRect = TextInkGeometry.rehearsalBox(
+            text: text, font: TextInkGeometry.font(for: .rehearsalMark, metrics: metrics),
+            origin: origin, sp: metrics.sp,
         )
         let lineWidth = RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp)
         let framePath: CGPath?

@@ -14,14 +14,10 @@ import java.nio.ByteOrder
  * and packs the result into the byte format defined at
  * Sources/SheetMusicBridgeCore/FontMetricsTable.swift.
  *
- * Uses `Paint.getTextPath` + `Path.computeBounds(exact=true)` rather than
- * `Paint.getTextBounds`. The TextBounds API returns the **rasterized**
- * pixel-aligned ink rectangle, which on a 1000 pt reference size rounds
- * to integer pixels and can disagree with the geometric path bbox by up
- * to 1 sp at typical staff sizes. The geometric bounds match Apple's
- * `CTFontCreatePathForGlyph().boundingBox`, so the `GlyphAnchor`
- * center→baseline-leading conversion in the bridge produces identical
- * positioning on both platforms.
+ * Text uses `Paint.getTextPath` and tightly bounded outline samples, including
+ * Paint's actual fake bold and italic. Bravura retains `Path.computeBounds`
+ * control-polygon bounds for the established glyph-anchor contract. Pixel
+ * bounds are a separate raster oracle, not the stored geometry.
  *
  * Y convention conversion: Android paths are y-down with baseline at
  * Y=0; the Swift side expects CG-style y-up (matching CGPath). Flip Y
@@ -133,23 +129,18 @@ object FontMetricsBuilder {
                 keepBlanks = true,
             )
         }.getOrNull()?.let { faces += it }
-        // NO BOLD FACE RECORD, and the reason is measured rather than assumed.
-        //
-        // `Paint.isFakeBoldText` is what this library's renderer paints bold text with, since Edwin
-        // ships as a single Roman face. The obvious companion — measure the same file with
-        // `isFakeBoldText = true` and store it as `"Edwin-Bold"` — was written, run on a device, and
-        // produced an advance for 'A' of 721.9961 against the regular face's 721.9961. Skia's
-        // synthetic bold thickens strokes; `getTextWidths` reports the face's own advances either
-        // way.
-        //
-        // So a bold record would be a byte-for-byte duplicate of the regular one, and
-        // `FontMetricsTable.face(for:)`'s fallback already answers a bold request with exactly those
-        // numbers. More importantly the numbers are RIGHT: `drawText` advances by the same amounts
-        // it measures, so a rehearsal-mark frame sized from the regular face fits the bold text
-        // drawn inside it.
-        //
-        // The lookup convention stays — a host that ships a real `Edwin-Bold.otf` and measures THAT
-        // would produce a record worth having — but nothing here should write a synthetic one.
+        for ((name, bold, italic) in listOf(
+            Triple("Edwin-Bold", true, false),
+            Triple("Edwin-Italic", false, true),
+            Triple("Edwin-BoldItalic", true, true),
+        )) {
+            runCatching {
+                measure(assets, name, "fonts/Edwin-Roman.otf", TEXT_START, TEXT_END,
+                    keepBlanks = true, bold = bold, italic = italic)
+            }.getOrNull()?.let { faces += it }
+        }
+        // Equal advances do not establish equal ink. Keep each painted style
+        // as its own measured record, including the renderer's synthetic italic shear.
         return encode(faces)
     }
 
@@ -167,6 +158,8 @@ object FontMetricsBuilder {
         first: Int,
         last: Int,
         keepBlanks: Boolean,
+        bold: Boolean = false,
+        italic: Boolean = false,
     ): Face {
         // Which codepoints this face actually has comes from the file's own
         // `cmap`, NOT from `Paint`. Nothing in `Paint` can answer it: measured
@@ -186,6 +179,8 @@ object FontMetricsBuilder {
             typeface = tf
             textSize = REFERENCE_SIZE.toFloat()
             isAntiAlias = true
+            isFakeBoldText = bold
+            textSkewX = if (italic) -0.25f else 0f
         }
         // `Paint.FontMetrics` is y-down: ascent is negative (above the
         // baseline), descent positive. The Swift side wants both as positive
@@ -207,9 +202,11 @@ object FontMetricsBuilder {
             val advance = if (n < 1) 0f else widths[0]
             path.reset()
             paint.getTextPath(s, 0, s.length, 0f, 0f, path)
-            // exact=true: traverse the actual control polygon, not the
-            // conservative fast bounds.
-            path.computeBounds(rectF, true)
+            if (keepBlanks) {
+                textOutlineBounds(path, rectF)
+            } else {
+                path.computeBounds(rectF, true)
+            }
             val inked = !rectF.isEmpty
             if (keepBlanks) {
                 if (advance <= 0f && !inked) continue
@@ -234,6 +231,29 @@ object FontMetricsBuilder {
             leading = fontMetrics.leading,
             entries = entries,
         )
+    }
+
+    /**
+     * computeBounds includes Bezier control points even when exact=true.
+     * This is visible on sheared Edwin g. Bound an outline approximation with
+     * at most 0.001 reference-unit error (0.000001 em), supported since API 26.
+     * The path already includes Paint's fake bold and italic, as Canvas draws.
+     */
+    private fun textOutlineBounds(path: Path, bounds: RectF) {
+        bounds.setEmpty()
+        if (path.isEmpty) return
+        val points = path.approximate(0.001f)
+        var left = Float.POSITIVE_INFINITY
+        var top = Float.POSITIVE_INFINITY
+        var right = Float.NEGATIVE_INFINITY
+        var bottom = Float.NEGATIVE_INFINITY
+        for (i in points.indices step 3) {
+            left = minOf(left, points[i + 1])
+            top = minOf(top, points[i + 2])
+            right = maxOf(right, points[i + 1])
+            bottom = maxOf(bottom, points[i + 2])
+        }
+        if (left.isFinite()) bounds.set(left, top, right, bottom)
     }
 
     /**

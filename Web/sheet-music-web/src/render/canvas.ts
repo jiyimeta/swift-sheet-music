@@ -43,14 +43,9 @@ export {
 const MIN_STROKE_PX = 1.5;
 
 /**
- * Italic slant, as the horizontal-shear term of a 2D transform.
- *
- * Android sets `Paint.textSkewX = -0.25f`, which leans the top of each glyph to
- * the right. Canvas2D has no text-skew property, so the equivalent is a shear
- * matrix. The sign is opposite to Android's because `textSkewX` multiplies by a
- * y that grows downward while the shear term here multiplies by the same y with
- * the opposite convention; it is pinned by the screenshot comparison in
- * `Web/sheet-music-web/e2e` rather than by argument.
+ * Legacy italicText / styled music glyph shear. Kept for those existing
+ * commands; measured text styles use -0.25 below, matching Android's Y-down
+ * textSkewX and the shipped Edwin italic outline records.
  */
 const ITALIC_SHEAR = 0.25;
 
@@ -99,34 +94,36 @@ function drawCommandList(
     ctx.strokeStyle = css;
   };
 
-  /**
-   * The CSS font shorthand for a text or glyph draw, honouring the active
-   * `setTextStyle`.
-   *
-   * `bold` reaches Canvas as a real font-weight rather than an emboldening
-   * trick, so the browser picks the family's bold member (or synthesizes one,
-   * which is what the metrics table's `Edwin-Bold` record measures either way).
-   * Italic goes through the shear below instead: the two bundled faces ship
-   * upright only, and a CSS `italic` on a family with no italic member gets a
-   * browser-chosen synthetic slant that differs from the one the layout
-   * measured.
-   */
+  // Styled text uses explicit geometry: a regular outline plus a 1/32 em
+  // round stroke for bold, then a -0.25 Y-down shear for italic. These match
+  // GenFontMetrics; browser-dependent CSS synthetic weights cannot do that.
+  let textSizePx = 0;
+  let styledMusicGlyph = false;
   const fontFor = (size: number, fontId: number): string => {
-    const weight = textStyleFlags & TEXT_STYLE_BOLD ? "bold " : "";
-    return `${weight}${size * pxPerMM}px "${faceFor(fontId, fonts)}"`;
+    textSizePx = size * pxPerMM;
+    styledMusicGlyph = fontId === FontId.smufl;
+    const weight = styledMusicGlyph && (textStyleFlags & TEXT_STYLE_BOLD) ? "bold " : "";
+    return `${weight}${textSizePx}px "${faceFor(fontId, fonts)}"`;
   };
 
-  /** Draw `text` at the baseline, applying the active italic shear if any. */
   const fillStyledText = (text: string, xPx: number, baselineY: number): void => {
-    if (!(textStyleFlags & TEXT_STYLE_ITALIC)) {
+    if (!textStyleFlags) {
       ctx.fillText(text, xPx, baselineY);
       return;
     }
     ctx.save();
-    // Shear about the baseline so the glyph's foot stays where the engraver put
-    // it and only the top leans — the same transform `italicText` uses.
-    ctx.transform(1, 0, ITALIC_SHEAR, 1, -ITALIC_SHEAR * baselineY, 0);
+    if (textStyleFlags & TEXT_STYLE_ITALIC) {
+      const shear = styledMusicGlyph ? ITALIC_SHEAR : -0.25;
+      ctx.transform(1, 0, shear, 1, -shear * baselineY, 0);
+    }
     ctx.fillText(text, xPx, baselineY);
+    if (!styledMusicGlyph && (textStyleFlags & TEXT_STYLE_BOLD)) {
+      ctx.lineWidth = textSizePx / 32;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.setLineDash([]);
+      ctx.strokeText(text, xPx, baselineY);
+    }
     ctx.restore();
   };
 

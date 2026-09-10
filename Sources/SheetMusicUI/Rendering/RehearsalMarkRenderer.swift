@@ -33,32 +33,19 @@ enum RehearsalMarkRenderer {
             textColor = .primary
         }
 
-        let resolved = context.resolve(
-            Text(text)
-                .foregroundColor(textColor)
-                .font(style.font),
-        )
-        let measured = resolved.measure(in: CGSize(
-            width: CGFloat.greatestFiniteMagnitude,
-            height: CGFloat.greatestFiniteMagnitude,
-        ))
-
         // Anchor the text bottom-leading at `(origin.x + pad,
         // origin.y - pad)` so the surrounding box's lower-left
         // corner ends up at `origin`.
         let textOrigin = CGPoint(
             x: origin.x + pad, y: origin.y - pad,
         )
-        context.draw(
-            resolved, at: textOrigin,
-            anchor: UnitPoint(x: 0, y: 1),
+        TextInkRenderer.draw(
+            context: &context, text: text, font: style.ctFont,
+            origin: textOrigin, anchor: CGPoint(x: 0, y: 1), color: textColor,
         )
-
-        let boxRect = RehearsalMarkFrame.boxRect(
-            textWidth: measured.width,
-            textHeight: measured.height,
-            origin: origin,
-            pad: pad,
+        let boxRect = TextInkGeometry.rehearsalBox(
+            text: text, font: TextInkGeometry.font(for: .rehearsalMark, overrides: properties, metrics: metrics),
+            origin: origin, sp: metrics.sp,
         )
         let strokeWidth = RehearsalMarkFrame.strokeWidthSp(
             sp: metrics.sp,

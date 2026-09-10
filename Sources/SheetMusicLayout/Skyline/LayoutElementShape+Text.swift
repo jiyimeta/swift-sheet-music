@@ -18,7 +18,7 @@ enum TextAnchorConvention {
 }
 
 extension LayoutElementShape {
-    /// Ink rect of `text` typeset in `font`, positioned per `anchor`.
+    /// Conservative typographic rect of `text`, positioned per the rendered block anchor.
     ///
     /// `text` may carry literal newlines — MuseScore writes multi-line
     /// `<StaffText>` payloads that way, and
@@ -48,20 +48,19 @@ extension LayoutElementShape {
         switch anchor {
         case .leadingCenter:
             return CGRect(
-                x: origin.x, y: origin.y - firstLineHeight / 2,
+                x: origin.x, y: origin.y - height / 2,
                 width: width, height: height,
             )
         case .bottomLeading:
-            // Origin is the bottom of the FIRST line; the rest of the
-            // stack hangs below it.
+            // The renderer anchors the whole stack, including empty lines.
             return CGRect(
-                x: origin.x, y: origin.y - firstLineHeight,
+                x: origin.x, y: origin.y - height,
                 width: width, height: height,
             )
         case .center:
             return CGRect(
                 x: origin.x - width / 2,
-                y: origin.y - firstLineHeight / 2,
+                y: origin.y - height / 2,
                 width: width, height: height,
             )
         }
@@ -165,10 +164,7 @@ extension LayoutElementShape {
     private static func styleFont(
         _ style: TextStyleType, sp: CGFloat,
     ) -> LayoutFont {
-        LayoutFont(
-            face: style.museScoreDefault.face,
-            pointSize: TextRoleStyle.fontSize(for: style, sp: sp),
-        )
+        TextInkGeometry.font(for: style, metrics: StaffMetrics(staffSize: sp * 4))
     }
 
     /// Rects for the elements the skyline pass is allowed to move.
@@ -183,9 +179,9 @@ extension LayoutElementShape {
                 markKind: markKind, text: text, origin: origin,
                 kind: kind, metrics: metrics,
             )]
-        case let .staffText(text, origin, _, _, _):
+        case let .staffText(text, origin, _, style, _):
             return [textRect(
-                text: text, font: font(for: kind, metrics: metrics),
+                text: text, font: TextInkGeometry.font(for: style, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,
             )]
         case let .measureNumber(text, origin):
@@ -216,6 +212,8 @@ extension LayoutElementShape {
             )]
         case let .lyricsMelisma(from, to), let .lyricHyphen(from, to):
             return [spanRect(from, to, thickness: sp * 0.3)]
+        case let .spannerSegment(.pedal, from, to, _, _, _, _):
+            return PedalInkGeometry.rects(from: from, to: to, metrics: metrics)
         case let .spannerSegment(spannerKind, from, to, _, _, _, _):
             return [spannerRect(
                 kind: spannerKind, from: from, to: to, sp: sp,
@@ -353,17 +351,17 @@ extension LayoutElementShape {
         frame: RehearsalMark.FrameKind, metrics: StaffMetrics,
     ) -> CGRect {
         let f = font(for: .rehearsalMark, metrics: metrics)
+        let pad = RehearsalMarkFrame.paddingSp(sp: metrics.sp)
         let inner = textRect(
-            text: text, font: f, origin: origin, anchor: .bottomLeading,
+            text: text, font: f, origin: CGPoint(x: origin.x + pad, y: origin.y - pad), anchor: .bottomLeading,
         )
         guard frame != .none else { return inner }
-        let pad = RehearsalMarkFrame.paddingSp(sp: metrics.sp)
-            + RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp)
-        return CGRect(
-            x: inner.minX - pad, y: inner.minY - pad,
-            width: inner.width + pad * 2,
-            height: inner.height + pad * 2,
-        )
+        let box = TextInkGeometry.rehearsalBox(text: text, font: f, origin: origin, sp: metrics.sp)
+        let stroke = RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp) / 2
+        switch RehearsalMarkFrame.shape(for: frame, around: box) {
+        case .none: return inner
+        case let .rectangle(rect), let .ellipse(rect): return rect.insetBy(dx: -stroke, dy: -stroke)
+        }
     }
 
     private static func spannerRect(

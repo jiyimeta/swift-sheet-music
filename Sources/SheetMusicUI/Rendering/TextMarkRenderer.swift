@@ -80,12 +80,10 @@ enum TextMarkRenderer {
             verse.isMultiple(of: 2) ? .lyricsOdd : .lyricsEven,
             overrides: properties, metrics: metrics,
         )
-        let resolved = context.resolve(
-            Text(text)
-                .foregroundColor(color)
-                .font(style.font),
+        TextInkRenderer.draw(
+            context: &context, text: text, font: style.ctFont,
+            origin: origin, anchor: CGPoint(x: 0.5, y: 0.5), color: color,
         )
-        context.draw(resolved, at: origin, anchor: .center)
     }
 
     /// Tempo indication ("♩ = 120"). MuseScore default: Edwin 12 pt

@@ -976,99 +976,45 @@ extension LayoutBridge {
         guard !lh.runs.isEmpty else { return }
         let argb = lh.harmony.color.flatMap(argb(from:))
         if let argb { out.append(.setColor(argb: argb)) }
-        let style = lh.harmony.styleType
-        let textPt = TextRoleStyle.fontSize(for: style, sp: CGFloat(sp))
-        let glyphPt = HarmonyRendering.glyphPointSize(
-            for: lh.harmony,
-            metrics: StaffMetrics(staffSize: CGFloat(sp) * 4),
-        )
-        // `.chordSymbolB` — MuseScore's jazz chord-symbol style — is italic, and Apple's
-        // `HarmonyRenderer` applies it through `ResolvedTextStyle.font`. Without this the same score
-        // reads upright here and slanted there.
-        let styleFlags = styleFlags(for: style)
-        let textFont = LayoutFont(
-            face: "Edwin", pointSize: textPt, weight: measurementWeight(for: style),
+        let metrics = StaffMetrics(staffSize: CGFloat(sp) * 4)
+        let textFont = TextInkGeometry.font(
+            for: lh.harmony.styleType,
+            overrides: lh.harmony.properties,
+            metrics: metrics,
         )
         let glyphFont = LayoutFont(
-            face: SMuFLFamily.bravura, pointSize: glyphPt,
+            face: SMuFLFamily.bravura,
+            pointSize: HarmonyRendering.glyphPointSize(for: lh.harmony, metrics: metrics),
         )
-        let textAscent = Double(
-            FontMetrics.provider.ascent(font: textFont),
-        )
-        let textDescent = Double(
-            FontMetrics.provider.descent(font: textFont),
-        )
-        let glyphAscent = Double(
-            FontMetrics.provider.ascent(font: glyphFont),
-        )
-        let glyphDescent = Double(
-            FontMetrics.provider.descent(font: glyphFont),
-        )
-        let originX = mox + lh.anchorX
-        let originY = moy + lh.y
-        withTextStyle(styleFlags, into: &out) { out in
-            emitHarmonyRuns(
-                lh.runs,
-                originX: originX, originY: originY,
-                text: HarmonyFaceMetrics(
-                    pointSize: Double(textPt),
-                    baselineShift: (textAscent - textDescent) / 2,
-                ),
-                glyph: HarmonyFaceMetrics(
-                    pointSize: Double(glyphPt),
-                    baselineShift: (glyphAscent - glyphDescent) / 2,
-                ),
-                into: &out,
-            )
-        }
-        if argb != nil {
-            out.append(.setColor(argb: 0xFF00_0000))
-        }
-    }
-
-    /// Point size and baseline shift for one of a harmony's two faces.
-    ///
-    /// Apple anchors each run at `.leading` (vertical center, leading edge) while `Canvas.drawText`
-    /// anchors at the baseline, so the shift is `(ascent − descent) / 2` for that face. Paired in a
-    /// struct because the two always travel together, and a run walk taking four loose `Double`s is
-    /// four chances to hand it the text size with the glyph's baseline.
-    struct HarmonyFaceMetrics {
-        let pointSize: Double
-        let baselineShift: Double
-    }
-
-    /// Walk a harmony's pre-laid-out runs.
-    private static func emitHarmonyRuns(
-        _ runs: [HarmonyRun],
-        originX: Double,
-        originY: Double,
-        text textFace: HarmonyFaceMetrics,
-        glyph glyphFace: HarmonyFaceMetrics,
-        into out: inout [DrawCommand],
-    ) {
-        for run in runs {
-            let runX = originX + run.x
+        let resolved = lh.harmony.properties.resolved(against: lh.harmony.styleType)
+        var flags: UInt8 = 0
+        if resolved.style.contains(.bold) { flags |= DrawCommand.TextStyleFlag.bold }
+        if resolved.style.contains(.italic) { flags |= DrawCommand.TextStyleFlag.italic }
+        for run in lh.runs {
+            let origin = CGPoint(x: mox + lh.anchorX + run.x, y: moy + lh.y)
             switch run.kind {
             case .text:
-                out.append(.text(
-                    text: run.content,
-                    x: runX * ptToMMScale,
-                    y: (originY + textFace.baselineShift) * ptToMMScale,
-                    size: textFace.pointSize * ptToMMScale,
-                    fontId: .textRoman,
-                ))
+                withTextStyle(flags, into: &out) { out in
+                    emitAnchoredText(
+                        text: run.content,
+                        font: textFont,
+                        origin: origin,
+                        anchor: CGPoint(x: 0, y: 0.5),
+                        into: &out,
+                    )
+                }
             case let .accidental(acc):
+                let baseline = TextInkGeometry.baselineOrigin(
+                    text: String(acc.codepoint), font: glyphFont, origin: origin, anchor: CGPoint(x: 0, y: 0.5),
+                )
                 out.append(.glyph(
-                    codepoint: acc.codepoint.unicodeScalars.first.map {
-                        UInt32($0.value)
-                    } ?? 0,
-                    x: runX * ptToMMScale,
-                    y: (originY + glyphFace.baselineShift) * ptToMMScale,
-                    size: glyphFace.pointSize * ptToMMScale,
-                    fontId: .smufl,
+                    codepoint: acc.codepoint.unicodeScalars.first.map { UInt32($0.value) } ?? 0,
+                    x: Double(baseline.x) * ptToMMScale, y: Double(baseline.y) * ptToMMScale,
+                    size: Double(glyphFont.pointSize) * ptToMMScale, fontId: .smufl,
                 ))
             }
         }
+        if argb != nil { out.append(.setColor(argb: 0xFF00_0000)) }
     }
 
     // MARK: - Notation text labels
@@ -1154,33 +1100,15 @@ extension LayoutBridge {
         let font = LayoutFont(
             face: "Edwin", pointSize: textPt, weight: measurementWeight(for: .rehearsalMark),
         )
-        let advance = Double(FontMetrics.provider.typographicWidth(
-            text: text, font: font,
-        ))
-        let ascent = Double(FontMetrics.provider.ascent(font: font))
-        let descent = Double(FontMetrics.provider.descent(font: font))
-        let textWidth = max(advance, Double(textPt) * 0.5)
-        let textHeight = ascent + descent
-        // Apple anchors the text at bottom-leading inside the box;
-        // Canvas.drawText anchors at baseline, so the baseline Y is
-        // `origin.y - pad - descent`.
-        let textOriginX = originX + pad
-        let baselineY = originY - pad - descent
+        let origin = CGPoint(x: CGFloat(originX), y: CGFloat(originY))
         withTextStyle(styleFlags, into: &out) { out in
-            out.append(.text(
-                text: text,
-                x: textOriginX * ptToMMScale,
-                y: baselineY * ptToMMScale,
-                size: Double(textPt) * ptToMMScale,
-                fontId: .textRoman,
-            ))
+            emitAnchoredText(
+                text: text, font: font,
+                origin: CGPoint(x: CGFloat(originX + pad), y: CGFloat(originY - pad)),
+                anchor: CGPoint(x: 0, y: 1), into: &out,
+            )
         }
-        let boxRect = RehearsalMarkFrame.boxRect(
-            textWidth: CGFloat(textWidth),
-            textHeight: CGFloat(textHeight),
-            origin: CGPoint(x: CGFloat(originX), y: CGFloat(originY)),
-            pad: CGFloat(pad),
-        )
+        let boxRect = TextInkGeometry.rehearsalBox(text: text, font: font, origin: origin, sp: CGFloat(sp))
         let strokeWidth = Double(
             RehearsalMarkFrame.strokeWidthSp(sp: CGFloat(sp)),
         )

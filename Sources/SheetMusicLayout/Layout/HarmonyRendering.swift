@@ -36,10 +36,7 @@ public enum HarmonyRendering {
         let glyphSize = glyphPointSize(
             for: harmony, metrics: metrics,
         )
-        let textFont = LayoutFont(
-            face: textFace(for: harmony),
-            pointSize: textSize,
-        )
+        let textFont = TextInkGeometry.font(for: harmony.styleType, overrides: harmony.properties, metrics: metrics)
         let glyphFont = LayoutFont(
             face: SMuFLFamily.bravura,
             pointSize: glyphSize,
@@ -288,10 +285,5 @@ public enum HarmonyRendering {
         case 2: return "\(letter)##"
         default: return String(letter)
         }
-    }
-
-    private static func textFace(for harmony: Harmony) -> String {
-        harmony.properties.face
-            ?? harmony.styleType.museScoreDefault.face
     }
 }

@@ -534,6 +534,12 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     sp: sp,
                     into: &out,
                 )
+            } else if case .lyrics = kind {
+                emitRoleText(
+                    text: text, style: .lyricsOdd,
+                    originX: mox + Double(origin.x), originY: moy + Double(origin.y),
+                    sp: sp, anchor: CGPoint(x: 0.5, y: 0.5), into: &out,
+                )
             } else {
                 emitText(
                     text: text,
@@ -548,12 +554,13 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         case let .staffText(text, origin, color, style, _):
             let argb = color.flatMap(LayoutBridge.argb(from:))
             if let argb { out.append(.setColor(argb: argb)) }
-            emitText(
+            emitRoleText(
                 text: text,
                 style: style,
                 originX: mox + Double(origin.x),
                 originY: moy + Double(origin.y),
                 sp: sp,
+                anchor: CGPoint(x: 0, y: 1),
                 into: &out,
             )
             if argb != nil {

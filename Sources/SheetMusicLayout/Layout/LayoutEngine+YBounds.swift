@@ -23,6 +23,13 @@ extension LayoutEngine {
         // pixels, not just the anchor point.
         let glyphPad = metrics.sp
         func accumulate(_ el: LayoutElement) {
+            if let rects = TextInkGeometry.rects(for: el, metrics: metrics) {
+                for rect in rects {
+                    minY = min(minY, rect.minY)
+                    maxY = max(maxY, rect.maxY)
+                }
+                return
+            }
             for p in elementYPoints(el, sp: metrics.sp) {
                 minY = min(minY, p - glyphPad)
                 maxY = max(maxY, p + glyphPad)

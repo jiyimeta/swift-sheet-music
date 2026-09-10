@@ -116,6 +116,15 @@ SwiftPM and a build with `SWIFT_SHEET_MUSIC_ANDROID=1`.
 
 ### The font-metrics table needs a device
 
+Text ink は first-line baseline 相対の Y-up bounds です。Android producer は
+bundled Edwin の regular / fake bold / italic / bold italic を別 record にし、
+renderer と同じ `Paint` から測ります。advance が同じでも bold の ink は異なります。
+`Path.computeBounds` は italic curve の control points まで含むため、text は
+`Path.approximate(0.001f)` の extrema を使います。誤差は reference size 1000 に対して
+最大 0.001 units です。Bravura の従来の glyph-anchor bounds は維持します。
+`FontMetricsBuilderTest.styledInkRecordsCoverPaintedText` は別の Canvas raster oracle で
+regular / bold / italic / bold italic の `A` と `g` を検証します。
+
 `FontMetricsBuilder` measures Bravura and Edwin out of the caller's assets at
 runtime, so nothing on the host exercises it and a wrong measurement does not
 fail anything — it engraves, slightly wrongly, on Android alone.

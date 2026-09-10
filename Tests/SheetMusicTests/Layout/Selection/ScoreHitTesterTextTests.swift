@@ -273,17 +273,19 @@
         func instrumentChangeIsNotATarget() {
             guard #available(macOS 15.0, *) else { return }
             let origin = CGPoint(x: 40, y: 20)
+            // The baseline's descender band has no ink in this string; probe the rendered letter band.
+            let inkPoint = CGPoint(x: 45, y: 13)
             // The control: the same element, same origin, differing only in style, IS reported. Without it
             // a `nil` here would be equally consistent with the probe point missing the box.
             #expect(hitText(on: [.staffText(
                 text: "to Accordion", origin: origin, color: nil,
                 style: .staffText, anchor: Self.anchor,
-            )], at: origin) == .staffText(anchor: Self.anchor, style: .staffText))
+            )], at: inkPoint) == .staffText(anchor: Self.anchor, style: .staffText))
 
             #expect(hitText(on: [.staffText(
                 text: "to Accordion", origin: origin, color: nil,
                 style: .instrumentChange, anchor: Self.anchor,
-            )], at: origin) == nil)
+            )], at: inkPoint) == nil)
         }
 
         @Test("Text carrying no identity is skipped rather than reported without one")

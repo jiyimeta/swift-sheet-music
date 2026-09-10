@@ -580,8 +580,8 @@ Never re-record to make a red browser test go green without first establishing
 that the engine change behind it was intended — that is what the fixtures exist
 to detect.
 
-The metrics table itself is committed too, and only changes when one of the two
-bundled faces does. Regenerate it — and the WASI copy, which
+The metrics table itself is committed too, and changes when bundled outlines or
+their rendering geometry changes. Regenerate it — and the WASI copy, which
 `ShippedMetricsTableTests` checks is byte-identical — with:
 
 ```bash
@@ -593,6 +593,19 @@ cp Web/sheet-music-web/assets/sheet-music.smft \
 It is macOS-only and refuses to write a table measured off a face that failed to
 register, since CoreText answers an unregistered family with the system font
 rather than an error.
+
+Text ink の table は Edwin の regular / bold / italic / bold italic を個別に保持します。
+Web の bold は regular outline の fill と幅 1/32 em の round stroke、italic はその後の
+Y-down shear -0.25 です。`GenFontMetrics` も stroke → shear の順で outline を測ります。
+CSS synthetic bold の量は browser ごとに変わり得るため、この経路では使いません。
+Bravura と legacy `italicText` の style 処理は従来どおりです。
+`e2e/text-ink.spec.ts` は実 renderer の raster と shipped table の全辺を比較し、
+次の glyph / line と呼び出し元への Canvas state の復帰も確認します。
+
+Apple は実際に選択した CoreText face、portable renderer は bundled Edwin を測ります。
+任意の named face を wire で選択する機能はありません。table の per-glyph union は
+kerning / ligature / fallback font の shaping を再現しないため、その部分は近似です。
+table にない glyph と table を入れない host の stub bounds も近似として扱います。
 
 Run the portable Swift tests through PackageToJS:
 

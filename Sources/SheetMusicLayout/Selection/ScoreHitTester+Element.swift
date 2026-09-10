@@ -55,8 +55,8 @@ extension ScoreHitTester {
     ///
     /// Skyline shapes are collision approximations; clicks and highlights need ink bounds without padding.
     /// `elementRects` documents which kinds measure ink and which still use skyline approximations.
-    /// Barlines, pedals and signatures measure ink independently because their skyline reservations omit
-    /// painted components. This leaves skyline collision behavior unchanged.
+    /// Barlines and signatures measure ink independently of their skyline reservations.
+    /// Pedals share the same painted glyph bounds with the skyline.
     public func elementHitRect(for target: ScoreHitTarget) -> CGRect? {
         guard let id = target.elementID else { return nil }
         var result: CGRect?
@@ -97,7 +97,7 @@ extension ScoreHitTester {
         case let .barLine(subtype, origin, halfHeight, _, _):
             return barLineInkRects(subtype: subtype, origin: origin, halfHeight: halfHeight)
         case let .spannerSegment(.pedal, from, to, _, _, _, _):
-            return pedalInkRects(from: from, to: to)
+            return PedalInkGeometry.rects(from: from, to: to, metrics: document.metrics)
         case let .keySignature(sharps, flats, clef, naturals, origin, _):
             return keySignatureInkRects(sharps: sharps, flats: flats, clef: clef, naturals: naturals, origin: origin)
         case let .timeSignature(numerator, denominator, symbol, origin, _):
@@ -107,18 +107,6 @@ extension ScoreHitTester {
                 for: element, id: 0, xOffset: 0, metrics: document.metrics,
             )?.rects.map(\.rect) ?? []
         }
-    }
-
-    /// Matches `ScoreLayerBuilder.drawPedal`'s leading, vertically centered glyph anchors. The anchor
-    /// centers the font's ascent/descent band, not the ink: baseline = origin.y + (ascent - descent) / 2.
-    /// Glyph bounds are Y-up, so their maxY determines the top edge. Leading alignment removes the glyph's
-    /// left bearing, placing the ink at origin.x. Missing glyph metrics produce no guessed rectangle.
-    private func pedalInkRects(from: CGPoint, to: CGPoint) -> [CGRect] {
-        let glyphs = SpannerGeometry.pedal(from: from, to: to)
-        return glyphInkRects([
-            (glyphs.downCodepoint, glyphs.downOrigin),
-            (glyphs.upCodepoint, glyphs.upOrigin),
-        ], anchorX: 0)
     }
 
     private func keySignatureInkRects(
