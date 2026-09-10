@@ -32,6 +32,10 @@ extension ScoreHitTester {
     private func hitElement(elements: [LayoutElement], base: CGPoint, point: CGPoint) -> ScoreHitTarget? {
         for element in elements {
             guard let id = element.elementID else { continue }
+            if let contains = arcContains(element, point: CGPoint(x: point.x - base.x, y: point.y - base.y)) {
+                if contains { return ScoreHitTarget(elementID: id) }
+                continue
+            }
             for rect in elementRects(element) where rect.offsetBy(dx: base.x, dy: base.y).contains(point) {
                 return ScoreHitTarget(elementID: id)
             }
@@ -80,6 +84,7 @@ extension ScoreHitTester {
     /// with the skyline helper's fallback; dynamics and tempo mix glyph and font metrics; hairpins, ottavas
     /// and voltas use coarse span reservations. No universal ink-coverage claim follows.
     private func elementRects(_ element: LayoutElement) -> [CGRect] {
+        if let rects = arcInkRects(element) { return rects }
         switch element {
         case let .barLine(subtype, origin, halfHeight, _, _):
             return barLineInkRects(subtype: subtype, origin: origin, halfHeight: halfHeight)
