@@ -34,6 +34,30 @@ enum ElementHitFixtures {
         let id: ScoreElementID
     }
 
+    /// Selection-3 samples stay separate from samples that invoke the older removal-command checker.
+    static let selection3Samples: [Sample] = {
+        let end = NoteID(
+            staff: anchor.staff, measureIndex: 1, voiceIndex: 0, elementIndex: 0, noteIndexInChord: 0,
+        )
+        let tie = ScoreElementID.tie(start: noteID, end: end)
+        let chordSlur = ScoreElementID.slur(.chord(anchor: anchor, ordinal: 1))
+        let jump = ScoreElementID.jump(staff: anchor.staff, measureIndex: 0, index: 1)
+        let glyph = ScoreElementID.marker(staff: anchor.staff, measureIndex: 0, index: 0)
+        let text = ScoreElementID.marker(staff: anchor.staff, measureIndex: 0, index: 1)
+        return [
+            Sample(element: .tieArc(
+                fromOrigin: origin, toOrigin: CGPoint(x: 180, y: 80), above: true, identity: tie,
+            ), id: tie),
+            Sample(element: .tieArc(
+                fromOrigin: origin, toOrigin: CGPoint(x: 180, y: 80), above: false, identity: chordSlur,
+            ), id: chordSlur),
+            Sample(element: spanner(.slur), id: .slur(.voice(anchor))),
+            Sample(element: .jump(text: "D.S.", origin: origin, identity: jump), id: jump),
+            Sample(element: .marker(kind: .segno, text: "", origin: origin, identity: glyph), id: glyph),
+            Sample(element: .marker(kind: .fine, text: "", origin: origin, identity: text), id: text),
+        ]
+    }()
+
     static let samples: [Sample] = [
         Sample(
             element: .textMark(kind: .dynamic(anchor: anchor), text: "mf", origin: origin),
