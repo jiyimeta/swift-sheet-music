@@ -279,9 +279,9 @@ enum ScoreSemanticComparison {
         // strip semantics.)
         s.systemMeasures.mapValues { measure in
             var copy = measure
-            copy.elements = copy.elements.filter { element in
-                if case .staffText = element.element { return false }
-                return true
+            copy.elements.removeAll { element in
+                if case .staffText = element.element { return true }
+                return false
             }
             return copy
         }

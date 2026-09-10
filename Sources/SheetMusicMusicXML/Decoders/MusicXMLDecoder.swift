@@ -139,25 +139,25 @@ extension Score {
         let measureCount = perStaffSystemElements
             .map(\.perMeasure.count)
             .max() ?? 0
-        var systemMeasures = Array(
-            repeating: SystemMeasure(),
+        var laneElements = Array(
+            repeating: [PositionedSystemElement](),
             count: measureCount,
         )
         for entry in perStaffSystemElements {
             for (measureIndex, elements) in entry.perMeasure.enumerated() {
-                guard measureIndex < systemMeasures.count else { continue }
+                guard measureIndex < laneElements.count else { continue }
                 for var element in elements {
                     element.originalStaff = entry.address
-                    systemMeasures[measureIndex].elements.append(element)
+                    laneElements[measureIndex].append(element)
                 }
             }
         }
-        for index in systemMeasures.indices {
-            systemMeasures[index].elements.sort {
+        for index in laneElements.indices {
+            laneElements[index].sort {
                 $0.position < $1.position
             }
         }
-        return (parts: parts, systemMeasures: systemMeasures)
+        return (parts: parts, systemMeasures: laneElements.map { SystemMeasure(elements: $0) })
     }
 
     /// Decode a single top-level `<part>` into its `Part` plus the

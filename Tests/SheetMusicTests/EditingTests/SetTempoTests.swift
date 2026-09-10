@@ -47,7 +47,7 @@ struct SetTempoTests {
         var score = EditingFixtures.parityFixture()
         _ = try SetTempo(anchor: Self.slot(0, 1), marking: Self.allegro).apply(to: &score)
         score.systemMeasures.updateValue(at: 0) { column in
-            column.elements[0].element = .tempo(Tempo(beatsPerSecond: 2.5, offsetX: 3))
+            column.elements.updateValue(at: 0) { $0.element = .tempo(Tempo(beatsPerSecond: 2.5, offsetX: 3)) }
         }
         _ = try SetTempo(anchor: Self.slot(0, 1), marking: Self.compound).apply(to: &score)
         let written = Self.tempos(score, 0)

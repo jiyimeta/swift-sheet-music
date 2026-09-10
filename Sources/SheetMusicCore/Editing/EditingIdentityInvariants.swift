@@ -1,7 +1,7 @@
 import SheetMusicFoundation
 
 #if DEBUG
-    /// Debug-only identity gates for the structural spine and every voice slot.
+    /// Debug-only identity gates for the structural spine, voice contents, and system-lane occupants.
     enum EditingIdentityInvariants {
         static func identifiers(in score: Score) -> [EID] {
             var result = score.parts.indices.map { score.parts.eid(at: $0) }
@@ -26,6 +26,9 @@ import SheetMusicFoundation
                 }
             }
             result.append(contentsOf: score.systemMeasures.indices.map { score.systemMeasures.eid(at: $0) })
+            for column in score.systemMeasures {
+                result.append(contentsOf: column.elements.indices.map { column.elements.eid(at: $0) })
+            }
             return result
         }
 

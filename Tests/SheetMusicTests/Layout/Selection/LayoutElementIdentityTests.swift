@@ -140,7 +140,9 @@ struct LayoutElementIdentityTests {
         let command = SetTempo(anchor: expected, marking: .init(beatsPerSecond: 3))
         _ = try command.apply(to: &score)
         // System marks default to the canonical staff; put this imported mark on the fixture's staff.
-        score.systemMeasures.updateValue(at: 1) { $0.elements[0].originalStaff = Self.staff }
+        score.systemMeasures.updateValue(at: 1) {
+            $0.elements.updateValue(at: 0) { $0.originalStaff = Self.staff }
+        }
         let tempos = Self.elements(score).filter { if case .textMark(.tempo, _, _) = $0 { true } else { false } }
         #expect(tempos.map(\.elementID) == [.tempo(anchor: command.anchor)])
         #expect(tempos.map(\.elementItemID) == [.element(.tempo(anchor: expected))])

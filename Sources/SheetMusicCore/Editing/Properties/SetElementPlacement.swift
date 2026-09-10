@@ -111,7 +111,7 @@ public struct SetElementPlacement: EditCommand {
             else { throw Self.refused(.targetNotFound(affectedLocation)) }
             mark.elementProperties.placement = placement
             score.systemMeasures.updateValue(at: slot.measureIndex) {
-                $0.elements[slot.elementIndex].element = .staffText(mark)
+                $0.elements.updateValue(at: slot.elementIndex) { $0.element = .staffText(mark) }
             }
         case let .harmony(anchor):
             guard let slot = SetChordSymbol.harmonySlot(at: anchor, in: score),
@@ -125,7 +125,9 @@ public struct SetElementPlacement: EditCommand {
                   case var .rehearsalMark(mark) = score.systemMeasures[index].elements[slot].element
             else { throw Self.refused(.targetNotFound(affectedLocation)) }
             mark.elementProperties.placement = placement
-            score.systemMeasures.updateValue(at: index) { $0.elements[slot].element = .rehearsalMark(mark) }
+            score.systemMeasures.updateValue(at: index) {
+                $0.elements.updateValue(at: slot) { $0.element = .rehearsalMark(mark) }
+            }
         }
     }
 }

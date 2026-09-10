@@ -174,10 +174,12 @@ public struct MovePart: EditCommand {
                 for elementIndex in column.elements.indices {
                     guard let address = column.elements[elementIndex].originalStaff
                     else { continue }
-                    column.elements[elementIndex].originalStaff = StaffAddress(
-                        partIndex: permuted(address.partIndex),
-                        staffIndexInPart: address.staffIndexInPart,
-                    )
+                    column.elements.updateValue(at: elementIndex) {
+                        $0.originalStaff = StaffAddress(
+                            partIndex: permuted(address.partIndex),
+                            staffIndexInPart: address.staffIndexInPart,
+                        )
+                    }
                 }
             }
         }
@@ -238,8 +240,9 @@ public struct MovePart: EditCommand {
                 for elementIndex in column.elements.indices
                     where restoredOriginalStaves[measureIndex].indices.contains(elementIndex)
                 {
-                    column.elements[elementIndex].originalStaff =
-                        restoredOriginalStaves[measureIndex][elementIndex]
+                    column.elements.updateValue(at: elementIndex) {
+                        $0.originalStaff = restoredOriginalStaves[measureIndex][elementIndex]
+                    }
                 }
             }
         }

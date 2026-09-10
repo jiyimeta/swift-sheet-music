@@ -106,13 +106,16 @@ public struct RemovePart: EditCommand {
                     guard let address = column.elements[elementIndex].originalStaff
                     else { continue }
                     if address.partIndex == partIndex {
-                        column.elements[elementIndex].originalStaff =
-                            StaffAddress(partIndex: 0, staffIndexInPart: 0)
+                        column.elements.updateValue(at: elementIndex) {
+                            $0.originalStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+                        }
                     } else if address.partIndex > partIndex {
-                        column.elements[elementIndex].originalStaff = StaffAddress(
-                            partIndex: address.partIndex - 1,
-                            staffIndexInPart: address.staffIndexInPart,
-                        )
+                        column.elements.updateValue(at: elementIndex) {
+                            $0.originalStaff = StaffAddress(
+                                partIndex: address.partIndex - 1,
+                                staffIndexInPart: address.staffIndexInPart,
+                            )
+                        }
                     }
                 }
             }

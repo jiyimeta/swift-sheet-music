@@ -62,7 +62,9 @@ struct ElementPropertyCommandTests {
             })
             guard case var .staffText(text) = score.systemMeasures[0].elements[laneIndex].element else { return }
             update(&text.elementProperties)
-            score.systemMeasures.updateValue(at: 0) { $0.elements[laneIndex].element = .staffText(text) }
+            score.systemMeasures.updateValue(at: 0) {
+                $0.elements.updateValue(at: laneIndex) { $0.element = .staffText(text) }
+            }
         case 3:
             let slot = VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1)
             guard case var .harmony(value)? = score[slot] else { Issue.record("missing symbol"); return }
@@ -74,7 +76,9 @@ struct ElementPropertyCommandTests {
             })
             guard case var .rehearsalMark(mark) = score.systemMeasures[0].elements[laneIndex].element else { return }
             update(&mark.elementProperties)
-            score.systemMeasures.updateValue(at: 0) { $0.elements[laneIndex].element = .rehearsalMark(mark) }
+            score.systemMeasures.updateValue(at: 0) {
+                $0.elements.updateValue(at: laneIndex) { $0.element = .rehearsalMark(mark) }
+            }
         default:
             Issue.record("unknown fixture carrier")
         }

@@ -64,7 +64,9 @@ public struct SetTempo: EditCommand {
         }
         if let marking {
             RehearsalMarkLane.pad(&score, ids: &ids)
-            score.systemMeasures.updateValue(at: anchor.measureIndex) { Self.write(marking, at: position, into: &$0) }
+            score.systemMeasures.updateValue(at: anchor.measureIndex) {
+                Self.write(marking, at: position, into: &$0, ids: &ids)
+            }
         } else {
             // Decided against the untouched score, before anything is written — `RemoveRehearsalMark`'s order.
             guard Self.current(at: anchor, in: score) != nil else { throw Self.refused(.targetNotFound(anchor)) }
@@ -91,17 +93,22 @@ public struct SetTempo: EditCommand {
         if case .tempo = positioned.element { true } else { false }
     }
 
-    private static func write(_ marking: Marking, at position: MeasurePosition, into measure: inout SystemMeasure) {
+    private static func write(
+        _ marking: Marking, at position: MeasurePosition, into measure: inout SystemMeasure, ids: inout EIDAllocator,
+    ) {
         if let index = SystemLaneSlot.firstIndex(in: measure, at: position, where: isTempo),
            case var .tempo(existing) = measure.elements[index].element
         {
             existing.beatsPerSecond = marking.beatsPerSecond
             existing.beatNote = marking.beatNote
             existing.beatDots = marking.beatDots
-            measure.elements[index].element = .tempo(existing)
-            var rest = Array(measure.elements[(index + 1)...])
-            rest.removeAll { $0.position == position && isTempo($0) }
-            measure.elements.replaceSubrange((index + 1)..., with: rest)
+            measure.elements.updateValue(at: index) { $0.element = .tempo(existing) }
+            for duplicate in measure.elements.indices.reversed() where duplicate > index {
+                let element = measure.elements[duplicate]
+                if element.position == position, isTempo(element) {
+                    measure.elements.removeSubrange(duplicate ..< duplicate + 1)
+                }
+            }
             return
         }
         measure.elements.insert(
@@ -112,6 +119,7 @@ public struct SetTempo: EditCommand {
                 )),
             ),
             at: SystemLaneSlot.insertionIndex(in: measure, for: position),
+            id: ids.next(),
         )
     }
 }

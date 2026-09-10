@@ -24,7 +24,10 @@ struct LiveChannelPlanTests {
         )
         for (partIndex, entry) in partInstruments.enumerated() {
             for (offset, instrument) in entry.1.enumerated() {
-                systemMeasures[offset + 1].elements.append(
+                let elements = systemMeasures[offset + 1].elements
+                let pairs = elements.indices.map { (elements.eid(at: $0), elements[$0]) }
+                systemMeasures[offset + 1].elements = IdentifiedArray(pairs + [(
+                    .invalid,
                     PositionedSystemElement(
                         position: MeasurePosition(
                             offset: Fraction(numerator: 0, denominator: 1),
@@ -36,7 +39,7 @@ struct LiveChannelPlanTests {
                             partIndex: partIndex, staffIndexInPart: 0,
                         ),
                     ),
-                )
+                )])
             }
         }
         return Score(division: 480, parts: IdentifiedArray(parts), systemMeasures: IdentifiedArray(systemMeasures))

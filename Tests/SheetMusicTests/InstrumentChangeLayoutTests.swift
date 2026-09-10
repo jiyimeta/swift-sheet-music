@@ -94,13 +94,15 @@ struct InstrumentChangeLayoutTests {
         // they're lifted into system space, so their DIFFERENCE below
         // is exact regardless of that (unrelated) transform.
         score.systemMeasures.updateValue(at: 0) { column in
-            column.elements.append(
+            let pairs = column.elements.indices.map { (column.elements.eid(at: $0), column.elements[$0]) }
+            column.elements = IdentifiedArray(pairs + [(
+                .invalid,
                 PositionedSystemElement(
                     position: .start,
                     element: .staffText(StaffText(text: "pizz.")),
                     originalStaff: anchorStaff,
                 ),
-            )
+            )])
         }
         let document = LayoutEngine.layout(
             score: score, options: ScoreViewOptions(), availableWidth: 800,
@@ -147,8 +149,7 @@ struct InstrumentChangeLayoutTests {
                 else { continue }
                 change.visible = false
                 score.systemMeasures.updateValue(at: measureIndex) { column in
-                    column.elements[elementIndex].element =
-                        .instrumentChange(change)
+                    column.elements.updateValue(at: elementIndex) { $0.element = .instrumentChange(change) }
                 }
             }
         }

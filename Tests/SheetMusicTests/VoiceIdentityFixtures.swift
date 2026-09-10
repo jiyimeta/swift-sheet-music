@@ -74,6 +74,13 @@ enum VoiceIdentityFixtures {
         #expect(actualTuplets.ids == expectedTuplets.ids, sourceLocation: sourceLocation)
         #expect(actualTuplets.values == expectedTuplets.values, sourceLocation: sourceLocation)
         #expect(graceIDs(actual) == graceIDs(expected), sourceLocation: sourceLocation)
+        let actualLaneIDs = actual.systemMeasures.map { column in
+            column.elements.indices.map { column.elements.eid(at: $0) }
+        }
+        let expectedLaneIDs = expected.systemMeasures.map { column in
+            column.elements.indices.map { column.elements.eid(at: $0) }
+        }
+        #expect(actualLaneIDs == expectedLaneIDs, sourceLocation: sourceLocation)
     }
 
     /// Per chord, before and after remain separate, including empty lists.

@@ -101,18 +101,18 @@ public struct Score: Sendable, Equatable {
     }
 
     /// Whether any currently identified collection contains an unassigned slot.
-    /// Covers parts, staves, voice members, graces, tuplets, unresolved endpoints, and systemMeasures.
+    /// Covers parts, staves, voice members, graces, tuplets, endpoints, columns, and lane occupants.
     public var hasUnassignedIDs: Bool {
-        parts.hasUnassignedIDs || systemMeasures.hasUnassignedIDs || parts.contains { part in
-            part.staves.hasUnassignedIDs || part.staves.contains { staff in
-                staff.measures.contains { $0.voices.contains { $0.hasUnassignedIDs } }
+        parts.hasUnassignedIDs || systemMeasures.hasUnassignedIDs
+            || systemMeasures.contains { $0.elements.hasUnassignedIDs } || parts.contains { part in
+                part.staves.hasUnassignedIDs || part.staves.contains { staff in
+                    staff.measures.contains { $0.voices.contains { $0.hasUnassignedIDs } }
+                }
             }
-        }
     }
 
     /// Fills only missing IDs on entry, preserving all assigned identifiers.
-    /// Includes every voice slot; later phases extend this alongside hasUnassignedIDs
-    /// when they identify nested collections.
+    /// Visits each part's staves and voice contents, then all columns, then their lane occupants.
     public mutating func assignMissingIDs(using ids: inout EIDAllocator) {
         parts.assignMissingIDs(using: &ids)
         for index in parts.indices {
@@ -130,6 +130,9 @@ public struct Score: Sendable, Equatable {
             }
         }
         systemMeasures.assignMissingIDs(using: &ids)
+        for index in systemMeasures.indices {
+            systemMeasures.updateValue(at: index) { $0.elements.assignMissingIDs(using: &ids) }
+        }
     }
 
     /// Return a copy without source-only XML carried for MSCX
@@ -155,9 +158,9 @@ public struct Score: Sendable, Equatable {
         for measureIndex in stripped.systemMeasures.indices {
             stripped.systemMeasures.updateValue(at: measureIndex) { column in
                 for elementIndex in column.elements.indices {
-                    stripPreservedMarkup(
-                        from: &column.elements[elementIndex].element,
-                    )
+                    column.elements.updateValue(at: elementIndex) {
+                        stripPreservedMarkup(from: &$0.element)
+                    }
                 }
             }
         }

@@ -24,6 +24,9 @@ struct MeasureColumnIdentityTests {
     private func assignedScore() -> Score {
         var score = bareScore()
         score.systemMeasures = IdentifiedArray([(firstID, column(1)), (secondID, column(2))])
+        // Nested occupants are assigned independently of this fixture's column allocator.
+        var laneIDs = EIDAllocator(actor: 100)
+        score.assignMissingIDs(using: &laneIDs)
         return score
     }
 
@@ -43,7 +46,7 @@ struct MeasureColumnIdentityTests {
 
     @Test func propertyUpdateKeepsColumnIdentity() {
         var lane = assignedScore().systemMeasures
-        lane.updateValue(at: 0) { $0.elements.removeAll() }
+        lane.updateValue(at: 0) { $0.elements.removeAll { _ in true } }
         #expect(lane[0].elements.isEmpty)
         #expect(lane.eid(at: 0) == firstID)
         #expect(lane.eid(at: 1) == secondID)
@@ -54,6 +57,8 @@ struct MeasureColumnIdentityTests {
         var structuralIDs = EIDAllocator(actor: 99)
         score.assignMissingIDs(using: &structuralIDs)
         score.systemMeasures = IdentifiedArray([(firstID, column(1))])
+        var laneIDs = EIDAllocator(actor: 100)
+        score.assignMissingIDs(using: &laneIDs)
         var ids = EIDAllocator(actor: 42, counter: 1)
         RehearsalMarkLane.pad(&score, ids: &ids)
         #expect(score.systemMeasures.count == 3)
@@ -122,12 +127,14 @@ struct MeasureColumnIdentityTests {
         try editor.apply(command)
         let first = editor.score.systemMeasures.eid(at: 0)
         #expect(!editor.score.hasUnassignedIDs)
-        #expect(editor.idAllocator.counter == 2)
+        // Entry assigns two columns, then their two tempo occupants.
+        #expect(editor.idAllocator.counter == 4)
         try editor.undo()
         #expect(editor.score.systemMeasures.eid(at: 0) == first)
         try editor.redo()
         #expect(editor.score.systemMeasures.eid(at: 0) == first)
-        #expect(editor.idAllocator.counter == 2)
+        // Undo and redo restore those same four IDs without minting.
+        #expect(editor.idAllocator.counter == 4)
     }
 }
 

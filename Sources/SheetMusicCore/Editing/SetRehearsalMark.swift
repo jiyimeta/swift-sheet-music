@@ -70,20 +70,23 @@ enum RehearsalMarkLane {
     /// of it. Re-binding needs a second match that the compiler cannot see is the same one, so it needs a failure
     /// branch — and the only honest thing such a branch could do here is silently skip the write, which would turn
     /// a future disagreement between the two matches into a no-op instead of something a test could catch.
-    static func write(_ text: String, into measure: inout SystemMeasure) {
+    static func write(_ text: String, into measure: inout SystemMeasure, ids: inout EIDAllocator) {
         for index in measure.elements.indices {
             guard var existing = mark(of: measure.elements[index].element) else { continue }
             existing.text = text
-            measure.elements[index].element = .rehearsalMark(existing)
-            var rest = Array(measure.elements[(index + 1)...])
-            rest.removeAll { mark(of: $0.element) != nil }
-            measure.elements.replaceSubrange((index + 1)..., with: rest)
+            measure.elements.updateValue(at: index) { $0.element = .rehearsalMark(existing) }
+            for duplicate in measure.elements.indices.reversed() where duplicate > index {
+                if mark(of: measure.elements[duplicate].element) != nil {
+                    measure.elements.removeSubrange(duplicate ..< duplicate + 1)
+                }
+            }
             return
         }
         let insertion = measure.elements.firstIndex { $0.position > .start } ?? measure.elements.count
         measure.elements.insert(
             PositionedSystemElement(position: .start, element: .rehearsalMark(RehearsalMark(text: text))),
             at: insertion,
+            id: ids.next(),
         )
     }
 
@@ -160,7 +163,9 @@ public struct SetRehearsalMark: EditCommand {
             let trimmed = text.trimmingWhitespaceAndNewlines()
             guard !trimmed.isEmpty else { throw Self.refused(.emptyRehearsalMarkText) }
             RehearsalMarkLane.pad(&score, ids: &ids)
-            score.systemMeasures.updateValue(at: measureIndex) { RehearsalMarkLane.write(trimmed, into: &$0) }
+            score.systemMeasures.updateValue(at: measureIndex) {
+                RehearsalMarkLane.write(trimmed, into: &$0, ids: &ids)
+            }
         }
         return SetRehearsalMark(restoringLane: previous, at: measureIndex)
     }

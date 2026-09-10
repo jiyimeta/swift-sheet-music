@@ -22,8 +22,8 @@ extension MidiImporter {
             slicesPerTrack[track.trackIndex, default: 0] += 1
         }
         var parts: [Part] = []
-        var systemMeasures: [SystemMeasure] = Array(
-            repeating: SystemMeasure(),
+        var systemMeasures: [[PositionedSystemElement]] = Array(
+            repeating: [],
             count: timeline.bars.count,
         )
         for (trackIdx, measures) in perTrackMeasures.enumerated() {
@@ -72,7 +72,7 @@ extension MidiImporter {
         return Score(
             division: file.division,
             parts: IdentifiedArray(parts),
-            systemMeasures: IdentifiedArray(systemMeasures),
+            systemMeasures: IdentifiedArray(systemMeasures.map { SystemMeasure(elements: $0) }),
             metaTags: meta,
             source: .midi,
         )
@@ -248,7 +248,7 @@ extension MidiImporter {
         file: MidiFile,
         timeline: BarTimeline,
         into staff: inout Staff,
-        systemMeasures: inout [SystemMeasure],
+        systemMeasures: inout [[PositionedSystemElement]],
         staffAddress: StaffAddress,
         includeTempo: Bool,
         includeKeySignature: Bool,
@@ -280,7 +280,7 @@ extension MidiImporter {
                 // of voice 0" approach landed at the same effective
                 // position (cursor 0 of the measure).
                 if measureIdx < systemMeasures.count {
-                    systemMeasures[measureIdx].elements.append(
+                    systemMeasures[measureIdx].append(
                         PositionedSystemElement(
                             position: .start,
                             element: .tempo(Tempo(beatsPerSecond: bps)),

@@ -54,7 +54,9 @@ public struct SetStaffText: EditCommand {
             let trimmed = text.trimmingWhitespaceAndNewlines()
             guard !trimmed.isEmpty else { throw Self.refused(.emptyStaffText) }
             RehearsalMarkLane.pad(&score, ids: &ids)
-            score.systemMeasures.updateValue(at: anchor.measureIndex) { write(trimmed, at: position, into: &$0) }
+            score.systemMeasures.updateValue(at: anchor.measureIndex) {
+                write(trimmed, at: position, into: &$0, ids: &ids)
+            }
         } else {
             guard Self.current(at: anchor, isSystemText: isSystemText, in: score) != nil else {
                 throw Self.refused(.targetNotFound(anchor))
@@ -104,15 +106,20 @@ public struct SetStaffText: EditCommand {
         return isSystemText || (positioned.originalStaff ?? Score.canonicalStaff) == anchor.staff
     }
 
-    private func write(_ trimmed: String, at position: MeasurePosition, into measure: inout SystemMeasure) {
+    private func write(
+        _ trimmed: String, at position: MeasurePosition, into measure: inout SystemMeasure, ids: inout EIDAllocator,
+    ) {
         if let index = SystemLaneSlot.firstIndex(in: measure, at: position, where: matches),
            case var .staffText(existing) = measure.elements[index].element
         {
             existing.text = trimmed
-            measure.elements[index].element = .staffText(existing)
-            var rest = Array(measure.elements[(index + 1)...])
-            rest.removeAll { $0.position == position && matches($0) }
-            measure.elements.replaceSubrange((index + 1)..., with: rest)
+            measure.elements.updateValue(at: index) { $0.element = .staffText(existing) }
+            for duplicate in measure.elements.indices.reversed() where duplicate > index {
+                let element = measure.elements[duplicate]
+                if element.position == position, matches(element) {
+                    measure.elements.removeSubrange(duplicate ..< duplicate + 1)
+                }
+            }
             return
         }
         measure.elements.insert(
@@ -122,6 +129,7 @@ public struct SetStaffText: EditCommand {
                 originalStaff: isSystemText ? nil : anchor.staff,
             ),
             at: SystemLaneSlot.insertionIndex(in: measure, for: position),
+            id: ids.next(),
         )
     }
 }

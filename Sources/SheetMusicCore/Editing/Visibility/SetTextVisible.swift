@@ -76,7 +76,7 @@ public struct SetTextVisible: EditCommand {
             else { throw Self.refused(.targetNotFound(affectedLocation)) }
             mark.visible = visible
             score.systemMeasures.updateValue(at: slot.measureIndex) {
-                $0.elements[slot.elementIndex].element = .staffText(mark)
+                $0.elements.updateValue(at: slot.elementIndex) { $0.element = .staffText(mark) }
             }
         case let .harmony(anchor):
             guard let slot = SetChordSymbol.harmonySlot(at: anchor, in: score) else {
@@ -90,7 +90,7 @@ public struct SetTextVisible: EditCommand {
             else { throw Self.refused(.targetNotFound(affectedLocation)) }
             mark.visible = visible
             score.systemMeasures.updateValue(at: measureIndex) {
-                $0.elements[index].element = .rehearsalMark(mark)
+                $0.elements.updateValue(at: index) { $0.element = .rehearsalMark(mark) }
             }
         }
         return SetTextVisible(text, visible: old)

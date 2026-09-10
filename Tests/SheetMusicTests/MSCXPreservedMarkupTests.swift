@@ -312,8 +312,7 @@ struct MSCXPreservedMarkupTests {
                 }
                 change.instrument = instrument
                 score.systemMeasures.updateValue(at: measureIndex) { column in
-                    column.elements[elementIndex].element =
-                        .instrumentChange(change)
+                    column.elements.updateValue(at: elementIndex) { $0.element = .instrumentChange(change) }
                 }
                 seeded += 1
             }

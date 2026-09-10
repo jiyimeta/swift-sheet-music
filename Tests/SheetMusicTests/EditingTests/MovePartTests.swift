@@ -70,11 +70,12 @@ struct MovePartTests {
     func moveRestampsSystemElementAddresses() throws {
         var score = duet()
         score.systemMeasures.updateValue(at: 1) { column in
-            column.elements.append(PositionedSystemElement(
+            let pairs = column.elements.indices.map { (column.elements.eid(at: $0), column.elements[$0]) }
+            column.elements = IdentifiedArray(pairs + [(.invalid, PositionedSystemElement(
                 position: .start,
                 element: .tempo(Tempo(beatsPerSecond: 3)),
                 originalStaff: StaffAddress(partIndex: 1, staffIndexInPart: 1),
-            ))
+            ))])
         }
         let original = score
         let inverse = try MovePart(from: 0, to: 1).apply(to: &score)

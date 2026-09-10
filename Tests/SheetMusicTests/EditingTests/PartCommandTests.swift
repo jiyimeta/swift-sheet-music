@@ -255,11 +255,12 @@ struct PartCommandTests {
     func removePartReanchorsSystemElementsPointingIntoIt() throws {
         var score = try fixture()
         score.systemMeasures.updateValue(at: 1) { column in
-            column.elements.append(PositionedSystemElement(
+            let pairs = column.elements.indices.map { (column.elements.eid(at: $0), column.elements[$0]) }
+            column.elements = IdentifiedArray(pairs + [(.invalid, PositionedSystemElement(
                 position: .start,
                 element: .tempo(Tempo(beatsPerSecond: 3)),
                 originalStaff: StaffAddress(partIndex: 1, staffIndexInPart: 1),
-            ))
+            ))])
         }
         let original = score
         let inverse = try RemovePart(partIndex: 1).apply(to: &score)

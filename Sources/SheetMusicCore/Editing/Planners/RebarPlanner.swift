@@ -271,7 +271,9 @@ enum RebarPlanner {
         var lanes = Array(repeating: SystemMeasure(), count: geometry.columnCount)
         for (offset, measureIndex) in geometry.run.enumerated() {
             guard score.systemMeasures.indices.contains(measureIndex) else { continue }
-            for positioned in score.systemMeasures[measureIndex].elements {
+            let elements = score.systemMeasures[measureIndex].elements
+            for index in elements.indices {
+                let positioned = elements[index]
                 let tick = geometry.measureStarts[offset]
                     + positioned.position.ticks(division: geometry.division)
                 let column = geometry.column(containing: tick)
@@ -279,7 +281,7 @@ enum RebarPlanner {
                 moved.position = MeasurePosition(
                     offset: geometry.fraction(ofTicks: tick - geometry.columnStart(column)),
                 )
-                lanes[column].elements.append(moved)
+                lanes[column].elements.insert(moved, at: lanes[column].elements.count, id: elements.eid(at: index))
             }
         }
         return lanes

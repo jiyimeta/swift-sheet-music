@@ -52,7 +52,9 @@ struct TextEntryOriginIdentityTests {
         {
             guard case var .staffText(text) = score.systemMeasures[0].elements[index].element else { continue }
             text.offsetX = 50
-            score.systemMeasures.updateValue(at: 0) { $0.elements[index].element = .staffText(text) }
+            score.systemMeasures.updateValue(at: 0) {
+                $0.elements.updateValue(at: index) { $0.element = .staffText(text) }
+            }
         }
 
         let document = Self.layout(score)

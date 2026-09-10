@@ -151,8 +151,9 @@ public struct AddPart: EditCommand {
                 for elementIndex in column.elements.indices
                     where restoredOriginalStaves[measureIndex].indices.contains(elementIndex)
                 {
-                    column.elements[elementIndex].originalStaff =
-                        restoredOriginalStaves[measureIndex][elementIndex]
+                    column.elements.updateValue(at: elementIndex) {
+                        $0.originalStaff = restoredOriginalStaves[measureIndex][elementIndex]
+                    }
                 }
             }
         }
@@ -244,10 +245,12 @@ public struct AddPart: EditCommand {
                     guard let address = column.elements[elementIndex].originalStaff,
                           address.partIndex >= partIndex
                     else { continue }
-                    column.elements[elementIndex].originalStaff = StaffAddress(
-                        partIndex: address.partIndex + 1,
-                        staffIndexInPart: address.staffIndexInPart,
-                    )
+                    column.elements.updateValue(at: elementIndex) {
+                        $0.originalStaff = StaffAddress(
+                            partIndex: address.partIndex + 1,
+                            staffIndexInPart: address.staffIndexInPart,
+                        )
+                    }
                 }
             }
         }
