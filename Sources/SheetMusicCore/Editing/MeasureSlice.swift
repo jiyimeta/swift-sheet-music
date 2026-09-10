@@ -4,8 +4,9 @@ struct MeasureSlice: Sendable, Equatable {
     /// `staffMeasures[partIndex][staffIndexInPart]`.
     var staffMeasures: [[Measure]]
     var systemMeasure: SystemMeasure
-    /// The captured column's identity. Nil means no source column existed, or this is a new
-    /// planned column whose identity will be minted only if it is inserted into the system lane.
+    /// The captured column's identity, or, for a planned column, the identity of the old column in its run that
+    /// it takes over. Nil means the run grew past its old count or no source column existed; whoever inserts the
+    /// column into the system lane mints one.
     var systemMeasureEID: EID?
 
     /// Unlike the synthesized initializer, this requires an explicit systemMeasureEID argument,

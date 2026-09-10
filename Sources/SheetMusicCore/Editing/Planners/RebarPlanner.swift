@@ -1,7 +1,8 @@
 import SheetMusicFoundation
 
 /// Re-partitions one measure region into bars of a new nominal duration. Called inside `SetTimeSignature.apply`:
-/// it reads the score and mints new slot identifiers from that apply's allocator before returning the columns.
+/// it reads the score and mints element and tuplet identities from that apply's allocator. Columns carry their
+/// source identity instead; a column its run grows past its old count carries none, for the splice to mint.
 ///
 /// The region is cut into RUNS of regular bars separated by irregular ones (`actualLength != nil`, i.e. a
 /// pickup or a deliberately short bar). An irregular column passes through verbatim and each run either side
@@ -162,7 +163,8 @@ enum RebarPlanner {
             MeasureSlice(
                 staffMeasures: staffColumns.map { part in part.map { $0[column] } },
                 systemMeasure: lanes[column],
-                systemMeasureEID: nil,
+                systemMeasureEID: column < run.count && score.systemMeasures.indices.contains(run.lowerBound + column)
+                    ? score.systemMeasures.eid(at: run.lowerBound + column) : nil,
             )
         }
     }

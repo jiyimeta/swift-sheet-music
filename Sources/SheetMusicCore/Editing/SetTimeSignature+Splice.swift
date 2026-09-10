@@ -151,6 +151,11 @@ enum TimeSignatureRegion {
 
     /// Replaces `range` with `columns` on every staff, and in the system lane when that lane is parallel.
     ///
+    /// A verbatim or restored lane column keeps its EID wherever it lands; a planned column takes over the
+    /// EID the planner assigned. Only a column with no EID gets one minted, in column order. The lane must
+    /// already be assigned, as every editing entry point ensures before `apply`: an unassigned identifier read
+    /// off it is passed through as is and trips `replaceSubrange`'s assert.
+    ///
     /// A staff too short to cover `range` is skipped whole rather than padded — the same conservatism
     /// `InsertMeasure.insert` applies to `systemMeasures`, and for the same reason: a score that never held the
     /// invariant must come back out of an undo exactly as it went in, not partially patched into it.
@@ -178,21 +183,7 @@ enum TimeSignatureRegion {
             }
         }
         guard parallelLane, score.systemMeasures.count >= range.upperBound else { return }
-        let sharedCount = min(range.count, columns.count)
-        for offset in 0 ..< sharedCount {
-            score.systemMeasures.updateValue(at: range.lowerBound + offset) { $0 = columns[offset].systemMeasure }
-        }
-        for index in (range.lowerBound + sharedCount ..< range.upperBound).reversed() {
-            let eid = score.systemMeasures.eid(at: index)
-            score.systemMeasures.remove(eid: eid)
-        }
-        for offset in sharedCount ..< columns.count {
-            let index = range.lowerBound + offset
-            let anchor = index == 0 ? nil : score.systemMeasures.eid(at: index - 1)
-            score.systemMeasures.insert(
-                columns[offset].systemMeasure, after: anchor,
-                id: columns[offset].systemMeasureEID ?? ids.next(),
-            )
-        }
+        let pairs = columns.map { ($0.systemMeasureEID ?? ids.next(), $0.systemMeasure) }
+        score.systemMeasures.replaceSubrange(range, with: pairs)
     }
 }
