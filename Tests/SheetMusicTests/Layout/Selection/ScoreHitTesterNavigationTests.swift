@@ -175,8 +175,25 @@ struct ScoreHitTesterNavigationTests {
             CGPoint(x: box.minX - 2.6, y: box.midY),
             CGPoint(x: box.minX - 5.5, y: box.midY), // 0.3 sp outside the padded edge.
         ] {
+            // Move the mark's left edge onto this SAME query point, even for zero-width text.
+            let dx = box.minX - miss.x
+            let shifted: LayoutElement
+            switch element {
+            case let .jump(text, origin, identity):
+                shifted = .jump(text: text, origin: CGPoint(x: origin.x - dx, y: origin.y), identity: identity)
+            case let .marker(kind, text, origin, identity):
+                shifted = .marker(
+                    kind: kind, text: text, origin: CGPoint(x: origin.x - dx, y: origin.y), identity: identity,
+                )
+            default:
+                Issue.record("expected navigation text"); return
+            }
+            let control = ScoreHitTester(document: ElementHitFixtures.document(
+                [], markers: isJump ? [] : [shifted], jumps: isJump ? [shifted] : [],
+            ))
             #expect(!padded.contains(miss))
-            #expect(tester.hitTest(at: edgeHit) == target)
+            #expect(padded.offsetBy(dx: -dx, dy: 0).contains(miss))
+            #expect(control.hitTest(at: miss) == target)
             #expect(tester.hitTest(at: miss) == nil)
         }
     }

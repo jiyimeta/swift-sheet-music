@@ -9,7 +9,12 @@ extension ScoreHitTester {
     func arcContains(_ element: LayoutElement, point: CGPoint) -> Bool? {
         guard let curve = arcCenterline(element) else { return nil }
         let sp = document.metrics.sp
-        return curve.distance(to: point, accuracy: sp * 0.001).value <= sp * Self.curveHitToleranceSp
+        let tolerance = sp * Self.curveHitToleranceSp
+        // Outside the tolerance-inflated curve bounds, every curve point is farther away than the tolerance.
+        let bounds = curve.bounds.insetBy(dx: -tolerance, dy: -tolerance)
+        guard point.x >= bounds.minX, point.x <= bounds.maxX,
+              point.y >= bounds.minY, point.y <= bounds.maxY else { return false }
+        return curve.distance(to: point, accuracy: sp * 0.001).value <= tolerance
     }
 
     /// Actual curve extrema plus the renderer's lens/stroke thickness, without hit tolerance.

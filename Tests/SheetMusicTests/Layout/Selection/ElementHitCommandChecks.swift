@@ -7,14 +7,13 @@ enum ElementHitCommandChecks {
         return try command.apply(to: &score)
     }
 
-    static func apply(_ id: ScoreElementID, fixture: Score? = nil) throws {
-        var score = ScoreEditor(score: fixture ?? EditingFixtures.twoConsecutiveC4Chords()).score
+    static func apply(_ id: ScoreElementID) throws {
+        var score = ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score
         let command: any EditCommand
         switch id {
         case .tie, .slur, .jump, .marker:
-            // New-kind checks supply a real score whose storage matches the hit identity.
-            score = try ScoreEditor(score: #require(fixture)).score
-            command = try #require(id.removalCommand)
+            Issue.record("Use remove(_:from:) with the real layout's score for selection-3 identities")
+            return
         case let .dynamic(anchor):
             command = SetDynamic(at: anchor, subtype: "ff")
         case let .fermata(anchor):

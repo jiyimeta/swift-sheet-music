@@ -20,8 +20,9 @@ and this project adheres to
   `RemoveTie`, `RemoveSlur`, `RemoveJump` and `RemoveMarker` remove one
   addressed element and return an inverse that restores its prior values.
   `ScoreElementID.removalCommand` resolves these four kinds without a score
-  lookup; older engraved-element kinds return nil. `RemoveTie` also clears
-  half-present links, and clearing already-absent links is a no-op.
+  lookup; older engraved-element kinds return nil. `RemoveTie` requires a
+  non-nil outgoing link matching the other note's incoming link; absent,
+  half-present or mismatched links are refused as `noTieBetween`.
   `RemoveSlur` counts only slur entries, including hidden ones, on a chord
   or rest, or removes a standalone slur slot. `RemoveSpanner` is unchanged
   and still removes every matching chord slur. Navigation removal affects
@@ -30,8 +31,8 @@ and this project adheres to
   The Mac example supports click-and-Delete through the Core resolver.
   Selection stays in layout coordinates for tint; element Delete maps its
   staff addresses back to the full score, uses the existing undo/redo path,
-  and clears selection after success. A stale-address failure leaves the
-  selection in place and displays the error; unsupported kinds get a
+  and clears element selection after any adopted edit. A stale-address
+  failure leaves the selection in place and displays the error; unsupported kinds get a
   kind-specific message.
 
   **Identities are positional.** Removal renumbers later list entries or

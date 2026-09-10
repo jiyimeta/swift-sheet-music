@@ -57,8 +57,8 @@ struct ScoreElementRemovalTests {
         }
     }
 
-    @Test("Stale supported identities still produce commands, which refuse on apply")
-    func staleAddresses() throws {
+    @Test("Supported identities with missing owners produce commands, which refuse on apply")
+    func missingOwners() throws {
         let note = NoteID(
             staff: Self.staff,
             measureIndex: 3,

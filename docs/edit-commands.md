@@ -132,7 +132,7 @@ own substantive logic.
 | `RemoveSpanner` — unchanged: removes every matching slur in the chord's spanners list, not one ordinal; other kinds remove their standalone slot | not in the example — host command registry | sugar |
 | `SetChordSymbol` | not in the example — host command registry | sugar |
 | `SetTextVisible` | not in the example — a host's properties panel, on a selected text | partly sugar |
-| `RemoveTie(start:end:)` — clears start's outgoing and end's incoming link, not their other links; already-absent links are an idempotent no-op | Backspace / forward Delete on a selected tie | sugar over `SetTie` |
+| `RemoveTie(start:end:)` — clears only a non-nil matching start-forward/end-back pair, preserving other links; absent, half-present or mismatched links are refused as `noTieBetween` | Backspace / forward Delete on a selected tie | validated sugar over `SetTie` |
 | `RemoveSlur(_:)` — removes one chord/rest slur by slur-only ordinal (hidden entries included), or one standalone voice slot; does not remove sibling slurs | Backspace / forward Delete on a selected slur | sugar over `ReplaceVoiceElement` / `ReplaceVoiceElements` |
 | `RemoveJump(staff:measureIndex:index:)` — removes one entry from that staff's jumps list; other staves' duplicate copies remain | Backspace / forward Delete on a selected jump | staff-scoped read–replace–write sugar |
 | `RemoveMarker(staff:measureIndex:index:)` — removes one entry from that staff's markers list; other staves' duplicate copies remain | Backspace / forward Delete on a selected marker | staff-scoped read–replace–write sugar |
@@ -150,8 +150,8 @@ does not make those hosts selectable. The Core commands and resolver are
 available directly; the resolver takes no score and leaves stale-address
 validation to `apply`.
 
-Every removal's inverse restores the prior values: tie links exactly as
-they were (including a half-present link), a chord/rest slur at its original
+Every accepted removal's inverse restores the prior values: matching tie
+links exactly as they were, a chord/rest slur at its original
 raw list index, a standalone slur with the voice's tuplet ranges, and a
 navigation list on the same owning staff. `SetJumps` / `SetMarkers` remain
 canonical-staff setters and are not used to remove another staff's entry.

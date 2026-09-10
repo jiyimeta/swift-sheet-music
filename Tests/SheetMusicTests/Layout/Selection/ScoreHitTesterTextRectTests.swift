@@ -58,7 +58,14 @@
             #expect(tester.hitTest(at: hit) == target)
             let miss = CGPoint(x: box.minX - 2.6, y: box.midY)
             #expect(!padded.contains(miss))
-            #expect(tester.hitTest(at: hit) == target)
+            // Moving the text left by one point makes the same query fall within its padded rectangle.
+            let shifted = LayoutElement.staffText(
+                text: "Fine", origin: CGPoint(x: ElementHitFixtures.origin.x - 1, y: ElementHitFixtures.origin.y),
+                color: nil, style: .staffText, anchor: ElementHitFixtures.anchor,
+            )
+            let control = ScoreHitTester(document: ElementHitFixtures.document([shifted]))
+            #expect(padded.offsetBy(dx: -1, dy: 0).contains(miss))
+            #expect(control.hitTest(at: miss) == target)
             #expect(tester.hitTest(at: miss) == nil)
         }
 

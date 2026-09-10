@@ -33,9 +33,9 @@ struct RemoveTieTests {
         )])).score
     }
 
-    @Test("clears only the addressed links, including either half-present link", arguments: [0, 1, 2])
-    func removesAndRestoresLinks(_ variant: Int) throws {
-        var score = Self.fixture(forward: variant == 2 ? nil : 7, back: variant == 1 ? nil : 7)
+    @Test("clears only the matching pair and restores it exactly")
+    func removesAndRestoresLinks() throws {
+        var score = Self.fixture()
         let before = score
         let command = RemoveTie(start: Self.note(0), end: Self.note(1))
         #expect(command.affectedLocation == VoiceElementID(Self.note(0)))
@@ -55,14 +55,47 @@ struct RemoveTieTests {
         #expect(score.stableFingerprint == before.stableFingerprint)
     }
 
-    @Test("already-absent links and their inverse are no-ops")
-    func absentLinks() throws {
-        var score = Self.fixture(forward: nil, back: nil)
+    @Test("absent, half-present and mismatched links are refused", arguments: [0, 1, 2, 3])
+    func unrelatedLinks(_ variant: Int) {
+        let links: [(Int?, Int?)] = [(nil, nil), (7, nil), (nil, 7), (7, 8)]
+        var score = Self.fixture(forward: links[variant].0, back: links[variant].1)
         let before = score
-        let inverse = try RemoveTie(start: Self.note(0), end: Self.note(1)).apply(to: &score)
+        let error = #expect(throws: SheetMusicError.self) {
+            _ = try RemoveTie(start: Self.note(0), end: Self.note(1)).apply(to: &score)
+        }
+        guard case let .invalidEdit(refusal)? = error else { Issue.record("expected refusal"); return }
+        #expect(refusal.reason == .noTieBetween(start: Self.note(0), end: Self.note(1)))
+        #expect(refusal.operation == "RemoveTie")
+        #expect(refusal.code == "edit.noTieBetween")
+        #expect(refusal.developerDescription == "RemoveTie: no tie between \(Self.note(0)) and \(Self.note(1))")
         #expect(score == before)
         #expect(score.stableFingerprint == before.stableFingerprint)
-        _ = try inverse.apply(to: &score)
+    }
+
+    @Test("a stale A-to-B address now naming X and A cannot cut Z-to-A")
+    func staleSelectionPreservesIncomingTie() {
+        let voice = Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14, tieForward: 5)])), // Z
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14, tieForward: 7, tieBack: 5)])), // A
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14, tieBack: 7)])), // B
+        ])
+        var literal = Score(division: 480, parts: [Part(
+            id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [Measure(voices: [voice])])],
+        )])
+        let stale = RemoveTie(start: Self.note(1), end: Self.note(2))
+        literal.parts[0].staves[0].measures[0].voices[0].elements.insert(
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])), at: 1, // X
+        )
+        var score = ScoreEditor(score: literal).score
+        let before = score
+        let error = #expect(throws: SheetMusicError.self) { _ = try stale.apply(to: &score) }
+        guard case let .invalidEdit(refusal)? = error else { Issue.record("expected refusal"); return }
+        #expect(refusal.reason == .noTieBetween(start: Self.note(1), end: Self.note(2)))
+        #expect(refusal.operation == "RemoveTie")
+        #expect(score[Self.note(0)]?.tieForward == 5)
+        #expect(score[Self.note(2)]?.tieBack == 5)
+        #expect(score[Self.note(2)]?.tieForward == 7)
+        #expect(score[Self.note(3)]?.tieBack == 7)
         #expect(score == before)
         #expect(score.stableFingerprint == before.stableFingerprint)
     }
@@ -80,7 +113,7 @@ struct RemoveTieTests {
         }
         guard case let .invalidEdit(refusal)? = error else { Issue.record("expected refusal"); return }
         #expect(refusal.reason == .noteNotFound(missing))
-        #expect(refusal.operation == "SetTie")
+        #expect(refusal.operation == "RemoveTie")
         #expect(score == before)
         #expect(score.stableFingerprint == before.stableFingerprint)
     }
