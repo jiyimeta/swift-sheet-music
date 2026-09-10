@@ -61,8 +61,9 @@ struct TextPlacementAutoplaceTests {
         )
         #expect(measures[0][0] == fixed)
         let fixedBox = try #require(TextInkGeometry.rects(for: fixed, metrics: metrics)?.first)
-        let movingBox = try #require(TextInkGeometry.rects(for: measures[0][1], metrics: metrics)?
-            .reduce(CGRect.null) { $0.union($1) })
+        let movingRects = try #require(TextInkGeometry.rects(for: measures[0][1], metrics: metrics))
+        let firstMovingRect = try #require(movingRects.first)
+        let movingBox = movingRects.dropFirst().reduce(firstMovingRect) { $0.union($1) }
         #expect(movingBox.minY - fixedBox.maxY >= metrics.sp * 0.5 - 0.001)
     }
 

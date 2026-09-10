@@ -298,9 +298,9 @@ extension SkylineAutoplacePass {
             metrics: metrics, skyline: querySkyline,
         )
         if let first = group.first,
-           let row = measures[first.measure][first.index].textPlacement?.row
+           let row = measures[first.measure][first.index].textPlacement?.row,
+           let box = LayoutShape(rects: shapes.flatMap(\.shape.rects)).bbox
         {
-            let box = shapes.compactMap(\.shape.bbox).reduce(CGRect.null) { $0.union($1) }
             let rowShift = lyricRows.outwardShift(
                 for: row, box: box, minimumGap: AutoplaceRules.minDistance(for: .lyrics, sp: metrics.sp),
             )
