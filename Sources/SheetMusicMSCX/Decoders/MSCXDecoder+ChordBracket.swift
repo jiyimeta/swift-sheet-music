@@ -8,7 +8,7 @@ extension ChordBracket {
     /// the base `<offset>` and `<placement>` are owned by `ElementProperties`.
     private static let consumedChildren: Set = [
         "bracketHookLen", "bracketHookPos", "bracketRightSide",
-        "color", "offset", "placement", "visible",
+        "color", "offset", "autoplace", "placement", "visible",
     ]
 
     /// Decode the first direct `<ChordBracket>` child of a `<Chord>`.

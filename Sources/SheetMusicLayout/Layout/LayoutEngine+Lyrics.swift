@@ -38,6 +38,7 @@ extension LayoutEngine {
         fromX: CGFloat,
         toX: CGFloat,
         y: CGFloat,
+        placement: TextPlacementMetadata? = nil,
         metrics: StaffMetrics,
         out: inout [LayoutElement],
     ) {
@@ -75,6 +76,7 @@ extension LayoutEngine {
                 toOrigin: CGPoint(
                     x: centerX + 0.5 * dashWidth, y: y,
                 ),
+                placement: placement,
             ))
         }
     }
@@ -84,6 +86,10 @@ extension LayoutEngine {
     static func emitMelismaContinuation(
         continuation: MelismaContinuation,
         staffMidY: CGFloat,
+        style: TextPlacementStyles = TextPlacementStyles(),
+        staff: StaffAddress? = nil,
+        lineGeometry: StaffLineGeometry = .standard,
+        maxAboveVerse: Int = 0,
         tickColumns: [Int: CGFloat],
         headerContentStartX: CGFloat,
         measureWidth: CGFloat,
@@ -93,10 +99,17 @@ extension LayoutEngine {
         // Use the same Y the anchor rule uses — the lyric font's
         // underline level (baseline + underline offset) rather
         // than the text's vertical center.
-        let lyricsY = staffMidY + metrics.sp * 4
-            + CGFloat(continuation.verseIndex) * metrics.sp
-            * lyricVerseStrideInSpatiums
-            + Self.melismaLineYOffset(sp: metrics.sp)
+        let side = style.side(for: .lyrics, element: continuation.lyric.elementProperties)
+        let placement = TextPlacementMetadata(
+            side: side,
+            autoplace: continuation.lyric.elementProperties.autoplace ?? true,
+            verse: continuation.verseIndex,
+            staff: staff,
+        )
+        let lyricsY = lyricOrigin(
+            lyric: continuation.lyric, verse: continuation.verseIndex, maxAboveVerse: maxAboveVerse,
+            style: style, x: 0, lineGeometry: lineGeometry, metrics: metrics,
+        ).y + Self.melismaLineYOffset(sp: metrics.sp)
         // Start at x=0 (the measure's left boundary) for mid-system
         // continuations so the rule visually touches the previous
         // measure's anchor rule. When the measure carries a clef /
@@ -134,6 +147,7 @@ extension LayoutEngine {
         out.append(.lyricsMelisma(
             fromOrigin: CGPoint(x: lineStartX, y: lyricsY),
             toOrigin: CGPoint(x: endX, y: lyricsY),
+            placement: placement,
         ))
     }
 
@@ -238,7 +252,7 @@ extension LayoutEngine {
                                 .ticks(division: division)
                             for (verseIdx, lyric)
                                 in c.lyrics.enumerated()
-                                where !lyric.text.isEmpty
+                                where lyric.visible && !lyric.text.isEmpty
                             {
                                 let key = MelismaLyricKey(
                                     staffIndex: staffIdx,
@@ -256,6 +270,7 @@ extension LayoutEngine {
                                     lyricTicks: ticks,
                                     voiceIdx: voiceIdx,
                                     verseIdx: verseIdx,
+                                    lyric: lyric,
                                     tickCounts: tickCounts,
                                     result: &result[staffIdx],
                                 )
@@ -281,6 +296,7 @@ extension LayoutEngine {
         lyricTicks: Int,
         voiceIdx: Int,
         verseIdx: Int,
+        lyric: Lyric,
         tickCounts: [Int],
         result: inout [[MelismaContinuation]],
     ) {
@@ -296,6 +312,7 @@ extension LayoutEngine {
                     result[currentMeasure].append(MelismaContinuation(
                         voiceIndex: voiceIdx,
                         verseIndex: verseIdx,
+                        lyric: lyric,
                         endTick: tickCounts[currentMeasure],
                         continuesPastMeasure: true,
                     ))
@@ -317,6 +334,7 @@ extension LayoutEngine {
                     result[currentMeasure].append(MelismaContinuation(
                         voiceIndex: voiceIdx,
                         verseIndex: verseIdx,
+                        lyric: lyric,
                         endTick: currentTick + remaining,
                         continuesPastMeasure: false,
                     ))
@@ -338,6 +356,7 @@ extension LayoutEngine {
                 result[currentMeasure].append(MelismaContinuation(
                     voiceIndex: voiceIdx,
                     verseIndex: verseIdx,
+                    lyric: lyric,
                     endTick: tickCounts[currentMeasure],
                     continuesPastMeasure: true,
                 ))
@@ -423,6 +442,7 @@ extension LayoutEngine {
         headerContentStartX: CGFloat,
         measureWidth: CGFloat,
         continuesPastMeasure: Bool,
+        placement: TextPlacementMetadata? = nil,
         metrics: StaffMetrics,
         out: inout [LayoutElement],
     ) {
@@ -472,6 +492,7 @@ extension LayoutEngine {
         out.append(.lyricsMelisma(
             fromOrigin: CGPoint(x: lineStartX, y: lyricsY),
             toOrigin: CGPoint(x: endX, y: lyricsY),
+            placement: placement,
         ))
     }
 }

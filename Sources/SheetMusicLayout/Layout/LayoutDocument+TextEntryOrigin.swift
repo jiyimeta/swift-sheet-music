@@ -4,22 +4,34 @@
 import SheetMusicCore
 
 extension LayoutDocument {
-    /// The final document-space origin of the lyric syllable `cursor` names — the point the engraved
-    /// syllable is centred on, which is where an inline lyric caret belongs.
-    ///
-    /// The X is the owning chord's column (`chordStemOrigin`) rather than anything read off the syllable:
-    /// `LayoutEngine+Placement` centres a syllable on that same `chordX`, so the two agree, and the column
-    /// still answers for a verse that has no syllable engraved yet. The Y comes from `lyricLineY`, which
-    /// prefers the verse's own engraved line and falls back to the placement engine's baseline.
-    ///
-    /// `nil` when the anchor names no chord in this document, or when its staff is not laid out here.
+    /// The final lyric ink anchor, including authored offsets. Empty rows resolve through
+    /// the supplied style context; the displayed cursor remains the only address used here.
     public func lyricEntryOrigin(
         at cursor: LyricInputPlanner.Cursor,
+        placementStyle: TextPlacementStyles? = nil,
+        elementProperties: ElementProperties = .default,
     ) -> CGPoint? {
+        for system in systems {
+            for measure in system.measures where measure.measureIndex == cursor.location.measureIndex {
+                for element in measure.elements {
+                    guard case let .textMark(.lyrics(_, verse, anchor, _), _, point) = element,
+                          anchor == cursor.location, verse == cursor.verse else { continue }
+                    return absolute(point, in: system, measure: measure)
+                }
+            }
+        }
         guard let anchor = chordStemOrigin(at: cursor.location),
-              let y = lyricLineY(at: cursor.location, verse: cursor.verse)
+              let y = lyricLineY(
+                  at: cursor.location,
+                  verse: cursor.verse,
+                  placementStyle: placementStyle,
+                  elementProperties: elementProperties,
+              )
         else { return nil }
-        return CGPoint(x: anchor.x, y: y)
+        let style = placementStyle ?? TextPlacementStyles()
+        let side = style.side(for: .lyrics, element: elementProperties)
+        let x = style.position(for: .lyrics, side: side).x + (elementProperties.offset?.x ?? 0)
+        return CGPoint(x: anchor.x + CGFloat(x) * metrics.sp, y: y)
     }
 
     /// The final document-space origin of a chord stem or rest at `anchor`.
@@ -89,11 +101,9 @@ extension LayoutDocument {
         style: TextStyleType,
     ) -> CGPoint? {
         firstOrigin(inMeasure: anchor.measureIndex) { element in
-            guard case let .staffText(
-                _, origin, _, candidateStyle, candidateAnchor,
-            ) = element,
-                candidateAnchor == anchor,
-                candidateStyle == style
+            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _) = element,
+                  candidateAnchor == anchor,
+                  candidateStyle == style
             else { return nil }
             return origin
         }
@@ -141,14 +151,12 @@ extension LayoutDocument {
         if let exact = staffTextOrigin(at: anchor, style: style) { return exact }
         guard let wanted = SystemLaneSlot.position(of: anchor, in: score) else { return nil }
         return firstOrigin(inMeasure: anchor.measureIndex) { element in
-            guard case let .staffText(
-                _, origin, _, candidateStyle, candidateAnchor,
-            ) = element,
-                candidateStyle == style,
-                let candidateAnchor,
-                candidateAnchor.measureIndex == anchor.measureIndex,
-                style == .systemText || candidateAnchor.staff == anchor.staff,
-                SystemLaneSlot.position(of: candidateAnchor, in: score) == wanted
+            guard case let .staffText(_, origin, _, candidateStyle, candidateAnchor, _) = element,
+                  candidateStyle == style,
+                  let candidateAnchor,
+                  candidateAnchor.measureIndex == anchor.measureIndex,
+                  style == .systemText || candidateAnchor.staff == anchor.staff,
+                  SystemLaneSlot.position(of: candidateAnchor, in: score) == wanted
             else { return nil }
             return origin
         }
@@ -191,9 +199,8 @@ extension LayoutDocument {
                 where measure.measureIndex == anchor.measureIndex
             {
                 for element in measure.elements {
-                    guard case let .rehearsalMark(
-                        _, origin, _, _, candidateMeasureIndex,
-                    ) = element, candidateMeasureIndex == anchor.measureIndex
+                    guard case let .rehearsalMark(_, origin, _, _, candidateMeasureIndex, _) = element,
+                          candidateMeasureIndex == anchor.measureIndex
                     else { continue }
                     let padding = RehearsalMarkFrame.paddingSp(sp: system.sp)
                     return absolute(

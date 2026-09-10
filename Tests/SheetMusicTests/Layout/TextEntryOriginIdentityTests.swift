@@ -126,7 +126,7 @@ struct TextEntryOriginIdentityTests {
         for system in document.systems {
             for measure in system.measures {
                 for element in measure.elements {
-                    if case let .staffText(_, _, _, _, candidate) = element {
+                    if case let .staffText(_, _, _, _, candidate, _) = element {
                         anchors.append(candidate)
                     }
                 }

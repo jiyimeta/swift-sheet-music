@@ -11,7 +11,7 @@ extension ExpressionText {
     /// `color` and `visible` are consumed because
     /// `ElementProperties(decodingMSCXChildrenOf:)` reads them.
     private static let consumedChildren: Set = [
-        "text", "snapToDynamics", "color", "offset", "placement", "visible",
+        "text", "snapToDynamics", "color", "offset", "autoplace", "placement", "visible",
     ]
 
     /// Decode one `<Expression>`.

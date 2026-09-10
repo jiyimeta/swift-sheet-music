@@ -26,8 +26,11 @@ extension LayoutDocument {
     public func editingHitTest(at point: CGPoint, activeVoice: Int) -> ScoreItemID? {
         let tester = ScoreHitTester(document: self)
         let slop = Self.slopRect(around: point)
-
-        guard let hit = tester.hitTest(at: point), let item = Self.selectableItem(from: hit) else {
+        let hit = tester.hitTest(at: point)
+        // A real text hit belongs to the host's text editor. It is not a near miss
+        // that should be rescued to a nearby note when the text sits close to a staff.
+        if hit?.textID != nil { return nil }
+        guard let hit, let item = Self.selectableItem(from: hit) else {
             // The engine's ladder only answers for points inside an element's own geometry, which makes noteheads a
             // fingertip-sized target at best and a hairline one on a dense system. Fall back to anything within the
             // slop box so a near miss still lands, preferring the active voice the same way an on-target hit does.

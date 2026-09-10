@@ -279,7 +279,10 @@ extension LayoutMeasureIdentityTests {
         ))
         for element in measure.markers + measure.jumps {
             #expect(element.elementItemID == element.elementID.map(ScoreItemID.element))
-            #expect(LayoutEngine.translate(element: element, dy: 17) == element)
+            let translated = LayoutEngine.translate(element: element, dy: 17)
+            #expect(translated.elementID == element.elementID)
+            #expect(LayoutEngine.elementYPoints(translated) == LayoutEngine.elementYPoints(element).map { $0 + 17 })
+            #expect(LayoutEngine.translate(element: translated, dy: -17) == element)
         }
     }
 

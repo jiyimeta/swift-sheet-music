@@ -16,7 +16,7 @@ import SheetMusicCore
 /// The pass never moves an element toward the staff, so author
 /// `<offset>` values (already baked into `origin.y` at emission) and
 /// the per-tick chord-avoidance already applied to dynamics, fermatas
-/// and lyrics all survive as better-than-default starting points.
+/// all survive as better-than-default starting points.
 ///
 /// **Inert categories.** The `.hairpin` / `.pedal` / `.ottava` /
 /// `.textLine` / `.volta` / `.marker` / `.jump` entries in `categories`
@@ -51,7 +51,7 @@ enum SkylineAutoplacePass {
         case individual
         /// One `dy` for every element in the category on this staff.
         case wholeStaff
-        /// One `dy` per verse row, recovered from the elements' Y.
+        /// One `dy` per side and verse row, carried in placement metadata.
         case lyricVerses
     }
 
@@ -162,7 +162,7 @@ enum SkylineAutoplacePass {
         for (mIdx, elements) in measures.enumerated() {
             for (i, el) in elements.enumerated() {
                 guard let kind = LayoutElementShape.kind(of: el),
-                      !AutoplaceRules.isAutoplaced(kind),
+                      !AutoplaceRules.isAutoplaced(kind) || el.textPlacement?.autoplace == false,
                       let shape = LayoutElementShape.shape(
                           for: el, id: ids[mIdx][i],
                           xOffset: xOffsets[mIdx], metrics: metrics,
@@ -182,11 +182,21 @@ enum SkylineAutoplacePass {
                 addresses, by: category.grouping, in: measures,
                 sp: metrics.sp,
             )
+            var lyricObstacles: [LayoutShape] = []
+            if case .lyricVerses = category.grouping {
+                for (measure, elements) in measures.enumerated() {
+                    for (index, element) in elements.enumerated() {
+                        if let shape = LayoutElementShape.lyricStemClearance(
+                            for: element, id: ids[measure][index], xOffset: xOffsets[measure], metrics: metrics,
+                        ) { lyricObstacles.append(shape) }
+                    }
+                }
+            }
             for members in groups {
                 apply(
                     group: members, measures: &measures, ids: ids,
                     xOffsets: xOffsets, staffMidY: staffMidY,
-                    metrics: metrics, skyline: &skyline,
+                    metrics: metrics, extraObstacles: lyricObstacles, skyline: &skyline,
                 )
             }
         }
@@ -201,7 +211,7 @@ extension SkylineAutoplacePass {
         for (mIdx, elements) in measures.enumerated() {
             for (i, el) in elements.enumerated() {
                 guard let kind = LayoutElementShape.kind(of: el),
-                      kinds.contains(kind) else { continue }
+                      kinds.contains(kind), el.textPlacement?.autoplace != false else { continue }
                 result.append(Address(measure: mIdx, index: i))
             }
         }
@@ -222,92 +232,40 @@ extension SkylineAutoplacePass {
         }
     }
 
-    /// Bucket lyric-family elements into verse rows. `LayoutElement`
-    /// carries no verse index, but the system-wide lyric-Y alignment
-    /// that runs immediately before this pass has already snapped every
-    /// syllable of one verse to a single Y, so distinct `.textMark`
-    /// Y values ARE the verse rows. Melismas and hyphens join the row
-    /// whose EXPECTED position for their kind they sit closest to —
-    /// see `rowOffset(for:sp:)`; a raw-Y comparison would put every
-    /// melisma one row too low.
+    /// Process the staff-nearest row first on each side. Metadata, never Y, identifies
+    /// generated rows. The fallback supports older manually constructed layout values.
     private static func lyricVerseGroups(
-        _ addresses: [Address], in measures: [[LayoutElement]],
-        sp: CGFloat,
+        _ addresses: [Address], in measures: [[LayoutElement]], sp: CGFloat,
     ) -> [[Address]] {
-        var rows: [CGFloat] = []
-        for a in addresses {
-            guard case let .textMark(.lyrics, _, p)
-                = measures[a.measure][a.index] else { continue }
-            let y = (p.y * 100).rounded() / 100
-            if !rows.contains(y) { rows.append(y) }
-        }
-        rows.sort()
-        // Degenerate case: a system whose lyric family is nothing but
-        // melismas / hyphens — a melisma continuing across a system
-        // break with no syllable of its own in this system — has no
-        // row anchor to bucket against, so every verse shares one
-        // `dy`. Over-constraining (one verse's clash pushes the
-        // others) is the safe direction: it never lets a rule land on
-        // top of something, it only leaves extra air.
-        guard !rows.isEmpty else { return [addresses] }
-        var buckets = [[Address]](repeating: [], count: rows.count)
-        for a in addresses {
-            let element = measures[a.measure][a.index]
-            let y = elementY(element)
-            let offset = rowOffset(for: element, sp: sp)
-            var best = 0
-            var bestDelta = CGFloat.infinity
-            for (i, row) in rows.enumerated() {
-                let delta = abs(row + offset - y)
-                if delta < bestDelta {
-                    bestDelta = delta
-                    best = i
+        var buckets: [LyricRow: [Address]] = [:]
+        for address in addresses {
+            let element = measures[address.measure][address.index]
+            let row: LyricRow
+            if let explicit = element.textPlacement?.row {
+                row = explicit
+            } else if case let .textMark(.lyrics(_, verse, _, _), _, _) = element {
+                row = LyricRow(side: .below, verse: verse)
+            } else {
+                let y = LayoutEngine.elementYPoints(element).first ?? 0
+                let offset: CGFloat = if case .lyricsMelisma = element {
+                    LayoutEngine.melismaLineYOffset(sp: sp)
+                } else { 0 }
+                let candidates = addresses.compactMap { candidate -> (Int, CGFloat)? in
+                    guard case let .textMark(
+                        .lyrics(_, verse, _, _),
+                        _,
+                        point,
+                    ) = measures[candidate.measure][candidate.index] else { return nil }
+                    return (verse, abs(point.y + offset - y))
                 }
+                row = LyricRow(side: .below, verse: candidates.min { $0.1 < $1.1 }?.0 ?? 0)
             }
-            buckets[best].append(a)
+            buckets[row, default: []].append(address)
         }
-        return buckets.filter { !$0.isEmpty }
-    }
-
-    /// Representative Y of an element, used only for verse bucketing.
-    private static func elementY(_ element: LayoutElement) -> CGFloat {
-        switch element {
-        case let .textMark(_, _, p):
-            return p.y
-        case let .lyricsMelisma(from, _), let .lyricHyphen(from, _):
-            return from.y
-        default:
-            return LayoutEngine.elementYPoints(element).first ?? 0
-        }
-    }
-
-    /// Where `element` is emitted RELATIVE to its own verse row's Y,
-    /// so the nearest-row search in `lyricVerseGroups` compares like
-    /// with like.
-    ///
-    /// Lyric text is `.center`-anchored exactly on the row Y, and a
-    /// hyphen is drawn at the lyric text's midline and carried along
-    /// by `shiftLyricTextY`, so both offsets are zero. A melisma rule
-    /// instead sits at the row's UNDERLINE level,
-    /// `LayoutEngine.melismaLineYOffset` = 0.9 sp below it (see
-    /// `LayoutEngine+Lyrics.emitMelismaContinuation`).
-    ///
-    /// Verse rows are pitched 1.7 sp apart, so comparing a melisma's
-    /// raw Y against the rowYs measures 0.9 sp to its own row versus
-    /// 1.7 − 0.9 = 0.8 sp to the row below — systematically picking
-    /// the WRONG row. `setMelismaAbsoluteY` snaps every melisma in the
-    /// system to verse 0's underline, so before this offset was
-    /// applied every melisma in a 2+-verse system landed in verse 1's
-    /// bucket: the rule detached from the syllables it underlines, and
-    /// its own clearance requirement pushed verse 1 down for a clash
-    /// that belonged to verse 0.
-    private static func rowOffset(
-        for element: LayoutElement, sp: CGFloat,
-    ) -> CGFloat {
-        if case .lyricsMelisma = element {
-            return LayoutEngine.melismaLineYOffset(sp: sp)
-        }
-        return 0
+        return buckets.keys.sorted {
+            if $0.side != $1.side { return $0.side == .above }
+            return $0.side == .above ? $0.verse > $1.verse : $0.verse < $1.verse
+        }.compactMap { buckets[$0] }
     }
 
     /// Compute one `dy` for the group (max over its members), apply it
@@ -316,9 +274,10 @@ extension SkylineAutoplacePass {
         group: [Address], measures: inout [[LayoutElement]],
         ids: [[Int]], xOffsets: [CGFloat],
         staffMidY: CGFloat, metrics: StaffMetrics,
+        extraObstacles: [LayoutShape],
         skyline: inout Skyline,
     ) {
-        var shapes: [(address: Address, shape: LayoutShape, kind: ShapeItemKind)] = []
+        var shapes: [(address: Address, shape: LayoutShape, kind: ShapeItemKind, side: Placement?)] = []
         for a in group {
             let el = measures[a.measure][a.index]
             guard let kind = LayoutElementShape.kind(of: el),
@@ -327,13 +286,17 @@ extension SkylineAutoplacePass {
                       xOffset: xOffsets[a.measure], metrics: metrics,
                   )
             else { continue }
-            shapes.append((a, shape, kind))
+            shapes.append((a, shape, kind, el.textPlacement?.side))
         }
         guard !shapes.isEmpty else { return }
 
+        var querySkyline = skyline
+        for obstacle in extraObstacles {
+            querySkyline.add(obstacle)
+        }
         let dy = requiredShift(
             shapes: shapes, staffMidY: staffMidY,
-            metrics: metrics, skyline: skyline,
+            metrics: metrics, skyline: querySkyline,
         )
         for entry in shapes {
             let m = entry.address.measure
@@ -351,14 +314,14 @@ extension SkylineAutoplacePass {
     /// Negative above the staff, positive below — i.e. always AWAY
     /// from it, never toward it (0 when nothing collides).
     private static func requiredShift(
-        shapes: [(address: Address, shape: LayoutShape, kind: ShapeItemKind)],
+        shapes: [(address: Address, shape: LayoutShape, kind: ShapeItemKind, side: Placement?)],
         staffMidY: CGFloat, metrics: StaffMetrics, skyline: Skyline,
     ) -> CGFloat {
         var dy: CGFloat = 0
         for entry in shapes {
             let shape = entry.shape
             let kind = entry.kind
-            let side = resolveSide(
+            let side: AutoplaceSide = entry.side.map { $0 == .above ? .above : .below } ?? resolveSide(
                 kind: kind, shape: shape, staffMidY: staffMidY,
             )
             let filtered = skyline.filtered { other in

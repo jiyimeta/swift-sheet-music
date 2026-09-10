@@ -37,6 +37,7 @@ extension LayoutEngine {
         let width: CGFloat
         let y: CGFloat
         let syllabic: Syllabic
+        let placement: TextPlacementMetadata
     }
 
     /// Which voice and verse a trail belongs to. A hyphen never crosses either.
@@ -110,10 +111,11 @@ extension LayoutEngine {
         for (slot, measure) in untranslated.enumerated() {
             guard let elements = measure.perStaffElements[staffIdx] else { continue }
             for element in elements {
-                guard case let .textMark(.lyrics(_, verse, anchor), text, origin) = element,
+                guard case let .textMark(.lyrics(_, verse, anchor, placement), text, origin) = element,
                       let anchor, !text.isEmpty,
                       let syllabic = syllabic(of: anchor, verse: verse, in: score)
                 else { continue }
+                let resolved = placement ?? TextPlacementMetadata(side: .below, verse: verse)
                 lanes[
                     HyphenLane(voiceIndex: anchor.voiceIndex, verse: verse),
                     default: [],
@@ -127,6 +129,7 @@ extension LayoutEngine {
                     width: lyricsTextWidth(text, sp: metrics.sp),
                     y: origin.y,
                     syllabic: syllabic,
+                    placement: resolved,
                 ))
             }
         }
@@ -160,12 +163,13 @@ extension LayoutEngine {
     ) {
         for (prev, curr) in zip(syllables, syllables.dropFirst())
             where prev.measureIndex != curr.measureIndex
+            && prev.placement.side == curr.placement.side
             && connectsWithHyphen(prev: prev.syllabic, curr: curr.syllabic)
         {
             emitSpan(
                 fromX: rightEdge(of: prev, sp: metrics.sp),
                 toX: leftEdge(of: curr, sp: metrics.sp),
-                y: curr.y, metrics: metrics, into: &dashes,
+                y: prev.y, placement: prev.placement, metrics: metrics, into: &dashes,
             )
         }
     }
@@ -191,23 +195,26 @@ extension LayoutEngine {
     ) {
         guard let first = syllables.first, let last = syllables.last else { return }
         if first.syllabic == .middle || first.syllabic == .end,
-           hasConnectingNeighbour(
+           let previous = connectingNeighbour(
                of: first, direction: .backward, score: score, staffIdx: staffIdx,
            )
         {
             emitSpan(
                 fromX: leadingStartX, toX: leftEdge(of: first, sp: metrics.sp),
-                y: first.y, metrics: metrics, into: &dashes,
+                y: first.y, placement: TextPlacementMetadata(
+                    side: first.placement.side, autoplace: previous.elementProperties.autoplace ?? true,
+                    verse: first.verse, staff: first.placement.staff,
+                ), metrics: metrics, into: &dashes,
             )
         }
         if last.syllabic == .begin || last.syllabic == .middle,
-           hasConnectingNeighbour(
+           connectingNeighbour(
                of: last, direction: .forward, score: score, staffIdx: staffIdx,
-           )
+           ) != nil
         {
             emitSpan(
                 fromX: rightEdge(of: last, sp: metrics.sp), toX: trailingEndX,
-                y: last.y, metrics: metrics, into: &dashes,
+                y: last.y, placement: last.placement, metrics: metrics, into: &dashes,
             )
         }
     }
@@ -223,16 +230,16 @@ extension LayoutEngine {
     /// Walks the score's measures outward from the syllable's own, in its own voice, and stops at the FIRST
     /// syllable it finds in that verse: a word's neighbour is the next syllable, not the next connecting one,
     /// so a `.single` in between correctly answers "no".
-    private static func hasConnectingNeighbour(
+    private static func connectingNeighbour(
         of syllable: HyphenSyllable,
         direction: HyphenSearchDirection,
         score: Score,
         staffIdx: Int,
-    ) -> Bool {
+    ) -> Lyric? {
         let entries = score.allStaves
-        guard entries.indices.contains(staffIdx) else { return false }
+        guard entries.indices.contains(staffIdx) else { return nil }
         let measures = entries[staffIdx].staff.measures
-        guard measures.indices.contains(syllable.measureIndex) else { return false }
+        guard measures.indices.contains(syllable.measureIndex) else { return nil }
         let measureOrder: [Int] = direction == .forward
             ? Array(syllable.measureIndex ..< measures.count)
             : Array((0 ... syllable.measureIndex).reversed())
@@ -254,12 +261,15 @@ extension LayoutEngine {
                 else { continue }
                 let neighbour = chord.lyrics[syllable.verse]
                 guard !neighbour.text.isEmpty else { continue }
-                return direction == .forward
+                guard score.style.textPlacement.side(for: .lyrics, element: neighbour.elementProperties) == syllable
+                    .placement.side else { return nil }
+                let connected = direction == .forward
                     ? connectsWithHyphen(prev: syllable.syllabic, curr: neighbour.syllabic)
                     : connectsWithHyphen(prev: neighbour.syllabic, curr: syllable.syllabic)
+                return connected ? neighbour : nil
             }
         }
-        return false
+        return nil
     }
 
     // MARK: - Geometry
@@ -309,7 +319,7 @@ extension LayoutEngine {
     /// widened backwards rather than dropped. Without it the arriving half of a system-break hyphen would
     /// almost never draw, because the syllable it points at sits on the system's first column.
     private static func emitSpan(
-        fromX: CGFloat, toX: CGFloat, y: CGFloat, metrics: StaffMetrics,
+        fromX: CGFloat, toX: CGFloat, y: CGFloat, placement: TextPlacementMetadata, metrics: StaffMetrics,
         into dashes: inout [LayoutElement],
     ) {
         let minLength = metrics.sp * 0.4
@@ -317,7 +327,7 @@ extension LayoutEngine {
         guard toX > start else { return }
         var emitted: [LayoutElement] = []
         emitLyricHyphens(
-            fromX: start, toX: toX, y: y, metrics: metrics, out: &emitted,
+            fromX: start, toX: toX, y: y, placement: placement, metrics: metrics, out: &emitted,
         )
         dashes.append(contentsOf: emitted)
     }
@@ -336,7 +346,7 @@ extension LayoutEngine {
         xOffsets: [CGFloat],
     ) {
         for element in dashes {
-            guard case let .lyricHyphen(from, to) = element else { continue }
+            guard case let .lyricHyphen(from, to, placement) = element else { continue }
             let centerX = (from.x + to.x) / 2
             var slot = 0
             for (index, offset) in xOffsets.enumerated() where offset <= centerX {
@@ -347,6 +357,7 @@ extension LayoutEngine {
             untranslated[slot].perStaffElements[staffIdx]?.append(.lyricHyphen(
                 fromOrigin: CGPoint(x: from.x - dx, y: from.y),
                 toOrigin: CGPoint(x: to.x - dx, y: to.y),
+                placement: placement,
             ))
         }
     }

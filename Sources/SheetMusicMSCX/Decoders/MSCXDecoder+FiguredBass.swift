@@ -12,7 +12,7 @@ extension FiguredBass {
     /// direct children, and they must survive in `preservedMarkup`.
     private static let consumedChildren: Set = [
         "onNote", "ticks", "FiguredBassItem", "text",
-        "color", "offset", "placement", "visible",
+        "color", "offset", "autoplace", "placement", "visible",
     ]
 
     /// Decode one `<FiguredBass>` without throwing.

@@ -8,7 +8,7 @@ extension Harmony {
     private static let consumedHarmonyChildren: Set = [
         "base", "baseCase", "bass", "bassCase", "bold", "color", "face",
         "framePadding", "frameType", "harmonyInfo", "harmonyType", "italic",
-        "leftParen", "name", "offset", "placement", "play", "rightParen", "root", "rootCase",
+        "leftParen", "name", "offset", "autoplace", "placement", "play", "rightParen", "root", "rootCase",
         "size", "strike", "underline", "visible",
     ]
 

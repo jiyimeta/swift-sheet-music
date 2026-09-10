@@ -31,6 +31,7 @@ extension ElementProperties {
                 )
             },
             placement: placement,
+            autoplace: node.first("autoplace").flatMap { Int($0.text) }.map { $0 != 0 },
         )
     }
 
@@ -52,6 +53,9 @@ extension ElementProperties {
         if !visible { out.append(XMLTreeNode(name: "visible", text: "0")) }
         if let placement {
             out.append(XMLTreeNode(name: "placement", text: placement.rawValue))
+        }
+        if let autoplace {
+            out.append(XMLTreeNode(name: "autoplace", text: autoplace ? "1" : "0"))
         }
         return out
     }

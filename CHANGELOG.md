@@ -234,6 +234,18 @@ and this project adheres to
 
 ### Fixed
 
+- **Text placementを描画とautoplaceへ反映。** Lyric、StaffText / SystemText、
+  RehearsalMark、Harmonyのabove / belowを、element override、score style、
+  kind defaultの優先順で解決します。実staff height、multilineのbaseline、
+  rehearsal frameのpaddingを使い、hit領域も新しいink位置へ追従します。
+  `ScoreStyle.textPlacement` はMSCX / mssのrole別positionを保持し、v3への保存でも
+  失いません。`ElementProperties.autoplace` はnilをtrueとして扱い、falseの要素は
+  固定位置のobstacleになります。Lyricのrowはsideとverseで分かれ、複数verseの
+  hyphen / melisma / system continuationも同じrowを保ちます。Note / Chordの
+  generic placementは描画上inertで、pitchやstem directionを変更しません。
+  空の編集caretも同じplacement styleを使い、近くのLyricをclickした際に
+  noteのnear-miss rescueへ落ちる問題を修正しました。
+
 - **`stableFingerprint` can see colour, placement and text properties.**
   It could not, and each of the three would have let the golden replay gate
   pass on a no-op: the mirror reports a FAILED write and a successful one as

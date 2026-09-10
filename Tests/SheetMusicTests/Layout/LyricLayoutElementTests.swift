@@ -50,7 +50,7 @@ struct LyricLayoutElementTests {
                 return false
             })
         guard case let .textMark(
-            .lyrics(_, verse, anchor), _, _,
+            .lyrics(_, verse, anchor, _), _, _,
         ) = mark else {
             Issue.record("Expected a lyric text mark")
             return

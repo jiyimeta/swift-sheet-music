@@ -358,10 +358,10 @@
             let origin = try #require(doc.lyricEntryOrigin(
                 at: LyricInputPlanner.Cursor(location: Self.anchor, verse: 0),
             ))
-            // Far enough below the staff that the near-miss rescue box (22 pt) cannot reach a notehead
-            // either, so a non-nil answer could only have come from the text target.
+            // A real lyric hit stays text even when its new baseline is within the
+            // note-selection rescue box. It must not be treated as a near miss.
             let point = CGPoint(x: origin.x + 2, y: origin.y - 2)
-            #expect(ScoreHitTester(document: doc).hitTest(at: point) != nil)
+            #expect(ScoreHitTester(document: doc).hitTest(at: point) == .lyric(anchor: Self.anchor, verse: 0))
             #expect(doc.editingHitTest(at: point, activeVoice: 0) == nil)
         }
     }

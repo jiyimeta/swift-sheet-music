@@ -18,7 +18,7 @@ extension EngravingSymbol {
     /// not preserved here.
     private static let consumedChildren: Set = [
         "name", "font", "symbolsSize", "symbolAngle",
-        "color", "offset", "placement", "visible",
+        "color", "offset", "autoplace", "placement", "visible",
     ]
 
     /// Decode direct `<Symbol>` children of a `<Note>` in document order,

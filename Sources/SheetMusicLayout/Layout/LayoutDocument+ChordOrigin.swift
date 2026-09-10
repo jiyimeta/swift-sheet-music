@@ -38,68 +38,58 @@ extension LayoutDocument {
         return nil
     }
 
-    /// Y (in document coords) where `verse` lyrics are drawn for the
-    /// chord at `voiceElementID`. Used to anchor an inline lyric editor
-    /// exactly where the rendered glyph sits.
-    ///
-    /// Strategy — every step scoped to `voiceElementID.staff`, since
-    /// each staff carries its own lyric line:
-    /// 1. Prefer an existing verse-0 lyric mark ON THIS STAFF, whose Y
-    ///    is the exact base shared across the measure.
-    /// 2. If only a higher verse is present, derive the base by removing
-    ///    that mark's indexed verse offset.
-    /// 3. Else fall back to the placement engine's per-system
-    ///    baseline: 6 sp below the staff top (staff height = 4 sp,
-    ///    plus a 2-sp lyric drop). This matches the un-ratcheted
-    ///    `chordLyricCenterY` in `LayoutEngine+Placement`.
+    /// Final lyric row Y. An existing syllable wins; an empty editor can supply style
+    /// and element properties without mixing a model address into the displayed document.
+    /// Omitting that context retains the default-style fallback for existing callers.
     public func lyricLineY(
-        at voiceElementID: VoiceElementID,
-        verse: Int,
+        at voiceElementID: VoiceElementID, verse: Int,
+        placementStyle: TextPlacementStyles? = nil,
+        elementProperties: ElementProperties = .default,
     ) -> CGFloat? {
-        let measureIndex = voiceElementID.measureIndex
+        let style = placementStyle ?? TextPlacementStyles()
+        let side = style.side(for: .lyrics, element: elementProperties)
         for system in systems {
-            for measure in system.measures
-                where measure.measureIndex == measureIndex
-            {
-                guard let staffIndex = system
-                    .flatIndex(for: voiceElementID.staff),
-                    system.staffOrigins.indices.contains(staffIndex)
-                else { return nil }
-                var higherVerseMark: (y: CGFloat, verse: Int)?
-                for el in measure.elements {
-                    // `measure.elements` aggregates EVERY staff in the
-                    // measure, in staff order, so an unfiltered scan
-                    // hands each caret the topmost lyric-carrying
-                    // staff's line. Only a mark anchored on this staff
-                    // describes this staff's lyric line; the no-mark
-                    // fallback below was already staff-aware, which is
-                    // why an empty bar answered correctly and a bar
-                    // with one syllable answered it for every staff.
-                    if case let .textMark(
-                        .lyrics(_, markVerse, markAnchor), _, p,
-                    ) = el, markAnchor?.staff == voiceElementID.staff {
-                        let y = system.origin.y + measure.origin.y + p.y
-                        if markVerse == 0 {
-                            return y + CGFloat(verse) * system.sp
-                                * lyricVerseStrideInSpatiums
-                        }
-                        if higherVerseMark == nil {
-                            higherVerseMark = (y, markVerse)
-                        }
-                    }
-                }
-                if let mark = higherVerseMark {
-                    let verseZeroY = mark.y - CGFloat(mark.verse) * system.sp
-                        * lyricVerseStrideInSpatiums
-                    return verseZeroY + CGFloat(verse) * system.sp
-                        * lyricVerseStrideInSpatiums
-                }
-                let staffTop = system.origin.y
-                    + system.staffOrigins[staffIndex].y
-                let sp = system.sp
-                return staffTop + sp * 6
-                    + CGFloat(verse) * sp * lyricVerseStrideInSpatiums
+            guard let measure = system.measures.first(where: { $0.measureIndex == voiceElementID.measureIndex }),
+                  let staffIndex = system.flatIndex(for: voiceElementID.staff),
+                  system.staffOrigins.indices.contains(staffIndex) else { continue }
+            var candidates: [(verse: Int, side: Placement, y: CGFloat)] = []
+            for el in measure.elements {
+                guard case let .textMark(.lyrics(_, markVerse, anchor, metadata), _, point) = el,
+                      anchor?.staff == voiceElementID.staff else { continue }
+                let y = system.origin.y + measure.origin.y + point.y
+                if anchor == voiceElementID, markVerse == verse { return y }
+                candidates.append((markVerse, metadata?.side ?? .below, y))
             }
+            if let exact = candidates
+                .first(where: { $0.verse == verse && (placementStyle == nil || $0.side == side) })
+            {
+                return exact.y
+            }
+            let maxAboveVerse = system.measures.flatMap(\.elements).compactMap { element -> Int? in
+                guard element.textPlacement?.side == .above,
+                      element.textPlacement?.staff == voiceElementID.staff else { return nil }
+                return element.textPlacement?.verse
+            }.max() ?? 0
+            if let nearest = candidates.filter({ $0.side == side })
+                .min(by: { abs($0.verse - verse) < abs($1.verse - verse) }),
+                side == .below || verse <= maxAboveVerse
+            {
+                return nearest.y + CGFloat(verse - nearest.verse) * system.sp * lyricVerseStrideInSpatiums
+            }
+            let position = style.position(for: .lyrics, side: side)
+            let geometry = system.geometry(atFlatIndex: staffIndex)
+            let edge = system.origin.y + system.staffOrigins[staffIndex].y
+                + (side == .above ? 0 : geometry.height(sp: system.sp))
+            let row = side == .above ? verse - max(verse, maxAboveVerse) : verse
+            let baseline = CGPoint(
+                x: 0,
+                y: edge + CGFloat(position.y + (elementProperties.offset?.y ?? 0)) * system.sp
+                    + CGFloat(row) * system.sp * lyricVerseStrideInSpatiums,
+            )
+            return LayoutEngine.textPlacementOrigin(
+                text: "", font: TextInkGeometry.font(for: .lyricsOdd, metrics: metrics), baseline: baseline,
+                center: true,
+            ).y
         }
         return nil
     }

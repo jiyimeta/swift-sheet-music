@@ -46,6 +46,7 @@ extension ScoreStyle {
         decodeSwing(node, into: &s)
         decodeTitleBlockAlign(node, into: &s)
         decodeOttava(node, into: &s)
+        s.textPlacement.overlay(node)
         // Preserved markup layers the same way the modeled fields do.
         // A `.mscz` can carry its style in `score_style.mss` AND an
         // inline `<Style>`, but only ONE `<Style>` is written back — so
@@ -53,7 +54,7 @@ extension ScoreStyle {
         // into the inline one, or saving such a container would delete
         // them. Inline wins per tag name, matching the tag-by-tag
         // override MuseScore performs on the modeled side.
-        let inline = node.preservedMarkup(consuming: consumedStyleChildren)
+        let inline = node.preservedMarkup(consuming: consumedStyleChildren.union(TextPlacementStyles.consumedTags))
         let inlineNames = Set(inline.map(\.name))
         s.preservedMarkup = base.preservedMarkup.filter {
             !inlineNames.contains($0.name)

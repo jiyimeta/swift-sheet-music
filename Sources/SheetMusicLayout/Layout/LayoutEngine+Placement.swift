@@ -11,6 +11,7 @@ import SheetMusicCore
 struct MelismaContinuation: Equatable {
     let voiceIndex: Int
     let verseIndex: Int
+    var lyric = Lyric(text: "")
     /// Tick (within this measure's voice time) where the line
     /// terminates. Ignored when `continuesPastMeasure` is true.
     let endTick: Int
@@ -77,6 +78,8 @@ extension LayoutEngine {
         incomingMelismas: [MelismaContinuation] = [],
         effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
         systemElements: [PositionedSystemElement] = [],
+        textPlacementStyle: TextPlacementStyles = TextPlacementStyles(),
+        maxAboveLyricVerse: Int = 0,
     ) -> MeasurePlacement {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         // Barlines are the one thing here measured against the staff's
@@ -247,8 +250,9 @@ extension LayoutEngine {
                 let textWidth: CGFloat
                 let lyricsY: CGFloat
                 let syllabic: Syllabic
+                let placement: TextPlacementMetadata
             }
-            var previousLyric: [Int: LyricTrail] = [:]
+            var previousLyric: [LyricRow: LyricTrail] = [:]
             // Pre-compute this voice's total ticks for the measure
             // so melisma emission can tell "ends inside" from
             // "crosses into next measure" without rescanning.
@@ -382,38 +386,6 @@ extension LayoutEngine {
                     map[t] = min(map[t] ?? .infinity, north)
                 }
                 return map
-            }()
-
-            // Final lyric center Y for this voice — the max over
-            // all chords' south-skyline-pushed Ys. Pre-computed
-            // here (rather than ratcheted incrementally during
-            // emission) so every chord's lyric uses the SAME Y;
-            // otherwise earlier chords sit at a lower ratchet
-            // value than later ones and the in-measure lyric row
-            // is jagged.
-            let voiceMaxLyricCenterY: CGFloat = {
-                // Default floor, 2 sp below the staff. A below-staff
-                // spanner sharing the measure used to bump this to
-                // 7.4 sp so the glyph could sit between staff and
-                // lyric; `SkylineAutoplacePass` now does that job
-                // properly — hairpins, pedals and ottavas are placed
-                // and added to the skyline BEFORE the lyric category,
-                // so a lyric clears the segment's actual position
-                // instead of a constant guess at where it might be.
-                var maxY = staffMidY + metrics.sp * 4
-                for el in voice.elements {
-                    guard case let .chord(chord) = el else { continue }
-                    guard let avoidY = chordLyricAvoidY(
-                        chord: chord,
-                        forcedStem: forcedStem,
-                        currentClef: currentClef,
-                        drumLineMap: drumLineMap,
-                        staffMidY: staffMidY,
-                        metrics: metrics,
-                    ) else { continue }
-                    maxY = max(maxY, avoidY)
-                }
-                return maxY
             }()
 
             // Emit the synthesized leading clef exactly once, at the top
@@ -969,7 +941,6 @@ extension LayoutEngine {
                     // alignment). The system-wide post-pass in
                     // `LayoutEngine.layout` then aligns this Y
                     // across measures of the same system.
-                    let chordLyricCenterY = voiceMaxLyricCenterY
                     let lyricAnchor = VoiceElementID(
                         staff: staffAddress,
                         measureIndex: measureIndex,
@@ -977,6 +948,18 @@ extension LayoutEngine {
                         elementIndex: voiceElemIdx,
                     )
                     for (verseIdx, lyric) in chord.lyrics.enumerated() {
+                        let side = textPlacementStyle.side(for: .lyrics, element: lyric.elementProperties)
+                        let placement = TextPlacementMetadata(
+                            side: side,
+                            autoplace: lyric.elementProperties.autoplace ?? true,
+                            verse: verseIdx,
+                            staff: staffAddress,
+                        )
+                        let row = LyricRow(side: side, verse: verseIdx)
+                        let origin = lyricOrigin(
+                            lyric: lyric, verse: verseIdx, maxAboveVerse: maxAboveLyricVerse,
+                            style: textPlacementStyle, x: chordX, lineGeometry: lineGeometry, metrics: metrics,
+                        )
                         // A host that hides lyrics loses the WHOLE row:
                         // syllable, hyphens and melisma rule alike, because
                         // every decoration below is emitted only alongside a
@@ -989,6 +972,12 @@ extension LayoutEngine {
                         // back.
                         guard options.lyricsVisible else { break }
                         guard !lyric.text.isEmpty else { continue }
+                        // A side change interrupts this verse's trail; it must not reconnect
+                        // to an earlier syllable if a later syllable returns to that side.
+                        previousLyric.removeValue(forKey: LyricRow(
+                            side: side == .above ? .below : .above,
+                            verse: verseIdx,
+                        ))
                         // Hidden lyrics: drop entirely when toggle is
                         // off (print-by-default); when toggle is on
                         // route the syllable text to `invisibleOut`
@@ -1007,13 +996,12 @@ extension LayoutEngine {
                             let textWidth = Self.lyricsTextWidth(
                                 lyric.text, sp: metrics.sp,
                             )
-                            previousLyric[verseIdx] = LyricTrail(
-                                centerX: chordX,
+                            previousLyric[row] = LyricTrail(
+                                centerX: origin.x,
                                 textWidth: textWidth,
-                                lyricsY: chordLyricCenterY
-                                    + CGFloat(verseIdx) * metrics.sp
-                                    * lyricVerseStrideInSpatiums,
+                                lyricsY: origin.y,
                                 syllabic: lyric.syllabic,
+                                placement: placement,
                             )
                             continue
                         }
@@ -1023,17 +1011,16 @@ extension LayoutEngine {
                         // adjacent verse lines (≈
                         // `Sid::lyricsLineHeight = 1.0` × font
                         // height).
-                        let lyricsY = chordLyricCenterY
-                            + CGFloat(verseIdx) * metrics.sp
-                            * lyricVerseStrideInSpatiums
+                        let lyricsY = origin.y
                         let lyricElement = LayoutElement.textMark(
                             kind: .lyrics(
                                 color: lyric.elementProperties.color,
                                 verse: verseIdx,
                                 anchor: lyricAnchor,
+                                placement: placement,
                             ),
                             text: lyric.text,
-                            origin: CGPoint(x: chordX, y: lyricsY),
+                            origin: origin,
                         )
                         if lyric.visible {
                             out.append(lyricElement)
@@ -1052,7 +1039,7 @@ extension LayoutEngine {
                         // then starts from the hidden lyric's slot
                         // (see the hidden-lyrics comment above).
                         if lyric.visible,
-                           let prev = previousLyric[verseIdx],
+                           let prev = previousLyric[row],
                            connectsWithHyphen(
                                prev: prev.syllabic,
                                curr: lyric.syllabic,
@@ -1061,21 +1048,23 @@ extension LayoutEngine {
                             let prevRight = prev.centerX
                                 + prev.textWidth / 2
                                 + metrics.sp * 0.3
-                            let currLeft = chordX - textWidth / 2
+                            let currLeft = origin.x - textWidth / 2
                                 - metrics.sp * 0.3
                             emitLyricHyphens(
                                 fromX: prevRight,
                                 toX: currLeft,
-                                y: lyricsY,
+                                y: prev.lyricsY,
+                                placement: prev.placement,
                                 metrics: metrics,
                                 out: &out,
                             )
                         }
-                        previousLyric[verseIdx] = LyricTrail(
-                            centerX: chordX,
+                        previousLyric[row] = LyricTrail(
+                            centerX: origin.x,
                             textWidth: textWidth,
                             lyricsY: lyricsY,
                             syllabic: lyric.syllabic,
+                            placement: placement,
                         )
                         // `<ticks>N</ticks>` in MuseScore marks a
                         // melisma whose visual rule reaches the
@@ -1104,7 +1093,7 @@ extension LayoutEngine {
                             let melismaLineY = lyricsY
                                 + Self.melismaLineYOffset(sp: metrics.sp)
                             emitMelismaLine(
-                                chordX: chordX,
+                                chordX: origin.x,
                                 lyricText: lyric.text,
                                 lyricTicks: lyric.ticks,
                                 lyricsY: melismaLineY,
@@ -1115,6 +1104,7 @@ extension LayoutEngine {
                                 headerSchedule.contentStartX,
                                 measureWidth: width,
                                 continuesPastMeasure: continuesPastMeasure,
+                                placement: placement,
                                 metrics: metrics,
                                 out: &out,
                             )
@@ -1318,17 +1308,19 @@ extension LayoutEngine {
                         for: harmony, metrics: metrics,
                     )
                     let width = HarmonyRendering.width(of: runs)
-                    // staffMidY → staffTop is `staffMidY - sp * 2`
-                    // (5-line staff). Shifting by harmonyPlacementAbove
-                    // (-2.5 sp) puts the symbol just clear of the top
-                    // line. The author's `<offset y>` adds on top.
-                    let staffTopLocal = staffMidY - metrics.sp * 2
-                    let yLocal = staffTopLocal
-                        + metrics.harmonyPlacementAbove
-                        + CGFloat(harmony.offsetY) * metrics.sp
-                    let anchorX = Double(
-                        stX + CGFloat(harmony.offsetX) * metrics.sp,
+                    let role = harmonyPlacementRole(harmony)
+                    let side = textPlacementStyle.side(for: role, element: harmony.elementProperties)
+                    let origin = placedTextOrigin(
+                        text: harmony.name, role: role, properties: harmony.elementProperties,
+                        style: textPlacementStyle, x: stX, lineGeometry: lineGeometry, metrics: metrics,
+                        font: TextInkGeometry.font(
+                            for: harmony.styleType,
+                            overrides: harmony.properties,
+                            metrics: metrics,
+                        ), center: true,
                     )
+                    let anchorX = Double(origin.x)
+                    let yLocal = origin.y
                     let harmonyElement = LayoutElement.harmony(LayoutHarmony(
                         harmony: harmony,
                         anchorX: anchorX,
@@ -1343,6 +1335,10 @@ extension LayoutEngine {
                             voiceIndex: voiceIdx,
                             measureDuration: measureDuration,
                             division: division,
+                        ),
+                        placement: TextPlacementMetadata(
+                            side: side,
+                            autoplace: harmony.elementProperties.autoplace ?? true,
                         ),
                     ))
                     if harmony.visible {
@@ -1874,48 +1870,6 @@ extension LayoutEngine {
                 }
             }
 
-            // --- Lyric post-beam re-clearance ---
-            //
-            // `voiceMaxLyricCenterY` (computed before emission) estimates
-            // each chord's south extent from a STANDALONE
-            // `defaultStemLength` stem + flag. The beam pass can drive a
-            // stem-down endpoint DEEPER than that: `groupDirection` is
-            // decided from the group's combined steps, so it can point a
-            // member down whose own median pointed up, and that member's
-            // stem then reaches the shared beam well below the staff —
-            // past the pre-beam lyric row. Lyrics were laid out before
-            // beaming, so recompute the row against the actual post-beam
-            // stem-down endpoints now stored in `out` and lower the whole
-            // voice's lyric row if a beam intrudes. Mirrors the fermata
-            // post-beam re-clearance above. It only ever DEEPENS the row:
-            // a non-beamed stem-down chord's `stemOrigin.y + stem/flag pad`
-            // stays inside the pre-beam estimate (which already added
-            // `flagSouthExtent`), so shallow / unbeamed measures — and
-            // thus the common case on both iOS and Android — are
-            // untouched.
-            let voiceHasLyrics = voice.elements.contains { el in
-                if case let .chord(chord) = el {
-                    return chord.lyrics.contains { !$0.text.isEmpty }
-                }
-                return false
-            }
-            if voiceHasLyrics {
-                var lowestDownTip = -CGFloat.infinity
-                for outIdx in voiceChordOutIndex.values where outIdx < out.count {
-                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _, _, _, _)
-                        = out[outIdx], stemDir == .down
-                    else { continue }
-                    lowestDownTip = max(lowestDownTip, stemOrigin.y)
-                }
-                // Same tight stem/flag pad the pre-beam estimate uses
-                // (0.25 sp `lyricsMinDistance` + 1.1 sp lyric ascender).
-                let requiredCenterY = lowestDownTip + metrics.sp * (0.25 + 1.1)
-                if lowestDownTip.isFinite, requiredCenterY > voiceMaxLyricCenterY {
-                    let dy = requiredCenterY - voiceMaxLyricCenterY
-                    out = out.map { shiftLyricTextY($0, dy: dy) }
-                }
-            }
-
             // --- Tuplet brackets / numbers ---
             //
             // For each tuplet span in the voice, determine whether every
@@ -2009,6 +1963,10 @@ extension LayoutEngine {
             emitMelismaContinuation(
                 continuation: continuation,
                 staffMidY: staffMidY,
+                style: textPlacementStyle,
+                staff: staffAddress,
+                lineGeometry: lineGeometry,
+                maxAboveVerse: maxAboveLyricVerse,
                 tickColumns: tickColumns,
                 headerContentStartX: headerSchedule.contentStartX,
                 measureWidth: width,
@@ -2050,13 +2008,14 @@ extension LayoutEngine {
                 if t.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .staffText(st):
                 guard st.visible || options.showsInvisibleElements else { break }
+                let role: TextPlacementRole = st.isSystemText ? .systemText : .staffText
+                let side = textPlacementStyle.side(for: role, element: st.elementProperties)
                 let element = LayoutElement.staffText(
                     text: st.text,
-                    origin: CGPoint(
-                        x: xAtTick
-                            + CGFloat(st.offsetX) * metrics.sp,
-                        y: staffMidY - metrics.sp * 3
-                            + CGFloat(st.offsetY) * metrics.sp,
+                    origin: placedTextOrigin(
+                        text: st.text, role: role, properties: st.elementProperties,
+                        style: textPlacementStyle, x: xAtTick, lineGeometry: lineGeometry, metrics: metrics,
+                        font: TextInkGeometry.font(for: st.styleType, metrics: metrics), center: false,
                     ),
                     color: st.color,
                     style: st.styleType,
@@ -2068,6 +2027,7 @@ extension LayoutEngine {
                         measureDuration: measureDuration,
                         division: division,
                     ),
+                    placement: TextPlacementMetadata(side: side, autoplace: st.elementProperties.autoplace ?? true),
                 )
                 if st.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .swing(s):
@@ -2113,17 +2073,19 @@ extension LayoutEngine {
             case let .rehearsalMark(rm):
                 guard rm.visible || options.showsInvisibleElements else { break }
                 let originX = metrics.sp * 0.5
+                let side = textPlacementStyle.side(for: .rehearsalMark, element: rm.elementProperties)
                 let rehearsalElement = LayoutElement.rehearsalMark(
                     text: rm.text,
-                    origin: CGPoint(
-                        x: originX
-                            + CGFloat(rm.offsetX) * metrics.sp,
-                        y: staffMidY - metrics.sp * 3.5
-                            + CGFloat(rm.offsetY) * metrics.sp,
+                    origin: placedTextOrigin(
+                        text: rm.text, role: .rehearsalMark, properties: rm.elementProperties,
+                        style: textPlacementStyle, x: originX, lineGeometry: lineGeometry, metrics: metrics,
+                        font: TextInkGeometry.font(for: .rehearsalMark, metrics: metrics), center: false,
+                        padding: RehearsalMarkFrame.paddingSp(sp: metrics.sp),
                     ),
                     frame: rm.frame,
                     color: rm.color,
                     measureIndex: measureIndex,
+                    placement: TextPlacementMetadata(side: side, autoplace: rm.elementProperties.autoplace ?? true),
                 )
                 if rm.visible {
                     out.append(rehearsalElement)
@@ -2395,74 +2357,6 @@ extension LayoutEngine {
         case .sixtyFourth: metrics.sp * 3.0
         default: 0
         }
-    }
-
-    /// Lowest lyric-center Y a chord forces, taking the max of
-    /// the per-obstacle clearances. Returns `nil` for empty chords.
-    ///
-    /// Two clearance regimes match MuseScore's south-skyline plus
-    /// `Sid::lyricsMinDistance` semantics (default 0.25 sp;
-    /// `styledef.cpp:78`):
-    ///
-    /// * **Notehead** — uses the historical 2.1 sp pad so a low-
-    ///   pitched chord (notehead well below the staff) still gets a
-    ///   generous lyric gap matching the existing visual.
-    /// * **Stem / flag** — uses a tighter 1.35 sp pad (= 0.25 sp
-    ///   minDistance + 1.1 sp lyric ascender). Stems and flags are
-    ///   thin obstacles; pushing the lyric a full 2.1 sp below them
-    ///   over-spaces visibly when the protrusion is small.
-    /// * **Stem-up + tie** — same notehead pad applied to a slightly
-    ///   lowered south so the tie arc clears.
-    private static func chordLyricAvoidY(
-        chord: Chord,
-        forcedStem: StemDirection?,
-        currentClef: NotatedClef,
-        drumLineMap: [Int: Int]?,
-        staffMidY: CGFloat,
-        metrics: StaffMetrics,
-    ) -> CGFloat? {
-        let steps: [Int] = chord.notes.map { note in
-            if let drumLine = drumLineMap?[note.pitch] {
-                return 4 - drumLine
-            }
-            return PitchStaffPosition.step(
-                midiPitch: note.pitch, tpc: note.tpc,
-                clef: currentClef,
-            ).step
-        }
-        let stemDir = forcedStem
-            ?? StemDirectionRule.direction(for: steps)
-        guard let lowestStep = steps.min() else { return nil }
-        let lowestNoteY = staffMidY
-            - CGFloat(lowestStep) * metrics.sp / 2
-        let noteheadBottom = lowestNoteY + metrics.sp * 0.5
-        let noteheadPad = metrics.sp * (1 + 1.1)
-        let stemFlagPad = metrics.sp * (0.25 + 1.1)
-
-        var avoidY = noteheadBottom + noteheadPad
-        // Stem-down: stem extends to `lowestNoteY +
-        // defaultStemLength` (StemRenderer:47); flag glyph hangs
-        // further. Mirrors MuseScore's south-skyline contribution
-        // from `Stem` + `Hook` (lyricslayout.cpp:662).
-        if stemDir == .down {
-            let stemEnd = lowestNoteY + metrics.defaultStemLength
-            let stemSouth = stemEnd + flagSouthExtent(
-                duration: chord.duration, metrics: metrics,
-            )
-            avoidY = max(avoidY, stemSouth + stemFlagPad)
-        }
-        // Stem-up + tied: tie arc curls below the lowest notehead;
-        // 0.8 sp keeps it clear of the lyric row.
-        if stemDir == .up {
-            let hasTie = chord.notes.contains {
-                $0.tieForward != nil || $0.tieBack != nil
-            }
-            if hasTie {
-                let tieSouth = noteheadBottom + metrics.sp * 0.8
-                avoidY = max(avoidY, tieSouth + noteheadPad)
-            }
-        }
-        return avoidY
     }
 
     /// Map a `ChordArticulation.Kind` to the renderable layout-local

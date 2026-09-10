@@ -66,14 +66,14 @@ public enum TextInkGeometry {
                 origin: origin,
                 anchor: CGPoint(x: 0.5, y: 0.5),
             ).map { [$0] } ?? []
-        case let .staffText(text, origin, _, style, _):
+        case let .staffText(text, origin, _, style, _, _):
             return rect(
                 text: text,
                 font: font(for: style, metrics: metrics),
                 origin: origin,
                 anchor: CGPoint(x: 0, y: 1),
             ).map { [$0] } ?? []
-        case let .rehearsalMark(text, origin, frame, _, _):
+        case let .rehearsalMark(text, origin, frame, _, _, _):
             return rehearsalRects(text: text, origin: origin, frame: frame, metrics: metrics)
         case let .harmony(harmony):
             return harmonyRects(harmony, metrics: metrics)

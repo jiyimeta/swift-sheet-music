@@ -266,5 +266,7 @@ public final class LayoutCache: @unchecked Sendable {
         /// `[Measure].effectiveMeasureDurations()`. Used to resolve any
         /// `.measure` rest duration via `NoteDuration.resolved(in:)`.
         let measureDuration: Fraction
+        var textPlacementStyle = TextPlacementStyles()
+        var maxAboveLyricVerse = 0
     }
 }

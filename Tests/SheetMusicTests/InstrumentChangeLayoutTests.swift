@@ -60,7 +60,7 @@ struct InstrumentChangeLayoutTests {
             anchor: nil,
         )
         let moved = LayoutEngine.translate(element: element, dy: 12)
-        guard case let .staffText(_, origin, _, style, _) = moved else {
+        guard case let .staffText(_, origin, _, style, _, _) = moved else {
             Issue.record("expected .staffText")
             return
         }
@@ -68,7 +68,7 @@ struct InstrumentChangeLayoutTests {
         #expect(origin.y == 12)
     }
 
-    @Test("a visible change is one spatium above where a staff text on the same staff would land")
+    @Test("a visible change keeps its offset while staff text uses its baseline and staff clearance")
     func emitsElement() throws {
         let url = try #require(
             TestResources.url(
@@ -111,7 +111,7 @@ struct InstrumentChangeLayoutTests {
             .flatMap(\.measures)
             .flatMap(\.elements)
             .compactMap { element -> (text: String, origin: CGPoint, style: TextStyleType)? in
-                guard case let .staffText(text, origin, _, style, _) = element
+                guard case let .staffText(text, origin, _, style, _, _) = element
                 else { return nil }
                 return (text, origin, style)
             }
@@ -120,17 +120,12 @@ struct InstrumentChangeLayoutTests {
             texts.first { $0.text == "to Accordion" && $0.style == .instrumentChange },
         )
         let pizz = try #require(texts.first { $0.text == "pizz." && $0.style == .staffText })
-        // MuseScore's `instrumentChangePosAbove` is (0, -2.0) spatium
-        // from the staff top (styledef.cpp:1622) — one spatium HIGHER
-        // than the `-3 sp` used for plain staff text — so the
-        // instruction clears a "pizz."-style directive anchored at
-        // the same tick. This pins that exact one-spatium gap against
-        // the SAME `StaffMetrics` this layout call produced, rather
-        // than a hardcoded literal, so it survives a future change to
-        // the base staff size. A regression that silently reverts the
-        // `- 4` back to staff text's `- 3` collapses this gap to
-        // zero and fails this line.
-        #expect(pizz.origin.y - change.origin.y == document.metrics.sp)
+        // Instrument changes retain their legacy anchor at staffTop - 2 sp. Staff text
+        // now uses baseline staffTop - 1 sp plus descent, limited by 0.5 sp staff clearance.
+        let font = TextInkGeometry.font(for: .staffText, metrics: document.metrics)
+        let descent = FontMetrics.provider.descent(font: font)
+        let gap = min(document.metrics.sp + descent, document.metrics.sp * 1.5)
+        #expect(abs(pizz.origin.y - change.origin.y - gap) < 0.001)
     }
 
     @Test("an invisible change is not drawn by default")
@@ -160,7 +155,7 @@ struct InstrumentChangeLayoutTests {
             .flatMap(\.measures)
             .flatMap(\.elements)
             .contains { element in
-                guard case let .staffText(text, _, _, _, _) = element
+                guard case let .staffText(text, _, _, _, _, _) = element
                 else { return false }
                 return text == "to Accordion"
             }

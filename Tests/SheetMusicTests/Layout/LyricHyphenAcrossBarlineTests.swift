@@ -67,7 +67,7 @@ struct LyricHyphenAcrossBarlineTests {
             for measure in system.measures {
                 let base = system.origin.x + measure.origin.x
                 for element in measure.elements {
-                    guard case let .lyricHyphen(from, to) = element else { continue }
+                    guard case let .lyricHyphen(from, to, _) = element else { continue }
                     result.append(Dash(
                         systemIndex: systemIndex,
                         minX: base + min(from.x, to.x),
@@ -85,7 +85,7 @@ struct LyricHyphenAcrossBarlineTests {
             for measure in system.measures {
                 let base = system.origin.x + measure.origin.x
                 for element in measure.elements {
-                    guard case let .textMark(.lyrics(_, _, _), text, origin) = element else { continue }
+                    guard case let .textMark(.lyrics(_, _, _, _), text, origin) = element else { continue }
                     result.append(Syllable(
                         systemIndex: systemIndex, text: text, centerX: base + origin.x,
                     ))

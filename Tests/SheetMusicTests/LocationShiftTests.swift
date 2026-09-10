@@ -68,7 +68,7 @@
                         switch el {
                         case let .chord(_, _, _, so, _, _, _, _, _, _, _):
                             chordXs.append(measure.origin.x + so.x)
-                        case let .staffText(_, p, _, style, _) where style == .systemText:
+                        case let .staffText(_, p, _, style, _, _) where style == .systemText:
                             textX = measure.origin.x + p.x
                         default:
                             break

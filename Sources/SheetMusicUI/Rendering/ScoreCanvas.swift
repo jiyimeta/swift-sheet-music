@@ -251,7 +251,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .textMark(.lyrics(lyricColor, _, _), text, p):
+        case let .textMark(.lyrics(lyricColor, _, _, _), text, p):
             TextMarkRenderer.drawLyric(
                 context: &context, text: text,
                 origin: shift(p),
@@ -362,7 +362,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, kind: kind, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .rehearsalMark(text, p, frame, color, _):
+        case let .rehearsalMark(text, p, frame, color, _, _):
             RehearsalMarkRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p), frame: frame, color: color,
@@ -383,7 +383,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .staffText(text, p, color, style, _):
+        case let .staffText(text, p, color, style, _, _):
             StaffTextRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p),
@@ -402,7 +402,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 origin: p,
                 metrics: metrics,
             )
-        case let .lyricsMelisma(from, to):
+        case let .lyricsMelisma(from, to, _):
             var path = Path()
             path.move(to: shift(from))
             path.addLine(to: shift(to))
@@ -411,7 +411,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 with: .color(.primary),
                 lineWidth: metrics.sp * 0.1,
             )
-        case let .lyricHyphen(from, to):
+        case let .lyricHyphen(from, to, _):
             // Same line thickness as the melisma rule; MuseScore's
             // `lyricsDashLineThickness` default is 0.1 sp.
             var path = Path()

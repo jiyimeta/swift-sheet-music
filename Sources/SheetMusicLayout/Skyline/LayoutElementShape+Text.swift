@@ -179,7 +179,7 @@ extension LayoutElementShape {
                 markKind: markKind, text: text, origin: origin,
                 kind: kind, metrics: metrics,
             )]
-        case let .staffText(text, origin, _, style, _):
+        case let .staffText(text, origin, _, style, _, _):
             return [textRect(
                 text: text, font: TextInkGeometry.font(for: style, metrics: metrics),
                 origin: origin, anchor: .bottomLeading,
@@ -194,7 +194,7 @@ extension LayoutElementShape {
                 text: text, font: font(for: kind, metrics: metrics),
                 origin: origin, anchor: .leadingCenter,
             )]
-        case let .rehearsalMark(text, origin, frame, _, _):
+        case let .rehearsalMark(text, origin, frame, _, _, _):
             return [rehearsalMarkRect(
                 text: text, origin: origin, frame: frame,
                 metrics: metrics,
@@ -204,13 +204,17 @@ extension LayoutElementShape {
             let provider = FontMetrics.provider
             let height = provider.ascent(font: f)
                 + provider.descent(font: f)
-            return [CGRect(
+            var box = CGRect(
                 x: CGFloat(lh.anchorX),
                 y: CGFloat(lh.y) - height / 2,
                 width: max(CGFloat(lh.width), sp),
                 height: height,
-            )]
-        case let .lyricsMelisma(from, to), let .lyricHyphen(from, to):
+            )
+            for ink in TextInkGeometry.rects(for: element, metrics: metrics) ?? [] {
+                box = box.union(ink)
+            }
+            return [box]
+        case let .lyricsMelisma(from, to, _), let .lyricHyphen(from, to, _):
             return [spanRect(from, to, thickness: sp * 0.3)]
         case let .spannerSegment(.pedal, from, to, _, _, _, _):
             return PedalInkGeometry.rects(from: from, to: to, metrics: metrics)

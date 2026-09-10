@@ -155,7 +155,7 @@
         /// the measure and the list index; no other line moved. Both
         /// sample lines matched the ones derived by hand before the run.
         private static let expectedDigestSHA256 =
-            "86447a0b77a75057996d84de55b54f447fb263c2ec57dd9cc755c6c0b8ed9576"
+            "f20b354440768f4f07bae8236935c8d85ab8292786bb92ddb4035567d0cd5454"
 
         @Test("write digest")
         func writeDigest() throws {

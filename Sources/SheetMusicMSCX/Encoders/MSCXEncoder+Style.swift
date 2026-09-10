@@ -21,6 +21,7 @@ extension ScoreStyle {
             var children = [
                 XMLTreeNode(name: "Spatium", text: String(spatium)),
             ]
+            children.append(contentsOf: textPlacement.mscxChildren())
             appendPreservedMarkup(preservedMarkup, to: &children, options: options)
             return XMLTreeNode(name: "Style", children: children)
         case .v4:
@@ -57,6 +58,7 @@ extension ScoreStyle {
                 lyricist: lyricistAlign,
                 into: &children,
             )
+            children.append(contentsOf: textPlacement.mscxChildren())
             appendPreservedMarkup(preservedMarkup, to: &children, options: options)
             return XMLTreeNode(name: "Style", children: children)
         }

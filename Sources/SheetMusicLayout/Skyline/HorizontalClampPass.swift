@@ -53,6 +53,7 @@ enum HorizontalClampPass {
             for i in measures[mIdx].indices {
                 let element = measures[mIdx][i]
                 guard let kind = LayoutElementShape.kind(of: element),
+                      element.textPlacement?.autoplace != false,
                       clampedKinds.contains(kind),
                       let span = horizontalExtent(
                           of: element, kind: kind,

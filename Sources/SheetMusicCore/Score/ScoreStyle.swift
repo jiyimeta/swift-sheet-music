@@ -14,6 +14,7 @@ public struct ScoreStyle: Sendable, Equatable {
     /// C++: `Sid::spatium` (stored internally in DPI units there;
     /// kept as mm here to match the on-disk XML and avoid surprises).
     /// MuseScore default 1.75 mm.
+    public var textPlacement: TextPlacementStyles
     public var spatium: Double
     public var pageLayout: PageLayout
     public var pageChrome: PageChrome
@@ -60,7 +61,9 @@ public struct ScoreStyle: Sendable, Equatable {
         lyricistAlign: TextAlign? = nil,
         ottavaNumbersOnly: Bool = true,
         preservedMarkup: [PreservedXML] = [],
+        textPlacement: TextPlacementStyles = TextPlacementStyles(),
     ) {
+        self.textPlacement = textPlacement
         self.spatium = spatium
         self.pageLayout = pageLayout
         self.pageChrome = pageChrome

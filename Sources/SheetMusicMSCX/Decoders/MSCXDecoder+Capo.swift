@@ -15,7 +15,7 @@ extension Capo {
     /// until the parity doc's §7.2 work landed; that is this commit.
     private static let consumedChildren: Set = [
         "active", "fretPosition", "generateText", "transposeMode", "string",
-        "text", "color", "offset", "placement", "visible",
+        "text", "color", "offset", "autoplace", "placement", "visible",
     ]
 
     /// Decode one `<Capo>`.

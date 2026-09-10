@@ -134,6 +134,13 @@ extension LayoutEngine {
         let announcingMeasureIdx: Int? = trailingCourtesy == nil
             ? nil
             : measureRange.reversed().first { !plan.isInteriorOfRun($0) }
+        let maxAboveVerses = staves.enumerated().map { staffIdx, staff in
+            maxAboveLyricVerse(
+                staff: staff, measures: measureRange, style: context.score.style.textPlacement,
+                continuations: context.melismaContinuations.indices.contains(staffIdx)
+                    ? context.melismaContinuations[staffIdx] : [],
+            )
+        }
         for (j, measureIdx) in measureRange.enumerated() {
             if plan.isInteriorOfRun(measureIdx) {
                 // Run-interior: collapsed-bar emission is owned by the
@@ -291,6 +298,8 @@ extension LayoutEngine {
                     showsInvisibleElements: context.options.showsInvisibleElements,
                     lyricsVisible: context.options.lyricsVisible,
                     measureDuration: measDuration,
+                    textPlacementStyle: context.score.style.textPlacement,
+                    maxAboveLyricVerse: maxAboveVerses[staffIdx],
                 )
                 let els: [LayoutElement]
                 let invisibleEls: [LayoutElement]
@@ -333,6 +342,8 @@ extension LayoutEngine {
                         incomingMelismas: incomingMelismas,
                         effectiveMelismaTicks: context.effectiveMelismaTicks,
                         systemElements: systemElementsForStaff,
+                        textPlacementStyle: context.score.style.textPlacement,
+                        maxAboveLyricVerse: maxAboveVerses[staffIdx],
                     )
                     els = result.elements
                     invisibleEls = result.invisibleElements
@@ -457,83 +468,9 @@ extension LayoutEngine {
             ))
         }
 
-        // --- System-wide lyric-Y alignment ---
-        //
-        // MuseScore's
-        // `LyricsLayout::checkCollisionsWithStaffElements`
-        // (`engraving/rendering/score/lyricslayout.cpp:614-651`)
-        // walks the whole system, finds the deepest required
-        // verse-Y, and shifts EVERY lyric in the verse uniformly
-        // so the row stays horizontally aligned across the
-        // system. `placeMeasureElements` only ratchets per
-        // measure — across measures, lyric Y can still differ
-        // (one measure has a low note that pushes lyrics down;
-        // adjacent measures don't). This post-pass enforces the
-        // system-wide max.
-        for staffIdx in 0 ..< staves.count {
-            // A verse-0 mark identifies each measure's lyric base.
-            // The old minimum-Y premise was wrong when a measure
-            // carried only a higher verse, so such a measure does not
-            // contribute a base or get shifted by this pass.
-            var measureVerse0Y: [Int: CGFloat] = [:]
-            for (mIdx, m) in untranslated.enumerated() {
-                guard let els = m.perStaffElements[staffIdx]
-                else { continue }
-                for el in els {
-                    if case let .textMark(
-                        .lyrics(_, verse, _), _, p,
-                    ) = el,
-                        verse == 0
-                    {
-                        measureVerse0Y[mIdx] = p.y
-                        break
-                    }
-                }
-            }
-            guard let systemTargetY = measureVerse0Y.values.max()
-            else { continue }
-            // Per-measure shift for lyric text + hyphens: all
-            // verses move uniformly so verse N stays at
-            // `systemTargetY + N * 1.7sp`.
-            for (mIdx, baseY) in measureVerse0Y
-                where baseY < systemTargetY
-            {
-                let dy = systemTargetY - baseY
-                if var els = untranslated[mIdx]
-                    .perStaffElements[staffIdx]
-                {
-                    els = els.map { shiftLyricTextY($0, dy: dy) }
-                    untranslated[mIdx]
-                        .perStaffElements[staffIdx] = els
-                }
-            }
-            // Melisma rules need an absolute snap, not a per-
-            // measure shift. Anchor rules emitted in a chord-
-            // pushed measure use that measure's pushed Y; the
-            // continuation rule for the SAME melisma emitted in
-            // the following measure (`emitMelismaContinuation`)
-            // uses the default verse-0 Y because it has no view
-            // of the originating chord. Without this snap the
-            // continuation lands at default Y + dy_thisMeasure,
-            // which only equals `systemTargetY + offset` when the
-            // current measure has no own push. Force every
-            // melisma in the system to `systemTargetY + 0.9 sp`
-            // (the lyric font's underline level — see
-            // `melismaLineYOffset`) so the rule sits flush with
-            // the now-aligned lyric row, regardless of which
-            // measure emitted it. Verse 0 only — multi-verse
-            // melismas would need a verse hint on the element.
-            let melismaTargetY = systemTargetY + metrics.sp * 0.9
-            for mIdx in untranslated.indices {
-                guard var els = untranslated[mIdx]
-                    .perStaffElements[staffIdx] else { continue }
-                els = els.map {
-                    setMelismaAbsoluteY($0, y: melismaTargetY)
-                }
-                untranslated[mIdx]
-                    .perStaffElements[staffIdx] = els
-            }
-        }
+        // Every row starts from the same staff-edge baseline. Its explicit identity is
+        // carried by syllables and decorations, so autoplace can align the entire row
+        // while preserving each author's offset and multiline baseline conversion.
 
         // --- Skyline autoplace ---
         //

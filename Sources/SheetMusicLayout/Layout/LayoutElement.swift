@@ -206,6 +206,7 @@ public enum LayoutElement: Sendable, Equatable {
         color: ScoreColor?,
         style: TextStyleType,
         anchor: VoiceElementID?,
+        placement: TextPlacementMetadata? = nil,
     )
     /// Pre-typeset chord symbol with a baked-in run list (text +
     /// SMuFL accidental glyphs) and total width. The placement
@@ -264,6 +265,7 @@ public enum LayoutElement: Sendable, Equatable {
         frame: RehearsalMark.FrameKind,
         color: ScoreColor?,
         measureIndex: Int,
+        placement: TextPlacementMetadata? = nil,
     )
     /// Navigation owned by the first drawn staff's measure list, in the input score's coordinates.
     /// Same-origin jumps retain distinct identities. At overlapping ink, only the first is
@@ -317,6 +319,7 @@ public enum LayoutElement: Sendable, Equatable {
     case lyricsMelisma(
         fromOrigin: CGPoint,
         toOrigin: CGPoint,
+        placement: TextPlacementMetadata? = nil,
     )
     /// One short horizontal stroke between two adjacent syllables of
     /// the same word ("Pa-ra-di-so" → three hyphens). Multiple
@@ -328,6 +331,7 @@ public enum LayoutElement: Sendable, Equatable {
     case lyricHyphen(
         fromOrigin: CGPoint,
         toOrigin: CGPoint,
+        placement: TextPlacementMetadata? = nil,
     )
     case glissandoLine(
         fromOrigin: CGPoint,
@@ -430,6 +434,7 @@ public enum LayoutElement: Sendable, Equatable {
             color: ScoreColor? = nil,
             verse: Int = 0,
             anchor: VoiceElementID? = nil,
+            placement: TextPlacementMetadata? = nil,
         )
     }
 }

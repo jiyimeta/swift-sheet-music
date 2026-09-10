@@ -261,7 +261,7 @@ struct FilteredEditingAddressTests {
         document.systems.flatMap { system in
             system.measures.flatMap { measure in
                 measure.elements.compactMap { element in
-                    guard case let .staffText(text, origin, _, _, _) = element else { return nil }
+                    guard case let .staffText(text, origin, _, _, _, _) = element else { return nil }
                     return (text, CGPoint(
                         x: system.origin.x + measure.origin.x + origin.x,
                         y: system.origin.y + measure.origin.y + origin.y,

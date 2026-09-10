@@ -178,7 +178,7 @@
             var found = false
             for measure in system.measures {
                 for el in measure.elements {
-                    guard case let .staffText(_, origin, _, _, _) = el
+                    guard case let .staffText(_, origin, _, _, _, _) = el
                     else { continue }
                     let column = try #require(measure.tickColumns[0])
                     #expect(abs(origin.x - column) < 0.01)

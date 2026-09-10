@@ -142,7 +142,7 @@ extension ScoreLayerBuilder {
         case let .textMark(.tempo, text, p):
             drawTempoText(text: text, origin: shift(p), metrics: metrics, height: height, into: parent)
         case let .textMark(
-            .lyrics(lyricColor, _, _), text, p,
+            .lyrics(lyricColor, _, _, _), text, p,
         ):
             let style = ResolvedTextStyle.resolve(
                 .lyricsOdd, metrics: metrics,
@@ -249,7 +249,7 @@ extension ScoreLayerBuilder {
                 kind: kind, text: text, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .rehearsalMark(text, p, frame, color, _):
+        case let .rehearsalMark(text, p, frame, color, _, _):
             // The frame is attached alongside the letter: MuseScore
             // tints a selected text's frame too, from the same
             // `curColor` (`TDraw::drawTextBase`), so a selected boxed
@@ -283,7 +283,7 @@ extension ScoreLayerBuilder {
             {
                 parent.addSublayer(layer)
             }
-        case let .staffText(text, p, color, style, _):
+        case let .staffText(text, p, color, style, _, _):
             // Author-supplied staff/system text. Color and offset
             // (already baked into `p` by placement) come from the
             // source `.mscx`. Bottom-leading anchor at `p` matches
@@ -380,8 +380,8 @@ extension ScoreLayerBuilder {
             {
                 parent.addSublayer(layer)
             }
-        case let .lyricsMelisma(from, to),
-             let .lyricHyphen(from, to):
+        case let .lyricsMelisma(from, to, _),
+             let .lyricHyphen(from, to, _):
             // Hyphens reuse the melisma rule's stroke (0.1 sp,
             // matching MuseScore's `lyricsDashLineThickness`); the
             // layout decides position and length per

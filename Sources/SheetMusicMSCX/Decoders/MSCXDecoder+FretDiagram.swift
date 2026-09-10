@@ -8,7 +8,7 @@ extension FretDiagram {
     /// ride in preserved markup.
     private static let consumedChildren: Set = [
         "Harmony", "fretDiagram", "frets", "strings",
-        "color", "offset", "placement", "visible",
+        "color", "offset", "autoplace", "placement", "visible",
     ]
 
     /// Decode one `<FretDiagram>` without throwing. A chord diagram is an

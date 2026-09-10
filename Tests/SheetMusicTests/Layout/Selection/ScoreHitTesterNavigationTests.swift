@@ -158,7 +158,8 @@ struct ScoreHitTesterNavigationTests {
         let width = lines.map { provider.typographicWidth(text: $0, font: font) }.max() ?? 0
         let lineHeight = provider.ascent(font: font) + provider.descent(font: font)
         let height = lineHeight + CGFloat(lines.count - 1) * (lineHeight + provider.leading(font: font))
-        #expect(raw == CGRect(x: 80, y: 80 - lineHeight / 2, width: width, height: height))
+        // The renderer centers the whole multiline block, including each line's leading.
+        #expect(raw == CGRect(x: 80, y: 80 - height / 2, width: width, height: height))
         let box = raw.offsetBy(dx: 50, dy: 50)
         let padded = box.insetBy(dx: -2.5, dy: -2.5) // sp=10, tolerance=0.25.
         let target = try ScoreHitTarget(elementID: #require(element.elementID))

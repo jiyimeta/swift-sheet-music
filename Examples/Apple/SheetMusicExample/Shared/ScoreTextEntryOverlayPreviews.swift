@@ -16,16 +16,29 @@
             StaffAddress(partIndex: 1, staffIndexInPart: 0),
         ]
 
-        init(kind: TextInputPlanner.Kind? = nil) {
+        init(kind: TextInputPlanner.Kind? = nil, aboveEmptyLyric: Bool = false, belowEmptyText: Bool = false) {
             _ = SheetMusicLayoutApple.install
             let staff = Staff(measures: [Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
                 .chord(Chord(duration: .half, notes: [Note(pitch: 64, tpc: 18)])),
             ])])])
-            let controller = NoteInputController(score: Score(division: 480, parts: [
+            var score = Score(division: 480, parts: [
                 Part(id: "hidden", instrument: Instrument(id: "a"), staves: [staff]),
                 Part(id: "visible", instrument: Instrument(id: "b"), staves: [staff, staff]),
-            ]))
+            ])
+            if aboveEmptyLyric {
+                score.style.textPlacement[.lyrics] = TextPlacementStyle(
+                    placement: .above, positionAbove: ScoreOffset(x: 0, y: -4),
+                )
+            }
+            if belowEmptyText {
+                for role in [TextPlacementRole.staffText, .systemText, .rehearsalMark, .harmonyA] {
+                    score.style.textPlacement[role] = TextPlacementStyle(
+                        placement: .below, positionBelow: ScoreOffset(x: 0, y: 4),
+                    )
+                }
+            }
+            let controller = NoteInputController(score: score)
             let lyric = LyricInputSession()
             let text = TextInputSession()
             let anchor = VoiceElementID(
@@ -34,10 +47,10 @@
             )
             if let kind {
                 text.begin(kind: kind, at: anchor, controller: controller)
-                text.text = kind == .chordSymbol ? "Am7" : "Visible staff"
+                text.text = belowEmptyText ? "" : (kind == .chordSymbol ? "Am7" : "Visible staff")
             } else {
                 lyric.begin(at: anchor, verse: 0, controller: controller)
-                lyric.text = "Visible"
+                lyric.text = aboveEmptyLyric ? "" : "Visible"
             }
             _controller = State(initialValue: controller)
             _lyricSession = State(initialValue: lyric)
@@ -78,5 +91,13 @@
 
     #Preview("Hidden staff new harmony caret") {
         FilteredTextEntryPreview(kind: .chordSymbol)
+    }
+
+    #Preview("Hidden staff empty above lyric caret") {
+        FilteredTextEntryPreview(aboveEmptyLyric: true)
+    }
+
+    #Preview("Hidden staff empty below text caret") {
+        FilteredTextEntryPreview(kind: .staffText, belowEmptyText: true)
     }
 #endif

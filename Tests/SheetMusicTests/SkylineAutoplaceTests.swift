@@ -145,7 +145,7 @@ enum SkylineFixtures {
         guard let system = doc.systems.first else { return nil }
         for measure in system.measures {
             for el in measure.elements {
-                if case let .staffText(_, p, _, _, _) = el { return p.y }
+                if case let .staffText(_, p, _, _, _, _) = el { return p.y }
             }
         }
         return nil
@@ -457,7 +457,7 @@ struct SkylineAutoplaceRegressionTests {
                 case let .textMark(.lyrics, _, p):
                     let y = (p.y * 100).rounded() / 100
                     if !rows.contains(y) { rows.append(y) }
-                case let .lyricsMelisma(from, _):
+                case let .lyricsMelisma(from, _, _):
                     melismaY = from.y
                 default:
                     break
@@ -506,7 +506,7 @@ struct SkylineAutoplaceRegressionTests {
             systemMeasures: [SystemMeasure(elements: [
                 PositionedSystemElement(
                     position: .start,
-                    element: .staffText(StaffText(text: "dolce")),
+                    element: .staffText(StaffText(text: "dolce", offsetY: -2)),
                 ),
             ])],
         )
@@ -514,8 +514,10 @@ struct SkylineAutoplaceRegressionTests {
         let system = try #require(doc.systems.first)
         let staffTop = try #require(system.staffOrigins.first).y
         let y = try #require(SkylineFixtures.staffTextY(in: doc))
-        // Default emission: staffMidY − 3 sp, i.e. staffTop − 1 sp.
-        #expect(abs(y - (staffTop - system.sp)) < 0.01)
+        // The authored -2 sp offset keeps the new -1 sp baseline beyond staff clearance.
+        let font = TextInkGeometry.font(for: .staffText, metrics: doc.metrics)
+        let descent = FontMetrics.provider.descent(font: font)
+        #expect(abs(y - (staffTop - system.sp * 3 + descent)) < 0.01)
     }
 
     /// …and when it DOES collide, it moves away from the staff by

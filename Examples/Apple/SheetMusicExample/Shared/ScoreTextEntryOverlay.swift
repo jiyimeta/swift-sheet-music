@@ -169,90 +169,6 @@ private struct EngravedSelectionBlendMode: ViewModifier {
     }
 }
 
-extension LayoutDocument {
-    // `lyricEntryOrigin(at:)` used to live here. It is engine geometry the hit tester and any host caret
-    // need too, so it now ships from `SheetMusicLayout` as
-    // `LayoutDocument.lyricEntryOrigin(at:)` — the call below resolves to that.
-
-    fileprivate func textEntryOrigin(
-        kind: TextInputPlanner.Kind,
-        at anchor: VoiceElementID,
-        text: String,
-    ) -> CGPoint? {
-        let trimmed = text.trimmingCharacters(
-            in: .whitespacesAndNewlines,
-        )
-        let engraved: CGPoint?
-        switch kind {
-        case .staffText:
-            engraved = staffTextOrigin(at: anchor, style: .staffText)
-        case .systemText:
-            engraved = staffTextOrigin(at: anchor, style: .systemText)
-        case .chordSymbol:
-            engraved = harmonyOrigin(at: anchor)
-        case .rehearsalMark:
-            engraved = rehearsalMarkTextOrigin(at: anchor)
-        }
-        if let engraved { return engraved }
-        guard trimmed.isEmpty else { return nil }
-        return emptyTextEntryOrigin(kind: kind, at: anchor)
-    }
-
-    private func emptyTextEntryOrigin(
-        kind: TextInputPlanner.Kind,
-        at anchor: VoiceElementID,
-    ) -> CGPoint? {
-        guard let timedOrigin = timedElementOrigin(at: anchor) else {
-            return nil
-        }
-        for system in systems {
-            guard let measure = system.measures.first(where: {
-                $0.measureIndex == anchor.measureIndex
-            }),
-                let staffIndex = system.flatIndex(for: anchor.staff),
-                system.staffOrigins.indices.contains(staffIndex),
-                let topStaffOrigin = system.staffOrigins.first
-            else { continue }
-
-            let sp = system.sp
-            let staffTop = system.origin.y
-                + system.staffOrigins[staffIndex].y
-            let systemTop = system.origin.y + topStaffOrigin.y
-            switch kind {
-            case .staffText:
-                return CGPoint(
-                    x: timedOrigin.x,
-                    y: staffTop - sp * 1.5,
-                )
-            case .systemText:
-                return CGPoint(
-                    x: timedOrigin.x,
-                    y: systemTop - sp * 3,
-                )
-            case .rehearsalMark:
-                // New rehearsal marks are placed half a spatium into
-                // the measure with their frame 1.5 sp above the top
-                // staff. Return the inset text origin used by the live
-                // renderer so neither caret nor box jumps on first input.
-                let pad = RehearsalMarkFrame.paddingSp(sp: sp)
-                return CGPoint(
-                    x: system.origin.x + measure.origin.x
-                        + sp * 0.5 + pad,
-                    y: systemTop - sp * 1.5 - pad,
-                )
-            case .chordSymbol:
-                let y = min(
-                    staffTop - sp * 2.5,
-                    (chordStemOrigin(at: anchor)?.y ?? staffTop)
-                        - sp * 0.5,
-                )
-                return CGPoint(x: timedOrigin.x, y: y)
-            }
-        }
-        return nil
-    }
-}
-
 /// Selects the active session and connects the reusable field to score
 /// application callbacks without putting session behavior back into the
 /// already-large `ContentViewMac`.
@@ -281,7 +197,12 @@ struct ScoreTextEntryOverlayHost: View {
 
         if let cursor = lyricSession.cursor,
            let location = displayedLocation(cursor.location, using: addresses),
-           let origin = document.lyricEntryOrigin(at: .init(location: location, verse: cursor.verse))
+           let origin = document.lyricEntryOrigin(
+               at: .init(location: location, verse: cursor.verse),
+               placementStyle: controller.score.style.textPlacement,
+               elementProperties: LyricInputPlanner.lyric(at: cursor, in: controller.score)?
+                   .elementProperties ?? .default,
+           )
         {
             ScoreTextEntryOverlay(
                 document: document,
@@ -299,6 +220,13 @@ struct ScoreTextEntryOverlayHost: View {
                       kind: textSession.kind,
                       at: location,
                       text: textSession.text,
+                      placementStyle: controller.score.style.textPlacement,
+                      elementProperties: SetElementPlacement.currentProperties(
+                          for: .text(textID(kind: textSession.kind, anchor: anchor)), in: controller.score,
+                      ) ?? .default,
+                      textProperties: SetTextFont.current(
+                          textID(kind: textSession.kind, anchor: anchor), in: controller.score,
+                      ) ?? TextProperties(),
                   )
         {
             ScoreTextEntryOverlay(
@@ -314,6 +242,15 @@ struct ScoreTextEntryOverlayHost: View {
                 kind: textSession.kind.overlayIdentity,
                 anchor: anchor,
             ))
+        }
+    }
+
+    private func textID(kind: TextInputPlanner.Kind, anchor: VoiceElementID) -> ScoreTextID {
+        switch kind {
+        case .staffText: .staffText(anchor: anchor, style: .staffText)
+        case .systemText: .staffText(anchor: anchor, style: .systemText)
+        case .chordSymbol: .harmony(anchor: anchor)
+        case .rehearsalMark: .rehearsalMark(measureIndex: anchor.measureIndex)
         }
     }
 

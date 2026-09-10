@@ -10,7 +10,7 @@ extension Fingering {
     /// `color` is consumed because `ElementProperties(decodingMSCXChildrenOf:)`
     /// reads it, the same arrangement every other decoder here has.
     private static let consumedChildren: Set = [
-        "style", "text", "color", "offset", "placement", "visible",
+        "style", "text", "color", "offset", "autoplace", "placement", "visible",
     ]
 
     /// The `<Fingering>` children of a `<Note>`, in document order.

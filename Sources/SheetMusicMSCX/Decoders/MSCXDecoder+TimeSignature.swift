@@ -4,7 +4,7 @@ import SheetMusicXMLTools
 
 extension TimeSignature {
     private static let consumedTimeSignatureChildren: Set = [
-        "color", "offset", "placement", "showCourtesySig", "sigD", "sigN", "subtype",
+        "color", "offset", "autoplace", "placement", "showCourtesySig", "sigD", "sigN", "subtype",
         "visible",
     ]
 

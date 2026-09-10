@@ -31,19 +31,21 @@ public struct ElementProperties: Sendable, Equatable, Codable {
     /// `twrite.cpp:578`).
     public var placement: Placement?
 
-    // Reserved extension points (NOT implemented in this work):
-    //   public var autoplace   // behavioral
+    /// Whether collision avoidance may move this element. Nil inherits the default true.
+    public var autoplace: Bool?
 
     public init(
         visible: Bool = true,
         color: ScoreColor? = nil,
         offset: ScoreOffset? = nil,
         placement: Placement? = nil,
+        autoplace: Bool? = nil,
     ) {
         self.visible = visible
         self.color = color
         self.offset = offset
         self.placement = placement
+        self.autoplace = autoplace
     }
 
     public static let `default` = ElementProperties()

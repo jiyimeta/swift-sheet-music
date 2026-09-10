@@ -132,6 +132,27 @@ struct MSCZStyleFileTests {
 
     // MARK: - Tests
 
+    @Test func textPlacementStyleFileOverlaysInlinePerField() throws {
+        let data = try mscz(
+            mscx: mscxXML(extraScoreChildren: "<Style><staffTextPosBelow x=\"3\" y=\"8\"/></Style>"),
+            styleFile: Data("""
+            <museScore version="4.60"><Style>
+              <staffTextPlacement>below</staffTextPlacement>
+              <staffTextPosBelow x="1" y="6"/>
+              <chordSymbolBPosAbove x="2" y="-9"/>
+            </Style></museScore>
+            """.utf8),
+        )
+        let score = try MSCZReader.parse(data)
+        #expect(score.style.textPlacement[.staffText].placement == .below)
+        #expect(score.style.textPlacement[.staffText].positionBelow == ScoreOffset(x: 3, y: 8))
+        #expect(score.style.textPlacement[.harmonyB].positionAbove == ScoreOffset(x: 2, y: -9))
+        let saved = try MSCXEncoder.encode(score)
+        let restored = try MSCXParser.parse(saved)
+        #expect(restored.style.textPlacement == score.style.textPlacement)
+        #expect(try MSCXEncoder.encode(restored) == saved)
+    }
+
     @Test("score_style.mss supplies the style when the mscx has none")
     func styleFileSuppliesScoreStyle() throws {
         let data = try mscz(mscx: mscxXML(), styleFile: styleFileXML())

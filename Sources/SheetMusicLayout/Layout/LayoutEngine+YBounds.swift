@@ -74,8 +74,8 @@ extension LayoutEngine {
              let .multiMeasureRest(_, p),
              let .measureNumber(_, p),
              let .staffName(_, p),
-             let .staffText(_, p, _, _, _),
-             let .rehearsalMark(_, p, _, _, _),
+             let .staffText(_, p, _, _, _, _),
+             let .rehearsalMark(_, p, _, _, _, _),
              let .rest(_, p, _, _, _),
              let .note(_, _, _, _, p, _, _, _):
             return [p.y]
@@ -99,8 +99,8 @@ extension LayoutEngine {
             )
         case let .tieArc(from, to, _, _),
              let .glissandoLine(from, to, _, _),
-             let .lyricsMelisma(from, to),
-             let .lyricHyphen(from, to),
+             let .lyricsMelisma(from, to, _),
+             let .lyricHyphen(from, to, _),
              // Never wider than the note it serves — the outermost
              // note's own step already dominates this Y (see
              // `LedgerLinePass`), so folding it in here is harmless.
@@ -182,6 +182,10 @@ extension LayoutEngine {
         from: CGPoint, to: CGPoint, sp: CGFloat?,
     ) -> [CGFloat] {
         guard let sp else { return [from.y, to.y] }
+        if kind == .pedal {
+            let rects = PedalInkGeometry.rects(from: from, to: to, metrics: StaffMetrics(staffSize: sp * 4))
+            return rects.flatMap { [$0.minY, $0.maxY] }
+        }
         let half = SpannerGeometry.segmentThickness(
             kind: kind, sp: sp,
         ) / 2
@@ -201,17 +205,17 @@ extension LayoutEngine {
             CGPoint(x: p.x, y: p.y + dy)
         }
         switch element {
-        case let .textMark(.lyrics(color, verse, anchor), text, p):
+        case let .textMark(.lyrics(color, verse, anchor, placement), text, p):
             return .textMark(
                 kind: .lyrics(
-                    color: color, verse: verse, anchor: anchor,
+                    color: color, verse: verse, anchor: anchor, placement: placement,
                 ),
                 text: text,
                 origin: bump(p),
             )
-        case let .lyricHyphen(from, to):
+        case let .lyricHyphen(from, to, placement):
             return .lyricHyphen(
-                fromOrigin: bump(from), toOrigin: bump(to),
+                fromOrigin: bump(from), toOrigin: bump(to), placement: placement,
             )
         default:
             return element
@@ -224,10 +228,11 @@ extension LayoutEngine {
     static func setMelismaAbsoluteY(
         _ element: LayoutElement, y: CGFloat,
     ) -> LayoutElement {
-        if case let .lyricsMelisma(from, to) = element {
+        if case let .lyricsMelisma(from, to, placement) = element {
             return .lyricsMelisma(
                 fromOrigin: CGPoint(x: from.x, y: y),
                 toOrigin: CGPoint(x: to.x, y: y),
+                placement: placement,
             )
         }
         return element

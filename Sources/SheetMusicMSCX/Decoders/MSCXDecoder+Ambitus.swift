@@ -15,7 +15,7 @@ extension Ambitus {
     private static let consumedChildren: Set = [
         "head", "headType", "mirror", "hasLine", "lineWidth",
         "topPitch", "topTpc", "bottomPitch", "bottomTpc",
-        "topAccidental", "bottomAccidental", "color", "offset", "placement",
+        "topAccidental", "bottomAccidental", "color", "offset", "autoplace", "placement",
         "visible",
     ]
 

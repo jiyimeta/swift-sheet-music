@@ -10,7 +10,7 @@ extension Sticking {
     /// `color` and `visible` are consumed because
     /// `ElementProperties(decodingMSCXChildrenOf:)` reads them.
     private static let consumedChildren: Set = [
-        "text", "color", "offset", "placement", "visible",
+        "text", "color", "offset", "autoplace", "placement", "visible",
     ]
 
     /// Decode one `<Sticking>`.

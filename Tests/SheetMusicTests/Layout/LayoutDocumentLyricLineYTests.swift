@@ -90,7 +90,7 @@ struct LayoutDocumentLyricLineYTests {
         })
         return measure.elements.compactMap { element in
             guard case let .textMark(
-                .lyrics(_, verse, _), _, origin,
+                .lyrics(_, verse, _, _), _, origin,
             ) = element
             else { return nil }
             return (
@@ -129,13 +129,14 @@ struct LayoutDocumentLyricLineYTests {
         #expect(verseZeroY < mark.y)
     }
 
-    @Test func explicitVerseZeroAnchorsEveryRequestedRow() throws {
+    @Test func eachRequestedVerseUsesItsFinalEngravedRow() throws {
         let document = Self.layout([Self.measure(lyrics: [
             Lyric(text: "one", verse: 0),
             Lyric(text: "two", verse: 1),
         ])])
         let marks = try Self.lyricMarks(in: document, measureIndex: 0)
         let verseZeroMark = try #require(marks.first { $0.verse == 0 })
+        let verseOneMark = try #require(marks.first { $0.verse == 1 })
         let verseZeroY = try #require(document.lyricLineY(
             at: Self.elementID(), verse: 0,
         ))
@@ -144,7 +145,8 @@ struct LayoutDocumentLyricLineYTests {
         ))
 
         #expect(abs(verseZeroY - verseZeroMark.y) < 0.001)
-        #expect(abs((verseOneY - verseZeroY) - document.metrics.sp * 1.7) < 0.001)
+        #expect(abs(verseOneY - verseOneMark.y) < 0.001)
+        #expect(verseOneY > verseZeroY)
     }
 
     @Test func measureWithoutLyricsUsesStridingFallback() throws {
@@ -157,7 +159,11 @@ struct LayoutDocumentLyricLineYTests {
             at: Self.elementID(), verse: 2,
         ))
 
-        #expect(abs(verseZeroY - (staffTop + document.metrics.sp * 6)) < 0.001)
+        let font = TextInkGeometry.font(for: .lyricsOdd, metrics: document.metrics)
+        let provider = FontMetrics.provider
+        let centerOffset = (provider.ascent(font: font) - provider.descent(font: font)) / 2
+        // Five-line staff: bottom is top + 4 sp, and the default lyric baseline is bottom + 3 sp.
+        #expect(abs(verseZeroY - (staffTop + document.metrics.sp * 7 - centerOffset)) < 0.001)
         #expect(abs((verseTwoY - verseZeroY) - document.metrics.sp * 3.4) < 0.001)
     }
 

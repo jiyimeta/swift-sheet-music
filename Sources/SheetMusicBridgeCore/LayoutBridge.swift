@@ -551,7 +551,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .staffText(text, origin, color, style, _):
+        case let .staffText(text, origin, color, style, _, _):
             let argb = color.flatMap(LayoutBridge.argb(from:))
             if let argb { out.append(.setColor(argb: argb)) }
             emitRoleText(
@@ -609,7 +609,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .rehearsalMark(text, origin, frame, color, _):
+        case let .rehearsalMark(text, origin, frame, color, _, _):
             encodeRehearsalMark(
                 text: text,
                 originX: mox + Double(origin.x),
@@ -698,7 +698,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .lyricsMelisma(fromOrigin, toOrigin):
+        case let .lyricsMelisma(fromOrigin, toOrigin, _):
             // Thin horizontal underscore-style rule from the syllable's
             // tail to the end of the last covered note. Apple uses
             // `staffLineThickness` here.
@@ -710,7 +710,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             out.append(.lineTo(x: tx, y: ty))
             out.append(.stroke(width: sp * 0.13 * ptToMM))
 
-        case let .lyricHyphen(fromOrigin, toOrigin):
+        case let .lyricHyphen(fromOrigin, toOrigin, _):
             // Short hyphen between two adjacent syllables. Same
             // thickness as the melisma.
             let fx = (mox + Double(fromOrigin.x)) * ptToMM

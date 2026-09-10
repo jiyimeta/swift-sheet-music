@@ -24,6 +24,7 @@ public struct LayoutHarmony: Sendable, Equatable {
     /// symbol's own tick. Carrying it is what lets a caret address one of two symbols with the same name in a
     /// bar. `nil` when no timed element starts at that tick, which is the `<location>`-shifted case no
     /// text-entry command can reach either.
+    public var placement: TextPlacementMetadata?
     public var anchor: VoiceElementID?
 
     public init(
@@ -33,7 +34,9 @@ public struct LayoutHarmony: Sendable, Equatable {
         runs: [HarmonyRun],
         width: Double,
         anchor: VoiceElementID?,
+        placement: TextPlacementMetadata? = nil,
     ) {
+        self.placement = placement
         self.harmony = harmony
         self.anchorX = anchorX
         self.y = y

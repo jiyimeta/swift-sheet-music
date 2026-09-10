@@ -12,7 +12,7 @@ extension Chord {
         "TremoloSingleChord", "TremoloTwoChord", "acciaccatura",
         "appoggiatura", "color", "dots", "durationType", "grace16",
         "grace16after", "grace32", "grace32after", "grace4", "grace8after",
-        "offset", "placement", "small", "track", "visible",
+        "offset", "autoplace", "placement", "small", "track", "visible",
     ]
 
     static func decode(_ node: XMLTreeNode) throws -> Chord {
@@ -274,7 +274,7 @@ extension Chord {
     /// `TextProperties.decode`, or `ElementProperties`.
     private static let consumedLyricsChildren: Set = [
         "bold", "color", "face", "framePadding", "frameType", "italic",
-        "no", "offset", "placement", "size", "strike", "syllabic", "text", "ticks", "underline",
+        "no", "offset", "autoplace", "placement", "size", "strike", "syllabic", "text", "ticks", "underline",
         "visible",
     ]
 

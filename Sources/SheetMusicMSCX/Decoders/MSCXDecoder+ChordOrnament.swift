@@ -14,7 +14,7 @@ extension ChordOrnament {
     private static let consumedChildren: Set = [
         "Accidental", "intervalAbove", "intervalBelow", "ornamentShowAccidental",
         "ornamentShowCueNote", "ornamentStyle", "play", "startOnUpperNote",
-        "subtype", "color", "offset", "placement", "visible",
+        "subtype", "color", "offset", "autoplace", "placement", "visible",
     ]
 
     /// The `<Ornament>` children of a `<Chord>`, in document order.

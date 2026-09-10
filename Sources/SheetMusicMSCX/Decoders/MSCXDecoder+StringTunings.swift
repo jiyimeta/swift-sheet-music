@@ -14,7 +14,7 @@ extension StringTunings {
     /// model nor the bag and is dropped. `offset` was deliberately held back
     /// until the parity doc's §7.2 work landed; that is this commit.
     private static let consumedChildren: Set = [
-        "preset", "visibleStrings", "StringData", "text", "color", "offset", "placement",
+        "preset", "visibleStrings", "StringData", "text", "color", "offset", "autoplace", "placement",
         "visible",
     ]
 

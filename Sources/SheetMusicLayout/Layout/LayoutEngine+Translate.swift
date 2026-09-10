@@ -173,17 +173,19 @@ extension LayoutEngine {
                 isAbove: above,
                 tupletID: tid,
             )
-        case let .lyricsMelisma(from, to):
+        case let .lyricsMelisma(from, to, placement):
             return .lyricsMelisma(
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
+                placement: placement,
             )
-        case let .lyricHyphen(from, to):
+        case let .lyricHyphen(from, to, placement):
             return .lyricHyphen(
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
+                placement: placement,
             )
-        case let .staffText(text, p, color, style, anchor):
+        case let .staffText(text, p, color, style, anchor, placement):
             // Emitted by `placeMeasureElements` in staff-local coords
             // (relative to a virtual staff with top at sp * 2), so the
             // per-staff `dy` must be applied for the text to land above
@@ -195,14 +197,16 @@ extension LayoutEngine {
                 color: color,
                 style: style,
                 anchor: anchor,
+                placement: placement,
             )
-        case let .rehearsalMark(text, p, frame, color, measureIndex):
+        case let .rehearsalMark(text, p, frame, color, measureIndex, placement):
             // Same staff-local origin convention as `.staffText`;
             // shift onto the system's actual top-staff y.
             return .rehearsalMark(
                 text: text, origin: shift(p),
                 frame: frame, color: color,
                 measureIndex: measureIndex,
+                placement: placement,
             )
         case let .harmony(lh):
             // Apply per-staff dy to the anchor point. The runs are
@@ -215,6 +219,7 @@ extension LayoutEngine {
                 runs: lh.runs,
                 width: lh.width,
                 anchor: lh.anchor,
+                placement: lh.placement,
             ))
         case let .graceChord(
             notes, dur, stem, so, relX, slash, mag, vi,
@@ -293,17 +298,17 @@ extension LayoutEngine {
             CGPoint(x: p.x + dx, y: p.y)
         }
         switch element {
-        case let .staffText(text, p, color, style, anchor):
+        case let .staffText(text, p, color, style, anchor, placement):
             return .staffText(
                 text: text, origin: shift(p),
-                color: color, style: style, anchor: anchor,
+                color: color, style: style, anchor: anchor, placement: placement,
             )
         case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))
-        case let .rehearsalMark(text, p, frame, color, measureIndex):
+        case let .rehearsalMark(text, p, frame, color, measureIndex, placement):
             return .rehearsalMark(
                 text: text, origin: shift(p),
-                frame: frame, color: color, measureIndex: measureIndex,
+                frame: frame, color: color, measureIndex: measureIndex, placement: placement,
             )
         default:
             return element

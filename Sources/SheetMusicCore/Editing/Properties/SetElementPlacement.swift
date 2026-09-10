@@ -1,10 +1,10 @@
 import SheetMusicFoundation
 
 /// Writes one carrier's authored placement override; nil restores its styled side.
-/// The field is written and preserved through MSCX, but this library does not yet draw the override.
-/// That rendering gap also affects placement authored elsewhere, before any editing command runs.
-/// Hosts must not interpret a lack of visible change as a failed edit. Placement and skyline layout
-/// need a separate engraving design; this command changes neither.
+/// Lyric, staff/system text, rehearsal marks, and harmony resolve the side through
+/// the element override, score style, and role default, then retain it through autoplace.
+/// Note and chord generic placement is persisted but visually inert: it changes neither
+/// pitch nor stem direction.
 ///
 /// Text, individual notes, and whole chords have distinct addresses. A chord target includes a rest
 /// (a chord with no notes) and writes only the chord's own property, never its notes' properties.
