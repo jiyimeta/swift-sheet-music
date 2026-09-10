@@ -90,7 +90,7 @@ extension LayoutEngine {
             return spannerSegmentYPoints(
                 kind: kind, from: from, to: to, sp: sp,
             )
-        case let .tieArc(from, to, _),
+        case let .tieArc(from, to, _, _),
              let .glissandoLine(from, to, _, _),
              let .lyricsMelisma(from, to),
              let .lyricHyphen(from, to),

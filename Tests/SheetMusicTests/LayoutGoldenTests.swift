@@ -129,8 +129,19 @@
         /// changed. Whatever tool you use to classify a diff of this
         /// file, check it against a line you KNOW moved before
         /// believing what it says about the ones you don't.
+        ///
+        /// **Re-recorded when tie arcs gained identity.** Paired by line
+        /// index (3890 lines before and after), 24 lines changed and
+        /// every one is a `spanner tieArc(` line whose only change is an
+        /// appended `identity:` field: 10 ties naming their two notes,
+        /// 14 slurs still `nil` until slur identity lands. Every other
+        /// line is byte-identical, and all 24 arc lines in the corpus
+        /// changed, so none was skipped. The classifier was checked
+        /// against a line known to move: its sample tie line matched,
+        /// character for character, the line derived by hand before the
+        /// run.
         private static let expectedDigestSHA256 =
-            "9b15fd57f1713137f14c431bdccaf291db9ae33767e20ac53065a6ca30b9e6f3"
+            "3ebcda1ddb0c5e415e85ffea40734160037c3bdf25161d213e04f5b1af078ad6"
 
         @Test("write digest")
         func writeDigest() throws {

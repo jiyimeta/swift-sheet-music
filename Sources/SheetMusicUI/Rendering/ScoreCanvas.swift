@@ -309,7 +309,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 continuesLeft: cl, continuesRight: cr,
                 text: text, metrics: metrics,
             )
-        case let .tieArc(from, to, above):
+        case let .tieArc(from, to, above, _):
             TieRenderer.draw(
                 context: &context,
                 from: shift(from), to: shift(to),

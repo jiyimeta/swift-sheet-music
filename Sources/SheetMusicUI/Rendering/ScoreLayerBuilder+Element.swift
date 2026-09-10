@@ -261,7 +261,7 @@ extension ScoreLayerBuilder {
                 continuesLeft: cl, continuesRight: cr, text: text,
                 metrics: metrics, height: height, into: parent,
             )
-        case let .tieArc(from, to, above):
+        case let .tieArc(from, to, above, _):
             drawTieArc(
                 from: shift(from), to: shift(to), above: above,
                 metrics: metrics, height: height, into: parent,

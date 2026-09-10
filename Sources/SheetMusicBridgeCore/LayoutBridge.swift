@@ -680,7 +680,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        case let .tieArc(fromOrigin, toOrigin, above):
+        case let .tieArc(fromOrigin, toOrigin, above, _):
             encodeTieArc(
                 fromX: mox + Double(fromOrigin.x),
                 fromY: moy + Double(fromOrigin.y),

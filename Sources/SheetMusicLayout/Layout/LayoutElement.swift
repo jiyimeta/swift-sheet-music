@@ -301,6 +301,7 @@ public enum LayoutElement: Sendable, Equatable {
         fromOrigin: CGPoint,
         toOrigin: CGPoint,
         above: Bool,
+        identity: ScoreElementID? = nil,
     )
     /// Horizontal melisma line drawn at the lyric baseline, from just
     /// past the syllable's text to the end of the last note the

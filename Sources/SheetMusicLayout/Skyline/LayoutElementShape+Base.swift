@@ -86,7 +86,7 @@ extension LayoutElementShape {
                 codepoint: BreathGlyph.codepoint(forKind: breathKind),
                 center: p, sp: sp,
             )]
-        case let .tieArc(from, to, above):
+        case let .tieArc(from, to, above, _):
             let apex = above ? min(from.y, to.y) - sp : max(from.y, to.y) + sp
             return [spanRect(
                 CGPoint(x: from.x, y: apex), to, thickness: sp * 0.2,
