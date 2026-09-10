@@ -7,12 +7,15 @@
     @available(macOS 15.0, *)
     private struct TextPlacementPreview: View {
         private let score: Score
+        private let showsInvisible: Bool
 
-        init() {
+        init(rehearsalText: String = "B\nframe", showsInvisible: Bool = false) {
+            self.showsInvisible = showsInvisible
             _ = SheetMusicLayoutApple.install
             func lyric(_ text: String, verse: Int, side: Placement, syllabic: Syllabic) -> Lyric {
                 var value = Lyric(text: text, syllabic: syllabic, verse: verse)
                 value.elementProperties.placement = side
+                if showsInvisible, verse >= 2 { value.visible = false }
                 return value
             }
             var harmony = Harmony(name: "Am7")
@@ -22,7 +25,7 @@
             above.elementProperties.placement = .above
             var below = StaffText(text: "Below\nsystem text", isSystemText: true)
             below.elementProperties.placement = .below
-            var rehearsal = RehearsalMark(text: "B\nframe", frame: .circle)
+            var rehearsal = RehearsalMark(text: rehearsalText, frame: .circle)
             rehearsal.elementProperties.placement = .below
             let voice = Voice(elements: [
                 .spanner(Spanner(
@@ -40,6 +43,7 @@
                     lyric("per", verse: 0, side: .above, syllabic: .end),
                     lyric("ward", verse: 1, side: .below, syllabic: .end),
                     lyric("row", verse: 2, side: .above, syllabic: .end),
+                    lyric(showsInvisible ? "Ghost verse 3" : "", verse: 3, side: .above, syllabic: .single),
                 ])),
             ])
             score = Score(
@@ -58,7 +62,10 @@
         }
 
         var body: some View {
-            let document = LayoutEngine.layout(score: score, options: .init(staffSize: 28), availableWidth: 760)
+            let document = LayoutEngine.layout(
+                score: score, options: .init(staffSize: 28, showsInvisibleElements: showsInvisible),
+                availableWidth: 760,
+            )
             ScoreView(document: document, score: score)
                 .padding(20)
                 .frame(width: 800, height: 620, alignment: .topLeading)
@@ -68,5 +75,13 @@
 
     #Preview("Text placement sides and rows") {
         TextPlacementPreview()
+    }
+
+    #Preview("Single-line rehearsal circle") {
+        TextPlacementPreview(rehearsalText: "A")
+    }
+
+    #Preview("Hidden above lyric rows") {
+        TextPlacementPreview(showsInvisible: true)
     }
 #endif

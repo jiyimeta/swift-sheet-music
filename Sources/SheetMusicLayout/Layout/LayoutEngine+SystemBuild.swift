@@ -139,6 +139,7 @@ extension LayoutEngine {
                 staff: staff, measures: measureRange, style: context.score.style.textPlacement,
                 continuations: context.melismaContinuations.indices.contains(staffIdx)
                     ? context.melismaContinuations[staffIdx] : [],
+                showsInvisibleElements: context.options.showsInvisibleElements,
             )
         }
         for (j, measureIdx) in measureRange.enumerated() {

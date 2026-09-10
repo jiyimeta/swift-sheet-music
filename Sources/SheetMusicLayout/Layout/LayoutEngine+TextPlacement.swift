@@ -67,7 +67,10 @@ extension LayoutEngine {
 
     static func maxAboveLyricVerse(
         staff: Staff, measures: Range<Int>, style: TextPlacementStyles, continuations: [[MelismaContinuation]],
+        showsInvisibleElements: Bool,
     ) -> Int {
+        // The visible and ghost rows share one ordering only while ghosts are shown.
+        // Print layout must not move a visible row because a hidden higher verse exists.
         var maximum = 0
         for index in measures {
             if staff.measures.indices.contains(index) {
@@ -75,7 +78,7 @@ extension LayoutEngine {
                     for element in voice.elements {
                         guard case let .chord(chord) = element else { continue }
                         for (verse, lyric) in chord.lyrics.enumerated()
-                            where lyric.visible && !lyric.text.isEmpty
+                            where (lyric.visible || showsInvisibleElements) && !lyric.text.isEmpty
                             && style.side(for: .lyrics, element: lyric.elementProperties) == .above
                         {
                             maximum = max(maximum, verse)

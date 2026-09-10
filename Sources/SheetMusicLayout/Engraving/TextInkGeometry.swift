@@ -55,6 +55,22 @@ public enum TextInkGeometry {
         )
     }
 
+    /// The same frame for rendering, hit bounds, and skyline. Circle clearance is measured
+    /// from the actual positioned ink to the inner stroke, including all lines of text.
+    public static func rehearsalFrame(
+        text: String, font: LayoutFont, origin: CGPoint, sp: CGFloat, frame: TextFrameType,
+    ) -> RehearsalMarkFrame.Shape {
+        let pad = RehearsalMarkFrame.paddingSp(sp: sp)
+        let ink = rect(
+            text: text, font: font, origin: CGPoint(x: origin.x + pad, y: origin.y - pad),
+            anchor: CGPoint(x: 0, y: 1),
+        )
+        return RehearsalMarkFrame.shape(
+            for: frame, around: rehearsalBox(text: text, font: font, origin: origin, sp: sp),
+            enclosing: ink, clearance: pad + RehearsalMarkFrame.strokeWidthSp(sp: sp) / 2,
+        )
+    }
+
     /// Element-local Y-down rectangles. Nil means unsupported; an empty array means supported
     /// but no painted ink, so callers must not substitute an anchor-sized fallback.
     public static func rects(for element: LayoutElement, metrics: StaffMetrics) -> [CGRect]? {
@@ -93,8 +109,7 @@ public enum TextInkGeometry {
             origin: CGPoint(x: origin.x + pad, y: origin.y - pad),
             anchor: CGPoint(x: 0, y: 1),
         ).map { [$0] } ?? []
-        let box = rehearsalBox(text: text, font: font, origin: origin, sp: metrics.sp)
-        switch RehearsalMarkFrame.shape(for: frame, around: box) {
+        switch rehearsalFrame(text: text, font: font, origin: origin, sp: metrics.sp, frame: frame) {
         case .none: break
         case let .rectangle(rect), let .ellipse(rect):
             let halfStroke = RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp) / 2

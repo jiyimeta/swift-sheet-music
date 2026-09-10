@@ -321,13 +321,13 @@ extension ScoreLayerBuilder {
             built.append(layer)
         }
 
-        let boxRect = TextInkGeometry.rehearsalBox(
+        let shape = TextInkGeometry.rehearsalFrame(
             text: text, font: TextInkGeometry.font(for: .rehearsalMark, metrics: metrics),
-            origin: origin, sp: metrics.sp,
+            origin: origin, sp: metrics.sp, frame: frame,
         )
         let lineWidth = RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp)
         let framePath: CGPath?
-        switch RehearsalMarkFrame.shape(for: frame, around: boxRect) {
+        switch shape {
         case .none:
             framePath = nil
         case let .rectangle(rect):

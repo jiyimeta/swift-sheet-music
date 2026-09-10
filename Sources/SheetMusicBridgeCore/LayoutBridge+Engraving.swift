@@ -1027,11 +1027,13 @@ extension LayoutBridge {
                 anchor: CGPoint(x: 0, y: 1), into: &out,
             )
         }
-        let boxRect = TextInkGeometry.rehearsalBox(text: text, font: font, origin: origin, sp: CGFloat(sp))
+        let shape = TextInkGeometry.rehearsalFrame(
+            text: text, font: font, origin: origin, sp: CGFloat(sp), frame: frame,
+        )
         let strokeWidth = Double(
             RehearsalMarkFrame.strokeWidthSp(sp: CGFloat(sp)),
         )
-        switch RehearsalMarkFrame.shape(for: frame, around: boxRect) {
+        switch shape {
         case .none:
             break
         case let .rectangle(rect):

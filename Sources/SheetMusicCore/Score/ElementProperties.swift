@@ -31,7 +31,9 @@ public struct ElementProperties: Sendable, Equatable, Codable {
     /// `twrite.cpp:578`).
     public var placement: Placement?
 
-    /// Whether collision avoidance may move this element. Nil inherits the default true.
+    /// Persisted author override for whether collision avoidance may move this element.
+    /// Nil inherits the default true. Storage is generic; layout currently honors this
+    /// override for Lyric, StaffText / SystemText, RehearsalMark, and Harmony.
     public var autoplace: Bool?
 
     public init(

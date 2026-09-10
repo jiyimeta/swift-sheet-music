@@ -43,14 +43,14 @@ enum RehearsalMarkRenderer {
             context: &context, text: text, font: style.ctFont,
             origin: textOrigin, anchor: CGPoint(x: 0, y: 1), color: textColor,
         )
-        let boxRect = TextInkGeometry.rehearsalBox(
+        let shape = TextInkGeometry.rehearsalFrame(
             text: text, font: TextInkGeometry.font(for: .rehearsalMark, overrides: properties, metrics: metrics),
-            origin: origin, sp: metrics.sp,
+            origin: origin, sp: metrics.sp, frame: frame,
         )
         let strokeWidth = RehearsalMarkFrame.strokeWidthSp(
             sp: metrics.sp,
         )
-        switch RehearsalMarkFrame.shape(for: frame, around: boxRect) {
+        switch shape {
         case .none:
             break
         case let .rectangle(rect):

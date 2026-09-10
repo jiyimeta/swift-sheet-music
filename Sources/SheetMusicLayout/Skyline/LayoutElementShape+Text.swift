@@ -360,9 +360,8 @@ extension LayoutElementShape {
             text: text, font: f, origin: CGPoint(x: origin.x + pad, y: origin.y - pad), anchor: .bottomLeading,
         )
         guard frame != .none else { return inner }
-        let box = TextInkGeometry.rehearsalBox(text: text, font: f, origin: origin, sp: metrics.sp)
         let stroke = RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp) / 2
-        switch RehearsalMarkFrame.shape(for: frame, around: box) {
+        switch TextInkGeometry.rehearsalFrame(text: text, font: f, origin: origin, sp: metrics.sp, frame: frame) {
         case .none: return inner
         case let .rectangle(rect), let .ellipse(rect): return rect.insetBy(dx: -stroke, dy: -stroke)
         }

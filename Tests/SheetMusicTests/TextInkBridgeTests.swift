@@ -10,7 +10,7 @@
     @MainActor struct TextInkBridgeTests {
         private let _installApple = TestSupport.installApple
 
-        @Test(arguments: ["A", "A\ng", "A\n\ng"], [TextFrameType.none, .rectangle, .circle])
+        @Test(arguments: ["A", "B\nframe", "A\ng", "A\n\ng"], [TextFrameType.none, .rectangle, .circle])
         func rehearsalCommandsMatchTextAndFrameInk(text: String, frame: TextFrameType) throws {
             guard #available(macOS 15.0, *) else { return }
             let element = LayoutElement.rehearsalMark(

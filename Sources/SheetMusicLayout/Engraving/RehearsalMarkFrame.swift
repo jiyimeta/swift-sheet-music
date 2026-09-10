@@ -48,15 +48,13 @@ public enum RehearsalMarkFrame {
         )
     }
 
-    /// Pick the frame shape (rect / inscribing ellipse / no frame)
-    /// around the given box.
-    ///
-    /// For `.circle`, the diameter is `max(boxRect.width, boxRect.height)`
-    /// so short labels ("A") get a tight circle and wide labels ("1サビ")
-    /// get a letterbox-friendly enclosing ellipse — matching the Apple
-    /// renderer's existing behavior.
+    /// Pick a frame around the nominal typographic box. A circle keeps the box center
+    /// and its maximum dimension as the minimum diameter. When ink is supplied, grow
+    /// only as needed to enclose every ink corner with the requested radial clearance.
+    /// Clearance includes half the stroke width when measured to the painted inner edge.
     public static func shape(
         for frame: TextFrameType, around boxRect: CGRect,
+        enclosing ink: CGRect? = nil, clearance: CGFloat = 0,
     ) -> Shape {
         switch frame {
         case .none:
@@ -64,7 +62,13 @@ public enum RehearsalMarkFrame {
         case .rectangle:
             return .rectangle(boxRect)
         case .circle:
-            let diameter = max(boxRect.width, boxRect.height)
+            var radius = max(boxRect.width, boxRect.height) / 2
+            if let ink {
+                let dx = max(abs(ink.minX - boxRect.midX), abs(ink.maxX - boxRect.midX))
+                let dy = max(abs(ink.minY - boxRect.midY), abs(ink.maxY - boxRect.midY))
+                radius = max(radius, (dx * dx + dy * dy).squareRoot() + clearance)
+            }
+            let diameter = radius * 2
             let inscribed = CGRect(
                 x: boxRect.midX - diameter / 2,
                 y: boxRect.midY - diameter / 2,
