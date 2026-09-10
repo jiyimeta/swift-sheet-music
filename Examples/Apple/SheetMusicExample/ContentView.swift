@@ -479,6 +479,11 @@
                 // Text editing is macOS-only in this example; on iOS a
                 // tap on engraved text reads as a deselect.
                 selection = .none
+            case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature,
+                 .barLine, .articulation:
+                // An engraved marking selects itself, so the renderer
+                // tints it; there is nothing to edit it with on iOS yet.
+                selection = target.selectableItem.map { .single($0) } ?? .none
             }
         }
 
