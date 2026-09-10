@@ -32,15 +32,20 @@ public struct ReplaceVoiceElement: EditCommand {
         guard var voice = score[voice: ref] else { throw Self.refused(.targetNotFound(location)) }
         let previous = voice.elements.eid(at: location.elementIndex)
         let inverseIdentity: ElementIdentity
+        var materialized = element
         switch identity {
         case .same:
-            voice.elements.updateValue(at: location.elementIndex) { $0 = element }
+            materialized.assignMissingGraceIDs(using: &ids)
+            voice.elements.updateValue(at: location.elementIndex) { $0 = materialized }
             inverseIdentity = .same
         case .fresh:
-            voice.replaceElement(at: location.elementIndex, with: element, id: ids.next())
+            let eid = ids.next()
+            materialized.assignMissingGraceIDs(using: &ids)
+            voice.replaceElement(at: location.elementIndex, with: materialized, id: eid)
             inverseIdentity = .restore(previous)
         case let .restore(restored):
-            voice.replaceElement(at: location.elementIndex, with: element, id: restored)
+            materialized.assignMissingGraceIDs(using: &ids)
+            voice.replaceElement(at: location.elementIndex, with: materialized, id: restored)
             inverseIdentity = .restore(previous)
         }
         score[voice: ref] = voice

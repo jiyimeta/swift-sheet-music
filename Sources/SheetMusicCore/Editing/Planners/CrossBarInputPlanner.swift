@@ -327,7 +327,8 @@ public enum CrossBarInputPlanner {
         }
         guard isFirst else {
             return .chord(Chord(
-                duration: duration, notes: notes, graceNotesAfter: isLast ? source.graceNotesAfter : [],
+                duration: duration, notes: notes,
+                graceNotesBefore: [], graceNotesAfter: isLast ? source.graceNotesAfter : [],
             ))
         }
         var head = source

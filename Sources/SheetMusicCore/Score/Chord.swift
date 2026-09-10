@@ -21,11 +21,11 @@ public struct Chord: Sendable, Equatable {
     /// (left-to-right) order. They don't consume voice time —
     /// `MidiRenderer+Grace` steals from this chord's head or the
     /// previous chord's tail to fit them in.
-    public var graceNotesBefore: [GraceChord]
+    public var graceNotesBefore: IdentifiedArray<GraceChord>
     /// Grace notes that play *after* this chord. Same conventions
     /// as `graceNotesBefore`; their playback time is stolen from
     /// the tail of this chord.
-    public var graceNotesAfter: [GraceChord]
+    public var graceNotesAfter: IdentifiedArray<GraceChord>
     /// Chord-level articulations (staccato / staccatissimo / tenuto and
     /// round-trip-preserved unknowns). C++: `Chord::_articulations`.
     public var articulations: [ChordArticulation]
@@ -118,8 +118,8 @@ public struct Chord: Sendable, Equatable {
         self.arpeggio = arpeggio
         self.bracket = bracket
         self.lyrics = lyrics
-        self.graceNotesBefore = graceNotesBefore
-        self.graceNotesAfter = graceNotesAfter
+        self.graceNotesBefore = IdentifiedArray(graceNotesBefore)
+        self.graceNotesAfter = IdentifiedArray(graceNotesAfter)
         self.articulations = articulations
         self.ornaments = ornaments
         self.tremolo = tremolo

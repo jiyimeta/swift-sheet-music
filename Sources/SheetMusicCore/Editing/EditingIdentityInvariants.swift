@@ -11,6 +11,15 @@ import SheetMusicFoundation
                     for measure in staff.measures {
                         for voice in measure.voices {
                             result.append(contentsOf: voice.elements.indices.map { voice.elements.eid(at: $0) })
+                            for element in voice.elements {
+                                guard case let .chord(chord) = element else { continue }
+                                result.append(contentsOf: chord.graceNotesBefore.indices.map {
+                                    chord.graceNotesBefore.eid(at: $0)
+                                })
+                                result.append(contentsOf: chord.graceNotesAfter.indices.map {
+                                    chord.graceNotesAfter.eid(at: $0)
+                                })
+                            }
                             result.append(contentsOf: voice.tuplets.indices.map { voice.tuplets.eid(at: $0) })
                         }
                     }

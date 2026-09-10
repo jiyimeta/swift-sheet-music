@@ -220,10 +220,10 @@ extension Score {
         c.notes = ChordNotes(c.notes.map {
             transposedNote($0, semitones: semitones, fifthsDelta: fifthsDelta, key: key)
         })
-        c.graceNotesBefore = c.graceNotesBefore.map {
+        c.graceNotesBefore.mapValues {
             transposedGrace($0, semitones: semitones, fifthsDelta: fifthsDelta, key: key)
         }
-        c.graceNotesAfter = c.graceNotesAfter.map {
+        c.graceNotesAfter.mapValues {
             transposedGrace($0, semitones: semitones, fifthsDelta: fifthsDelta, key: key)
         }
         return c

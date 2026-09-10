@@ -36,6 +36,7 @@ public struct PasteVoiceElement: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
+        var element = element.clearingGraceIDsForCopy()
         guard let voice = DurationChangeAlgorithm
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)
@@ -43,17 +44,16 @@ public struct PasteVoiceElement: EditCommand {
             throw Self.refused(.targetNotFound(location))
         }
         let original = voice.elements[location.elementIndex]
-        let division = score.division
         let measureDuration = score
             .effectiveMeasureDurations(
                 partIndex: location.staff.partIndex,
                 staffIndex: location.staff.staffIndexInPart,
             )[location.measureIndex]
         let srcTicks = Self.ticks(
-            of: element, division: division, measureDuration: measureDuration,
+            of: element, division: score.division, measureDuration: measureDuration,
         )
         let dstTicks = Self.ticks(
-            of: original, division: division, measureDuration: measureDuration,
+            of: original, division: score.division, measureDuration: measureDuration,
         )
 
         // Non-timed source or target: degenerate to a verbatim swap
@@ -79,12 +79,13 @@ public struct PasteVoiceElement: EditCommand {
         let targetRtick = DurationChangeAlgorithm.tickOffset(
             in: voice,
             ofElementAt: location.elementIndex,
-            division: division,
+            division: score.division,
         )
         // `srcTicks` in DurationChangeAlgorithm = the OLD duration
         // at idx (i.e., the target we're replacing); `dstTicks` =
         // the NEW duration (i.e., the pasted element).
         let pastedEID = ids.next()
+        element.assignMissingGraceIDs(using: &ids)
         let (newElements, newTuplets) = try DurationChangeAlgorithm
             .compute(
                 in: voice,
@@ -93,7 +94,7 @@ public struct PasteVoiceElement: EditCommand {
                 srcTicks: dst,
                 dstTicks: src,
                 targetRtick: targetRtick,
-                division: division,
+                division: score.division,
                 baseLocation: location,
                 operation: "PasteVoiceElement",
                 targetEID: pastedEID, ids: &ids,

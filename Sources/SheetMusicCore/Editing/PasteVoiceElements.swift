@@ -130,7 +130,13 @@ public struct PasteVoiceElements: EditCommand {
         baseLocation: VoiceElementID, ids: inout EIDAllocator,
     ) throws -> (elements: IdentifiedArray<VoiceElement>, tuplets: IdentifiedArray<Tuplet>) {
         var newElements = voice.elements
-        newElements.replaceSubrange(idx ..< (idx + 1), with: payload.map { (ids.next(), $0) })
+        let pasted = payload.map { source in
+            let eid = ids.next()
+            var element = source.clearingGraceIDsForCopy()
+            element.assignMissingGraceIDs(using: &ids)
+            return (eid, element)
+        }
+        newElements.replaceSubrange(idx ..< (idx + 1), with: pasted)
         let payloadEndIdx = idx + payload.count - 1
         let payloadInsertDelta = payload.count - 1
         // The paste's effective element-index range in the ORIGINAL

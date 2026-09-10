@@ -2,16 +2,25 @@ import SheetMusicFoundation
 
 extension Voice {
     var hasUnassignedIDs: Bool {
-        elements.hasUnassignedIDs || tuplets.hasUnassignedIDs || tuplets.contains {
-            if case .index = $0.first { return true }
-            if case .index = $0.last { return true }
-            return false
-        }
+        elements.hasUnassignedIDs || elements.contains(where: \.hasUnassignedGraceIDs)
+            || tuplets.hasUnassignedIDs || tuplets.contains {
+                if case .index = $0.first { return true }
+                if case .index = $0.last { return true }
+                return false
+            }
     }
 
-    /// Mint members before their tuplets, resolving literal endpoints immediately after the member pass.
+    /// Mint each member, then its before/after graces; resolve endpoints and mint tuplets after all members.
     mutating func assignMissingIDs(using ids: inout EIDAllocator) {
-        elements.assignMissingIDs(using: &ids)
+        if elements.hasUnassignedIDs || elements.contains(where: \.hasUnassignedGraceIDs) {
+            elements = IdentifiedArray(elements.indices.map { index in
+                let old = elements.eid(at: index)
+                let eid = old.isValid ? old : ids.next()
+                var element = elements[index]
+                element.assignMissingGraceIDs(using: &ids)
+                return (eid, element)
+            })
+        }
         resolveTupletEndpoints()
         tuplets.assignMissingIDs(using: &ids)
     }

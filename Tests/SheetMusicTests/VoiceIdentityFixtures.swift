@@ -73,6 +73,25 @@ enum VoiceIdentityFixtures {
         let expectedTuplets = tupletValues(expected)
         #expect(actualTuplets.ids == expectedTuplets.ids, sourceLocation: sourceLocation)
         #expect(actualTuplets.values == expectedTuplets.values, sourceLocation: sourceLocation)
+        #expect(graceIDs(actual) == graceIDs(expected), sourceLocation: sourceLocation)
+    }
+
+    /// Per chord, before and after remain separate, including empty lists.
+    private static func graceIDs(_ score: Score) -> [[[EID]]] {
+        score.parts.flatMap { part in
+            part.staves.flatMap { staff in
+                staff.measures.flatMap { measure in
+                    measure.voices.flatMap { voice in
+                        voice.elements.compactMap { element -> [[EID]]? in
+                            guard case let .chord(chord) = element else { return nil }
+                            return [chord.graceNotesBefore, chord.graceNotesAfter].map { graces in
+                                graces.indices.map { graces.eid(at: $0) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private static func tupletValues(_ score: Score) -> (ids: [[EID]], values: [[Tuplet]]) {

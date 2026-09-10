@@ -17,13 +17,17 @@ public struct VoiceSlot: Sendable, Equatable {
 
     static func materialize(_ slots: [VoiceSlot], using ids: inout EIDAllocator) -> IdentifiedArray<VoiceElement> {
         IdentifiedArray(slots.map { slot in
+            let eid: EID
             switch slot.identity {
-            case let .keep(eid):
-                assert(eid.isValid, "a kept voice slot requires an assigned identifier")
-                return (eid, slot.element)
+            case let .keep(kept):
+                assert(kept.isValid, "a kept voice slot requires an assigned identifier")
+                eid = kept
             case .fresh:
-                return (ids.next(), slot.element)
+                eid = ids.next()
             }
+            var element = slot.element
+            element.assignMissingGraceIDs(using: &ids)
+            return (eid, element)
         })
     }
 }

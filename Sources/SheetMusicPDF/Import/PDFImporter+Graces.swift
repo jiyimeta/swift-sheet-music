@@ -87,7 +87,7 @@ extension PDFImporter {
                 target = out.lastIndex { !$0.isRest }
             }
             guard let t = target else { continue }
-            out[t].chord.graceNotesBefore.append(grace)
+            out[t].chord.graceNotesBefore = IdentifiedArray(out[t].chord.graceNotesBefore.values + [grace])
         }
         return out
     }

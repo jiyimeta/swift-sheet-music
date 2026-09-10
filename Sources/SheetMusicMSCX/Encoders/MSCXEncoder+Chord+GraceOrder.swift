@@ -51,7 +51,7 @@ extension Chord {
     /// the two runs instead. That is semantically identical on reload
     /// (MuseScore splits by tag, not position) but not byte-identical.
     var mscxFileOrderedGraces: [GraceChord] {
-        graceNotesBefore + graceNotesAfter.reversed()
+        graceNotesBefore.values + graceNotesAfter.reversed()
     }
 
     /// `mscxFileOrderedGraces` paired with each grace's index in the list it

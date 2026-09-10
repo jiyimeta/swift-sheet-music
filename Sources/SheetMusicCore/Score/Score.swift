@@ -101,7 +101,7 @@ public struct Score: Sendable, Equatable {
     }
 
     /// Whether any currently identified collection contains an unassigned slot.
-    /// Covers parts, staves, voice members and tuplets, unresolved endpoints, and systemMeasures.
+    /// Covers parts, staves, voice members, graces, tuplets, unresolved endpoints, and systemMeasures.
     public var hasUnassignedIDs: Bool {
         parts.hasUnassignedIDs || systemMeasures.hasUnassignedIDs || parts.contains { part in
             part.staves.hasUnassignedIDs || part.staves.contains { staff in
@@ -334,11 +334,13 @@ private func strippingPreservedMarkup(from source: Chord) -> Chord {
 }
 
 /// Clear grace-chord bags and the note bags they contain.
-private func stripPreservedMarkup(from graces: inout [GraceChord]) {
+private func stripPreservedMarkup(from graces: inout IdentifiedArray<GraceChord>) {
     for graceIndex in graces.indices {
-        graces[graceIndex].preservedMarkup = []
-        for noteIndex in graces[graceIndex].notes.indices {
-            stripPreservedMarkup(from: &graces[graceIndex].notes[noteIndex])
+        graces.updateValue(at: graceIndex) { grace in
+            grace.preservedMarkup = []
+            for noteIndex in grace.notes.indices {
+                stripPreservedMarkup(from: &grace.notes[noteIndex])
+            }
         }
     }
 }

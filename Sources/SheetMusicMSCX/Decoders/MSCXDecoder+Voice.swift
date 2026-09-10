@@ -184,13 +184,12 @@ extension Voice {
                     // See `Chord.mscxFileOrderedGraces` for the citation
                     // trail, including the upstream playback test that
                     // pins the after-run's reversal.
-                    chord.graceNotesBefore = pendingGraces
-                        .filter { !$0.graceType.isAfter }
-                    chord.graceNotesAfter = Array(
+                    chord.graceNotesBefore = IdentifiedArray(pendingGraces.filter { !$0.graceType.isAfter })
+                    chord.graceNotesAfter = IdentifiedArray(Array(
                         pendingGraces
                             .filter(\.graceType.isAfter)
                             .reversed(),
-                    )
+                    ))
                     pendingGraces.removeAll(keepingCapacity: true)
                 }
                 chord.beamVisible = takePendingBeamVisible()

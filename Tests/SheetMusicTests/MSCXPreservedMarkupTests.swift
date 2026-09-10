@@ -437,14 +437,16 @@ struct MSCXPreservedMarkupTests {
     }
 
     private func seedGraceFingerings(
-        _ marker: PreservedXML, in graces: inout [GraceChord], count: inout Int,
+        _ marker: PreservedXML, in graces: inout IdentifiedArray<GraceChord>, count: inout Int,
     ) {
         for graceIndex in graces.indices {
-            for noteIndex in graces[graceIndex].notes.indices {
-                graces[graceIndex].notes[noteIndex].fingerings = [
-                    Fingering(text: "1", preservedMarkup: [marker]),
-                ]
-                count += 1
+            graces.updateValue(at: graceIndex) { grace in
+                for noteIndex in grace.notes.indices {
+                    grace.notes[noteIndex].fingerings = [
+                        Fingering(text: "1", preservedMarkup: [marker]),
+                    ]
+                    count += 1
+                }
             }
         }
     }
