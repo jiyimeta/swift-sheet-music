@@ -1878,7 +1878,7 @@
                         let voice = staffVal
                             .measures[measure].voices[cell.voiceIndex]
                         let baseIndices = Self.findContiguousIndices(
-                            of: cell.elements, in: voice.elements,
+                            of: cell.elements, in: voice.elements.values,
                         )
                         guard let (lo, hi) = baseIndices else { continue }
                         // Schedule deletes back-to-front so indices
@@ -2593,7 +2593,7 @@
                 return staffVal.measures[id.measureIndex]
                     .voices[id.voiceIndex]
             }()
-            let alreadyInTuplet = voice?.tuplets.contains(where: {
+            let alreadyInTuplet = voice?.tupletSpans.contains(where: {
                 $0.startIndex <= id.elementIndex
                     && id.elementIndex <= $0.endIndex
             }) ?? false
