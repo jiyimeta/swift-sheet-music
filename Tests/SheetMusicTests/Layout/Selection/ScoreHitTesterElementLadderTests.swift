@@ -3,6 +3,16 @@ import SheetMusicFoundation
 @testable import SheetMusicLayout
 import Testing
 
+#if !canImport(CoreGraphics)
+    /// On Android and WebAssembly, SheetMusicCore and SheetMusicLayout both export portable
+    /// `CGFloat` / `CGPoint` shims, so anchor explicitly to SheetMusicLayout's definitions.
+    ///
+    /// `private typealias` keeps these file-scoped — a module-scope alias here would collide
+    /// with the same pattern in every other file in this target that needs it.
+    private typealias CGFloat = SheetMusicLayout.CGFloat
+    private typealias CGPoint = SheetMusicLayout.CGPoint
+#endif
+
 @Suite("Element hits preserve the priority ladder")
 struct ScoreHitTesterElementLadderTests {
     private let _installFontMetrics = TestSupport.installFontMetrics

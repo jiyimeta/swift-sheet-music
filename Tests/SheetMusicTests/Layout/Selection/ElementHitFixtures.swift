@@ -2,13 +2,29 @@ import SheetMusicCore
 import SheetMusicFoundation
 import SheetMusicLayout
 
+#if !canImport(CoreGraphics)
+    /// On Android and WebAssembly, SheetMusicCore and SheetMusicLayout both export portable
+    /// `CGFloat` / `CGPoint` shims, so anchor explicitly to SheetMusicLayout's definitions.
+    ///
+    /// `private typealias` keeps these file-scoped — a module-scope alias here would collide
+    /// with the same pattern in every other file in this target that needs it.
+    private typealias CGFloat = SheetMusicLayout.CGFloat
+    private typealias CGPoint = SheetMusicLayout.CGPoint
+#endif
+
 enum ElementHitFixtures {
     static let anchor = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
         measureIndex: 0, voiceIndex: 0, elementIndex: 1,
     )
     static let metrics = StaffMetrics(staffSize: 40)
-    static let origin = CGPoint(x: 80, y: 80)
+    #if canImport(CoreGraphics)
+        static let origin = CGPoint(x: 80, y: 80)
+    #else
+        /// Spelled out rather than through the file's private alias: other files read this
+        /// internal property, and an internal declaration cannot expose a private type.
+        static let origin = SheetMusicLayout.CGPoint(x: 80, y: 80)
+    #endif
     static let noteID = NoteID(
         staff: anchor.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
     )
