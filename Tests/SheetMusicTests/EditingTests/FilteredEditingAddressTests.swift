@@ -3,6 +3,10 @@ import SheetMusicFoundation
 import SheetMusicLayout
 import Testing
 
+#if !canImport(CoreGraphics)
+    private typealias CGPoint = SheetMusicLayout.CGPoint
+#endif
+
 @Suite("Filtered editing address boundaries")
 struct FilteredEditingAddressTests {
     private let hidden: Set<StaffAddress> = [

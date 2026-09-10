@@ -3,6 +3,10 @@ import SheetMusicFoundation
 @testable import SheetMusicLayout
 import Testing
 
+#if !canImport(CoreGraphics)
+    private typealias CGPoint = SheetMusicLayout.CGPoint
+#endif
+
 @Suite("Text placement baselines")
 struct TextPlacementBaselineTests {
     private let _installFontMetrics = TestSupport.installFontMetrics

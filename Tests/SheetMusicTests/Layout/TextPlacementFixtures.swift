@@ -3,6 +3,10 @@ import SheetMusicFoundation
 @testable import SheetMusicLayout
 
 enum TextPlacementFixtures {
+    #if !canImport(CoreGraphics)
+        typealias CGPoint = SheetMusicLayout.CGPoint
+    #endif
+
     static let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
     static let metrics = StaffMetrics(staffSize: 28)
 

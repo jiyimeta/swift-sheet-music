@@ -268,7 +268,7 @@ extension LayoutMeasureIdentityTests {
         // Their Y gap is the five-line band plus two margins: (4 + 1 + 1) * 7 = 42.
         #expect(markerOrigin.x == 4)
         #expect(jumpOrigin.x == measure.width - 28)
-        #expect(jumpOrigin.y - markerOrigin.y == 42)
+        #expect(abs(jumpOrigin.y - markerOrigin.y - 42) < 1e-9)
         #expect(measure.markers[1] == .marker(
             kind: .coda, text: "A coda", origin: markerOrigin,
             identity: .marker(staff: owner, measureIndex: 2, index: 1),
