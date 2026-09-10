@@ -335,6 +335,7 @@ extension Score {
 
         var copy = self
         copy.parts = IdentifiedArray(newParts)
+        copy.filterSystemLane(survivorLocations: newLocation)
         return copy
     }
 

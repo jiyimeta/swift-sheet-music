@@ -213,6 +213,98 @@ struct FilteredEditingAddressTests {
         ))
     }
 
+    @Test("Staff text preview keeps its filtered lane and caret origin", arguments: [false, true], [false, true])
+    func staffTextPreview(sharedStaff: Bool, hiddenMark: Bool) throws {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        _ = TestSupport.installFontMetrics
+        func makeStaff() -> Staff {
+            Staff(measures: [Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
+                .chord(Chord(duration: .half, notes: [Note(pitch: 64, tpc: 18)])),
+            ])])])
+        }
+        let shared = makeStaff()
+        let committed = ScoreEditor(score: Score(division: 480, parts: [
+            Part(id: "hidden", instrument: Instrument(id: "a"), staves: [sharedStaff ? shared : makeStaff()]),
+            Part(id: "visible", instrument: Instrument(id: "b"), staves: [
+                sharedStaff ? shared : makeStaff(), sharedStaff ? shared : makeStaff(),
+            ]),
+        ])).score
+        let fullAnchor = anchor(original, element: 0)
+        var preview = committed
+        _ = try TextInputPlanner.command(.staffText, at: fullAnchor, text: "Visible staff")
+            .apply(to: &preview)
+        if hiddenMark {
+            _ = try TextInputPlanner.command(
+                .staffText, at: anchor(.init(partIndex: 0, staffIndexInPart: 0), element: 0), text: "Hidden staff",
+            ).apply(to: &preview)
+        }
+        let map = ScoreEditingAddressMap(score: committed, hiddenStaves: hidden, previewScore: preview)
+        let caret = try #require(map.displayedItem(forFull: .text(.staffText(
+            anchor: fullAnchor, style: .staffText,
+        )))?.textID?.anchor)
+        let filtered = preview.filtered(hidingStaves: hidden)
+        #expect(preview.systemMeasures[0].elements.first?.originalStaff == original)
+        #expect(filtered.systemMeasures[0].elements.count == 1)
+        #expect(filtered.systemMeasures[0].elements.first?.originalStaff == displayed)
+        #expect(filtered.systemMeasures[0].elements.eid(at: 0) == preview.systemMeasures[0].elements.eid(at: 0))
+        let document = LayoutEngine.layout(score: filtered, options: .init(), availableWidth: 640)
+        let origin = try #require(document.staffTextOrigin(at: caret, style: .staffText))
+        #expect(origin == document.staffTextOrigin(at: caret, style: .staffText, in: filtered))
+        let emitted = staffTextGlyphs(in: document)
+        #expect(emitted.map(\.text) == ["Visible staff"])
+        #expect(emitted.first?.origin == origin)
+        #expect(committed.systemMeasures.isEmpty)
+    }
+
+    private func staffTextGlyphs(in document: LayoutDocument) -> [(text: String, origin: CGPoint)] {
+        document.systems.flatMap { system in
+            system.measures.flatMap { measure in
+                measure.elements.compactMap { element in
+                    guard case let .staffText(text, origin, _, _, _) = element else { return nil }
+                    return (text, CGPoint(
+                        x: system.origin.x + measure.origin.x + origin.x,
+                        y: system.origin.y + measure.origin.y + origin.y,
+                    ))
+                }
+            }
+        }
+    }
+
+    @Test("Filtering keeps score-wide lane marks and removes hidden staff-owned marks")
+    func systemLaneOwnership() {
+        let hiddenStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        let global: [SystemElement] = [
+            .tempo(Tempo(beatsPerSecond: 2)), .rehearsalMark(RehearsalMark(text: "A")),
+            .staffText(StaffText(text: "System", isSystemText: true)), .swing(Swing(isSystemText: true)),
+        ]
+        let owned: [SystemElement] = [
+            .staffText(StaffText(text: "Staff", isSystemText: false)), .swing(Swing(isSystemText: false)),
+            .instrumentChange(InstrumentChange(text: "Change")),
+        ]
+        var source = fixture()
+        source.systemMeasures = IdentifiedArray([SystemMeasure(elements:
+            (global + owned).flatMap { element in
+                [nil, hiddenStaff, original].map { staff in
+                    PositionedSystemElement(position: .start, element: element, originalStaff: staff)
+                }
+            })])
+        source = ScoreEditor(score: source).score
+        let before = source.systemMeasures
+        let filtered = source.filtered(hidingStaves: hidden)
+        let lane = filtered.systemMeasures[0].elements
+        #expect(lane.count == global.count * 3 + owned.count)
+        #expect(lane.prefix(global.count * 3).allSatisfy { $0.originalStaff == nil })
+        #expect(lane.suffix(owned.count).allSatisfy { $0.originalStaff == displayed })
+        #expect(source.systemMeasures == before)
+        for index in lane.indices {
+            #expect(before[0].elements.index(of: lane.eid(at: index)) != nil)
+        }
+        let allHidden = source.filtered(hidingStaves: Set(source.allStaves.map(\.address)))
+        #expect(allHidden.systemMeasures[0].elements.count == global.count * 3)
+        #expect(source.filtered(hidingStaves: []).systemMeasures == before)
+    }
+
     @Test(
         "Host mode changes preserve selected EIDs across pending harmony insertion and removal",
         arguments: [false, true],
