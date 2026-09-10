@@ -424,6 +424,9 @@
                 rebuildLayoutsForOptionsChange()
             }
             .onChange(of: honorAuthoredHiding) { _, _ in
+                if case .single(.element) = selection {
+                    selection = .none
+                }
                 rebuildLayoutsForOptionsChange()
             }
             .onChange(of: textEntryPreviewIdentity) { _, _ in
@@ -2766,11 +2769,11 @@
             }
         }
 
-        /// Replace the currently-selected chord/rest with a rest of the
-        /// same duration via `DeleteVoiceElement`. Selection moves to
-        /// the resulting rest so subsequent edits (transpose, retype)
-        /// target the new element. No-op when nothing actionable is
-        /// selected.
+        /// Remove a supported engraved element and clear its positional selection.
+        /// Chord/rest deletion instead uses `DeleteVoiceElement` to create a rest of
+        /// the same duration and selects that rest for subsequent edits.
+        /// Unsupported element kinds report their own message; other non-actionable
+        /// selections keep the existing note/rest prompt.
         private func deleteSelectedElement(
             controller: NoteInputController,
         ) {
@@ -2817,6 +2820,9 @@
                 target = VoiceElementID(noteID)
             case let .single(.rest(restID)):
                 target = VoiceElementID(restID)
+            case let .single(.element(id)):
+                deleteEngravedElement(id, controller: controller)
+                return
             default:
                 errorMessage = "Select a note or rest to delete."
                 return
@@ -2839,6 +2845,48 @@
                 errorMessage = "Deleted"
             } catch {
                 errorMessage = exampleErrorDescription(error)
+            }
+        }
+
+        private func deleteEngravedElement(_ id: ScoreElementID, controller: NoteInputController) {
+            let fullScore = controller.score
+            // Match rebuildHorizontalScreenLayout: hiding is read from the pre-transpose preview score.
+            let preview = ScoreTextEntryPreview.compose(
+                committed: fullScore, lyricSession: lyricSession, textSession: textSession,
+            )
+            let hidden = honorAuthoredHiding ? Self.authoredHiddenStaves(of: preview) : []
+            let cursor = fullScore.engineCursorForFilteredTap(.item(.element(id)), hiddenStaves: hidden)
+            guard case let .item(.element(fullID)) = cursor else {
+                errorMessage = "This element can't be deleted."
+                return
+            }
+            guard let command = fullID.removalCommand else {
+                errorMessage = Self.elementDeletionUnavailableMessage(fullID)
+                return
+            }
+            do {
+                try controller.apply(command, undoManager: undoManager)
+                adoptEditedScore(controller.score)
+                // Identities are positional, so removal invalidates the held selection.
+                selection = .none
+                errorMessage = "Deleted"
+            } catch {
+                errorMessage = exampleErrorDescription(error)
+            }
+        }
+
+        private static func elementDeletionUnavailableMessage(_ id: ScoreElementID) -> String {
+            switch id {
+            case .dynamic: "Dynamics can't be deleted yet."
+            case .fermata: "Fermatas can't be deleted yet."
+            case .breath: "Breath marks can't be deleted yet."
+            case .tempo: "Tempo markings can't be deleted yet."
+            case .spanner: "Spanners can't be deleted yet."
+            case .keySignature: "Key signatures can't be deleted yet."
+            case .timeSignature: "Time signatures can't be deleted yet."
+            case .barLine: "Barlines can't be deleted yet."
+            case .articulation: "Articulations can't be deleted yet."
+            case .tie, .slur, .jump, .marker: "This element can't be deleted."
             }
         }
 
@@ -3475,6 +3523,8 @@
         ///     layout engine renormalises within the system on its own
         ///     pass — saving the full-score `naturalContentWidth` walk.
         private func adoptEditedScore(_ edited: Score) {
+            // Positional identities may have shifted after any adopted edit.
+            if case .single(.element) = selection { selection = .none }
             let t0 = Date()
             let layoutMs = rebuildHorizontalScreenLayout(for: edited)
             verticalDoc = nil
