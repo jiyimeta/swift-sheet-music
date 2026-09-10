@@ -2,13 +2,19 @@
 import Testing
 
 enum ElementHitCommandChecks {
-    static func apply(_ id: ScoreElementID) throws {
-        var score = EditingFixtures.twoConsecutiveC4Chords()
+    static func remove(_ id: ScoreElementID, from score: inout Score) throws -> any EditCommand {
+        let command = try #require(id.removalCommand)
+        return try command.apply(to: &score)
+    }
+
+    static func apply(_ id: ScoreElementID, fixture: Score? = nil) throws {
+        var score = ScoreEditor(score: fixture ?? EditingFixtures.twoConsecutiveC4Chords()).score
         let command: any EditCommand
         switch id {
         case .tie, .slur, .jump, .marker:
-            Issue.record("new-kind removal belongs to the selection-3 command checks")
-            return
+            // New-kind checks supply a real score whose storage matches the hit identity.
+            score = try ScoreEditor(score: #require(fixture)).score
+            command = try #require(id.removalCommand)
         case let .dynamic(anchor):
             command = SetDynamic(at: anchor, subtype: "ff")
         case let .fermata(anchor):
@@ -44,9 +50,10 @@ enum ElementHitCommandChecks {
                 command = SetBarLine(at: measure, style: .double)
             }
         }
-        let expected = id.anchor == nil ? VoiceElementID(
-            staff: ElementHitFixtures.anchor.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 0,
-        ) : ElementHitFixtures.anchor
+        let item = ScoreItemID.element(id)
+        let expected = id.anchor ?? VoiceElementID(
+            staff: item.staff, measureIndex: item.measureIndex, voiceIndex: 0, elementIndex: 0,
+        )
         #expect(command.affectedLocation == expected)
         let before = score.stableFingerprint
         let inverse = try command.apply(to: &score)
