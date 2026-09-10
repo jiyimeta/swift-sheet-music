@@ -12,8 +12,8 @@ import SheetMusicFoundation
 /// `NoteDuration` is already scaled by the ratio (`CreateTuplet`, `MSCXDecoder+Voice`), so a triplet before the
 /// slot changes nothing about where the slot falls. `TupletOnsetTests` pins that convention.
 ///
-/// > Note: This command is sugar over `CreateVoice` + `SplitRest` (× ≤ 2) + `ReplaceVoiceElements` +
-/// > `ReplaceVoiceElement`, bundled in a `CompositeEditCommand` so one undo step reverts the whole move.
+/// > Note: This command is sugar over `CreateVoice` + `SplitRest` (× ≤ 2) + `ReplaceVoiceElement` +
+/// > `ReplaceVoiceElements`, bundled in a `CompositeEditCommand` so one undo step reverts the whole move.
 public struct MoveToVoice: EditCommand {
     public let location: VoiceElementID
     public let destination: VoiceRef
@@ -29,6 +29,12 @@ public struct MoveToVoice: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
+        let planned = try plan(in: score, ids: ids)
+        return try planned.composite.apply(to: &score, ids: &ids)
+    }
+
+    /// Plans every step on copies, including the source replacement before the destination takes its EID.
+    func plan(in score: Score, ids: EIDAllocator) throws -> RangeEditPlanner.Plan {
         guard destination.staff == location.staff, destination.measureIndex == location.measureIndex,
               destination.voiceIndex != location.voiceIndex
         else { throw Self.refused(.voiceMismatch(from: VoiceRef(location), to: destination)) }
@@ -49,8 +55,8 @@ public struct MoveToVoice: EditCommand {
         )
         let length = chord.duration.resolved(in: measureDuration).ticks(division: division)
 
-        // Plan against a scratch copy so every step sees the score the previous one produced, then apply the
-        // composite to the real score for the inverse.
+        // Plan against a scratch copy so every step sees the score the previous one produced; `apply(to:ids:)`
+        // replays the returned composite on the real score and returns its inverse.
         var scratchIDs = ids
         var scratch = score
         var steps: [any EditCommand] = []
@@ -69,12 +75,19 @@ public struct MoveToVoice: EditCommand {
             start: start, length: length, in: &scratch, destination: destination,
             steps: &steps, measureDuration: measureDuration, ids: &scratchIDs,
         )
-        try steps.append(Self.replaceSlot(
+        // The destination payload reads only the carved destination, so replacing the source cannot invalidate it.
+        let destinationWrite = try Self.replaceSlot(
             start: start, length: length, with: chord, in: scratch,
             destination: destination, measureDuration: measureDuration,
-        ))
-        steps.append(ReplaceVoiceElement(at: location, with: .rest(duration: chord.duration), identity: .fresh))
-        return try CompositeEditCommand(commands: steps, location: location).apply(to: &score, ids: &ids)
+            sourceEID: sourceVoice.elements.eid(at: location.elementIndex),
+        )
+        let sourceWrite = ReplaceVoiceElement(at: location, with: .rest(duration: chord.duration), identity: .fresh)
+        // Remove the chord's EID from the source before it lands in another voice, even between composite steps.
+        try sourceWrite.apply(to: &scratch, ids: &scratchIDs)
+        steps.append(sourceWrite)
+        try destinationWrite.apply(to: &scratch, ids: &scratchIDs)
+        steps.append(destinationWrite)
+        return RangeEditPlanner.Plan(commands: steps, location: location, result: scratch, idAllocator: scratchIDs)
     }
 
     /// Splits the destination voice's rests so that `[start, start + length)` is covered by whole rests only.
@@ -127,7 +140,7 @@ public struct MoveToVoice: EditCommand {
     /// collapsing it shortens the element list, and every tuplet after the run has to move left by as much.
     private static func replaceSlot(
         start: Int, length: Int, with chord: Chord, in scratch: Score,
-        destination: VoiceRef, measureDuration: Fraction,
+        destination: VoiceRef, measureDuration: Fraction, sourceEID: EID,
     ) throws -> ReplaceVoiceElements {
         guard let voice = scratch[voice: destination] else { throw refused(.targetNotFound(slot(destination))) }
         var tick = 0
@@ -142,7 +155,7 @@ public struct MoveToVoice: EditCommand {
             }
             let ticks = rest.duration.resolved(in: measureDuration).ticks(division: scratch.division)
             if tick >= start, tick + ticks <= start + length {
-                if collapsed == 0 { elements.append(VoiceSlot(identity: .fresh, element: .chord(chord))) }
+                if collapsed == 0 { elements.append(VoiceSlot(identity: .keep(sourceEID), element: .chord(chord))) }
                 collapsed += 1
                 collapsedTicks += ticks
                 lastCollapsedIndex = index
@@ -151,9 +164,8 @@ public struct MoveToVoice: EditCommand {
             }
             tick += ticks
         }
-        // The run must tile the span exactly. A destination voice that simply ENDS before the span leaves the run
-        // short (or empty) — and writing that would drop the chord entirely, since voice 0's copy has already
-        // become a rest by then. Refused instead: the destination has no slot at this tick.
+        // Validate the complete destination span before replacing the source. At execution, the source becomes
+        // a fresh rest FIRST; an incomplete destination payload would then lose the moved chord entirely.
         guard collapsed > 0, collapsedTicks == length else { throw refused(.destinationNotFree(slot(destination))) }
         let tuplets = MeasureStructure.shiftTuplets(
             voice.tuplets, by: -(collapsed - 1), after: lastCollapsedIndex,

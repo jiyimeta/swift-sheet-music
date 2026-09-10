@@ -109,6 +109,13 @@ extension ScoreEditSession {
     private static func keyChangeCommand(
         _ command: any EditCommand, in score: Score, ids: EIDAllocator,
     ) throws -> any EditCommand {
+        try keyChangePlan(command, in: score, ids: ids).command
+    }
+
+    /// Retains the key preview and its allocator alongside the span repairs that carry its identifiers.
+    static func keyChangePlan(
+        _ command: any EditCommand, in score: Score, ids: EIDAllocator,
+    ) throws -> AccidentalRenotationPlan {
         var scratch = ids
         var preview = score
         try command.apply(to: &preview, ids: &scratch)
@@ -116,11 +123,12 @@ extension ScoreEditSession {
         // `apply` has accepted the index, so `measureIndex` names a real bar and the range below is never empty.
         let end = nextExplicitKeyChange(after: measureIndex, in: preview)
             ?? MeasureStructure.measureCount(of: preview)
-        return CompositeEditCommand(
-            commands: [command] + MeasureAccidentals.renotationCommands(
-                in: preview, measureRange: measureIndex ..< end,
+        let repairs = MeasureAccidentals.renotationCommands(in: preview, measureRange: measureIndex ..< end)
+        return AccidentalRenotationPlan(
+            command: CompositeEditCommand(
+                commands: [command] + repairs, location: command.affectedLocation,
             ),
-            location: command.affectedLocation,
+            preview: preview, idAllocator: scratch, repairs: repairs,
         )
     }
 

@@ -94,12 +94,20 @@ public final class ScoreEditSession {
     private static func renotatingAccidentals(
         _ command: any EditCommand, from score: Score, ids: EIDAllocator,
     ) -> any EditCommand {
+        renotationPlan(command, from: score, ids: ids)?.command ?? command
+    }
+
+    /// Retains the preview and allocator that produced the diff-driven repairs; a refused preview has no plan.
+    static func renotationPlan(
+        _ command: any EditCommand, from score: Score, ids: EIDAllocator,
+    ) -> AccidentalRenotationPlan? {
         var scratch = ids
         var preview = score
-        guard (try? command.apply(to: &preview, ids: &scratch)) != nil else { return command }
+        guard (try? command.apply(to: &preview, ids: &scratch)) != nil else { return nil }
         let repairs = MeasureAccidentals.renotationCommands(in: preview, changedFrom: score)
-        guard !repairs.isEmpty else { return command }
-        return CompositeEditCommand(commands: [command] + repairs, location: command.affectedLocation)
+        let repaired: any EditCommand = repairs.isEmpty
+            ? command : CompositeEditCommand(commands: [command] + repairs, location: command.affectedLocation)
+        return AccidentalRenotationPlan(command: repaired, preview: preview, idAllocator: scratch, repairs: repairs)
     }
 
     /// Preserves an edit refusal directly and wraps any escaped foreign error.

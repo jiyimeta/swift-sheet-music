@@ -41,6 +41,11 @@ public struct DeleteRange: EditCommand {
     /// session's planner reads as "restating is nil". Validation happens here so a direct `apply` and a planned one
     /// refuse identically.
     func plan(in score: Score, ids: EIDAllocator) throws -> CompositeEditCommand? {
+        try detailedPlan(in: score, ids: ids)?.composite
+    }
+
+    /// The complete post-delete, post-collapse scratch state and the commands that reproduce it.
+    func detailedPlan(in score: Score, ids: EIDAllocator) throws -> RangeEditPlanner.Plan? {
         guard !score.voiceElements(in: range).isEmpty else { throw Self.refused(.targetNotFound(range.start)) }
         // The last slot this command actually deleted, per `(staff, measure, voice)`, in the order the voices were
         // first touched. The collapse must be planned against a slot the delete emptied — `FullMeasureRestCollapse`
@@ -64,6 +69,7 @@ public struct DeleteRange: EditCommand {
             _ = try collapse.command.apply(to: &plan.result, ids: &scratch)
             plan.commands.append(collapse.command)
         }
-        return plan.composite
+        plan.idAllocator = scratch
+        return plan
     }
 }
