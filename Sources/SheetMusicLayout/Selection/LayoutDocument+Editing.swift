@@ -108,7 +108,8 @@ extension LayoutDocument {
         case let .stem(notes), let .flag(notes), let .beam(notes):
             notes.first.map(ScoreItemID.note)
         case .clef, .lyric, .staffText, .harmony, .rehearsalMark,
-             .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation:
+             .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
+             .tie, .slur, .jump, .marker:
             nil
         }
     }

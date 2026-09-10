@@ -6,6 +6,9 @@ enum ElementHitCommandChecks {
         var score = EditingFixtures.twoConsecutiveC4Chords()
         let command: any EditCommand
         switch id {
+        case .tie, .slur, .jump, .marker:
+            Issue.record("new-kind removal belongs to the selection-3 command checks")
+            return
         case let .dynamic(anchor):
             command = SetDynamic(at: anchor, subtype: "ff")
         case let .fermata(anchor):

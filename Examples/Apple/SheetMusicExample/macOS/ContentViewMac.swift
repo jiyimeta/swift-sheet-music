@@ -3219,7 +3219,7 @@
                 selection = .none
                 return
             case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation:
+                 .articulation, .tie, .slur, .jump, .marker:
                 // An engraved marking selects itself rather than the chord it hangs from, so the renderer
                 // tints the marking. It takes no part in the note-range logic below.
                 selection = target.selectableItem.map { .single($0) } ?? .none
@@ -3288,7 +3288,7 @@
                 )
             case .note, .rest, .stem, .flag, .beam, .tuplet, .clef,
                  .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation:
+                 .articulation, .tie, .slur, .jump, .marker:
                 return
             }
             textEntryFocused = true

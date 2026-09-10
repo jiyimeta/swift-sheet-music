@@ -15,7 +15,7 @@ public enum ScoreItemID: Hashable, Sendable {
     /// text kinds nest inside one case, and for why a lyric
     /// selection is one syllable rather than a verse row.
     case text(ScoreTextID)
-    /// An engraved element addressed through its anchor or bar; see `ScoreElementID`.
+    /// An engraved element addressed through its anchor, bar, or staff-owned list; see `ScoreElementID`.
     case element(ScoreElementID)
 
     public var staff: StaffAddress {
@@ -32,6 +32,7 @@ public enum ScoreItemID: Hashable, Sendable {
             // accessor means by it.
             return id.anchor?.staff
                 ?? StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        case let .element(.jump(staff, _, _)), let .element(.marker(staff, _, _)): return staff
         case let .element(id):
             return id.anchor?.staff ?? StaffAddress(partIndex: 0, staffIndexInPart: 0)
         }
@@ -46,6 +47,7 @@ public enum ScoreItemID: Hashable, Sendable {
         case .clef(.staffDefault): return 0
         case let .text(.rehearsalMark(measureIndex)): return measureIndex
         case let .text(id): return id.anchor?.measureIndex ?? 0
+        case let .element(.jump(_, measureIndex, _)), let .element(.marker(_, measureIndex, _)): return measureIndex
         case let .element(id): return id.anchor?.measureIndex ?? id.measureIndexIfAddressedByBar ?? 0
         }
     }
@@ -69,6 +71,8 @@ public enum ScoreItemID: Hashable, Sendable {
     /// bar-addressed item likewise `0` (the authoritative target is the
     /// bar index, which `measureIndex` answers exactly). Bar-addressed elements
     /// also approximate staff with the top staff and voice with `0`.
+    /// Navigation identities retain their actual staff and measure, but approximate voice and element
+    /// with `0`: their list index is not a voice slot.
     public var elementIndex: Int {
         switch self {
         case let .note(id): return id.elementIndex
