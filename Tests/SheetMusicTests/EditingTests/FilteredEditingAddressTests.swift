@@ -194,4 +194,102 @@ struct FilteredEditingAddressTests {
         let toDeleted = ScoreEditingAddressMap(score: deleted, hiddenStaves: hidden, previewScore: preview)
         #expect(toDeleted.fullItem(forDisplayed: selected) == nil)
     }
+
+    private func twoChordFixture() -> Score {
+        let staff = Staff(measures: [Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)], lyrics: [Lyric(text: "A")])),
+            .chord(Chord(duration: .half, notes: [Note(pitch: 64, tpc: 18)], lyrics: [Lyric(text: "B")])),
+        ])])])
+        return ScoreEditor(score: Score(division: 480, parts: [
+            Part(id: "hidden", instrument: Instrument(id: "a"), staves: [staff]),
+            Part(id: "mixed", instrument: Instrument(id: "b"), staves: [staff, staff, staff, staff]),
+        ])).score
+    }
+
+    private func noteItem(at anchor: VoiceElementID) -> ScoreItemID {
+        .note(NoteID(
+            staff: anchor.staff, measureIndex: anchor.measureIndex, voiceIndex: anchor.voiceIndex,
+            elementIndex: anchor.elementIndex, noteIndexInChord: 0,
+        ))
+    }
+
+    @Test(
+        "Host mode changes preserve selected EIDs across pending harmony insertion and removal",
+        arguments: [false, true],
+        [0, 1],
+    )
+    func hostModeRoundTrip(removing: Bool, selectedElement: Int) throws {
+        var committed = twoChordFixture()
+        let firstIdentity = try #require(committed.eid(at: anchor(original, element: 0)))
+        let selectedIdentity = try #require(committed.eid(at: anchor(original, element: selectedElement)))
+        if removing {
+            _ = try SetChordSymbol(at: anchor(original, element: 0), name: "C").apply(to: &committed)
+        }
+        let firstAnchor = try #require(committed.position(of: firstIdentity))
+        let selectedAnchor = try #require(committed.position(of: selectedIdentity))
+        var preview = committed
+        _ = try SetChordSymbol(at: firstAnchor, name: removing ? nil : "Am7").apply(to: &preview)
+        let horizontal = ScoreEditingAddressMap(score: committed, hiddenStaves: hidden, previewScore: preview)
+        let vertical = ScoreEditingAddressMap(score: committed, hiddenStaves: hidden)
+        let selected = noteItem(at: selectedAnchor)
+        var host = ScoreEditingSelection()
+        try host.selectDisplayed(.single(#require(horizontal.displayedItem(forFull: selected))), in: horizontal)
+
+        // The mode onChange moves to committed geometry, then back to preview geometry.
+        host.transition(to: vertical)
+        #expect(try host.selection == .single(#require(vertical.displayedItem(forFull: selected))))
+        // Session shortcuts remain available in vertical mode: a commit changes committed ordinals there too.
+        var committingHost = host
+        let committedVertical = ScoreEditingAddressMap(score: preview, hiddenStaves: hidden)
+        committingHost.transition(to: committedVertical)
+        let committedSelection = try noteItem(at: #require(preview.position(of: selectedIdentity)))
+        #expect(try committingHost.selection == .single(#require(
+            committedVertical.displayedItem(forFull: committedSelection),
+        )))
+        host.transition(to: horizontal)
+        // Entering horizontal also rebuilds its document; this second transition must be idempotent.
+        host.transition(to: horizontal)
+        #expect(try host.selection == .single(#require(horizontal.displayedItem(forFull: selected))))
+        guard case let .single(displayedItem) = host.selection else {
+            Issue.record("Expected selected note after mode round trip")
+            return
+        }
+        #expect(host.addresses?.fullItem(forDisplayed: displayedItem) == selected)
+    }
+
+    @Test(
+        "Host harmony-to-lyric begin then sync then render cannot reinterpret the new selection",
+        arguments: [0, 1],
+    )
+    func hostSessionSwitch(selectedElement: Int) throws {
+        let committed = twoChordFixture()
+        var harmonyPreview = committed
+        _ = try SetChordSymbol(at: anchor(original, element: 0), name: "Am7").apply(to: &harmonyPreview)
+        let beforeBegin = ScoreEditingAddressMap(
+            score: committed, hiddenStaves: hidden, previewScore: harmonyPreview,
+        )
+        let fullAnchor = anchor(original, element: selectedElement)
+        let lyricHit = try #require(beforeBegin.displayedItem(forFull: .text(.lyric(anchor: fullAnchor, verse: 0))))
+        var host = ScoreEditingSelection()
+        host.selectDisplayed(.single(lyricHit), in: beforeBegin)
+        // Double-click resolves the hit before begin ends the harmony session.
+        let sessionAnchor = try #require(beforeBegin.fullItem(forDisplayed: lyricHit)?.textID?.anchor)
+        var lyricPreview = committed
+        let plan = LyricInputPlanner.plan(
+            typing: "Visible", terminatedBy: .none,
+            at: .init(location: sessionAnchor, verse: 0), in: committed,
+        )
+        _ = try #require(plan.command).apply(to: &lyricPreview)
+        let afterBegin = ScoreEditingAddressMap(score: committed, hiddenStaves: hidden, previewScore: lyricPreview)
+        // These are the exact helper calls used by syncSelectionToLyricCursor and the onChange rebuild.
+        host.selectFull(noteItem(at: sessionAnchor), in: afterBegin)
+        host.transition(to: afterBegin)
+        host.transition(to: afterBegin)
+        #expect(try host.selection == .single(#require(afterBegin.displayedItem(forFull: noteItem(at: fullAnchor)))))
+        guard case let .single(selected) = host.selection else {
+            Issue.record("Expected selected lyric chord")
+            return
+        }
+        #expect(host.addresses?.fullItem(forDisplayed: selected) == noteItem(at: sessionAnchor))
+    }
 }

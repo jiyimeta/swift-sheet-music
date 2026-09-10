@@ -61,7 +61,7 @@
         @State private var layoutMode: MacLayoutMode = .horizontal
         @State private var pageIndex = 0
         @State private var totalPages = 1
-        @State private var selection: ScoreSelection = .none
+        @State private var editingSelection = ScoreEditingSelection()
         @State private var clefPopover: ClefPopoverState?
 
         struct ClefPopoverState: Equatable, Identifiable {
@@ -91,8 +91,6 @@
         /// entry it includes the pending command applied to a value copy;
         /// exports continue to read the committed `score` below.
         @State private var horizontalScreenScore: Score?
-        /// The previous rendered preview, retained only to follow selections by voice-slot identity.
-        @State private var horizontalEditingAddresses: ScoreEditingAddressMap?
         /// Invalidates the AppKit-hosted score even when a pending keystroke
         /// changes glyph content without changing the document size.
         @State private var horizontalContentVersion = UUID()
@@ -260,6 +258,11 @@
             )
         }
 
+        private var selection: ScoreSelection {
+            get { editingSelection.selection }
+            nonmutating set { editingSelection.selectDisplayed(newValue, in: editingAddresses) }
+        }
+
         /// Selection belongs to the layout; commands and input sessions belong to the full score.
         private var editingAddresses: ScoreEditingAddressMap? {
             guard let committed = inputController?.score ?? score else { return nil }
@@ -296,7 +299,7 @@
         }
 
         private func selectFullItem(_ item: ScoreItemID) {
-            selection = editingAddresses?.displayedItem(forFull: item).map { .single($0) } ?? .none
+            editingSelection.selectFull(item, in: editingAddresses)
         }
 
         private var fullPlaybackSelection: ScoreSelection {
@@ -504,9 +507,14 @@
                 rebuildLayoutsForOptionsChange()
             }
             .onChange(of: layoutMode) { oldMode, newMode in
+                clefPopover = nil
                 if oldMode == .originalPDF || newMode == .originalPDF {
                     selection = .none
-                    clefPopover = nil
+                } else if let addresses = editingAddresses {
+                    editingSelection.transition(to: addresses)
+                }
+                if newMode == .horizontal, let committed = inputController?.score {
+                    rebuildHorizontalScreenLayout(for: committed)
                 }
             }
             .onChange(of: textEntryPreviewIdentity) { _, _ in
@@ -3640,19 +3648,13 @@
                 hiddenStaves: honorAuthoredHiding ? Self.authoredHiddenStaves(of: preview) : [],
                 previewScore: preview,
             )
-            if renderedTextEntryPreview != nil || textEntryPreviewIdentity != nil,
-               let previous = horizontalEditingAddresses
-            {
+            if renderedTextEntryPreview != nil || textEntryPreviewIdentity != nil {
                 // Only preview lifecycle changes follow existing EIDs. Ordinary positional edits
                 // retain their command-specific selection policy below and at the call sites.
-                let committedAddresses = ScoreEditingAddressMap(
-                    score: committed, hiddenStaves: previous.hiddenStaves,
-                    previewScore: previous.previewScore ?? previous.score,
+                let displayedAddresses = layoutMode == .horizontal ? addresses : ScoreEditingAddressMap(
+                    score: committed, hiddenStaves: layoutMode == .originalPDF ? [] : addresses.hiddenStaves,
                 )
-                selection = Self.translatingSelection(selection) { item in
-                    guard let full = committedAddresses.fullItem(forDisplayed: item) else { return nil }
-                    return addresses.displayedItem(forFull: full)
-                }
+                editingSelection.transition(to: displayedAddresses)
             }
             let hOpts = horizontalOptions
             // Reuse the previously-laid-out total width. The cache rejects
@@ -3671,7 +3673,6 @@
             )
             let layoutMs = Date().timeIntervalSince(tLayoutStart) * 1000
             horizontalScreenScore = screenScore
-            horizontalEditingAddresses = addresses
             horizontalDoc = document
             horizontalContentVersion = UUID()
             renderedTextEntryPreview = textEntryPreviewIdentity
