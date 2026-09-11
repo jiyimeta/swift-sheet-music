@@ -6,6 +6,15 @@ import SheetMusicFoundation
         /// A chord's own note identifiers, plus each grace chord's note identifiers. Shared so the
         /// production gate and test fixtures that need "every note in this chord" (e.g. copy/paste
         /// disjointness checks) cannot drift on what counts as a note.
+        ///
+        /// Because `GraceTransportFixtures.allNoteIDs` delegates here (see its doc comment), this
+        /// function and that test helper now share fate on traversal-completeness bugs: a future
+        /// site that mints note identifiers without going through here (a new nested-note slot, a
+        /// third grace list, …) is invisible to both at once. Extending what this function walks
+        /// must come with a hardcoded-count regression test — the pattern in
+        /// `identifierTraversalCountsTupletSlotsNotEndpointReferences` and
+        /// `traversalCountsGraceSlotsAndRejectsCrossCollectionDuplicates` — rather than relying on
+        /// the delegation to catch the gap.
         static func noteIdentifiers(of chord: Chord) -> [EID] {
             var result = chord.notes.indices.map { chord.notes.eid(at: $0) }
             for grace in chord.graceNotesBefore.values + chord.graceNotesAfter.values {
