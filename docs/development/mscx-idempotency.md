@@ -124,3 +124,94 @@ exists to catch, reproduced inside the gate itself. The run prints its counts �
 facts. Quote the counts, not the conclusion.
 
 Run this before a release, and after any change to `Sources/SheetMusicMSCX/`.
+
+## A real MuseScore round trip (`<eid>` identifier survival)
+
+Everything above is this library checking itself against itself. This section is
+the one gate in the P4 `<eid>`-persistence phase that is not: it runs the
+**installed MuseScore application** on a file this library wrote, and checks
+what comes back.
+
+**Measured 2026-09-11 against `MuseScore4 4.7.4`** (`/Applications/MuseScore
+4.app/Contents/MacOS/mscore --version`). The spec's source citations
+(`read460.cpp`, `tread.cpp`, `twrite.cpp`) are from the MuseScore 4.6 source
+tree; this measurement does not confirm those citations against 4.6 itself; it
+measures the actually-installed 4.7.4 binary, which is the version whose
+behavior matters for anyone running this library today. A MuseScore 3
+installation is also present on this machine and was **not** used — MuseScore 3
+predates this phase's `<eid>` support entirely.
+
+Method: decode a fixture, encode it with `MSCZWriter` (the same path a host
+app uses), and re-parse that exact `.mscz` to record every identifier's
+value at its structural position (part/staff/measure/voice/element/note —
+see the scratch harness for the full walk). Run the MuseScore 4.7.4 CLI
+(`mscore -o roundtrip.mscz input.mscz`) against the file this library wrote,
+re-parse the CLI's output, and compare every recorded identifier at its
+position.
+
+Three fixtures were used to cover the carriers this library identifies:
+`guitarbend_release_twice.mscx` (Part, Staff, Measure, TimeSig, Dynamic,
+Tempo, Chord, Note, Rest, GraceChord), `own/grace-notes.mscx` (adds Tuplet),
+and `testRepeatsWithKeySigsExceptFirstMeas.mscx` (KeySig at a non-staff-head
+position — the staff-head KeySig in the other two fixtures is a C-major key
+this library's own encoder omits as implicit, per MuseScore's own writer
+convention, so it never reaches MuseScore at all and cannot test survival).
+
+**Per-carrier survival, summed over the three fixtures (74 identifiers recorded total):**
+
+| Carrier | Survived | Changed | Missing |
+|---|---|---|---|
+| Chord | 14 | 0 | 0 |
+| Note | 19 | 0 | 0 |
+| Rest | 2 | 0 | 0 |
+| GraceChord | 7 | 0 | 0 |
+| Note (grace) | 7 | 0 | 0 |
+| Measure | 9 | 0 | 0 |
+| Staff (`<Part><Staff>` declaration) | 3 | 0 | 0 |
+| KeySignature | 4 | 0 | 0 |
+| TimeSignature | 3 | 0 | 0 |
+| Dynamic | 1 | 0 | 0 |
+| Tempo | 1 | 0 | 0 |
+| Tuplet | 1 | 0 | 0 |
+| **Part** | **0** | **3** | **0** |
+
+71 of 74 identifiers came back byte-identical. The only carrier that did
+not is **Part**, on all 3 of 3 occurrences — exactly the gap this phase
+already documents as deliberate: `<Part><eid>` is this library's own tag
+inside MuseScore's element, MuseScore's writer never round-trips it, and a
+fresh save re-mints it. No other modeled carrier changed or went missing in
+any of the three fixtures.
+
+Two things the raw MuseScore output surfaced that are **not** carrier
+losses, recorded here so a future measurement doesn't re-diagnose them:
+
+- **A voice element this library does not model at all — decoded as
+  `.preserved`/replayed verbatim — carries no persistent identifier by
+  design.** `MSCXEncoder+Voice+Emit.swift`'s `case let .preserved(markup):
+  return XMLTreeNode(preserved: markup)` never consults the slot's `eid`;
+  `IdentifiedArray.assignMissingIDs` still gives the slot an in-memory ID
+  because every slot gets one uniformly, but that ID is never written. The
+  `testRepeatsWithKeySigsExceptFirstMeas.mscx` fixture (a pre-P4, no-`<voice>`
+  legacy layout) decodes its bare `<startRepeat/>` / `<endRepeat>` markers at
+  measures 3–4 into one such unmodeled slot each; comparing raw XML-child
+  index would have misreported every following real carrier in that voice as
+  "shifted", so the harness's position index counts only the elements this
+  library actually persists identity for.
+- **The MuseScore 4.7.4 CLI process crashed with `libc++abi: mutex lock
+  failed` (exit code 6) after successfully writing its output** on most of
+  the runs in this measurement — the known trap from earlier work in this
+  repository. The output `.mscz` was checked for existence and non-zero size
+  before being trusted, not the exit code.
+
+**Probe validity check.** The comparison above is not a comparison that
+would report success on nothing: a real round-tripped `.mscz` was unzipped,
+one `<Chord><eid>` was deleted by hand, and the file was re-zipped. Running
+the same comparison used above against that hand-mutated file reported
+`Chord: survived=1 changed=1` and named the exact identifier
+(`XM0f8eqOBUL_yul1asrUrNJ` → freshly re-minted), confirming the comparison
+notices a genuinely lost identifier rather than passing regardless of input.
+
+Not covered by any committed fixture, so not measured here: `RehearsalMark`
+(no fixture in this repository contains one) and `.spanner` (already
+recorded elsewhere in this phase as not persisting, for a reason unrelated
+to MuseScore's round trip).
