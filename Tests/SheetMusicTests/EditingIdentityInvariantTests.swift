@@ -31,6 +31,22 @@ struct EditingIdentityInvariantTests {
     }
 
     #if DEBUG
+        private func singleChordWithGrace() -> Score {
+            GraceIdentityFixtures.score(before: [GraceIdentityFixtures.grace()], after: [])
+        }
+
+        @Test("the identifier traversal includes chord and grace notes")
+        func traversalIncludesNotes() {
+            let editor = ScoreEditor(score: singleChordWithGrace())
+            guard case let .chord(chord) = editor.score.parts[0].staves[0].measures[0].voices[0].elements[0]
+            else { fatalError("fixture is a chord") }
+            let noteID = chord.notes.eid(at: 0)
+            let graceNoteID = chord.graceNotesBefore[0].notes.eid(at: 0)
+            let collected = Set(EditingIdentityInvariants.identifiers(in: editor.score))
+            #expect(collected.contains(noteID))
+            #expect(collected.contains(graceNoteID))
+        }
+
         @Test func duplicateCheckerRejectsRealDuplicateSlots() {
             let eid = EID(first: 42, second: 1)
             let duplicate = Score(division: 480, parts: IdentifiedArray([

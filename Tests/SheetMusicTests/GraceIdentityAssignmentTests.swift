@@ -99,8 +99,11 @@ struct GraceIdentityAssignmentTests {
         @Test func traversalCountsGraceSlotsAndRejectsCrossCollectionDuplicates() throws {
             let score = ScoreEditor(score: literal).score
             let all = EditingIdentityInvariants.identifiers(in: score)
-            #expect(all.count == 11)
-            #expect(Set(all).count == 11)
+            // Base 11 (1 part + 1 staff + 3 elements + 4 grace slot ids [x: 2 before + 1 after, y: 1
+            // before] + 1 tuplet + 1 systemMeasure) plus 6 notes now that the traversal walks into
+            // chord.notes: x's own note (1) + x's 3 grace notes + y's own note (1) + y's 1 grace note = 17.
+            #expect(all.count == 17)
+            #expect(Set(all).count == 17)
             let x = try F.chord(score)
             for shared in [x.graceNotesBefore.eid(at: 0), V.elements(score).eid(at: 0)] {
                 var broken = score

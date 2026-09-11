@@ -3,6 +3,17 @@ import SheetMusicFoundation
 #if DEBUG
     /// Debug-only identity gates for the structural spine, voice contents, and system-lane occupants.
     enum EditingIdentityInvariants {
+        /// A chord's own note identifiers, plus each grace chord's note identifiers. Shared so the
+        /// production gate and test fixtures that need "every note in this chord" (e.g. copy/paste
+        /// disjointness checks) cannot drift on what counts as a note.
+        static func noteIdentifiers(of chord: Chord) -> [EID] {
+            var result = chord.notes.indices.map { chord.notes.eid(at: $0) }
+            for grace in chord.graceNotesBefore.values + chord.graceNotesAfter.values {
+                result.append(contentsOf: grace.notes.indices.map { grace.notes.eid(at: $0) })
+            }
+            return result
+        }
+
         static func identifiers(in score: Score) -> [EID] {
             var result = score.parts.indices.map { score.parts.eid(at: $0) }
             for part in score.parts {
@@ -19,6 +30,7 @@ import SheetMusicFoundation
                                 result.append(contentsOf: chord.graceNotesAfter.indices.map {
                                     chord.graceNotesAfter.eid(at: $0)
                                 })
+                                result.append(contentsOf: noteIdentifiers(of: chord))
                             }
                             result.append(contentsOf: voice.tuplets.indices.map { voice.tuplets.eid(at: $0) })
                         }

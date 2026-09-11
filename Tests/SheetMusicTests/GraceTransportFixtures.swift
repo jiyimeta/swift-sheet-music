@@ -34,9 +34,11 @@ enum GraceTransportFixtures {
     }
 
     /// Every note identifier reachable from `score` — each chord's own notes plus each grace chord's own
-    /// notes, across every part / staff / measure / voice. `EditingIdentityInvariants.identifiers(in:)`
-    /// does not walk into `chord.notes` yet, so paste/split tests that need to assert note-level
-    /// uniqueness directly collect this list themselves rather than lean on that gate.
+    /// notes, across every part / staff / measure / voice. Delegates the per-chord collection to
+    /// `EditingIdentityInvariants.noteIdentifiers(of:)`, the same helper the debug gate's
+    /// `identifiers(in:)` traversal now uses, so this fixture and the production gate cannot drift on
+    /// what counts as a note. (Before EID-P3-Task-3, `identifiers(in:)` did not walk into `chord.notes`
+    /// at all, and this fixture duplicated the collection logic standalone.)
     static func allNoteIDs(_ score: Score) -> [EID] {
         var result: [EID] = []
         for part in score.parts {
@@ -45,10 +47,7 @@ enum GraceTransportFixtures {
                     for voice in measure.voices {
                         for element in voice.elements {
                             guard case let .chord(chord) = element else { continue }
-                            result.append(contentsOf: chord.notes.indices.map { chord.notes.eid(at: $0) })
-                            for grace in chord.graceNotesBefore.values + chord.graceNotesAfter.values {
-                                result.append(contentsOf: grace.notes.indices.map { grace.notes.eid(at: $0) })
-                            }
+                            result.append(contentsOf: EditingIdentityInvariants.noteIdentifiers(of: chord))
                         }
                     }
                 }

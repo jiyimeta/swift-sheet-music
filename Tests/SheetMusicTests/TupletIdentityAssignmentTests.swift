@@ -152,8 +152,10 @@ struct TupletIdentityAssignmentTests {
         @Test func identifierTraversalCountsTupletSlotsNotEndpointReferences() {
             let score = ScoreEditor(score: literal).score
             let reported = EditingIdentityInvariants.identifiers(in: score)
-            #expect(reported.count == 7)
-            #expect(Set(reported).count == 7)
+            // 1 part + 1 staff + 3 elements + 1 tuplet + 1 systemMeasure + 3 notes (one per chord,
+            // no graces in this fixture) = 10, now that the traversal walks into chord.notes.
+            #expect(reported.count == 10)
+            #expect(Set(reported).count == 10)
             #expect(reported.contains(F.voice(score).tuplets.eid(at: 0)))
         }
     #endif
