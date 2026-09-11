@@ -2,26 +2,44 @@ import SheetMusicFoundation
 
 /// Identity of a slot in a deferred voice replacement. Only the landing apply mints fresh identifiers.
 ///
-/// `.keep` and `.fresh` say what happens to the SLOT's own `EID` only — never to the identifiers
-/// nested inside `element` (a chord's notes, its grace lists, each grace's own notes). Materializing
-/// either case runs `assignMissingNestedIDs`, which fills only unassigned nested slots and otherwise
-/// leaves them exactly as `element` already carries them. So `.fresh` alone does not make "different
-/// notes": an `element` copied from elsewhere in the score keeps its source notes' identifiers even
-/// under a brand-new slot `EID`, unless the caller has first called `clearNestedIDsForCopy()` on it.
-/// That call is how a caller says "this is a different chord with different notes" — today only the
-/// two paste commands (`PasteVoiceElement`, `PasteVoiceElements`) make it.
+/// `.keep` and `.fresh` say what happens to the SLOT's own `EID` only — never directly to the
+/// identifiers nested inside `element` (a chord's notes, its grace lists, each grace's own notes).
+/// `.keep` always leaves them exactly as `element` already carries them: `assignMissingNestedIDs`
+/// fills only unassigned nested slots. `.fresh` defaults to a NEW element — its nested identifiers are
+/// cleared before assignment, because a brand-new slot ordinarily means a different chord with
+/// different notes, not the same notes at a new address. The rare exception (nested elements that
+/// MOVE rather than being copied — e.g. a grace list handed from one chord to another across a split)
+/// opts out via `VoiceSlot`'s `nestedIdentity: .carried`.
 public enum SlotIdentity: Sendable, Equatable {
     case keep(EID)
     case fresh
 }
 
 public struct VoiceSlot: Sendable, Equatable {
+    /// Whether a `.fresh` slot's nested identifiers (a chord's notes, its grace lists, each grace's
+    /// own notes) are cleared before assignment, or carried through unchanged. Irrelevant to `.keep`,
+    /// which always carries them regardless of this value.
+    enum NestedIdentity: Sendable, Equatable {
+        /// The default: `element` is a different chord with different notes, so its nested
+        /// identifiers are cleared and reassigned fresh.
+        case cleared
+        /// The opt-out: `element`'s nested identifiers are the SAME notes the performer was looking
+        /// at, moved rather than copied, and must survive under the new slot unchanged.
+        case carried
+    }
+
     public var identity: SlotIdentity
     public var element: VoiceElement
+    var nestedIdentity: NestedIdentity
 
     public init(identity: SlotIdentity, element: VoiceElement) {
+        self.init(identity: identity, element: element, nestedIdentity: .cleared)
+    }
+
+    init(identity: SlotIdentity, element: VoiceElement, nestedIdentity: NestedIdentity) {
         self.identity = identity
         self.element = element
+        self.nestedIdentity = nestedIdentity
     }
 
     static func materialize(_ slots: [VoiceSlot], using ids: inout EIDAllocator) -> IdentifiedArray<VoiceElement> {
@@ -35,6 +53,9 @@ public struct VoiceSlot: Sendable, Equatable {
                 eid = ids.next()
             }
             var element = slot.element
+            if case .fresh = slot.identity, slot.nestedIdentity == .cleared {
+                element = element.clearingNestedIDsForCopy()
+            }
             element.assignMissingNestedIDs(using: &ids)
             return (eid, element)
         })
@@ -43,11 +64,12 @@ public struct VoiceSlot: Sendable, Equatable {
 
 /// Identity of the slot a `ReplaceVoiceElement` writes into — `.same` keeps the existing `EID`,
 /// `.fresh` mints a new one, `.restore` reinstates a specific one (undo/redo). As with `SlotIdentity`,
-/// this governs the SLOT only: every case runs `assignMissingNestedIDs` on the incoming element, which
-/// fills unassigned nested identifiers (notes, grace lists, grace notes) and leaves already-assigned
-/// ones untouched. `.fresh` does not imply new notes — a caller replacing one chord with a copy of
-/// another must call `clearNestedIDsForCopy()` on the element itself first, or the copy's notes keep
-/// the source's identifiers under the new slot.
+/// this governs the SLOT only. `.same` and `.restore` run `assignMissingNestedIDs` on the incoming
+/// element as-is, filling only unassigned nested identifiers and leaving already-assigned ones
+/// untouched — right for `.restore` in particular, since undo reinstates the very notes that were
+/// there before. `.fresh` clears the element's nested identifiers unconditionally before assignment:
+/// a fresh slot means a different chord with different notes, so a caller replacing one chord with a
+/// copy of another needs no extra step — `ReplaceVoiceElement` clears the copy's notes itself.
 public enum ElementIdentity: Sendable, Equatable {
     case same
     case fresh

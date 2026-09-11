@@ -200,7 +200,9 @@ public enum CrossBarInputPlanner {
                 } else {
                     identity = .fresh
                 }
-                return VoiceSlot(identity: identity, element: element)
+                // The last piece's after-graces are MOVED off the head, not copied — `piece(...)` gives
+                // them to whichever piece isLast — so a fresh slot here must not clear them.
+                return VoiceSlot(identity: identity, element: element, nestedIdentity: .carried)
             }
             guard let spliced = splice(
                 pieces,

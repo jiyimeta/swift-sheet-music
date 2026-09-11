@@ -40,6 +40,7 @@ public struct ReplaceVoiceElement: EditCommand {
             inverseIdentity = .same
         case .fresh:
             let eid = ids.next()
+            materialized = materialized.clearingNestedIDsForCopy()
             materialized.assignMissingNestedIDs(using: &ids)
             voice.replaceElement(at: location.elementIndex, with: materialized, id: eid)
             inverseIdentity = .restore(previous)

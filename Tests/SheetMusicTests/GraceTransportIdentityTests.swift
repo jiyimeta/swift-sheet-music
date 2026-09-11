@@ -6,7 +6,16 @@ struct GraceTransportIdentityTests {
     private typealias V = VoiceIdentityFixtures
     private typealias G = GraceTransportFixtures
 
-    @Test func freshSlotKeepsAssignedGraceIdentity() throws {
+    /// Renamed from `freshSlotKeepsAssignedGraceIdentity` (SP0 P4 Task 0): a fresh `ReplaceVoiceElement`
+    /// handed a chord that already carries assigned grace identity — exactly the same chord read back
+    /// from its own slot, the shape a caller replacing one chord with a copy of another produces — used
+    /// to keep that identity under the new slot. That was the bug this task closes: `.fresh` now means
+    /// "a different chord with different notes" by default, so it clears and reassigns every nested
+    /// identifier. `Chord.assignMissingNestedIDs` fills them in a fixed order — the chord's own note,
+    /// then the before-grace's slot id, then the after-grace's slot id, then the before-grace's own
+    /// note, then the after-grace's own note — so after the slot's own mint (#1) the before/after grace
+    /// ids land at #3 and #4, for 6 mints in total.
+    @Test func freshSlotClearsAssignedGraceIdentity() throws {
         let editor = ScoreEditor(score: V.score(elements: [G.decorated(.whole)]))
         let before = editor.score
         let initial = editor.idAllocator
@@ -16,11 +25,15 @@ struct GraceTransportIdentityTests {
         #expect(V.ids(V.elements(editor.score)) == [V.minted(initial, 1)])
         G.expectGrace(
             result,
-            before: [original.graceNotesBefore.eid(at: 0)],
-            after: [original.graceNotesAfter.eid(at: 0)],
+            before: [V.minted(initial, 3)],
+            after: [V.minted(initial, 4)],
         )
+        #expect(result.graceNotesBefore.eid(at: 0) != original.graceNotesBefore.eid(at: 0))
+        #expect(result.graceNotesAfter.eid(at: 0) != original.graceNotesAfter.eid(at: 0))
+        #expect(result.notes.eid(at: 0) != original.notes.eid(at: 0))
+        // Values only: `Chord`'s `==` never looks at identifiers.
         #expect(result == original)
-        #expect(editor.idAllocator == V.advanced(initial, by: 1))
+        #expect(editor.idAllocator == V.advanced(initial, by: 6))
         try G.expectCycle(editor, before: before)
     }
 

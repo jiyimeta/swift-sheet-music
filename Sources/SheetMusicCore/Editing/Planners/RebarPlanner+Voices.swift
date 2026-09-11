@@ -255,7 +255,8 @@ extension RebarPlanner {
             // chain's, and re-starting it at each barline would clear the head's incoming tie each time.
             let pieces = RebarPlanner.pieces(of: item.elements[0].element, durations: perSegment.flatMap(\.self))
                 .enumerated().map { index, element in
-                    VoiceSlot(identity: index == 0 ? item.elements[0].identity : .fresh, element: element)
+                    let identity: SlotIdentity = index == 0 ? item.elements[0].identity : .fresh
+                    return VoiceSlot(identity: identity, element: element, nestedIdentity: .carried) // moved not copied
                 }
             var written = 0
             for (index, segment) in segments.enumerated() {
