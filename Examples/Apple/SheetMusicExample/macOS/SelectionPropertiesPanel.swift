@@ -161,6 +161,11 @@
             .textFieldStyle(.roundedBorder)
             .onAppear { syncOffsetText(offset) }
             .onChange(of: offset) { _, newValue in syncOffsetText(newValue) }
+            // Selecting a different text can carry the same offset (both nil is the common case), which
+            // fires neither `.onAppear` nor the `offset` `.onChange` above — resync on the identity of the
+            // selection itself so a half-typed, uncommitted value can't be left in the field and then
+            // written to the newly selected target by the next "Set".
+            .onChange(of: text) { _, _ in syncOffsetText(offset) }
         }
 
         private func syncOffsetText(_ offset: ScoreOffset?) {
@@ -175,8 +180,15 @@
         }
 
         private static func formattedOffsetComponent(_ value: Double) -> String {
-            value.truncatingRemainder(dividingBy: 1) == 0
-                ? String(Int(value)) : String(format: "%.2f", value)
+            // `Int(value)` traps for a non-finite value or one outside `Int`'s range — an `.mscx` can carry
+            // an offset that large (`<offset x="1e30">`), so guard before converting rather than trapping
+            // the whole example. Non-finite values already fall through here on their own:
+            // `truncatingRemainder` returns NaN for both NaN and infinity, so only an out-of-range but
+            // finite whole number needs the explicit check.
+            guard value.truncatingRemainder(dividingBy: 1) == 0, value.isFinite, value.magnitude < 9e18 else {
+                return String(format: "%.2f", value)
+            }
+            return String(Int(value))
         }
 
         private func placementLabel(_ placement: Placement?) -> String {

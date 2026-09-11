@@ -3601,6 +3601,9 @@
             case let .beamVisible(value):
                 guard let noteID = selectedPropertyNoteID else { return }
                 let location = VoiceElementID(noteID)
+                // Mirrors `ScoreEditSession+VisibilityPlanning.swift:31` exactly. The `?? location` fallback
+                // is unreachable from this row: it only renders when `SetBeamVisible.current(at:in:)` is
+                // non-nil, which requires `leader(of:in:)` to already be non-nil for this same location.
                 let target = SetBeamVisible.leader(of: location, in: controller.score) ?? location
                 applyNoteEdit(SetBeamVisible(at: target, visible: value), noteID: noteID, controller: controller)
             case .deselect:
