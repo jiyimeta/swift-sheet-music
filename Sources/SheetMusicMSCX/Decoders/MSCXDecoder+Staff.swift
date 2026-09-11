@@ -7,7 +7,7 @@ extension Staff {
     /// Anything else becomes preserved markup — see `PreservedXML`.
     private static let consumedStaffChildren: Set = [
         "StaffType", "bracket", "defaultClef", "defaultConcertClef",
-        "defaultTransposingClef",
+        "defaultTransposingClef", EIDXML.childName,
     ]
 
     /// Every `<StaffType>` child this decoder reads. Its other children
@@ -18,7 +18,13 @@ extension Staff {
     /// portion of an inside-`<Part><Staff>` element. Measures are
     /// added separately during pairing — see
     /// `assembleParts(decoded:topLevel:)`.
-    static func declared(_ node: XMLTreeNode) -> (mscxID: String?, staff: Staff) {
+    ///
+    /// `eid` is this declaration's own identifier
+    /// (`<Part><Staff><eid>`) — the "staff" carrier. It is distinct
+    /// from, and never to be confused with, the top-level
+    /// `<Staff id="N">` that holds measures, which carries no `<eid>`
+    /// at all.
+    static func declared(_ node: XMLTreeNode) -> (mscxID: String?, eid: EID, staff: Staff) {
         let staffTypeNode = node.first("StaffType")
         let staffType = staffTypeNode?.first("name")?.text ?? "stdNormal"
         let group = staffTypeNode?.attributes["group"] ?? "pitched"
@@ -88,7 +94,7 @@ extension Staff {
             ))
         }
 
-        return (mscxID, Staff(
+        return (mscxID, EIDXML.decode(from: node), Staff(
             staffType: staffType,
             group: group,
             lineCount: lineCount,
@@ -113,6 +119,11 @@ struct MSCXTopLevelStaff {
     /// voices during decoding. `originalStaff` is left nil here and
     /// gets stamped during part assembly.
     let systemElementsByMeasure: [[PositionedSystemElement]]
+    /// One entry per measure (positionally aligned with `measures`):
+    /// that `<Measure>`'s own `<eid>`, decoded unconditionally.
+    /// Only the score's first staff's entries are meaningful — see
+    /// `Measure.DecodeResult.eid` and `assembleParts`.
+    let measureEIDs: [EID]
 }
 
 extension MSCXTopLevelStaff {
@@ -130,15 +141,18 @@ extension MSCXTopLevelStaff {
             .filter { !Measure.isMultiMeasureRestContainer($0) }
         var measures: [Measure] = []
         var systemElementsByMeasure: [[PositionedSystemElement]] = []
+        var measureEIDs: [EID] = []
         for measureNode in measureNodes {
             let result = try Measure.decodeWithSystemElements(measureNode)
             measures.append(result.measure)
             systemElementsByMeasure.append(result.systemElements)
+            measureEIDs.append(result.eid)
         }
         return MSCXTopLevelStaff(
             mscxID: id,
             measures: measures,
             systemElementsByMeasure: systemElementsByMeasure,
+            measureEIDs: measureEIDs,
         )
     }
 }
@@ -153,10 +167,14 @@ struct MSCXStaffPairing {
     var partID: String
     var trackName: String?
     var instrument: Instrument
-    var declared: [(mscxID: String?, staff: Staff)]
+    var declared: [(mscxID: String?, eid: EID, staff: Staff)]
     /// MuseScore `<Part><show>` — false when `<show>0</show>` hid the part.
     var isVisibleInScore: Bool
     var preservedMarkup: [PreservedXML]
+    /// This `<Part>`'s own `<eid>` — a carrier MuseScore itself never
+    /// writes (P4 plan decision 4); we write and read our own child
+    /// in the same first-child position as every other carrier.
+    var eid: EID
 }
 
 /// Result of part assembly: the wired-up `[Part]` plus the
@@ -164,7 +182,12 @@ struct MSCXStaffPairing {
 /// every staff into a single array indexed by measure number.
 struct MSCXAssembledParts {
     var parts: [Part]
+    /// Positionally aligned with `parts`: each part's own `<eid>`.
+    var partEIDs: [EID]
     var systemMeasures: [SystemMeasure]
+    /// Positionally aligned with `systemMeasures`: the "column"
+    /// identifier lifted out of the score's first staff's measures.
+    var systemMeasureEIDs: [EID]
 }
 
 func assembleParts( // swiftlint:disable:this function_body_length
@@ -185,9 +208,17 @@ func assembleParts( // swiftlint:disable:this function_body_length
     // score.systemMeasures after part assembly is complete.
     var perStaffSystemElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])] = []
 
+    // The "column" identifier — the score's first staff's <Measure><eid>
+    // (measurewrite.cpp:58, guarded by staffwrite.cpp:66). Lifted out of
+    // address (0, 0) only, below; every other staff's measure <eid> (if
+    // a malformed file even has one) is discarded, because it would name
+    // a different element.
+    var columnEIDs: [EID] = []
+
     var parts: [Part] = []
+    var partEIDs: [EID] = []
     for dp in decoded {
-        var assembled: [Staff] = []
+        var assembled: [(EID, Staff)] = []
         for (staffIndexInPart, declared) in dp.declared.enumerated() {
             let topLevelStaff: MSCXTopLevelStaff
             if let id = declared.mscxID {
@@ -227,11 +258,14 @@ func assembleParts( // swiftlint:disable:this function_body_length
             }
             var s = declared.staff
             s.measures = topLevelStaff.measures
-            assembled.append(s)
+            assembled.append((declared.eid, s))
             let address = StaffAddress(
                 partIndex: parts.count,
                 staffIndexInPart: staffIndexInPart,
             )
+            if address == StaffAddress(partIndex: 0, staffIndexInPart: 0) {
+                columnEIDs = topLevelStaff.measureEIDs
+            }
             perStaffSystemElements.append(
                 (address, topLevelStaff.systemElementsByMeasure),
             )
@@ -244,6 +278,7 @@ func assembleParts( // swiftlint:disable:this function_body_length
             isVisibleInScore: dp.isVisibleInScore,
             preservedMarkup: dp.preservedMarkup,
         ))
+        partEIDs.append(dp.eid)
     }
 
     let leftover = orderedIDs.filter { !consumed.contains($0) }
@@ -283,5 +318,13 @@ func assembleParts( // swiftlint:disable:this function_body_length
             $0.position < $1.position
         }
     }
-    return MSCXAssembledParts(parts: parts, systemMeasures: laneElements.map { SystemMeasure(elements: $0) })
+    let resolvedSystemMeasureEIDs = (0 ..< measureCount).map {
+        $0 < columnEIDs.count ? columnEIDs[$0] : .invalid
+    }
+    return MSCXAssembledParts(
+        parts: parts,
+        partEIDs: partEIDs,
+        systemMeasures: laneElements.map { SystemMeasure(elements: $0) },
+        systemMeasureEIDs: resolvedSystemMeasureEIDs,
+    )
 }

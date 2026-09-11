@@ -31,9 +31,14 @@ extension Score {
             }
             allStaffIDs.append((part, partID, ids))
         }
-        for (part, partID, ids) in allStaffIDs {
+        for (partIndex, entry) in allStaffIDs.enumerated() {
             scoreChildren.append(
-                part.encodeDeclaration(partID: partID, staffIDs: ids, options: options),
+                entry.part.encodeDeclaration(
+                    eid: parts.eid(at: partIndex),
+                    partID: entry.partID,
+                    staffIDs: entry.ids,
+                    options: options,
+                ),
             )
         }
         try appendStaffBodies(
@@ -136,8 +141,14 @@ extension Score {
                 // non-measures are written only for staff 0
                 // (`rw/write/staffwrite.cpp:42`). They are score-level, so in
                 // this part/staff model only the first staff receives them.
-                let staffBlocks = partIndex == 0 && staffIndexInPart == 0
-                    ? blocks
+                let isFirstStaffOfScore = partIndex == 0 && staffIndexInPart == 0
+                let staffBlocks = isFirstStaffOfScore ? blocks : []
+                // The column identifier is the first staff's <Measure><eid>
+                // only (measurewrite.cpp:58, guarded by staffwrite.cpp:66) —
+                // every other staff's call leaves this empty so
+                // `Measure.encode` writes no `<eid>` there.
+                let columnEIDs = isFirstStaffOfScore
+                    ? systemMeasures.indices.map { systemMeasures.eid(at: $0) }
                     : []
                 try scoreChildren.append(
                     staff.encodeTopLevel(
@@ -145,6 +156,7 @@ extension Score {
                         blocks: staffBlocks,
                         systemElementsByMeasure: perMeasure,
                         effectiveMeasureDurations: staff.measures.effectiveMeasureDurations(),
+                        columnEIDs: columnEIDs,
                         options: partOptions,
                     ),
                 )

@@ -1,3 +1,4 @@
+import Foundation
 import SheetMusicCore
 @testable import SheetMusicMSCX
 import SheetMusicXMLTools
@@ -66,5 +67,58 @@ struct EIDPersistenceTests {
         // empty match above is not proof that the probe itself is broken.
         let v4XML = try #require(String(bytes: MSCXEncoder.encode(score), encoding: .utf8))
         #expect(v4XML.contains("<eid>"))
+    }
+
+    @Test("a column, a staff declaration and a part keep their identifiers across an encode")
+    func spineIdentifiersSurviveAnEncodeDecode() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        #expect(score.parts.count >= 1)
+        // midi01.mscx:25 is <Part><Staff><eid>C_C</eid>; :88 is the first
+        // <Measure>'s <eid>D_D</eid>. <Score><eid>B_B</eid> is deliberately
+        // not modeled, so it is not asserted here.
+        let columnEID = score.systemMeasures.eid(at: 0)
+        let staffEID = score.parts[0].staves.eid(at: 0)
+        let partEID = score.parts.eid(at: 0)
+        #expect(columnEID == EID(string: "D_D"))
+        #expect(staffEID == EID(string: "C_C"))
+        #expect(partEID.isValid) // midi01.mscx has no <Part><eid> — this is our own carrier, minted at parse
+
+        let reparsed = try MSCXParser.parse(MSCXEncoder.encode(score))
+        #expect(reparsed.systemMeasures.eid(at: 0) == columnEID)
+        #expect(reparsed.parts[0].staves.eid(at: 0) == staffEID)
+        #expect(reparsed.parts.eid(at: 0) == partEID)
+    }
+
+    @Test("a column identifier is written on the first staff's measure only")
+    func columnIdentifierIsWrittenOnce() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("multiPartMixedStaves"))
+        // Part 1 (Violin 1, one staff) is address (0, 0) — the first staff
+        // of the whole score — and top-level <Staff> #0 in document order.
+        // Part 2 (Violin 2, one staff) is address (1, 0) — top-level
+        // <Staff> #1 — and must NOT carry the column identifier.
+        let xml = try #require(String(bytes: MSCXEncoder.encode(score), encoding: .utf8))
+        #expect(try measureEIDCount(in: xml, staffIndex: 0) > 0)
+        #expect(try measureEIDCount(in: xml, staffIndex: 1) == 0)
+    }
+
+    /// Number of `<Measure>` children carrying an `<eid>` under the
+    /// `staffIndex`-th top-level `<Staff>` (document-order, 0-based) —
+    /// walked via `XMLTreeNode`, not string search, so a parser that
+    /// finds nothing is not mistaken for a fixture that has nothing.
+    private func measureEIDCount(in xml: String, staffIndex: Int) throws -> Int {
+        let root = try XMLTreeParser.parse(Data(xml.utf8))
+        let scoreNode = try #require(root.first("Score"))
+        // Direct children only, so this only ever sees top-level
+        // <Staff> — a <Part><Staff> declaration is nested one level
+        // deeper and `all(_:)` does not recurse into it.
+        let topLevelStaves = scoreNode.all("Staff")
+        let staff = try #require(topLevelStaves[safe: staffIndex])
+        return staff.all("Measure").filter { EIDXML.decode(from: $0).isValid }.count
+    }
+}
+
+extension Array {
+    fileprivate subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

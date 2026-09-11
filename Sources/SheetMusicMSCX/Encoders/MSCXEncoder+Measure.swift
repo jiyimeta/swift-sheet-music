@@ -13,7 +13,7 @@ extension Measure {
     /// in any order, but matching MuseScore's order keeps diffs
     /// against fixtures readable.
     func encode(options: MSCXEncoderOptions = .init()) throws -> XMLTreeNode {
-        try encode(carryInVoiceTieCarries: [], options: options).node
+        try encode(eid: .invalid, carryInVoiceTieCarries: [], options: options).node
     }
 
     /// `carryInVoiceTieCarries[i]` is the previous measure's voice
@@ -33,6 +33,7 @@ extension Measure {
     /// pass the real per-measure value (built from
     /// `[Measure].effectiveMeasureDurations()`).
     func encode( // swiftlint:disable:this function_body_length
+        eid: EID,
         carryInVoiceTieCarries: [Voice.VoiceTieCarry],
         isFirstMeasureOfStaff: Bool = false,
         options: MSCXEncoderOptions = .init(),
@@ -42,6 +43,11 @@ extension Measure {
         nextMeasureFirstChordNotes: [ChordNotes?] = [],
     ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes — only
+        // written at all for the score's first staff (see
+        // `Score.appendStaffBodies`, which is the only caller that
+        // ever supplies a valid `eid` here).
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         for marker in markers {
             children.append(marker.encode(options: options))
         }
@@ -136,7 +142,7 @@ extension Measure {
         let carries = carryInLastChordDurations.map {
             Voice.VoiceTieCarry(prevChordDuration: $0, prevVoiceTotal: nil)
         }
-        let result = try encode(carryInVoiceTieCarries: carries, options: options)
+        let result = try encode(eid: .invalid, carryInVoiceTieCarries: carries, options: options)
         return (result.node, result.carryOutVoiceTieCarries.map(\.prevChordDuration))
     }
 }

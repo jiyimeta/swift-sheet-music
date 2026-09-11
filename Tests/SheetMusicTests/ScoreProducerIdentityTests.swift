@@ -100,8 +100,16 @@ struct ScoreProducerIdentityTests {
     /// Catches a fixed deterministic allocator reused from its initial value for each load.
     /// Does not catch a shared allocator: its advancing counter also produces disjoint sets.
     /// D4's ban on shared allocators is enforced by review, not by this test.
+    ///
+    /// Fixture is `multiPartMixedStaves`, not `midi01`: it carries no `<eid>` of its own on
+    /// any part, staff declaration, or measure, so every identifier `identifiers(_:)` collects
+    /// is chokepoint-minted rather than file-persisted. `midi01.mscx` would no longer work here
+    /// since Task 3 of the P4 plan made its staff declaration (`C_C`) and first-measure column
+    /// (`D_D`) round-trip — those decode to the *same* identifiers on every load by design, which
+    /// is the feature, not a regression, but it would make this disjointness assertion fail for
+    /// the wrong reason.
     @Test func repeatedLoadsHaveDisjointIdentifiers() throws {
-        let data = try bytes("midi01", "mscx")
+        let data = try bytes("multiPartMixedStaves", "mscx")
         let first = try identifiers(ScoreLoader.loadScore(bytes: data))
         let second = try identifiers(ScoreLoader.loadScore(bytes: data))
         #expect(!first.isEmpty)

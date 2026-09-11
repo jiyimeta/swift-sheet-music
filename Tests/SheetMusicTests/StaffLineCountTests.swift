@@ -59,13 +59,13 @@ struct StaffLineCountEncodeTests {
             staffType: "perc3Line", group: "percussion", lineCount: 3,
             measures: [Measure(voices: [Voice(elements: [])])],
         )
-        let node = staff.encodeDeclaration(staffID: "1")
+        let node = staff.encodeDeclaration(eid: .invalid, staffID: "1")
         let staffType = try #require(node.first("StaffType"))
         #expect(staffType.first("lines")?.text == "3")
     }
 
     @Test func fiveLineStaffOmitsTheElement() {
-        let node = Staff().encodeDeclaration(staffID: "1")
+        let node = Staff().encodeDeclaration(eid: .invalid, staffID: "1")
         // XMLTreeNode.first(_:) is a custom child lookup, not
         // Sequence.first(where:), so SwiftLint's
         // contains_over_first_not_nil rule fires as a false positive

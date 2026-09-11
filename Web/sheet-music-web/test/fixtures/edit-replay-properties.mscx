@@ -6,7 +6,9 @@
       <spatium>1.75</spatium>
     </Style>
     <Part id="1">
+      <eid>B_B</eid>
       <Staff id="1">
+        <eid>B_C</eid>
         <StaffType group="pitched">
           <name>stdNormal</name>
         </StaffType>

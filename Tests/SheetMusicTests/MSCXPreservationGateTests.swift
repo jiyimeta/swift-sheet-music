@@ -157,12 +157,16 @@ enum MSCXPreservation {
         // `Chord/eid`, `Note/eid`, and `Rest/eid` are deliberately NOT
         // here: Task 2 of the P4 plan (`EIDPersistenceTests.swift`) made
         // those three carriers round-trip their `<eid>` instead of losing
-        // it, so no committed fixture drops them any more.
+        // it, so no committed fixture drops them any more. `Measure/eid`
+        // and `Staff/eid` are likewise absent as of Task 3: the column
+        // (first staff's `<Measure><eid>`) and the staff declaration's
+        // `<Part><Staff><eid>` now round-trip too. `Score/eid` stays —
+        // `<Score><eid>` is deliberately not modeled (P4 plan decision).
         allow([
             "Accidental/eid", "BarLine/eid", "Clef/eid", "Dynamic/eid",
             "GuitarBend/eid", "GuitarBendHold/eid", "HBox/eid", "KeySig/eid",
-            "LayoutBreak/eid", "Lyrics/eid", "Marker/eid", "Measure/eid",
-            "Score/eid", "Staff/eid", "StaffText/eid", "Symbol/eid", "SystemText/eid", "Tempo/eid",
+            "LayoutBreak/eid", "Lyrics/eid", "Marker/eid",
+            "Score/eid", "StaffText/eid", "Symbol/eid", "SystemText/eid", "Tempo/eid",
             "Text/eid", "Tie/eid", "TimeSig/eid", "VBox/eid", "museScore/LastEID",
         ], because: elementIdentityReason, into: &result)
         // `LaissezVib/eid` is deliberately NOT here. `<LaissezVib>` is

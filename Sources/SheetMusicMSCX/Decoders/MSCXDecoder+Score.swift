@@ -130,8 +130,8 @@ extension Score {
             : systemMeasures
         return Score(
             division: division,
-            parts: IdentifiedArray(parts),
-            systemMeasures: IdentifiedArray(resolvedSystemMeasures),
+            parts: IdentifiedArray(Array(zip(assembled.partEIDs, parts))),
+            systemMeasures: IdentifiedArray(Array(zip(assembled.systemMeasureEIDs, resolvedSystemMeasures))),
             metaTags: metaTags,
             blocks: blocks,
             style: style,

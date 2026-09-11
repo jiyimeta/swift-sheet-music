@@ -6,7 +6,7 @@ extension Part {
     /// Every `<Part>` child this decoder reads. Anything else becomes
     /// preserved markup — see `PreservedXML`.
     private static let consumedPartChildren: Set = [
-        "Instrument", "Staff", "show", "trackName",
+        "Instrument", "Staff", "show", "trackName", EIDXML.childName,
     ]
 
     /// Decode the per-`<Part>` declaration. Top-level `<Staff>` measures
@@ -43,6 +43,7 @@ extension Part {
             declared: declared,
             isVisibleInScore: isVisibleInScore,
             preservedMarkup: node.preservedMarkup(consuming: consumedPartChildren),
+            eid: EIDXML.decode(from: node),
         )
     }
 }

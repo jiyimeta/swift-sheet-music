@@ -33,7 +33,7 @@ extension Measure {
         "Rest", "Spanner", "StaffText", "SystemText", "Tempo",
         "TimeSig", "Tuplet", "endRepeat", "endTuplet", "irregular",
         "location", "measureRepeatCount", "multiMeasureRest",
-        "startRepeat", "tick", "voice",
+        "startRepeat", "tick", "voice", EIDXML.childName,
     ]
 
     private static let modeledLayoutBreakSubtypes: Set = [
@@ -53,9 +53,16 @@ extension Measure {
     /// `PositionedSystemElement.originalStaff` with the appropriate
     /// `StaffAddress` once the part/staff index is known (see
     /// `assembleParts(decoded:topLevel:)`).
+    ///
+    /// `eid` is this `<Measure>`'s own identifier — decoded
+    /// unconditionally here, but only MEANINGFUL as the "column"
+    /// identity when this measure belongs to the score's first staff
+    /// (MuseScore itself never writes `<eid>` on any other staff's
+    /// `<Measure>`); `assembleParts` is what applies that rule.
     struct DecodeResult {
         let measure: Measure
         let systemElements: [PositionedSystemElement]
+        let eid: EID
     }
 
     /// True when a raw `<Measure>` XML node is MuseScore's mmRest
@@ -152,7 +159,10 @@ extension Measure {
             irregular: irregular,
             preservedMarkup: preservedMarkup,
         )
-        return DecodeResult(measure: measure, systemElements: systemElements)
+        return DecodeResult(
+            measure: measure, systemElements: systemElements,
+            eid: EIDXML.decode(from: node),
+        )
     }
 
     /// Preserve only `<LayoutBreak>` subtypes the model did not

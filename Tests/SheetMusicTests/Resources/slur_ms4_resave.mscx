@@ -8,7 +8,9 @@
     <metaTag name="composer">Composer / arranger</metaTag>
     <metaTag name="workTitle">Untitled score</metaTag>
     <Part id="1">
+      <eid>pQKuPfSAUlF_B</eid>
       <Staff id="1">
+        <eid>pQKuPfSAUlF_C</eid>
         <StaffType group="pitched">
           <name>stdNormal</name>
         </StaffType>
@@ -29,6 +31,7 @@
     </Part>
     <Staff id="1">
       <Measure>
+        <eid>pQKuPfSAUlF_E</eid>
         <voice>
           <TimeSig>
             <sigN>4</sigN>
@@ -97,6 +100,7 @@
         </voice>
       </Measure>
       <Measure>
+        <eid>pQKuPfSAUlF_F</eid>
         <voice>
           <Chord>
             <eid>d_d</eid>
