@@ -16,7 +16,7 @@ import Testing
 @Suite("MSCXEncoder spanners")
 struct MSCXEncoderSpannersTests {
     private func noteRoundTrip(_ note: Note) throws -> Note {
-        let xml = note.encode()
+        let xml = note.encode(eid: .invalid)
         let bytes = XMLTreeSerializer.serialize(
             XMLTreeNode(name: "root", children: [xml]),
         )

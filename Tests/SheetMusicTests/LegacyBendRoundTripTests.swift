@@ -68,7 +68,7 @@ struct LegacyBendRoundTripTests {
             fontSize: 10.5,
             fontStyle: 1,
         )
-        let bend = try #require(note.encode().first("Bend"))
+        let bend = try #require(note.encode(eid: .invalid).first("Bend"))
         #expect(bend.children.map(\.name)
             == [
                 "point",
@@ -104,7 +104,7 @@ struct LegacyBendRoundTripTests {
             LegacyBend.Point(time: 15, pitch: 100),
             LegacyBend.Point(time: 60, pitch: 100),
         ])
-        let bend = try #require(note.encode().first("Bend"))
+        let bend = try #require(note.encode(eid: .invalid).first("Bend"))
         #expect(bend.children.map(\.name) == ["point", "point", "point"])
     }
 
@@ -123,8 +123,8 @@ struct LegacyBendRoundTripTests {
             play: false,
             lineWidth: 0.2,
         )
-        let v4 = note.encode(options: .init(targetVersion: .v4)).first("Bend")
-        let v3 = note.encode(options: .init(targetVersion: .v3)).first("Bend")
+        let v4 = note.encode(eid: .invalid, options: .init(targetVersion: .v4)).first("Bend")
+        let v3 = note.encode(eid: .invalid, options: .init(targetVersion: .v3)).first("Bend")
         #expect(v4 != nil)
         #expect(v4 == v3)
     }

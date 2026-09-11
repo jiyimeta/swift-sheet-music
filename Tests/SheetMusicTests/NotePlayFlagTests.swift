@@ -65,11 +65,11 @@ struct NotePlayFlagTests {
 
     @Test func encodesPlayFlagOnRoundTrip() {
         let note = Note(pitch: 67, tpc: 15, play: false)
-        let xml = note.encode()
+        let xml = note.encode(eid: .invalid)
         let playNode = xml.children.first { $0.name == "play" }
         #expect(playNode?.text == "0")
 
-        let playingXML = Note(pitch: 60, tpc: 14).encode()
+        let playingXML = Note(pitch: 60, tpc: 14).encode(eid: .invalid)
         #expect(!playingXML.children.contains { $0.name == "play" })
     }
 

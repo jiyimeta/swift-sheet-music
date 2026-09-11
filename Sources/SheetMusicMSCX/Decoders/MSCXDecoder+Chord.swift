@@ -282,12 +282,17 @@ extension Chord {
     /// chord-level `<small>1</small>` to every note that isn't already
     /// small. MuseScore writes `<small>` on the chord element when the
     /// whole chord is displayed at a reduced size (cue / small noteheads).
-    private static func decodeNotes(_ node: XMLTreeNode) throws -> [Note] {
-        let rawNotes = try node.all("Note").map { try Note.decode($0) }
+    /// Each note is paired with its own `<eid>`, decoded via `EIDXML` —
+    /// `.invalid` when the file carried none, which the encoder/parser
+    /// chokepoint fills in later.
+    private static func decodeNotes(_ node: XMLTreeNode) throws -> [(EID, Note)] {
+        let rawNotes = try node.all("Note").map { noteNode in
+            try (EIDXML.decode(from: noteNode), Note.decode(noteNode))
+        }
         guard node.first("small")?.text == "1" else { return rawNotes }
-        return rawNotes.map { n in
-            guard !n.isSmall else { return n }
-            var copy = n; copy.isSmall = true; return copy
+        return rawNotes.map { eid, n in
+            guard !n.isSmall else { return (eid, n) }
+            var copy = n; copy.isSmall = true; return (eid, copy)
         }
     }
 
@@ -296,13 +301,13 @@ extension Chord {
     /// `<NoteIdx>` into the chord's note list. MuseScore synthesizes both
     /// sides on read, so a referenced note is always `.both`. Out-of-range
     /// indices are skipped (permissive parser).
-    private static func applyNoteParenGroup(_ node: XMLTreeNode, to notes: inout [Note]) {
+    private static func applyNoteParenGroup(_ node: XMLTreeNode, to notes: inout [(EID, Note)]) {
         guard let group = node.first("NoteParenGroup"),
               let notesNode = group.first("Notes")
         else { return }
         for idxNode in notesNode.all("NoteIdx") {
             guard let idx = Int(idxNode.text), notes.indices.contains(idx) else { continue }
-            notes[idx].parentheses = .both
+            notes[idx].1.parentheses = .both
         }
     }
 

@@ -10,6 +10,7 @@ extension Voice {
     /// percussion-v3 stem direction and default note head emission.
     func encodeChord(
         chord: Chord,
+        eid: EID,
         activeTuplets: [TupletSpan],
         previousChordDuration: Fraction?,
         isFirstChordOfVoice: Bool,
@@ -57,10 +58,12 @@ extension Voice {
         )
         return unscaledChord.notes.isEmpty
             ? unscaledChord.encodeAsRest(
+                eid: eid,
                 slurEndMarkers: slurEndMarkers,
                 options: options, in: effectiveDuration,
             )
             : unscaledChord.encodeAsChord(
+                eid: eid,
                 tieForwardLocation: tieForward,
                 tieBackLocation: tieBack,
                 tieForwardPartnerNotes: forwardTiePartnerNotes,

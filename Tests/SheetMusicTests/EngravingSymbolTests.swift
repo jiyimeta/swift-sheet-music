@@ -154,7 +154,7 @@ struct EngravingSymbolDecodeTests {
         #expect(symbol.scoreFont == nil)
         #expect(symbol.preservedMarkup == [PreservedXML(name: "scoreFont", text: "Leland")])
 
-        let encoded = try #require(note.encode().first("Symbol"))
+        let encoded = try #require(note.encode(eid: .invalid).first("Symbol"))
         #expect(encoded.children.map(\.name) == ["name", "scoreFont"])
         #expect(encoded.first("scoreFont")?.text == "Leland")
         #expect(!encoded.children.contains { $0.name == "font" })
@@ -177,7 +177,7 @@ struct EngravingSymbolDecodeTests {
         #expect(note.parentheses == .left)
         #expect(note.symbols.map(\.name) == ["accidentalSharp"])
 
-        let encoded = note.encode(options: MSCXEncoderOptions(targetVersion: .v3))
+        let encoded = note.encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: .v3))
         let names = encoded.all("Symbol").compactMap { $0.first("name")?.text }
         #expect(names.filter { $0 == "noteheadParenthesisLeft" }.count == 1)
         #expect(names.filter { $0 == "accidentalSharp" }.count == 1)
@@ -253,7 +253,7 @@ struct EngravingSymbolEncodeTests {
             fingerings: [Fingering(text: "1")],
             symbols: [EngravingSymbol(name: "ornamentTrill")],
         )
-        let names = note.encode().children.map(\.name)
+        let names = note.encode(eid: .invalid).children.map(\.name)
         let fingering = try #require(names.firstIndex(of: "Fingering"))
         let symbol = try #require(names.firstIndex(of: "Symbol"))
         let pitch = try #require(names.firstIndex(of: "pitch"))
@@ -274,7 +274,7 @@ struct EngravingSymbolEncodeTests {
         </Symbol>
         <pitch>60</pitch><tpc>14</tpc>
         """)
-        let reDecoded = try Note.decode(decoded.encode())
+        let reDecoded = try Note.decode(decoded.encode(eid: .invalid))
         #expect(reDecoded.symbols == decoded.symbols)
     }
 
@@ -392,7 +392,7 @@ struct EngravingSymbolEncodeTests {
         )
         #expect(note.parentheses == .none)
 
-        let encoded = note.encode(options: MSCXEncoderOptions(targetVersion: .v3))
+        let encoded = note.encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: .v3))
         let names = encoded.all("Symbol").compactMap { $0.first("name")?.text }
         #expect(names == ["accidentalSharp"])
 

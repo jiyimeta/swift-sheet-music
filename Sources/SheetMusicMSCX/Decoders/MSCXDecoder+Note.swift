@@ -15,8 +15,8 @@ extension Note {
     private static let consumedNoteChildren: Set = [
         "Accidental", "Bend", "ChordLine", "Fingering", "Parenthesis", "Symbol",
         "Spanner", "Tie",
-        "color", "endSpanner", "fret", "head", "offset", "parentheses", "pitch", "autoplace", "placement", "play",
-        "small", "string", "tpc", "tpc2", "veloType", "velocity", "visible",
+        "color", "eid", "endSpanner", "fret", "head", "offset", "parentheses", "pitch", "autoplace", "placement",
+        "play", "small", "string", "tpc", "tpc2", "veloType", "velocity", "visible",
     ]
 
     /// Symbol names owned exclusively by `decodeParentheses(_:)`. Keeping the

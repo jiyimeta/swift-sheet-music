@@ -807,13 +807,14 @@ extension MSCXPreservedMarkupTests {
         // a nominal 4/4 is enough to reach the same child list.
         let written = chord.notes.isEmpty
             ? chord.encodeAsRest(
+                eid: .invalid,
                 options: options, in: Fraction(numerator: 4, denominator: 4),
             )
-            : chord.encodeAsChord(options: options)
+            : chord.encodeAsChord(eid: .invalid, options: options)
         expectNoNameCollision(chord.preservedMarkup, written, context: context)
         for (index, note) in chord.notes.enumerated() {
             expectNoNameCollision(
-                note.preservedMarkup, note.encode(options: options),
+                note.preservedMarkup, note.encode(eid: .invalid, options: options),
                 context: "\(context)/<Note>[\(index)]",
             )
         }
@@ -832,12 +833,12 @@ extension MSCXPreservedMarkupTests {
         for (index, grace) in chord.mscxFileOrderedGraces.enumerated() {
             let graceContext = "\(context)/<Chord>[grace \(index)]"
             expectNoNameCollision(
-                grace.preservedMarkup, grace.encode(parentChord: chord, options: options),
+                grace.preservedMarkup, grace.encode(eid: .invalid, parentChord: chord, options: options),
                 context: graceContext,
             )
             for (noteIndex, note) in grace.notes.enumerated() {
                 expectNoNameCollision(
-                    note.preservedMarkup, note.encode(options: options),
+                    note.preservedMarkup, note.encode(eid: .invalid, options: options),
                     context: "\(graceContext)/<Note>[\(noteIndex)]",
                 )
             }

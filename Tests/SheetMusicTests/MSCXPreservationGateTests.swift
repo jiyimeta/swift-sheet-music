@@ -154,10 +154,14 @@ enum MSCXPreservation {
 
     private static func addPermanentLosses(to result: inout [String: String]) {
         // Permanent: identity and generated file metadata.
+        // `Chord/eid`, `Note/eid`, and `Rest/eid` are deliberately NOT
+        // here: Task 2 of the P4 plan (`EIDPersistenceTests.swift`) made
+        // those three carriers round-trip their `<eid>` instead of losing
+        // it, so no committed fixture drops them any more.
         allow([
-            "Accidental/eid", "BarLine/eid", "Chord/eid", "Clef/eid", "Dynamic/eid",
+            "Accidental/eid", "BarLine/eid", "Clef/eid", "Dynamic/eid",
             "GuitarBend/eid", "GuitarBendHold/eid", "HBox/eid", "KeySig/eid",
-            "LayoutBreak/eid", "Lyrics/eid", "Marker/eid", "Measure/eid", "Note/eid", "Rest/eid",
+            "LayoutBreak/eid", "Lyrics/eid", "Marker/eid", "Measure/eid",
             "Score/eid", "Staff/eid", "StaffText/eid", "Symbol/eid", "SystemText/eid", "Tempo/eid",
             "Text/eid", "Tie/eid", "TimeSig/eid", "VBox/eid", "museScore/LastEID",
         ], because: elementIdentityReason, into: &result)

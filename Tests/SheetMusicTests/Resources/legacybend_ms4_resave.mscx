@@ -36,8 +36,10 @@
             <sigD>4</sigD>
           </TimeSig>
           <Chord>
+            <eid>Q_Q</eid>
             <durationType>half</durationType>
             <Note>
+              <eid>R_R</eid>
               <Accidental>
                 <subtype>accidentalSharp</subtype>
               </Accidental>
@@ -59,8 +61,10 @@
             </Note>
           </Chord>
           <Chord>
+            <eid>S_S</eid>
             <durationType>half</durationType>
             <Note>
+              <eid>T_T</eid>
               <Spanner type="Tie">
                 <prev>
                   <location>

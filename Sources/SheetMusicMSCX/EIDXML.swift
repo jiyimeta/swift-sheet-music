@@ -28,4 +28,16 @@ enum EIDXML {
         guard eid.isValid else { return nil }
         return XMLTreeNode(name: childName, text: eid.stringValue)
     }
+
+    /// Append `<eid>` as the next child, but only for a MuseScore 4
+    /// target — real MuseScore 4.6+ files carry it; earlier generations
+    /// never did, so a v3/v2 encode writes none (P4 plan decision 7).
+    /// Shared by every value encoder (`Chord`, `Note`, `GraceChord`) so
+    /// the version gate lives in one place.
+    static func appendIfNeeded(
+        _ eid: EID, options: MSCXEncoderOptions, to children: inout [XMLTreeNode],
+    ) {
+        guard options.targetVersion == .v4, let node = node(for: eid) else { return }
+        children.append(node)
+    }
 }

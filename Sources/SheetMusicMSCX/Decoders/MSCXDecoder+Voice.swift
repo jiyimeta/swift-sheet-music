@@ -45,7 +45,7 @@ extension Voice {
         _ node: XMLTreeNode,
     ) throws -> DecodeResult {
         let voiceChildren = injectMS2EndTuplets(node.children)
-        var elements: [VoiceElement] = []
+        var elements: [(EID, VoiceElement)] = []
         elements.reserveCapacity(voiceChildren.count)
         var tuplets: [Tuplet] = []
         var systemElements: [PositionedSystemElement] = []
@@ -69,7 +69,7 @@ extension Voice {
         // end-of-voice) are dropped — MuseScore's own buffer is
         // per-measure and never flushed, so it doesn't keep them
         // either.
-        var pendingGraces: [GraceChord] = []
+        var pendingGraces: [(EID, GraceChord)] = []
         // Measure-relative read position, in fractions-of-whole-note.
         // Advances by each chord/rest's tuplet-scaled duration AND by
         // every `<location>` delta, exactly like the single tick that
@@ -105,12 +105,12 @@ extension Voice {
         func tupletFractions() -> [Fraction] {
             tupletStack.map(\.ratio)
         }
-        func appendVoiceElement(_ element: VoiceElement) {
+        func appendVoiceElement(_ element: VoiceElement, eid: EID = .invalid) {
             if pendingShift.numerator != 0 {
-                elements.append(.locationShift(delta: pendingShift))
+                elements.append((.invalid, .locationShift(delta: pendingShift)))
                 pendingShift = Fraction(numerator: 0, denominator: 1)
             }
-            elements.append(element)
+            elements.append((eid, element))
         }
         func lifted(_ element: SystemElement) {
             let position = MeasurePosition(offset: cursor)
@@ -164,12 +164,12 @@ extension Voice {
                     // inside `<Chord>`.
                     let graceMarkup = inner.preservedMarkup
                         + child.all("ChordBracket").map(PreservedXML.init)
-                    pendingGraces.append(GraceChord(
+                    pendingGraces.append((EIDXML.decode(from: child), GraceChord(
                         graceType: graceType,
                         duration: inner.duration,
                         notes: inner.notes,
                         preservedMarkup: graceMarkup,
-                    ))
+                    )))
                     continue
                 }
                 var chord = try Chord.decode(child)
@@ -183,17 +183,20 @@ extension Voice {
                     // the before side forward, the after side reversed.
                     // See `Chord.mscxFileOrderedGraces` for the citation
                     // trail, including the upstream playback test that
-                    // pins the after-run's reversal.
-                    chord.graceNotesBefore = IdentifiedArray(pendingGraces.filter { !$0.graceType.isAfter })
+                    // pins the after-run's reversal. Each grace's identifier
+                    // travels WITH its `GraceChord` through this filter and
+                    // reversal — never split apart and reassembled — so a
+                    // reversed after-run cannot mismatch identifier to value.
+                    chord.graceNotesBefore = IdentifiedArray(pendingGraces.filter { !$0.1.graceType.isAfter })
                     chord.graceNotesAfter = IdentifiedArray(Array(
                         pendingGraces
-                            .filter(\.graceType.isAfter)
+                            .filter(\.1.graceType.isAfter)
                             .reversed(),
                     ))
                     pendingGraces.removeAll(keepingCapacity: true)
                 }
                 chord.beamVisible = takePendingBeamVisible()
-                appendVoiceElement(.chord(chord))
+                appendVoiceElement(.chord(chord), eid: EIDXML.decode(from: child))
                 // `.measure` chords carry no intrinsic duration; the
                 // measure-rest fills the bar by definition, so any
                 // following element would be malformed. Skip the
@@ -209,7 +212,7 @@ extension Voice {
                     rest.duration, by: tupletFractions(),
                 )
                 rest.beamVisible = takePendingBeamVisible()
-                appendVoiceElement(.chord(rest))
+                appendVoiceElement(.chord(rest), eid: EIDXML.decode(from: child))
                 if case .measure = rest.duration {
                     // A measure rest's `NoteDuration` is the bare
                     // `.measure` marker (its fraction is resolved
@@ -375,7 +378,7 @@ extension Voice {
         // semantic effect and is discarded.
         try resolveTremoloPairs(in: &elements)
         return DecodeResult(
-            voice: Voice(elements: elements, tuplets: tuplets),
+            voice: Voice(elements: IdentifiedArray(elements), tuplets: tuplets),
             systemElements: systemElements,
         )
     }
@@ -394,22 +397,22 @@ extension Voice {
     /// loop is written to tolerate it. A start with no follower is a
     /// malformed score and throws.
     private static func resolveTremoloPairs(
-        in elements: inout [VoiceElement],
+        in elements: inout [(EID, VoiceElement)],
     ) throws {
         for i in elements.indices {
-            guard case let .chord(start) = elements[i],
+            guard case let .chord(start) = elements[i].1,
                   let trem = start.tremolo,
                   trem.span == .between
             else { continue }
             var followerIndex: Int?
             for j in (i + 1) ..< elements.count {
-                if case .chord = elements[j] {
+                if case .chord = elements[j].1 {
                     followerIndex = j
                     break
                 }
             }
             guard let fIdx = followerIndex,
-                  case var .chord(follower) = elements[fIdx]
+                  case var .chord(follower) = elements[fIdx].1
             else {
                 throw SheetMusicError.malformedScore(
                     ScoreFault(
@@ -420,7 +423,7 @@ extension Voice {
                 )
             }
             follower.tremolo = nil
-            elements[fIdx] = .chord(follower)
+            elements[fIdx].1 = .chord(follower)
         }
     }
 

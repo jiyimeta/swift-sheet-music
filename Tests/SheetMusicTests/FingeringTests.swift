@@ -142,7 +142,7 @@ struct FingeringMSCXTests {
 
     @Test func noteEncodesFingeringsBeforePitch() throws {
         let note = Note(pitch: 60, tpc: 14, fingerings: [Fingering(text: "1")])
-        let names = note.encode().children.map(\.name)
+        let names = note.encode(eid: .invalid).children.map(\.name)
         let fingering = try #require(names.firstIndex(of: "Fingering"))
         let pitch = try #require(names.firstIndex(of: "pitch"))
         #expect(fingering < pitch)
@@ -154,7 +154,7 @@ struct FingeringMSCXTests {
         <Fingering><text>1</text></Fingering>
         <pitch>60</pitch><tpc>14</tpc>
         """)
-        let reDecoded = try Note.decode(decoded.encode())
+        let reDecoded = try Note.decode(decoded.encode(eid: .invalid))
         #expect(reDecoded.fingerings == decoded.fingerings)
     }
 

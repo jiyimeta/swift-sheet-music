@@ -41,7 +41,11 @@ extension Voice {
             prevVoiceTotal: carryIn.prevVoiceTotal,
         )
         for (grace, listIndex) in chord.mscxFileOrderedGracesWithListIndex {
+            let graceEID = grace.graceType.isAfter
+                ? chord.graceNotesAfter.eid(at: listIndex)
+                : chord.graceNotesBefore.eid(at: listIndex)
             state.children.append(grace.encode(
+                eid: graceEID,
                 parentChord: chord,
                 parentForwardTieLocation: forwardDelta,
                 parentBackwardTieLocation: backwardDelta,
@@ -152,6 +156,7 @@ extension Voice {
         )
         try state.children.append(encode(
             element: element,
+            eid: elements.eid(at: index),
             activeTuplets: state.stack,
             previousChordDuration: state.previousChordDuration,
             isFirstChordOfVoice: !state.seenChordInVoice,
@@ -223,6 +228,7 @@ extension Voice {
 
     private func encode(
         element: VoiceElement,
+        eid: EID,
         activeTuplets: [TupletSpan],
         previousChordDuration: Fraction?,
         isFirstChordOfVoice: Bool,
@@ -243,6 +249,7 @@ extension Voice {
         case let .chord(chord):
             return try encodeChord(
                 chord: chord,
+                eid: eid,
                 activeTuplets: activeTuplets,
                 previousChordDuration: previousChordDuration,
                 isFirstChordOfVoice: isFirstChordOfVoice,

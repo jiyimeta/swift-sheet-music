@@ -7,7 +7,7 @@ import Testing
 struct NoteParenthesesRoundTripTests {
     private func roundTrip(_ parens: NoteParentheses, version: MSCXVersion) throws -> NoteParentheses {
         let note = Note(pitch: 60, tpc: 14, parentheses: parens)
-        let encoded = note.encode(options: MSCXEncoderOptions(targetVersion: version))
+        let encoded = note.encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: version))
         return try Note.decode(encoded).parentheses
     }
 
@@ -27,13 +27,13 @@ struct NoteParenthesesRoundTripTests {
 
     @Test func v4EmitsParenthesesElement() {
         let note = Note(pitch: 60, tpc: 14, parentheses: .both)
-        let encoded = note.encode(options: MSCXEncoderOptions(targetVersion: .v4))
+        let encoded = note.encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: .v4))
         #expect(encoded.first("parentheses")?.text == "both")
     }
 
     @Test func v3EmitsSymbolElements() {
         let note = Note(pitch: 60, tpc: 14, parentheses: .both)
-        let encoded = note.encode(options: MSCXEncoderOptions(targetVersion: .v3))
+        let encoded = note.encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: .v3))
         let symNames = encoded.all("Symbol").compactMap { $0.first("name")?.text }
         #expect(symNames.contains("noteheadParenthesisLeft"))
         #expect(symNames.contains("noteheadParenthesisRight"))

@@ -28,35 +28,24 @@
             <sigD>4</sigD>
           </TimeSig>
           <Chord>
+            <eid>B_F</eid>
             <durationType>quarter</durationType>
             <Note>
+              <eid>B_G</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
             </Note>
           </Chord>
           <Rest>
+            <eid>B_H</eid>
             <durationType>quarter</durationType>
           </Rest>
           <Rest>
+            <eid>B_I</eid>
             <durationType>quarter</durationType>
           </Rest>
           <Rest>
-            <durationType>quarter</durationType>
-          </Rest>
-        </voice>
-      </Measure>
-      <Measure>
-        <voice>
-          <Rest>
-            <durationType>quarter</durationType>
-          </Rest>
-          <Rest>
-            <durationType>quarter</durationType>
-          </Rest>
-          <Rest>
-            <durationType>quarter</durationType>
-          </Rest>
-          <Rest>
+            <eid>B_J</eid>
             <durationType>quarter</durationType>
           </Rest>
         </voice>
@@ -64,19 +53,44 @@
       <Measure>
         <voice>
           <Rest>
+            <eid>B_K</eid>
+            <durationType>quarter</durationType>
+          </Rest>
+          <Rest>
+            <eid>B_L</eid>
+            <durationType>quarter</durationType>
+          </Rest>
+          <Rest>
+            <eid>B_M</eid>
+            <durationType>quarter</durationType>
+          </Rest>
+          <Rest>
+            <eid>B_N</eid>
+            <durationType>quarter</durationType>
+          </Rest>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Rest>
+            <eid>B_O</eid>
             <durationType>quarter</durationType>
           </Rest>
           <Chord>
+            <eid>B_P</eid>
             <durationType>quarter</durationType>
             <Note>
+              <eid>B_Q</eid>
               <pitch>62</pitch>
               <tpc>16</tpc>
             </Note>
           </Chord>
           <Rest>
+            <eid>B_R</eid>
             <durationType>quarter</durationType>
           </Rest>
           <Rest>
+            <eid>B_S</eid>
             <durationType>quarter</durationType>
           </Rest>
         </voice>

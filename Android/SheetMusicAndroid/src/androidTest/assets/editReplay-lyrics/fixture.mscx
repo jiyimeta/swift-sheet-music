@@ -25,23 +25,29 @@
             <sigD>4</sigD>
           </TimeSig>
           <Chord>
+            <eid>B_E</eid>
             <durationType>quarter</durationType>
             <Note>
+              <eid>B_F</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
             </Note>
           </Chord>
           <Chord>
+            <eid>B_G</eid>
             <durationType>quarter</durationType>
             <Note>
+              <eid>B_H</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
             </Note>
           </Chord>
           <Rest>
+            <eid>B_I</eid>
             <durationType>quarter</durationType>
           </Rest>
           <Rest>
+            <eid>B_J</eid>
             <durationType>quarter</durationType>
           </Rest>
         </voice>

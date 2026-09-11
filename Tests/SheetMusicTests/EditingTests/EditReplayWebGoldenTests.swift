@@ -77,7 +77,7 @@
             arguments: ReplayChain.all,
         )
         func replayFixtureMatchesLiveScriptAndAndroidGoldens(chain: ReplayChain) throws {
-            let liveFixtureData = try MSCXEncoder.encode(chain.fixture())
+            let liveFixtureData = try MSCXEncoder.encode(chain.identifiedFixture())
             let steps = chain.steps(Self.staff)
             let replay = try makeReplayFixture(steps: steps, fixtureData: liveFixtureData)
 

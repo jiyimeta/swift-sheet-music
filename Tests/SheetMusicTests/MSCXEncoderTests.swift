@@ -35,7 +35,7 @@ struct MSCXEncoderTests {
     @Test("Note encodes pitch + tpc and round-trips")
     func noteRoundTrip() throws {
         let note = Note(pitch: 60, tpc: 14)
-        let xml = note.encode()
+        let xml = note.encode(eid: .invalid)
         // re-parse via the full pipeline
         let document = XMLTreeNode(name: "root", children: [xml])
         let bytes = XMLTreeSerializer.serialize(document)
@@ -50,7 +50,7 @@ struct MSCXEncoderTests {
         let cases: [Accidental] = [.sharp, .flat, .natural, .doubleSharp, .doubleFlat]
         for acc in cases {
             let note = Note(pitch: 61, tpc: 21, accidental: acc)
-            let document = XMLTreeNode(name: "root", children: [note.encode()])
+            let document = XMLTreeNode(name: "root", children: [note.encode(eid: .invalid)])
             let bytes = XMLTreeSerializer.serialize(document)
             let reparsed = try XMLTreeParser.parse(bytes)
             let noteNode = try #require(reparsed.first("Note"))
@@ -88,7 +88,7 @@ struct MSCXEncoderTests {
             duration: .quarter,
             notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
         )
-        let xml = chord.encodeAsChord()
+        let xml = chord.encodeAsChord(eid: .invalid)
         let document = XMLTreeNode(name: "root", children: [xml])
         let bytes = XMLTreeSerializer.serialize(document)
         let reparsed = try XMLTreeParser.parse(bytes)
@@ -100,7 +100,7 @@ struct MSCXEncoderTests {
     @Test("rest chord emits as <Rest>")
     func restEmitsAsRestElement() {
         let rest = Chord(duration: .quarter, notes: [])
-        let xml = rest.encodeAsRest()
+        let xml = rest.encodeAsRest(eid: .invalid)
         #expect(xml.name == "Rest")
         #expect(xml.first("durationType")?.text == "quarter")
     }
@@ -258,7 +258,7 @@ struct MSCXEncoderTests {
             duration: .quarter.dotted(1),
             notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
         )
-        let xml = chord.encodeAsChord()
+        let xml = chord.encodeAsChord(eid: .invalid)
         let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
         let reparsed = try XMLTreeParser.parse(bytes)
         let chordNode = try #require(reparsed.first("Chord"))

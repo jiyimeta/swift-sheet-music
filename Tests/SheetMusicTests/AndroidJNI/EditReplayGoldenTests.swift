@@ -68,7 +68,7 @@
         func replayMatchesCommittedAssets(chain: ReplayChain) throws {
             let dir = assetsDir(for: chain)
             let fixturePath = dir.appendingPathComponent("fixture.mscx")
-            let liveFixtureData = try MSCXEncoder.encode(chain.fixture())
+            let liveFixtureData = try MSCXEncoder.encode(chain.identifiedFixture())
 
             let isRecording = ProcessInfo.processInfo.environment["SM_EDIT_REPLAY_RECORD"] == "1"
             if isRecording {

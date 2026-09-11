@@ -240,7 +240,7 @@ struct ChordBracketEncodeTests {
             arpeggio: Arpeggio(subtype: 0),
             bracket: ChordBracket(),
         )
-        let names = chord.encodeAsChord().children.map(\.name)
+        let names = chord.encodeAsChord(eid: .invalid).children.map(\.name)
         let note = try #require(names.firstIndex(of: "Note"))
         let arpeggio = try #require(names.firstIndex(of: "Arpeggio"))
         let bracket = try #require(names.firstIndex(of: "ChordBracket"))
@@ -254,7 +254,7 @@ struct ChordBracketEncodeTests {
             notes: ChordNotes(),
             bracket: ChordBracket(),
         )
-        #expect(!rest.encodeAsRest().children.map(\.name).contains("ChordBracket"))
+        #expect(!rest.encodeAsRest(eid: .invalid).children.map(\.name).contains("ChordBracket"))
     }
 
     @Test func roundTripsEverythingModeledAndPreserved() throws {
@@ -269,7 +269,7 @@ struct ChordBracketEncodeTests {
           <userLen1>1.25</userLen1>
         </ChordBracket>
         """)
-        let reDecoded = try Chord.decode(decoded.encodeAsChord())
+        let reDecoded = try Chord.decode(decoded.encodeAsChord(eid: .invalid))
         #expect(reDecoded.bracket == decoded.bracket)
     }
 

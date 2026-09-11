@@ -147,7 +147,7 @@ struct SlurRoundTripTests {
         var chord = Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])
         chord.articulations = [ChordArticulation(kind: .staccato)]
         chord.spanners = [Self.slur(fractions: Fraction(numerator: 1, denominator: 2))]
-        let node = chord.encodeAsChord()
+        let node = chord.encodeAsChord(eid: .invalid)
         #expect(node.children.map(\.name)
             == ["durationType", "Spanner", "Articulation", "Note"])
     }
@@ -159,7 +159,7 @@ struct SlurRoundTripTests {
     func beginMarkerCarriesPayloadAndNext() throws {
         var chord = Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])
         chord.spanners = [Self.slur(fractions: Fraction(numerator: 1, denominator: 2))]
-        let spanner = try #require(chord.encodeAsChord().first("Spanner"))
+        let spanner = try #require(chord.encodeAsChord(eid: .invalid).first("Spanner"))
         #expect(spanner.attributes == ["type": "Slur"])
         #expect(spanner.children.map(\.name) == ["Slur", "next"])
         #expect(spanner.first("next")?.first("location")?
@@ -180,11 +180,11 @@ struct SlurRoundTripTests {
         slur.visible = false
         var chord = Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])
         chord.spanners = [slur]
-        let spanner = try #require(chord.encodeAsChord().first("Spanner"))
+        let spanner = try #require(chord.encodeAsChord(eid: .invalid).first("Spanner"))
         #expect(spanner.children.map(\.name) == ["Slur", "next"])
         #expect(spanner.first("Slur")?.first("visible")?.text == "0")
         // …and comes back invisible rather than silently un-hidden.
-        #expect(Chord.decodeChordSpanners(chord.encodeAsChord())
+        #expect(Chord.decodeChordSpanners(chord.encodeAsChord(eid: .invalid))
             .first?.visible == false)
     }
 

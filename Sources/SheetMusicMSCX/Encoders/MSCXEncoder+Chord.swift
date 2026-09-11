@@ -26,6 +26,7 @@ extension Chord {
     /// that *end* here; the voice walker computes them when it passes the
     /// begin chord (see `MSCXPendingSlurEnd`).
     func encodeAsChord(
+        eid: EID,
         tieForwardLocation: TieLocation? = nil,
         tieBackLocation: TieLocation? = nil,
         tieForwardPartnerNotes: ChordNotes? = nil,
@@ -40,6 +41,8 @@ extension Chord {
         injectedTremolo: Tremolo? = nil,
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         let isPercussionV3 =
             options.targetVersion == .v3 && staffGroup == "percussion"
         if isPercussionV3 {
@@ -101,6 +104,7 @@ extension Chord {
         let graceTieForwardOverrides = graceAfterTieForwardEndpoints()
         for (noteIndex, note) in notes.enumerated() {
             children.append(note.encode(
+                eid: notes.eid(at: noteIndex),
                 tieForwardEndpoint: graceTieForwardOverrides[noteIndex]
                     ?? tieForwardLocation.map {
                         TieEndpoint($0, notesDelta: notesDelta(
@@ -231,10 +235,12 @@ extension Chord {
     /// MuseScore anchors slurs to any `ChordRest` and writes both sides
     /// through the one `TWrite::writeProperties(const ChordRest*, …)`.
     func encodeAsRest(
+        eid: EID,
         slurEndMarkers: [XMLTreeNode] = [],
         options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         duration.appendDurationXML(to: &children)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())
@@ -248,11 +254,13 @@ extension Chord {
     /// Non-`.measure` durations behave identically to the
     /// single-argument overload.
     func encodeAsRest(
+        eid: EID,
         slurEndMarkers: [XMLTreeNode] = [],
         options: MSCXEncoderOptions = .init(),
         in measureDuration: Fraction,
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         duration.appendDurationXML(to: &children, in: measureDuration)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         children.append(contentsOf: elementProperties.mscxChildren())

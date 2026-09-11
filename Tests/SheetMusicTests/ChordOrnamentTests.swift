@@ -321,7 +321,7 @@ struct ChordOrnamentEncodeTests {
             articulations: [ChordArticulation(kind: .staccato, anchor: .above)],
             ornaments: [ChordOrnament(kind: .trill)],
         )
-        let names = chord.encodeAsChord().children.map(\.name)
+        let names = chord.encodeAsChord(eid: .invalid).children.map(\.name)
         let articulation = try #require(names.firstIndex(of: "Articulation"))
         let ornament = try #require(names.firstIndex(of: "Ornament"))
         let note = try #require(names.firstIndex(of: "Note"))
@@ -347,7 +347,7 @@ struct ChordOrnamentEncodeTests {
         <Note><pitch>60</pitch><tpc>14</tpc></Note>
         """
         let decoded = try parseChord(source)
-        let reDecoded = try Chord.decode(decoded.encodeAsChord())
+        let reDecoded = try Chord.decode(decoded.encodeAsChord(eid: .invalid))
         #expect(reDecoded.ornaments == decoded.ornaments)
     }
 
@@ -387,7 +387,7 @@ struct ChordOrnamentEncodeTests {
         </Ornament>
         <Note><pitch>60</pitch><tpc>14</tpc></Note>
         """)
-        let ornamentNode = try #require(decoded.encodeAsChord().first("Ornament"))
+        let ornamentNode = try #require(decoded.encodeAsChord(eid: .invalid).first("Ornament"))
         let cueNote = try #require(ornamentNode.first("Chord"))
         #expect(cueNote.first("Note")?.first("pitch")?.text == "62")
     }
