@@ -240,6 +240,15 @@ and this project adheres to
   - **A `.spanner` voice element's identifier does not persist.** The `<Spanner>` wrapper MuseScore writes
     is not itself an engraving item — the real identifier lives on the payload it wraps — and modeling that
     needs this library's per-subtype field ordering untangled first.
+  - **`MSCXEncoder.encode` is not byte-stable for a score that still has unassigned identifiers**,
+    because it fills them on a local copy with a fresh, randomly-actored `EIDAllocator` on every call —
+    saving the same in-memory score twice can write different `<eid>` bytes each time, and since the fill
+    never reaches the caller's own value, the host's in-memory score keeps those elements `.invalid` while
+    the file gets real identifiers, so looking an element up by identifier after a save will not match
+    what is on disk. A host that wants either stable bytes across repeated saves or in-memory identifiers
+    that match the file should call `score.assignMissingIDs(using:)` with its own `EIDAllocator` once
+    before saving and keep the mutated result; `score.hasUnassignedIDs` says whether that call would do
+    anything. Exposing the allocator on the encode call itself is left for a later phase.
 
   `RehearsalMark`'s round trip is unmeasured: no fixture in this repository carries one.
 
