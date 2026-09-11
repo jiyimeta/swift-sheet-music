@@ -55,7 +55,7 @@ extension Chord {
                 text: voiceIndex == 0 ? "up" : "down",
             ))
         }
-        let chordCarriesSmall = appendChordLevelSmall(to: &children)
+        let chordCarriesSmall = appendChordLevelSmall(for: notes, to: &children)
         duration.appendDurationXML(to: &children)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         // Articulations sit between durationType and the first
@@ -134,30 +134,6 @@ extension Chord {
         }
         appendChordTail(to: &children, options: options)
         return XMLTreeNode(name: "Chord", children: children)
-    }
-
-    /// Write the whole-chord `<small>1</small>` when every note is small, and
-    /// report whether it did so the notes can skip their own copy.
-    ///
-    /// This is the shape MuseScore uses for a cue chord: the flag on the
-    /// `<Chord>`, nothing on the notes. `MSCXDecoder+Chord.decodeNotes` is the
-    /// inverse — it normalizes a chord-level `<small>` down onto every note,
-    /// which is why the model carries the flag per note and has no chord-level
-    /// field of its own. A chord only *some* of whose notes are small has no
-    /// whole-chord form to write and falls through to the per-note tag.
-    ///
-    /// Position: `Pid::SMALL` is a `ChordRest` property written after
-    /// `<BeamMode>` and before `<dots>` / `<durationType>` in both generations
-    /// — `TWrite::write(const ChordRest*, …)` (`rw/write/twrite.cpp:1105`) and
-    /// 3.6.2 `ChordRest::writeProperties` (`libmscore/chordrest.cpp:167`).
-    /// `Tests/SheetMusicTests/Resources/own/ornaments.mscx:90` shows the same
-    /// slot in MuseScore-authored data.
-    private func appendChordLevelSmall(to children: inout [XMLTreeNode]) -> Bool {
-        let allSmall = !notes.isEmpty && notes.allSatisfy(\.isSmall)
-        if allSmall {
-            children.append(XMLTreeNode(name: "small", text: "1"))
-        }
-        return allSmall
     }
 
     /// Append the modeled arpeggio and chord bracket, element properties, and
@@ -313,4 +289,36 @@ extension Arpeggio {
         children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Arpeggio", children: children)
     }
+}
+
+/// Write the whole-chord `<small>1</small>` when every note is small, and
+/// report whether it did, so the notes can skip their own copy.
+///
+/// The single definition of the chord-level / per-note boundary. Both writers
+/// of a `<Chord>` element call it — `Chord.encodeAsChord` and
+/// `GraceChord.encode` — because a grace is written as a `<Chord>` and read
+/// back by `Chord.decode`, so the two must not be able to drift apart.
+///
+/// `MSCXDecoder+Chord.decodeNotes` is the inverse: it normalizes a chord-level
+/// `<small>` down onto every note, which is why the model carries the flag per
+/// note and has no chord-level field of its own. A chord only *some* of whose
+/// notes are small has no whole-chord form to write and falls through to the
+/// per-note tag `Note.encode` emits. See `docs/musescore-model-parity.md` §5.2
+/// for what that normalization costs on the way back out.
+///
+/// The empty guard matters: `allSatisfy` is vacuously true on no notes, which
+/// would tag a note-less chord as small.
+///
+/// Position: `Pid::SMALL` is a `ChordRest` property written after `<BeamMode>`
+/// and before `<dots>` / `<durationType>` in both generations —
+/// `TWrite::write(const ChordRest*, …)` (`rw/write/twrite.cpp:1105`) and 3.6.2
+/// `ChordRest::writeProperties` (`libmscore/chordrest.cpp:167`).
+/// `Tests/SheetMusicTests/Resources/own/ornaments.mscx:90` shows the same slot
+/// in MuseScore-authored data.
+func appendChordLevelSmall(for notes: ChordNotes, to children: inout [XMLTreeNode]) -> Bool {
+    let allSmall = !notes.isEmpty && notes.allSatisfy(\.isSmall)
+    if allSmall {
+        children.append(XMLTreeNode(name: "small", text: "1"))
+    }
+    return allSmall
 }

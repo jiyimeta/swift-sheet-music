@@ -16,11 +16,19 @@ extension Note {
     /// `chord()->el()` for chord lines matching the note); chord-level
     /// ones stay under `<Chord>`.
     ///
-    /// `chordCarriesSmall` is set by `Chord.encodeAsChord` when every note in
-    /// the chord is small and it has therefore already written the chord-level
-    /// `<small>1</small>`. This note then omits its own, matching MuseScore,
-    /// which keeps `Pid::SMALL` on the chord and on the note as two separate
-    /// properties and writes whichever one the user set.
+    /// `chordCarriesSmall` is set by the chord writers (`Chord.encodeAsChord`,
+    /// `GraceChord.encode`) when they have already written the chord-level
+    /// `<small>1</small>`; this note then omits its own.
+    ///
+    /// The split is decided by the model, not by the source file. MuseScore has
+    /// two independent properties — `ChordRest.small` scales the stem and hook,
+    /// `Note.small` scales only the notehead — but the decoder normalizes a
+    /// chord-level `<small>` down onto every note, so this package carries one
+    /// flag per note and no chord-level field. An all-small chord is therefore
+    /// always written in the chord-level spelling, whichever of the two the
+    /// file it was read from used, and a partially-small chord always in the
+    /// per-note spelling. That promotion is a real round-trip gap for the
+    /// single-note case, recorded in `docs/musescore-model-parity.md` §5.2.
     func encode(
         eid: EID,
         tieForwardEndpoint: TieEndpoint? = nil,

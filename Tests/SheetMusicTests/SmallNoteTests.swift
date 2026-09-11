@@ -71,6 +71,27 @@ struct SmallNoteTests {
         #expect(plain.all("small").isEmpty)
     }
 
+    /// The known normalization, pinned rather than wished away: the model holds
+    /// one flag per note and no chord-level field, so a file that spelled the
+    /// flag on every `<Note>` comes back out in the chord-level spelling. In
+    /// MuseScore those are different properties — `ChordRest.small` scales the
+    /// stem and hook, `Note.small` only the notehead — so this can change how a
+    /// re-saved file renders. Recorded in `docs/musescore-model-parity.md` §5.2;
+    /// this test exists so the promotion cannot change unnoticed.
+    @Test("a chord whose every note spelled <small> itself is promoted to the chord-level form")
+    func allNoteLevelSmallIsPromotedToChordLevel() throws {
+        let chord = try parseChord("""
+        <Chord><durationType>quarter</durationType>\
+        <Note><pitch>71</pitch><tpc>19</tpc><small>1</small></Note>\
+        <Note><pitch>74</pitch><tpc>16</tpc><small>1</small></Note></Chord>
+        """)
+
+        let encoded = chord.encodeAsChord(eid: .invalid)
+        #expect(encoded.first("small")?.text == "1")
+        let noteSmalls = encoded.all("Note").map { $0.first("small") }
+        #expect(noteSmalls == [nil, nil])
+    }
+
     /// A grace is written as a `<Chord>` and read back by `Chord.decode`, so it
     /// has to spell the flag the same way an ordinary chord does — cue graces
     /// are where `<small>` turns up most often in real scores.
