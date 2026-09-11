@@ -15,7 +15,8 @@ extension Note {
     private static let consumedNoteChildren: Set = [
         "Accidental", "Bend", "ChordLine", "Fingering", "Parenthesis", "Symbol",
         "Spanner", "Tie",
-        "color", "eid", "endSpanner", "fret", "head", "offset", "parentheses", "pitch", "autoplace", "placement",
+        "color", EIDXML.childName, "endSpanner", "fret", "head", "offset", "parentheses", "pitch",
+        "autoplace", "placement",
         "play", "small", "string", "tpc", "tpc2", "veloType", "velocity", "visible",
     ]
 

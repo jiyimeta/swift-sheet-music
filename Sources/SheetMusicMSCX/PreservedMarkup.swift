@@ -37,7 +37,7 @@ enum PreservedMarkupPolicy {
     ///   the source's through would contradict the version it just
     ///   declared.
     static let neverPreserved: Set = [
-        "eid", "LastEID", "programVersion", "programRevision",
+        EIDXML.childName, "LastEID", "programVersion", "programRevision",
     ]
 }
 

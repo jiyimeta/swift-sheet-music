@@ -89,11 +89,13 @@ extension Chord {
     ///
     /// The rest are the allowlist:
     ///
-    /// - `eid` — MuseScore 4.6's regenerated internal element id. No decoder
-    ///   in this package models it anywhere, it carries no user data (4.6
-    ///   mints a fresh one on every save), and warning on it would fire on
-    ///   every element of every 4.6 score. Same reasoning, same silence, as
-    ///   `Note.eidChildName` in `MSCXDecoder+GuitarBend.swift`.
+    /// - `eid` (`EIDXML.childName`) — the slur payload's own identifier. Unlike most carriers this
+    ///   phase gave identity to, `Spanner.spanner` is `.invalid`: the real identifier lives on the
+    ///   `<Spanner>` wrapper this payload sits inside, and that spanner-payload identity is the open
+    ///   gap `PHASE-NOTES.md` and `MSCXPreservationGateTests.swift`'s `spannerPayloadEIDReason`
+    ///   already record. Listed here only so it is elided rather than reported as an unmodeled
+    ///   property dropped — same reasoning, same silence, as the `EIDXML.childName` entries in
+    ///   `MSCXDecoder+GuitarBend.swift`.
     /// - `linkedMain` / `linked` — part-linking bookkeeping. MuseScore tags
     ///   the master copy of a linked element `<linkedMain/>` and every linked
     ///   copy `<linked>…</linked>` (4.2 `TWrite::writeProperties(const
@@ -110,7 +112,7 @@ extension Chord {
         "placement",
         "visible",
         "beginText",
-        "eid",
+        EIDXML.childName,
         "linkedMain",
         "linked",
     ]
