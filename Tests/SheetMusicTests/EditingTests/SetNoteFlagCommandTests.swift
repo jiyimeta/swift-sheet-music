@@ -1,4 +1,5 @@
 @testable import SheetMusicCore
+import SheetMusicMSCX
 import Testing
 
 @Suite("Per-note flag commands")
@@ -54,5 +55,16 @@ struct SetNoteFlagCommandTests {
         )
         #expect(score[Self.note]?.isSmall == true)
         #expect(score[neighbour]?.isSmall == false)
+    }
+
+    @Test("small and play written by command survive an MSCX round trip")
+    func survivesMSCXRoundTrip() throws {
+        var score = EditingFixtures.twoConsecutiveC4Chords()
+        try SetNoteSmall(at: Self.note, isSmall: true).apply(to: &score)
+        try SetNotePlay(at: Self.note, play: false).apply(to: &score)
+
+        let reloaded = try MSCXParser.parse(MSCXEncoder.encode(score))
+        #expect(reloaded[Self.note]?.isSmall == true)
+        #expect(reloaded[Self.note]?.play == false)
     }
 }
