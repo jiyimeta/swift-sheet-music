@@ -16,11 +16,14 @@ extension MeasureRepeat {
     /// (`<durationType>measure</durationType>` + `<duration>N/D
     /// </duration>`) on both branches.
     func encode(
+        eid: EID,
         options: MSCXEncoderOptions = .init(),
         in measureDuration: Fraction = Fraction(numerator: 4, denominator: 4),
     ) -> XMLTreeNode {
         let elementName: String
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         switch options.targetVersion {
         case .v2, .v3:
             elementName = "RepeatMeasure"

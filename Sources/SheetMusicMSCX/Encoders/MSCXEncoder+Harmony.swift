@@ -22,9 +22,12 @@ extension Harmony {
     /// therefore loses EVERY chord symbol on the round trip
     /// (measured against MuseScore 4.7.4). `.v3` keeps the flat form,
     /// which is what read410 / read400 / read114 expect.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         let usesHarmonyInfo = options.targetVersion == .v4
-        var children = chordContent(usesHarmonyInfo: usesHarmonyInfo)
+        var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        children += chordContent(usesHarmonyInfo: usesHarmonyInfo)
         if rootCase != .auto {
             children.append(XMLTreeNode(
                 name: "rootCase", text: encodeNoteCase(rootCase),

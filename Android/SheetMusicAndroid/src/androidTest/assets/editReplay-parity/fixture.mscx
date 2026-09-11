@@ -41,6 +41,7 @@
       <Measure>
         <voice>
           <TimeSig>
+            <eid>B_E</eid>
             <sigN>4</sigN>
             <sigD>4</sigD>
           </TimeSig>
@@ -150,6 +151,7 @@
       <Measure>
         <voice>
           <TimeSig>
+            <eid>B_W</eid>
             <sigN>4</sigN>
             <sigD>4</sigD>
           </TimeSig>

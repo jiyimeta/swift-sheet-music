@@ -126,7 +126,7 @@ struct OrdinaryTieNotesIndexTests {
                 ])]),
             ],
         )
-        let measureNodes = try staff.encodeTopLevel(staffID: "1").all("Measure")
+        let measureNodes = try staff.encodeTopLevel(staffID: "1", columnEIDs: []).all("Measure")
         #expect(measureNodes.count == 2)
         guard measureNodes.count == 2 else { return }
 

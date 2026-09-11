@@ -173,7 +173,11 @@ extension Spanner {
         if (node.first("visible")?.text ?? "1") == "0" { return false }
         var hasPayload = false
         for child in node.children
-            where child.name != "next" && child.name != "prev"
+            // `<eid>` is the wrapper's own identifier (see `EIDXML`), not a
+            // subtype payload — an end-side `<prev>` marker now carries one
+            // too, and counting it here would make every invisible end
+            // marker decode back as visible the moment it has an identifier.
+            where child.name != "next" && child.name != "prev" && child.name != "eid"
         {
             hasPayload = true
             if child.first("visible")?.text == "0" { return false }

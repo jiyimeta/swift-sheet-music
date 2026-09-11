@@ -7,10 +7,11 @@ extension Fermata {
     /// decoding in `MSCXDecoder+Voice.swift`. `<timeStretch>` is
     /// omitted when the value matches the subtype's default — same
     /// "omit when default" convention MuseScore uses.
-    func encode() -> XMLTreeNode {
-        var children: [XMLTreeNode] = [
-            XMLTreeNode(name: "subtype", text: subtype),
-        ]
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        children.append(XMLTreeNode(name: "subtype", text: subtype))
         let defaultStretch = Fermata.defaultTimeStretch(for: subtype)
         if timeStretch != defaultStretch {
             children.append(XMLTreeNode(

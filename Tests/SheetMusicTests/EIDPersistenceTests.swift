@@ -101,6 +101,46 @@ struct EIDPersistenceTests {
         #expect(try measureEIDCount(in: xml, staffIndex: 1) == 0)
     }
 
+    @Test("a voice-lane element (a dynamic marking) keeps the identifier the file gave it")
+    func dynamicIdentifierSurvivesAnEncodeDecode() throws {
+        let eid = EID(first: 5, second: 9)
+        let voice = Voice(
+            elements: IdentifiedArray([
+                (eid, VoiceElement.dynamic(Dynamic(subtype: "mf", velocity: 80))),
+            ]),
+        )
+        let node = try voice.encode()
+        let dynamicNode = try #require(node.first("Dynamic"))
+        #expect(EIDXML.decode(from: dynamicNode) == eid)
+
+        let decoded = try Voice.decode(node)
+        #expect(decoded.elements.eid(at: 0) == eid)
+    }
+
+    @Test("a preserved element round-trips with exactly one identifier")
+    func preservedElementCarriesExactlyOneEID() throws {
+        let unmodeled = XMLTreeNode(
+            name: "FutureElement",
+            children: [XMLTreeNode(name: "eid", text: "Q_Q")],
+        )
+        let decoded = try Voice.decodeWithSystemElements(
+            XMLTreeNode(name: "voice", children: [unmodeled]),
+        )
+        guard case .preserved = decoded.voice.elements[0] else {
+            Issue.record("expected element 0 to be a preserved element")
+            return
+        }
+        // The slot's own identifier stays unassigned — the source
+        // <eid> was captured verbatim inside the preserved bag
+        // instead, not decoded a second time into the slot.
+        #expect(decoded.voice.elements.eid(at: 0) == .invalid)
+
+        let reencoded = try decoded.voice.encode()
+        let futureNode = try #require(reencoded.first("FutureElement"))
+        #expect(futureNode.all("eid").count == 1)
+        #expect(futureNode.first("eid")?.text == "Q_Q")
+    }
+
     /// Number of `<Measure>` children carrying an `<eid>` under the
     /// `staffIndex`-th top-level `<Staff>` (document-order, 0-based) —
     /// walked via `XMLTreeNode`, not string search, so a parser that

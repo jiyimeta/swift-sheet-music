@@ -14,8 +14,10 @@ extension Ambitus {
     ///
     /// `<Ambitus>` predates every target supported by this encoder, so no
     /// version branch is needed.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         if let noteHeadGroup {
             children.append(XMLTreeNode(name: "head", text: noteHeadGroup))
         }

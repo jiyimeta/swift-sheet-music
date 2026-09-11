@@ -17,8 +17,10 @@ extension KeySignature {
     /// into the writable `[-7, +7]` range. For a non-transposing part the offset is 0, so v3 output
     /// is unchanged and v4 omits `<actualKey>` entirely — which keeps every existing fixture
     /// byte-stable.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         let writtenKey = Score.respelledKey(concertKey + options.writtenFifthsOffset)
         switch options.targetVersion {
         case .v2, .v3:

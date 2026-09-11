@@ -53,7 +53,10 @@ extension Note {
         // `decodeParentheses` would read it back as `parentheses`, growing a
         // pair of brackets the model never had.
         for symbol in symbols where !Self.parenthesisSymbolNames.contains(symbol.name) {
-            children.append(symbol.encode(options: options))
+            // `Note.symbols` is a plain array, not an `IdentifiedArray` —
+            // a note-attached `<Symbol>` has no slot of its own to carry
+            // an identifier.
+            children.append(symbol.encode(eid: .invalid, options: options))
         }
         if tieForward != nil {
             children.append(tieSpanner(

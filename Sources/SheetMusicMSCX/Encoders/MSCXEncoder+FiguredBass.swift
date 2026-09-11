@@ -12,8 +12,10 @@ extension FiguredBass {
     /// matching MuseScore's own writer and its derived-text reader behavior.
     /// `<FiguredBass>` predates every supported target, so no version branch is
     /// needed.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         if !isOnNote {
             children.append(XMLTreeNode(name: "onNote", text: "0"))
         }

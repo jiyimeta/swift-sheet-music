@@ -3,8 +3,10 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension TimeSignature {
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         // MuseScore writes `<subtype>` FIRST — `TWrite::write(const TimeSig*, …)` emits `Pid::TIMESIG_TYPE`
         // ahead of the item properties and `<sigN>` — and omits it for the default `NORMAL`, so a numeric
         // signature's bytes are unchanged.

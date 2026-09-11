@@ -231,7 +231,7 @@ struct AmbitusMSCXTests {
     }
 
     @Test func encodesCanonicalChildOrderAndOrdinalMirror() {
-        let bare = Ambitus(topPitch: 60, topTpc: 14, bottomPitch: 48, bottomTpc: 14).encode()
+        let bare = Ambitus(topPitch: 60, topTpc: 14, bottomPitch: 48, bottomTpc: 14).encode(eid: .invalid)
         #expect(bare.name == "Ambitus")
         #expect(bare.children.map(\.name) == [
             "topPitch", "topTpc", "bottomPitch", "bottomTpc",
@@ -240,7 +240,7 @@ struct AmbitusMSCXTests {
         let styled = Ambitus(
             topPitch: 60, topTpc: 14, bottomPitch: 48, bottomTpc: 14,
             mirror: .right, hasLine: false,
-        ).encode()
+        ).encode(eid: .invalid)
         #expect(styled.children.map(\.name) == [
             "mirror", "hasLine", "topPitch", "topTpc", "bottomPitch", "bottomTpc",
         ])
@@ -261,7 +261,7 @@ struct AmbitusMSCXTests {
 
     @Test func allAbsentAppearanceFieldsAreIdempotent() throws {
         let first = try #require(try ambitusValue(ambitusVoiceElements(bareAmbitusXML).first))
-        let second = Ambitus.decode(first.encode())
+        let second = Ambitus.decode(first.encode(eid: .invalid))
         #expect(second == first)
     }
 }

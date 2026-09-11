@@ -12,8 +12,13 @@ extension Spanner {
     /// (and Volta endings / measures + fractions offsets), an
     /// end-side emits just `<prev/>` so the parser recovers
     /// `visible == false`.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes. This is the
+        // voice-level `<Spanner>` form only — chord-anchored spanners go
+        // through `encodeChordAnchoredBegin` / `chordAnchoredEndMarker`,
+        // whose identifiers are `Chord.spanners`' concern, not this slot's.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         if visible {
             children.append(payloadElement(options: options))
             if let next = nextLocationElement() {

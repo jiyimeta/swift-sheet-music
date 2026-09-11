@@ -20,8 +20,11 @@ extension Capo {
     /// v3-target encode emits a capo MuseScore 3 drops, the same known
     /// limitation as `<Expression>` and `<MeasureRepeat>`; no v3
     /// down-conversion is attempted.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children = [
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        children += [
             XMLTreeNode(name: "active", text: isActive ? "1" : "0"),
             XMLTreeNode(name: "fretPosition", text: String(fretPosition)),
             XMLTreeNode(name: "generateText", text: generatesText ? "1" : "0"),

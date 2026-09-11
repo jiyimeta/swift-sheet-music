@@ -116,15 +116,15 @@ struct MSCXEncoderTests {
         }
 
         let key = KeySignature(concertKey: 1)
-        let decKey = try roundTripParse(key.encode(), name: "KeySig", KeySignature.decode)
+        let decKey = try roundTripParse(key.encode(eid: .invalid), name: "KeySig", KeySignature.decode)
         #expect(decKey == key)
 
         let time = TimeSignature(numerator: 4, denominator: 4)
-        let decTime = try roundTripParse(time.encode(), name: "TimeSig", TimeSignature.decode)
+        let decTime = try roundTripParse(time.encode(eid: .invalid), name: "TimeSig", TimeSignature.decode)
         #expect(decTime == time)
 
         let clef = Clef(concertClefType: "G")
-        let decClef = try roundTripParse(clef.encode(), name: "Clef", Clef.decode)
+        let decClef = try roundTripParse(clef.encode(eid: .invalid), name: "Clef", Clef.decode)
         #expect(decClef == clef)
     }
 

@@ -266,28 +266,28 @@ extension Voice {
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,
             )
-        case let .keySignature(key): return key.encode(options: options)
-        case let .timeSignature(time): return time.encode(options: options)
-        case let .clef(clef): return clef.encode(options: options)
-        case let .dynamic(dynamic): return dynamic.encode(options: options)
-        case let .barLine(barLine): return barLine.encode(options: options)
-        case let .harmony(harmony): return harmony.encode(options: options)
-        case let .sticking(sticking): return sticking.encode(options: options)
-        case let .expression(expression): return expression.encode(options: options)
-        case let .capo(capo): return capo.encode(options: options)
-        case let .stringTunings(tunings): return tunings.encode(options: options)
-        case let .ambitus(ambitus): return ambitus.encode(options: options)
-        case let .figuredBass(figuredBass): return figuredBass.encode(options: options)
-        case let .symbol(symbol): return symbol.encode(options: options)
-        case let .fretDiagram(diagram): return diagram.encode(options: options)
+        case let .keySignature(key): return key.encode(eid: eid, options: options)
+        case let .timeSignature(time): return time.encode(eid: eid, options: options)
+        case let .clef(clef): return clef.encode(eid: eid, options: options)
+        case let .dynamic(dynamic): return dynamic.encode(eid: eid, options: options)
+        case let .barLine(barLine): return barLine.encode(eid: eid, options: options)
+        case let .harmony(harmony): return harmony.encode(eid: eid, options: options)
+        case let .sticking(sticking): return sticking.encode(eid: eid, options: options)
+        case let .expression(expression): return expression.encode(eid: eid, options: options)
+        case let .capo(capo): return capo.encode(eid: eid, options: options)
+        case let .stringTunings(tunings): return tunings.encode(eid: eid, options: options)
+        case let .ambitus(ambitus): return ambitus.encode(eid: eid, options: options)
+        case let .figuredBass(figuredBass): return figuredBass.encode(eid: eid, options: options)
+        case let .symbol(symbol): return symbol.encode(eid: eid, options: options)
+        case let .fretDiagram(diagram): return diagram.encode(eid: eid, options: options)
         case let .preserved(markup):
             return XMLTreeNode(preserved: markup)
         case let .measureRepeat(measureRepeat):
-            return measureRepeat.encode(options: options, in: effectiveDuration)
+            return measureRepeat.encode(eid: eid, options: options, in: effectiveDuration)
         case let .fermata(fermata):
-            return fermata.encode()
+            return fermata.encode(eid: eid, options: options)
         case let .breath(breath):
-            return breath.encode()
+            return breath.encode(eid: eid, options: options)
         case let .locationShift(delta):
             // Inverse of the inline `<location>` decode: the
             // voice-level cursor shift is `<location><fractions>N/D
@@ -301,7 +301,7 @@ extension Voice {
                     text: "\(delta.numerator)/\(delta.denominator)",
                 )],
             )
-        case let .spanner(spanner): return spanner.encode(options: options)
+        case let .spanner(spanner): return spanner.encode(eid: eid, options: options)
         }
     }
 }

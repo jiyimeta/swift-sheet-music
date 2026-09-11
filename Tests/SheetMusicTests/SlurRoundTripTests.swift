@@ -201,7 +201,7 @@ struct SlurRoundTripTests {
     @Test("a barline-crossing slur's <prev> negates both offsets")
     func crossBarlineEndMarkerNegatesBothOffsets() throws {
         let node = try Self.crossBarlineStaff().encodeTopLevel(
-            staffID: "1", options: .init(targetVersion: .v3),
+            staffID: "1", columnEIDs: [], options: .init(targetVersion: .v3),
         )
         let endChord = try #require(
             node.all("Measure")[1].first("voice")?.all("Chord").first,
@@ -247,7 +247,7 @@ struct SlurRoundTripTests {
     func crossBarlineEndMarkerFollowsV4LocationOrder() throws {
         let staff = Self.crossBarlineStaff()
         let node = try staff.encodeTopLevel(
-            staffID: "1", options: .init(targetVersion: .v4),
+            staffID: "1", columnEIDs: [], options: .init(targetVersion: .v4),
         )
         let beginLocation = try #require(
             node.all("Measure")[0].first("voice")?.all("Chord").last?
@@ -263,7 +263,7 @@ struct SlurRoundTripTests {
         #expect(endLocation.first("fractions")?.text == "1/2")
         // The two dialects now produce the identical staff.
         try #expect(node == staff.encodeTopLevel(
-            staffID: "1", options: .init(targetVersion: .v3),
+            staffID: "1", columnEIDs: [], options: .init(targetVersion: .v3),
         ))
     }
 

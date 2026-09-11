@@ -22,8 +22,10 @@ extension ExpressionText {
     /// Down-converting to `<StaffText>` is deliberately not done: re-reading
     /// that would produce a `StaffText`, not an `ExpressionText`, an asymmetry
     /// the preservation gate would report as a false loss.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         if let snapToDynamics {
             children.append(XMLTreeNode(
                 name: "snapToDynamics", text: snapToDynamics ? "1" : "0",

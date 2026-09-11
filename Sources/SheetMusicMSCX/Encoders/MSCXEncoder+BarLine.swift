@@ -6,8 +6,10 @@ extension BarLine {
     /// Build a `<BarLine>` element. Mirrors `BarLine.decode(_:)` —
     /// emits a `<subtype>` child only when set; the absent default
     /// resolves to a normal bar line on re-parse.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         if let subtype {
             children.append(XMLTreeNode(name: "subtype", text: subtype))
         }

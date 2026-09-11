@@ -23,9 +23,11 @@
       <Measure>
         <voice>
           <KeySig>
+            <eid>B_D</eid>
             <concertKey>2</concertKey>
           </KeySig>
           <TimeSig>
+            <eid>B_E</eid>
             <sigN>4</sigN>
             <sigD>4</sigD>
           </TimeSig>

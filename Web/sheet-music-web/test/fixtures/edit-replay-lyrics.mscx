@@ -23,6 +23,7 @@
       <Measure>
         <voice>
           <TimeSig>
+            <eid>B_D</eid>
             <sigN>4</sigN>
             <sigD>4</sigD>
           </TimeSig>

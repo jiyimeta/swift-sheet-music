@@ -188,7 +188,7 @@ struct EngravingSymbolDecodeTests {
 @Suite("EngravingSymbol encoding")
 struct EngravingSymbolEncodeTests {
     @Test func alwaysWritesNameAndOnlyPresentOptionalFields() {
-        let bare = EngravingSymbol(name: "").encode()
+        let bare = EngravingSymbol(name: "").encode(eid: .invalid)
         #expect(bare.children.map(\.name) == ["name"])
         #expect(bare.first("name")?.text.isEmpty == true)
 
@@ -198,7 +198,7 @@ struct EngravingSymbolEncodeTests {
             size: 1.5,
             angle: -12.25,
             elementProperties: ElementProperties(visible: false),
-        ).encode()
+        ).encode(eid: .invalid)
         #expect(styled.children.map(\.name) == [
             "name", "font", "symbolsSize", "symbolAngle", "visible",
         ])
@@ -209,7 +209,7 @@ struct EngravingSymbolEncodeTests {
     }
 
     @Test func sizeAndAngleWriteWithoutAFont() {
-        let node = EngravingSymbol(name: "ornamentTrill", size: 1.25, angle: 30).encode()
+        let node = EngravingSymbol(name: "ornamentTrill", size: 1.25, angle: 30).encode(eid: .invalid)
         #expect(node.children.map(\.name) == ["name", "symbolsSize", "symbolAngle"])
         #expect(node.first("symbolsSize")?.text == "1.25")
         #expect(node.first("symbolAngle")?.text == "30")
@@ -221,7 +221,7 @@ struct EngravingSymbolEncodeTests {
         let node = EngravingSymbol(
             name: "ornamentTrill",
             preservedMarkup: [PreservedXML(name: "Image")],
-        ).encode(options: options)
+        ).encode(eid: .invalid, options: options)
         #expect(node.children.map(\.name) == ["name"])
     }
 
@@ -242,7 +242,7 @@ struct EngravingSymbolEncodeTests {
                     PreservedXML(name: "path", text: "symbol.svg"),
                 ]),
             ],
-        ).encode()
+        ).encode(eid: .invalid)
         #expect(node.children.map(\.name) == ["name", "Symbol", "Image", "visible"])
     }
 

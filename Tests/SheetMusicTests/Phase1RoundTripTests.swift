@@ -23,12 +23,12 @@ struct Phase1RoundTripTests {
         )
         let dyn = try Dynamic.decode(node)
         #expect(dyn.visible == false)
-        let reencoded = dyn.encode()
+        let reencoded = dyn.encode(eid: .invalid)
         #expect(reencoded.first("visible")?.text == "0")
     }
 
     @Test func dynamicVisibleTrueOmitsTag() {
-        let encoded = Dynamic(subtype: "f", velocity: 96).encode()
+        let encoded = Dynamic(subtype: "f", velocity: 96).encode(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 

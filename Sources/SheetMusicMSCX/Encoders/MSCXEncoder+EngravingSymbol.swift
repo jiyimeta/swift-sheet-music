@@ -38,8 +38,11 @@ extension EngravingSymbol {
     /// (`dom/symbol.cpp:49`). This decoder collapses both to an empty name, so
     /// a hand-written `<Symbol/>` comes back as `noSym` rather than a sharp.
     /// MuseScore's own writer never emits the tagless shape.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children = [XMLTreeNode(name: "name", text: name)]
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        children.append(XMLTreeNode(name: "name", text: name))
         if let scoreFont {
             children.append(XMLTreeNode(name: "font", text: scoreFont))
         }

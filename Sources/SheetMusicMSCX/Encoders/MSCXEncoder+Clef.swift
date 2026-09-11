@@ -3,10 +3,11 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension Clef {
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children: [XMLTreeNode] = [
-            XMLTreeNode(name: "concertClefType", text: concertClefType),
-        ]
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        children.append(XMLTreeNode(name: "concertClefType", text: concertClefType))
         if let transposingClefType {
             children.append(XMLTreeNode(
                 name: "transposingClefType", text: transposingClefType,

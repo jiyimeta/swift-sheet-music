@@ -160,14 +160,26 @@ enum MSCXPreservation {
         // it, so no committed fixture drops them any more. `Measure/eid`
         // and `Staff/eid` are likewise absent as of Task 3: the column
         // (first staff's `<Measure><eid>`) and the staff declaration's
-        // `<Part><Staff><eid>` now round-trip too. `Score/eid` stays —
-        // `<Score><eid>` is deliberately not modeled (P4 plan decision).
+        // `<Part><Staff><eid>` now round-trip too. `BarLine/eid`,
+        // `Clef/eid`, `Dynamic/eid`, and `TimeSig/eid` are absent as of
+        // Task 4a for the same reason — every voice-lane kind but
+        // `.preserved` and `.locationShift` now round-trips its own
+        // `<eid>` instead of losing it. `KeySig/eid` and `Symbol/eid`
+        // stay, but for reasons unrelated to that gap: the fixtures that
+        // exercise them lose the identifier through a DIFFERENT,
+        // still-lossy path — a staff-head `KeySig` at the implicit
+        // C-major default is dropped whole (`shouldDropInitialZeroKeySig`
+        // in `MSCXEncoder+Voice.swift`), and a note-attached parenthesis
+        // `<Symbol>` is regenerated from `Note.parentheses` rather than
+        // round-tripped verbatim — so the loss is real and this is not a
+        // dead entry. `Score/eid` stays — `<Score><eid>` is deliberately
+        // not modeled (P4 plan decision).
         allow([
-            "Accidental/eid", "BarLine/eid", "Clef/eid", "Dynamic/eid",
+            "Accidental/eid",
             "GuitarBend/eid", "GuitarBendHold/eid", "HBox/eid", "KeySig/eid",
             "LayoutBreak/eid", "Lyrics/eid", "Marker/eid",
             "Score/eid", "StaffText/eid", "Symbol/eid", "SystemText/eid", "Tempo/eid",
-            "Text/eid", "Tie/eid", "TimeSig/eid", "VBox/eid", "museScore/LastEID",
+            "Text/eid", "Tie/eid", "VBox/eid", "museScore/LastEID",
         ], because: elementIdentityReason, into: &result)
         // `LaissezVib/eid` is deliberately NOT here. `<LaissezVib>` is
         // itself preserved whole, and the exclusion list only fires at

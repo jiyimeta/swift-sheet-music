@@ -15,8 +15,11 @@ extension StringTunings {
     /// encode therefore emits an element MuseScore 3 drops, the same known
     /// limitation as `<Expression>` and `<MeasureRepeat>`; no v3
     /// down-conversion is attempted.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children = [
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        children += [
             XMLTreeNode(name: "preset", text: preset),
             XMLTreeNode(
                 name: "visibleStrings",

@@ -87,7 +87,7 @@ extension Staff {
         blocks: [PositionedScoreBlock] = [],
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
         effectiveMeasureDurations: [Fraction] = [],
-        columnEIDs: [EID] = [],
+        columnEIDs: [EID],
         options: MSCXEncoderOptions = .init(),
     ) throws -> XMLTreeNode {
         var children: [XMLTreeNode] = []

@@ -373,7 +373,7 @@ struct MSCXEncoderMS3Tests {
             nextMeasuresOffset: 1,
             nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
         )
-        let xml = spanner.encode(options: .init(targetVersion: version))
+        let xml = spanner.encode(eid: .invalid, options: .init(targetVersion: version))
         let location = try #require(xml.first("next")?.first("location"))
         #expect(location.children.map(\.name) == ["measures", "fractions"])
         #expect(location.first("measures")?.text == "1")
@@ -388,7 +388,7 @@ struct MSCXEncoderMS3Tests {
             nextMeasuresOffset: 0,
             nextFractionsOffset: nil,
         )
-        let xml = spanner.encode(options: .init(targetVersion: .v3))
+        let xml = spanner.encode(eid: .invalid, options: .init(targetVersion: .v3))
         #expect(!xml.children.map(\.name).contains("next"))
     }
 
