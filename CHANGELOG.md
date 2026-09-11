@@ -22,7 +22,11 @@ and this project adheres to
   accept them. `SetBeamVisible.current(at:in:)` is now public: `Chord.beamVisible` is meaningful only
   on the chord that starts a beam group, so this accessor resolves the group's leader before reading it.
   `nil` means "this selection is in no beam group", not "the beam is hidden" — a host must not collapse
-  the two into one unchecked checkbox.
+  the two into one unchecked checkbox. `SetBeamVisible` writes exactly where it is pointed, because its
+  inverse must land on the same slot — so a host constructing the command directly must aim it at
+  `SetBeamVisible.leader(of:in:)`, now also public, rather than at the selected chord. A host driving
+  `EditIntent.setBeamVisible` needs none of this: the planner re-targets from any member to the leader
+  (`ScoreEditSession+VisibilityPlanning.swift`).
 
 ### Fixed
 

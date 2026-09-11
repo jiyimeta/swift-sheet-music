@@ -1,11 +1,14 @@
 import SheetMusicFoundation
 
-/// The one place that resolves a `ScoreTextID` to the `ElementProperties` it addresses, and writes them back.
+/// Resolves a `ScoreTextID` to the `ElementProperties` it addresses, and writes them back, for
+/// `SetElementOffset` and `SetElementAutoplace`.
 ///
-/// Four commands carried a copy of this switch before it was extracted (`SetElementColor`,
-/// `SetElementPlacement`, `SetTextFont`, `SetTextVisible`), and each copy encoded the same four lookup rules:
-/// a lyric by verse inside its anchor chord, staff and system text by lane slot, harmony by harmony slot, and
-/// a rehearsal mark by its lane index. Adding offset and auto-place would have made six.
+/// This switch used to be copied in each command that needed it, encoding the same four lookup rules: a
+/// lyric by verse inside its anchor chord, staff and system text by lane slot, harmony by harmony slot, and
+/// a rehearsal mark by its lane index. `SetElementPlacement` was moved onto this shared helper.
+/// `SetElementColor`, `SetTextFont` and `SetTextVisible` still carry their own copies of the same switch —
+/// that was a deliberate scoping decision for this change, not an oversight, and routing them through here
+/// too is an intended follow-up rather than completed work.
 ///
 /// Refusals are NOT thrown here. `EditCommand.refused` stamps the calling command's type name as the refused
 /// operation, so `update` reports absence as `false` and lets the caller throw with its own name.
