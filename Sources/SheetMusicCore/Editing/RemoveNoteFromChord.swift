@@ -40,7 +40,8 @@ public struct RemoveNoteFromChord: EditCommand {
             throw Self.refused(.noteNotFound(location))
         }
         let original = chord
-        chord.notes.removeSubrange(location.noteIndexInChord ..< location.noteIndexInChord + 1)
+        let eid = chord.notes.eid(at: location.noteIndexInChord)
+        chord.notes.remove(eid: eid)
         // chord-level metadata (lyrics, arpeggio, bracket) on a rest is
         // unusual, so strip it. The original is preserved in the
         // inverse for undo.

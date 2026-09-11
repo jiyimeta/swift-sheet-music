@@ -86,6 +86,35 @@ struct NoteIdentityAssignmentTests {
         #expect(tail.notes.eid(at: 0).isValid)
     }
 
+    @Test("adding a note mints one identifier and leaves the others alone")
+    func addNoteMintsOneIdentifier() throws {
+        let editor = ScoreEditor(score: EditingFixtures.chordAtIndex1())
+        let location = VoiceElementID(
+            staff: EditingFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+        )
+        guard case let .chord(before) = editor.score[location] else { fatalError("fixture is a chord") }
+        let existing = before.notes.eid(at: 0)
+        try editor.apply(AddNoteToChord(at: location, pitch: 67, tpc: 15))
+        guard case let .chord(after) = editor.score[location] else { fatalError("still a chord") }
+        #expect(after.notes.count == before.notes.count + 1)
+        #expect(after.notes.eid(at: 0) == existing)
+        #expect(after.notes.eid(at: after.notes.count - 1).isValid)
+    }
+
+    @Test("undoing a removal restores the removed note's identifier")
+    func undoRestoresTheRemovedNoteIdentifier() throws {
+        let editor = ScoreEditor(score: EditingFixtures.twoNoteChordAtIndex1())
+        let location = EditingFixtures.noteID(element: 1, noteIndex: 1)
+        guard case let .chord(before) = editor.score[VoiceElementID(location)]
+        else { fatalError("fixture is a chord") }
+        let removed = before.notes.eid(at: 1)
+        try editor.apply(RemoveNoteFromChord(at: location))
+        try editor.undo()
+        guard case let .chord(after) = editor.score[VoiceElementID(location)]
+        else { fatalError("still a chord") }
+        #expect(after.notes.eid(at: 1) == removed)
+    }
+
     @Test("an already assigned note identifier is not re-minted")
     func adoptionKeepsAssignedNoteIdentifiers() {
         var ids = EIDAllocator(actor: 3)
