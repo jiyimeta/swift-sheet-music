@@ -9,12 +9,17 @@ extension Dynamic {
     /// any per-element `TextProperties`.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        // `<eid>` is the first child MuseScore itself writes.
-        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children += [
             XMLTreeNode(name: "subtype", text: subtype),
             XMLTreeNode(name: "velocity", text: String(velocity)),
         ]
+        // `<eid>` sits here, not first: `TWrite::write(const Dynamic*, ...)`
+        // (`rw/write/twrite.cpp:1288-1307`) writes `<subtype>`/`<velocity>`
+        // (and other unmodeled Dynamic-only properties) before calling
+        // `writeProperties(TextBase*, ...)`, whose own first act is
+        // `writeItemProperties` — the `<eid>` writer — right where
+        // `elementProperties.mscxChildren()` already sits.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)

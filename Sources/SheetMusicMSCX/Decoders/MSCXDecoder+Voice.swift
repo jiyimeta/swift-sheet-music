@@ -289,9 +289,13 @@ extension Voice {
                     .dynamic(Dynamic.decode(child)), eid: EIDXML.decode(from: child),
                 )
             case "Spanner":
-                try appendVoiceElement(
-                    .spanner(Spanner.decode(child)), eid: EIDXML.decode(from: child),
-                )
+                // `eid: .invalid` deliberately: the `<Spanner type="X">`
+                // wrapper is not itself an `EngravingItem` and never
+                // carries `<eid>` in a real file — the identifier, when
+                // one exists, lives one level down on the begin side's
+                // payload element, which this carrier does not yet read.
+                // See `Spanner.encode`'s doc comment for the full citation.
+                try appendVoiceElement(.spanner(Spanner.decode(child)), eid: .invalid)
             case "MeasureRepeat", "RepeatMeasure":
                 // <RepeatMeasure> is the MuseScore 3.x spelling of the same
                 // element (see MeasureRead::readVoice in measureread.cpp:336).

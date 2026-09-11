@@ -19,7 +19,10 @@ extension KeySignature {
     /// byte-stable.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        // `<eid>` is the first child MuseScore itself writes.
+        // `<eid>` genuinely is first here: `TWrite::write(const KeySig*,
+        // ...)` (`rw/write/twrite.cpp:2150-2153`) calls `writeItemProperties`
+        // — the `<eid>` writer — BEFORE writing `concertKey`/`custom`/etc.,
+        // unlike every other kind in this file.
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
         let writtenKey = Score.respelledKey(concertKey + options.writtenFifthsOffset)
         switch options.targetVersion {

@@ -6,12 +6,17 @@ extension FretDiagram {
     /// Build the `<FretDiagram>` element in MuseScore's storage order.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        // `<eid>` is the first child MuseScore itself writes.
-        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children += [
             XMLTreeNode(name: "strings", text: String(stringCount)),
             XMLTreeNode(name: "frets", text: String(fretCount)),
         ]
+        // `<eid>` sits here, not first: `TWrite::write(const FretDiagram*,
+        // ...)` (`rw/write/twrite.cpp:1438-1465`) writes its own properties
+        // loop (which includes the strings/frets counts) before calling
+        // `writeItemProperties` — the `<eid>` writer — and only THEN writes
+        // `<Harmony>` and the `<fretDiagram>` payload; right where
+        // `elementProperties.mscxChildren()` already sits.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children += elementProperties.mscxChildren()
         children += elementProperties.mscxTrailingChildren()
         if let harmony {

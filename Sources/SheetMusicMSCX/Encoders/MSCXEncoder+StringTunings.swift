@@ -17,8 +17,6 @@ extension StringTunings {
     /// down-conversion is attempted.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        // `<eid>` is the first child MuseScore itself writes.
-        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children += [
             XMLTreeNode(name: "preset", text: preset),
             XMLTreeNode(
@@ -29,6 +27,14 @@ extension StringTunings {
         if let stringData {
             children.append(stringData.encode(options: options))
         }
+        // `<eid>` sits here, not first: `TWrite::write(const StringTunings*,
+        // ...)` (`rw/write/twrite.cpp:3225-3238`) writes preset/
+        // visibleStrings/StringData, THEN calls `writeProperties
+        // (StaffTextBase*, ...)`, which — after its own unmodeled
+        // MidiAction/channelSwitch/aeolus/swing tags — calls `writeProperties
+        // (TextBase*, ..., true)`, whose first act is `writeItemProperties`
+        // (the `<eid>` writer), before `<text>`.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(encodeText(
             text,
             preservedTextMarkup: preservedTextMarkup,

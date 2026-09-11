@@ -242,8 +242,12 @@ struct EngravingSymbolEncodeTests {
                     PreservedXML(name: "path", text: "symbol.svg"),
                 ]),
             ],
-        ).encode(eid: .invalid)
-        #expect(node.children.map(\.name) == ["name", "Symbol", "Image", "visible"])
+        ).encode(eid: EID(first: 1, second: 1))
+        // `<eid>` rides with the base element properties, not with the
+        // leaves — it comes from `writeItemProperties`, called only AFTER
+        // `TWrite::writeProperties(const BSymbol*, …)` has written the leaf
+        // children (`twrite.cpp:1883-1889`).
+        #expect(node.children.map(\.name) == ["name", "Symbol", "Image", "eid", "visible"])
     }
 
     @Test func noteWritesSymbolsInItsElementSlotBeforePitch() throws {

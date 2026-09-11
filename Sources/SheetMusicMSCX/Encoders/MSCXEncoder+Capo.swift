@@ -22,8 +22,6 @@ extension Capo {
     /// down-conversion is attempted.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        // `<eid>` is the first child MuseScore itself writes.
-        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children += [
             XMLTreeNode(name: "active", text: isActive ? "1" : "0"),
             XMLTreeNode(name: "fretPosition", text: String(fretPosition)),
@@ -42,6 +40,14 @@ extension Capo {
                 children: [XMLTreeNode(name: "apply", text: "0")],
             ))
         }
+        // `<eid>` sits here, not first: `TWrite::write(const Capo*, ...)`
+        // (`rw/write/twrite.cpp:1264-1284`) writes Capo's own scalar
+        // properties and ignored strings, THEN calls `writeProperties
+        // (StaffTextBase*, ...)`, which — after its own unmodeled
+        // MidiAction/channelSwitch/aeolus/swing tags — calls `writeProperties
+        // (TextBase*, ..., true)`, whose first act is `writeItemProperties`
+        // (the `<eid>` writer), before `<text>`.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(encodeText(
             text,
             preservedTextMarkup: preservedTextMarkup,

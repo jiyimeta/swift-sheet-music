@@ -780,7 +780,7 @@ extension MSCXPreservedMarkupTests {
         }
         if case let .spanner(value) = element {
             expectNoNameCollision(
-                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+                value.preservedMarkup, value.encode(options: options), context: context,
             )
         }
         if case let .sticking(value) = element {

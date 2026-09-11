@@ -49,7 +49,7 @@ struct SpannerBeginTextTests {
         <beginText>rit.</beginText></TextLine>
         <next><location><measures>1</measures></location></next></Spanner>
         """)
-        let reparsed = try Spanner.decode(original.encode(eid: .invalid))
+        let reparsed = try Spanner.decode(original.encode())
         #expect(reparsed.beginText == "rit.")
     }
 }

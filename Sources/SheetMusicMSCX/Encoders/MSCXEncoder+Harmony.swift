@@ -25,8 +25,6 @@ extension Harmony {
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         let usesHarmonyInfo = options.targetVersion == .v4
         var children: [XMLTreeNode] = []
-        // `<eid>` is the first child MuseScore itself writes.
-        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children += chordContent(usesHarmonyInfo: usesHarmonyInfo)
         if rootCase != .auto {
             children.append(XMLTreeNode(
@@ -48,6 +46,13 @@ extension Harmony {
         if !play {
             children.append(XMLTreeNode(name: "play", text: "0"))
         }
+        // `<eid>` sits here, not first: `TWrite::write(const Harmony*, ...)`
+        // (`rw/write/twrite.cpp:1788-1837`) writes the chord content,
+        // rootCase/bassCase, the parenthesis flags, and `<play>` before
+        // calling `writeProperties(TextBase*, ..., false)`, whose own
+        // first act is `writeItemProperties` — the `<eid>` writer — right
+        // where `elementProperties.mscxChildren()` already sits.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)

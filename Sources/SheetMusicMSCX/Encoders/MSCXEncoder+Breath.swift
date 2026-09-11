@@ -41,8 +41,6 @@ extension Breath {
     /// `Fermata.encode()` for `<timeStretch>`.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        // `<eid>` is the first child MuseScore itself writes.
-        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(XMLTreeNode(name: "symbol", text: kind.mscxSubtype))
         let defaultPause = Breath.defaultPause(for: kind)
         if pause != defaultPause {
@@ -51,6 +49,11 @@ extension Breath {
                 text: formatPause(pause),
             ))
         }
+        // `<eid>` sits here, not first: `TWrite::write(const Breath*, ...)`
+        // (`rw/write/twrite.cpp:944-952`) writes `<symbol>`/`<pause>` before
+        // calling `writeItemProperties` — the `<eid>` writer — right where
+        // `elementProperties.mscxChildren()` already sits.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(contentsOf: elementProperties.mscxChildren())
         children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Breath", children: children)

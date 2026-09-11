@@ -301,7 +301,9 @@ extension Voice {
                     text: "\(delta.numerator)/\(delta.denominator)",
                 )],
             )
-        case let .spanner(spanner): return spanner.encode(eid: eid, options: options)
+        // No `eid` here — see `Spanner.encode`'s doc comment for why the
+        // voice-level `<Spanner>` carrier was reverted to `.invalid`.
+        case let .spanner(spanner): return spanner.encode(options: options)
         }
     }
 }

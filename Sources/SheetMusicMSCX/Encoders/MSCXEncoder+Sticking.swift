@@ -21,7 +21,12 @@ extension Sticking {
     /// there is no version branch.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        // `<eid>` is the first child MuseScore itself writes.
+        // `<eid>` genuinely is first here: `TWrite::write(const Sticking*,
+        // ...)` (`rw/write/twrite.cpp:3015-3023`) has no properties of its
+        // own before calling `writeProperties(TextBase*, ..., true)`, whose
+        // own first act is `writeItemProperties` — the `<eid>` writer —
+        // before `<text>`. Unlike most of this file's other kinds, nothing
+        // precedes it.
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(encodeText(
             text,

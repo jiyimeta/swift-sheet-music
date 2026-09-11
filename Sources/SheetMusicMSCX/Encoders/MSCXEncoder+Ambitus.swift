@@ -16,8 +16,6 @@ extension Ambitus {
     /// version branch is needed.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        // `<eid>` is the first child MuseScore itself writes.
-        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         if let noteHeadGroup {
             children.append(XMLTreeNode(name: "head", text: noteHeadGroup))
         }
@@ -44,6 +42,12 @@ extension Ambitus {
         ]
         appendAccidental(topAccidental, wrapperName: "topAccidental", to: &children)
         appendAccidental(bottomAccidental, wrapperName: "bottomAccidental", to: &children)
+        // `<eid>` sits here, not first: `TWrite::write(const Ambitus*, ...)`
+        // (`rw/write/twrite.cpp:619-641`) calls `writeItemProperties` — the
+        // `<eid>` writer — only after every one of Ambitus's own leaf
+        // children, right where `elementProperties.mscxChildren()` already
+        // sits.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         children += elementProperties.mscxTrailingChildren()

@@ -34,6 +34,7 @@
         <eid>pQKuPfSAUlF_E</eid>
         <voice>
           <TimeSig>
+            <subtype>1</subtype>
             <eid>T_T</eid>
             <sigN>4</sigN>
             <sigD>4</sigD>

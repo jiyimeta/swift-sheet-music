@@ -9,8 +9,6 @@ extension Fermata {
     /// "omit when default" convention MuseScore uses.
     func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
-        // `<eid>` is the first child MuseScore itself writes.
-        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(XMLTreeNode(name: "subtype", text: subtype))
         let defaultStretch = Fermata.defaultTimeStretch(for: subtype)
         if timeStretch != defaultStretch {
@@ -19,6 +17,12 @@ extension Fermata {
                 text: formatStretch(timeStretch),
             ))
         }
+        // `<eid>` sits here, not first: `TWrite::write(const Fermata*, ...)`
+        // (`rw/write/twrite.cpp:1353-1368`) writes `<subtype>`/`<timeStretch>`
+        // (and other unmodeled properties) before calling
+        // `writeItemProperties` — the `<eid>` writer — right where
+        // `elementProperties.mscxChildren()` already sits.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(contentsOf: elementProperties.mscxChildren())
         children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Fermata", children: children)

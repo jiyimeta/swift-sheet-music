@@ -7,7 +7,7 @@ import Testing
 struct HairpinEncoderTests {
     @Test func nilHairpinEmitsBareElement() throws {
         let s = Spanner(kind: .hairpin, rawType: "HairPin")
-        let hp = try #require(s.encode(eid: .invalid).first("HairPin"))
+        let hp = try #require(s.encode().first("HairPin"))
         #expect(hp.children.isEmpty)
     }
 
@@ -17,7 +17,7 @@ struct HairpinEncoderTests {
             rawType: "HairPin",
             hairpin: .init(subtype: .crescendo, veloChange: 20),
         )
-        let hp = try #require(s.encode(eid: .invalid).first("HairPin"))
+        let hp = try #require(s.encode().first("HairPin"))
         #expect(hp.first("subtype")?.text == "0")
         #expect(hp.first("veloChange")?.text == "20")
         // .normal omitted
@@ -30,7 +30,7 @@ struct HairpinEncoderTests {
             rawType: "HairPin",
             hairpin: .init(subtype: .decrescendo, veloChangeMethod: .easeInOut),
         )
-        let hp = try #require(s.encode(eid: .invalid).first("HairPin"))
+        let hp = try #require(s.encode().first("HairPin"))
         #expect(hp.first("subtype")?.text == "1")
         #expect(hp.children.map(\.name).contains("veloChange") == false)
         #expect(hp.first("veloChangeMethod")?.text == "ease-in-out")
@@ -43,7 +43,7 @@ struct HairpinEncoderTests {
             nextMeasuresOffset: 1,
             hairpin: .init(subtype: .crescendo, veloChange: 15, veloChangeMethod: .easeIn),
         )
-        let encoded = original.encode(eid: .invalid)
+        let encoded = original.encode()
         let xml = XMLTreeSerializer.serialize(encoded)
         let reparsed = try XMLTreeParser.parse(xml)
         let decoded = try Spanner.decode(reparsed)

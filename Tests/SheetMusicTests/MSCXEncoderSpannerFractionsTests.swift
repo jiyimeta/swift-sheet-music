@@ -58,7 +58,7 @@ struct MSCXEncoderSpannerFractionsTests {
 
     /// Round-trip: encode → reparse → compare.
     private func roundTrip(_ spanner: Spanner) throws -> Spanner {
-        let xml = spanner.encode(eid: .invalid)
+        let xml = spanner.encode()
         let bytes = XMLTreeSerializer.serialize(
             XMLTreeNode(name: "root", children: [xml]),
         )
@@ -86,7 +86,7 @@ struct MSCXEncoderSpannerFractionsTests {
             nextMeasuresOffset: 1,
             nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
         )
-        let xml = spanner.encode(eid: .invalid)
+        let xml = spanner.encode()
         let location = try #require(
             xml.first("next")?.first("location"),
         )

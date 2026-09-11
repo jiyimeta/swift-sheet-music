@@ -67,7 +67,7 @@ struct SpannerElementOverrideTests {
             "HairPin",
             "<HairPin><subtype>0</subtype><placement>above</placement></HairPin>",
         ))
-        let encoded = original.encode(eid: .invalid)
+        let encoded = original.encode()
         #expect(encoded.children.map(\.name) == ["HairPin", "next"])
         let payload = try #require(encoded.first("HairPin"))
         #expect(payload.children.map(\.name) == ["placement", "subtype"])
@@ -102,7 +102,7 @@ struct SpannerElementOverrideTests {
             "Ottava",
             "<Ottava><subtype>15mb</subtype><numbersOnly>0</numbersOnly></Ottava>",
         ))
-        let reparsed = try Spanner.decode(original.encode(eid: .invalid))
+        let reparsed = try Spanner.decode(original.encode())
         #expect(reparsed.ottava?.numbersOnly == false)
         #expect(reparsed.ottava?.subtype == .fifteenMB)
     }
