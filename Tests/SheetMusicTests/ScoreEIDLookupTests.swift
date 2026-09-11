@@ -96,6 +96,13 @@ struct ScoreEIDLookupTests {
         #expect(identifiers.count == notePositions.count)
     }
 
+    @Test func notePositionSkipsPastANonMatchingChordToTheSecondChord() throws {
+        let score = ScoreEditor(score: EditingFixtures.c4ThenD4Chords()).score
+        let secondChordPosition = EditingFixtures.noteID(element: 2)
+        let eid = try #require(score.eid(at: secondChordPosition))
+        #expect(score.notePosition(of: eid) == secondChordPosition)
+    }
+
     @Test func unknownNoteIdentifierIsNil() {
         let score = ScoreEditor(score: EditingFixtures.twoNoteChordAtIndex1()).score
         var unrelated = EIDAllocator(actor: 999)

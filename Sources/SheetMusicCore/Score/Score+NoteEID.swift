@@ -14,7 +14,8 @@ import SheetMusicFoundation
 extension Score {
     /// The first match in part, staff, measure, voice, element, then note order, or `nil` for an
     /// invalid or absent identifier — including one that names a grace note rather than a top-level
-    /// chord note.
+    /// chord note. Identifiers are expected to be unique: `ScoreEditor`'s debug gate checks that
+    /// after every edit. If they repeat anyway, the first match in this order wins.
     public func notePosition(of eid: EID) -> NoteID? {
         guard eid.isValid else { return nil }
         for (partIndex, part) in parts.enumerated() {
