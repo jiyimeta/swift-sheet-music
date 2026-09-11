@@ -113,6 +113,10 @@ import Wirelet
 /// 77 = setElementPlacement(SetElementPlacementIntentWire), see EditIntentPayloads+Properties.swift
 /// 78 = setTextFont(SetTextFontIntentWire), see EditIntentPayloads+TextFont.swift
 /// 79 = setLyricVerse(SetLyricVerseIntentWire), see EditIntentPayloads+TextFont.swift
+/// 80 = setNoteSmall(SetNoteSmallIntentWire), see EditIntentPayloads+Notation2.swift
+/// 81 = setNotePlay(SetNotePlayIntentWire), see EditIntentPayloads+Notation2.swift
+/// 82 = setElementOffset(SetElementOffsetIntentWire), see EditIntentPayloads+Properties.swift
+/// 83 = setElementAutoplace(SetElementAutoplaceIntentWire), see EditIntentPayloads+Properties.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -1068,6 +1072,14 @@ public enum EditIntentWire {
     case setElementPlacement(SetElementPlacementIntentWire)
     case setTextFont(SetTextFontIntentWire)
     case setLyricVerse(SetLyricVerseIntentWire)
+    /// Appended for the properties inspector — index 80. Never renumber anything above it.
+    case setNoteSmall(SetNoteSmallIntentWire)
+    /// Appended for the properties inspector — index 81. Never renumber anything above it.
+    case setNotePlay(SetNotePlayIntentWire)
+    /// Appended for the properties inspector — index 82. Never renumber anything above it.
+    case setElementOffset(SetElementOffsetIntentWire)
+    /// Appended for the properties inspector — index 83. Never renumber anything above it.
+    case setElementAutoplace(SetElementAutoplaceIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1266,6 +1278,14 @@ public enum EditIntentWire {
             self = .setTextFont(SetTextFontIntentWire(text: text, patch: patch))
         case let .setLyricVerse(text, destination):
             self = .setLyricVerse(SetLyricVerseIntentWire(text: text, toVerse: destination))
+        case let .setNoteSmall(location, isSmall):
+            self = .setNoteSmall(SetNoteSmallIntentWire(location: location, isSmall: isSmall))
+        case let .setNotePlay(location, play):
+            self = .setNotePlay(SetNotePlayIntentWire(location: location, play: play))
+        case let .setElementOffset(target, offset):
+            self = .setElementOffset(SetElementOffsetIntentWire(target: target, offset: offset))
+        case let .setElementAutoplace(target, autoplace):
+            self = .setElementAutoplace(SetElementAutoplaceIntentWire(target: target, autoplace: autoplace))
         }
     }
 
@@ -1526,6 +1546,18 @@ public enum EditIntentWire {
         case let .setLyricVerse(wire):
             let decoded = try wire.decoded()
             return .setLyricVerse(text: decoded.text, toVerse: decoded.toVerse)
+        case let .setNoteSmall(wire):
+            let decoded = wire.decoded()
+            return .setNoteSmall(at: decoded.location, isSmall: decoded.isSmall)
+        case let .setNotePlay(wire):
+            let decoded = wire.decoded()
+            return .setNotePlay(at: decoded.location, play: decoded.play)
+        case let .setElementOffset(wire):
+            let decoded = wire.decoded()
+            return .setElementOffset(target: decoded.target, offset: decoded.offset)
+        case let .setElementAutoplace(wire):
+            let decoded = wire.decoded()
+            return .setElementAutoplace(target: decoded.target, autoplace: decoded.autoplace)
         }
     }
 }

@@ -260,7 +260,7 @@
                  .setSlur, .setHairpin, .setPedal, .setVolta, .setOttava, .setTextLine, .setTrill, .setVibrato,
                  .setPalmMute, .setLetRing, .removeSpanner,
                  .setChordSymbol, .setLyricSyllables, .setTextVisible, .setElementColor, .setElementPlacement,
-                 .setTextFont, .setLyricVerse:
+                 .setTextFont, .setLyricVerse, .setNoteSmall, .setNotePlay, .setElementOffset, .setElementAutoplace:
                 self.init(op: "intentBytes")
                 base64 = EditIntentCodec.encode(intent).base64EncodedString()
             }

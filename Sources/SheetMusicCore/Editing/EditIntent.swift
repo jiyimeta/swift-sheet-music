@@ -446,4 +446,19 @@ public enum EditIntent: Sendable, Equatable {
 
     /// Move a whole syllable without neighbor repair; occupied destination rows are refused.
     case setLyricVerse(text: ScoreTextID, toVerse: Int)
+
+    /// One note's cue-size flag. Appended for the properties-inspector project — wire tag 80.
+    case setNoteSmall(at: NoteID, isSmall: Bool)
+
+    /// One note's sounding flag. Engraving is unaffected. Appended for the properties-inspector project —
+    /// wire tag 81.
+    case setNotePlay(at: NoteID, play: Bool)
+
+    /// One engraved text's authored offset in spatium units; nil restores the styled position. Text only —
+    /// see `SetElementOffset` for why. Appended for the properties-inspector project — wire tag 82.
+    case setElementOffset(target: ScoreTextID, offset: ScoreOffset?)
+
+    /// One engraved text's collision-avoidance override; nil inherits the default. Text only. Appended for the
+    /// properties-inspector project — wire tag 83.
+    case setElementAutoplace(target: ScoreTextID, autoplace: Bool?)
 }
