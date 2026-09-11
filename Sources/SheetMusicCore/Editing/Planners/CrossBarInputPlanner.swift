@@ -188,21 +188,21 @@ public enum CrossBarInputPlanner {
             case let .chord(source): voice.elements[segment.startIndex] == .chord(source)
             }
             let pieces = segment.durations.enumerated().map { offset, duration in
+                let isLast = written + offset == pieceCount - 1
                 let element = piece(
                     duration: duration,
                     content: content,
                     isFirst: written + offset == 0,
-                    isLast: written + offset == pieceCount - 1,
+                    isLast: isLast,
                 )
-                let identity: SlotIdentity
-                if written + offset == 0, keepsHead {
-                    identity = .keep(voice.elements.eid(at: segment.startIndex))
-                } else {
-                    identity = .fresh
-                }
-                // The last piece's after-graces are MOVED off the head, not copied — `piece(...)` gives
-                // them to whichever piece isLast — so a fresh slot here must not clear them.
-                return VoiceSlot(identity: identity, element: element, nestedIdentity: .carried)
+                let identity: SlotIdentity = written + offset == 0 && keepsHead
+                    ? .keep(voice.elements.eid(at: segment.startIndex)) : .fresh
+                // Only the LAST piece is moved, not copied: `piece(...)` hands it `source.graceNotesAfter`
+                // verbatim when `isLast`. Every other piece — including a fresh, non-`keepsHead` head,
+                // whose notes/`graceNotesBefore` are a COPY of `source`'s — takes the default clear. The
+                // head and the last piece are never the same one: `plan` only reaches here when content
+                // overflows the bar, which forces `pieceCount >= 2` always.
+                return VoiceSlot(identity: identity, element: element, nestedIdentity: isLast ? .carried : .cleared)
             }
             guard let spliced = splice(
                 pieces,
