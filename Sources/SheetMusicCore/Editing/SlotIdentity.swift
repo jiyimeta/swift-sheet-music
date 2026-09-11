@@ -30,6 +30,10 @@ public struct VoiceSlot: Sendable, Equatable {
 
     public var identity: SlotIdentity
     public var element: VoiceElement
+    /// Left in the synthesized `==` deliberately, unlike `TupletSpan.eid`'s exclusion: this is not
+    /// bookkeeping identity riding alongside a value, it is an instruction that changes what
+    /// `materialize` does with `element`'s nested identifiers — two slots that differ only here are
+    /// not equivalent requests, so equality must see the difference.
     var nestedIdentity: NestedIdentity
 
     public init(identity: SlotIdentity, element: VoiceElement) {

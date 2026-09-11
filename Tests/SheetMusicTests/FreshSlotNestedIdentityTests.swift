@@ -51,6 +51,10 @@ struct FreshSlotNestedIdentityTests {
             return
         }
         let resultIDs = Self.nestedIDs(of: result)
+        // Hardcoded per `EditingIdentityInvariants.swift`'s standing rule: a relative count alone stays
+        // green if `nestedIDs(of:)` under-walks. `G.decorated()`'s fixture is 1 own note + 1
+        // graceNotesBefore slot + 1 graceNotesAfter slot + 1 before-grace note + 1 after-grace note = 5.
+        #expect(sourceIDs.count == 5)
         #expect(resultIDs.count == sourceIDs.count)
         #expect(resultIDs.isDisjoint(with: sourceIDs))
         #expect(result == source)
