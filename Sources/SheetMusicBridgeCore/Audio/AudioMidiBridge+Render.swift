@@ -14,7 +14,10 @@ extension AudioMidiBridge {
     /// change works BY channel routing — would have defeated the feature
     /// on Android under any design.
     package static func renderMidi(score: Score) throws -> Data {
-        var midi = try MidiRenderer.render(score: score)
+        // `renderForPlayback`, not `render`: this is the SMF Android's transport plays, and the transport's end is
+        // what stops playback, so a bar whose music stops mid-way has to keep running to its barline. Same reason
+        // the Apple engine's `cachedRender` uses it, and the same reason MIDI export does not.
+        var midi = try MidiRenderer.renderForPlayback(score: score)
         let plan = LiveChannelPlan.build(score: score)
         MidiChannelRemap.apply(midi: &midi, plan: plan)
         // Strip the baked-in CC 7 / tick-0 program on every mixer-owned
