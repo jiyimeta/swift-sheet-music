@@ -213,6 +213,7 @@ and this project adheres to
   - parts, staves and measure columns;
   - voice elements and tuplets;
   - grace chords;
+  - notes, both a chord's own notes and the notes inside its grace chords;
   - system-lane elements (tempo, rehearsal marks, staff and system text, swing, instrument changes).
 
   The identifier survives an edit that moves the element, such as a re-barring, a part move or an
@@ -248,6 +249,13 @@ and this project adheres to
   - **`ReplaceVoiceElements` takes `slots: [VoiceSlot]` and `tupletSlots: [TupletSlot]`.** Each slot says
     whether it keeps an existing identifier (`.keep(eid)`) or is new (`.fresh`). Its `elements` and `tuplets`
     properties are gone.
+  - **`ChordNotes` is no longer a `MutableCollection` or a `RangeReplaceableCollection`.** A note slot's
+    identifier has to survive a value change and be assigned on an insertion, which a plain subscript
+    setter or `RangeReplaceableCollection`'s requirements cannot express. `chord.notes[i] = note`,
+    `append`, `insert(_:at:)` and `remove(at:)` no longer compile:
+    - a value change is `updateNote(at:)`;
+    - an addition is `tryAppend(_:id:)`;
+    - a removal is `remove(eid:)`.
 
   **Lookup by identifier:**
   - `score[eid:]`, `position(of:)` and `eid(at:)` translate between an identifier and the positional

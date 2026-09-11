@@ -2308,16 +2308,24 @@
                                 isFirstSplit && i == 0
                             let isLastChain =
                                 isLastSplit && i == durations.count - 1
-                            var notes = c.notes
+                            var notes = Array(c.notes)
                             for ni in notes.indices {
                                 notes[ni].tieBack = isFirstChain
                                     ? c.notes[ni].tieBack : 1
                                 notes[ni].tieForward = isLastChain
                                     ? c.notes[ni].tieForward : 1
                             }
+                            // The piece that keeps the original chord's onset
+                            // keeps its notes' identifiers; every continuation
+                            // piece is a different note.
+                            let chordNotes = isFirstChain
+                                ? ChordNotes(Array(zip(
+                                    c.notes.indices.map(c.notes.eid(at:)), notes,
+                                )))
+                                : ChordNotes(notes)
                             pieceElements.append(.chord(Chord(
                                 duration: dur,
-                                notes: notes,
+                                notes: chordNotes,
                                 arpeggio: isFirstChain
                                     ? c.arpeggio : nil,
                                 lyrics: isFirstChain
@@ -2498,7 +2506,7 @@
                 for (i, dur) in durations.enumerated() {
                     let isFirst = i == 0
                     let isLast = i == durations.count - 1
-                    var notes = c.notes
+                    var notes = Array(c.notes)
                     for ni in notes.indices {
                         notes[ni].tieBack = isFirst
                             ? (
@@ -2513,9 +2521,19 @@
                             )
                             : 1
                     }
+                    // Only the piece that keeps the original chord's onset
+                    // keeps its notes' identifiers — a trailing trim's own
+                    // first piece is not the onset, so it gets fresh ones
+                    // like every other continuation piece.
+                    let keepsOriginalIdentity = isFirst && tieBackKeepsOriginal
+                    let chordNotes = keepsOriginalIdentity
+                        ? ChordNotes(Array(zip(
+                            c.notes.indices.map(c.notes.eid(at:)), notes,
+                        )))
+                        : ChordNotes(notes)
                     pieces.append(.chord(Chord(
                         duration: dur,
-                        notes: notes,
+                        notes: chordNotes,
                         arpeggio: isFirst && tieBackKeepsOriginal
                             ? c.arpeggio : nil,
                         lyrics: isFirst && tieBackKeepsOriginal
