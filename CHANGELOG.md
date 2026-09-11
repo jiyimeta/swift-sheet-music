@@ -218,8 +218,30 @@ and this project adheres to
 
   The identifier survives an edit that moves the element, such as a re-barring, a part move or an
   inserted measure, and undo and redo restore it exactly. Equality and `stableFingerprint` still see values
-  only: two parses of one file compare equal, and no golden moved. Identifiers are not persisted yet (MSCX
-  `<eid>` is later work) and no wire format carries them, so every load mints fresh ones.
+  only: two parses of one file compare equal, and no golden moved. The edit wire (`SheetMusicEditWire`)
+  does not carry identifiers yet — each mirror reserves a tag against the day it does, but attaching one
+  there is later work.
+
+  **Identifiers now persist to MSCX.** A host that saves a score and reloads it — including through a
+  real MuseScore Studio round trip — gets back the same identifier on: parts, staves and measure columns;
+  chords (including grace chords), their notes, and rests; tuplets; and every voice-lane and system-lane
+  annotation this library models as one of MuseScore's own engraving items — clefs, key and time
+  signatures, barlines, dynamics, symbols, measure repeats, fermatas, breath marks, harmony/chord symbols,
+  sticking, expression text, capo, string tunings, ambitus, figured bass and fret diagrams on the voice
+  lane; tempo marks, rehearsal marks, staff and system text, swing, and instrument changes on the system
+  lane. A score that reaches the encoder with any element still unidentified — built by hand rather than
+  loaded, or otherwise missing a slot — is filled with fresh identifiers rather than refused: a save never
+  fails over an identifier.
+
+  Two things a host should not rely on yet:
+  - **`<Part><eid>` is this library's own tag** — MuseScore's writer has none, so it is minted fresh at
+    every parse of a file this library has not saved before. It is stable from that first save onward, but
+    the first save of a MuseScore-authored file will not match a later one.
+  - **A `.spanner` voice element's identifier does not persist.** The `<Spanner>` wrapper MuseScore writes
+    is not itself an engraving item — the real identifier lives on the payload it wraps — and modeling that
+    needs this library's per-subtype field ordering untangled first.
+
+  `RehearsalMark`'s round trip is unmeasured: no fixture in this repository carries one.
 
   **What breaks at compile time, and how to migrate:**
 

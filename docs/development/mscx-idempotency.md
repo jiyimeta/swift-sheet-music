@@ -93,19 +93,46 @@ and asserts a non-zero count of chords changed so it cannot silently do nothing.
 **When you add a fixture, add the reason with it.** A list of names with no
 stated shapes stops being maintainable the moment the encoder changes.
 
-## Layer 2 — the corpus sweep, opt in
+## Layer 2 — the corpus sweeps, opt in
 
-`@Suite MSCXIdempotencySweep` runs the same comparison over every `.mscx` /
-`.mscz` under a directory, recursively:
+Two suites gate on the same `SM_MSCX_IDEMPOTENCY_DIR` environment variable and
+walk the same corpus, but check different properties. **Filtering by suite
+name runs exactly one; an unfiltered `swift test` with the variable set arms
+and runs both.**
+
+`@Suite MSCXIdempotencySweep` runs the encode/decode/encode byte-identity
+comparison described above over every `.mscx` / `.mscz` under a directory,
+recursively:
 
 ```bash
 SM_MSCX_IDEMPOTENCY_DIR=~/path/to/scores swift test --filter MSCXIdempotencySweep
 ```
 
-The suite is **disabled** when `SM_MSCX_IDEMPOTENCY_DIR` is unset, so it costs a
-default `swift test` nothing. **No corpus path is committed** — the variable
-carries it, following `SM_VELOCITY_DIR` (`Sources/RenderPreviews/VelocityReport
-.swift`), `SM_PDF_PROBE` and `OMR_DATA_ROOT`.
+`@Suite EIDRoundTripSweep` (added in the P4 `<eid>`-persistence phase) checks
+a different property over the same corpus: that every identifier a file
+carries survives this library's own decode → encode → decode, at the same
+structural position. It is the layer-2 counterpart to the single-fixture
+`EIDPersistenceTests`, over real scores rather than committed fixtures:
+
+```bash
+SM_MSCX_IDEMPOTENCY_DIR=~/path/to/scores swift test --filter EIDRoundTripSweep
+```
+
+**`--filter Sweep` is a loose match, not a way to select "the sweeps"** — on
+this corpus it caught 13 tests across 9 suites, most of them unrelated. To run
+precisely these two:
+
+```bash
+SM_MSCX_IDEMPOTENCY_DIR=~/path/to/scores swift test --filter 'EIDRoundTripSweep|MSCXIdempotencySweep'
+```
+
+Both suites are **disabled** when `SM_MSCX_IDEMPOTENCY_DIR` is unset, so an
+unfiltered default `swift test` costs nothing. **No corpus path is
+committed** — the variable carries it, following `SM_VELOCITY_DIR`
+(`Sources/RenderPreviews/VelocityReport.swift`), `SM_PDF_PROBE` and
+`OMR_DATA_ROOT`. Against a 669-file corpus, expect roughly 9–10 minutes for
+`EIDRoundTripSweep` alone and about 16 minutes to run both suites in one
+invocation.
 
 A file that will not **decode** is reported and skipped rather than failed: a
 corpus of real scores contains MuseScore 1.x files this reader does not claim to
@@ -114,16 +141,45 @@ but whose **encode throws** is counted separately, as `failed`, and makes the
 sweep fail rather than pass quietly — folding a throwing encode into "not
 different" (`try?` swallowing the error) would let a broken encoder hide inside
 a green `differing=0`, exactly the "a pass is not evidence" failure this gate
-exists to catch, reproduced inside the gate itself. The run prints its counts —
+exists to catch, reproduced inside the gate itself. `MSCXIdempotencySweep`
+prints its counts —
 
 ```
-[mscx-idempotency] files=669 loaded=668 unreadable=1 failed=0 differing=0
+[mscx-idempotency] files=670 loaded=669 unreadable=1 failed=0 differing=0
 ```
 
-— because "no failure was reported" and "it compared 668 scores" are different
-facts. Quote the counts, not the conclusion.
+— because "no failure was reported" and "it compared 669 scores" are different
+facts. Quote the counts, not the conclusion. The corpus has grown over time —
+an earlier measurement of this same transcript read `loaded=668`; do not read
+that older number as the gate's current size.
 
 Run this before a release, and after any change to `Sources/SheetMusicMSCX/`.
+
+## A property that looks like a bug and is not: `systemMeasures` shorter than the measure count
+
+A `Score` whose `systemMeasures` lane is shorter than its measure count is
+**not** an encode fixed point, even though `MSCXEncoder.encode` runs the
+identifier chokepoint (`assignMissingIDs`) on a local copy before encoding,
+and every carrier whose slot exists is otherwise a fixed point under it. The
+chokepoint can only **fill** a slot that exists — `Score.swift:132` assigns
+into `systemMeasures`, it never resizes the array — while decode always pads
+the lane to the real measure count. So a score built or edited into that
+shorter-than-measure-count shape encodes once with the lane short, and only
+gains the missing identified slots on the next decode → encode, one round
+trip later.
+
+This is a legitimately reachable host state, not a defect to "fix" by
+rejecting it: `InsertMeasure.swift:136-139` and
+`SetTimeSignature+Splice.swift:165` both maintain the lane **only when**
+`systemMeasures.count == measureCount` already held, because "a score that
+never held the lane at all" is itself a supported state (most scores have no
+system-lane elements). It stabilises after one round trip and nothing is
+lost — the identifiers filled on that second encode are as valid as any
+other minted identifier.
+
+The candidate fix for a later phase is to normalise `systemMeasures` to the
+measure count inside `assignMissingIDs` itself, so the chokepoint's fill
+covers this case in the same pass rather than needing a second round trip.
 
 ## A real MuseScore round trip (`<eid>` identifier survival)
 
