@@ -63,7 +63,7 @@ struct MSCXDecoderInstrumentTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (mscxID, staff) = Staff.declared(node)
+        let (mscxID, _, staff) = Staff.declared(node)
         #expect(mscxID == "1")
         #expect(staff.staffType == "stdNormal")
         #expect(staff.group == "pitched")
@@ -83,7 +83,7 @@ struct MSCXDecoderInstrumentTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.defaultClefType == "F")
     }
 
@@ -96,7 +96,7 @@ struct MSCXDecoderInstrumentTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.defaultClefType == "F8vb")
     }
 
@@ -111,7 +111,7 @@ struct MSCXDecoderInstrumentTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.defaultClefType == "F")
     }
 

@@ -153,8 +153,10 @@ extension Score {
                    isStandardAccidental(accidental)
                 {
                     var mutated = chord
-                    mutated.notes[ref.note].accidental = nil
-                    mutated.notes[ref.note].accidentalBracket = .none
+                    mutated.notes.updateNote(at: ref.note) {
+                        $0.accidental = nil
+                        $0.accidentalBracket = .none
+                    }
                     measure.voices[ref.voice].elements.updateValue(at: ref.element) { $0 = .chord(mutated) }
                 }
                 // Otherwise the accidental is needed, USER-forced, or

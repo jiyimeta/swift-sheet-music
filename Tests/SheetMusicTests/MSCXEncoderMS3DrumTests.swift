@@ -16,6 +16,7 @@ struct MSCXEncoderMS3DrumTests {
             notes: [drumNote],
         )
         let xml = chord.encodeAsChord(
+            eid: .invalid,
             options: .init(targetVersion: .v3),
             staffGroup: "percussion",
             voiceIndex: 0,
@@ -34,6 +35,7 @@ struct MSCXEncoderMS3DrumTests {
             notes: [Note(pitch: 36, tpc: 14)],
         )
         let xml = chord.encodeAsChord(
+            eid: .invalid,
             options: .init(targetVersion: .v3),
             staffGroup: "percussion",
             voiceIndex: 1,
@@ -50,6 +52,7 @@ struct MSCXEncoderMS3DrumTests {
             notes: [Note(pitch: 36, tpc: 14)],
         )
         let xml = chord.encodeAsChord(
+            eid: .invalid,
             options: .init(targetVersion: .v3),
             staffGroup: "percussion",
             voiceIndex: 1,
@@ -65,6 +68,7 @@ struct MSCXEncoderMS3DrumTests {
             notes: [Note(pitch: 38, tpc: 14)],
         )
         let xml = chord.encodeAsChord(
+            eid: .invalid,
             options: .init(targetVersion: .v4),
             staffGroup: "percussion",
             voiceIndex: 0,
@@ -79,6 +83,7 @@ struct MSCXEncoderMS3DrumTests {
             notes: [Note(pitch: 60, tpc: 14)],
         )
         let xml = chord.encodeAsChord(
+            eid: .invalid,
             options: .init(targetVersion: .v3),
             staffGroup: "pitched",
             voiceIndex: 0,

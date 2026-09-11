@@ -351,7 +351,7 @@ extension MidiRenderer {
     static func transpose(_ chord: Chord, by semitones: Int) -> Chord {
         guard semitones != 0 else { return chord }
         var result = chord
-        result.notes = ChordNotes(chord.notes.map { transpose($0, by: semitones) })
+        result.notes.mapValues { transpose($0, by: semitones) }
         result.graceNotesBefore.mapValues {
             transpose($0, by: semitones)
         }
@@ -365,7 +365,7 @@ extension MidiRenderer {
         _ grace: GraceChord, by semitones: Int,
     ) -> GraceChord {
         var copy = grace
-        copy.notes = ChordNotes(grace.notes.map { transpose($0, by: semitones) })
+        copy.notes.mapValues { transpose($0, by: semitones) }
         return copy
     }
 

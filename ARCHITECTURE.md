@@ -89,7 +89,10 @@ targets) are resolved inside rendering passes, not stored in the types.
   movement but can never turn a bare scalar into a struct compatibly; each
   mirror reserves its next unassigned tag with a doc comment ("tag N is
   reserved for SP0's optional stable identity; do not assign it") against
-  the day a stable identity needs to attach there. See
+  the day a stable identity needs to attach there. SP0 (this stable-identity
+  project) landed the identifier on disk — `<eid>` in MSCX — and left these
+  edit-wire tags unassigned: putting an identifier on the edit wire itself
+  is SP6's work, deliberately not done here. See
   `docs/superpowers/specs/2026-09-02-edit-command-parity-design.md` §2 for
   the full rationale.
 

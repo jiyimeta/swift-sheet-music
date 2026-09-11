@@ -85,6 +85,7 @@ extension GraceChord {
     /// side instead), so it defaults to `0`, the value that makes a lone grace
     /// behave identically.
     func encode(
+        eid: EID,
         parentChord: Chord? = nil,
         parentForwardTieLocation: TieLocation? = nil,
         parentBackwardTieLocation: TieLocation? = nil,
@@ -92,10 +93,12 @@ extension GraceChord {
         options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         duration.appendDurationXML(to: &children)
         children.append(XMLTreeNode(name: graceType.mscxTag))
-        for note in notes {
+        for (noteIndex, note) in notes.enumerated() {
             children.append(note.encode(
+                eid: notes.eid(at: noteIndex),
                 tieForwardEndpoint: note.tieForward == nil ? nil : endpoint(
                     forNote: note,
                     towardsParent: !graceType.isAfter,

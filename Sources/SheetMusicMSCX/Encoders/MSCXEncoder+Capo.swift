@@ -20,8 +20,9 @@ extension Capo {
     /// v3-target encode emits a capo MuseScore 3 drops, the same known
     /// limitation as `<Expression>` and `<MeasureRepeat>`; no v3
     /// down-conversion is attempted.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children = [
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        children += [
             XMLTreeNode(name: "active", text: isActive ? "1" : "0"),
             XMLTreeNode(name: "fretPosition", text: String(fretPosition)),
             XMLTreeNode(name: "generateText", text: generatesText ? "1" : "0"),
@@ -39,6 +40,14 @@ extension Capo {
                 children: [XMLTreeNode(name: "apply", text: "0")],
             ))
         }
+        // `<eid>` sits here, not first: `TWrite::write(const Capo*, ...)`
+        // (`rw/write/twrite.cpp:1264-1284`) writes Capo's own scalar
+        // properties and ignored strings, THEN calls `writeProperties
+        // (StaffTextBase*, ...)`, which — after its own unmodeled
+        // MidiAction/channelSwitch/aeolus/swing tags — calls `writeProperties
+        // (TextBase*, ..., true)`, whose first act is `writeItemProperties`
+        // (the `<eid>` writer), before `<text>`.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(encodeText(
             text,
             preservedTextMarkup: preservedTextMarkup,

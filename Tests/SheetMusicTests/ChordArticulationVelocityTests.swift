@@ -61,7 +61,7 @@ struct ChordArticulationVelocityTests {
             notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
             articulations: articulations,
         )
-        let xml = chord.encodeAsChord()
+        let xml = chord.encodeAsChord(eid: .invalid)
         return xml.all("Articulation").compactMap { $0.first("subtype")?.text }
     }
 
@@ -98,7 +98,7 @@ struct ChordArticulationVelocityTests {
                 .init(kind: .marcatoStaccato, anchor: .below),
             ],
         )
-        let xml = original.encodeAsChord()
+        let xml = original.encodeAsChord(eid: .invalid)
         let serialized = XMLTreeSerializer.serialize(xml)
         let parsed = try XMLTreeParser.parse(serialized)
         let roundTripped = try Chord.decode(parsed)

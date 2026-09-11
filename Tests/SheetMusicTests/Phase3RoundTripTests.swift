@@ -20,12 +20,12 @@ struct Phase3RoundTripTests {
     @Test func fermataVisibleFalseEncodes() {
         var fermata = Fermata(subtype: "fermataAbove")
         fermata.visible = false
-        let encoded = fermata.encode()
+        let encoded = fermata.encode(eid: .invalid)
         #expect(encoded.first("visible")?.text == "0")
     }
 
     @Test func fermataVisibleTrueOmitsTag() {
-        let encoded = Fermata(subtype: "fermataAbove").encode()
+        let encoded = Fermata(subtype: "fermataAbove").encode(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 
@@ -64,12 +64,12 @@ struct Phase3RoundTripTests {
         )
         let mark = try RehearsalMark.decode(node)
         #expect(mark.visible == false)
-        let reencoded = mark.encode()
+        let reencoded = mark.encode(eid: .invalid)
         #expect(reencoded.first("visible")?.text == "0")
     }
 
     @Test func rehearsalMarkVisibleTrueOmitsTag() {
-        let encoded = RehearsalMark(text: "A").encode()
+        let encoded = RehearsalMark(text: "A").encode(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 

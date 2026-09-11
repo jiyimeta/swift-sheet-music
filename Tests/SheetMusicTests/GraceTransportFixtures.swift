@@ -33,6 +33,29 @@ enum GraceTransportFixtures {
         #expect(afterIDs == after, sourceLocation: sourceLocation)
     }
 
+    /// Every note identifier reachable from `score` — each chord's own notes plus each grace chord's own
+    /// notes, across every part / staff / measure / voice. Delegates the per-chord collection to
+    /// `EditingIdentityInvariants.noteIdentifiers(of:)`, the same helper the debug gate's
+    /// `identifiers(in:)` traversal now uses, so this fixture and the production gate cannot drift on
+    /// what counts as a note. (Before EID-P3-Task-3, `identifiers(in:)` did not walk into `chord.notes`
+    /// at all, and this fixture duplicated the collection logic standalone.)
+    static func allNoteIDs(_ score: Score) -> [EID] {
+        var result: [EID] = []
+        for part in score.parts {
+            for staff in part.staves {
+                for measure in staff.measures {
+                    for voice in measure.voices {
+                        for element in voice.elements {
+                            guard case let .chord(chord) = element else { continue }
+                            result.append(contentsOf: EditingIdentityInvariants.noteIdentifiers(of: chord))
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
     static func expectCycle(
         _ editor: ScoreEditor, before: Score, sourceLocation: SourceLocation = #_sourceLocation,
     ) throws {

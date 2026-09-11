@@ -12,8 +12,12 @@ extension Measure {
     /// permissive about ordering so semantic round-trip would work
     /// in any order, but matching MuseScore's order keeps diffs
     /// against fixtures readable.
+    ///
+    /// The fixed `eid: .invalid` means this convenience writes no column identity — a real
+    /// `<Measure><eid>` only ever comes from the score's first staff, and the production path for
+    /// that is `Staff.encodeTopLevel`, not this overload. Tests use this one.
     func encode(options: MSCXEncoderOptions = .init()) throws -> XMLTreeNode {
-        try encode(carryInVoiceTieCarries: [], options: options).node
+        try encode(eid: .invalid, carryInVoiceTieCarries: [], options: options).node
     }
 
     /// `carryInVoiceTieCarries[i]` is the previous measure's voice
@@ -33,15 +37,21 @@ extension Measure {
     /// pass the real per-measure value (built from
     /// `[Measure].effectiveMeasureDurations()`).
     func encode( // swiftlint:disable:this function_body_length
+        eid: EID,
         carryInVoiceTieCarries: [Voice.VoiceTieCarry],
         isFirstMeasureOfStaff: Bool = false,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
-        voice0SystemElements: [PositionedSystemElement] = [],
+        voice0SystemElements: [(eid: EID, element: PositionedSystemElement)] = [],
         effectiveDuration: Fraction = Fraction(numerator: 4, denominator: 4),
         nextMeasureFirstChordNotes: [ChordNotes?] = [],
     ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes — only
+        // written at all for the score's first staff (see
+        // `Score.appendStaffBodies`, which is the only caller that
+        // ever supplies a valid `eid` here).
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         for marker in markers {
             children.append(marker.encode(options: options))
         }
@@ -58,7 +68,7 @@ extension Measure {
             let carryIn = index < carryInVoiceTieCarries.count
                 ? carryInVoiceTieCarries[index]
                 : Voice.VoiceTieCarry()
-            let injection: [PositionedSystemElement] =
+            let injection: [(eid: EID, element: PositionedSystemElement)] =
                 index == 0 ? voice0SystemElements : []
             let result = try voice.encode(
                 carryIn: carryIn,
@@ -122,22 +132,6 @@ extension Measure {
             ),
             carryOut,
         )
-    }
-
-    /// Public stable signature: encode using a per-voice
-    /// `lastChordDuration` array rather than the encoder-internal
-    /// `VoiceTieCarry`. Kept for source-compatibility while the
-    /// rest of the codebase still calls the older shape; new
-    /// callers should pass `[Voice.VoiceTieCarry]` directly.
-    func encode(
-        carryInLastChordDurations: [Fraction?],
-        options: MSCXEncoderOptions = .init(),
-    ) throws -> (node: XMLTreeNode, carryOutLastChordDurations: [Fraction?]) {
-        let carries = carryInLastChordDurations.map {
-            Voice.VoiceTieCarry(prevChordDuration: $0, prevVoiceTotal: nil)
-        }
-        let result = try encode(carryInVoiceTieCarries: carries, options: options)
-        return (result.node, result.carryOutVoiceTieCarries.map(\.prevChordDuration))
     }
 }
 

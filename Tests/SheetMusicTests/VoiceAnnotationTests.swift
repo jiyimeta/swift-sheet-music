@@ -266,19 +266,19 @@ struct VoiceAnnotationMSCXTests {
     }
 
     @Test func encodesCanonicalChildShapes() {
-        let sticking = Sticking(text: "R").encode()
+        let sticking = Sticking(text: "R").encode(eid: .invalid)
         #expect(sticking.name == "Sticking")
         #expect(sticking.children.map(\.name) == ["text"])
 
         var hiddenSticking = Sticking(text: "R")
         hiddenSticking.visible = false
-        #expect(hiddenSticking.encode().children.map(\.name) == ["text", "visible"])
+        #expect(hiddenSticking.encode(eid: .invalid).children.map(\.name) == ["text", "visible"])
 
-        let expression = ExpressionText(text: "dolce").encode()
+        let expression = ExpressionText(text: "dolce").encode(eid: .invalid)
         #expect(expression.name == "Expression")
         #expect(expression.children.map(\.name) == ["text"])
 
-        let explicitSnap = ExpressionText(text: "dolce", snapToDynamics: false).encode()
+        let explicitSnap = ExpressionText(text: "dolce", snapToDynamics: false).encode(eid: .invalid)
         #expect(explicitSnap.children.map(\.name) == ["snapToDynamics", "text"])
         #expect(explicitSnap.first("snapToDynamics")?.text == "0")
     }

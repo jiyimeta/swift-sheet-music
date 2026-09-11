@@ -97,7 +97,7 @@ struct MSCXEncoderMS3RoundTripTests {
                 Lyric(text: "mer", syllabic: .end, verse: 0),
             ],
         )
-        let v3Node = chord.encodeAsChord(options: .init(targetVersion: .v3))
+        let v3Node = chord.encodeAsChord(eid: .invalid, options: .init(targetVersion: .v3))
         let v3Lyrics = v3Node.children.filter { $0.name == "Lyrics" }
         #expect(v3Lyrics.count == 2)
         #expect(v3Lyrics[0].first("text")?.text == "Sum")
@@ -105,7 +105,7 @@ struct MSCXEncoderMS3RoundTripTests {
         // v3 marks every score-graph element with <linkedMain/>.
         #expect(v3Lyrics[0].children.map(\.name).contains("linkedMain"))
 
-        let v4Node = chord.encodeAsChord(options: .init(targetVersion: .v4))
+        let v4Node = chord.encodeAsChord(eid: .invalid, options: .init(targetVersion: .v4))
         let v4Lyrics = v4Node.children.filter { $0.name == "Lyrics" }
         #expect(v4Lyrics.count == 2)
         #expect(v4Lyrics[0].first("text")?.text == "Sum")
@@ -126,7 +126,7 @@ struct MSCXEncoderMS3RoundTripTests {
                 Lyric(text: "verse2", verse: 1),
             ],
         )
-        let node = chord.encodeAsChord(options: .init(targetVersion: .v3))
+        let node = chord.encodeAsChord(eid: .invalid, options: .init(targetVersion: .v3))
         let lyrics = node.children.filter { $0.name == "Lyrics" }
         #expect(lyrics.count == 1)
         #expect(lyrics[0].first("text")?.text == "verse2")

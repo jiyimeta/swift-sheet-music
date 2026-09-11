@@ -441,9 +441,11 @@ struct MSCXPreservedMarkupTests {
         for graceIndex in graces.indices {
             graces.updateValue(at: graceIndex) { grace in
                 for noteIndex in grace.notes.indices {
-                    grace.notes[noteIndex].fingerings = [
-                        Fingering(text: "1", preservedMarkup: [marker]),
-                    ]
+                    grace.notes.updateNote(at: noteIndex) {
+                        $0.fingerings = [
+                            Fingering(text: "1", preservedMarkup: [marker]),
+                        ]
+                    }
                     count += 1
                 }
             }
@@ -737,6 +739,7 @@ extension MSCXPreservedMarkupTests {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     private func expectNoVoiceElementNameCollisions(
         _ element: VoiceElement,
         context: String,
@@ -746,43 +749,69 @@ extension MSCXPreservedMarkupTests {
             expectNoChordNameCollisions(chord, context: context, options: options)
         }
         if case let .keySignature(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
         }
         if case let .timeSignature(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
         }
         if case let .clef(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
         }
         if case let .dynamic(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
         }
         if case let .barLine(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
         }
         if case let .harmony(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
         }
         if case let .spanner(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(options: options), context: context,
+            )
         }
         if case let .sticking(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
         }
         if case let .expression(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
         }
         if case let .capo(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
         }
         if case let .stringTunings(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
         }
         if case let .ambitus(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
         }
         if case let .figuredBass(value) = element {
-            expectNoNameCollision(value.preservedMarkup, value.encode(options: options), context: context)
+            expectNoNameCollision(
+                value.preservedMarkup, value.encode(eid: .invalid, options: options), context: context,
+            )
             for (index, item) in value.items.enumerated() {
                 expectNoNameCollision(
                     item.preservedMarkup,
@@ -805,13 +834,14 @@ extension MSCXPreservedMarkupTests {
         // a nominal 4/4 is enough to reach the same child list.
         let written = chord.notes.isEmpty
             ? chord.encodeAsRest(
+                eid: .invalid,
                 options: options, in: Fraction(numerator: 4, denominator: 4),
             )
-            : chord.encodeAsChord(options: options)
+            : chord.encodeAsChord(eid: .invalid, options: options)
         expectNoNameCollision(chord.preservedMarkup, written, context: context)
         for (index, note) in chord.notes.enumerated() {
             expectNoNameCollision(
-                note.preservedMarkup, note.encode(options: options),
+                note.preservedMarkup, note.encode(eid: .invalid, options: options),
                 context: "\(context)/<Note>[\(index)]",
             )
         }
@@ -830,12 +860,12 @@ extension MSCXPreservedMarkupTests {
         for (index, grace) in chord.mscxFileOrderedGraces.enumerated() {
             let graceContext = "\(context)/<Chord>[grace \(index)]"
             expectNoNameCollision(
-                grace.preservedMarkup, grace.encode(parentChord: chord, options: options),
+                grace.preservedMarkup, grace.encode(eid: .invalid, parentChord: chord, options: options),
                 context: graceContext,
             )
             for (noteIndex, note) in grace.notes.enumerated() {
                 expectNoNameCollision(
-                    note.preservedMarkup, note.encode(options: options),
+                    note.preservedMarkup, note.encode(eid: .invalid, options: options),
                     context: "\(graceContext)/<Note>[\(noteIndex)]",
                 )
             }

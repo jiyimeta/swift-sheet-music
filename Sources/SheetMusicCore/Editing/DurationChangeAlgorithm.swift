@@ -149,7 +149,7 @@ public enum DurationChangeAlgorithm {
                     case let .chord(consumedChord)
                         where !consumedChord.notes.isEmpty:
                         pieces = makeChordChain(
-                            from: consumedChord, durations: durations,
+                            from: consumedChord, durations: durations, onsetOwnership: .allContinuation,
                         )
                     default:
                         // Rest overshoot (or empty chord) — leftover
@@ -249,24 +249,44 @@ public enum DurationChangeAlgorithm {
         ).map { .rest(duration: $0) }
     }
 
+    /// Which shape this chain is being built for — `src`'s onset genuinely landing in the first piece,
+    /// or the whole chain being continuation material that starts after `src`'s onset was already
+    /// consumed elsewhere. No default: every caller has to look at what it's building and say which.
+    public enum OnsetOwnership: Sendable, Equatable {
+        /// `src` is genuinely being split (`RebarPlanner+Voices.pieces(of:durations:)`, where the first
+        /// piece IS `src`'s onset landing under a new barring), so the first piece keeps `src`'s note
+        /// identifiers.
+        case headIsOnset
+        /// `src` is the *overshoot* of a different element whose onset was already consumed by an
+        /// adjacent edit (`DurationChangeAlgorithm.compute`'s lengthen branch, when its partial-overshoot
+        /// leftover is a chord; `PasteVoiceElements`; `CrossBarInputPlanner.overshoot`) — the whole chain
+        /// is new continuation material, so every piece, including the first, mints a fresh identifier.
+        case allContinuation
+    }
+
     public static func makeChordChain(
-        from src: Chord, durations: [NoteDuration],
+        from src: Chord, durations: [NoteDuration], onsetOwnership: OnsetOwnership,
     ) -> [VoiceElement] {
         guard !durations.isEmpty else { return [] }
         var pieces: [VoiceElement] = []
         for (idx, dur) in durations.enumerated() {
             let isFirst = idx == 0
             let isLast = idx == durations.count - 1
-            var notes = src.notes
+            var notes = Array(src.notes)
             for ni in notes.indices {
                 notes[ni].tieBack = isFirst ? nil : 1
                 notes[ni].tieForward = isLast
                     ? src.notes[ni].tieForward
                     : 1
             }
+            let chordNotes = if isFirst, onsetOwnership == .headIsOnset {
+                ChordNotes(Array(zip(src.notes.indices.map(src.notes.eid(at:)), notes)))
+            } else {
+                ChordNotes(notes)
+            }
             pieces.append(.chord(Chord(
                 duration: dur,
-                notes: notes,
+                notes: chordNotes,
                 arpeggio: isFirst ? src.arpeggio : nil,
                 bracket: isFirst ? src.bracket : nil,
                 lyrics: isFirst ? src.lyrics : [],

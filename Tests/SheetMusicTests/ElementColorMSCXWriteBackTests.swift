@@ -59,7 +59,7 @@ struct ElementColorMSCXWriteBackTests {
         #expect(sticking.elementProperties.color == expectedColor)
         #expect(sticking.preservedMarkup.map(\.name) == ["style"])
 
-        let encoded = sticking.encode()
+        let encoded = sticking.encode(eid: .invalid)
         #expect(encoded.children.map(\.name) == ["text", "style", "color"])
         try expectEncodedColor(in: encoded)
     }
@@ -70,7 +70,7 @@ struct ElementColorMSCXWriteBackTests {
             children: [colorNode(), XMLTreeNode(name: "text", text: "dolce")],
         ))
         #expect(expression.elementProperties.color == expectedColor)
-        try expectEncodedColor(in: expression.encode())
+        try expectEncodedColor(in: expression.encode(eid: .invalid))
     }
 
     @Test func chordBracketColorRoundTrips() throws {
@@ -95,7 +95,7 @@ struct ElementColorMSCXWriteBackTests {
             excludingNames: [],
         ).first)
         #expect(symbol.elementProperties.color == expectedColor)
-        try expectEncodedColor(in: symbol.encode())
+        try expectEncodedColor(in: symbol.encode(eid: .invalid))
     }
 
     @Test func harmonyColorRoundTrips() throws {
@@ -107,21 +107,21 @@ struct ElementColorMSCXWriteBackTests {
             ],
         ))
         #expect(harmony.elementProperties.color == expectedColor)
-        try expectEncodedColor(in: harmony.encode())
+        try expectEncodedColor(in: harmony.encode(eid: .invalid))
     }
 
     @Test func baglessTypesEmitExactlyOneColor() {
-        let staffText = StaffText(text: "text", color: expectedColor).encode()
+        let staffText = StaffText(text: "text", color: expectedColor).encode(eid: .invalid)
 
         var tempo = Tempo(beatsPerSecond: 2)
         tempo.elementProperties.color = expectedColor
 
         let nodes = [
             staffText,
-            tempo.encode(),
-            Swing(color: expectedColor).encode(),
-            InstrumentChange(text: "change", color: expectedColor).encode(),
-            RehearsalMark(text: "A", color: expectedColor).encode(),
+            tempo.encode(eid: .invalid),
+            Swing(color: expectedColor).encode(eid: .invalid),
+            InstrumentChange(text: "change", color: expectedColor).encode(eid: .invalid),
+            RehearsalMark(text: "A", color: expectedColor).encode(eid: .invalid),
         ]
         let colorCounts = nodes.map { $0.all("color").count }
         #expect(colorCounts == [1, 1, 1, 1, 1])

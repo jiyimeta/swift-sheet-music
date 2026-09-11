@@ -12,6 +12,22 @@ extension Spanner {
     /// (and Volta endings / measures + fractions offsets), an
     /// end-side emits just `<prev/>` so the parser recovers
     /// `visible == false`.
+    ///
+    /// **No `<eid>` here, deliberately.** The `<Spanner type="X">` wrapper
+    /// this method builds is not itself an `EngravingItem` — MuseScore's
+    /// `ConnectorInfoWriter::write()` (`connectorinfowriter.cpp:52-75`)
+    /// writes only the wrapper, the payload item, and `<prev>`/`<next>`; the
+    /// identifier lives one level down, on the begin side's payload element
+    /// (confirmed against a real file: `guitarbend_tied.mscx:169-171` is
+    /// `<Spanner type="Tie">` → `<Tie>` → `<eid>…</eid>`), and the end side
+    /// has no payload at all, so it never carries one. This model's
+    /// `payloadElement(options:)` already diverges from `TWrite`'s real
+    /// per-subtype field order for `Volta`/`HairPin`/`Ottava` (an
+    /// established simplification that predates this task), so there is no
+    /// single correct position to add `<eid>` to that payload without first
+    /// untangling that divergence per subtype — out of scope for this task.
+    /// Reverted from an earlier attempt that stamped `<eid>` on the wrapper
+    /// itself, which is a shape no MuseScore file ever produces.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if visible {

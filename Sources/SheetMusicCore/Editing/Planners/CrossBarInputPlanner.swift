@@ -188,19 +188,21 @@ public enum CrossBarInputPlanner {
             case let .chord(source): voice.elements[segment.startIndex] == .chord(source)
             }
             let pieces = segment.durations.enumerated().map { offset, duration in
+                let isLast = written + offset == pieceCount - 1
                 let element = piece(
                     duration: duration,
                     content: content,
                     isFirst: written + offset == 0,
-                    isLast: written + offset == pieceCount - 1,
+                    isLast: isLast,
                 )
-                let identity: SlotIdentity
-                if written + offset == 0, keepsHead {
-                    identity = .keep(voice.elements.eid(at: segment.startIndex))
-                } else {
-                    identity = .fresh
-                }
-                return VoiceSlot(identity: identity, element: element)
+                let identity: SlotIdentity = written + offset == 0 && keepsHead
+                    ? .keep(voice.elements.eid(at: segment.startIndex)) : .fresh
+                // Only the LAST piece is moved, not copied: `piece(...)` hands it `source.graceNotesAfter`
+                // verbatim when `isLast`. Every other piece — including a fresh, non-`keepsHead` head,
+                // whose notes/`graceNotesBefore` are a COPY of `source`'s — takes the default clear. The
+                // head and the last piece are never the same one: `plan` only reaches here when content
+                // overflows the bar, which forces `pieceCount >= 2` always.
+                return VoiceSlot(identity: identity, element: element, nestedIdentity: isLast ? .carried : .cleared)
             }
             guard let spliced = splice(
                 pieces,
@@ -305,7 +307,9 @@ public enum CrossBarInputPlanner {
         guard case let .chord(chord) = element, !chord.notes.isEmpty else {
             return durations.map { .rest(duration: $0) }
         }
-        return DurationChangeAlgorithm.makeChordChain(from: chord, durations: durations)
+        return DurationChangeAlgorithm.makeChordChain(
+            from: chord, durations: durations, onsetOwnership: .allContinuation,
+        )
     }
 
     /// One link of the chain: tied at every interior joint, with the chord's ties at the two ENDS left as its own —
@@ -320,20 +324,22 @@ public enum CrossBarInputPlanner {
         duration: NoteDuration, content: Content, isFirst: Bool, isLast: Bool,
     ) -> VoiceElement {
         guard case let .chord(source) = content else { return .rest(duration: duration) }
-        var notes = source.notes
+        var notes = Array(source.notes)
         for index in notes.indices {
             notes[index].tieBack = isFirst ? source.notes[index].tieBack : 1
             notes[index].tieForward = isLast ? source.notes[index].tieForward : 1
         }
         guard isFirst else {
             return .chord(Chord(
-                duration: duration, notes: notes,
+                duration: duration, notes: ChordNotes(notes),
                 graceNotesBefore: [], graceNotesAfter: isLast ? source.graceNotesAfter : [],
             ))
         }
         var head = source
         head.duration = duration
-        head.notes = notes
+        // The head is `source`'s onset landing in the first piece of the chain, so it keeps `source`'s own
+        // note identifiers — only the continuations (built above, `guard isFirst else`) are different notes.
+        head.notes = ChordNotes(Array(zip(source.notes.indices.map(source.notes.eid(at:)), notes)))
         // Grace notes AFTER the chord lead into whatever follows the sound, so they belong on its last piece, not
         // its first — the one case the head doesn't keep.
         head.graceNotesAfter = isLast ? source.graceNotesAfter : []

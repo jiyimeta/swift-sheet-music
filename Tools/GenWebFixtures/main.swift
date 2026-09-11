@@ -160,6 +160,29 @@ enum GenWebFixtures {
         exit(code)
     }
 
+    /// Assigns identifiers with a fixed, non-random actor before handing a
+    /// score to `MSCZWriter`.
+    ///
+    /// These fixtures are hand-built `Score` values that never went through
+    /// `MSCXParser.decode`, so every element reaches the encoder unidentified.
+    /// `MSCXEncoder.encode` fills that gap with `EIDAllocator()`, whose actor
+    /// is drawn at random per process (`EIDAllocator.init()`,
+    /// `Sources/SheetMusicCore/Score/EIDAllocator.swift`) — so without this,
+    /// the emitted `<eid>` values, and so the `.mscz` bytes `FixtureEmitter`
+    /// compares, would differ on every invocation of this tool, and the
+    /// committed fixtures could never compare byte-identical across runs.
+    /// Pre-assigning with a fixed actor makes `assignMissingIDs` inside
+    /// `MSCXEncoder.encode` a no-op, so the actor here is the one that ends up
+    /// on disk. Mirrors `ReplayChain.identifiedFixture()` in
+    /// `Tests/SheetMusicTests/EditingTests/ReplayChain.swift`, which solves the
+    /// identical problem for the Android/Web edit-replay goldens.
+    static func identified(_ score: Score) -> Score {
+        var score = score
+        var allocator = EIDAllocator(actor: 1)
+        score.assignMissingIDs(using: &allocator)
+        return score
+    }
+
     /// Installs the same `sheet-music.smft` table the browser installs, NOT the
     /// CoreText provider.
     ///
@@ -245,7 +268,7 @@ enum GenWebFixtures {
         let container: Data
         let reloaded: Score
         do {
-            container = try MSCZWriter.write(score: tallScore)
+            container = try MSCZWriter.write(score: identified(tallScore))
             reloaded = try ScoreBridge.loadScore(bytes: container)
         } catch {
             fail("could not round-trip the tall score: \(error)", code: 5)
@@ -320,7 +343,7 @@ enum GenWebFixtures {
         let container: Data
         let reloaded: Score
         do {
-            container = try MSCZWriter.write(score: sampleScore)
+            container = try MSCZWriter.write(score: identified(sampleScore))
             reloaded = try ScoreBridge.loadScore(bytes: container)
         } catch {
             fail("could not round-trip the sample score: \(error)", code: 5)

@@ -44,7 +44,7 @@ extension Voice {
                 opening: opening,
                 activeTuplets: activeWithOpening,
             )
-            state.children.append(opening.encode(baseDuration: base))
+            state.children.append(opening.encode(eid: opening.eid, baseDuration: base, options: options))
             state.stack.append(opening)
         }
         if !(plan.dropInitialZeroKeySig && index == 0) {

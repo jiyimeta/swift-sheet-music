@@ -55,7 +55,7 @@ public struct SetElementColor: EditCommand {
             let slot = VoiceElementID(id)
             guard case var .chord(chord)? = score[slot], chord.notes.indices.contains(id.noteIndexInChord)
             else { throw Self.refused(.noteNotFound(id)) }
-            chord.notes[id.noteIndexInChord].elementProperties.color = color
+            chord.notes.updateNote(at: id.noteIndexInChord) { $0.elementProperties.color = color }
             score[slot] = .chord(chord)
         }
         return SetElementColor(target, color: old.color)

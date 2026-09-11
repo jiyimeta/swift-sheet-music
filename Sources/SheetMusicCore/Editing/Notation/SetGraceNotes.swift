@@ -74,6 +74,12 @@ public struct SetGraceNotes: EditCommand {
     }
 
     /// First unused equal value wins; duplicate values consume distinct current slots in order.
+    ///
+    /// A matched slot keeps the CURRENT value, not the caller's — `GraceChord` equality (like
+    /// `ChordNotes`'s) ignores note identity, so a caller restating an unchanged grace as a fresh
+    /// literal is value-equal to the existing slot while carrying unassigned note identifiers. Keeping
+    /// `current[index]` preserves those without minting; only a genuinely new slot mints, and does so
+    /// down to its own notes, matching `Chord.assignMissingNestedIDs`'s widened coverage.
     private static func match(
         _ wanted: [GraceChord], against current: IdentifiedArray<GraceChord>, using ids: inout EIDAllocator,
     ) -> IdentifiedArray<GraceChord> {
@@ -81,9 +87,13 @@ public struct SetGraceNotes: EditCommand {
         return IdentifiedArray(wanted.map { grace in
             if let index = current.indices.first(where: { !used.contains($0) && current[$0] == grace }) {
                 used.insert(index)
-                return (current.eid(at: index), grace)
+                return (current.eid(at: index), current[index])
             }
-            return (ids.next(), grace)
+            let eid = ids.next()
+            var minted = grace
+            minted.notes = ChordNotes(minted.notes.values) // a new slot is new notes
+            minted.notes.assignMissingIDs(using: &ids)
+            return (eid, minted)
         })
     }
 }

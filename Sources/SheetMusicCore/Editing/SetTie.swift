@@ -80,9 +80,7 @@ public struct SetTie: EditCommand {
         else {
             throw Self.refused(.noteNotFound(noteID))
         }
-        var note = chord.notes[noteID.noteIndexInChord]
-        mutate(&note)
-        chord.notes[noteID.noteIndexInChord] = note
+        chord.notes.updateNote(at: noteID.noteIndexInChord, mutate)
         score[veID] = .chord(chord)
     }
 }

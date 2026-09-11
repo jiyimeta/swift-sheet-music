@@ -19,12 +19,12 @@ struct Phase2RoundTripTests {
         )
         let bar = try BarLine.decode(node)
         #expect(bar.visible == false)
-        let reencoded = bar.encode()
+        let reencoded = bar.encode(eid: .invalid)
         #expect(reencoded.first("visible")?.text == "0")
     }
 
     @Test func barLineVisibleTrueOmitsTag() {
-        let encoded = BarLine(subtype: nil).encode()
+        let encoded = BarLine(subtype: nil).encode(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 
@@ -40,12 +40,12 @@ struct Phase2RoundTripTests {
         )
         let clef = try Clef.decode(node)
         #expect(clef.visible == false)
-        let reencoded = clef.encode()
+        let reencoded = clef.encode(eid: .invalid)
         #expect(reencoded.first("visible")?.text == "0")
     }
 
     @Test func clefVisibleTrueOmitsTag() {
-        let encoded = Clef(concertClefType: "G").encode()
+        let encoded = Clef(concertClefType: "G").encode(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 
@@ -61,12 +61,12 @@ struct Phase2RoundTripTests {
         )
         let key = try KeySignature.decode(node)
         #expect(key.visible == false)
-        let reencoded = key.encode()
+        let reencoded = key.encode(eid: .invalid)
         #expect(reencoded.first("visible")?.text == "0")
     }
 
     @Test func keySignatureVisibleTrueOmitsTag() {
-        let encoded = KeySignature(concertKey: 0).encode()
+        let encoded = KeySignature(concertKey: 0).encode(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 
@@ -83,12 +83,12 @@ struct Phase2RoundTripTests {
         )
         let timeSig = try TimeSignature.decode(node)
         #expect(timeSig.visible == false)
-        let reencoded = timeSig.encode()
+        let reencoded = timeSig.encode(eid: .invalid)
         #expect(reencoded.first("visible")?.text == "0")
     }
 
     @Test func timeSignatureVisibleTrueOmitsTag() {
-        let encoded = TimeSignature(numerator: 4, denominator: 4).encode()
+        let encoded = TimeSignature(numerator: 4, denominator: 4).encode(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 }

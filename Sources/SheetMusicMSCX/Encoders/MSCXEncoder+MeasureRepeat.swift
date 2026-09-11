@@ -16,6 +16,7 @@ extension MeasureRepeat {
     /// (`<durationType>measure</durationType>` + `<duration>N/D
     /// </duration>`) on both branches.
     func encode(
+        eid: EID,
         options: MSCXEncoderOptions = .init(),
         in measureDuration: Fraction = Fraction(numerator: 4, denominator: 4),
     ) -> XMLTreeNode {
@@ -31,6 +32,12 @@ extension MeasureRepeat {
                 name: "subtype", text: String(numMeasures),
             ))
         }
+        // `<eid>` sits here, not first: `TWrite::write(const MeasureRepeat*,
+        // ...)` (`rw/write/twrite.cpp:2294-2301`) writes `<subtype>` (v4's
+        // header), then calls `writeProperties(Rest*) → writeProperties
+        // (ChordRest*)`, whose own FIRST act is `writeItemProperties` — the
+        // `<eid>` writer — before the duration tags that follow.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         let resolved = duration.resolved(in: measureDuration)
         if case let .fraction(f) = resolved {
             children.append(XMLTreeNode(name: "durationType", text: "measure"))

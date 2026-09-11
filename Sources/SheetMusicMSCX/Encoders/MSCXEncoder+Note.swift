@@ -16,6 +16,7 @@ extension Note {
     /// `chord()->el()` for chord lines matching the note); chord-level
     /// ones stay under `<Chord>`.
     func encode(
+        eid: EID,
         tieForwardEndpoint: TieEndpoint? = nil,
         tieBackEndpoint: TieEndpoint? = nil,
         guitarBendForwardEndpoint: TieEndpoint? = nil,
@@ -25,6 +26,7 @@ extension Note {
         chordLines: [ChordLine] = [],
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         appendAccidental(into: &children)
         // The legacy `<Bend>` is an `el()` item, which MuseScore writes
         // immediately after `<Accidental>` and before the tie spanners —
@@ -51,7 +53,10 @@ extension Note {
         // `decodeParentheses` would read it back as `parentheses`, growing a
         // pair of brackets the model never had.
         for symbol in symbols where !Self.parenthesisSymbolNames.contains(symbol.name) {
-            children.append(symbol.encode(options: options))
+            // `Note.symbols` is a plain array, not an `IdentifiedArray` —
+            // a note-attached `<Symbol>` has no slot of its own to carry
+            // an identifier.
+            children.append(symbol.encode(eid: .invalid, options: options))
         }
         if tieForward != nil {
             children.append(tieSpanner(

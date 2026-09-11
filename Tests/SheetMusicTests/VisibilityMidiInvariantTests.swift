@@ -87,7 +87,7 @@ struct VisibilityMidiInvariantTests {
                                 for noteIdx in chord.notes.indices
                                     where chord.notes[noteIdx].visible
                                 {
-                                    chord.notes[noteIdx].visible = false
+                                    chord.notes.updateNote(at: noteIdx) { $0.visible = false }
                                     flippedAny = true
                                 }
                                 hidden.parts.updateValue(at: partIdx) { partValue in

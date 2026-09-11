@@ -31,6 +31,87 @@ struct EditingIdentityInvariantTests {
     }
 
     #if DEBUG
+        private func singleChordWithGrace() -> Score {
+            GraceIdentityFixtures.score(before: [GraceIdentityFixtures.grace()], after: [])
+        }
+
+        @Test("the identifier traversal includes chord and grace notes")
+        func traversalIncludesNotes() {
+            let editor = ScoreEditor(score: singleChordWithGrace())
+            guard case let .chord(chord) = editor.score.parts[0].staves[0].measures[0].voices[0].elements[0]
+            else { fatalError("fixture is a chord") }
+            let noteID = chord.notes.eid(at: 0)
+            let graceNoteID = chord.graceNotesBefore[0].notes.eid(at: 0)
+            let collected = Set(EditingIdentityInvariants.identifiers(in: editor.score))
+            #expect(collected.contains(noteID))
+            #expect(collected.contains(graceNoteID))
+        }
+
+        // Containment alone (above) only shows the traversal reports a note identifier when one
+        // exists; it says nothing about whether the gate can actually catch a collision at the note
+        // level. These three tests force a collision directly on `ChordNotes.ids` — internal, but
+        // reachable through `@testable import` — deliberately bypassing `noteIdentifiers(of:)` and
+        // every other production mutation path, so a pass here is independent evidence about the
+        // traversal's discriminating power rather than a restatement of it.
+
+        @Test("hasUniqueIDs rejects two notes within one chord sharing an identifier")
+        func noteCollisionWithinOneChordIsRejected() {
+            var score = ScoreEditor(score: VoiceIdentityFixtures.score(elements: [
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14), Note(pitch: 64, tpc: 18)])),
+            ])).score
+            #expect(EditingIdentityInvariants.hasUniqueIDs(score))
+            GraceIdentityFixtures.mutate(&score) { chord in
+                chord.notes.ids[1] = chord.notes.ids[0]
+            }
+            #expect(!EditingIdentityInvariants.hasUniqueIDs(score))
+        }
+
+        @Test("hasUniqueIDs rejects a chord's note sharing an identifier with its own grace's note")
+        func noteCollisionWithOwnGraceIsRejected() {
+            var score = ScoreEditor(score: singleChordWithGrace()).score
+            #expect(EditingIdentityInvariants.hasUniqueIDs(score))
+            GraceIdentityFixtures.mutate(&score) { chord in
+                let noteID = chord.notes.eid(at: 0)
+                chord.graceNotesBefore.updateValue(at: 0) { grace in
+                    grace.notes.ids[0] = noteID
+                }
+            }
+            #expect(!EditingIdentityInvariants.hasUniqueIDs(score))
+        }
+
+        @Test("hasUniqueIDs rejects notes in two different chords sharing an identifier")
+        func noteCollisionAcrossChordsIsRejected() {
+            var score = ScoreEditor(score: VoiceIdentityFixtures.score(elements: [
+                VoiceIdentityFixtures.chord(pitch: 60), VoiceIdentityFixtures.chord(pitch: 64),
+            ])).score
+            #expect(EditingIdentityInvariants.hasUniqueIDs(score))
+            guard case let .chord(first) = VoiceIdentityFixtures.elements(score)[0]
+            else { fatalError("fixture is a chord") }
+            let firstNoteID = first.notes.eid(at: 0)
+            GraceIdentityFixtures.mutate(&score, index: 1) { chord in
+                chord.notes.ids[0] = firstNoteID
+            }
+            #expect(!EditingIdentityInvariants.hasUniqueIDs(score))
+        }
+
+        @Test("allocatorCovers rejects a note identifier forged outside the allocator's range")
+        func allocatorCoverageIncludesNoteHighWater() {
+            var score = singleChordWithGrace()
+            var ids = EIDAllocator(actor: 42)
+            score.assignMissingIDs(using: &ids)
+            #expect(EditingIdentityInvariants.allocatorCovers(score, ids))
+            // Any counter value past the live high-water mark is out of range by construction —
+            // no need to hand-derive the exact mint count, unlike the duplicate-collision tests
+            // above where the forged id must equal an existing one.
+            let forged = EID(first: ids.actor, second: ids.counter + 1)
+            GraceIdentityFixtures.mutate(&score) { chord in
+                chord.notes.ids[0] = forged
+            }
+            #expect(!score.hasUnassignedIDs)
+            #expect(EditingIdentityInvariants.hasUniqueIDs(score))
+            #expect(!EditingIdentityInvariants.allocatorCovers(score, ids))
+        }
+
         @Test func duplicateCheckerRejectsRealDuplicateSlots() {
             let eid = EID(first: 42, second: 1)
             let duplicate = Score(division: 480, parts: IdentifiedArray([

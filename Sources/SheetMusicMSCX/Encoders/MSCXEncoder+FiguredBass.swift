@@ -12,7 +12,7 @@ extension FiguredBass {
     /// matching MuseScore's own writer and its derived-text reader behavior.
     /// `<FiguredBass>` predates every supported target, so no version branch is
     /// needed.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if !isOnNote {
             children.append(XMLTreeNode(name: "onNote", text: "0"))
@@ -23,10 +23,20 @@ extension FiguredBass {
                 text: "\(ticks.numerator)/\(ticks.denominator)",
             ))
         }
+        // `<eid>` moves with the payload shape it belongs to —
+        // `TWrite::write(const FiguredBass*, ...)` (`rw/write/twrite.cpp:1371-1396`)
+        // takes two mutually exclusive branches after `onNote`/`ticks`: the
+        // text-only form calls `writeProperties(TextBase*, ..., true)`,
+        // whose own first act is `writeItemProperties` (the `<eid>` writer)
+        // BEFORE `<text>`; the parsed-items form writes every
+        // `<FiguredBassItem>` first and calls `writeItemProperties` only
+        // AFTER them, essentially last.
         if items.isEmpty {
+            EIDXML.appendIfNeeded(eid, options: options, to: &children)
             children.append(XMLTreeNode(name: "text", text: text))
         } else {
             children += items.map { $0.encode(options: options) }
+            EIDXML.appendIfNeeded(eid, options: options, to: &children)
         }
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)

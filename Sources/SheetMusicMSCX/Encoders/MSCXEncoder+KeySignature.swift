@@ -17,8 +17,13 @@ extension KeySignature {
     /// into the writable `[-7, +7]` range. For a non-transposing part the offset is 0, so v3 output
     /// is unchanged and v4 omits `<actualKey>` entirely — which keeps every existing fixture
     /// byte-stable.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        // `<eid>` genuinely is first here: `TWrite::write(const KeySig*,
+        // ...)` (`rw/write/twrite.cpp:2150-2153`) calls `writeItemProperties`
+        // — the `<eid>` writer — BEFORE writing `concertKey`/`custom`/etc.,
+        // unlike every other kind in this file.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         let writtenKey = Score.respelledKey(concertKey + options.writtenFifthsOffset)
         switch options.targetVersion {
         case .v2, .v3:

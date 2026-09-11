@@ -23,12 +23,12 @@ struct Phase1RoundTripTests {
         )
         let dyn = try Dynamic.decode(node)
         #expect(dyn.visible == false)
-        let reencoded = dyn.encode()
+        let reencoded = dyn.encode(eid: .invalid)
         #expect(reencoded.first("visible")?.text == "0")
     }
 
     @Test func dynamicVisibleTrueOmitsTag() {
-        let encoded = Dynamic(subtype: "f", velocity: 96).encode()
+        let encoded = Dynamic(subtype: "f", velocity: 96).encode(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 
@@ -45,12 +45,12 @@ struct Phase1RoundTripTests {
         )
         let note = try Note.decode(node)
         #expect(note.visible == false)
-        let reencoded = note.encode()
+        let reencoded = note.encode(eid: .invalid)
         #expect(reencoded.first("visible")?.text == "0")
     }
 
     @Test func noteVisibleTrueOmitsTag() {
-        let encoded = Note(pitch: 60, tpc: 14).encode()
+        let encoded = Note(pitch: 60, tpc: 14).encode(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 
@@ -73,7 +73,7 @@ struct Phase1RoundTripTests {
         )
         let chord = try Chord.decode(node)
         #expect(chord.visible == false)
-        let reencoded = chord.encodeAsChord()
+        let reencoded = chord.encodeAsChord(eid: .invalid)
         #expect(reencoded.first("visible")?.text == "0")
     }
 
@@ -82,7 +82,7 @@ struct Phase1RoundTripTests {
             duration: .quarter,
             notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
         )
-        let encoded = chord.encodeAsChord()
+        let encoded = chord.encodeAsChord(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 
@@ -107,7 +107,7 @@ struct Phase1RoundTripTests {
         )
         let chord = try Chord.decode(node)
         #expect(chord.stemVisible == false)
-        let reencoded = chord.encodeAsChord()
+        let reencoded = chord.encodeAsChord(eid: .invalid)
         let stem = reencoded.first("Stem")
         #expect(stem != nil)
         #expect(stem?.first("visible")?.text == "0")
@@ -118,7 +118,7 @@ struct Phase1RoundTripTests {
             duration: .eighth,
             notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
         )
-        let encoded = chord.encodeAsChord()
+        let encoded = chord.encodeAsChord(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "Stem" }))
     }
 
@@ -134,12 +134,12 @@ struct Phase1RoundTripTests {
         )
         let rest = try MSCXRestDecoder.decode(node)
         #expect(rest.visible == false)
-        let reencoded = rest.encodeAsRest()
+        let reencoded = rest.encodeAsRest(eid: .invalid)
         #expect(reencoded.first("visible")?.text == "0")
     }
 
     @Test func restVisibleTrueOmitsTag() {
-        let encoded = Chord(duration: .quarter, notes: []).encodeAsRest()
+        let encoded = Chord(duration: .quarter, notes: []).encodeAsRest(eid: .invalid)
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 }

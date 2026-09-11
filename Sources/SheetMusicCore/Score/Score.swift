@@ -318,7 +318,9 @@ private func strippingPreservedMarkup(from source: Chord) -> Chord {
     var chord = source
     chord.preservedMarkup = []
     for noteIndex in chord.notes.indices {
-        stripPreservedMarkup(from: &chord.notes[noteIndex])
+        chord.notes.updateNote(at: noteIndex) { note in
+            stripPreservedMarkup(from: &note)
+        }
     }
     for lyricIndex in chord.lyrics.indices {
         chord.lyrics[lyricIndex].preservedMarkup = []
@@ -342,7 +344,9 @@ private func stripPreservedMarkup(from graces: inout IdentifiedArray<GraceChord>
         graces.updateValue(at: graceIndex) { grace in
             grace.preservedMarkup = []
             for noteIndex in grace.notes.indices {
-                stripPreservedMarkup(from: &grace.notes[noteIndex])
+                grace.notes.updateNote(at: noteIndex) { note in
+                    stripPreservedMarkup(from: &note)
+                }
             }
         }
     }

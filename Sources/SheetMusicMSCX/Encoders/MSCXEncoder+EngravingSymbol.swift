@@ -38,8 +38,9 @@ extension EngravingSymbol {
     /// (`dom/symbol.cpp:49`). This decoder collapses both to an empty name, so
     /// a hand-written `<Symbol/>` comes back as `noSym` rather than a sharp.
     /// MuseScore's own writer never emits the tagless shape.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children = [XMLTreeNode(name: "name", text: name)]
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        children.append(XMLTreeNode(name: "name", text: name))
         if let scoreFont {
             children.append(XMLTreeNode(name: "font", text: scoreFont))
         }
@@ -50,6 +51,12 @@ extension EngravingSymbol {
             children.append(XMLTreeNode(name: "symbolAngle", text: formatDouble(angle)))
         }
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
+        // `<eid>` sits here, not first: `TWrite::writeProperties(const
+        // BSymbol*, …)` (`twrite.cpp:1883-1889`) writes the leaf children
+        // (captured above as preserved markup) FIRST, and only then calls
+        // `writeItemProperties` — the `<eid>` writer — right where
+        // `elementProperties.mscxChildren()` already sits.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children += elementProperties.mscxChildren()
         children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Symbol", children: children)

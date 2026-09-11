@@ -203,7 +203,7 @@ struct TabAnnotationMSCXTests {
         #expect(capo.transposeMode == nil)
         #expect(capo.ignoredStrings.isEmpty)
         #expect(capo.text.isEmpty)
-        #expect(Capo.decode(capo.encode()) == capo)
+        #expect(Capo.decode(capo.encode(eid: .invalid)) == capo)
     }
 
     @Test func distinguishesAbsentBooleansFromExplicitZero() throws {
@@ -301,24 +301,24 @@ struct TabAnnotationMSCXTests {
     }
 
     @Test func encodesCanonicalChildShapesAndSortedIgnoredStrings() throws {
-        let capo = Capo(text: "Capo 2").encode()
+        let capo = Capo(text: "Capo 2").encode(eid: .invalid)
         #expect(capo.name == "Capo")
         #expect(capo.children.map(\.name) == [
             "active", "fretPosition", "generateText", "text",
         ])
 
-        let tabOnly = Capo(transposeMode: .tabOnly, text: "Capo 2").encode()
+        let tabOnly = Capo(transposeMode: .tabOnly, text: "Capo 2").encode(eid: .invalid)
         #expect(tabOnly.children.map(\.name) == [
             "active", "fretPosition", "generateText", "transposeMode", "text",
         ])
         #expect(tabOnly.first("transposeMode")?.text == "2")
 
-        let partial = Capo(ignoredStrings: [5, 1], text: "Partial capo").encode()
+        let partial = Capo(ignoredStrings: [5, 1], text: "Partial capo").encode(eid: .invalid)
         let strings = partial.all("string")
         #expect(strings.compactMap { $0.attributes["no"] } == ["1", "5"])
         #expect(strings.allSatisfy { $0.first("apply")?.text == "0" })
 
-        let tunings = StringTunings().encode()
+        let tunings = StringTunings().encode(eid: .invalid)
         let visibleStrings = try #require(tunings.first("visibleStrings"))
         #expect(visibleStrings.text.isEmpty)
     }

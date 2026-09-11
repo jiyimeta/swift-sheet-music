@@ -217,9 +217,16 @@ extension Score {
         _ chord: Chord, semitones: Int, fifthsDelta: Int, key: Int,
     ) -> Chord {
         var c = chord
-        c.notes = ChordNotes(c.notes.map {
+        // In-place `mapValues` keeps each slot's own identifier, unlike rebuilding via
+        // `ChordNotes(_:)`, which re-derives an unassigned collection. A transposed display copy
+        // is the same notes shown differently, so the note IDs it carries must match the
+        // committed score's — that is what lets a host map a click on the display back to an
+        // edit address. `mapValues` can collide two distinct pitches onto one (first-wins,
+        // returning the collided-away identifiers); a display copy discards that list, same as
+        // playback callers, since there is no edit to refuse.
+        c.notes.mapValues {
             transposedNote($0, semitones: semitones, fifthsDelta: fifthsDelta, key: key)
-        })
+        }
         c.graceNotesBefore.mapValues {
             transposedGrace($0, semitones: semitones, fifthsDelta: fifthsDelta, key: key)
         }
@@ -233,9 +240,9 @@ extension Score {
         _ grace: GraceChord, semitones: Int, fifthsDelta: Int, key: Int,
     ) -> GraceChord {
         var g = grace
-        g.notes = ChordNotes(grace.notes.map {
+        g.notes.mapValues {
             Self.transposedNote($0, semitones: semitones, fifthsDelta: fifthsDelta, key: key)
-        })
+        }
         return g
     }
 

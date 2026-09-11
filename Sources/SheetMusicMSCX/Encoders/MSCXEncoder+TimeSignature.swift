@@ -3,7 +3,7 @@ import SheetMusicFoundation
 import SheetMusicXMLTools
 
 extension TimeSignature {
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         // MuseScore writes `<subtype>` FIRST — `TWrite::write(const TimeSig*, …)` emits `Pid::TIMESIG_TYPE`
         // ahead of the item properties and `<sigN>` — and omits it for the default `NORMAL`, so a numeric
@@ -11,6 +11,14 @@ extension TimeSignature {
         if symbol != .numeric {
             children.append(XMLTreeNode(name: "subtype", text: String(symbol.rawValue)))
         }
+        // `<eid>` comes immediately after `<subtype>` (present or not) and
+        // before `<sigN>`/`<sigD>`: `TWrite::write(const TimeSig*, …)`
+        // (`rw/write/twrite.cpp:3220-3224`) calls `writeItemProperties` —
+        // the `<eid>` writer — right after `Pid::TIMESIG_TYPE`. A numeric
+        // signature therefore still gets `<eid>` first (no `<subtype>`
+        // precedes it), matching `midi01.mscx`'s `<TimeSig><eid>F_F</eid>`;
+        // a common-time/cut-time signature gets `<subtype>` first instead.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children += [
             XMLTreeNode(name: "sigN", text: String(numerator)),
             XMLTreeNode(name: "sigD", text: String(denominator)),

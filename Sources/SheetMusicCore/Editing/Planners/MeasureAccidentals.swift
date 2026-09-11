@@ -240,8 +240,10 @@ public enum MeasureAccidentals {
             }
             guard wanted != note.accidental else { continue }
             var mutated = chord
-            mutated.notes[ref.noteIndex].accidental = wanted
-            mutated.notes[ref.noteIndex].accidentalBracket = wanted == nil ? .none : note.accidentalBracket
+            mutated.notes.updateNote(at: ref.noteIndex) {
+                $0.accidental = wanted
+                $0.accidentalBracket = wanted == nil ? .none : note.accidentalBracket
+            }
             voices[ref.voiceIndex].elements.updateValue(at: ref.elementIndex) { $0 = .chord(mutated) }
         }
         return voices.indices.compactMap { voiceIndex in

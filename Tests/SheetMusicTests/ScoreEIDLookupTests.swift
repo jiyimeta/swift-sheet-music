@@ -80,6 +80,65 @@ struct ScoreEIDLookupTests {
         #expect(editor.score[eid: eid] == nil)
     }
 
+    @Test func everyNotePositionRoundTripsWithDistinctIdentifiers() throws {
+        let score = ScoreEditor(score: EditingFixtures.twoNoteChordAtIndex1()).score
+        let notePositions = [
+            EditingFixtures.noteID(element: 1, noteIndex: 0),
+            EditingFixtures.noteID(element: 1, noteIndex: 1),
+        ]
+        var identifiers = Set<EID>()
+        for notePosition in notePositions {
+            let eid = try #require(score.eid(at: notePosition))
+            #expect(eid.isValid)
+            #expect(score.notePosition(of: eid) == notePosition)
+            #expect(identifiers.insert(eid).inserted)
+        }
+        #expect(identifiers.count == notePositions.count)
+    }
+
+    @Test func notePositionSkipsPastANonMatchingChordToTheSecondChord() throws {
+        let score = ScoreEditor(score: EditingFixtures.c4ThenD4Chords()).score
+        let secondChordPosition = EditingFixtures.noteID(element: 2)
+        let eid = try #require(score.eid(at: secondChordPosition))
+        #expect(score.notePosition(of: eid) == secondChordPosition)
+    }
+
+    @Test func unknownNoteIdentifierIsNil() {
+        let score = ScoreEditor(score: EditingFixtures.twoNoteChordAtIndex1()).score
+        var unrelated = EIDAllocator(actor: 999)
+        #expect(score.notePosition(of: unrelated.next()) == nil)
+        #expect(score.notePosition(of: .invalid) == nil)
+    }
+
+    @Test func outOfRangeNotePositionsReturnNil() {
+        let score = ScoreEditor(score: EditingFixtures.twoNoteChordAtIndex1()).score
+        let invalidPositions = [
+            NoteID(
+                staff: StaffAddress(partIndex: -1, staffIndexInPart: 0),
+                measureIndex: 0, voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
+            ),
+            EditingFixtures.noteID(measure: 1, element: 1),
+            EditingFixtures.noteID(element: 99),
+            // element 0 is a rest, not a chord.
+            EditingFixtures.noteID(element: 0),
+            EditingFixtures.noteID(element: 1, noteIndex: 2),
+            EditingFixtures.noteID(element: 1, noteIndex: -1),
+        ]
+        for position in invalidPositions {
+            #expect(score.eid(at: position) == nil)
+        }
+    }
+
+    @Test func graceNoteIdentifierIsOutsideNoteLookupScope() throws {
+        let score = ScoreEditor(score: GraceIdentityFixtures.score(before: [
+            GraceIdentityFixtures.grace(),
+        ], after: [])).score
+        let chord = try GraceIdentityFixtures.chord(score)
+        let graceNoteEID = chord.graceNotesBefore[0].notes.eid(at: 0)
+        #expect(graceNoteEID.isValid)
+        #expect(score.notePosition(of: graceNoteEID) == nil)
+    }
+
     @Test func nestedGraceChordsAreOutsideLookupScope() throws {
         let score = ScoreEditor(score: literalScore()).score
         let element = try #require(score[position()])

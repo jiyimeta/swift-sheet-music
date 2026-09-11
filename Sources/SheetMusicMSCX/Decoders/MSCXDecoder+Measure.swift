@@ -33,7 +33,7 @@ extension Measure {
         "Rest", "Spanner", "StaffText", "SystemText", "Tempo",
         "TimeSig", "Tuplet", "endRepeat", "endTuplet", "irregular",
         "location", "measureRepeatCount", "multiMeasureRest",
-        "startRepeat", "tick", "voice",
+        "startRepeat", "tick", "voice", EIDXML.childName,
     ]
 
     private static let modeledLayoutBreakSubtypes: Set = [
@@ -53,9 +53,19 @@ extension Measure {
     /// `PositionedSystemElement.originalStaff` with the appropriate
     /// `StaffAddress` once the part/staff index is known (see
     /// `assembleParts(decoded:topLevel:)`).
+    ///
+    /// `eid` is this `<Measure>`'s own identifier — decoded
+    /// unconditionally here, but only MEANINGFUL as the "column"
+    /// identity when this measure belongs to the score's first staff
+    /// (MuseScore itself never writes `<eid>` on any other staff's
+    /// `<Measure>`); `assembleParts` is what applies that rule.
     struct DecodeResult {
         let measure: Measure
         let systemElements: [PositionedSystemElement]
+        /// Positionally aligned with `systemElements` — see
+        /// `Voice.DecodeResult.systemElementEIDs`.
+        let systemElementEIDs: [EID]
+        let eid: EID
     }
 
     /// True when a raw `<Measure>` XML node is MuseScore's mmRest
@@ -109,6 +119,7 @@ extension Measure {
         }
         let voices = voiceResults.map(\.voice)
         let systemElements = voiceResults.flatMap(\.systemElements)
+        let systemElementEIDs = voiceResults.flatMap(\.systemElementEIDs)
         let markers = node.all("Marker").map(decodeMarker)
         let jumps = node.all("Jump").map(decodeJump)
         // `<LayoutBreak>` declares an explicit system / page / section
@@ -152,7 +163,11 @@ extension Measure {
             irregular: irregular,
             preservedMarkup: preservedMarkup,
         )
-        return DecodeResult(measure: measure, systemElements: systemElements)
+        return DecodeResult(
+            measure: measure, systemElements: systemElements,
+            systemElementEIDs: systemElementEIDs,
+            eid: EIDXML.decode(from: node),
+        )
     }
 
     /// Preserve only `<LayoutBreak>` subtypes the model did not

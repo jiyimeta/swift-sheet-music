@@ -130,7 +130,18 @@ struct SetChordSymbolTests {
         #expect(reread.harmonyType == harmonyType)
         #expect(reread.rootTpc == nil)
         #expect(reread.bassTpc == nil)
-        #expect(try MSCXEncoder.encode(parsed) == first)
+        // Fixed point is anchored one parse-cycle later than `first`, not at it:
+        // `parityFixture()` is a hand-built Score that deliberately leaves
+        // `systemMeasures` empty (`ParityFixtureTests` pins that), so `first`'s encode
+        // carries no "column" <eid> for any measure. Decoding always pads
+        // `systemMeasures` to the real measure count (`assembleParts`), and the
+        // identifier chokepoint then mints one — so `parsed`, unlike the never-parsed
+        // `score`, has a column identity to echo back on its own next encode. That
+        // is exactly what the real corpus 2-pass gate measures too: it always starts
+        // from an already-parsed Score, never a hand-built one.
+        let second = try MSCXEncoder.encode(parsed)
+        let reparsed = try MSCXParser.parse(second)
+        #expect(try MSCXEncoder.encode(reparsed) == second)
     }
 
     private static func reason(of error: SheetMusicError?) -> EditRefusal.Reason? {

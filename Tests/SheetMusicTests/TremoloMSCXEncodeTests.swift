@@ -11,7 +11,7 @@ struct TremoloMSCXEncodeTests {
             notes: [Note(pitch: 60, tpc: 14)],
             tremolo: Tremolo(subtype: .r16),
         )
-        let node = original.encodeAsChord()
+        let node = original.encodeAsChord(eid: .invalid)
         let decoded = try Chord.decode(node)
         #expect(decoded.tremolo == original.tremolo)
     }
@@ -44,7 +44,7 @@ struct TremoloMSCXEncodeTests {
             notes: [Note(pitch: 60, tpc: 14)],
             tremolo: Tremolo(subtype: .r32, strokeStyle: .traditional),
         )
-        let node = original.encodeAsChord()
+        let node = original.encodeAsChord(eid: .invalid)
         let decoded = try Chord.decode(node)
         #expect(decoded.tremolo?.strokeStyle == .traditional)
     }

@@ -32,7 +32,7 @@ public struct SetNoteVisible: EditCommand {
         guard case var .chord(chord) = score[veID] else {
             throw Self.refused(.wrongElementKind(at: veID, expected: .chord))
         }
-        chord.notes[location.noteIndexInChord].visible = visible
+        chord.notes.updateNote(at: location.noteIndexInChord) { $0.visible = visible }
         score[veID] = .chord(chord)
         return SetNoteVisible(at: location, visible: oldNote.visible)
     }

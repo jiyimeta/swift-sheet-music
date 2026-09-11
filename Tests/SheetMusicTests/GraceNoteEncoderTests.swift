@@ -135,7 +135,7 @@ struct GraceNoteEncoderStructuralTests {
             notes: ChordNotes([Note(pitch: 59, tpc: 11, tieForward: 1)]),
         )
 
-        let chordNode = grace.encode()
+        let chordNode = grace.encode(eid: .invalid)
         let noteNode = chordNode.first("Note")
         let spanner = noteNode?.all("Spanner").first { $0.attributes["type"] == "Tie" }
         #expect(spanner != nil)
@@ -167,7 +167,7 @@ struct GraceNoteEncoderStructuralTests {
             notes: ChordNotes([Note(pitch: 64, tpc: 18, tieBack: 1)]),
         )
 
-        let chordNode = grace.encode()
+        let chordNode = grace.encode(eid: .invalid)
         let noteNode = chordNode.first("Note")
         let spanner = noteNode?.all("Spanner").first { $0.attributes["type"] == "Tie" }
         #expect(spanner != nil)

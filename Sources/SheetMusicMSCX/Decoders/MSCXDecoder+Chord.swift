@@ -89,11 +89,13 @@ extension Chord {
     ///
     /// The rest are the allowlist:
     ///
-    /// - `eid` — MuseScore 4.6's regenerated internal element id. No decoder
-    ///   in this package models it anywhere, it carries no user data (4.6
-    ///   mints a fresh one on every save), and warning on it would fire on
-    ///   every element of every 4.6 score. Same reasoning, same silence, as
-    ///   `Note.eidChildName` in `MSCXDecoder+GuitarBend.swift`.
+    /// - `eid` (`EIDXML.childName`) — the slur payload's own identifier. Unlike most carriers this
+    ///   phase gave identity to, `Spanner.spanner` is `.invalid`: the real identifier lives on the
+    ///   `<Spanner>` wrapper this payload sits inside, and that spanner-payload identity is the open
+    ///   gap `PHASE-NOTES.md` and `MSCXPreservationGateTests.swift`'s `spannerPayloadEIDReason`
+    ///   already record. Listed here only so it is elided rather than reported as an unmodeled
+    ///   property dropped — same reasoning, same silence, as the `EIDXML.childName` entries in
+    ///   `MSCXDecoder+GuitarBend.swift`.
     /// - `linkedMain` / `linked` — part-linking bookkeeping. MuseScore tags
     ///   the master copy of a linked element `<linkedMain/>` and every linked
     ///   copy `<linked>…</linked>` (4.2 `TWrite::writeProperties(const
@@ -110,7 +112,7 @@ extension Chord {
         "placement",
         "visible",
         "beginText",
-        "eid",
+        EIDXML.childName,
         "linkedMain",
         "linked",
     ]
@@ -282,12 +284,17 @@ extension Chord {
     /// chord-level `<small>1</small>` to every note that isn't already
     /// small. MuseScore writes `<small>` on the chord element when the
     /// whole chord is displayed at a reduced size (cue / small noteheads).
-    private static func decodeNotes(_ node: XMLTreeNode) throws -> [Note] {
-        let rawNotes = try node.all("Note").map { try Note.decode($0) }
+    /// Each note is paired with its own `<eid>`, decoded via `EIDXML` —
+    /// `.invalid` when the file carried none, which the encoder/parser
+    /// chokepoint fills in later.
+    private static func decodeNotes(_ node: XMLTreeNode) throws -> [(EID, Note)] {
+        let rawNotes = try node.all("Note").map { noteNode in
+            try (EIDXML.decode(from: noteNode), Note.decode(noteNode))
+        }
         guard node.first("small")?.text == "1" else { return rawNotes }
-        return rawNotes.map { n in
-            guard !n.isSmall else { return n }
-            var copy = n; copy.isSmall = true; return copy
+        return rawNotes.map { eid, n in
+            guard !n.isSmall else { return (eid, n) }
+            var copy = n; copy.isSmall = true; return (eid, copy)
         }
     }
 
@@ -296,13 +303,13 @@ extension Chord {
     /// `<NoteIdx>` into the chord's note list. MuseScore synthesizes both
     /// sides on read, so a referenced note is always `.both`. Out-of-range
     /// indices are skipped (permissive parser).
-    private static func applyNoteParenGroup(_ node: XMLTreeNode, to notes: inout [Note]) {
+    private static func applyNoteParenGroup(_ node: XMLTreeNode, to notes: inout [(EID, Note)]) {
         guard let group = node.first("NoteParenGroup"),
               let notesNode = group.first("Notes")
         else { return }
         for idxNode in notesNode.all("NoteIdx") {
             guard let idx = Int(idxNode.text), notes.indices.contains(idx) else { continue }
-            notes[idx].parentheses = .both
+            notes[idx].1.parentheses = .both
         }
     }
 

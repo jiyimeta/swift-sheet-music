@@ -24,20 +24,27 @@ struct GraceIdentityAssignmentTests {
         }
         #expect(score.parts.eid(at: 0) == eid(1))
         #expect(score.parts[0].staves.eid(at: 0) == eid(2))
-        #expect(V.ids(voice.elements) == [eid(3), eid(7), eid(9)])
-        #expect(F.ids(x.graceNotesBefore) == [eid(4), eid(5)])
-        #expect(F.ids(x.graceNotesAfter) == [eid(6)])
-        #expect(F.ids(y.graceNotesBefore) == [eid(8)])
-        #expect(voice.tuplets.eid(at: 0) == eid(10))
+        // Per chord: its element slot, then its own note, then its grace slot lists, then each grace's own note.
+        #expect(V.ids(voice.elements) == [eid(3), eid(11), eid(15)])
+        #expect(x.notes.eid(at: 0) == eid(4))
+        #expect(F.ids(x.graceNotesBefore) == [eid(5), eid(6)])
+        #expect(F.ids(x.graceNotesAfter) == [eid(7)])
+        #expect(x.graceNotesBefore.values[0].notes.eid(at: 0) == eid(8))
+        #expect(x.graceNotesBefore.values[1].notes.eid(at: 0) == eid(9))
+        #expect(x.graceNotesAfter.values[0].notes.eid(at: 0) == eid(10))
+        #expect(y.notes.eid(at: 0) == eid(12))
+        #expect(F.ids(y.graceNotesBefore) == [eid(13)])
+        #expect(y.graceNotesBefore.values[0].notes.eid(at: 0) == eid(14))
+        #expect(voice.tuplets.eid(at: 0) == eid(16))
         #expect(voice.tuplets[0].first == .element(eid(3)))
-        #expect(voice.tuplets[0].last == .element(eid(9)))
-        #expect(score.systemMeasures.eid(at: 0) == eid(11))
-        #expect(ids.counter == 11)
+        #expect(voice.tuplets[0].last == .element(eid(15)))
+        #expect(score.systemMeasures.eid(at: 0) == eid(17))
+        #expect(ids.counter == 17)
         #expect(!score.hasUnassignedIDs)
         let assigned = score
         score.assignMissingIDs(using: &ids)
         V.expectSameScore(score, assigned)
-        #expect(ids.counter == 11)
+        #expect(ids.counter == 17)
     }
 
     @Test func bareAndEditorNoOpLandEveryLiteralGrace() throws {
@@ -92,8 +99,11 @@ struct GraceIdentityAssignmentTests {
         @Test func traversalCountsGraceSlotsAndRejectsCrossCollectionDuplicates() throws {
             let score = ScoreEditor(score: literal).score
             let all = EditingIdentityInvariants.identifiers(in: score)
-            #expect(all.count == 11)
-            #expect(Set(all).count == 11)
+            // Base 11 (1 part + 1 staff + 3 elements + 4 grace slot ids [x: 2 before + 1 after, y: 1
+            // before] + 1 tuplet + 1 systemMeasure) plus 6 notes now that the traversal walks into
+            // chord.notes: x's own note (1) + x's 3 grace notes + y's own note (1) + y's 1 grace note = 17.
+            #expect(all.count == 17)
+            #expect(Set(all).count == 17)
             let x = try F.chord(score)
             for shared in [x.graceNotesBefore.eid(at: 0), V.elements(score).eid(at: 0)] {
                 var broken = score
@@ -119,7 +129,7 @@ struct GraceIdentityAssignmentTests {
             score.assignMissingIDs(using: &ids)
             #expect(EditingIdentityInvariants.allocatorCovers(score, ids))
             F.mutate(&score) { chord in
-                chord.graceNotesAfter = IdentifiedArray([(EID(first: 42, second: 12), chord.graceNotesAfter[0])])
+                chord.graceNotesAfter = IdentifiedArray([(EID(first: 42, second: 18), chord.graceNotesAfter[0])])
             }
             #expect(!score.hasUnassignedIDs)
             #expect(EditingIdentityInvariants.hasUniqueIDs(score))

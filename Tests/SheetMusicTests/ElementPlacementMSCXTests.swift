@@ -28,7 +28,7 @@ struct ElementPlacementMSCXTests {
         ))
         #expect(capo.elementProperties.placement == .below)
         #expect(capo.preservedMarkup.isEmpty)
-        let encodedCapo = capo.encode()
+        let encodedCapo = capo.encode(eid: .invalid)
         #expect(encodedCapo.all("placement").count == 1)
         #expect(encodedCapo.first("placement")?.text == "below")
     }

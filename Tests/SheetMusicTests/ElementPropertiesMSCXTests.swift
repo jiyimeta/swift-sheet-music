@@ -118,7 +118,7 @@ struct ElementPropertiesMSCXTests {
         let decoded = try StaffText.decode(source, isSystemText: false)
         #expect(decoded.elementProperties.offset == ScoreOffset(x: 0, y: 0))
 
-        let encoded = decoded.encode()
+        let encoded = decoded.encode(eid: .invalid)
         let offsets = encoded.all("offset")
         #expect(offsets.count == 1)
         #expect(offsets.first?.attributes["x"] == "0")

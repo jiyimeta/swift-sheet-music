@@ -33,6 +33,26 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
         name
     }
 
+    /// `fixture()`, with every element identified before the caller ever
+    /// encodes it — for a byte-stable golden MSCX comparison.
+    ///
+    /// `fixture()` returns every element unassigned, and `MSCXEncoder.encode`'s
+    /// last-resort fill (`MSCXEncoder.swift`) mints gaps from a fresh
+    /// `EIDAllocator()`, whose actor is drawn at random per process
+    /// (`EIDAllocator.init()`). Since Chord/Rest/Note write `<eid>` for a v4
+    /// target, encoding the bare `fixture()` twice — once now, once on the
+    /// next `swift test` invocation — would write two different (but
+    /// equally valid) sets of identifiers, and the committed `fixture.mscx`
+    /// / web `.mscx` goldens could never compare byte-identical across runs.
+    /// A fixed, non-sentinel actor makes the assignment (and so the
+    /// resulting bytes) the same on every call.
+    func identifiedFixture() -> Score {
+        var score = fixture()
+        var allocator = EIDAllocator(actor: 1)
+        score.assignMissingIDs(using: &allocator)
+        return score
+    }
+
     /// SP0/SP1's original chain: twenty-three note- and slot-level steps over `EditingFixtures.replayFixture()`.
     static let standard = ReplayChain(
         name: "standard",

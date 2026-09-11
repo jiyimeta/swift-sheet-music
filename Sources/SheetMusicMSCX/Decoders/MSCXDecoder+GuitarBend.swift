@@ -28,7 +28,12 @@ extension Note {
         "bendShowHoldLine",
         "GuitarBendHold",
         "direction",
-        eidChildName,
+        // `GuitarBend` (unlike most carriers this phase gave identity to) has no `eid` field of its
+        // own: the payload sits inside `<Spanner type="GuitarBend">`, and that spanner-payload
+        // identity is the open gap `PHASE-NOTES.md` and `MSCXPreservationGateTests.swift`'s
+        // `spannerPayloadEIDReason` already record. Listed here only so the tag is elided rather than
+        // reported as an unmodeled property dropped.
+        EIDXML.childName,
         // `<anchor>` is `SLine`'s spanner anchor, not a bend property:
         // `TWrite::write(const GuitarBend*, …)` ends with
         // `writeProperties(static_cast<const SLine*>(item), …)`
@@ -51,16 +56,10 @@ extension Note {
         "fontFace",
         "fontSize",
         "fontStyle",
-        eidChildName,
+        // `LegacyBend` has no `eid` field either — see the same note on `guitarBendKnownChildren`
+        // above.
+        EIDXML.childName,
     ]
-
-    /// MuseScore 4.6's regenerated internal element id. It is exempt from the
-    /// dropped-child diagnostics on purpose: no decoder in this package models
-    /// `<eid>` anywhere, it carries no user data (4.6 mints a fresh one on
-    /// every save), and warning on it would fire on every element of every 4.6
-    /// score — drowning the diagnostics that report real data loss. It stays
-    /// silently elided.
-    private static let eidChildName = "eid"
 
     /// The `<direction>` spellings that mean "unchanged", so dropping the tag
     /// loses nothing.

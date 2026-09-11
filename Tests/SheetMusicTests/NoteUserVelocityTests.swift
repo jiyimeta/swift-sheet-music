@@ -91,8 +91,8 @@ struct NoteUserVelocityTests {
     // MARK: - MSCX encode
 
     @Test func encodesVelocityOnlyWhenOverridden() {
-        #expect(!Note(pitch: 60, tpc: 14).encode().children.contains { $0.name == "velocity" })
-        let overridden = Note(pitch: 60, tpc: 14, userVelocity: 96).encode()
+        #expect(!Note(pitch: 60, tpc: 14).encode(eid: .invalid).children.contains { $0.name == "velocity" })
+        let overridden = Note(pitch: 60, tpc: 14, userVelocity: 96).encode(eid: .invalid)
         #expect(overridden.children.first { $0.name == "velocity" }?.text == "96")
     }
 
@@ -100,19 +100,19 @@ struct NoteUserVelocityTests {
     /// generation's default, so a MuseScore 4 file round-trips unchanged.
     @Test func encodesVeloTypeOnlyWhenItDiffersFromTheTargetDefault() {
         let absoluteV4 = Note(pitch: 60, tpc: 14, userVelocity: 96, velocityType: .user)
-            .encode(options: MSCXEncoderOptions(targetVersion: .v4))
+            .encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: .v4))
         #expect(!absoluteV4.children.contains { $0.name == "veloType" })
 
         let offsetV4 = Note(pitch: 60, tpc: 14, userVelocity: -20, velocityType: .offset)
-            .encode(options: MSCXEncoderOptions(targetVersion: .v4))
+            .encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: .v4))
         #expect(offsetV4.children.first { $0.name == "veloType" }?.text == "offset")
 
         let offsetV3 = Note(pitch: 60, tpc: 14, userVelocity: -20, velocityType: .offset)
-            .encode(options: MSCXEncoderOptions(targetVersion: .v3))
+            .encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: .v3))
         #expect(!offsetV3.children.contains { $0.name == "veloType" })
 
         let absoluteV3 = Note(pitch: 60, tpc: 14, userVelocity: 96, velocityType: .user)
-            .encode(options: MSCXEncoderOptions(targetVersion: .v3))
+            .encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: .v3))
         #expect(absoluteV3.children.first { $0.name == "veloType" }?.text == "user")
     }
 
@@ -125,7 +125,7 @@ struct NoteUserVelocityTests {
             pitch: 60, tpc: 14, headType: "cross", play: false,
             userVelocity: -20, velocityType: .offset,
         )
-        let names = note.encode().children.map(\.name)
+        let names = note.encode(eid: .invalid).children.map(\.name)
         let tracked = ["head", "velocity", "play", "veloType"]
         #expect(names.filter { tracked.contains($0) } == tracked)
     }
@@ -134,7 +134,7 @@ struct NoteUserVelocityTests {
         let notes = try decodeNotes(version: "3.02", noteXML: """
         <Note><pitch>60</pitch><tpc>14</tpc><velocity>-20</velocity></Note>
         """)
-        let reEncoded = notes[0].encode(options: MSCXEncoderOptions(targetVersion: .v4))
+        let reEncoded = notes[0].encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: .v4))
         let reDecoded = try Note.decode(reEncoded)
         #expect(reDecoded.userVelocity == -20)
         #expect(reDecoded.velocityType == .offset)

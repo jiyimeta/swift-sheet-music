@@ -132,8 +132,8 @@ public struct PasteVoiceElements: EditCommand {
         var newElements = voice.elements
         let pasted = payload.map { source in
             let eid = ids.next()
-            var element = source.clearingGraceIDsForCopy()
-            element.assignMissingGraceIDs(using: &ids)
+            var element = source.clearingNestedIDsForCopy()
+            element.assignMissingNestedIDs(using: &ids)
             return (eid, element)
         }
         newElements.replaceSubrange(idx ..< (idx + 1), with: pasted)
@@ -215,7 +215,7 @@ public struct PasteVoiceElements: EditCommand {
                 switch lastEl {
                 case let .chord(c) where !c.notes.isEmpty:
                     pieces = DurationChangeAlgorithm.makeChordChain(
-                        from: c, durations: durations,
+                        from: c, durations: durations, onsetOwnership: .allContinuation,
                     )
                 default:
                     pieces = durations.map { .rest(duration: $0) }

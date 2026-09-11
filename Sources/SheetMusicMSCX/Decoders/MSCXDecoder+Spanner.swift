@@ -83,7 +83,11 @@ extension Spanner {
     /// `<Spanner>` wrapper, and MuseScore writes it on any
     /// `TextLineBase` subclass — so scan every payload child rather
     /// than special-casing `<TextLine>`. `next` / `prev` are location
-    /// records and never carry one.
+    /// records and never carry one. Unlike `decodeVisible` below, this
+    /// walk has no `<eid>` exclusion: `child.first("beginText")` on an
+    /// `<eid>` leaf node (no children of its own) is always nil, so the
+    /// wrapper's identifier is harmless here without special-casing it —
+    /// the asymmetry with `decodeVisible` is not accidental.
     private static func decodeBeginText(_ node: XMLTreeNode) -> String? {
         for child in node.children
             where child.name != "next" && child.name != "prev"
@@ -173,7 +177,14 @@ extension Spanner {
         if (node.first("visible")?.text ?? "1") == "0" { return false }
         var hasPayload = false
         for child in node.children
-            where child.name != "next" && child.name != "prev"
+            // `<eid>` is the wrapper's own identifier (see `EIDXML`), not a subtype payload.
+            // `.spanner` was reverted to `.invalid` (Task 4a) and `Spanner.encode` writes no
+            // `<eid>` of its own, and real MuseScore never puts one on the `<Spanner>` wrapper
+            // either — so nothing should reach this exclusion today. Kept as defensive: some
+            // intermediate commit of this phase did write that shape on the wrapper, and
+            // counting it here would have made every invisible end marker decode back as
+            // visible the moment it carried an identifier.
+            where child.name != "next" && child.name != "prev" && child.name != EIDXML.childName
         {
             hasPayload = true
             if child.first("visible")?.text == "0" { return false }

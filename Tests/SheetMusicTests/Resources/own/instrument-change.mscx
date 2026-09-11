@@ -55,6 +55,7 @@
               </Channel>
             </Instrument>
             <init>1</init>
+            <eid>V_V</eid>
             <text>to Accordion</text>
           </InstrumentChange>
           <Chord>

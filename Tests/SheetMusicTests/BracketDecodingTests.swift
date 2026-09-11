@@ -13,7 +13,7 @@ struct BracketDecodingTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.brackets.count == 1)
         let b = staff.brackets[0]
         #expect(b.type == .brace)
@@ -31,7 +31,7 @@ struct BracketDecodingTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.brackets.count == 2)
         #expect(staff.brackets[0].type == .normal)
         #expect(staff.brackets[0].column == 0)
@@ -47,7 +47,7 @@ struct BracketDecodingTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.brackets.count == 1)
         #expect(staff.brackets[0].column == 0)
     }
@@ -60,7 +60,7 @@ struct BracketDecodingTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.brackets[0].visible == true)
     }
 
@@ -72,7 +72,7 @@ struct BracketDecodingTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.brackets[0].visible == false)
     }
 
@@ -84,7 +84,7 @@ struct BracketDecodingTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.brackets.isEmpty)
     }
 
@@ -96,7 +96,7 @@ struct BracketDecodingTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.brackets.count == 1)
         #expect(staff.brackets[0].span == 1)
     }
@@ -110,7 +110,7 @@ struct BracketDecodingTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.brackets.isEmpty)
     }
 
@@ -123,7 +123,7 @@ struct BracketDecodingTests {
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let (_, staff) = Staff.declared(node)
+        let (_, _, staff) = Staff.declared(node)
         #expect(staff.brackets.isEmpty)
     }
 }

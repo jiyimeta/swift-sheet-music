@@ -21,7 +21,7 @@ enum TieValidator {
         var forwardValid = Array(repeating: false, count: chords.count)
         var backValid = Array(repeating: false, count: chords.count)
 
-        var mutable = staffMeasures
+        let mutable = staffMeasures
         for (i, current) in chords.enumerated() {
             guard
                 case let .chord(chord) = mutable[current.measureIndex]
@@ -127,14 +127,14 @@ enum TieValidator {
                 .voices[ref.voiceIndex]
                 .elements[ref.elementIndex] else { continue }
             var updated = chord
-            var note = updated.notes[ref.noteIndex]
-            if note.tieForward != nil, !forwardValid[index] {
-                note.tieForward = nil
+            updated.notes.updateNote(at: ref.noteIndex) { note in
+                if note.tieForward != nil, !forwardValid[index] {
+                    note.tieForward = nil
+                }
+                if note.tieBack != nil, !backValid[index] {
+                    note.tieBack = nil
+                }
             }
-            if note.tieBack != nil, !backValid[index] {
-                note.tieBack = nil
-            }
-            updated.notes[ref.noteIndex] = note
             var voice = out[ref.measureIndex].voices[ref.voiceIndex]
             voice.elements.updateValue(at: ref.elementIndex) { $0 = .chord(updated) }
             out[ref.measureIndex].voices[ref.voiceIndex] = voice

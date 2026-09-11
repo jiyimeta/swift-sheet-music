@@ -15,8 +15,9 @@ extension StringTunings {
     /// encode therefore emits an element MuseScore 3 drops, the same known
     /// limitation as `<Expression>` and `<MeasureRepeat>`; no v3
     /// down-conversion is attempted.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children = [
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        children += [
             XMLTreeNode(name: "preset", text: preset),
             XMLTreeNode(
                 name: "visibleStrings",
@@ -26,6 +27,14 @@ extension StringTunings {
         if let stringData {
             children.append(stringData.encode(options: options))
         }
+        // `<eid>` sits here, not first: `TWrite::write(const StringTunings*,
+        // ...)` (`rw/write/twrite.cpp:3225-3238`) writes preset/
+        // visibleStrings/StringData, THEN calls `writeProperties
+        // (StaffTextBase*, ...)`, which — after its own unmodeled
+        // MidiAction/channelSwitch/aeolus/swing tags — calls `writeProperties
+        // (TextBase*, ..., true)`, whose first act is `writeItemProperties`
+        // (the `<eid>` writer), before `<text>`.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(encodeText(
             text,
             preservedTextMarkup: preservedTextMarkup,

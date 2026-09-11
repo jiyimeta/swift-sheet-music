@@ -35,7 +35,7 @@ public struct SetNoteHead: EditCommand {
         guard case var .chord(chord) = score[veID] else {
             throw Self.refused(.wrongElementKind(at: veID, expected: .chord))
         }
-        chord.notes[location.noteIndexInChord].headType = headType
+        chord.notes.updateNote(at: location.noteIndexInChord) { $0.headType = headType }
         score[veID] = .chord(chord)
         return SetNoteHead(at: location, headType: oldNote.headType)
     }

@@ -111,7 +111,7 @@ struct InstrumentChangeMSCXTests {
             isUserInitialized: true,
         )
         change.visible = true
-        let node = change.encode()
+        let node = change.encode(eid: .invalid)
         #expect(node.name == "InstrumentChange")
         // MuseScore's own order: Instrument, init, then TextBase props.
         // `prefix` yields an ArraySlice, which has no `==` against an
@@ -125,7 +125,7 @@ struct InstrumentChangeMSCXTests {
 
     @Test("a false init emits no <init> element")
     func initOmittedWhenFalse() {
-        let node = InstrumentChange(text: "x").encode()
+        let node = InstrumentChange(text: "x").encode(eid: .invalid)
         // XMLTreeNode.first(_:) is a custom child lookup, not
         // Sequence.first(where:), so SwiftLint's
         // contains_over_first_not_nil rule fires as a false positive.
@@ -135,7 +135,7 @@ struct InstrumentChangeMSCXTests {
 
     @Test("a text-only change encodes without an <Instrument>")
     func textOnlyEncodes() {
-        let node = InstrumentChange(text: "x").encode()
+        let node = InstrumentChange(text: "x").encode(eid: .invalid)
         // swiftlint:disable:next contains_over_first_not_nil
         #expect(node.first("Instrument") == nil)
         #expect(node.first("text")?.text == "x")

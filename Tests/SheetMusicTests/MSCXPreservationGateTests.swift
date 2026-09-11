@@ -41,7 +41,51 @@ enum MSCXPreservation {
     static let allowedLosses = makeAllowedLosses()
 
     private static let elementIdentityReason =
-        "by design: MuseScore element identity is regenerated instead of preserved (spec §3.4)."
+        "by design: this element kind has no identity slot in the model, so a decoded <eid> has "
+            + "nothing to attach to and is dropped at decode time; MuseScore 4.6 assigns a fresh "
+            + "one when it re-reads the file (it does read and write back whatever <eid> it finds "
+            + "elsewhere — see PreservedMarkupPolicy.neverPreserved — the gap here is that this "
+            + "library, not MuseScore, never captured one for this kind)."
+    private static let scoreIdentityReason =
+        "by design: <Score><eid> is deliberately not modeled (P4 plan decision) — the score as a "
+            + "whole is not a slot this library gives identity to, unlike its measures/parts/staves."
+    private static let markerIdentityReason =
+        "by design: Marker lives in a plain array with no identity slot, matching the jump/marker "
+            + "model design; nothing in this library ever needs to reference one marker among others."
+    private static let lastEIDCounterReason =
+        "by design: <museScore><LastEID> is MuseScore's own id-issuing counter (the highest id it "
+            + "has ever handed out), not the identity of any element. This library neither reads "
+            + "nor writes it, so it is dropped whole rather than round-tripped."
+    private static let keySigEIDMaskedReason =
+        "not a residual identity gap: KeySignature IS modeled with eid and "
+            + "MSCXEncoder+KeySignature.swift round-trips it for every KeySig this encoder emits. "
+            + "Every fixture that loses KeySig/eid loses it because the KeySig itself is a "
+            + "staff-head C-major default that MSCXEncoder+Voice.swift's shouldDropInitialZeroKeySig "
+            + "omits whole (see staffHeadCMajorReason, which explains the voice/KeySig loss this "
+            + "always accompanies) — the eid disappears as a symptom of that omission, not because "
+            + "the carrier itself is unidentified."
+    private static let noteAttachedSymbolEIDReason =
+        "by design, and not a preservation gap in this corpus: every <Symbol><eid> lost here is a "
+            + "note-attached noteheadParenthesisLeft/Right symbol (Note.symbols), and Note.symbols "
+            + "has no identity slot — unlike a voice-level <Symbol> (VoiceElement.symbol, built from "
+            + "EngravingSymbol), which DOES round-trip its eid via "
+            + "MSCXEncoder+EngravingSymbol.swift, as pinned directly by "
+            + "EIDPersistenceTests.voiceLevelSymbolIdentifierSurvivesAnEncodeDecode rather than "
+            + "through this gate.\n"
+            + "CAVEAT: this entry keys on the Symbol/eid path only, not on which Symbol it is, so it "
+            + "would also silently absorb a genuine voice-level EngravingSymbol eid loss if one ever "
+            + "appeared in a fixture. The gate cannot narrow it — it sees element paths, not values "
+            + "— so the EIDPersistenceTests case above, not a green gate here, is what actually pins "
+            + "voice-level Symbol identity survival."
+    private static let spannerPayloadEIDReason =
+        "OPEN GAP, not a design decision: the identifier lives on the spanner payload "
+            + "(<Spanner type=\"Tie\"|\"GuitarBend\"> → <Tie>/<GuitarBend>/<GuitarBendHold> → "
+            + "<eid>), confirmed against guitarbend_tied.mscx:169-171. Spanner.spanner was reverted "
+            + "to .invalid in Task 4a of the P4 plan (MSCXEncoder+Spanner.swift's "
+            + "encode(options:) comment), so no payload identity is modeled or written at all yet. "
+            + "Fixing it needs this project's per-subtype spanner payload field ordering untangled "
+            + "first — an established simplification that predates this task — which is out of "
+            + "scope here. Tracked as an open item for a later phase, not closed by this design."
     private static let linkedIdentityReason =
         "genuinely lost under this design: <linked> / <linkedMain> is MuseScore's excerpt link "
             + "bookkeeping, which this library does not model at all. On a chord, note, rest, or "
@@ -154,13 +198,66 @@ enum MSCXPreservation {
 
     private static func addPermanentLosses(to result: inout [String: String]) {
         // Permanent: identity and generated file metadata.
+        // `Chord/eid`, `Note/eid`, and `Rest/eid` are deliberately NOT
+        // here: Task 2 of the P4 plan (`EIDPersistenceTests.swift`) made
+        // those three carriers round-trip their `<eid>` instead of losing
+        // it, so no committed fixture drops them any more. `Measure/eid`
+        // and `Staff/eid` are likewise absent as of Task 3: the column
+        // (first staff's `<Measure><eid>`) and the staff declaration's
+        // `<Part><Staff><eid>` now round-trip too. `BarLine/eid`,
+        // `Clef/eid`, `Dynamic/eid`, and `TimeSig/eid` are absent as of
+        // Task 4a for the same reason — every voice-lane kind but
+        // `.preserved`, `.locationShift`, and `.spanner` now round-trips
+        // its own `<eid>` instead of losing it (`.locationShift` never had
+        // one to begin with — `<location>` is voice-cursor bookkeeping,
+        // not an `EngravingItem`; `.spanner` is item 4 below).
+        // `StaffText/eid`, `SystemText/eid`, and `Tempo/eid` are likewise
+        // absent as of Task 4b — every system-lane kind (tempo, rehearsal
+        // mark, staff/system text, swing, instrument change) now
+        // round-trips too, along with `Tuplet/eid`.
+        //
+        // What remains below is NOT one design decision, even though an
+        // earlier revision lumped all of it under one `elementIdentityReason`
+        // string. Four distinct things are going on, verified against the
+        // committed fixtures (Task 5 of the P4 plan) rather than assumed:
+        //   1. Element kinds this library never gives an identity slot at
+        //      all (elementIdentityReason) — Accidental, HBox, LayoutBreak,
+        //      Lyrics, Text, VBox. Confirmed lossy in
+        //      testCodaHBox_ref.mscx, testPartNames_ref.mscx,
+        //      musicxml/test*_ref.mscx, and the guitarbend_*/midi0*
+        //      fixtures.
+        //   2. Slots this library deliberately does not model at all —
+        //      Score (scoreIdentityReason), Marker (markerIdentityReason),
+        //      and museScore/LastEID (lastEIDCounterReason), which is a
+        //      counter, not an element identity.
+        //   3. Carriers that ARE modeled and DO round-trip `<eid>`, whose
+        //      fixture loss comes from a different, already-documented
+        //      lossy path that happens to also remove the identified
+        //      element whole — KeySig (keySigEIDMaskedReason, the
+        //      staff-head C-major omission) and Symbol
+        //      (noteAttachedSymbolEIDReason, a CAVEAT entry: every fixture
+        //      occurrence is the note-attached, unidentified form, while
+        //      the voice-level, identified form is pinned separately in
+        //      EIDPersistenceTests because this gate cannot tell the two
+        //      apart).
+        //   4. An open gap, not a design decision — GuitarBend,
+        //      GuitarBendHold, and Tie (spannerPayloadEIDReason): the
+        //      identifier lives on a spanner's payload child, which this
+        //      project does not model the identity of yet (Task 4a
+        //      reverted `.spanner` to `.invalid` rather than guess at the
+        //      payload's field order). Do not delete these three pending a
+        //      later phase.
         allow([
-            "Accidental/eid", "BarLine/eid", "Chord/eid", "Clef/eid", "Dynamic/eid",
-            "GuitarBend/eid", "GuitarBendHold/eid", "HBox/eid", "KeySig/eid",
-            "LayoutBreak/eid", "Lyrics/eid", "Marker/eid", "Measure/eid", "Note/eid", "Rest/eid",
-            "Score/eid", "Staff/eid", "StaffText/eid", "Symbol/eid", "SystemText/eid", "Tempo/eid",
-            "Text/eid", "Tie/eid", "TimeSig/eid", "VBox/eid", "museScore/LastEID",
+            "Accidental/eid", "HBox/eid", "LayoutBreak/eid", "Lyrics/eid", "Text/eid", "VBox/eid",
         ], because: elementIdentityReason, into: &result)
+        allow(["Score/eid"], because: scoreIdentityReason, into: &result)
+        allow(["Marker/eid"], because: markerIdentityReason, into: &result)
+        allow(["museScore/LastEID"], because: lastEIDCounterReason, into: &result)
+        allow(["KeySig/eid"], because: keySigEIDMaskedReason, into: &result)
+        allow(["Symbol/eid"], because: noteAttachedSymbolEIDReason, into: &result)
+        allow([
+            "GuitarBend/eid", "GuitarBendHold/eid", "Tie/eid",
+        ], because: spannerPayloadEIDReason, into: &result)
         // `LaissezVib/eid` is deliberately NOT here. `<LaissezVib>` is
         // itself preserved whole, and the exclusion list only fires at
         // a CAPTURE point — an id nested inside a verbatim subtree

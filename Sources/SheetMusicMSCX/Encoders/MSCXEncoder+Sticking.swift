@@ -19,12 +19,20 @@ extension Sticking {
     /// `<Sticking>` has been readable since MuseScore 3.3; 3.2 and earlier drop
     /// it as unknown. Every target this encoder emits is at or above that, so
     /// there is no version branch.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children = [encodeText(
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        // `<eid>` genuinely is first here: `TWrite::write(const Sticking*,
+        // ...)` (`rw/write/twrite.cpp:3015-3023`) has no properties of its
+        // own before calling `writeProperties(TextBase*, ..., true)`, whose
+        // own first act is `writeItemProperties` — the `<eid>` writer —
+        // before `<text>`. Unlike most of this file's other kinds, nothing
+        // precedes it.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        children.append(encodeText(
             text,
             preservedTextMarkup: preservedTextMarkup,
             options: options,
-        )]
+        ))
         children += elementProperties.mscxChildren()
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         children += elementProperties.mscxTrailingChildren()

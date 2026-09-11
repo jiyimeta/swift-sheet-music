@@ -110,7 +110,9 @@ struct VoiceElementIdentityTests {
         )
         #expect(ids.counter == counter)
         let inverse = try command.apply(to: &score, ids: &ids)
-        #expect(ids.counter == counter + 2)
+        // 4 total mints: the fresh chord's slot and its own note, the kept slot's own note (its element
+        // is a fresh literal even though the slot id is kept), and the fresh rest's slot.
+        #expect(ids.counter == counter + 4)
         #expect(elements(score).values == [chord(62), chord(), .rest(duration: .quarter)])
         #expect(elements(score).eid(at: 1) == before[0])
         let created = Set(identifiers(score)).subtracting(before)

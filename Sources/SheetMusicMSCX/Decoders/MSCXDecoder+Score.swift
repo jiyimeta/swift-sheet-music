@@ -130,8 +130,8 @@ extension Score {
             : systemMeasures
         return Score(
             division: division,
-            parts: IdentifiedArray(parts),
-            systemMeasures: IdentifiedArray(resolvedSystemMeasures),
+            parts: IdentifiedArray(Array(zip(assembled.partEIDs, parts))),
+            systemMeasures: IdentifiedArray(Array(zip(assembled.systemMeasureEIDs, resolvedSystemMeasures))),
             metaTags: metaTags,
             blocks: blocks,
             style: style,
@@ -221,21 +221,25 @@ extension Score {
         _ measures: [SystemMeasure],
     ) -> [SystemMeasure] {
         measures.map { measure in
-            let elements = measure.elements.map { positioned -> PositionedSystemElement in
-                guard case let .swing(swing) = positioned.element,
+            var measure = measure
+            // `mapValues` edits in place and keeps each slot's own
+            // identifier — unlike `IdentifiedArray.map` (plain
+            // `Collection.map`, which returns a bare `[Value]` with no
+            // slot identity at all). MS2 never writes `<eid>` in the
+            // first place, so every id here is `.invalid` regardless;
+            // this is future-proofing, not a fix for an observed loss.
+            measure.elements.mapValues { positioned in
+                guard case var .swing(swing) = positioned.element,
                       !swing.isSystemText
                 else {
                     return positioned
                 }
-                var promoted = swing
-                promoted.isSystemText = true
-                return PositionedSystemElement(
-                    position: positioned.position,
-                    element: .swing(promoted),
-                    originalStaff: positioned.originalStaff,
-                )
+                swing.isSystemText = true
+                var promoted = positioned
+                promoted.element = .swing(swing)
+                return promoted
             }
-            return SystemMeasure(elements: elements)
+            return measure
         }
     }
 

@@ -255,7 +255,8 @@ extension RebarPlanner {
             // chain's, and re-starting it at each barline would clear the head's incoming tie each time.
             let pieces = RebarPlanner.pieces(of: item.elements[0].element, durations: perSegment.flatMap(\.self))
                 .enumerated().map { index, element in
-                    VoiceSlot(identity: index == 0 ? item.elements[0].identity : .fresh, element: element)
+                    let identity: SlotIdentity = index == 0 ? item.elements[0].identity : .fresh
+                    return VoiceSlot(identity: identity, element: element, nestedIdentity: .carried) // moved not copied
                 }
             var written = 0
             for (index, segment) in segments.enumerated() {
@@ -365,18 +366,23 @@ extension RebarPlanner {
     /// `makeChordChain` builds every piece from scratch and so clears the head's `tieBack` — right for a
     /// duration change, wrong here: a chord tied IN from before the region is still tied in after it is
     /// re-barred. The head is rebuilt from the source chord the way `CrossBarInputPlanner.piece` does, so
-    /// its incoming tie — and everything else hanging off the sound — survives.
+    /// its incoming tie — and everything else hanging off the sound — survives. This IS a genuine split
+    /// of `chord` (its onset lands in the head, unlike the leftover chains `makeChordChain`'s other
+    /// callers build), so `onsetOwnership: .headIsOnset` carries `chord.notes`' own identifiers onto the
+    /// head.
     static func pieces(of element: VoiceElement, durations: [NoteDuration]) -> [VoiceElement] {
         guard case let .chord(chord) = element, !chord.notes.isEmpty else {
             return durations.map { .rest(duration: $0) }
         }
-        var chain = DurationChangeAlgorithm.makeChordChain(from: chord, durations: durations)
+        var chain = DurationChangeAlgorithm.makeChordChain(
+            from: chord, durations: durations, onsetOwnership: .headIsOnset,
+        )
         guard case let .chord(head) = chain.first, let first = durations.first else { return chain }
         var restored = chord
         restored.duration = first
         restored.notes = head.notes
         for index in restored.notes.indices where chord.notes.indices.contains(index) {
-            restored.notes[index].tieBack = chord.notes[index].tieBack
+            restored.notes.updateNote(at: index) { $0.tieBack = chord.notes[index].tieBack }
         }
         // Grace notes AFTER the chord lead into whatever follows the sound, so they belong on its last
         // piece — the one thing the head gives up when the chain is longer than one. `makeChordChain`

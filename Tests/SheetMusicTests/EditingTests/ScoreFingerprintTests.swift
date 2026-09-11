@@ -67,7 +67,7 @@ struct ScoreFingerprintTests {
         let before = score.stableFingerprint
         let slot = VoiceElementID(EditingFixtures.restID(element: 1))
         guard case var .chord(chord) = score[slot] else { Issue.record("expected a chord"); return }
-        chord.notes[0].headType = "cross"
+        chord.notes.updateNote(at: 0) { $0.headType = "cross" }
         score[slot] = .chord(chord)
         #expect(score.stableFingerprint != before)
     }
@@ -178,7 +178,7 @@ struct ScoreFingerprintTests {
         let before = score.stableFingerprint
         let slot = VoiceElementID(EditingFixtures.restID(element: 1))
         guard case var .chord(chord) = score[slot] else { Issue.record("expected a chord"); return }
-        chord.notes[0].accidentalBracket = .parenthesis
+        chord.notes.updateNote(at: 0) { $0.accidentalBracket = .parenthesis }
         score[slot] = .chord(chord)
         #expect(score.stableFingerprint != before)
     }
@@ -189,7 +189,7 @@ struct ScoreFingerprintTests {
         let before = score.stableFingerprint
         let slot = VoiceElementID(EditingFixtures.restID(element: 1))
         guard case var .chord(chord) = score[slot] else { Issue.record("expected a chord"); return }
-        chord.notes[0].accidentalRole = .user
+        chord.notes.updateNote(at: 0) { $0.accidentalRole = .user }
         score[slot] = .chord(chord)
         #expect(score.stableFingerprint != before)
     }
@@ -200,7 +200,7 @@ struct ScoreFingerprintTests {
         let before = score.stableFingerprint
         let slot = VoiceElementID(EditingFixtures.restID(element: 1))
         guard case var .chord(chord) = score[slot] else { Issue.record("expected a chord"); return }
-        chord.notes[0].glissando = Glissando(style: .chromatic)
+        chord.notes.updateNote(at: 0) { $0.glissando = Glissando(style: .chromatic) }
         score[slot] = .chord(chord)
         #expect(score.stableFingerprint != before)
     }
@@ -211,7 +211,7 @@ struct ScoreFingerprintTests {
         let before = score.stableFingerprint
         let slot = VoiceElementID(EditingFixtures.restID(element: 1))
         guard case var .chord(chord) = score[slot] else { Issue.record("expected a chord"); return }
-        chord.notes[0].parentheses = .both
+        chord.notes.updateNote(at: 0) { $0.parentheses = .both }
         score[slot] = .chord(chord)
         #expect(score.stableFingerprint != before)
     }
@@ -222,7 +222,7 @@ struct ScoreFingerprintTests {
         let before = score.stableFingerprint
         let slot = VoiceElementID(EditingFixtures.restID(element: 1))
         guard case var .chord(chord) = score[slot] else { Issue.record("expected a chord"); return }
-        chord.notes[0].isSmall = true
+        chord.notes.updateNote(at: 0) { $0.isSmall = true }
         score[slot] = .chord(chord)
         #expect(score.stableFingerprint != before)
     }
@@ -233,7 +233,7 @@ struct ScoreFingerprintTests {
         let before = score.stableFingerprint
         let slot = VoiceElementID(EditingFixtures.restID(element: 1))
         guard case var .chord(chord) = score[slot] else { Issue.record("expected a chord"); return }
-        chord.notes[0].play = false
+        chord.notes.updateNote(at: 0) { $0.play = false }
         score[slot] = .chord(chord)
         #expect(score.stableFingerprint != before)
     }
@@ -244,7 +244,7 @@ struct ScoreFingerprintTests {
         let before = score.stableFingerprint
         let slot = VoiceElementID(EditingFixtures.restID(element: 1))
         guard case var .chord(chord) = score[slot] else { Issue.record("expected a chord"); return }
-        chord.notes[0].visible = false
+        chord.notes.updateNote(at: 0) { $0.visible = false }
         score[slot] = .chord(chord)
         #expect(score.stableFingerprint != before)
     }

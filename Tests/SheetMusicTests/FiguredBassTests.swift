@@ -233,7 +233,7 @@ struct FiguredBassMSCXTests {
             text: "ignored",
             isOnNote: false,
             ticks: Fraction(numerator: 1, denominator: 4),
-        ).encode()
+        ).encode(eid: .invalid)
         #expect(itemForm.children.map(\.name) == ["onNote", "ticks", "FiguredBassItem"])
         let item = try #require(itemForm.first("FiguredBassItem"))
         #expect(item.children.map(\.name) == ["brackets", "digit"])
@@ -241,7 +241,7 @@ struct FiguredBassMSCXTests {
             "b0": "0", "b1": "0", "b2": "0", "b3": "0", "b4": "0",
         ])
 
-        let textForm = FiguredBass(text: "6\n4").encode()
+        let textForm = FiguredBass(text: "6\n4").encode(eid: .invalid)
         #expect(textForm.children.map(\.name) == ["text"])
         #expect(textForm.first("text")?.text == "6\n4")
     }
@@ -261,7 +261,7 @@ struct FiguredBassMSCXTests {
         let first = try #require(try figuredBassValue(figuredBassVoiceElements("""
         <FiguredBass><FiguredBassItem/></FiguredBass>
         """).first))
-        let second = FiguredBass.decode(first.encode())
+        let second = FiguredBass.decode(first.encode(eid: .invalid))
         #expect(second == first)
     }
 }

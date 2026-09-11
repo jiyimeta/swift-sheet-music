@@ -7,9 +7,14 @@ extension Staff {
     /// bracket information, default clef. Measures are emitted by
     /// `encodeTopLevel(staffID:)` separately.
     func encodeDeclaration(
-        staffID: String, options: MSCXEncoderOptions = .init(),
+        eid: EID, staffID: String, options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        // `<eid>` is the first child MuseScore itself writes
+        // (twrite.cpp:2751-2755) — the "staff" carrier. Never to be
+        // confused with the top-level `<Staff id="N">` measure body,
+        // which carries no `<eid>` at all.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         var staffTypeChildren: [XMLTreeNode] = [
             XMLTreeNode(name: "name", text: staffType),
         ]
@@ -71,11 +76,18 @@ extension Staff {
     /// An empty array (the default) keeps the historical 4/4
     /// fallback for source-compat — safe until decoders start
     /// emitting `.measure` rests.
+    ///
+    /// `columnEIDs[i]` (when supplied) is the "column" identifier for
+    /// measure `i` — `Score.systemMeasures.eid(at: i)`. Pass this only
+    /// for the score's first staff (address (0, 0)); every other
+    /// staff's call must leave it empty, matching MuseScore's own
+    /// writer, which emits `<Measure><eid>` for that one staff only.
     func encodeTopLevel(
         staffID: String,
         blocks: [PositionedScoreBlock] = [],
-        systemElementsByMeasure: [[PositionedSystemElement]] = [],
+        systemElementsByMeasure: [[(eid: EID, element: PositionedSystemElement)]] = [],
         effectiveMeasureDurations: [Fraction] = [],
+        columnEIDs: [EID],
         options: MSCXEncoderOptions = .init(),
     ) throws -> XMLTreeNode {
         var children: [XMLTreeNode] = []
@@ -90,7 +102,7 @@ extension Staff {
             children.append(contentsOf: blocks.lazy
                 .filter { $0.beforeMeasureIndex == measureIndex }
                 .map { $0.block.encode(options: options) })
-            let injection: [PositionedSystemElement] =
+            let injection: [(eid: EID, element: PositionedSystemElement)] =
                 measureIndex < systemElementsByMeasure.count
                     ? systemElementsByMeasure[measureIndex]
                     : []
@@ -107,7 +119,11 @@ extension Staff {
             let nextFirstChordNotes = measureIndex + 1 < measures.count
                 ? measures[measureIndex + 1].voices.map(Self.firstChordNotes)
                 : []
+            let measureEID = measureIndex < columnEIDs.count
+                ? columnEIDs[measureIndex]
+                : .invalid
             let result = try measure.encode(
+                eid: measureEID,
                 carryInVoiceTieCarries: carry,
                 isFirstMeasureOfStaff: measureIndex == 0,
                 options: options,

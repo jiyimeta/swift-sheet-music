@@ -44,7 +44,7 @@ public struct SetGlissando: EditCommand {
         if glissando != nil, !NextChordProbe.hasFollowingChord(after: elementID, in: score) {
             throw Self.refused(.noNextChord(at: elementID))
         }
-        chord.notes[location.noteIndexInChord].glissando = glissando
+        chord.notes.updateNote(at: location.noteIndexInChord) { $0.glissando = glissando }
         score[elementID] = .chord(chord)
         return SetGlissando(at: location, glissando: oldNote.glissando)
     }

@@ -5,7 +5,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.0.0] - 2026-09-12
 
 ### Added
 
@@ -213,12 +213,44 @@ and this project adheres to
   - parts, staves and measure columns;
   - voice elements and tuplets;
   - grace chords;
+  - notes, both a chord's own notes and the notes inside its grace chords;
   - system-lane elements (tempo, rehearsal marks, staff and system text, swing, instrument changes).
 
   The identifier survives an edit that moves the element, such as a re-barring, a part move or an
   inserted measure, and undo and redo restore it exactly. Equality and `stableFingerprint` still see values
-  only: two parses of one file compare equal, and no golden moved. Identifiers are not persisted yet (MSCX
-  `<eid>` is later work) and no wire format carries them, so every load mints fresh ones.
+  only: two parses of one file compare equal, and no golden moved. The edit wire (`SheetMusicEditWire`)
+  does not carry identifiers yet — each mirror reserves a tag against the day it does, but attaching one
+  there is later work.
+
+  **Identifiers now persist to MSCX.** A host that saves a score and reloads it — including through a
+  real MuseScore Studio round trip — gets back the same identifier on: parts, staves and measure columns;
+  chords (including grace chords), their notes, and rests; tuplets; and every voice-lane and system-lane
+  annotation this library models as one of MuseScore's own engraving items — clefs, key and time
+  signatures, barlines, dynamics, symbols, measure repeats, fermatas, breath marks, harmony/chord symbols,
+  sticking, expression text, capo, string tunings, ambitus, figured bass and fret diagrams on the voice
+  lane; tempo marks, rehearsal marks, staff and system text, swing, and instrument changes on the system
+  lane. A score that reaches the encoder with any element still unidentified — built by hand rather than
+  loaded, or otherwise missing a slot — is filled with fresh identifiers rather than refused: a save never
+  fails over an identifier.
+
+  Two things a host should not rely on yet:
+  - **`<Part><eid>` is this library's own tag** — MuseScore's writer has none, so it is minted fresh at
+    every parse of a file this library has not saved before. It is stable from that first save onward, but
+    the first save of a MuseScore-authored file will not match a later one.
+  - **A `.spanner` voice element's identifier does not persist.** The `<Spanner>` wrapper MuseScore writes
+    is not itself an engraving item — the real identifier lives on the payload it wraps — and modeling that
+    needs this library's per-subtype field ordering untangled first.
+  - **`MSCXEncoder.encode` is not byte-stable for a score that still has unassigned identifiers**,
+    because it fills them on a local copy with a fresh, randomly-actored `EIDAllocator` on every call —
+    saving the same in-memory score twice can write different `<eid>` bytes each time, and since the fill
+    never reaches the caller's own value, the host's in-memory score keeps those elements `.invalid` while
+    the file gets real identifiers, so looking an element up by identifier after a save will not match
+    what is on disk. A host that wants either stable bytes across repeated saves or in-memory identifiers
+    that match the file should call `score.assignMissingIDs(using:)` with its own `EIDAllocator` once
+    before saving and keep the mutated result; `score.hasUnassignedIDs` says whether that call would do
+    anything. Exposing the allocator on the encode call itself is left for a later phase.
+
+  `RehearsalMark`'s round trip is unmeasured: no fixture in this repository carries one.
 
   **What breaks at compile time, and how to migrate:**
 
@@ -248,10 +280,32 @@ and this project adheres to
   - **`ReplaceVoiceElements` takes `slots: [VoiceSlot]` and `tupletSlots: [TupletSlot]`.** Each slot says
     whether it keeps an existing identifier (`.keep(eid)`) or is new (`.fresh`). Its `elements` and `tuplets`
     properties are gone.
+  - **`ChordNotes` is no longer a `MutableCollection` or a `RangeReplaceableCollection`.** A note slot's
+    identifier has to survive a value change and be assigned on an insertion, which a plain subscript
+    setter or `RangeReplaceableCollection`'s requirements cannot express. `chord.notes[i] = note`,
+    `append`, `insert(_:at:)` and `remove(at:)` no longer compile — and so does anything `MutableCollection`
+    supplies on top: `sort()`, `sorted(by:)` returning `Self`, `swapAt(_:_:)` and `partition(by:)`. A host
+    sorting noteheads by pitch, or otherwise reordering a chord's notes, breaks with no direct replacement:
+    - a value change is `updateNote(at:)`;
+    - an addition is `tryAppend(_:id:)`;
+    - a removal is `remove(eid:)`;
+    - a wholesale reorder has no dedicated method — rebuild with `ChordNotes(pairs)`, pairing each existing
+      note's current `eid(at:)` with its `Note` in the new order, and assign the result back to
+      `chord.notes` directly.
+  - **`DurationChangeAlgorithm.makeChordChain(from:durations:)` now requires `onsetOwnership:`, a new
+    public `OnsetOwnership` enum with no default.** A host building a tied chain (splitting a chord across
+    a re-barring, or continuing one after a partial-overshoot edit) must now say which case applies:
+    `.headIsOnset` when the first piece genuinely carries the source chord's onset, so it keeps the
+    source's note identifiers; `.allContinuation` when every piece — including the first — is new
+    continuation material whose onset was already consumed elsewhere, so every piece mints fresh
+    identifiers instead.
 
   **Lookup by identifier:**
   - `score[eid:]`, `position(of:)` and `eid(at:)` translate between an identifier and the positional
-    addresses that hit-testing and selection still produce. They cover top-level voice elements only.
+    addresses that hit-testing and selection still produce, for top-level voice elements.
+  - `Score.eid(at: NoteID)` and `Score.notePosition(of: EID)` are the equivalent pair for notes: they
+    cover a chord's own top-level notes, not the notes nested inside its grace chords — a grace note's
+    identifier has no `NoteID` to resolve to and looks up as `nil`.
   - Positions move under edits: to follow an element across one, take `eid(at:)` before the edit and
     `position(of:)` after it.
   - Identifiers are assigned on entry by `ScoreEditor`, `ScoreEditSession`, `ScoreLoader`, the MusicXML
@@ -267,6 +321,12 @@ and this project adheres to
 
   A host command trips these assertions if it rebuilds a voice from a plain array or mints from a snapshot of
   `ScoreEditor.idAllocator`. Release builds carry no checks.
+
+  **What breaks at runtime, not at compile time:** `SetNotePitch` now *throws* `.duplicatePitch` when the
+  target pitch collides with another note already in the chord, where it previously applied nothing and
+  returned successfully. A host that retunes a note into an existing pitch used to get a silent no-op; it
+  now gets a refused edit it must catch. Nothing else about the call site changes, so this is the one
+  migration item a host is likely to find last — after everything that failed to compile is already fixed.
 
 ### Fixed
 
@@ -3681,7 +3741,8 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/2.1.0...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/3.0.0...HEAD
+[3.0.0]: https://github.com/jiyimeta/swift-sheet-music/compare/2.6.0...3.0.0
 [2.1.0]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.1...2.1.0
 [2.0.1]: https://github.com/jiyimeta/swift-sheet-music/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.15.0...2.0.0

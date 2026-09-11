@@ -7,13 +7,13 @@ import SheetMusicFoundation
 /// silently dedupes — so this command's pre-check exists only to
 /// surface a clear "this pitch already exists" error to the host
 /// instead of the operation no-op'ing. Refusal goes through
-/// `ChordNotes.tryAppend(_:) -> Bool`.
+/// `ChordNotes.tryAppend(_:id:) -> Bool`.
 ///
 /// Inverse is a `ReplaceVoiceElement` carrying the prior chord, so
 /// undo restores the chord's original notes (and any chord-level
 /// metadata — arpeggio, lyrics, etc.) verbatim.
 ///
-/// > Note: This command is sugar over `ChordNotes.tryAppend(_:)`
+/// > Note: This command is sugar over `ChordNotes.tryAppend(_:id:)`
 /// > + `ReplaceVoiceElement`. It exists to give the operation a
 /// > domain-meaningful name and to surface the duplicate-pitch
 /// > rejection as an explicit `invalidEdit` error; callers can
@@ -52,7 +52,7 @@ public struct AddNoteToChord: EditCommand {
         let original = chord
         let added = chord.notes.tryAppend(Note(
             pitch: pitch, tpc: tpc, accidental: accidental,
-        ))
+        ), id: ids.next())
         guard added else {
             throw Self.refused(.duplicatePitch(pitch))
         }

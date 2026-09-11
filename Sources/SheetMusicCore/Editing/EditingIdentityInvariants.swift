@@ -3,6 +3,26 @@ import SheetMusicFoundation
 #if DEBUG
     /// Debug-only identity gates for the structural spine, voice contents, and system-lane occupants.
     enum EditingIdentityInvariants {
+        /// A chord's own note identifiers, plus each grace chord's note identifiers. Shared so the
+        /// production gate and test fixtures that need "every note in this chord" (e.g. copy/paste
+        /// disjointness checks) cannot drift on what counts as a note.
+        ///
+        /// Because `GraceTransportFixtures.allNoteIDs` delegates here (see its doc comment), this
+        /// function and that test helper now share fate on traversal-completeness bugs: a future
+        /// site that mints note identifiers without going through here (a new nested-note slot, a
+        /// third grace list, …) is invisible to both at once. Extending what this function walks
+        /// must come with a hardcoded-count regression test — the pattern in
+        /// `identifierTraversalCountsTupletSlotsNotEndpointReferences` and
+        /// `traversalCountsGraceSlotsAndRejectsCrossCollectionDuplicates` — rather than relying on
+        /// the delegation to catch the gap.
+        static func noteIdentifiers(of chord: Chord) -> [EID] {
+            var result = chord.notes.indices.map { chord.notes.eid(at: $0) }
+            for grace in chord.graceNotesBefore.values + chord.graceNotesAfter.values {
+                result.append(contentsOf: grace.notes.indices.map { grace.notes.eid(at: $0) })
+            }
+            return result
+        }
+
         static func identifiers(in score: Score) -> [EID] {
             var result = score.parts.indices.map { score.parts.eid(at: $0) }
             for part in score.parts {
@@ -19,6 +39,7 @@ import SheetMusicFoundation
                                 result.append(contentsOf: chord.graceNotesAfter.indices.map {
                                     chord.graceNotesAfter.eid(at: $0)
                                 })
+                                result.append(contentsOf: noteIdentifiers(of: chord))
                             }
                             result.append(contentsOf: voice.tuplets.indices.map { voice.tuplets.eid(at: $0) })
                         }

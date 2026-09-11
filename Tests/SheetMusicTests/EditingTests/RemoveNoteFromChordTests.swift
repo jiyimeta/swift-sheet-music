@@ -13,7 +13,7 @@ struct RemoveNoteFromChordTests {
         var score = EditingFixtures.chordAtIndex1()
         // Add a second note so removal leaves a chord, not a rest.
         if case var .chord(chord) = score[Self.chordVE] {
-            chord.notes.append(Note(pitch: 64, tpc: 18)) // E4
+            chord.notes = ChordNotes(Array(chord.notes) + [Note(pitch: 64, tpc: 18)]) // E4
             score[Self.chordVE] = .chord(chord)
         }
         let removeID = NoteID(
@@ -67,7 +67,7 @@ struct RemoveNoteFromChordTests {
     func inverseRestoresAfterPartialRemoval() throws {
         var score = EditingFixtures.chordAtIndex1()
         if case var .chord(chord) = score[Self.chordVE] {
-            chord.notes.append(Note(pitch: 64, tpc: 18))
+            chord.notes = ChordNotes(Array(chord.notes) + [Note(pitch: 64, tpc: 18)])
             score[Self.chordVE] = .chord(chord)
         }
         let snapshot = score

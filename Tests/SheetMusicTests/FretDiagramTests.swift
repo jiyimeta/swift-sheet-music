@@ -111,7 +111,7 @@ struct FretDiagramMSCXTests {
         """)
         #expect(diagram.preservedMarkup.map(\.name) == ["string", "barre"])
 
-        let encoded = diagram.encode()
+        let encoded = diagram.encode(eid: .invalid)
         let oldString = try #require(encoded.first("string"))
         #expect(oldString.attributes == ["no": "2"])
         #expect(oldString.first("dot")?.text == "3")
@@ -125,7 +125,7 @@ struct FretDiagramMSCXTests {
             harmony: Harmony(name: "C", rootTpc: 14),
             preservedMarkup: [PreservedXML(name: "string", attributes: ["no": "0"])],
         )
-        let names = diagram.encode().children.map(\.name)
+        let names = diagram.encode(eid: .invalid).children.map(\.name)
         let harmonyIndex = try #require(names.firstIndex(of: "Harmony"))
         let fretDiagramIndex = try #require(names.firstIndex(of: "fretDiagram"))
         #expect(harmonyIndex < fretDiagramIndex)

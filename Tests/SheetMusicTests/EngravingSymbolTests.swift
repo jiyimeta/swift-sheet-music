@@ -154,7 +154,7 @@ struct EngravingSymbolDecodeTests {
         #expect(symbol.scoreFont == nil)
         #expect(symbol.preservedMarkup == [PreservedXML(name: "scoreFont", text: "Leland")])
 
-        let encoded = try #require(note.encode().first("Symbol"))
+        let encoded = try #require(note.encode(eid: .invalid).first("Symbol"))
         #expect(encoded.children.map(\.name) == ["name", "scoreFont"])
         #expect(encoded.first("scoreFont")?.text == "Leland")
         #expect(!encoded.children.contains { $0.name == "font" })
@@ -177,7 +177,7 @@ struct EngravingSymbolDecodeTests {
         #expect(note.parentheses == .left)
         #expect(note.symbols.map(\.name) == ["accidentalSharp"])
 
-        let encoded = note.encode(options: MSCXEncoderOptions(targetVersion: .v3))
+        let encoded = note.encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: .v3))
         let names = encoded.all("Symbol").compactMap { $0.first("name")?.text }
         #expect(names.filter { $0 == "noteheadParenthesisLeft" }.count == 1)
         #expect(names.filter { $0 == "accidentalSharp" }.count == 1)
@@ -188,7 +188,7 @@ struct EngravingSymbolDecodeTests {
 @Suite("EngravingSymbol encoding")
 struct EngravingSymbolEncodeTests {
     @Test func alwaysWritesNameAndOnlyPresentOptionalFields() {
-        let bare = EngravingSymbol(name: "").encode()
+        let bare = EngravingSymbol(name: "").encode(eid: .invalid)
         #expect(bare.children.map(\.name) == ["name"])
         #expect(bare.first("name")?.text.isEmpty == true)
 
@@ -198,7 +198,7 @@ struct EngravingSymbolEncodeTests {
             size: 1.5,
             angle: -12.25,
             elementProperties: ElementProperties(visible: false),
-        ).encode()
+        ).encode(eid: .invalid)
         #expect(styled.children.map(\.name) == [
             "name", "font", "symbolsSize", "symbolAngle", "visible",
         ])
@@ -209,7 +209,7 @@ struct EngravingSymbolEncodeTests {
     }
 
     @Test func sizeAndAngleWriteWithoutAFont() {
-        let node = EngravingSymbol(name: "ornamentTrill", size: 1.25, angle: 30).encode()
+        let node = EngravingSymbol(name: "ornamentTrill", size: 1.25, angle: 30).encode(eid: .invalid)
         #expect(node.children.map(\.name) == ["name", "symbolsSize", "symbolAngle"])
         #expect(node.first("symbolsSize")?.text == "1.25")
         #expect(node.first("symbolAngle")?.text == "30")
@@ -221,7 +221,7 @@ struct EngravingSymbolEncodeTests {
         let node = EngravingSymbol(
             name: "ornamentTrill",
             preservedMarkup: [PreservedXML(name: "Image")],
-        ).encode(options: options)
+        ).encode(eid: .invalid, options: options)
         #expect(node.children.map(\.name) == ["name"])
     }
 
@@ -242,8 +242,12 @@ struct EngravingSymbolEncodeTests {
                     PreservedXML(name: "path", text: "symbol.svg"),
                 ]),
             ],
-        ).encode()
-        #expect(node.children.map(\.name) == ["name", "Symbol", "Image", "visible"])
+        ).encode(eid: EID(first: 1, second: 1))
+        // `<eid>` rides with the base element properties, not with the
+        // leaves — it comes from `writeItemProperties`, called only AFTER
+        // `TWrite::writeProperties(const BSymbol*, …)` has written the leaf
+        // children (`twrite.cpp:1883-1889`).
+        #expect(node.children.map(\.name) == ["name", "Symbol", "Image", "eid", "visible"])
     }
 
     @Test func noteWritesSymbolsInItsElementSlotBeforePitch() throws {
@@ -253,7 +257,7 @@ struct EngravingSymbolEncodeTests {
             fingerings: [Fingering(text: "1")],
             symbols: [EngravingSymbol(name: "ornamentTrill")],
         )
-        let names = note.encode().children.map(\.name)
+        let names = note.encode(eid: .invalid).children.map(\.name)
         let fingering = try #require(names.firstIndex(of: "Fingering"))
         let symbol = try #require(names.firstIndex(of: "Symbol"))
         let pitch = try #require(names.firstIndex(of: "pitch"))
@@ -274,7 +278,7 @@ struct EngravingSymbolEncodeTests {
         </Symbol>
         <pitch>60</pitch><tpc>14</tpc>
         """)
-        let reDecoded = try Note.decode(decoded.encode())
+        let reDecoded = try Note.decode(decoded.encode(eid: .invalid))
         #expect(reDecoded.symbols == decoded.symbols)
     }
 
@@ -392,7 +396,7 @@ struct EngravingSymbolEncodeTests {
         )
         #expect(note.parentheses == .none)
 
-        let encoded = note.encode(options: MSCXEncoderOptions(targetVersion: .v3))
+        let encoded = note.encode(eid: .invalid, options: MSCXEncoderOptions(targetVersion: .v3))
         let names = encoded.all("Symbol").compactMap { $0.first("name")?.text }
         #expect(names == ["accidentalSharp"])
 

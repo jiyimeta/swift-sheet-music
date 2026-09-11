@@ -24,6 +24,14 @@ extension Voice {
         var tuplets: [Tuplet] {
             voice.tuplets.values
         }
+
+        /// Positionally aligned with `systemElements`: each lifted
+        /// element's own `<eid>`, decoded alongside it. A separate
+        /// parallel array rather than folding into `systemElements`
+        /// itself — matching `MSCXTopLevelStaff.measureEIDs`'s shape —
+        /// so every existing consumer of `systemElements` (tests
+        /// included) keeps compiling unchanged.
+        let systemElementEIDs: [EID]
     }
 
     /// Convenience that drops the lifted system elements, returning
@@ -38,6 +46,7 @@ extension Voice {
     private struct OpenTuplet {
         let ratio: Fraction
         let firstElementIndex: Int
+        let eid: EID
     }
 
     // swiftlint:disable:next function_body_length cyclomatic_complexity
@@ -45,10 +54,11 @@ extension Voice {
         _ node: XMLTreeNode,
     ) throws -> DecodeResult {
         let voiceChildren = injectMS2EndTuplets(node.children)
-        var elements: [VoiceElement] = []
+        var elements: [(EID, VoiceElement)] = []
         elements.reserveCapacity(voiceChildren.count)
-        var tuplets: [Tuplet] = []
+        var tuplets: [(EID, Tuplet)] = []
         var systemElements: [PositionedSystemElement] = []
+        var systemElementEIDs: [EID] = []
         // Stack of open tuplet ratios (normal/actual). Each <Tuplet>
         // pushes, each <endTuplet/> pops. Chord/Rest durations are
         // scaled by the product of every ratio on the stack — mirrors
@@ -69,7 +79,7 @@ extension Voice {
         // end-of-voice) are dropped — MuseScore's own buffer is
         // per-measure and never flushed, so it doesn't keep them
         // either.
-        var pendingGraces: [GraceChord] = []
+        var pendingGraces: [(EID, GraceChord)] = []
         // Measure-relative read position, in fractions-of-whole-note.
         // Advances by each chord/rest's tuplet-scaled duration AND by
         // every `<location>` delta, exactly like the single tick that
@@ -105,19 +115,20 @@ extension Voice {
         func tupletFractions() -> [Fraction] {
             tupletStack.map(\.ratio)
         }
-        func appendVoiceElement(_ element: VoiceElement) {
+        func appendVoiceElement(_ element: VoiceElement, eid: EID) {
             if pendingShift.numerator != 0 {
-                elements.append(.locationShift(delta: pendingShift))
+                elements.append((.invalid, .locationShift(delta: pendingShift)))
                 pendingShift = Fraction(numerator: 0, denominator: 1)
             }
-            elements.append(element)
+            elements.append((eid, element))
         }
-        func lifted(_ element: SystemElement) {
+        func lifted(_ element: SystemElement, eid: EID) {
             let position = MeasurePosition(offset: cursor)
             systemElements.append(PositionedSystemElement(
                 position: position,
                 element: element,
             ))
+            systemElementEIDs.append(eid)
             // `pendingShift` deliberately survives: a lifted element
             // records where it sits but does not *consume* the jog
             // that got there. The voice cursor stays moved for the
@@ -164,12 +175,12 @@ extension Voice {
                     // inside `<Chord>`.
                     let graceMarkup = inner.preservedMarkup
                         + child.all("ChordBracket").map(PreservedXML.init)
-                    pendingGraces.append(GraceChord(
+                    pendingGraces.append((EIDXML.decode(from: child), GraceChord(
                         graceType: graceType,
                         duration: inner.duration,
                         notes: inner.notes,
                         preservedMarkup: graceMarkup,
-                    ))
+                    )))
                     continue
                 }
                 var chord = try Chord.decode(child)
@@ -183,17 +194,20 @@ extension Voice {
                     // the before side forward, the after side reversed.
                     // See `Chord.mscxFileOrderedGraces` for the citation
                     // trail, including the upstream playback test that
-                    // pins the after-run's reversal.
-                    chord.graceNotesBefore = IdentifiedArray(pendingGraces.filter { !$0.graceType.isAfter })
+                    // pins the after-run's reversal. Each grace's identifier
+                    // travels WITH its `GraceChord` through this filter and
+                    // reversal — never split apart and reassembled — so a
+                    // reversed after-run cannot mismatch identifier to value.
+                    chord.graceNotesBefore = IdentifiedArray(pendingGraces.filter { !$0.1.graceType.isAfter })
                     chord.graceNotesAfter = IdentifiedArray(Array(
                         pendingGraces
-                            .filter(\.graceType.isAfter)
+                            .filter(\.1.graceType.isAfter)
                             .reversed(),
                     ))
                     pendingGraces.removeAll(keepingCapacity: true)
                 }
                 chord.beamVisible = takePendingBeamVisible()
-                appendVoiceElement(.chord(chord))
+                appendVoiceElement(.chord(chord), eid: EIDXML.decode(from: child))
                 // `.measure` chords carry no intrinsic duration; the
                 // measure-rest fills the bar by definition, so any
                 // following element would be malformed. Skip the
@@ -209,7 +223,7 @@ extension Voice {
                     rest.duration, by: tupletFractions(),
                 )
                 rest.beamVisible = takePendingBeamVisible()
-                appendVoiceElement(.chord(rest))
+                appendVoiceElement(.chord(rest), eid: EIDXML.decode(from: child))
                 if case .measure = rest.duration {
                     // A measure rest's `NoteDuration` is the bare
                     // `.measure` marker (its fraction is resolved
@@ -240,100 +254,147 @@ extension Voice {
                 // immediately before that chord/rest.
                 pendingBeamVisible =
                     (child.first("visible")?.text ?? "1") != "0"
-                appendVoiceElement(.preserved(PreservedXML(child)))
+                // The `<Beam>` node's own `<eid>` (if any) travels inside
+                // the preserved bag verbatim — see `.preserved`'s comment
+                // on `default:` below.
+                appendVoiceElement(.preserved(PreservedXML(child)), eid: .invalid)
             case "Tuplet":
                 if let ratio = tupletRatio(from: child) {
                     tupletStack.append(OpenTuplet(
                         ratio: ratio,
                         firstElementIndex: elements.count,
+                        eid: EIDXML.decode(from: child),
                     ))
                 }
             case "endTuplet":
                 if let top = tupletStack.popLast() {
                     let endIndex = elements.count - 1
                     if endIndex >= top.firstElementIndex {
-                        tuplets.append(Tuplet(
+                        tuplets.append((top.eid, Tuplet(
                             normalNotes: top.ratio.numerator,
                             actualNotes: top.ratio.denominator,
                             startIndex: top.firstElementIndex,
                             endIndex: endIndex,
-                        ))
+                        )))
                     }
                 }
             case "KeySig":
-                try appendVoiceElement(.keySignature(KeySignature.decode(child)))
+                try appendVoiceElement(
+                    .keySignature(KeySignature.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "TimeSig":
-                try appendVoiceElement(.timeSignature(TimeSignature.decode(child)))
+                try appendVoiceElement(
+                    .timeSignature(TimeSignature.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "Clef":
-                try appendVoiceElement(.clef(Clef.decode(child)))
+                try appendVoiceElement(
+                    .clef(Clef.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "BarLine":
-                try appendVoiceElement(.barLine(BarLine.decode(child)))
+                try appendVoiceElement(
+                    .barLine(BarLine.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "Tempo":
-                try lifted(.tempo(Tempo.decode(child)))
+                try lifted(.tempo(Tempo.decode(child)), eid: EIDXML.decode(from: child))
             case "Dynamic":
-                try appendVoiceElement(.dynamic(Dynamic.decode(child)))
+                try appendVoiceElement(
+                    .dynamic(Dynamic.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "Spanner":
-                try appendVoiceElement(.spanner(Spanner.decode(child)))
+                // `eid: .invalid` deliberately: the `<Spanner type="X">`
+                // wrapper is not itself an `EngravingItem` and never
+                // carries `<eid>` in a real file — the identifier, when
+                // one exists, lives one level down on the begin side's
+                // payload element, which this carrier does not yet read.
+                // See `Spanner.encode`'s doc comment for the full citation.
+                try appendVoiceElement(.spanner(Spanner.decode(child)), eid: .invalid)
             case "MeasureRepeat", "RepeatMeasure":
                 // <RepeatMeasure> is the MuseScore 3.x spelling of the same
                 // element (see MeasureRead::readVoice in measureread.cpp:336).
-                try appendVoiceElement(.measureRepeat(MeasureRepeat.decode(child)))
+                try appendVoiceElement(
+                    .measureRepeat(MeasureRepeat.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "Fermata":
                 let subtype = child.first("subtype")?.text ?? ""
                 let stretch: Double? = child.first("timeStretch").flatMap { Double($0.text) }
                 var fermata = Fermata(subtype: subtype, timeStretch: stretch)
                 fermata.elementProperties = ElementProperties(decodingMSCXChildrenOf: child)
-                appendVoiceElement(.fermata(fermata))
+                appendVoiceElement(.fermata(fermata), eid: EIDXML.decode(from: child))
             case "Breath":
-                appendVoiceElement(.breath(Breath.decodeMSCX(child)))
+                appendVoiceElement(
+                    .breath(Breath.decodeMSCX(child)), eid: EIDXML.decode(from: child),
+                )
             case "StaffText":
                 if Swing.isSwingMarker(child) {
-                    lifted(.swing(
-                        Swing.decode(child, isSystemText: false),
-                    ))
+                    lifted(
+                        .swing(Swing.decode(child, isSystemText: false)),
+                        eid: EIDXML.decode(from: child),
+                    )
                 } else {
-                    try lifted(.staffText(
-                        StaffText.decode(child, isSystemText: false),
-                    ))
+                    try lifted(
+                        .staffText(StaffText.decode(child, isSystemText: false)),
+                        eid: EIDXML.decode(from: child),
+                    )
                 }
             case "SystemText":
                 if Swing.isSwingMarker(child) {
-                    lifted(.swing(
-                        Swing.decode(child, isSystemText: true),
-                    ))
+                    lifted(
+                        .swing(Swing.decode(child, isSystemText: true)),
+                        eid: EIDXML.decode(from: child),
+                    )
                 } else {
-                    try lifted(.staffText(
-                        StaffText.decode(child, isSystemText: true),
-                    ))
+                    try lifted(
+                        .staffText(StaffText.decode(child, isSystemText: true)),
+                        eid: EIDXML.decode(from: child),
+                    )
                 }
             case "Harmony":
-                try appendVoiceElement(.harmony(Harmony.decode(child)))
+                try appendVoiceElement(
+                    .harmony(Harmony.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "Sticking":
-                appendVoiceElement(.sticking(Sticking.decode(child)))
+                appendVoiceElement(
+                    .sticking(Sticking.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "Expression":
-                appendVoiceElement(.expression(ExpressionText.decode(child)))
+                appendVoiceElement(
+                    .expression(ExpressionText.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "Capo":
-                appendVoiceElement(.capo(Capo.decode(child)))
+                appendVoiceElement(
+                    .capo(Capo.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "StringTunings":
-                appendVoiceElement(.stringTunings(StringTunings.decode(child)))
+                appendVoiceElement(
+                    .stringTunings(StringTunings.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "Ambitus":
-                appendVoiceElement(.ambitus(Ambitus.decode(child)))
+                appendVoiceElement(
+                    .ambitus(Ambitus.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "FiguredBass":
-                appendVoiceElement(.figuredBass(FiguredBass.decode(child)))
+                appendVoiceElement(
+                    .figuredBass(FiguredBass.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "Symbol":
-                appendVoiceElement(.symbol(
-                    EngravingSymbol.decode(child, location: "voice/Symbol"),
-                ))
+                appendVoiceElement(
+                    .symbol(EngravingSymbol.decode(child, location: "voice/Symbol")),
+                    eid: EIDXML.decode(from: child),
+                )
             case "FretDiagram":
-                appendVoiceElement(.fretDiagram(FretDiagram.decode(child)))
+                appendVoiceElement(
+                    .fretDiagram(FretDiagram.decode(child)), eid: EIDXML.decode(from: child),
+                )
             case "RehearsalMark":
-                try lifted(.rehearsalMark(
-                    RehearsalMark.decode(child),
-                ))
+                try lifted(
+                    .rehearsalMark(RehearsalMark.decode(child)),
+                    eid: EIDXML.decode(from: child),
+                )
             case "InstrumentChange":
-                try lifted(.instrumentChange(
-                    InstrumentChange.decode(child),
-                ))
+                try lifted(
+                    .instrumentChange(InstrumentChange.decode(child)),
+                    eid: EIDXML.decode(from: child),
+                )
             case "location":
                 // Voice-level cursor shift. MuseScore uses
                 // `<location><fractions>N/D</fractions></location>`
@@ -366,7 +427,14 @@ extension Voice {
                 // it; leaving the jog pending until the next modeled
                 // element would move the preserved child to the wrong
                 // tick on re-encode.
-                appendVoiceElement(.preserved(PreservedXML(child)))
+                //
+                // `eid: .invalid` deliberately: an unmodeled child's own
+                // `<eid>` (if any) is captured verbatim inside the
+                // `PreservedXML` bag by `PreservedXML(child)` and re-emitted
+                // from there on encode — see `MSCXEncoder+Voice+Emit.swift`'s
+                // `.preserved` case. Decoding it a second time into the
+                // slot's own identifier would write the child twice.
+                appendVoiceElement(.preserved(PreservedXML(child)), eid: .invalid)
             }
         }
         // Stranded `pendingGraces` (no following chord in this
@@ -375,8 +443,9 @@ extension Voice {
         // semantic effect and is discarded.
         try resolveTremoloPairs(in: &elements)
         return DecodeResult(
-            voice: Voice(elements: elements, tuplets: tuplets),
+            voice: Voice(elements: IdentifiedArray(elements), tuplets: IdentifiedArray(tuplets)),
             systemElements: systemElements,
+            systemElementEIDs: systemElementEIDs,
         )
     }
 
@@ -394,22 +463,22 @@ extension Voice {
     /// loop is written to tolerate it. A start with no follower is a
     /// malformed score and throws.
     private static func resolveTremoloPairs(
-        in elements: inout [VoiceElement],
+        in elements: inout [(EID, VoiceElement)],
     ) throws {
         for i in elements.indices {
-            guard case let .chord(start) = elements[i],
+            guard case let .chord(start) = elements[i].1,
                   let trem = start.tremolo,
                   trem.span == .between
             else { continue }
             var followerIndex: Int?
             for j in (i + 1) ..< elements.count {
-                if case .chord = elements[j] {
+                if case .chord = elements[j].1 {
                     followerIndex = j
                     break
                 }
             }
             guard let fIdx = followerIndex,
-                  case var .chord(follower) = elements[fIdx]
+                  case var .chord(follower) = elements[fIdx].1
             else {
                 throw SheetMusicError.malformedScore(
                     ScoreFault(
@@ -420,7 +489,7 @@ extension Voice {
                 )
             }
             follower.tremolo = nil
-            elements[fIdx] = .chord(follower)
+            elements[fIdx].1 = .chord(follower)
         }
     }
 

@@ -197,10 +197,12 @@ struct ScoreFingerprintParityTests {
         score[Self.slot] = .chord(chord)
         #expect(score.stableFingerprint != before)
         chord.visible = true
-        chord.notes[0].elementProperties.color = ScoreColor(red: 255, green: 0, blue: 0, alpha: 255)
+        chord.notes.updateNote(at: 0) {
+            $0.elementProperties.color = ScoreColor(red: 255, green: 0, blue: 0, alpha: 255)
+        }
         score[Self.slot] = .chord(chord)
         #expect(score.stableFingerprint != before)
-        chord.notes[0].elementProperties.color = nil
+        chord.notes.updateNote(at: 0) { $0.elementProperties.color = nil }
         score[Self.slot] = .chord(chord)
         #expect(score.stableFingerprint == before)
     }

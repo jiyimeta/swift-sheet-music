@@ -18,7 +18,13 @@ public enum MSCXEncoder {
     public static func encode(
         _ score: Score, options: MSCXEncoderOptions,
     ) throws -> Data {
-        let root = try score.encode(options: options)
+        // A score can still arrive unidentified — a host can build one by hand. Filling keeps the
+        // save working; a producer that skips its chokepoint is caught by ScoreProducerIdentityTests,
+        // not by refusing to save.
+        var identified = score
+        var ids = EIDAllocator()
+        identified.assignMissingIDs(using: &ids)
+        let root = try identified.encode(options: options)
         return XMLTreeSerializer.serialize(root)
     }
 

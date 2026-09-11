@@ -224,7 +224,7 @@ extension GenWebFixtures {
     static func writeMixerScore(to directory: URL) {
         let container: Data
         do {
-            container = try MSCZWriter.write(score: mixerScore)
+            container = try MSCZWriter.write(score: identified(mixerScore))
         } catch {
             fail("could not write the mixer score: \(error)", code: 5)
         }
@@ -244,7 +244,7 @@ extension GenWebFixtures {
         let container: Data
         let reloaded: Score
         do {
-            container = try MSCZWriter.write(score: repeatScore)
+            container = try MSCZWriter.write(score: identified(repeatScore))
             reloaded = try ScoreBridge.loadScore(bytes: container)
         } catch {
             fail("could not round-trip the repeat score: \(error)", code: 5)

@@ -22,8 +22,16 @@ extension ExpressionText {
     /// Down-converting to `<StaffText>` is deliberately not done: re-reading
     /// that would produce a `StaffText`, not an `ExpressionText`, an asymmetry
     /// the preservation gate would report as a false loss.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
+        // `<eid>` genuinely is first here, ahead of `snapToDynamics`:
+        // `TWrite::write(const Expression*, ...)` has no properties of its
+        // own and calls `writeProperties(TextBase*, ..., true)` directly,
+        // whose first act is `writeItemProperties` (the `<eid>` writer);
+        // `snapToDynamics` is `Expression`'s one styled property
+        // (`dom/expression.cpp:36`), written by the STYLED-property loop
+        // that runs after `writeItemProperties`, not before it.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         if let snapToDynamics {
             children.append(XMLTreeNode(
                 name: "snapToDynamics", text: snapToDynamics ? "1" : "0",

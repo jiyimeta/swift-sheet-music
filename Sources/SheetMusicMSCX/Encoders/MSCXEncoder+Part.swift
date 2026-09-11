@@ -12,6 +12,7 @@ extension Part {
     /// shadowed by the encoder-assigned value — preserves
     /// MuseScore Studio compatibility for hand-built scores.
     func encodeDeclaration(
+        eid: EID,
         partID: String,
         staffIDs: [String],
         options: MSCXEncoderOptions = .init(),
@@ -21,8 +22,15 @@ extension Part {
             "staffIDs must match staves count",
         )
         var children: [XMLTreeNode] = []
-        for (staff, id) in zip(staves, staffIDs) {
-            children.append(staff.encodeDeclaration(staffID: id, options: options))
+        // `<eid>` is our own child — MuseScore never writes one for
+        // `<Part>` (P4 plan decision 4) — but written first, like
+        // every other carrier.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        for (index, id) in staffIDs.enumerated() {
+            let staff = staves[index]
+            children.append(staff.encodeDeclaration(
+                eid: staves.eid(at: index), staffID: id, options: options,
+            ))
         }
         // Round-trip MuseScore's `<Part><show>`: only a hidden part carries the
         // element (`<show>0</show>`), matching MuseScore, which omits it when the

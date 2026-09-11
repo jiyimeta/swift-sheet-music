@@ -35,16 +35,17 @@ public struct ReplaceVoiceElement: EditCommand {
         var materialized = element
         switch identity {
         case .same:
-            materialized.assignMissingGraceIDs(using: &ids)
+            materialized.assignMissingNestedIDs(using: &ids)
             voice.elements.updateValue(at: location.elementIndex) { $0 = materialized }
             inverseIdentity = .same
         case .fresh:
             let eid = ids.next()
-            materialized.assignMissingGraceIDs(using: &ids)
+            materialized = materialized.clearingNestedIDsForCopy()
+            materialized.assignMissingNestedIDs(using: &ids)
             voice.replaceElement(at: location.elementIndex, with: materialized, id: eid)
             inverseIdentity = .restore(previous)
         case let .restore(restored):
-            materialized.assignMissingGraceIDs(using: &ids)
+            materialized.assignMissingNestedIDs(using: &ids)
             voice.replaceElement(at: location.elementIndex, with: materialized, id: restored)
             inverseIdentity = .restore(previous)
         }
