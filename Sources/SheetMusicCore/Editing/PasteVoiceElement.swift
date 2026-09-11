@@ -85,7 +85,7 @@ public struct PasteVoiceElement: EditCommand {
         // at idx (i.e., the target we're replacing); `dstTicks` =
         // the NEW duration (i.e., the pasted element).
         let pastedEID = ids.next()
-        element.assignMissingGraceIDs(using: &ids)
+        element.assignMissingNestedIDs(using: &ids)
         let (newElements, newTuplets) = try DurationChangeAlgorithm
             .compute(
                 in: voice,

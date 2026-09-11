@@ -20,8 +20,10 @@ struct CrossBarIdentityTests {
         let secondIDs = Fixture.ids(Fixture.elements(before, measure: 1))
         #expect(session.apply(.setChordDuration(at: Fixture.location(3), duration: .half)))
         #expect(Fixture.ids(Fixture.elements(session.score)) == firstIDs)
+        // The head keeps its slot, but both head and tail land freshly-built `Chord` literals, so the
+        // split mints three: the head's own (now tied) note, the fresh tail's slot, then the tail's note.
         #expect(Fixture.ids(Fixture.elements(session.score, measure: 1)) == [
-            Fixture.minted(initial, 1), secondIDs[1], secondIDs[2],
+            Fixture.minted(initial, 2), secondIDs[1], secondIDs[2],
         ])
         let expectedHead = VoiceElement.chord(Chord(
             duration: .quarter, notes: [Note(pitch: 60, tpc: 14, tieForward: 1)],
@@ -35,7 +37,7 @@ struct CrossBarIdentityTests {
         #expect(Fixture.elements(session.score, measure: 1).values == [
             expectedTail, .rest(duration: .quarter), .rest(duration: .half),
         ])
-        #expect(session.idAllocator == Fixture.advanced(initial, by: 1))
+        #expect(session.idAllocator == Fixture.advanced(initial, by: 3))
         #expect(session.undo())
         Fixture.expectSameScore(session.score, before)
     }

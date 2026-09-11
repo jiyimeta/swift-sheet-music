@@ -26,7 +26,7 @@ public struct VoiceSlot: Sendable, Equatable {
                 eid = ids.next()
             }
             var element = slot.element
-            element.assignMissingGraceIDs(using: &ids)
+            element.assignMissingNestedIDs(using: &ids)
             return (eid, element)
         })
     }

@@ -2,7 +2,7 @@ import SheetMusicFoundation
 
 extension Voice {
     var hasUnassignedIDs: Bool {
-        elements.hasUnassignedIDs || elements.contains(where: \.hasUnassignedGraceIDs)
+        elements.hasUnassignedIDs || elements.contains(where: \.hasUnassignedNestedIDs)
             || tuplets.hasUnassignedIDs || tuplets.contains {
                 if case .index = $0.first { return true }
                 if case .index = $0.last { return true }
@@ -10,14 +10,15 @@ extension Voice {
             }
     }
 
-    /// Mint each member, then its before/after graces; resolve endpoints and mint tuplets after all members.
+    /// Mint each member, then its notes and before/after graces; resolve endpoints and mint tuplets after all
+    /// members.
     mutating func assignMissingIDs(using ids: inout EIDAllocator) {
-        if elements.hasUnassignedIDs || elements.contains(where: \.hasUnassignedGraceIDs) {
+        if elements.hasUnassignedIDs || elements.contains(where: \.hasUnassignedNestedIDs) {
             elements = IdentifiedArray(elements.indices.map { index in
                 let old = elements.eid(at: index)
                 let eid = old.isValid ? old : ids.next()
                 var element = elements[index]
-                element.assignMissingGraceIDs(using: &ids)
+                element.assignMissingNestedIDs(using: &ids)
                 return (eid, element)
             })
         }

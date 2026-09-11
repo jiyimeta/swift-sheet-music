@@ -17,13 +17,14 @@ struct TupletIdentityAssignmentTests {
         let voice = F.voice(score)
         #expect(score.parts.eid(at: 0) == EID(first: 42, second: 1))
         #expect(score.parts[0].staves.eid(at: 0) == EID(first: 42, second: 2))
-        let elementIDs = (3 ... 5).map { EID(first: 42, second: UInt64($0)) }
+        // Each chord mints its own note right after its element slot, so slot ids land on odd counters.
+        let elementIDs = [3, 5, 7].map { EID(first: 42, second: UInt64($0)) }
         #expect(V.ids(voice.elements) == elementIDs)
-        #expect(voice.tuplets.eid(at: 0) == EID(first: 42, second: 6))
+        #expect(voice.tuplets.eid(at: 0) == EID(first: 42, second: 9))
         #expect(voice.tuplets[0].first == .element(EID(first: 42, second: 3)))
-        #expect(voice.tuplets[0].last == .element(EID(first: 42, second: 5)))
-        #expect(score.systemMeasures.eid(at: 0) == EID(first: 42, second: 7))
-        #expect(ids.counter == 7)
+        #expect(voice.tuplets[0].last == .element(EID(first: 42, second: 7)))
+        #expect(score.systemMeasures.eid(at: 0) == EID(first: 42, second: 10))
+        #expect(ids.counter == 10)
         #expect(!score.hasUnassignedIDs)
     }
 
@@ -99,15 +100,16 @@ struct TupletIdentityAssignmentTests {
         )
         let inverse = try command.apply(to: &score, ids: &ids)
         let after = score
+        // The slot's own id mints first, then its note, and only then the tuplet.
         #expect(F.voice(score).elements.eid(at: 0) == EID(first: 42, second: 1))
-        #expect(F.voice(score).tuplets.eid(at: 0) == EID(first: 42, second: 2))
+        #expect(F.voice(score).tuplets.eid(at: 0) == EID(first: 42, second: 3))
         #expect(F.voice(score).tuplets[0].first == .element(EID(first: 42, second: 1)))
         #expect(F.voice(score).tuplets[0].last == .element(EID(first: 42, second: 1)))
         let redo = try inverse.apply(to: &score, ids: &ids)
         V.expectSameScore(score, before)
         try redo.apply(to: &score, ids: &ids)
         V.expectSameScore(score, after)
-        #expect(ids.counter == 2)
+        #expect(ids.counter == 3)
     }
 
     #if DEBUG
