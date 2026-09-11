@@ -161,8 +161,14 @@ struct EIDPersistenceTests {
             ]))],
         )
         let bytes = try MSCXEncoder.encode(score)
-        let xml = try #require(String(bytes: bytes, encoding: .utf8))
-        #expect(xml.contains("<eid>"))
+        // Asserted on the `<RehearsalMark>` node specifically. A bare
+        // `xml.contains("<eid>")` cannot fail for the reason this test is
+        // about: the measure, the staff declaration and the part all carry
+        // one already, so it stays true with the rehearsal mark's own
+        // carrier removed outright.
+        let root = try XMLTreeParser.parse(bytes)
+        let markNode = try #require(Self.firstDescendant(named: "RehearsalMark", in: root))
+        #expect(EIDXML.decode(from: markNode) == eid)
 
         let decoded = try MSCXParser.parse(bytes)
         #expect(decoded.systemMeasures.first?.elements.eid(at: 0) == eid)
@@ -189,6 +195,36 @@ struct EIDPersistenceTests {
         #expect(reparsedVoice.tuplets.eid(at: 0) == tupletEID)
     }
 
+    @Test("an instrument change keeps the identifier the file gave it")
+    func instrumentChangeIdentifierSurvivesAnEncodeDecode() throws {
+        // `own/instrument-change.mscx` is the repository's only `<InstrumentChange>`, and until this test it
+        // carried no `<eid>` at all — so `InstrumentChange/eid` was exercised by nothing, and the preservation
+        // gate's silence about it was proof of absence rather than of survival. The `<eid>` was added to the
+        // fixture at the position `MSCXEncoder+InstrumentChange.swift` writes it: after the conditional
+        // `<Instrument>` and `<init>`, before `<text>` (`twrite.cpp:2128-2137`). That is what makes this the
+        // carrier most likely to move silently — two conditional children sit ahead of it — and what makes a
+        // fixture worth having for it.
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("instrument-change"))
+        var found: [EID] = []
+        for column in score.systemMeasures {
+            for index in column.elements.indices {
+                guard case .instrumentChange = column.elements[index].element else { continue }
+                found.append(column.elements.eid(at: index))
+            }
+        }
+        #expect(found == [EID(string: "V_V")])
+
+        let reparsed = try MSCXParser.parse(MSCXEncoder.encode(score))
+        var reloaded: [EID] = []
+        for column in reparsed.systemMeasures {
+            for index in column.elements.indices {
+                guard case .instrumentChange = column.elements[index].element else { continue }
+                reloaded.append(column.elements.eid(at: index))
+            }
+        }
+        #expect(reloaded == found)
+    }
+
     @Test("a preserved element round-trips with exactly one identifier")
     func preservedElementCarriesExactlyOneEID() throws {
         let unmodeled = XMLTreeNode(
@@ -211,6 +247,105 @@ struct EIDPersistenceTests {
         let futureNode = try #require(reencoded.first("FutureElement"))
         #expect(futureNode.all("eid").count == 1)
         #expect(futureNode.first("eid")?.text == "Q_Q")
+    }
+
+    // MARK: - Gate 3: renumbering a file that carries no identifier at all
+
+    /// **Gate 3.** Strip every `<eid>` out of a MuseScore-authored file's XML, parse the result, and assert the
+    /// parser's chokepoint filled every slot with a distinct identifier — and that it filled exactly as many
+    /// slots as the unstripped parse holds.
+    ///
+    /// The count equality is what stops this passing on a traversal that shrank: a renumbering pass that
+    /// dropped elements, or a traversal that stopped walking notes, would still report "all unique" over
+    /// whatever was left. `midi01.mscx` is the corpus file used because it is the one whose own identifiers
+    /// other tests here assert by literal value, so "stripped" and "unstripped" are the same score twice.
+    ///
+    /// Coverage is `.every` rather than `.persisted`: this gate is about MINTING, and `.preserved`,
+    /// `.locationShift` and `.spanner` slots are minted like any other — it is only their round trip through a
+    /// file that they do not survive.
+    @Test("a file with every identifier stripped is renumbered completely and without a collision")
+    func strippedFileIsRenumbered() throws {
+        let original = try MSCXFixtureLoader.mscxData("midi01")
+        let originalXML = try #require(String(bytes: original, encoding: .utf8))
+        // Control: the probe below is only evidence if the source actually had identifiers to strip.
+        #expect(originalXML.contains("<eid>"))
+        let strippedXML = originalXML.replacing(/<eid>[^<]*<\/eid>\s*/, with: "")
+        #expect(!strippedXML.contains("<eid>"))
+
+        let unstripped = try MSCXParser.parse(original)
+        let stripped = try MSCXParser.parse(Data(strippedXML.utf8))
+        let mintedSlots = EIDRoundTrip.slots(in: stripped, coverage: .every)
+        let sourceSlots = EIDRoundTrip.slots(in: unstripped, coverage: .every)
+
+        print("[eid-renumber] midi01.mscx minted=\(mintedSlots.count) source=\(sourceSlots.count)")
+        #expect(!mintedSlots.isEmpty)
+        #expect(mintedSlots.count == sourceSlots.count)
+        let unassigned = mintedSlots.filter { !$0.eid.isValid }
+        #expect(unassigned.isEmpty, "\(unassigned.count) slots came back without an identifier")
+        let distinct = Set(mintedSlots.map(\.eid))
+        #expect(distinct.count == mintedSlots.count, "two slots were minted the same identifier")
+    }
+
+    // MARK: - Gate 4: a MuseScore-authored file keeps its identifiers
+
+    /// **Gate 4.** `midi01.mscx` is MuseScore's own output. Parse it, encode it, parse that, and assert the four
+    /// identifiers MuseScore wrote are the same ones on the other side — and that nothing adopted a foreign
+    /// identifier's halves as an actor and a counter (decision 3: a decoded identifier is opaque).
+    ///
+    /// `B_B` is deliberately absent from the list: that one is `<Score><eid>`, which this library leaves
+    /// unmodeled on purpose, so a gate written against it could not pass.
+    @Test("a MuseScore-authored file's own identifiers survive a save and a reload")
+    func museScoreAuthoredIdentifiersSurvive() throws {
+        let source = try MSCXFixtureLoader.mscxData("midi01")
+        let score = try MSCXParser.parse(source)
+        let reparsed = try MSCXParser.parse(MSCXEncoder.encode(score))
+        // midi01.mscx:25 `<Part><Staff><eid>C_C`, :88 the first `<Measure><eid>D_D`,
+        // :100 the first `<Chord><eid>G_G`, :103 its `<Note><eid>H_H`.
+        #expect(reparsed.parts[0].staves.eid(at: 0) == EID(string: "C_C"))
+        #expect(reparsed.systemMeasures.eid(at: 0) == EID(string: "D_D"))
+        let voice = reparsed.parts[0].staves[0].measures[0].voices[0]
+        #expect(voice.elements.eid(at: 2) == EID(string: "G_G"))
+        guard case let .chord(chord) = voice.elements[2] else {
+            Issue.record("expected element 2 to be the fixture's first chord")
+            return
+        }
+        #expect(chord.notes.eid(at: 0) == EID(string: "H_H"))
+
+        // Every `first` half MuseScore wrote in this file, read off the source bytes rather than listed by
+        // hand, so the check below widens automatically if the fixture gains an identifier.
+        let foreignFirsts = try Set(
+            originalXMLIdentifiers(in: #require(String(bytes: source, encoding: .utf8))).map(\.first),
+        )
+        #expect(foreignFirsts.count >= 4, "the fixture no longer carries the identifiers this gate reads")
+
+        // A session over a score full of foreign identifiers starts its allocator at zero and mints under its
+        // own actor: no foreign half was adopted as either.
+        let session = ScoreEditSession(score: reparsed)
+        #expect(session.idAllocator.counter == 0, "a foreign identifier advanced the live counter")
+        var minting = session.idAllocator
+        let minted = minting.next()
+        #expect(minted.second == 1)
+        #expect(!foreignFirsts.contains(minted.first))
+        // Control: the same check, applied to an allocator that DID adopt a foreign half, must reject it —
+        // otherwise a green result above says nothing about the probe.
+        let adoptedFirst = try #require(foreignFirsts.first { $0 != 0 && $0 != .max })
+        var adopted = EIDAllocator(actor: adoptedFirst, counter: 0)
+        #expect(foreignFirsts.contains(adopted.next().first))
+    }
+
+    /// Every `<eid>` value in an MSCX document, decoded. Used to read a fixture's foreign identifiers off its
+    /// own bytes instead of restating them in the test.
+    private func originalXMLIdentifiers(in xml: String) -> [EID] {
+        xml.matches(of: /<eid>([^<]*)<\/eid>/).compactMap { EID(string: String($0.1)) }
+    }
+
+    /// First descendant node with `name`, at any depth. `XMLTreeNode.first(_:)` looks at direct children only.
+    private static func firstDescendant(named name: String, in node: XMLTreeNode) -> XMLTreeNode? {
+        if node.name == name { return node }
+        for child in node.children {
+            if let found = firstDescendant(named: name, in: child) { return found }
+        }
+        return nil
     }
 
     /// Number of `<Measure>` children carrying an `<eid>` under the
