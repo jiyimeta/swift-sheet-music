@@ -23,6 +23,14 @@ import Testing
 /// corpus, so the two parses Leg A compares are structurally congruent by construction and a path mismatch
 /// there is a real defect rather than a normalization.
 ///
+/// **What starting from pass 1 costs.** An identifier that MOVED between two surviving elements during
+/// that first encode — the one leg starts after — is invisible to both legs: Leg A never looks at the
+/// original file at all, and Leg B only checks set membership, which a swap does not change. Closing this
+/// would need asserting the ORIGINAL's identifier sequence, filtered down to the set pass 1 still holds,
+/// equals pass 1's sequence in that same order — order-preserving so a legitimate drop costs nothing but a
+/// swap is caught — and it would assume the encoder never legitimately reorders identified slots relative
+/// to each other, which is not yet established.
+///
 /// **Leg B — set-based, against the original file.** Every identifier the reload holds must already have been
 /// in the original parse: a save and a reload may LOSE an identifier (the encoder dropped the element that
 /// carried it) but may never INVENT one. This is the leg that speaks about the identifiers a MuseScore-authored
@@ -316,22 +324,5 @@ struct EIDRoundTripSweep {
         #expect(emptyFiles.isEmpty, "\(emptyFiles.count) scores carried no identified slot at all")
         #expect(unstable.isEmpty, "\(unstable.count) of \(loaded) scores moved an identifier across a reload")
         #expect(invented.isEmpty, "\(invented.count) of \(loaded) scores invented an identifier on reload")
-    }
-
-    private static func score(at url: URL) throws -> Score {
-        let data = try Data(contentsOf: url)
-        return url.pathExtension.lowercased() == "mscz"
-            ? try MSCZReader.parse(data)
-            : try MSCXParser.parse(data)
-    }
-
-    private static func scoreFiles(under root: URL) -> [URL] {
-        let enumerator = FileManager.default.enumerator(
-            at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles],
-        )
-        let found = (enumerator?.allObjects as? [URL] ?? []).filter {
-            ["mscx", "mscz"].contains($0.pathExtension.lowercased())
-        }
-        return found.sorted { $0.path < $1.path }
     }
 }
