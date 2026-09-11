@@ -1,6 +1,7 @@
 import Foundation
 import SheetMusicCore
 import SheetMusicLoader
+import SheetMusicMSCX
 @testable import SheetMusicMusicXML
 import SheetMusicXMLTools
 import Testing
@@ -47,6 +48,15 @@ struct ScoreProducerIdentityTests {
 
     @Test func loaderIdentifiesMIDI() throws {
         let score = try ScoreLoader.loadScore(bytes: bytes("midi01-ref", "mid"))
+        #expect(!score.parts.isEmpty)
+        #expect(!score.hasUnassignedIDs)
+    }
+
+    /// `ScoreLoader` already assigns unconditionally after every producer, so
+    /// `loaderIdentifiesMSCX` above would pass even if `MSCXParser.parse` itself
+    /// forgot its own chokepoint. This calls the parser directly.
+    @Test func mscxParserIdentifiesItsScore() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
         #expect(!score.parts.isEmpty)
         #expect(!score.hasUnassignedIDs)
     }

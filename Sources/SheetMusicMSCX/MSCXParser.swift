@@ -25,9 +25,12 @@ public enum MSCXParser {
             data,
             preservingMixedContentIn: ["text"],
         )
-        return try Score.decode(
+        var score = try Score.decode(
             root, styleFileStyle: styleFileStyle(styleFileData),
         )
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        return score
     }
 
     /// Read `.mscx` XML from a file URL and parse into a `Score`.
