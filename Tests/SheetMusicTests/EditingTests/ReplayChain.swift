@@ -107,17 +107,22 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
         minimumDistinctFingerprints: 11,
     )
 
-    /// The selection-and-editing project's accepting-path chain for intents 76...79. The script documents
-    /// its state transitions, three-state font patch and hand-derived fingerprint floor.
+    /// The selection-and-editing project's accepting-path chain for intents 76...79, extended by the
+    /// properties-inspector project to 80...83. The script documents its state transitions, three-state font
+    /// patch and hand-derived fingerprint floor.
     static let properties = ReplayChain(
         name: "properties",
         androidAssetDir: "editReplay-properties",
         webFixtureStem: "edit-replay-properties",
         fixture: { EditingFixtures.twoConsecutiveC4Chords() },
         steps: { EditReplayScript.properties(staff: $0) },
-        // Initial state + seven new states; four undo/reapply steps revisit earlier states. No recorded count
-        // supplies this floor: each of the seven authored changes must contribute to the expected spread.
-        minimumDistinctFingerprints: 8,
+        // Initial state + seven new states from intents 76...79, plus two from the note flags (80/81) appended
+        // for the properties-inspector project: `Note.isSmall` and `Note.play` are hashed, so each of steps 12
+        // and 13 introduces a new state. The three offset / auto-place steps (82/83, steps 15...17) add recorded
+        // steps and no distinct fingerprints — neither field is hashed, deliberately (see
+        // `ElementPropertyFingerprintTests`). No recorded count supplies this floor: each of the nine authored
+        // changes that do move the fingerprint must contribute to the expected spread.
+        minimumDistinctFingerprints: 10,
     )
 
     static let all: [ReplayChain] = [.standard, .parity, .lyrics, .properties]
