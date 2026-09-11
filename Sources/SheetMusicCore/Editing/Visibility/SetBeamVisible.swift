@@ -72,9 +72,19 @@ public struct SetBeamVisible: EditCommand {
         BeamGrouping.leader(of: location, in: score)
     }
 
-    /// The beam flag of the group `location` belongs to — read off its leader — or `nil` when the element is not
-    /// a beamed chord.
-    static func current(at location: VoiceElementID, in score: Score) -> Bool? {
+    /// The beam-visibility flag governing `location` — read off the leading chord of its beam group.
+    ///
+    /// `Chord.beamVisible` is meaningful only on the chord that STARTS a group: MuseScore's `<Beam>` is owned by
+    /// the group and one flag governs every member. A host reading the flag off an arbitrary member would show a
+    /// value that governs nothing, which is what this accessor exists to prevent — it resolves the group first.
+    ///
+    /// Returns nil when `location` is in no beam group at all: a rest, a quarter or longer, a lone eighth, or a
+    /// slot that does not exist. **Nil means "this selection has no beam row", not "the beam is hidden"** — an
+    /// inspector must not collapse the two, or it draws an unchecked checkbox where there is nothing to check.
+    ///
+    /// Grouped exactly as the layout groups it: the measure's own time-signature element and the staff's
+    /// effective bar length.
+    public static func current(at location: VoiceElementID, in score: Score) -> Bool? {
         guard let lead = leader(of: location, in: score), case let .chord(chord)? = score[lead] else { return nil }
         return chord.beamVisible
     }
