@@ -3600,9 +3600,9 @@
                 applyNoteEdit(SetNotePlay(at: noteID, play: value), noteID: noteID, controller: controller)
             case let .beamVisible(value):
                 guard let noteID = selectedPropertyNoteID else { return }
-                applyNoteEdit(
-                    SetBeamVisible(at: VoiceElementID(noteID), visible: value), noteID: noteID, controller: controller,
-                )
+                let location = VoiceElementID(noteID)
+                let target = SetBeamVisible.leader(of: location, in: controller.score) ?? location
+                applyNoteEdit(SetBeamVisible(at: target, visible: value), noteID: noteID, controller: controller)
             case .deselect:
                 selection = .none
             }

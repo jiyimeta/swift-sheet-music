@@ -68,7 +68,12 @@ public struct SetBeamVisible: EditCommand {
     }
 
     /// The leading chord of the beam group `location` belongs to, or `nil` when it belongs to none.
-    static func leader(of location: VoiceElementID, in score: Score) -> VoiceElementID? {
+    ///
+    /// `SetBeamVisible` writes exactly where it is pointed — it does not retarget itself — so a caller
+    /// constructing the command directly must aim it at this answer, not at an arbitrary group member. A caller
+    /// going through `EditIntent.setBeamVisible` does not need this: the planner
+    /// (`ScoreEditSession+VisibilityPlanning.swift`) already resolves the leader before building the command.
+    public static func leader(of location: VoiceElementID, in score: Score) -> VoiceElementID? {
         BeamGrouping.leader(of: location, in: score)
     }
 
