@@ -446,4 +446,11 @@ public enum EditIntent: Sendable, Equatable {
 
     /// Move a whole syllable without neighbor repair; occupied destination rows are refused.
     case setLyricVerse(text: ScoreTextID, toVerse: Int)
+
+    /// Write the score's credit fields — title, subtitle, composer, arranger, lyricist, copyright — into both the
+    /// `<metaTag>` dictionary and the engraved title frame, creating that frame when the score has none.
+    ///
+    /// Plural for `setLyricSyllables`' reason: a credits form saves every field at once and one Save has to be one
+    /// undo step. See `ScoreInfoWrite` for why one field reaches two places.
+    case setScoreInfo(writes: [ScoreInfoWrite])
 }
