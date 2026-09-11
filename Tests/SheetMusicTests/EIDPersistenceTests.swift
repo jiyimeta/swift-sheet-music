@@ -117,6 +117,34 @@ struct EIDPersistenceTests {
         #expect(decoded.elements.eid(at: 0) == eid)
     }
 
+    @Test("a voice-level Symbol keeps the identifier the file gave it, unlike a note-attached one")
+    func voiceLevelSymbolIdentifierSurvivesAnEncodeDecode() throws {
+        // `Symbol/eid` is one allowlist pair covering two different things in
+        // MSCXPreservationGateTests: a `<Note><Symbol>` (a D9 parenthesis
+        // attachment this library gives no identity) and a voice-level
+        // `<Symbol>` (`VoiceElement.symbol`, which IS identified). The
+        // preservation gate counts element paths and cannot tell the two
+        // apart, so this is the test that actually pins the voice-level half
+        // — see `noteAttachedSymbolEIDReason`.
+        let eid = EID(first: 17, second: 19)
+        let voice = Voice(
+            elements: IdentifiedArray([
+                (eid, VoiceElement.symbol(EngravingSymbol(name: "segno"))),
+            ]),
+        )
+        let node = try voice.encode()
+        let symbolNode = try #require(node.first("Symbol"))
+        #expect(EIDXML.decode(from: symbolNode) == eid)
+
+        let decoded = try Voice.decode(node)
+        guard case let .symbol(decodedSymbol) = decoded.elements[0] else {
+            Issue.record("expected element 0 to be a decoded .symbol")
+            return
+        }
+        #expect(decoded.elements.eid(at: 0) == eid)
+        #expect(decodedSymbol.name == "segno")
+    }
+
     @Test("a system-lane element (a rehearsal mark) keeps the identifier the file gave it")
     func rehearsalMarkIdentifierSurvivesAnEncodeDecode() throws {
         let eid = EID(first: 11, second: 13)

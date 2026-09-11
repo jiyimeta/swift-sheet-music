@@ -6,11 +6,32 @@ import SheetMusicXMLTools
 enum PreservedMarkupPolicy {
     /// Tags dropped on purpose rather than carried through.
     ///
-    /// - `eid` / `LastEID`: MuseScore 5's element identity. This
-    ///   encoder declares `version="4.60"`, and 4.6 does not use
-    ///   `<eid>` at all. Editing a score can duplicate or strand an
-    ///   id, and a stale identity is worse than an absent one —
-    ///   MuseScore regenerates them on load.
+    /// - `eid`: MuseScore's element identity. Both halves of the
+    ///   claim this comment used to make here are false — MuseScore
+    ///   4.6 does read `<eid>` (`read460.cpp:127`, `tread.cpp:540,
+    ///   577-585`) and writes back whatever it read
+    ///   (`twrite.cpp:495-511`), it does not regenerate on load. This
+    ///   library models `<eid>` for the carriers it gives identity to
+    ///   (chords, notes, rests, grace chords, measures, staves,
+    ///   parts, most voice- and system-lane element kinds, and
+    ///   tuplets — see `EIDPersistenceTests.swift`) and each of those
+    ///   encoders writes its own `<eid>` child directly. `eid` stays
+    ///   in this never-preserved set anyway, for two reasons: first,
+    ///   for a modeled carrier, keeping it out of the preserved bag
+    ///   is what stops that carrier's `<eid>` from being emitted
+    ///   twice — once from the model, once from `preservedMarkup`
+    ///   (`MSCXPreservationGateTests.swift` calls this out per entry
+    ///   for every carrier kind that still loses one). Second, for
+    ///   every tag this library does NOT give an identity to
+    ///   (`Accidental`, `Text`, frame boxes, and the rest audited in
+    ///   `MSCXPreservationGateTests.swift`'s `addPermanentLosses`),
+    ///   there is nothing in the model to attach a decoded `<eid>`
+    ///   to, so it is dropped rather than carried verbatim; MuseScore
+    ///   assigns that element a fresh one the next time it reads the
+    ///   file back.
+    /// - `LastEID`: MuseScore's id-issuing counter (the highest id it
+    ///   has ever handed out), not the identity of any element. This
+    ///   library neither reads nor writes it.
     /// - `programVersion` / `programRevision`: the encoder writes its
     ///   own values for the format generation it targets, so carrying
     ///   the source's through would contradict the version it just
