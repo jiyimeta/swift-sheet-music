@@ -71,4 +71,49 @@ public enum NotatedClef: Sendable, Equatable, Hashable, CaseIterable {
         case .percussion2: "PERC2"
         }
     }
+
+    /// The note the MIDDLE staff line carries under this clef, as an absolute diatonic index (`octave * 7 + letter`,
+    /// C = 0) — B4 = 34 under a treble clef, D3 = 22 under a bass clef.
+    ///
+    /// This is the anchor the enum's own doc comment promises ("each clef anchors a reference pitch to a reference
+    /// staff line"), and it is what makes the clef mean something to code that is not drawing it: `SheetMusicLayout`
+    /// derives every notehead's staff step from it, and note input derives the octave a letter key writes into an
+    /// empty staff from it. Both used to carry their own answer — layout a complete table, input a hard-coded
+    /// octave 4 — and the second was wrong for every clef but the treble.
+    ///
+    /// Octave-transposing clefs shift the anchor by ±7 (one diatonic octave) or ±14, so a `G8vb` staff reads and
+    /// writes an octave below a `G` one. The two percussion clefs have no pitch to anchor; they answer with the
+    /// treble's B4, which is the positional convention layout already draws them by, and which leaves unpitched
+    /// staves behaving exactly as they did.
+    public var middleLineDiatonicStep: Int {
+        switch self {
+        case .treble: 4 * 7 + 6 // B4
+        case .treble8va: 5 * 7 + 6 // B5
+        case .treble8vb: 3 * 7 + 6 // B3
+        case .treble15ma: 6 * 7 + 6 // B6
+        case .treble15mb: 2 * 7 + 6 // B2
+        case .bass: 3 * 7 + 1 // D3
+        case .bass8va: 4 * 7 + 1 // D4
+        case .bass8vb: 2 * 7 + 1 // D2
+        case .soprano: 4 * 7 + 4 // G4
+        case .alto: 4 * 7 + 0 // C4
+        case .tenor: 3 * 7 + 5 // A3
+        case .baritone: 3 * 7 + 3 // F3
+        case .percussion: 4 * 7 + 6 // positional (B4)
+        case .percussion2: 4 * 7 + 6 // positional (B4)
+        }
+    }
+
+    /// MIDI pitch of the natural note on the middle staff line — `middleLineDiatonicStep` sounded rather than
+    /// counted. Treble → 71 (B4), bass → 50 (D3).
+    ///
+    /// Natural by construction: a staff line names a letter, and what the key signature or the bar does to that
+    /// letter is a separate question the caller already has an answer for. Used as the reference pitch when a letter
+    /// key has no previous note to measure against, so the letter lands in the staff the user is looking at.
+    public var middleLinePitch: Int {
+        let semitoneForLetter = [0, 2, 4, 5, 7, 9, 11] // C D E F G A B
+        let step = middleLineDiatonicStep
+        let octave = step / 7
+        return (octave + 1) * 12 + semitoneForLetter[step % 7]
+    }
 }
