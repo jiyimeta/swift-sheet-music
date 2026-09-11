@@ -4,9 +4,11 @@ import SheetMusicFoundation
 ///
 /// Addressed by `ScoreTextID` — lyric, staff and system text, harmony, rehearsal mark — because those four are
 /// exactly the carriers whose offset reaches the page. The layout reads `ElementProperties.offset` in one place,
-/// `LayoutEngine.placedTextOrigin`, and those four are its callers. A note, a chord, a dynamic or a spanner
-/// stores an offset and round-trips it without moving, which is why this command does not accept them: an
-/// inspector row over an inert write is worse than no row.
+/// `LayoutEngine.placedTextOrigin`, whose callers cover exactly those four kinds — five call sites, not four: the
+/// fifth (`LayoutDocument+EmptyTextEntryOrigin.swift`) places the text-entry cursor from that same authored offset,
+/// one more reader of the same four kinds rather than a fifth kind. A note, a chord, a dynamic or a spanner stores
+/// an offset and round-trips it without moving, which is why this command does not accept them: an inspector row
+/// over an inert write is worse than no row.
 ///
 /// The offset is applied on top of the resolved side, so it composes with `SetElementPlacement` rather than
 /// replacing it.
