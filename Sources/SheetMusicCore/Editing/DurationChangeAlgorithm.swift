@@ -149,7 +149,7 @@ public enum DurationChangeAlgorithm {
                     case let .chord(consumedChord)
                         where !consumedChord.notes.isEmpty:
                         pieces = makeChordChain(
-                            from: consumedChord, durations: durations,
+                            from: consumedChord, durations: durations, onsetOwnership: .allContinuation,
                         )
                     default:
                         // Rest overshoot (or empty chord) — leftover
@@ -249,15 +249,23 @@ public enum DurationChangeAlgorithm {
         ).map { .rest(duration: $0) }
     }
 
-    /// `headKeepsIdentity` distinguishes the two shapes this chain is built for: `src` genuinely being
-    /// split (`RebarPlanner+Voices.pieces(of:durations:)`, where the first piece IS `src`'s onset landing
-    /// under a new barring, and so keeps its note identifiers) versus `src` being the *overshoot* of a
-    /// different element that already consumed its onset (`DurationChangeAlgorithm.compute`'s own
-    /// shorten path, `PasteVoiceElements`, `CrossBarInputPlanner.overshoot`) — there the whole chain is
-    /// new continuation material and every piece, including the first, mints fresh identifiers. Default
-    /// `false` matches every call site but the genuine split.
+    /// Which shape this chain is being built for — `src`'s onset genuinely landing in the first piece,
+    /// or the whole chain being continuation material that starts after `src`'s onset was already
+    /// consumed elsewhere. No default: every caller has to look at what it's building and say which.
+    public enum OnsetOwnership: Sendable, Equatable {
+        /// `src` is genuinely being split (`RebarPlanner+Voices.pieces(of:durations:)`, where the first
+        /// piece IS `src`'s onset landing under a new barring), so the first piece keeps `src`'s note
+        /// identifiers.
+        case headIsOnset
+        /// `src` is the *overshoot* of a different element whose onset was already consumed by an
+        /// adjacent edit (`DurationChangeAlgorithm.compute`'s lengthen branch, when its partial-overshoot
+        /// leftover is a chord; `PasteVoiceElements`; `CrossBarInputPlanner.overshoot`) — the whole chain
+        /// is new continuation material, so every piece, including the first, mints a fresh identifier.
+        case allContinuation
+    }
+
     public static func makeChordChain(
-        from src: Chord, durations: [NoteDuration], headKeepsIdentity: Bool = false,
+        from src: Chord, durations: [NoteDuration], onsetOwnership: OnsetOwnership,
     ) -> [VoiceElement] {
         guard !durations.isEmpty else { return [] }
         var pieces: [VoiceElement] = []
@@ -271,7 +279,7 @@ public enum DurationChangeAlgorithm {
                     ? src.notes[ni].tieForward
                     : 1
             }
-            let chordNotes = if isFirst, headKeepsIdentity {
+            let chordNotes = if isFirst, onsetOwnership == .headIsOnset {
                 ChordNotes(Array(zip(src.notes.indices.map(src.notes.eid(at:)), notes)))
             } else {
                 ChordNotes(notes)

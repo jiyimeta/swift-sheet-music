@@ -305,7 +305,9 @@ public enum CrossBarInputPlanner {
         guard case let .chord(chord) = element, !chord.notes.isEmpty else {
             return durations.map { .rest(duration: $0) }
         }
-        return DurationChangeAlgorithm.makeChordChain(from: chord, durations: durations)
+        return DurationChangeAlgorithm.makeChordChain(
+            from: chord, durations: durations, onsetOwnership: .allContinuation,
+        )
     }
 
     /// One link of the chain: tied at every interior joint, with the chord's ties at the two ENDS left as its own —
