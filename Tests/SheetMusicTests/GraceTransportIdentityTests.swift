@@ -68,20 +68,23 @@ struct GraceTransportIdentityTests {
         #expect(tail.graceNotesAfter.values == original.graceNotesAfter.values)
         #expect(head.notes[0].tieForward == 1)
         #expect(tail.notes[0].tieBack == 1)
+        #expect(head.notes.eid(at: 0) == original.notes.eid(at: 0))
+        #expect(tail.notes.eid(at: 0) != original.notes.eid(at: 0))
         #expect(V.ids(V.elements(session.score)) == firstIDs)
-        // As in the plain cross-bar case: the head's own (now tied) note mints, then the fresh tail's
-        // slot, then the tail's own note — the graces themselves are reused, not reminted.
+        // As in the plain cross-bar case: the head keeps its own note identifier now (`CrossBarInputPlanner
+        // .piece` no longer re-mints it), so the fresh tail's slot mints first, then its own note — the
+        // graces themselves are reused, not reminted, and are not part of either mint.
         #expect(V.ids(V.elements(session.score, measure: 1)) == [
-            V.minted(initial, 2), secondIDs[1], secondIDs[2],
+            V.minted(initial, 1), secondIDs[1], secondIDs[2],
         ])
-        #expect(session.idAllocator == V.advanced(initial, by: 3))
+        #expect(session.idAllocator == V.advanced(initial, by: 2))
         let applied = session.score
         for _ in 0 ..< 2 {
             #expect(session.undo())
             V.expectSameScore(session.score, before)
             #expect(session.redo())
             V.expectSameScore(session.score, applied)
-            #expect(session.idAllocator == V.advanced(initial, by: 3))
+            #expect(session.idAllocator == V.advanced(initial, by: 2))
         }
     }
 
@@ -93,11 +96,13 @@ struct GraceTransportIdentityTests {
         let column = before.systemMeasures.eid(at: 0)
         let original = try G.chord(before, 1)
         try editor.apply(SetTimeSignature(measureIndex: 0, numerator: 2, denominator: 4))
-        // The head's own (now tied) note mints, then the fresh tail's slot, then the tail's own note,
-        // and only then the new measure's system column — the graces themselves are reused, not reminted.
-        #expect(V.voiceIDs(editor.score) == [[old[0], old[1]], [V.minted(initial, 2)]])
+        // The head keeps its own note identifier now (`RebarPlanner.pieces`'s `headKeepsIdentity: true`
+        // carries it onto `makeChordChain`'s first piece instead of losing it), so the fresh tail's slot
+        // mints first, then its own note, and only then the new measure's system column — the graces
+        // themselves are reused, not reminted, and are not part of either mint.
+        #expect(V.voiceIDs(editor.score) == [[old[0], old[1]], [V.minted(initial, 1)]])
         #expect(editor.score.systemMeasures.eid(at: 0) == column)
-        #expect(editor.score.systemMeasures.eid(at: 1) == V.minted(initial, 4))
+        #expect(editor.score.systemMeasures.eid(at: 1) == V.minted(initial, 3))
         let head = try G.chord(editor.score, 1)
         let tail = try G.chord(editor.score, 0, measure: 1)
         G.expectGrace(head, before: [original.graceNotesBefore.eid(at: 0)], after: [])
@@ -108,7 +113,9 @@ struct GraceTransportIdentityTests {
         #expect(tail.duration == .half)
         #expect(head.notes[0].tieForward == 1)
         #expect(tail.notes[0].tieBack == 1)
-        #expect(editor.idAllocator == V.advanced(initial, by: 4))
+        #expect(head.notes.eid(at: 0) == original.notes.eid(at: 0))
+        #expect(tail.notes.eid(at: 0) != original.notes.eid(at: 0))
+        #expect(editor.idAllocator == V.advanced(initial, by: 3))
         try G.expectCycle(editor, before: before)
     }
 }

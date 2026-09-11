@@ -137,21 +137,28 @@ struct GraceIdentityLandingTests {
         #expect(chord.graceNotesAfter.values[0].notes.eid(at: 0) == EID(first: 42, second: 7))
         chord.assignMissingNestedIDs(using: &ids)
         #expect(ids.counter == 7)
-        chord.clearGraceIDsForCopy()
+        chord.clearNestedIDsForCopy()
         #expect(chord == literal)
         #expect(chord.hasUnassignedNestedIDs)
-        // The chord's own note, and each grace's own note, are untouched by the copy clear — only the
-        // grace slot lists reset. Assignment afterward mints just the reset slots, never re-minting notes.
-        #expect(chord.notes.eid(at: 0) == ownNoteAfterFirstMint)
+        // A copy is different notes throughout, not just different grace slots: the chord's own note and
+        // each grace's own note are wiped by the copy clear along with both grace slot lists, so a pasted
+        // copy can never land sharing an EID with its source.
+        #expect(chord.notes.eid(at: 0) == .invalid)
         #expect(F.ids(chord.graceNotesBefore) == [.invalid, .invalid])
         #expect(F.ids(chord.graceNotesAfter) == [.invalid])
-        #expect(chord.graceNotesBefore.values[0].notes.eid(at: 0) == EID(first: 42, second: 5))
-        #expect(chord.graceNotesBefore.values[1].notes.eid(at: 0) == EID(first: 42, second: 6))
-        #expect(chord.graceNotesAfter.values[0].notes.eid(at: 0) == EID(first: 42, second: 7))
+        #expect(chord.graceNotesBefore.values[0].notes.eid(at: 0) == .invalid)
+        #expect(chord.graceNotesBefore.values[1].notes.eid(at: 0) == .invalid)
+        #expect(chord.graceNotesAfter.values[0].notes.eid(at: 0) == .invalid)
         chord.assignMissingNestedIDs(using: &ids)
-        #expect(F.ids(chord.graceNotesBefore) == [EID(first: 42, second: 8), EID(first: 42, second: 9)])
-        #expect(F.ids(chord.graceNotesAfter) == [EID(first: 42, second: 10)])
-        #expect(chord.notes.eid(at: 0) == ownNoteAfterFirstMint)
-        #expect(ids.counter == 10)
+        // Same mint order as the first assignment: the chord's own note, both grace slot lists, then each
+        // grace's own note — but every one of them is now a fresh mint, none reused from `ownNoteAfterFirstMint`.
+        #expect(chord.notes.eid(at: 0) == EID(first: 42, second: 8))
+        #expect(chord.notes.eid(at: 0) != ownNoteAfterFirstMint)
+        #expect(F.ids(chord.graceNotesBefore) == [EID(first: 42, second: 9), EID(first: 42, second: 10)])
+        #expect(F.ids(chord.graceNotesAfter) == [EID(first: 42, second: 11)])
+        #expect(chord.graceNotesBefore.values[0].notes.eid(at: 0) == EID(first: 42, second: 12))
+        #expect(chord.graceNotesBefore.values[1].notes.eid(at: 0) == EID(first: 42, second: 13))
+        #expect(chord.graceNotesAfter.values[0].notes.eid(at: 0) == EID(first: 42, second: 14))
+        #expect(ids.counter == 14)
     }
 }

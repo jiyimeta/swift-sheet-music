@@ -333,7 +333,9 @@ public enum CrossBarInputPlanner {
         }
         var head = source
         head.duration = duration
-        head.notes = ChordNotes(notes)
+        // The head is `source`'s onset landing in the first piece of the chain, so it keeps `source`'s own
+        // note identifiers — only the continuations (built above, `guard isFirst else`) are different notes.
+        head.notes = ChordNotes(Array(zip(source.notes.indices.map(source.notes.eid(at:)), notes)))
         // Grace notes AFTER the chord lead into whatever follows the sound, so they belong on its last piece, not
         // its first — the one case the head doesn't keep.
         head.graceNotesAfter = isLast ? source.graceNotesAfter : []

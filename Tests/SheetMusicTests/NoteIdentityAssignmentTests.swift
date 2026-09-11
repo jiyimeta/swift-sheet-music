@@ -57,6 +57,35 @@ struct NoteIdentityAssignmentTests {
         #expect(chord.notes.eid(at: 0).isValid)
     }
 
+    @Test("a chord split into a tied chain keeps the head's note identifiers and mints the rest")
+    func chainContinuationsGetNewNoteIdentifiers() {
+        // A chord lengthened past its bar's end has to cross the barline as a tied chain
+        // (`CrossBarInputPlanner`) — the one command that splits a chord already in the score into
+        // multiple pieces. The head is the chord's own onset landing in the first piece, so it keeps the
+        // chord's note identifier; the tail is new continuation material and mints its own.
+        let session = ScoreEditSession(score: V.score([
+            [Voice(elements: [V.time, .rest(duration: .half), .rest(duration: .quarter), V.chord()])],
+            [Voice(elements: [.rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .half)])],
+        ]))
+        guard case let .chord(original) = V.elements(session.score)[3] else {
+            Issue.record("fixture is a chord")
+            return
+        }
+        let originalNoteID = original.notes.eid(at: 0)
+        #expect(session.apply(.setChordDuration(at: V.location(3), duration: .half)))
+        guard case let .chord(head) = V.elements(session.score)[3] else {
+            Issue.record("head is a chord")
+            return
+        }
+        guard case let .chord(tail) = V.elements(session.score, measure: 1)[0] else {
+            Issue.record("tail is a chord")
+            return
+        }
+        #expect(head.notes.eid(at: 0) == originalNoteID)
+        #expect(tail.notes.eid(at: 0) != originalNoteID)
+        #expect(tail.notes.eid(at: 0).isValid)
+    }
+
     @Test("an already assigned note identifier is not re-minted")
     func adoptionKeepsAssignedNoteIdentifiers() {
         var ids = EIDAllocator(actor: 3)

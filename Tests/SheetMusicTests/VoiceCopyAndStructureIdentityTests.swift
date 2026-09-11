@@ -16,10 +16,18 @@ struct VoiceCopyAndStructureIdentityTests {
         try editor.apply(PasteVoiceElement(at: Fixture.location(1), element: copied))
         let result = Fixture.elements(editor.score)
         #expect(result.values == [copied, copied, .rest(duration: .half)])
+        // The slot's own EID mints first (unaffected), then the widened nested walk mints the chord's own
+        // note — `clearNestedIDsForCopy` no longer lets a paste keep the source's note identifier.
         #expect(Fixture.ids(result) == [old[0], Fixture.minted(initial, 1), old[2]])
         #expect(result.eid(at: 1) != old[0])
         #expect(result.eid(at: 1) != old[1])
-        #expect(editor.idAllocator == Fixture.advanced(initial, by: 1))
+        guard case let .chord(sourceChord) = copied, case let .chord(pastedChord) = result[1] else {
+            Issue.record("fixture is a chord")
+            return
+        }
+        #expect(pastedChord.notes.eid(at: 0) == Fixture.minted(initial, 2))
+        #expect(pastedChord.notes.eid(at: 0) != sourceChord.notes.eid(at: 0))
+        #expect(editor.idAllocator == Fixture.advanced(initial, by: 2))
         try editor.undo()
         Fixture.expectSameScore(editor.score, before)
     }

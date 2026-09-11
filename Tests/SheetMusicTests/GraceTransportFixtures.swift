@@ -33,6 +33,30 @@ enum GraceTransportFixtures {
         #expect(afterIDs == after, sourceLocation: sourceLocation)
     }
 
+    /// Every note identifier reachable from `score` — each chord's own notes plus each grace chord's own
+    /// notes, across every part / staff / measure / voice. `EditingIdentityInvariants.identifiers(in:)`
+    /// does not walk into `chord.notes` yet, so paste/split tests that need to assert note-level
+    /// uniqueness directly collect this list themselves rather than lean on that gate.
+    static func allNoteIDs(_ score: Score) -> [EID] {
+        var result: [EID] = []
+        for part in score.parts {
+            for staff in part.staves {
+                for measure in staff.measures {
+                    for voice in measure.voices {
+                        for element in voice.elements {
+                            guard case let .chord(chord) = element else { continue }
+                            result.append(contentsOf: chord.notes.indices.map { chord.notes.eid(at: $0) })
+                            for grace in chord.graceNotesBefore.values + chord.graceNotesAfter.values {
+                                result.append(contentsOf: grace.notes.indices.map { grace.notes.eid(at: $0) })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
     static func expectCycle(
         _ editor: ScoreEditor, before: Score, sourceLocation: SourceLocation = #_sourceLocation,
     ) throws {

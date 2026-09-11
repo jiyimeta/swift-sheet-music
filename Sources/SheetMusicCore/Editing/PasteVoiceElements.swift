@@ -132,7 +132,7 @@ public struct PasteVoiceElements: EditCommand {
         var newElements = voice.elements
         let pasted = payload.map { source in
             let eid = ids.next()
-            var element = source.clearingGraceIDsForCopy()
+            var element = source.clearingNestedIDsForCopy()
             element.assignMissingNestedIDs(using: &ids)
             return (eid, element)
         }

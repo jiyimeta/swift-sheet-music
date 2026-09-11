@@ -249,8 +249,15 @@ public enum DurationChangeAlgorithm {
         ).map { .rest(duration: $0) }
     }
 
+    /// `headKeepsIdentity` distinguishes the two shapes this chain is built for: `src` genuinely being
+    /// split (`RebarPlanner+Voices.pieces(of:durations:)`, where the first piece IS `src`'s onset landing
+    /// under a new barring, and so keeps its note identifiers) versus `src` being the *overshoot* of a
+    /// different element that already consumed its onset (`DurationChangeAlgorithm.compute`'s own
+    /// shorten path, `PasteVoiceElements`, `CrossBarInputPlanner.overshoot`) — there the whole chain is
+    /// new continuation material and every piece, including the first, mints fresh identifiers. Default
+    /// `false` matches every call site but the genuine split.
     public static func makeChordChain(
-        from src: Chord, durations: [NoteDuration],
+        from src: Chord, durations: [NoteDuration], headKeepsIdentity: Bool = false,
     ) -> [VoiceElement] {
         guard !durations.isEmpty else { return [] }
         var pieces: [VoiceElement] = []
@@ -264,9 +271,14 @@ public enum DurationChangeAlgorithm {
                     ? src.notes[ni].tieForward
                     : 1
             }
+            let chordNotes = if isFirst, headKeepsIdentity {
+                ChordNotes(Array(zip(src.notes.indices.map(src.notes.eid(at:)), notes)))
+            } else {
+                ChordNotes(notes)
+            }
             pieces.append(.chord(Chord(
                 duration: dur,
-                notes: ChordNotes(notes),
+                notes: chordNotes,
                 arpeggio: isFirst ? src.arpeggio : nil,
                 bracket: isFirst ? src.bracket : nil,
                 lyrics: isFirst ? src.lyrics : [],

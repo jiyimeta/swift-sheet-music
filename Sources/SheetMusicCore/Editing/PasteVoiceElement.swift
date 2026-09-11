@@ -36,7 +36,7 @@ public struct PasteVoiceElement: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
-        var element = element.clearingGraceIDsForCopy()
+        var element = element.clearingNestedIDsForCopy()
         guard let voice = DurationChangeAlgorithm
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)

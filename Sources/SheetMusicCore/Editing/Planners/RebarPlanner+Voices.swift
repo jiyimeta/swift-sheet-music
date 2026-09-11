@@ -365,12 +365,16 @@ extension RebarPlanner {
     /// `makeChordChain` builds every piece from scratch and so clears the head's `tieBack` — right for a
     /// duration change, wrong here: a chord tied IN from before the region is still tied in after it is
     /// re-barred. The head is rebuilt from the source chord the way `CrossBarInputPlanner.piece` does, so
-    /// its incoming tie — and everything else hanging off the sound — survives.
+    /// its incoming tie — and everything else hanging off the sound — survives. This IS a genuine split
+    /// of `chord` (its onset lands in the head, unlike the leftover chains `makeChordChain`'s other
+    /// callers build), so `headKeepsIdentity: true` carries `chord.notes`' own identifiers onto the head.
     static func pieces(of element: VoiceElement, durations: [NoteDuration]) -> [VoiceElement] {
         guard case let .chord(chord) = element, !chord.notes.isEmpty else {
             return durations.map { .rest(duration: $0) }
         }
-        var chain = DurationChangeAlgorithm.makeChordChain(from: chord, durations: durations)
+        var chain = DurationChangeAlgorithm.makeChordChain(
+            from: chord, durations: durations, headKeepsIdentity: true,
+        )
         guard case let .chord(head) = chain.first, let first = durations.first else { return chain }
         var restored = chord
         restored.duration = first

@@ -18,12 +18,17 @@ struct CrossBarIdentityTests {
         let initial = session.idAllocator
         let firstIDs = Fixture.ids(Fixture.elements(before))
         let secondIDs = Fixture.ids(Fixture.elements(before, measure: 1))
+        guard case let .chord(originalChord) = Fixture.elements(before)[3] else {
+            Issue.record("fixture is a chord")
+            return
+        }
+        let originalNoteID = originalChord.notes.eid(at: 0)
         #expect(session.apply(.setChordDuration(at: Fixture.location(3), duration: .half)))
         #expect(Fixture.ids(Fixture.elements(session.score)) == firstIDs)
-        // The head keeps its slot, but both head and tail land freshly-built `Chord` literals, so the
-        // split mints three: the head's own (now tied) note, the fresh tail's slot, then the tail's note.
+        // The head keeps its slot AND its own note identifier now (`CrossBarInputPlanner.piece` no longer
+        // re-mints it) — only the tail is new: its slot, then its own note. Two mints, not three.
         #expect(Fixture.ids(Fixture.elements(session.score, measure: 1)) == [
-            Fixture.minted(initial, 2), secondIDs[1], secondIDs[2],
+            Fixture.minted(initial, 1), secondIDs[1], secondIDs[2],
         ])
         let expectedHead = VoiceElement.chord(Chord(
             duration: .quarter, notes: [Note(pitch: 60, tpc: 14, tieForward: 1)],
@@ -37,7 +42,17 @@ struct CrossBarIdentityTests {
         #expect(Fixture.elements(session.score, measure: 1).values == [
             expectedTail, .rest(duration: .quarter), .rest(duration: .half),
         ])
-        #expect(session.idAllocator == Fixture.advanced(initial, by: 3))
+        guard case let .chord(head) = Fixture.elements(session.score)[3] else {
+            Issue.record("head is a chord")
+            return
+        }
+        guard case let .chord(tail) = Fixture.elements(session.score, measure: 1)[0] else {
+            Issue.record("tail is a chord")
+            return
+        }
+        #expect(head.notes.eid(at: 0) == originalNoteID)
+        #expect(tail.notes.eid(at: 0) != originalNoteID)
+        #expect(session.idAllocator == Fixture.advanced(initial, by: 2))
         #expect(session.undo())
         Fixture.expectSameScore(session.score, before)
     }
