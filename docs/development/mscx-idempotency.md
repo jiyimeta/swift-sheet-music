@@ -93,6 +93,21 @@ and asserts a non-zero count of chords changed so it cannot silently do nothing.
 **When you add a fixture, add the reason with it.** A list of names with no
 stated shapes stops being maintainable the moment the encoder changes.
 
+**Which fixtures are pristine MuseScore output, and which are not.**
+`midi01.mscx`, `grace_after.mscx`, `guitarbend_release_twice.mscx`,
+`guitarbend_gracebend.mscx` and `musicxml/*_ref.mscx` are unmodified
+MuseScore-authored files and may be cited as evidence of what MuseScore
+itself writes. `slur_ms4_resave.mscx` and `legacybend_ms4_resave.mscx` are
+**not** — both are hybrids that carry this library's own writer output,
+including `<Part><eid>` values no MuseScore file ever contains (MuseScore's
+writer has no such tag — see "A real MuseScore round trip" below, which
+measures this as the one carrier that does not survive an actual MuseScore
+save). `slur_ms4_resave.mscx` also
+gained an explicit `<TimeSig><subtype>1</subtype>` during this phase
+specifically to pin the `<eid>`-after-`<subtype>` ordering under a gate
+rather than only a comment (`e2fa7d0d`) — a reader should not mistake that
+tag for musical intent recorded by MuseScore itself.
+
 ## Layer 2 — the corpus sweeps, opt in
 
 Two suites gate on the same `SM_MSCX_IDEMPOTENCY_DIR` environment variable and
@@ -130,9 +145,41 @@ Both suites are **disabled** when `SM_MSCX_IDEMPOTENCY_DIR` is unset, so an
 unfiltered default `swift test` costs nothing. **No corpus path is
 committed** — the variable carries it, following `SM_VELOCITY_DIR`
 (`Sources/RenderPreviews/VelocityReport.swift`), `SM_PDF_PROBE` and
-`OMR_DATA_ROOT`. Against a 669-file corpus, expect roughly 9–10 minutes for
-`EIDRoundTripSweep` alone and about 16 minutes to run both suites in one
-invocation.
+`OMR_DATA_ROOT`. **Measured** running `EIDRoundTripSweep` alone against the
+669-file corpus: **17.7 minutes (1062.5 seconds)** — budget for that, not
+the 9–10 minutes an earlier estimate in this doc named before the sweep had
+actually been run once end to end.
+
+```
+[eid-roundtrip] files=670 loaded=669 unreadable=1 failed=0 identifiers=3320622 dropped=13
+                unstable=0 invented=0 noIdentifiers=0
+```
+
+3.3 million identifiers compared over 669 real scores, zero unstable, zero
+invented. **`dropped=13`**: a static scan of the same corpus (matching every
+staff-head, voice-0, measure-0 `<KeySig>` against
+`MSCXEncoder+Voice.swift`'s `shouldDropInitialZeroKeySig` precondition —
+concert key resolves to 0 under `MSCXDecoder+KeySignature.swift`'s rules)
+found exactly 13 qualifying elements, confirming the count is not a mystery:
+9 are the ordinary case already known from a smaller measurement (ordinary
+staff-head implicit-C-major `<KeySig>`, spelled `<accidental>0</accidental>`
+or `<concertKey>0</concertKey>`), and the remaining **4 are a related but
+distinct sub-case worth flagging on its own**: a staff-head key signature
+marked `<custom>`/`<mode>` and spelled entirely with `<KeySym>` glyphs (an
+atonal or non-standard signature) decodes its absent fifths count as 0 under
+`KeySignature.decode`'s custom-key fallback, so `shouldDropInitialZeroKeySig`
+treats it exactly like an implicit C-major default and drops it **whole** —
+losing the actual custom glyphs, not merely an implicit default that carried
+no information. That is a genuine (if rare — 4 of 3.3 million identifiers)
+content-loss gap in the pre-existing custom-key-signature simplification,
+not introduced by this phase and out of scope for this fix wave, but worth
+a follow-up. (A third, unrelated shape was also found while scanning: one
+corpus file's staff-head `<KeySig>` uses the legacy MuseScore 1.x `<subtype>`
++ `<KeySym>` spelling with no `<concertKey>`/`<accidental>`/`<custom>`/`<mode>`
+at all, which this decoder does not recognize and would fail to decode —
+consistent with the sweep's own `unreadable=1`, and irrelevant to the
+`dropped` count since a file that never loads contributes to neither side of
+the comparison.)
 
 A file that will not **decode** is reported and skipped rather than failed: a
 corpus of real scores contains MuseScore 1.x files this reader does not claim to
