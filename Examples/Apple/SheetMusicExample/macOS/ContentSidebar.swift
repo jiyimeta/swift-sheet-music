@@ -43,6 +43,7 @@
         let onLoadBundled: () -> Void
         let onLoadHarmonyBasic: () -> Void
         let onLoadLyricsBasic: () -> Void
+        let onLoadEditingDemo: () -> Void
         let onOpenFile: () -> Void
         let onImportPDF: () -> Void
         let onTogglePlayback: () -> Void
@@ -58,6 +59,7 @@
         var body: some View {
             List {
                 Section("Bundled") {
+                    Button("Load editing-demo.mscx", action: onLoadEditingDemo)
                     Button("Load test.mscx", action: onLoadBundled)
                     Button(
                         "Load harmony-basic.mscx",

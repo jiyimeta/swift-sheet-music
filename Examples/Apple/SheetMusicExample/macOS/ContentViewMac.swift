@@ -442,6 +442,7 @@
                     onLoadBundled: loadBundled,
                     onLoadHarmonyBasic: loadHarmonyBasic,
                     onLoadLyricsBasic: loadLyricsBasic,
+                    onLoadEditingDemo: loadEditingDemo,
                     onOpenFile: showOpenPanel,
                     onImportPDF: showPDFImportPanel,
                     onTogglePlayback: togglePlayback,
@@ -457,6 +458,18 @@
             } detail: {
                 if let score {
                     scoreContent(score: laidOut(score))
+                        .safeAreaInset(edge: .trailing, spacing: 0) {
+                            SelectionPropertiesPanel(
+                                text: selectedPropertyText,
+                                properties: selectedPropertyText.flatMap { text in
+                                    inputController.flatMap {
+                                        SetElementPlacement.currentProperties(for: .text(text), in: $0.score)
+                                    }
+                                },
+                                isEditingText: lyricSession.isActive || textSession.isActive,
+                                onAction: applyTextProperty,
+                            )
+                        }
                         .popover(item: $clefPopover, arrowEdge: .top) { state in
                             ClefPopover(
                                 current: ClefChoice.from(rawType: state.currentRawType),
@@ -3491,6 +3504,54 @@
                 )
             } catch {
                 errorMessage = "Failed: \(exampleErrorDescription(error))"
+            }
+        }
+
+        private var selectedPropertyText: ScoreTextID? {
+            guard layoutMode == .horizontal || layoutMode == .vertical,
+                  case let .single(item) = selection,
+                  case let .text(text) = fullEditingItem(item)
+            else { return nil }
+            return text
+        }
+
+        private func applyTextProperty(_ action: SelectionPropertiesPanel.Action) {
+            guard let controller = inputController, let text = selectedPropertyText,
+                  !lyricSession.isActive, !textSession.isActive
+            else { return }
+            let command: any EditCommand
+            var resultingText = text
+            switch action {
+            case let .placement(value): command = SetElementPlacement(.text(text), placement: value)
+            case let .color(value): command = SetElementColor(.text(text), color: value)
+            case let .font(patch): command = SetTextFont(text, patch: patch)
+            case let .verse(verse):
+                guard case let .lyric(anchor, _) = text else { return }
+                command = SetLyricVerse(text, toVerse: verse)
+                resultingText = .lyric(anchor: anchor, verse: verse)
+            case .deselect:
+                selection = .none
+                return
+            }
+            do {
+                try controller.apply(command, undoManager: undoManager)
+                selectFullItem(.text(resultingText))
+                errorMessage = nil
+            } catch {
+                errorMessage = exampleErrorDescription(error)
+            }
+        }
+
+        private func loadEditingDemo() {
+            do {
+                guard let url = Bundle.main.url(
+                    forResource: "editing-demo", withExtension: "mscx", subdirectory: "Fixtures",
+                ) else { throw ScoreLoader.LoadError.bundledMissing }
+                layoutMode = .horizontal
+                honorAuthoredHiding = true
+                try adoptLoadedScore(ScoreLoader.load(from: url), sourceName: "editing-demo.mscx")
+            } catch {
+                errorMessage = exampleErrorDescription(error)
             }
         }
 
