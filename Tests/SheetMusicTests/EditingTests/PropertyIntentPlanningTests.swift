@@ -20,6 +20,7 @@ struct PropertyIntentPlanningTests {
         .setNoteSmall(at: note, isSmall: true),
         .setNotePlay(at: note, play: false),
         .setElementOffset(target: .lyric(anchor: chord, verse: 0), offset: ScoreOffset(x: 1, y: -2)),
+        .setElementOffset(target: .lyric(anchor: chord, verse: 0), offset: ScoreOffset(x: 0, y: 0)),
         .setElementOffset(target: .lyric(anchor: chord, verse: 0), offset: nil),
         .setElementAutoplace(target: .lyric(anchor: chord, verse: 0), autoplace: false),
         .setElementAutoplace(target: .lyric(anchor: chord, verse: 0), autoplace: nil),
@@ -51,6 +52,20 @@ struct PropertyIntentPlanningTests {
         #expect(session.apply(
             .setElementOffset(target: .lyric(anchor: Self.chord, verse: 9), offset: nil),
         ) == false)
+        let reason = try #require(session.lastRefusal?.reason)
+        #expect(reason != .nothingToApply)
+    }
+
+    /// Mirrors `absentCarrierIsRefusedNotSkipped`: the note arms and the property arms both unwrap the carrier
+    /// (here, the note itself), not the property's own value, so a missing note reaches `SetNoteSmall.apply` and
+    /// is refused by name (`.noteNotFound`) rather than reported as nothing to apply.
+    @Test("an absent note is refused by the command, not skipped by the planner")
+    func absentNoteIsRefusedNotSkipped() throws {
+        let absentNote = NoteID(
+            staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1, noteIndexInChord: 9,
+        )
+        let session = try ScoreEditSession(score: Self.populated())
+        #expect(session.apply(.setNoteSmall(at: absentNote, isSmall: true)) == false)
         let reason = try #require(session.lastRefusal?.reason)
         #expect(reason != .nothingToApply)
     }

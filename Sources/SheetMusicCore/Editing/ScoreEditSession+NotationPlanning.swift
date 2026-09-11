@@ -53,11 +53,13 @@ extension ScoreEditSession {
             guard score[location] != nil else { return command }
             return SetNoteParentheses.current(at: location, in: score) == parentheses ? nil : command
         case let .setNoteSmall(location, isSmall):
-            guard let note = score[location], note.isSmall != isSmall else { return nil }
-            return SetNoteSmall(at: location, isSmall: isSmall)
+            let command = SetNoteSmall(at: location, isSmall: isSmall)
+            guard let note = score[location] else { return command }
+            return note.isSmall == isSmall ? nil : command
         case let .setNotePlay(location, play):
-            guard let note = score[location], note.play != play else { return nil }
-            return SetNotePlay(at: location, play: play)
+            let command = SetNotePlay(at: location, play: play)
+            guard let note = score[location] else { return command }
+            return note.play == play ? nil : command
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.

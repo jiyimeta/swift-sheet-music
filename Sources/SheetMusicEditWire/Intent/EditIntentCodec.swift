@@ -126,7 +126,9 @@ import Wirelet
 /// range group. Cases 41…49 were appended for its mark group. Cases 50…57 were appended for its note / chord
 /// group. Cases 58…61 were appended for its visibility group. Cases 62…72 were appended for its spanner group.
 /// Case 73 was appended for its harmony group. Cases 74 and 75 were appended for the macOS score-text-entry
-/// project (spec 2026-09-07), and 75 is the catalogue's last.
+/// project (spec 2026-09-07). Cases 76…79 were appended for selection and editing (color, placement, text font,
+/// lyric verse). Cases 80…83 were appended for the properties-inspector project (spec 2026-09-12) — note
+/// small/play and element offset/autoplace — and 83 is the catalogue's last.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
