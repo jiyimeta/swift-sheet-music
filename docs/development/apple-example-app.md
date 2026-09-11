@@ -55,6 +55,25 @@ xcodebuild -project Examples/Apple/SheetMusicExample.xcodeproj -scheme SheetMusi
 
 ## Last verified
 
+**2026-09-11**, worktree `eid-p3-p4` (branch `worktree-eid-p3-p4`), as part
+of the fix wave closing out the note-identity branch (11 commits on
+`3b592744`, notes gaining stable `EID`s):
+
+- `Scripts/link-apple-sounds.sh` — symlink already in place, ran as a no-op
+  ("Already linked: ... -> ...").
+- `xcodegen generate --spec Examples/Apple/project.yml --project Examples/Apple`
+  — succeeded, project regenerated at
+  `Examples/Apple/SheetMusicExample.xcodeproj`.
+- `SheetMusicExampleMac` (`platform=macOS`) — **BUILD SUCCEEDED**.
+- `SheetMusicExample` (`generic/platform=iOS Simulator`) — **BUILD
+  SUCCEEDED**.
+
+This branch rewrote `ChordNotes` (a portable container type shared with the
+layout/rendering call sites the example apps exercise); no build had
+compiled either target since it landed before this run.
+
+## Previously verified
+
 **2026-09-04**, worktree `macos-foundations` (branch
 `worktree-macos-foundations`), after landing the `fixedLayoutWidth` option
 (macOS-foundations §B, Tasks 1-4):

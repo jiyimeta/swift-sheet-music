@@ -91,6 +91,7 @@ public struct SetGraceNotes: EditCommand {
             }
             let eid = ids.next()
             var minted = grace
+            minted.notes = ChordNotes(minted.notes.values) // a new slot is new notes
             minted.notes.assignMissingIDs(using: &ids)
             return (eid, minted)
         })

@@ -4,11 +4,15 @@ import SheetMusicFoundation
 /// single `Chord`.
 ///
 /// Type-level invariant: **no two notes in a chord can share the
-/// same MIDI `pitch`.** Every mutation path (`init`, `tryAppend`,
-/// `updateNote`, `mapValues`, `replaceSubrange`, `replace`, …)
-/// silently dedupes, keeping the first occurrence of each pitch. The
-/// score model can never reach a state where two notes of a chord
-/// have the same pitch, no matter how callers mutate it.
+/// same MIDI `pitch`.** The two initializers and `mapValues` silently
+/// dedupe, keeping the first occurrence of each pitch and dropping
+/// the rest (and their identifiers) with it. `updateNote` and
+/// `tryAppend` do NOT dedupe — a mutation that would introduce a
+/// colliding pitch is refused outright and the chord is left
+/// untouched, rather than silently resolved. The score model can
+/// never reach a state where two notes of a chord have the same
+/// pitch, no matter how callers mutate it — but which of those two
+/// responses a caller gets depends on the method.
 ///
 /// Every slot also carries an `EID` — see `IdentifiedArray`'s doc
 /// comment for the general shape this follows: parallel storage/id
@@ -31,6 +35,13 @@ import SheetMusicFoundation
 /// through a named method, so a caller can't drop a slot's identity
 /// (or its pitch-uniqueness) by assigning through `notes[i] = note`
 /// without saying so.
+///
+/// `storage` and `ids` are `@usableFromInline var`, not `private` —
+/// the type's no-mutable-subscript guarantee holds only across the
+/// module boundary. Inside `SheetMusicCore` a caller can still write
+/// `notes.ids[i]` directly; the identity invariant tests use exactly
+/// that hatch to forge collisions on purpose, to exercise the gates
+/// that are supposed to catch them.
 public struct ChordNotes: Sendable {
     @usableFromInline var storage: [Note]
     @usableFromInline var ids: [EID]
@@ -131,11 +142,14 @@ public struct ChordNotes: Sendable {
     ///
     /// Returns the identifiers of slots the transform collided away —
     /// empty in the normal case. A silently vanished note would
-    /// otherwise be invisible to every gate, so this is the one place
-    /// in the type where an identifier disappears without a caller
-    /// naming it — which is exactly why it returns the list. Display
-    /// and playback callers discard it; a future editing caller can
-    /// refuse on a non-empty one.
+    /// otherwise be invisible to every gate, so `mapValues` reports
+    /// what it dropped, which is exactly why it returns the list.
+    /// Display and playback callers discard it; a future editing
+    /// caller can refuse on a non-empty one. `init(_ pairs:)` drops an
+    /// identifier the same way on a duplicate pitch, but with no
+    /// return value pointing at it — that initializer is now the
+    /// type's one place where an identifier can still disappear
+    /// without the caller learning which one.
     @discardableResult
     public mutating func mapValues(_ body: (Note) -> Note) -> [EID] {
         storage = storage.map(body)
@@ -151,6 +165,8 @@ public struct ChordNotes: Sendable {
     /// fine (a burnt counter is not a duplicate identifier).
     @discardableResult
     public mutating func tryAppend(_ note: Note, id: EID) -> Bool {
+        assert(id.isValid, "tryAppend requires an assigned identifier")
+        assert(index(of: id) == nil, "identifier already present — appending it would duplicate")
         guard !storage.contains(where: { $0.pitch == note.pitch })
         else { return false }
         storage.append(note)
@@ -162,35 +178,6 @@ public struct ChordNotes: Sendable {
         guard let index = index(of: eid) else { return }
         storage.remove(at: index)
         ids.remove(at: index)
-    }
-
-    public mutating func removeSubrange(_ range: Range<Int>) {
-        storage.removeSubrange(range)
-        ids.removeSubrange(range)
-    }
-
-    /// Assign the supplied identities, allowing reuse from the
-    /// replaced range and keeping survivors' identities — same
-    /// contract as `IdentifiedArray.replaceSubrange`, plus the
-    /// pitch-uniqueness dedup every `ChordNotes` mutation keeps.
-    /// Pitches that already exist outside the subrange win; pitches
-    /// in `pairs` that appear earlier in `pairs` win over later
-    /// duplicates.
-    public mutating func replaceSubrange(_ range: Range<Int>, with pairs: [(EID, Note)]) {
-        storage.replaceSubrange(range, with: pairs.map(\.1))
-        ids.replaceSubrange(range, with: pairs.map(\.0))
-        dedupingByPitch()
-    }
-
-    /// A different note in the same slot, so it takes a new
-    /// identifier. Mirrors `IdentifiedArray.replace(at:with:newEID:)`;
-    /// if the new note's pitch collides with another slot, the
-    /// pitch-uniqueness dedup drops whichever occurrence comes later.
-    public mutating func replace(at eid: EID, with note: Note, newEID: EID) {
-        guard let index = index(of: eid) else { return }
-        storage[index] = note
-        ids[index] = newEID
-        dedupingByPitch()
     }
 
     /// Keep the first occurrence of each pitch, in current storage

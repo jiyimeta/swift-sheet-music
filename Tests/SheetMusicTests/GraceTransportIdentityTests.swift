@@ -96,7 +96,7 @@ struct GraceTransportIdentityTests {
         let column = before.systemMeasures.eid(at: 0)
         let original = try G.chord(before, 1)
         try editor.apply(SetTimeSignature(measureIndex: 0, numerator: 2, denominator: 4))
-        // The head keeps its own note identifier now (`RebarPlanner.pieces`'s `headKeepsIdentity: true`
+        // The head keeps its own note identifier now (`RebarPlanner.pieces`'s `onsetOwnership: .headIsOnset`
         // carries it onto `makeChordChain`'s first piece instead of losing it), so the fresh tail's slot
         // mints first, then its own note, and only then the new measure's system column — the graces
         // themselves are reused, not reminted, and are not part of either mint.

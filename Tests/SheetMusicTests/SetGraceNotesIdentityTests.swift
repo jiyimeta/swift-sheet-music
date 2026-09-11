@@ -168,6 +168,24 @@ struct SetGraceNotesIdentityTests {
         }
     }
 
+    /// Regression for the mint branch keeping the caller's note identifiers instead of minting its
+    /// own. `F.grace()` alone can't exercise this: a bare literal's note slot is `.invalid`, so
+    /// `assignMissingIDs` fills it either way and the bug is invisible. Here the grace is first
+    /// adopted into a score (so its note carries a real, assigned identifier), then handed back
+    /// twice — once to match the existing slot, once to mint a second one. The minted slot must get
+    /// its OWN note identity, not a copy of the matched slot's.
+    @Test func mintedSlotFromAnAdoptedGraceGetsItsOwnNoteIdentity() throws {
+        let editor = ScoreEditor(score: F.score(before: [F.grace()], after: []))
+        let adopted = try F.chord(editor.score).graceNotesBefore.values[0]
+        #expect(adopted.notes.eid(at: 0).isValid)
+        try editor.apply(SetGraceNotes(at: V.location(0), before: [adopted, adopted], after: []))
+        let result = try F.chord(editor.score)
+        #expect(result.graceNotesBefore.count == 2)
+        let noteIDs = result.graceNotesBefore.values.map { $0.notes.eid(at: 0) }
+        #expect(Set(noteIDs).count == 2, "each minted grace slot must mint its own notes")
+        #expect(EditingIdentityInvariants.hasUniqueIDs(editor.score))
+    }
+
     @Test func movingValueBetweenListsMintsInsteadOfMatchingAcrossLists() throws {
         let a = F.grace(), b = F.grace(61)
         let editor = ScoreEditor(score: F.score(before: [a], after: [b]))

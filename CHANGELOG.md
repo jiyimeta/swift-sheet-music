@@ -252,14 +252,29 @@ and this project adheres to
   - **`ChordNotes` is no longer a `MutableCollection` or a `RangeReplaceableCollection`.** A note slot's
     identifier has to survive a value change and be assigned on an insertion, which a plain subscript
     setter or `RangeReplaceableCollection`'s requirements cannot express. `chord.notes[i] = note`,
-    `append`, `insert(_:at:)` and `remove(at:)` no longer compile:
+    `append`, `insert(_:at:)` and `remove(at:)` no longer compile — and so does anything `MutableCollection`
+    supplies on top: `sort()`, `sorted(by:)` returning `Self`, `swapAt(_:_:)` and `partition(by:)`. A host
+    sorting noteheads by pitch, or otherwise reordering a chord's notes, breaks with no direct replacement:
     - a value change is `updateNote(at:)`;
     - an addition is `tryAppend(_:id:)`;
-    - a removal is `remove(eid:)`.
+    - a removal is `remove(eid:)`;
+    - a wholesale reorder has no dedicated method — rebuild with `ChordNotes(pairs)`, pairing each existing
+      note's current `eid(at:)` with its `Note` in the new order, and assign the result back to
+      `chord.notes` directly.
+  - **`DurationChangeAlgorithm.makeChordChain(from:durations:)` now requires `onsetOwnership:`, a new
+    public `OnsetOwnership` enum with no default.** A host building a tied chain (splitting a chord across
+    a re-barring, or continuing one after a partial-overshoot edit) must now say which case applies:
+    `.headIsOnset` when the first piece genuinely carries the source chord's onset, so it keeps the
+    source's note identifiers; `.allContinuation` when every piece — including the first — is new
+    continuation material whose onset was already consumed elsewhere, so every piece mints fresh
+    identifiers instead.
 
   **Lookup by identifier:**
   - `score[eid:]`, `position(of:)` and `eid(at:)` translate between an identifier and the positional
-    addresses that hit-testing and selection still produce. They cover top-level voice elements only.
+    addresses that hit-testing and selection still produce, for top-level voice elements.
+  - `Score.eid(at: NoteID)` and `Score.notePosition(of: EID)` are the equivalent pair for notes: they
+    cover a chord's own top-level notes, not the notes nested inside its grace chords — a grace note's
+    identifier has no `NoteID` to resolve to and looks up as `nil`.
   - Positions move under edits: to follow an element across one, take `eid(at:)` before the edit and
     `position(of:)` after it.
   - Identifiers are assigned on entry by `ScoreEditor`, `ScoreEditSession`, `ScoreLoader`, the MusicXML
@@ -275,6 +290,12 @@ and this project adheres to
 
   A host command trips these assertions if it rebuilds a voice from a plain array or mints from a snapshot of
   `ScoreEditor.idAllocator`. Release builds carry no checks.
+
+  **What breaks at runtime, not at compile time:** `SetNotePitch` now *throws* `.duplicatePitch` when the
+  target pitch collides with another note already in the chord, where it previously applied nothing and
+  returned successfully. A host that retunes a note into an existing pitch used to get a silent no-op; it
+  now gets a refused edit it must catch. Nothing else about the call site changes, so this is the one
+  migration item a host is likely to find last — after everything that failed to compile is already fixed.
 
 ### Fixed
 
