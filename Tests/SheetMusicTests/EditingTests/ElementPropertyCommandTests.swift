@@ -186,6 +186,8 @@ struct ElementPropertyCommandTests {
             [
                 EditIntent.setElementColor(target: .text(text), color: nil),
                 EditIntent.setElementPlacement(target: .text(text), placement: nil),
+                EditIntent.setElementOffset(target: text, offset: nil),
+                EditIntent.setElementAutoplace(target: text, autoplace: nil),
             ]
         }
         intents += [
@@ -303,12 +305,21 @@ struct ElementPropertyCommandTests {
     func absentIsRefusedAndClearingIsNot() throws {
         var score = try Self.populated()
         let missingVerse = ScoreTextID.lyric(anchor: Self.chord, verse: 9)
-        #expect(throws: SheetMusicError.self) {
+        let offsetError = #expect(throws: SheetMusicError.self) {
             try SetElementOffset(missingVerse, offset: nil).apply(to: &score)
         }
-        #expect(throws: SheetMusicError.self) {
+        guard case let .invalidEdit(offsetRefusal)? = offsetError else { Issue.record("expected refusal"); return }
+        // `TextElementProperties.update` reports absence as `false` and lets the caller throw with its own
+        // name, so the stamped operation must be the calling command, not the shared helper.
+        #expect(offsetRefusal.operation == "SetElementOffset")
+        let autoplaceError = #expect(throws: SheetMusicError.self) {
             try SetElementAutoplace(missingVerse, autoplace: nil).apply(to: &score)
         }
+        guard case let .invalidEdit(autoplaceRefusal)? = autoplaceError else {
+            Issue.record("expected refusal")
+            return
+        }
+        #expect(autoplaceRefusal.operation == "SetElementAutoplace")
 
         let present = ScoreTextID.lyric(anchor: Self.chord, verse: 1)
         #expect(SetElementOffset.currentProperties(for: present, in: score)?.offset == nil)
