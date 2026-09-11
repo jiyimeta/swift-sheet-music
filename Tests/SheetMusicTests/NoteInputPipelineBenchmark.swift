@@ -370,10 +370,12 @@
                     for ei in elements.indices {
                         if case var .chord(c) = elements[ei], !c.notes.isEmpty {
                             let n = c.notes[0]
-                            c.notes[0] = Note(
-                                pitch: n.pitch == 60 ? 62 : 60,
-                                tpc: n.pitch == 60 ? 16 : 14,
-                            )
+                            c.notes.updateNote(at: 0) { note in
+                                note = Note(
+                                    pitch: n.pitch == 60 ? 62 : 60,
+                                    tpc: n.pitch == 60 ? 16 : 14,
+                                )
+                            }
                             elements.updateValue(at: ei) { $0 = .chord(c) }
                             voices[vi] = Voice(elements: elements)
                             changed = true

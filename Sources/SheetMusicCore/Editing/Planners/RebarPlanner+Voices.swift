@@ -376,7 +376,7 @@ extension RebarPlanner {
         restored.duration = first
         restored.notes = head.notes
         for index in restored.notes.indices where chord.notes.indices.contains(index) {
-            restored.notes[index].tieBack = chord.notes[index].tieBack
+            restored.notes.updateNote(at: index) { $0.tieBack = chord.notes[index].tieBack }
         }
         // Grace notes AFTER the chord lead into whatever follows the sound, so they belong on its last
         // piece — the one thing the head gives up when the chain is longer than one. `makeChordChain`

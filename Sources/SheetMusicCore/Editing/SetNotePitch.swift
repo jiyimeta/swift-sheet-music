@@ -42,11 +42,13 @@ public struct SetNotePitch: EditCommand {
         guard case var .chord(chord) = score[veID] else {
             throw Self.refused(.wrongElementKind(at: veID, expected: .chord))
         }
-        var note = chord.notes[location.noteIndexInChord]
-        note.pitch = pitch
-        note.tpc = tpc
-        note.accidental = accidental
-        chord.notes[location.noteIndexInChord] = note
+        guard chord.notes.updateNote(at: location.noteIndexInChord, {
+            $0.pitch = pitch
+            $0.tpc = tpc
+            $0.accidental = accidental
+        }) else {
+            throw Self.refused(.duplicatePitch(pitch))
+        }
         score[veID] = .chord(chord)
         return SetNotePitch(
             at: location,

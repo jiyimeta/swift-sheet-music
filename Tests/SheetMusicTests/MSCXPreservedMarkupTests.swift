@@ -441,9 +441,11 @@ struct MSCXPreservedMarkupTests {
         for graceIndex in graces.indices {
             graces.updateValue(at: graceIndex) { grace in
                 for noteIndex in grace.notes.indices {
-                    grace.notes[noteIndex].fingerings = [
-                        Fingering(text: "1", preservedMarkup: [marker]),
-                    ]
+                    grace.notes.updateNote(at: noteIndex) {
+                        $0.fingerings = [
+                            Fingering(text: "1", preservedMarkup: [marker]),
+                        ]
+                    }
                     count += 1
                 }
             }

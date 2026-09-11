@@ -16,7 +16,7 @@ struct ElementPropertyCommandTests {
         var score = EditingFixtures.twoConsecutiveC4Chords()
         let anchor = VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1)
         guard case var .chord(value)? = score[anchor] else { throw SetElementVisible.refused(.targetNotFound(anchor)) }
-        value.notes.append(Note(pitch: 64, tpc: 18))
+        value.notes = ChordNotes(Array(value.notes) + [Note(pitch: 64, tpc: 18)])
         score[anchor] = .chord(value)
         try SetLyric(at: anchor, verse: 0, text: "la", syllabic: .single).apply(to: &score)
         try SetLyric(at: anchor, verse: 1, text: "lo", syllabic: .single).apply(to: &score)
@@ -53,7 +53,7 @@ struct ElementPropertyCommandTests {
         case 0, 5, 6:
             guard case var .chord(value)? = score[chord] else { Issue.record("missing chord"); return }
             if index == 0 { update(&value.lyrics[1].elementProperties) }
-            if index == 5 { update(&value.notes[1].elementProperties) }
+            if index == 5 { value.notes.updateNote(at: 1) { update(&$0.elementProperties) } }
             if index == 6 { update(&value.elementProperties) }
             score[chord] = .chord(value)
         case 1, 2:

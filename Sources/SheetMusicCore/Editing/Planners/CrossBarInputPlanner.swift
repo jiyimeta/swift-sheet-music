@@ -320,20 +320,20 @@ public enum CrossBarInputPlanner {
         duration: NoteDuration, content: Content, isFirst: Bool, isLast: Bool,
     ) -> VoiceElement {
         guard case let .chord(source) = content else { return .rest(duration: duration) }
-        var notes = source.notes
+        var notes = Array(source.notes)
         for index in notes.indices {
             notes[index].tieBack = isFirst ? source.notes[index].tieBack : 1
             notes[index].tieForward = isLast ? source.notes[index].tieForward : 1
         }
         guard isFirst else {
             return .chord(Chord(
-                duration: duration, notes: notes,
+                duration: duration, notes: ChordNotes(notes),
                 graceNotesBefore: [], graceNotesAfter: isLast ? source.graceNotesAfter : [],
             ))
         }
         var head = source
         head.duration = duration
-        head.notes = notes
+        head.notes = ChordNotes(notes)
         // Grace notes AFTER the chord lead into whatever follows the sound, so they belong on its last piece, not
         // its first — the one case the head doesn't keep.
         head.graceNotesAfter = isLast ? source.graceNotesAfter : []

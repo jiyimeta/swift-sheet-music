@@ -88,7 +88,7 @@ struct StaffMeasureBuilder {
         let idx = internVoice(voiceId)
         var elements = voices[idx]
         if let last = elements.last, case var .chord(chord) = last {
-            chord.notes.append(note)
+            chord.notes = ChordNotes(Array(chord.notes) + [note])
             elements[elements.count - 1] = .chord(chord)
         } else {
             elements.append(.chord(Chord(duration: duration, notes: [note])))

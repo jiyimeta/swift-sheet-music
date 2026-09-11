@@ -44,11 +44,11 @@ public struct SetAccidental: EditCommand {
             throw Self.refused(.wrongElementKind(at: veID, expected: .chord))
         }
         let respelled = Self.respelled(oldNote, with: accidental, at: location, in: score)
-        var note = chord.notes[location.noteIndexInChord]
-        note.pitch = respelled.pitch
-        note.tpc = respelled.tpc
-        note.accidental = accidental
-        chord.notes[location.noteIndexInChord] = note
+        chord.notes.updateNote(at: location.noteIndexInChord) {
+            $0.pitch = respelled.pitch
+            $0.tpc = respelled.tpc
+            $0.accidental = accidental
+        }
         score[veID] = .chord(chord)
         return SetNotePitch(
             at: location,

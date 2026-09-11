@@ -62,7 +62,7 @@ public struct SetElementPlacement: EditCommand {
             let slot = VoiceElementID(id)
             guard case var .chord(chord)? = score[slot], chord.notes.indices.contains(id.noteIndexInChord)
             else { throw Self.refused(.noteNotFound(id)) }
-            chord.notes[id.noteIndexInChord].elementProperties.placement = placement
+            chord.notes.updateNote(at: id.noteIndexInChord) { $0.elementProperties.placement = placement }
             score[slot] = .chord(chord)
         case let .chord(id):
             guard case var .chord(chord)? = score[id] else {

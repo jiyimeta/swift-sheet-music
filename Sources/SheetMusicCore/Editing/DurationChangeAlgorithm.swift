@@ -257,7 +257,7 @@ public enum DurationChangeAlgorithm {
         for (idx, dur) in durations.enumerated() {
             let isFirst = idx == 0
             let isLast = idx == durations.count - 1
-            var notes = src.notes
+            var notes = Array(src.notes)
             for ni in notes.indices {
                 notes[ni].tieBack = isFirst ? nil : 1
                 notes[ni].tieForward = isLast
@@ -266,7 +266,7 @@ public enum DurationChangeAlgorithm {
             }
             pieces.append(.chord(Chord(
                 duration: dur,
-                notes: notes,
+                notes: ChordNotes(notes),
                 arpeggio: isFirst ? src.arpeggio : nil,
                 bracket: isFirst ? src.bracket : nil,
                 lyrics: isFirst ? src.lyrics : [],

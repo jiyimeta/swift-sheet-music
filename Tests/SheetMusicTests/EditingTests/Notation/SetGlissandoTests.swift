@@ -78,7 +78,7 @@ struct SetGlissandoTests {
             Issue.record("expected a chord")
             return
         }
-        chord.notes[0].glissando = Glissando()
+        chord.notes.updateNote(at: 0) { $0.glissando = Glissando() }
         score[Self.slot(2, 1)] = .chord(chord)
         #expect(score[target]?.glissando != nil)
         _ = try SetGlissando(at: target, glissando: nil).apply(to: &score)

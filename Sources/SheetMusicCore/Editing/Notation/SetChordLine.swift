@@ -90,7 +90,7 @@ public struct SetNoteParentheses: EditCommand {
         guard case var .chord(chord) = score[elementID] else {
             throw Self.refused(.wrongElementKind(at: elementID, expected: .chord))
         }
-        chord.notes[location.noteIndexInChord].parentheses = parentheses
+        chord.notes.updateNote(at: location.noteIndexInChord) { $0.parentheses = parentheses }
         score[elementID] = .chord(chord)
         return SetNoteParentheses(at: location, parentheses: oldNote.parentheses)
     }
