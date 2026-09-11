@@ -9,6 +9,42 @@ and this project adheres to
 
 ### Added
 
+- **Text is measured from the face that actually draws it.** `FontMetricsProvider` gained
+  `textInkBounds(text:font:)` — real ink relative to the first line's baseline, Y-up, nil when
+  there is none — and `renderingTextFont(_:)`, the face a host can actually draw; `LayoutFont`
+  gained `isItalic`. Both requirements ship default implementations, so a provider written
+  against the old protocol still compiles and keeps answering with the previous typographic
+  approximation until it overrides them.
+
+  Hit rectangles for the four text kinds, the tempo, dynamic, measure-number, staff-name, jump
+  and marker labels, and the pedal obstacle the skyline reserves (`PedalInkGeometry`, now shared
+  by hits and the south skyline rather than measured twice) all come from that ink. The shipped
+  `.smft` metrics table was regenerated carrying Edwin's italic and bold-italic records beside
+  the regular and bold ones, measured with the synthesis each renderer paints with — Android's
+  own `Paint`, the browser's stroke-then-shear. **The format version stays 4** because faces are
+  a name-keyed dictionary: an `.smft` a host bundled before this release still loads and simply
+  answers a styled request with the regular record, until it is regenerated with
+  `Tools/GenFontMetrics`. A face or codepoint the table does not carry still falls through to
+  the stub, and the table's per-glyph union still cannot reproduce kerning, ligatures or font
+  fallback, so that part remains an approximation.
+
+- **A host that hides staves can still edit the score behind them.** `ScoreEditingAddressMap`
+  translates a displayed `ScoreItemID` to its full-score address and back, and refuses rather
+  than guessing — unlike playback cursor translation, an unresolved staff address cannot become
+  a beat and pass through. It carries the optional full-score text preview too, so an
+  in-progress text edit maps through existing voice-slot identities and a preview-only slot
+  never acquires a commit target. `ScoreEditingSelection` holds a selection together with the
+  address space its positions were written in and transitions it across preview updates and
+  layout-mode changes, so a later render cannot reinterpret new positions as old ones. In the
+  display copy, staff-owned lane marks leave with their owner while score-wide ones (tempo,
+  rehearsal marks, system text, swing) stay above the first visible staff; the committed lane
+  and its identifiers are untouched.
+
+- **The Mac example drives the four property commands by hand.** A selection-properties panel
+  applies `SetElementColor`, `SetElementPlacement`, `SetTextFont` and `SetLyricVerse` to the
+  selected text through the existing undo/redo path, so §B has a way to be exercised without a
+  test.
+
 - **Ties, slurs, jumps and markers are selectable and tinted on Apple.**
   Ties and chord-attached slurs keep one identity across split-system
   segments; standalone slurs name their own voice slot. Tie and slur hits
@@ -234,17 +270,42 @@ and this project adheres to
 
 ### Fixed
 
-- **Text placementを描画とautoplaceへ反映。** Lyric、StaffText / SystemText、
-  RehearsalMark、Harmonyのabove / belowを、element override、score style、
-  kind defaultの優先順で解決します。実staff height、multilineのbaseline、
-  rehearsal frameのpaddingを使い、hit領域も新しいink位置へ追従します。
-  `ScoreStyle.textPlacement` はMSCX / mssのrole別positionを保持し、v3への保存でも
-  失いません。`ElementProperties.autoplace` はnilをtrueとして扱い、falseの要素は
-  固定位置のobstacleになります。Lyricのrowはsideとverseで分かれ、複数verseの
-  hyphen / melisma / system continuationも同じrowを保ちます。Note / Chordの
-  generic placementは描画上inertで、pitchやstem directionを変更しません。
-  空の編集caretも同じplacement styleを使い、近くのLyricをclickした際に
-  noteのnear-miss rescueへ落ちる問題を修正しました。
+- **Engraved labels are measured and drawn from one description of the face.** Tempo, dynamic,
+  measure-number, staff-name, jump and marker text had the layout and the renderer each deciding
+  a font and a baseline for themselves; they now share `NotationTextStyle` and the provider's
+  ink. Android's golden page and the browser's page snapshot moved by a few pixels as a result:
+  the ink sits where it is painted now, not where a typographic band estimated it was.
+
+- **A circled rehearsal mark encloses its own ink.** The circle's diameter was
+  `max(width, height)` of the *typographic* box, so a wide or tall label — "1サビ", anything
+  multi-line — painted ink outside the stroke it was supposed to be inside. It now grows to
+  clear every ink corner radially, with the frame padding and half the stroke width as the
+  clearance, and rendering, hit bounds and the skyline all take the frame from one function.
+
+- **A hidden lyric verse no longer moves the visible rows in print.** `maxAboveLyricVerse`
+  counted only visible syllables while the ghost rows a host renders for invisible elements sit
+  in the same ordering; the two now share an ordering exactly when ghosts are shown. Print
+  layout therefore stops reserving a row for a verse nobody can see.
+
+- **A lyric row keeps its verse order across the staff, and an authored offset stops dragging
+  the caret.** Verses were ordered only where syllables overlapped horizontally, so a verse 2
+  syllable in a bar where verse 1 is silent could settle inside verse 1's row; row bands are now
+  staff-wide, and a movable row only ever moves outward. Separately, `TextPlacementMetadata`
+  carries `lyricAnchorCorrectionY` — the authored Y offset plus the multiline centring — so
+  subtracting it from a syllable's final origin recovers the row the caret has to sit on
+  instead of following one offset syllable.
+
+- **Text placement reaches rendering and autoplace.** Above / below for lyrics, staff and system
+  text, rehearsal marks and harmonies resolves in the order element override, score style, kind
+  default. It uses the real staff height, the multiline baseline and the rehearsal frame's
+  padding, and hit regions follow the new ink position. `ScoreStyle.textPlacement` keeps the
+  per-role positions from MSCX / mss and does not lose them when saving to v3.
+  `ElementProperties.autoplace` treats nil as true; an element that sets it false becomes a
+  fixed obstacle rather than moving. A lyric's row is keyed by side and verse, so hyphens,
+  melismas and system continuations hold the same row across several verses. Generic placement
+  on notes and chords is inert for rendering and changes neither pitch nor stem direction. The
+  empty editing caret uses the same placement style, which fixes a click near a lyric falling
+  through to the note's near-miss rescue.
 
 - **`stableFingerprint` can see colour, placement and text properties.**
   It could not, and each of the three would have let the golden replay gate
