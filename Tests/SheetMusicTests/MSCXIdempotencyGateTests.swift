@@ -96,6 +96,33 @@ enum MSCXIdempotency {
         return text.split(separator: "\n", omittingEmptySubsequences: false)
             .map { $0.trimmingCharacters(in: .whitespaces) }
     }
+
+    // MARK: - The corpus enumerator, shared by every opt-in sweep
+
+    /// Decode one corpus file, routing `.mscz` through the zip reader.
+    ///
+    /// **Shared deliberately.** `MSCXIdempotencySweep` and `EIDRoundTripSweep` read the SAME corpus off the
+    /// same `SM_MSCX_IDEMPOTENCY_DIR`, and two sweeps that enumerate it separately drift: a skip-list, an
+    /// `.mxl` extension or a different sort order lands in one copy, both keep printing `files=669`, and the
+    /// two gates quietly cover different corpora while looking like they agree. One enumerator, two callers.
+    static func score(at url: URL) throws -> Score {
+        let data = try Data(contentsOf: url)
+        return url.pathExtension.lowercased() == "mscz"
+            ? try MSCZReader.parse(data)
+            : try MSCXParser.parse(data)
+    }
+
+    /// Every `.mscx` / `.mscz` under `root`, recursively, in a stable order. See `score(at:)` for why this is
+    /// shared rather than duplicated per sweep.
+    static func scoreFiles(under root: URL) -> [URL] {
+        let enumerator = FileManager.default.enumerator(
+            at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles],
+        )
+        let found = (enumerator?.allObjects as? [URL] ?? []).filter {
+            ["mscx", "mscz"].contains($0.pathExtension.lowercased())
+        }
+        return found.sorted { $0.path < $1.path }
+    }
 }
 
 /// The always-on layer. Every fixture here is named with the reason it is here — a shape that has moved the
@@ -235,7 +262,7 @@ struct MSCXIdempotencySweep {
     func corpusIsAFixedPoint() throws {
         let raw = try #require(ProcessInfo.processInfo.environment["SM_MSCX_IDEMPOTENCY_DIR"])
         let root = URL(fileURLWithPath: (raw as NSString).expandingTildeInPath)
-        let files = Self.scoreFiles(under: root)
+        let files = MSCXIdempotency.scoreFiles(under: root)
         #expect(!files.isEmpty, "no .mscx / .mscz found under \(root.path)")
 
         var loaded = 0
@@ -243,7 +270,7 @@ struct MSCXIdempotencySweep {
         var failed: [String] = []
         var differing: [String] = []
         for file in files {
-            guard let score = try? Self.score(at: file) else {
+            guard let score = try? MSCXIdempotency.score(at: file) else {
                 unreadable.append(file.lastPathComponent)
                 continue
             }
@@ -272,22 +299,5 @@ struct MSCXIdempotencySweep {
         }
         #expect(failed.isEmpty, "\(failed.count) of \(loaded) scores decoded but threw on re-encode")
         #expect(differing.isEmpty, "\(differing.count) of \(loaded) scores re-encode differently on pass 2")
-    }
-
-    private static func score(at url: URL) throws -> Score {
-        let data = try Data(contentsOf: url)
-        return url.pathExtension.lowercased() == "mscz"
-            ? try MSCZReader.parse(data)
-            : try MSCXParser.parse(data)
-    }
-
-    private static func scoreFiles(under root: URL) -> [URL] {
-        let enumerator = FileManager.default.enumerator(
-            at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles],
-        )
-        let found = (enumerator?.allObjects as? [URL] ?? []).filter {
-            ["mscx", "mscz"].contains($0.pathExtension.lowercased())
-        }
-        return found.sorted { $0.path < $1.path }
     }
 }

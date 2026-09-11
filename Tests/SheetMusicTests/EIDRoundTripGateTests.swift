@@ -221,6 +221,42 @@ struct EIDRoundTripTests {
             "\(name): the reload invented identifiers the source parse never held: \(inventedDetail)",
         )
     }
+
+    #if DEBUG
+        /// **`EIDRoundTrip.slots` and `EditingIdentityInvariants.identifiers(in:)` share fate.**
+        ///
+        /// `slots(in:coverage: .every)` is a second hand-written walk of the same identified sequences that
+        /// `identifiers(in:)` walks. Two independent traversals of one structure drift, and
+        /// `identifiers(in:)`'s own doc comment already warns that a new minting site becomes "invisible to
+        /// both at once" — a third walker inherits that blindness, and gate 1 and gate 3 both rest on this one.
+        ///
+        /// It is gate 3 in particular that needs this. Its count-equality compares two numbers that BOTH come
+        /// from `slots(in:coverage: .every)`, so a traversal that stopped walking notes would shrink both sides
+        /// equally and the gate would pass having measured less. This test is what makes that count-equality an
+        /// independent check rather than a tautology: the traversal is pinned against a walker that lives in a
+        /// different module and is maintained for a different reason.
+        ///
+        /// Compared as a SET, not only as a count: the two walks emit a chord's own notes and its grace
+        /// chords' notes in a different order, so order-sensitive equality would fail for a reason that is not
+        /// about coverage, while set equality over distinct identifiers is strictly stronger than the count.
+        ///
+        /// Fixtures: `grace-notes` carries the repo's only `<Tuplet>` plus grace chords (the two nested
+        /// sequences most easily dropped from a walk), and `instrument-change` is the only one with a
+        /// system-lane occupant.
+        @Test("the gate's traversal and the editing invariant's walk cover the same slots", arguments: [
+            "grace-notes",
+            "instrument-change",
+            "testSingleNoteDynamics",
+        ])
+        func traversalAgreesWithTheEditingInvariant(_ name: String) throws {
+            let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData(name))
+            let mine = EIDRoundTrip.slots(in: score, coverage: .every).map(\.eid)
+            let theirs = EditingIdentityInvariants.identifiers(in: score)
+            #expect(!mine.isEmpty, "\(name): the traversal reported nothing, so agreement proves nothing")
+            #expect(mine.count == theirs.count, "\(name): \(mine.count) slots here, \(theirs.count) there")
+            #expect(Set(mine) == Set(theirs), "\(name): the two walks cover different slots")
+        }
+    #endif
 }
 
 /// The opt-in corpus layer, deliberately keyed on the SAME `SM_MSCX_IDEMPOTENCY_DIR` the 2-pass sweep uses —
@@ -239,7 +275,7 @@ struct EIDRoundTripSweep {
     func corpusIdentifiersSurvive() throws {
         let raw = try #require(ProcessInfo.processInfo.environment["SM_MSCX_IDEMPOTENCY_DIR"])
         let root = URL(fileURLWithPath: (raw as NSString).expandingTildeInPath)
-        let files = Self.scoreFiles(under: root)
+        let files = MSCXIdempotency.scoreFiles(under: root)
         #expect(!files.isEmpty, "no .mscx / .mscz found under \(root.path)")
 
         var loaded = 0
@@ -251,7 +287,7 @@ struct EIDRoundTripSweep {
         var unstable: [String] = []
         var invented: [String] = []
         for file in files {
-            guard let score = try? Self.score(at: file) else {
+            guard let score = try? MSCXIdempotency.score(at: file) else {
                 unreadable += 1
                 continue
             }

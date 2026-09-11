@@ -255,10 +255,17 @@ struct EIDPersistenceTests {
     /// parser's chokepoint filled every slot with a distinct identifier — and that it filled exactly as many
     /// slots as the unstripped parse holds.
     ///
-    /// The count equality is what stops this passing on a traversal that shrank: a renumbering pass that
-    /// dropped elements, or a traversal that stopped walking notes, would still report "all unique" over
-    /// whatever was left. `midi01.mscx` is the corpus file used because it is the one whose own identifiers
-    /// other tests here assert by literal value, so "stripped" and "unstripped" are the same score twice.
+    /// **What the count equality does and does not catch.** It catches a RENUMBERING pass that dropped
+    /// elements — the stripped parse comes back with fewer slots than the unstripped one — which is the
+    /// failure "all unique over whatever was left" would otherwise hide. It does NOT, on its own, catch a
+    /// shrinking TRAVERSAL: both sides are counted by `EIDRoundTrip.slots(in:coverage: .every)`, so a walk
+    /// that stopped visiting notes would shrink both equally and the counts would still match. What rules that
+    /// out is a separate test — `EIDRoundTripTests.traversalAgreesWithTheEditingInvariant` pins this traversal
+    /// against `EditingIdentityInvariants.identifiers(in:)`, a walker in another module maintained for another
+    /// reason — and without it this gate's equality would be a tautology.
+    ///
+    /// `midi01.mscx` is the corpus file used because it is the one whose own identifiers other tests here
+    /// assert by literal value, so "stripped" and "unstripped" are the same score twice.
     ///
     /// Coverage is `.every` rather than `.persisted`: this gate is about MINTING, and `.preserved`,
     /// `.locationShift` and `.spanner` slots are minted like any other — it is only their round trip through a
