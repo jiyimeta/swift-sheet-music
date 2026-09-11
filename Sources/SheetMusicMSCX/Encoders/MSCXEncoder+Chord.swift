@@ -55,6 +55,7 @@ extension Chord {
                 text: voiceIndex == 0 ? "up" : "down",
             ))
         }
+        let chordCarriesSmall = appendChordLevelSmall(to: &children)
         duration.appendDurationXML(to: &children)
         children += chordAnchoredSpanners(ending: slurEndMarkers, options: options)
         // Articulations sit between durationType and the first
@@ -128,10 +129,35 @@ extension Chord {
                 options: options,
                 drumDefaultHead: isPercussionV3 ? "normal" : nil,
                 chordLines: chordLines.filter { $0.noteIndex == noteIndex },
+                chordCarriesSmall: chordCarriesSmall,
             ))
         }
         appendChordTail(to: &children, options: options)
         return XMLTreeNode(name: "Chord", children: children)
+    }
+
+    /// Write the whole-chord `<small>1</small>` when every note is small, and
+    /// report whether it did so the notes can skip their own copy.
+    ///
+    /// This is the shape MuseScore uses for a cue chord: the flag on the
+    /// `<Chord>`, nothing on the notes. `MSCXDecoder+Chord.decodeNotes` is the
+    /// inverse — it normalizes a chord-level `<small>` down onto every note,
+    /// which is why the model carries the flag per note and has no chord-level
+    /// field of its own. A chord only *some* of whose notes are small has no
+    /// whole-chord form to write and falls through to the per-note tag.
+    ///
+    /// Position: `Pid::SMALL` is a `ChordRest` property written after
+    /// `<BeamMode>` and before `<dots>` / `<durationType>` in both generations
+    /// — `TWrite::write(const ChordRest*, …)` (`rw/write/twrite.cpp:1105`) and
+    /// 3.6.2 `ChordRest::writeProperties` (`libmscore/chordrest.cpp:167`).
+    /// `Tests/SheetMusicTests/Resources/own/ornaments.mscx:90` shows the same
+    /// slot in MuseScore-authored data.
+    private func appendChordLevelSmall(to children: inout [XMLTreeNode]) -> Bool {
+        let allSmall = !notes.isEmpty && notes.allSatisfy(\.isSmall)
+        if allSmall {
+            children.append(XMLTreeNode(name: "small", text: "1"))
+        }
+        return allSmall
     }
 
     /// Append the modeled arpeggio and chord bracket, element properties, and

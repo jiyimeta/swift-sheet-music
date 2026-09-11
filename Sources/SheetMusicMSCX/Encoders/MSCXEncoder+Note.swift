@@ -15,6 +15,12 @@ extension Note {
     /// the `<Note>` (`TWrite::write(const Note*, …)` walks
     /// `chord()->el()` for chord lines matching the note); chord-level
     /// ones stay under `<Chord>`.
+    ///
+    /// `chordCarriesSmall` is set by `Chord.encodeAsChord` when every note in
+    /// the chord is small and it has therefore already written the chord-level
+    /// `<small>1</small>`. This note then omits its own, matching MuseScore,
+    /// which keeps `Pid::SMALL` on the chord and on the note as two separate
+    /// properties and writes whichever one the user set.
     func encode(
         eid: EID,
         tieForwardEndpoint: TieEndpoint? = nil,
@@ -24,6 +30,7 @@ extension Note {
         options: MSCXEncoderOptions = .init(),
         drumDefaultHead: String? = nil,
         chordLines: [ChordLine] = [],
+        chordCarriesSmall: Bool = false,
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
@@ -84,11 +91,11 @@ extension Note {
                 name: "tpc2", text: String(tpc + options.writtenFifthsOffset),
             ))
         }
-        if let headType {
-            children.append(XMLTreeNode(name: "head", text: headType))
-        } else if let drumDefaultHead {
-            children.append(XMLTreeNode(name: "head", text: drumDefaultHead))
-        }
+        appendSmallAndHead(
+            into: &children,
+            chordCarriesSmall: chordCarriesSmall,
+            drumDefaultHead: drumDefaultHead,
+        )
         appendUserVelocity(into: &children)
         // MuseScore omits `<play>` for the default (true); emit only
         // the muted form. Element order mirrors the writer: after
@@ -120,6 +127,35 @@ extension Note {
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)
         children += elementProperties.mscxTrailingChildren()
         return XMLTreeNode(name: "Note", children: children)
+    }
+
+    /// Append the cue-size flag and the notehead, in that order.
+    ///
+    /// They travel together because MuseScore writes the note's properties as
+    /// one list — `PITCH, CENT_OFFSET, TPC1, TPC2, SMALL, MIRROR_HEAD,
+    /// DOT_POSITION, HEAD_SCHEME, HEAD_GROUP, USER_VELOCITY, PLAY, …` — so
+    /// `<small>` sits after `<tpc2>` and before `<head>`, and the two this
+    /// package models are adjacent in that run. C++:
+    /// `TWrite::write(const Note*, …)` (`rw/write/twrite.cpp:2378`), 3.6.2
+    /// `Note::write` (`libmscore/note.cpp:1315`); the lists agree apart from
+    /// `CENT_OFFSET`, so this is not branched on the target version.
+    ///
+    /// `<small>` is omitted at its default (false), and also when the owning
+    /// chord has already written the whole-chord form — see
+    /// `Chord.encodeAsChord` and `GraceChord.encode`.
+    private func appendSmallAndHead(
+        into children: inout [XMLTreeNode],
+        chordCarriesSmall: Bool,
+        drumDefaultHead: String?,
+    ) {
+        if isSmall, !chordCarriesSmall {
+            children.append(XMLTreeNode(name: "small", text: "1"))
+        }
+        if let headType {
+            children.append(XMLTreeNode(name: "head", text: headType))
+        } else if let drumDefaultHead {
+            children.append(XMLTreeNode(name: "head", text: drumDefaultHead))
+        }
     }
 
     /// Append the `<Accidental>` block, the first thing MuseScore writes
@@ -343,57 +379,5 @@ extension Note {
                 XMLTreeNode(name: "next"),
             ],
         )
-    }
-}
-
-extension LegacyBend {
-    /// Build the `<Bend>` element. Field order mirrors both writers —
-    /// points, then the styled properties, then `<play>`, which is written
-    /// only when it is false because `writeProperty(Pid::PLAY)` elides the
-    /// default. The four styled properties are likewise absent unless the
-    /// user overrode them, so an untouched bend writes back as nothing but
-    /// its curve.
-    /// C++: `TWrite::write(const Bend*, …)` (`rw/write/twrite.cpp:825`),
-    /// 3.6.2 `Bend::write` (`libmscore/bend.cpp:285`). The two are
-    /// identical, so no target-version branch exists here.
-    ///
-    /// The point attributes go in as a dictionary, the same way every other
-    /// attribute-carrying encoder in this module writes one (see the
-    /// `<color r= g= b= a=>` writers): `XMLTreeSerializer` emits attributes
-    /// in sorted key order, so the rendered element reads
-    /// `<point pitch= time= vibrato=/>` rather than MuseScore's
-    /// `time`/`pitch`/`vibrato`. Attribute order carries no meaning in XML
-    /// and MuseScore's reader looks each one up by name; byte parity with
-    /// Studio's own writer is a stated non-goal of the serializer.
-    func encode() -> XMLTreeNode {
-        var children: [XMLTreeNode] = points.map { point in
-            XMLTreeNode(name: "point", attributes: [
-                "time": String(point.time),
-                "pitch": String(point.pitch),
-                "vibrato": String(point.vibrato),
-            ])
-        }
-        if let lineWidth {
-            children.append(XMLTreeNode(
-                name: "lineWidth", text: formatDouble(lineWidth),
-            ))
-        }
-        if let fontFace {
-            children.append(XMLTreeNode(name: "fontFace", text: fontFace))
-        }
-        if let fontSize {
-            children.append(XMLTreeNode(
-                name: "fontSize", text: formatDouble(fontSize),
-            ))
-        }
-        if let fontStyle {
-            children.append(XMLTreeNode(
-                name: "fontStyle", text: String(fontStyle),
-            ))
-        }
-        if !play {
-            children.append(XMLTreeNode(name: "play", text: "0"))
-        }
-        return XMLTreeNode(name: "Bend", children: children)
     }
 }
