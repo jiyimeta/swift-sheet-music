@@ -128,4 +128,17 @@ struct NoteIdentityAssignmentTests {
         else { fatalError("still a chord") }
         #expect(after.notes.eid(at: 0) == kept)
     }
+
+    @Test("a transposed display copy keeps each note's identifier")
+    func displayTransposeKeepsNoteIdentity() {
+        let editor = ScoreEditor(score: EditingFixtures.chordAtIndex1())
+        let location = VoiceElementID(
+            staff: EditingFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+        )
+        guard case let .chord(committed) = editor.score[location] else { fatalError("fixture is a chord") }
+        let displayed = editor.score.transposed(bySemitones: 2)
+        guard case let .chord(shown) = displayed[location] else { fatalError("still a chord") }
+        #expect(shown.notes[0].pitch != committed.notes[0].pitch) // the transform did something
+        #expect(shown.notes.eid(at: 0) == committed.notes.eid(at: 0))
+    }
 }
