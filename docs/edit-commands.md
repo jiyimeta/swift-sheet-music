@@ -215,6 +215,19 @@ Apart from those, new commands start with a gap from §C, or with a new
 feature altogether; either way they open a new wire chain rather than
 extending the frozen parity one (`ReplayChain`).
 
+The properties-inspector project
+(`.superpowers/sdd/2026-09-12-properties-inspector-write-surface/`)
+reopened §B a third time — extending `ReplayChain.properties`, the same
+non-frozen chain 76–79 opened, rather than starting a fourth — with four
+more commands: `SetNoteSmall` (80), `SetNotePlay` (81), `SetElementOffset`
+(82) and `SetElementAutoplace` (83). Same convention:
+
+| Command | What the row above got wrong |
+| --- | --- |
+| `SetNoteSmall` (80) | Closes the §C row this replaced (now deleted): it claimed neither `Chord` nor `Note` carried a scale or cue flag. False — `Note.isSmall` already round-tripped through MSCX decode and drove the layout's `chordMag` (a chord draws small when any of its notes is); only the encoder had no arm for `<small>`, so a cue note loaded correctly and was silently dropped on save. That gap is fixed alongside this command. Deliberately per-note with no whole-chord form: MuseScore's chord-wide `<small>` is normalized onto the notes at decode, so `Chord` carries no field of its own — a host wanting the chord-wide checkbox composes one command per note. |
+| `SetNotePlay` (81) | The mirror image of `SetNoteVisible`: `Note.play` governs MIDI output only (`MidiRenderer+*`, including its tremolo / glissando / bend realizations) and leaves the notehead drawn. Hiding a note does not silence it and muting it does not hide it — neither command derives the other. |
+| `SetElementOffset` (82) / `SetElementAutoplace` (83) | Both take a `ScoreTextID` — lyric, staff/system text, harmony, rehearsal mark — not a note, chord or spanner, because those four are the only carriers whose `offset` and `autoplace` the layout reads: `LayoutEngine.placedTextOrigin` (`offset`, four call sites) and the four `TextPlacementMetadata(autoplace:)` sites in `LayoutEngine+Placement.swift`, nowhere else. `ElementProperties` carries both fields on every engravable — a note, a chord, a dynamic and a spanner all store and round-trip them — but there they are storing-but-inert, the same pattern `SetElementColor` (76) already found for `Chord.elementProperties.color`. |
+
 ---
 
 ## C. Still out of reach
@@ -238,9 +251,8 @@ else is known to be missing:
 
 | Feature | Why it is out of reach today |
 | --- | --- |
-| Ornaments other than trill (turn, mordent, …) | the model has `TrillType` (`SetTrill`, #68) but no general ornament case — a turn or mordent has nowhere to attach. |
+| Ornaments other than trill (turn, mordent, …) | the model has `Chord.ornaments` (`ChordOrnament`, 2026-09-04) and it round-trips through MSCX, but nothing consumes it — `SheetMusicLayout` and `SheetMusicMIDI` reference it zero times, so a turn or mordent read from a file is neither drawn nor played. An edit command would write a value with no visible or audible effect. What is out of reach is the engraving and the playback, not the model field. |
 | Manual stem direction | the model has no field for it — `Chord` carries `stemVisible` (`SetStemVisible`, #60), not a direction; MuseScore always computes it. |
-| Cue note (small) | neither `Chord` nor `Note` carries a scale or cue flag — nothing in the model distinguishes a cue-sized note from a full-sized one. |
 | Slash notation | no dedicated voice element represents it — a slash is neither a `Chord` nor a `Rest` in the model. |
 | Figured bass | no dedicated annotation type carries it — the model has nothing analogous to `Harmony` for a figured-bass numeral. |
 | Pedal line style | `Spanner` has no pedal-style payload — `SetPedal` (#64) writes `rawType = "Pedal"` only. |

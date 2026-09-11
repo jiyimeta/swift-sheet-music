@@ -42,8 +42,10 @@ struct SmallNoteTests {
         #expect(encoded.first("small")?.text == "1")
         let names = encoded.children.map(\.name)
         #expect(names.firstIndex(of: "small").map { $0 + 1 } == names.firstIndex(of: "durationType"))
-        // The flag lives on the chord OR on the notes, never on both: MuseScore
-        // keeps them as two separate properties and writes whichever was set.
+        // The decoder normalizes a chord-level <small> onto every note, so the
+        // model holds one flag per note and no chord-level field at all — an
+        // all-small chord is therefore always written back in the chord-level
+        // spelling, regardless of which spelling the source file used.
         let noteSmalls = encoded.all("Note").map { $0.first("small") }
         #expect(noteSmalls == [nil, nil])
     }
