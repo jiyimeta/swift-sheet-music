@@ -7,9 +7,9 @@ extension Voice {
     /// sorted array as a queue, draining elements as the voice
     /// cursor catches up to each position.
     static func sortedSystemElements(
-        _ systemElements: [PositionedSystemElement],
-    ) -> [PositionedSystemElement] {
-        systemElements.sorted { $0.position < $1.position }
+        _ systemElements: [(eid: EID, element: PositionedSystemElement)],
+    ) -> [(eid: EID, element: PositionedSystemElement)] {
+        systemElements.sorted { $0.element.position < $1.element.position }
     }
 
     /// Emit any sorted system elements whose position equals the
@@ -21,15 +21,15 @@ extension Voice {
     /// document position — no `<location>` shift is needed when the
     /// cursor is already there.
     static func emitSystemElementsAtCursor(
-        _ sorted: [PositionedSystemElement],
+        _ sorted: [(eid: EID, element: PositionedSystemElement)],
         from start: Int,
         cursor: Fraction,
         into children: inout [XMLTreeNode],
         options: MSCXEncoderOptions = .init(),
     ) -> Int {
         var i = start
-        while i < sorted.count, sorted[i].position.offset == cursor {
-            children.append(Self.encodeSystem(sorted[i].element, options: options))
+        while i < sorted.count, sorted[i].element.position.offset == cursor {
+            children.append(Self.encodeSystem(sorted[i].element.element, eid: sorted[i].eid, options: options))
             i += 1
         }
         return i
@@ -42,7 +42,7 @@ extension Voice {
     /// to each target. No compensating back-shift is needed — no
     /// voice content follows.
     static func flushRemainingSystemElements(
-        _ sorted: [PositionedSystemElement],
+        _ sorted: [(eid: EID, element: PositionedSystemElement)],
         from start: Int,
         cursor: inout Fraction,
         into children: inout [XMLTreeNode],
@@ -50,12 +50,12 @@ extension Voice {
     ) -> Int {
         var i = start
         while i < sorted.count {
-            let target = sorted[i].position.offset
+            let target = sorted[i].element.position.offset
             let delta = target - cursor
             if delta.numerator != 0 {
                 children.append(locationNode(delta))
             }
-            children.append(Self.encodeSystem(sorted[i].element, options: options))
+            children.append(Self.encodeSystem(sorted[i].element.element, eid: sorted[i].eid, options: options))
             cursor = target
             i += 1
         }

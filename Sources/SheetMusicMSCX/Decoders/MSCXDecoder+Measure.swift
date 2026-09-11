@@ -62,6 +62,9 @@ extension Measure {
     struct DecodeResult {
         let measure: Measure
         let systemElements: [PositionedSystemElement]
+        /// Positionally aligned with `systemElements` — see
+        /// `Voice.DecodeResult.systemElementEIDs`.
+        let systemElementEIDs: [EID]
         let eid: EID
     }
 
@@ -116,6 +119,7 @@ extension Measure {
         }
         let voices = voiceResults.map(\.voice)
         let systemElements = voiceResults.flatMap(\.systemElements)
+        let systemElementEIDs = voiceResults.flatMap(\.systemElementEIDs)
         let markers = node.all("Marker").map(decodeMarker)
         let jumps = node.all("Jump").map(decodeJump)
         // `<LayoutBreak>` declares an explicit system / page / section
@@ -161,6 +165,7 @@ extension Measure {
         )
         return DecodeResult(
             measure: measure, systemElements: systemElements,
+            systemElementEIDs: systemElementEIDs,
             eid: EIDXML.decode(from: node),
         )
     }

@@ -105,7 +105,7 @@ extension Voice {
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
-        systemElements: [PositionedSystemElement] = [],
+        systemElements: [(eid: EID, element: PositionedSystemElement)] = [],
         effectiveDuration: Fraction = Fraction(numerator: 4, denominator: 4),
         nextMeasureFirstChordNotes: ChordNotes? = nil,
     ) throws -> (node: XMLTreeNode, carryOut: VoiceTieCarry) {
@@ -301,14 +301,15 @@ extension Voice {
     /// element cases — the actual per-type encoders are unchanged.
     static func encodeSystem(
         _ element: SystemElement,
+        eid: EID,
         options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
         switch element {
-        case let .tempo(tempo): return tempo.encode()
-        case let .rehearsalMark(rehearsalMark): return rehearsalMark.encode(options: options)
-        case let .staffText(staffText): return staffText.encode(options: options)
-        case let .swing(swing): return swing.encode(options: options)
-        case let .instrumentChange(change): return change.encode(options: options)
+        case let .tempo(tempo): return tempo.encode(eid: eid, options: options)
+        case let .rehearsalMark(rehearsalMark): return rehearsalMark.encode(eid: eid, options: options)
+        case let .staffText(staffText): return staffText.encode(eid: eid, options: options)
+        case let .swing(swing): return swing.encode(eid: eid, options: options)
+        case let .instrumentChange(change): return change.encode(eid: eid, options: options)
         }
     }
 

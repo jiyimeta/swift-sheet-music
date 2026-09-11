@@ -24,6 +24,14 @@ extension Voice {
         var tuplets: [Tuplet] {
             voice.tuplets.values
         }
+
+        /// Positionally aligned with `systemElements`: each lifted
+        /// element's own `<eid>`, decoded alongside it. A separate
+        /// parallel array rather than folding into `systemElements`
+        /// itself — matching `MSCXTopLevelStaff.measureEIDs`'s shape —
+        /// so every existing consumer of `systemElements` (tests
+        /// included) keeps compiling unchanged.
+        let systemElementEIDs: [EID]
     }
 
     /// Convenience that drops the lifted system elements, returning
@@ -38,6 +46,7 @@ extension Voice {
     private struct OpenTuplet {
         let ratio: Fraction
         let firstElementIndex: Int
+        let eid: EID
     }
 
     // swiftlint:disable:next function_body_length cyclomatic_complexity
@@ -47,8 +56,9 @@ extension Voice {
         let voiceChildren = injectMS2EndTuplets(node.children)
         var elements: [(EID, VoiceElement)] = []
         elements.reserveCapacity(voiceChildren.count)
-        var tuplets: [Tuplet] = []
+        var tuplets: [(EID, Tuplet)] = []
         var systemElements: [PositionedSystemElement] = []
+        var systemElementEIDs: [EID] = []
         // Stack of open tuplet ratios (normal/actual). Each <Tuplet>
         // pushes, each <endTuplet/> pops. Chord/Rest durations are
         // scaled by the product of every ratio on the stack — mirrors
@@ -112,12 +122,13 @@ extension Voice {
             }
             elements.append((eid, element))
         }
-        func lifted(_ element: SystemElement) {
+        func lifted(_ element: SystemElement, eid: EID) {
             let position = MeasurePosition(offset: cursor)
             systemElements.append(PositionedSystemElement(
                 position: position,
                 element: element,
             ))
+            systemElementEIDs.append(eid)
             // `pendingShift` deliberately survives: a lifted element
             // records where it sits but does not *consume* the jog
             // that got there. The voice cursor stays moved for the
@@ -252,18 +263,19 @@ extension Voice {
                     tupletStack.append(OpenTuplet(
                         ratio: ratio,
                         firstElementIndex: elements.count,
+                        eid: EIDXML.decode(from: child),
                     ))
                 }
             case "endTuplet":
                 if let top = tupletStack.popLast() {
                     let endIndex = elements.count - 1
                     if endIndex >= top.firstElementIndex {
-                        tuplets.append(Tuplet(
+                        tuplets.append((top.eid, Tuplet(
                             normalNotes: top.ratio.numerator,
                             actualNotes: top.ratio.denominator,
                             startIndex: top.firstElementIndex,
                             endIndex: endIndex,
-                        ))
+                        )))
                     }
                 }
             case "KeySig":
@@ -283,7 +295,7 @@ extension Voice {
                     .barLine(BarLine.decode(child)), eid: EIDXML.decode(from: child),
                 )
             case "Tempo":
-                try lifted(.tempo(Tempo.decode(child)))
+                try lifted(.tempo(Tempo.decode(child)), eid: EIDXML.decode(from: child))
             case "Dynamic":
                 try appendVoiceElement(
                     .dynamic(Dynamic.decode(child)), eid: EIDXML.decode(from: child),
@@ -314,23 +326,27 @@ extension Voice {
                 )
             case "StaffText":
                 if Swing.isSwingMarker(child) {
-                    lifted(.swing(
-                        Swing.decode(child, isSystemText: false),
-                    ))
+                    lifted(
+                        .swing(Swing.decode(child, isSystemText: false)),
+                        eid: EIDXML.decode(from: child),
+                    )
                 } else {
-                    try lifted(.staffText(
-                        StaffText.decode(child, isSystemText: false),
-                    ))
+                    try lifted(
+                        .staffText(StaffText.decode(child, isSystemText: false)),
+                        eid: EIDXML.decode(from: child),
+                    )
                 }
             case "SystemText":
                 if Swing.isSwingMarker(child) {
-                    lifted(.swing(
-                        Swing.decode(child, isSystemText: true),
-                    ))
+                    lifted(
+                        .swing(Swing.decode(child, isSystemText: true)),
+                        eid: EIDXML.decode(from: child),
+                    )
                 } else {
-                    try lifted(.staffText(
-                        StaffText.decode(child, isSystemText: true),
-                    ))
+                    try lifted(
+                        .staffText(StaffText.decode(child, isSystemText: true)),
+                        eid: EIDXML.decode(from: child),
+                    )
                 }
             case "Harmony":
                 try appendVoiceElement(
@@ -370,13 +386,15 @@ extension Voice {
                     .fretDiagram(FretDiagram.decode(child)), eid: EIDXML.decode(from: child),
                 )
             case "RehearsalMark":
-                try lifted(.rehearsalMark(
-                    RehearsalMark.decode(child),
-                ))
+                try lifted(
+                    .rehearsalMark(RehearsalMark.decode(child)),
+                    eid: EIDXML.decode(from: child),
+                )
             case "InstrumentChange":
-                try lifted(.instrumentChange(
-                    InstrumentChange.decode(child),
-                ))
+                try lifted(
+                    .instrumentChange(InstrumentChange.decode(child)),
+                    eid: EIDXML.decode(from: child),
+                )
             case "location":
                 // Voice-level cursor shift. MuseScore uses
                 // `<location><fractions>N/D</fractions></location>`
@@ -425,8 +443,9 @@ extension Voice {
         // semantic effect and is discarded.
         try resolveTremoloPairs(in: &elements)
         return DecodeResult(
-            voice: Voice(elements: IdentifiedArray(elements), tuplets: tuplets),
+            voice: Voice(elements: IdentifiedArray(elements), tuplets: IdentifiedArray(tuplets)),
             systemElements: systemElements,
+            systemElementEIDs: systemElementEIDs,
         )
     }
 

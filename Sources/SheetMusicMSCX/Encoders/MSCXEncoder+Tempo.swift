@@ -12,7 +12,7 @@ extension Tempo {
     /// dots, nothing else) and MuseScore 4 shows a `TempoText` only through its text — a `<Tempo>` with `<tempo>`
     /// alone opens as an empty, invisible marking. `followText` is what lets `Tempo.decode` read the beat back
     /// out of the printed number, which is what makes encode → decode → encode a fixed point.
-    func encode() -> XMLTreeNode {
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = [
             XMLTreeNode(name: "tempo", text: formatDouble(beatsPerSecond)),
         ]
@@ -20,6 +20,14 @@ extension Tempo {
         if marking != nil {
             children.append(XMLTreeNode(name: "followText", text: "1"))
         }
+        // `<eid>` sits here: `TWrite::write(const TempoText*, ...)`
+        // (`rw/write/twrite.cpp:3163-3181`) writes `PLAY`/`<tempo>`/
+        // `<followText>`/`<type>` (this model has no `PLAY` or
+        // `<type>` field) before calling `writeProperties(TextBase*,
+        // ..., true)`, whose own first act is `writeItemProperties` —
+        // the `<eid>` writer — ahead of everything
+        // `elementProperties.mscxChildren()` and `<text>` below.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
         children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
         if let marking {

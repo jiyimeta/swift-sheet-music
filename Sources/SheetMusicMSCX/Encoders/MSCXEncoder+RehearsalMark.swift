@@ -9,14 +9,21 @@ extension RehearsalMark {
     /// `frame` is folded back into `<frameType>` (decoder strips it
     /// out of `properties` and surfaces it as the dedicated
     /// `frame` field).
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        var children: [XMLTreeNode] = [
+    func encode(eid: EID, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        // `<eid>` is the true first child: `TWrite::write(const
+        // RehearsalMark*, ...)` (`rw/write/twrite.cpp:2633-2640`) calls
+        // `writeProperties(toTextBase(item), ..., true)` immediately —
+        // no kind-specific leading fields — and that call's own first
+        // act is `writeItemProperties`, ahead of `<text>` itself.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        children.append(
             encodeText(
                 text,
                 preservedTextMarkup: preservedTextMarkup,
                 options: options,
             ),
-        ]
+        )
         var props = properties
         // RehearsalMark defaults to a rectangle frame (MuseScore's
         // `Sid::rehearsalMarkFrameType`). MuseScore Studio omits

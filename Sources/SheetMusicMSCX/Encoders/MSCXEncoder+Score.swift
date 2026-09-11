@@ -81,12 +81,14 @@ extension Score {
     /// inner array is the elements for that measure of this staff.
     private func perMeasureSystemElements(
         for address: StaffAddress,
-    ) -> [[PositionedSystemElement]] {
+    ) -> [[(eid: EID, element: PositionedSystemElement)]] {
         let canonical = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         return systemMeasures.map { systemMeasure in
-            systemMeasure.elements.filter { element in
+            systemMeasure.elements.indices.compactMap { index -> (eid: EID, element: PositionedSystemElement)? in
+                let element = systemMeasure.elements[index]
                 let original = element.originalStaff ?? canonical
-                return original == address
+                guard original == address else { return nil }
+                return (systemMeasure.elements.eid(at: index), element)
             }
         }
     }

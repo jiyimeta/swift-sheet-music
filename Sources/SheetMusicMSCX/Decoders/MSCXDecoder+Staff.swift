@@ -119,6 +119,11 @@ struct MSCXTopLevelStaff {
     /// voices during decoding. `originalStaff` is left nil here and
     /// gets stamped during part assembly.
     let systemElementsByMeasure: [[PositionedSystemElement]]
+    /// One entry per measure, one entry per element within it —
+    /// positionally aligned with `systemElementsByMeasure` — carrying
+    /// each lifted element's own `<eid>`. See
+    /// `Voice.DecodeResult.systemElementEIDs`.
+    let systemElementEIDsByMeasure: [[EID]]
     /// One entry per measure (positionally aligned with `measures`):
     /// that `<Measure>`'s own `<eid>`, decoded unconditionally.
     /// Only the score's first staff's entries are meaningful — see
@@ -141,17 +146,20 @@ extension MSCXTopLevelStaff {
             .filter { !Measure.isMultiMeasureRestContainer($0) }
         var measures: [Measure] = []
         var systemElementsByMeasure: [[PositionedSystemElement]] = []
+        var systemElementEIDsByMeasure: [[EID]] = []
         var measureEIDs: [EID] = []
         for measureNode in measureNodes {
             let result = try Measure.decodeWithSystemElements(measureNode)
             measures.append(result.measure)
             systemElementsByMeasure.append(result.systemElements)
+            systemElementEIDsByMeasure.append(result.systemElementEIDs)
             measureEIDs.append(result.eid)
         }
         return MSCXTopLevelStaff(
             mscxID: id,
             measures: measures,
             systemElementsByMeasure: systemElementsByMeasure,
+            systemElementEIDsByMeasure: systemElementEIDsByMeasure,
             measureEIDs: measureEIDs,
         )
     }
@@ -206,7 +214,13 @@ func assembleParts( // swiftlint:disable:this function_body_length
     // Per-staff per-measure system elements, paired with the
     // resolved StaffAddress, so we can merge across staves into
     // score.systemMeasures after part assembly is complete.
-    var perStaffSystemElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])] = []
+    // `perMeasureEIDs` is positionally aligned with `perMeasure` at
+    // both levels (measure, then element within it).
+    var perStaffSystemElements: [(
+        address: StaffAddress,
+        perMeasure: [[PositionedSystemElement]],
+        perMeasureEIDs: [[EID]],
+    )] = []
 
     // The "column" identifier — the score's first staff's <Measure><eid>
     // (measurewrite.cpp:58, guarded by staffwrite.cpp:66). Lifted out of
@@ -267,7 +281,7 @@ func assembleParts( // swiftlint:disable:this function_body_length
                 columnEIDs = topLevelStaff.measureEIDs
             }
             perStaffSystemElements.append(
-                (address, topLevelStaff.systemElementsByMeasure),
+                (address, topLevelStaff.systemElementsByMeasure, topLevelStaff.systemElementEIDsByMeasure),
             )
         }
         parts.append(Part(
@@ -295,16 +309,27 @@ func assembleParts( // swiftlint:disable:this function_body_length
     let measureCount = perStaffSystemElements
         .map(\.perMeasure.count)
         .max() ?? 0
+    // `laneEIDs` stays positionally aligned with `laneElements` at
+    // every step below (append together, sort together) so the pair
+    // can be zipped into the final `IdentifiedArray` without ever
+    // separating an element from its own identifier.
     var laneElements = Array(
         repeating: [PositionedSystemElement](),
         count: measureCount,
     )
+    var laneEIDs = Array(repeating: [EID](), count: measureCount)
     for entry in perStaffSystemElements {
         for (measureIndex, elements) in entry.perMeasure.enumerated() {
             guard measureIndex < laneElements.count else { continue }
-            for var element in elements {
+            let eids = measureIndex < entry.perMeasureEIDs.count
+                ? entry.perMeasureEIDs[measureIndex]
+                : []
+            for (elementIndex, var element) in elements.enumerated() {
                 element.originalStaff = entry.address
                 laneElements[measureIndex].append(element)
+                laneEIDs[measureIndex].append(
+                    elementIndex < eids.count ? eids[elementIndex] : .invalid,
+                )
             }
         }
     }
@@ -312,11 +337,13 @@ func assembleParts( // swiftlint:disable:this function_body_length
     // downstream consumers can walk them in time order without
     // needing to re-sort. Elements from different staves at the
     // same position keep their relative insertion order
-    // (top-down staff iteration above).
+    // (top-down staff iteration above). Sorted as identifier/element
+    // pairs so an element's own `<eid>` travels with it.
     for index in laneElements.indices {
-        laneElements[index].sort {
-            $0.position < $1.position
-        }
+        let paired = zip(laneEIDs[index], laneElements[index])
+            .sorted { $0.1.position < $1.1.position }
+        laneEIDs[index] = paired.map(\.0)
+        laneElements[index] = paired.map(\.1)
     }
     let resolvedSystemMeasureEIDs = (0 ..< measureCount).map {
         $0 < columnEIDs.count ? columnEIDs[$0] : .invalid
@@ -324,7 +351,9 @@ func assembleParts( // swiftlint:disable:this function_body_length
     return MSCXAssembledParts(
         parts: parts,
         partEIDs: partEIDs,
-        systemMeasures: laneElements.map { SystemMeasure(elements: $0) },
+        systemMeasures: (0 ..< measureCount).map { index in
+            SystemMeasure(elements: IdentifiedArray(Array(zip(laneEIDs[index], laneElements[index]))))
+        },
         systemMeasureEIDs: resolvedSystemMeasureEIDs,
     )
 }

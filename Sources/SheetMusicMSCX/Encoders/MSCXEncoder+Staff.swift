@@ -85,7 +85,7 @@ extension Staff {
     func encodeTopLevel(
         staffID: String,
         blocks: [PositionedScoreBlock] = [],
-        systemElementsByMeasure: [[PositionedSystemElement]] = [],
+        systemElementsByMeasure: [[(eid: EID, element: PositionedSystemElement)]] = [],
         effectiveMeasureDurations: [Fraction] = [],
         columnEIDs: [EID],
         options: MSCXEncoderOptions = .init(),
@@ -102,7 +102,7 @@ extension Staff {
             children.append(contentsOf: blocks.lazy
                 .filter { $0.beforeMeasureIndex == measureIndex }
                 .map { $0.block.encode(options: options) })
-            let injection: [PositionedSystemElement] =
+            let injection: [(eid: EID, element: PositionedSystemElement)] =
                 measureIndex < systemElementsByMeasure.count
                     ? systemElementsByMeasure[measureIndex]
                     : []

@@ -11,11 +11,17 @@ extension TupletSpan {
     /// resulting `Fraction(0, 0)` triggers a divide-by-zero in
     /// subsequent tick math (`Ms::Measure::readVoice` SIGFPE crash on
     /// file open). MuseScore 4 already tolerates the field.
-    func encode(baseDuration: NoteDuration? = nil) -> XMLTreeNode {
-        var children: [XMLTreeNode] = [
-            XMLTreeNode(name: "normalNotes", text: String(normalNotes)),
-            XMLTreeNode(name: "actualNotes", text: String(actualNotes)),
-        ]
+    func encode(eid: EID, baseDuration: NoteDuration? = nil, options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        // `<eid>` is the true first child: `TWrite::write(const
+        // Tuplet*, ...)` (`rw/write/twrite.cpp:3321-3324`) calls
+        // `writeItemProperties` before writing `<normalNotes>` /
+        // `<actualNotes>` / `<baseNote>` — the opposite of every other
+        // text-bearing carrier in this task, but the same shape as
+        // KeySig/Sticking/Expression from Task 4a.
+        EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        children.append(XMLTreeNode(name: "normalNotes", text: String(normalNotes)))
+        children.append(XMLTreeNode(name: "actualNotes", text: String(actualNotes)))
         if let baseDuration {
             let baseName = baseDuration.mscxName ?? baseDuration.decomposed()?.name
             if let baseName {

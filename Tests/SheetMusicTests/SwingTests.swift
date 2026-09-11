@@ -100,7 +100,7 @@ struct MSCXSwingTests {
     @Test("16th swing unit serializes with the MuseScore '16th' token")
     func sixteenthSwingUnitToken() throws {
         let swing = Swing(unit: .sixteenth, ratio: 75)
-        let xml = swing.encode()
+        let xml = swing.encode(eid: .invalid)
         let swingChild = try #require(xml.first("swing"))
         #expect(swingChild.attributes["unit"] == "16th")
         #expect(swingChild.attributes["ratio"] == "75")

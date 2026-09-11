@@ -10,7 +10,7 @@ import Testing
 @Suite("Tempo <text> encode")
 struct TempoTextEncodeTests {
     private static func text(of tempo: Tempo) -> XMLTreeNode? {
-        tempo.encode().first("text")
+        tempo.encode(eid: .invalid).first("text")
     }
 
     private static func syms(_ node: XMLTreeNode?) -> [String] {
@@ -19,7 +19,7 @@ struct TempoTextEncodeTests {
 
     @Test("a plain quarter at 2 bps prints ♩ = 120 with followText on")
     func quarter() {
-        let node = Tempo(beatsPerSecond: 2).encode()
+        let node = Tempo(beatsPerSecond: 2).encode(eid: .invalid)
         #expect(node.first("followText")?.text == "1")
         #expect(node.children.last?.name == "text")
         #expect(Self.syms(node.first("text")) == ["metNoteQuarterUp"])
@@ -53,7 +53,7 @@ struct TempoTextEncodeTests {
         #expect(sixtyFourth?.first("b")?.text == " = 120")
         let threeDots = Self.text(of: Tempo(beatsPerSecond: 2, beatNote: .quarter, beatDots: 3))
         #expect(Self.syms(threeDots) == ["metNoteQuarterUp"])
-        let silent = Tempo(beatsPerSecond: 0).encode()
+        let silent = Tempo(beatsPerSecond: 0).encode(eid: .invalid)
         #expect(silent.all("text").isEmpty)
         #expect(silent.all("followText").isEmpty)
     }

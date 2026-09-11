@@ -98,7 +98,7 @@ struct MSCXTextMarkupTests {
         var tempo = try Tempo.decode(node)
         tempo.beatsPerSecond = 2
 
-        let encoded = XMLTreeSerializer.serialize(tempo.encode())
+        let encoded = XMLTreeSerializer.serialize(tempo.encode(eid: .invalid))
         let xml = try #require(String(bytes: encoded, encoding: .utf8))
 
         #expect(xml.contains("<sym>metNoteQuarterUp</sym>"))

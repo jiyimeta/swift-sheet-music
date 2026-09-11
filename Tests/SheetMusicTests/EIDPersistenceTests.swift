@@ -117,6 +117,50 @@ struct EIDPersistenceTests {
         #expect(decoded.elements.eid(at: 0) == eid)
     }
 
+    @Test("a system-lane element (a rehearsal mark) keeps the identifier the file gave it")
+    func rehearsalMarkIdentifierSurvivesAnEncodeDecode() throws {
+        let eid = EID(first: 11, second: 13)
+        let mark = RehearsalMark(text: "A")
+        let score = Score(
+            division: 480,
+            parts: [Part(
+                id: "1",
+                instrument: Instrument(id: "voice"),
+                staves: [Staff(measures: [Measure(voices: [Voice(elements: [])])])],
+            )],
+            systemMeasures: [SystemMeasure(elements: IdentifiedArray([
+                (eid, PositionedSystemElement(position: .start, element: .rehearsalMark(mark))),
+            ]))],
+        )
+        let bytes = try MSCXEncoder.encode(score)
+        let xml = try #require(String(bytes: bytes, encoding: .utf8))
+        #expect(xml.contains("<eid>"))
+
+        let decoded = try MSCXParser.parse(bytes)
+        #expect(decoded.systemMeasures.first?.elements.eid(at: 0) == eid)
+        guard case let .rehearsalMark(reparsed) = decoded.systemMeasures.first?.elements.first?.element
+        else {
+            Issue.record("expected a decoded .rehearsalMark")
+            return
+        }
+        #expect(reparsed.text == "A")
+    }
+
+    @Test("a tuplet keeps the identifier the file gave it")
+    func tupletIdentifierSurvivesAnEncodeDecode() throws {
+        // The repo's only <Tuplet> fixture; own/grace-notes.mscx:70-73
+        // carries <eid>Z_Z</eid> as the Tuplet's own first child — no
+        // other committed fixture has a Tuplet/eid pair at all.
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("grace-notes"))
+        let voice = score.parts[0].staves[0].measures[1].voices[0]
+        let tupletEID = voice.tuplets.eid(at: 0)
+        #expect(tupletEID == EID(string: "Z_Z"))
+
+        let reparsed = try MSCXParser.parse(MSCXEncoder.encode(score))
+        let reparsedVoice = reparsed.parts[0].staves[0].measures[1].voices[0]
+        #expect(reparsedVoice.tuplets.eid(at: 0) == tupletEID)
+    }
+
     @Test("a preserved element round-trips with exactly one identifier")
     func preservedElementCarriesExactlyOneEID() throws {
         let unmodeled = XMLTreeNode(

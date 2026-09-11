@@ -30,10 +30,12 @@ public struct Voice: Sendable, Equatable {
     }
 
     public var tupletSpans: [TupletSpan] {
-        tuplets.map {
-            TupletSpan(
-                normalNotes: $0.normalNotes, actualNotes: $0.actualNotes,
-                startIndex: $0.first.index(in: elements), endIndex: $0.last.index(in: elements),
+        tuplets.indices.map { index in
+            let tuplet = tuplets[index]
+            return TupletSpan(
+                normalNotes: tuplet.normalNotes, actualNotes: tuplet.actualNotes,
+                startIndex: tuplet.first.index(in: elements), endIndex: tuplet.last.index(in: elements),
+                eid: tuplets.eid(at: index),
             )
         }
     }

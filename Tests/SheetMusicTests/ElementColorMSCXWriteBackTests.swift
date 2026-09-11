@@ -111,17 +111,17 @@ struct ElementColorMSCXWriteBackTests {
     }
 
     @Test func baglessTypesEmitExactlyOneColor() {
-        let staffText = StaffText(text: "text", color: expectedColor).encode()
+        let staffText = StaffText(text: "text", color: expectedColor).encode(eid: .invalid)
 
         var tempo = Tempo(beatsPerSecond: 2)
         tempo.elementProperties.color = expectedColor
 
         let nodes = [
             staffText,
-            tempo.encode(),
-            Swing(color: expectedColor).encode(),
-            InstrumentChange(text: "change", color: expectedColor).encode(),
-            RehearsalMark(text: "A", color: expectedColor).encode(),
+            tempo.encode(eid: .invalid),
+            Swing(color: expectedColor).encode(eid: .invalid),
+            InstrumentChange(text: "change", color: expectedColor).encode(eid: .invalid),
+            RehearsalMark(text: "A", color: expectedColor).encode(eid: .invalid),
         ]
         let colorCounts = nodes.map { $0.all("color").count }
         #expect(colorCounts == [1, 1, 1, 1, 1])

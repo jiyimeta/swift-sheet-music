@@ -38,7 +38,7 @@ extension Measure {
         isFirstMeasureOfStaff: Bool = false,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
-        voice0SystemElements: [PositionedSystemElement] = [],
+        voice0SystemElements: [(eid: EID, element: PositionedSystemElement)] = [],
         effectiveDuration: Fraction = Fraction(numerator: 4, denominator: 4),
         nextMeasureFirstChordNotes: [ChordNotes?] = [],
     ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
@@ -64,7 +64,7 @@ extension Measure {
             let carryIn = index < carryInVoiceTieCarries.count
                 ? carryInVoiceTieCarries[index]
                 : Voice.VoiceTieCarry()
-            let injection: [PositionedSystemElement] =
+            let injection: [(eid: EID, element: PositionedSystemElement)] =
                 index == 0 ? voice0SystemElements : []
             let result = try voice.encode(
                 carryIn: carryIn,
