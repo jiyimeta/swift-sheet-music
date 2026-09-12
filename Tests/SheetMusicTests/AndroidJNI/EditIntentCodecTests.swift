@@ -241,6 +241,8 @@ struct EditIntentCodecTests {
             .setAccidentalsInRange(over: range, accidental: nil),
             .setDurationInRange(over: range, duration: .fraction(Fraction(numerator: 3, denominator: 8))),
             .respellRange(over: range, mode: .preferFlats),
+            // Appended for the duplicate-range project (spec 2026-09-13) — index 85.
+            .duplicateRange(over: range),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)

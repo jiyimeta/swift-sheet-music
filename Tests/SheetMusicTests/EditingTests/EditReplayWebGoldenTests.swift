@@ -251,7 +251,7 @@
                  .createVoice, .splitRest, .setNoteHead, .setDrumsetEntry,
                  .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice,
                  .transposeRange, .addIntervalToSelection, .deleteRange, .setAccidentalsInRange,
-                 .setDurationInRange, .respellRange,
+                 .setDurationInRange, .respellRange, .duplicateRange,
                  .setClef, .removeClef, .setTempo, .setStaffText, .setDynamic, .setFermata, .setBreath,
                  .setJumps, .setMarkers,
                  .setArticulation, .setGraceNotes, .setTremolo, .setArpeggio, .setGlissando, .setDots,

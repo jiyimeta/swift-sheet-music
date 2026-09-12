@@ -468,4 +468,12 @@ public enum EditIntent: Sendable, Equatable {
     /// Plural for `setLyricSyllables`' reason: a credits form saves every field at once and one Save has to be one
     /// undo step. See `ScoreInfoWrite` for why one field reaches two places.
     case setScoreInfo(writes: [ScoreInfoWrite])
+
+    // Appended for the duplicate-range project (spec 2026-09-13) — index 85.
+
+    /// Write a copy of `range` immediately after itself — MuseScore's `R`, Repeat selection. The destination is
+    /// implied: it starts where the range ends, runs for the range's own length, and lands in the same staves and
+    /// voice indices. Bars are appended when the copy runs past the end of the score. Chords and rests travel;
+    /// the range's own clefs and signatures do not.
+    case duplicateRange(over: VoiceElementRange)
 }

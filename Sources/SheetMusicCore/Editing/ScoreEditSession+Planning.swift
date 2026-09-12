@@ -131,7 +131,7 @@ extension ScoreEditSession {
         case .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice:
             return structuralParityCommand(for: intent, in: score)
         case .transposeRange, .addIntervalToSelection, .deleteRange, .setAccidentalsInRange, .setDurationInRange,
-             .respellRange:
+             .respellRange, .duplicateRange:
             return rangeCommand(for: intent, in: score, ids: ids)
         case .setClef, .removeClef, .setTempo, .setStaffText, .setDynamic, .setFermata, .setBreath, .setJumps,
              .setMarkers, .setChordSymbol, .setLyricSyllables:

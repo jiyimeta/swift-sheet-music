@@ -29,6 +29,9 @@ extension ScoreEditSession {
         case let .respellRange(range, mode):
             let command = RespellRange(over: range, mode: mode)
             return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
+        case let .duplicateRange(range):
+            let command = DuplicateRange(over: range)
+            return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;
             // the `default` exists because that narrowing is a `case` list, not a type.
