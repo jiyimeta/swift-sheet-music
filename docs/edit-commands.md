@@ -68,7 +68,7 @@ own substantive logic.
 | `ReplaceVoiceElements` | primitive | primitive |
 | `PasteVoiceElement` | ⌘V (single element, rebalanced within the measure) | — |
 | `PasteVoiceElements` | ⌘V (range, multi-element, tuplet-aware, within one measure) | — |
-| `DuplicateRange` | `R` (repeat selection: copies the range to just after itself) | — |
+| `DuplicateRange` | `R` (repeat selection: copies the range to just after itself; appends bars when the copy runs past the end of the score, and leaves the destination's own clefs and signatures where they stand) | — |
 | `InsertMeasure` | menu command (structural) | — |
 | `DeleteMeasure` | menu command (structural) | — |
 | `CreateTuplet` | ⌘+digit on a non-tuplet element | — |

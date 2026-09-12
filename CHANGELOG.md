@@ -12,7 +12,9 @@ and this project adheres to
 - **`EditIntent.duplicateRange(over:)` (wire 85) and `DuplicateRange`: MuseScore's `R`, repeating a range
   selection immediately after itself across measures, staves and voices.** Tuplets are carried; bars are
   appended when the copy runs past the end of the score; the destination's own clefs, signatures and other
-  non-timed elements are kept.
+  non-timed elements are kept. A range covering staves that are barred differently over the copied span —
+  a pickup bar written on one staff and not on another — refuses with `insufficientRoom`, because the copy's
+  offset is one subtraction for every staff and two barrings cannot both be right.
 
 ## [3.1.0] - 2026-09-12
 

@@ -47,6 +47,35 @@ struct DuplicateRangeIntentTests {
         #expect(session.score.stableFingerprint == before)
     }
 
+    /// A bar's accidentals are in force only until its barline, so a copy that moves a sharp into a new bar
+    /// changes what every later note in that bar reads as. The session bundles the repair into the same step.
+    private static func sharpBeforeANaturalInTheNextBar() -> Score {
+        var score = EditingFixtures.parityFixture()
+        // Beat 4 of bar 0 becomes F♯4, carrying the ♯ glyph its own bar already owes it — without that the
+        // pass below would report bar 0's missing glyph and say nothing about the copy. Beat 2 of bar 1 is an
+        // F natural that needs no glyph while it stands alone in its bar.
+        score[Self.slot(0, 4)] = .chord(Chord(
+            duration: .quarter, notes: [Note(pitch: 66, tpc: 20, accidental: .sharp)],
+        ))
+        score[Self.slot(1, 1)] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 65, tpc: 13)]))
+        return score
+    }
+
+    @Test("a copied bar leaves the following notes' accidentals correctly renotated")
+    func renotatesAfterTheCopy() throws {
+        // Copying beat 4 puts the F♯ on beat 1 of bar 1, in front of that bar's F natural.
+        let range = VoiceElementRange(start: Self.slot(0, 4), end: Self.slot(0, 4))
+        // The raw command writes the copy and nothing else, so the F natural is left reading sharp — which is
+        // what makes the session's result below evidence of a repair rather than of nothing to repair.
+        var raw = Self.sharpBeforeANaturalInTheNextBar()
+        _ = try DuplicateRange(over: range).apply(to: &raw)
+        #expect(MeasureAccidentals.renotationCommands(in: raw, measureRange: 1 ..< 2).count == 1)
+
+        let session = ScoreEditSession(score: Self.sharpBeforeANaturalInTheNextBar())
+        #expect(session.apply(.duplicateRange(over: range)))
+        #expect(MeasureAccidentals.renotationCommands(in: session.score, measureRange: 0 ..< 2).isEmpty)
+    }
+
     @Test("the command and the intent produce the same score")
     func agreesWithCommand() throws {
         var direct = EditingFixtures.parityFixture()

@@ -181,9 +181,16 @@ extension RangeCopyVoiceRebuild {
         }
         for carried in piece.tuplets {
             let indices = rebuilt.pieceSlotIndices
+            // Unreachable: `rebuild` appends one entry to `pieceSlotIndices` per element of `piece.elements`,
+            // and `RangeCopyPlacement` builds `carried.range` from indices into that same array. Stated as a
+            // guard rather than a subscript so a future change that lets the two lists diverge drops a bracket
+            // instead of trapping.
             guard indices.indices.contains(carried.range.lowerBound),
                   indices.indices.contains(carried.range.upperBound)
-            else { continue }
+            else {
+                assertionFailure("a carried tuplet named a piece element the rebuild did not place")
+                continue
+            }
             let start = indices[carried.range.lowerBound]
             ordered.append((order: start, slot: TupletSlot(identity: .fresh, tuplet: Tuplet(
                 normalNotes: carried.normalNotes, actualNotes: carried.actualNotes,

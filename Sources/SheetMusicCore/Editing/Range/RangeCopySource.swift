@@ -61,8 +61,9 @@ struct RangeCopySource {
         let anchor = RangeCopyGeometry(staff: firstStaff, in: score)
         let low = min(startOnset, endOnset)
         let high = max(startEnd, endEnd)
-        startTick = anchor.absolute(low)
-        lengthTicks = anchor.absolute(high) - startTick
+        guard let start = anchor.absolute(low), let end = anchor.absolute(high) else { return nil }
+        startTick = start
+        lengthTicks = end - start
 
         streams = Self.makeStreams(from: targets, in: score)
         guard !streams.isEmpty else { return nil }
@@ -101,8 +102,8 @@ extension RangeCopySource {
         var elements: [(absoluteTick: Int, lengthTicks: Int, element: VoiceElement)] = []
         var infoByLocation: [MeasureElementLocation: (tick: Int, length: Int)] = [:]
         for id in ids {
-            guard let onset = score.onset(of: id), var element = score[id],
-                  sourceDurations.indices.contains(id.measureIndex),
+            guard let onset = score.onset(of: id), let absolute = geometry.absolute(onset),
+                  var element = score[id], sourceDurations.indices.contains(id.measureIndex),
                   // `tickCount(division:in:)` resolves a `.measure` duration against its own bar's effective
                   // duration; `NoteDuration.ticks(division:)` traps on one, so a whole-bar rest must never reach
                   // it here.
@@ -114,7 +115,6 @@ extension RangeCopySource {
                 chord.spanners = []
                 element = .chord(chord)
             }
-            let absolute = geometry.absolute(onset)
             let location = MeasureElementLocation(measureIndex: id.measureIndex, elementIndex: id.elementIndex)
             infoByLocation[location] = (tick: absolute, length: length)
             elements.append((absoluteTick: absolute, lengthTicks: length, element: element))

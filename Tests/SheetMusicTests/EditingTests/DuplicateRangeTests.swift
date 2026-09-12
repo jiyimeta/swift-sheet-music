@@ -179,6 +179,24 @@ struct DuplicateRangeTests {
         #expect(score.parts[0].staves[0].measures[4].voices[0].elements == [.rest(duration: .measure)])
     }
 
+    @Test("an articulation hanging off a copied chord comes along")
+    func keepsArticulations() throws {
+        var score = EditingFixtures.parityFixture()
+        let staccato = ChordArticulation(kind: .staccato)
+        score[Self.slot(0, 1)] = .chord(Chord(
+            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)], articulations: [staccato],
+        ))
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 2)))
+            .apply(to: &score)
+        guard case let .chord(copied) = Self.voice(score, 0).elements[3] else {
+            Issue.record("element 3 should be the copy of the articulated chord")
+            return
+        }
+        // Name the pitch too: an empty articulation list on the WRONG element would also read as "kept".
+        #expect(copied.notes[0].pitch == 60)
+        #expect(copied.articulations == [staccato])
+    }
+
     @Test("a range that resolves to nothing is refused")
     func refusesUnresolvable() {
         var score = EditingFixtures.parityFixture()
