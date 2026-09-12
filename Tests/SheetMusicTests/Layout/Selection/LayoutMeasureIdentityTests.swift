@@ -105,7 +105,17 @@ struct LayoutMeasureIdentityTests {
         #expect(allMatch2)
     }
 
-    @Test("A system-head key restatement does not acquire a new measure identity")
+    /// **A system-head restatement names the bar that DECLARED the signature, never its own.**
+    ///
+    /// The distinction is the whole point. The restatement declares nothing, so giving it the identity of the
+    /// bar it is drawn in would invent a declaration that is not in the score — and an edit addressed there
+    /// would write one. Naming the bar it restates invents nothing: it is the same declaration, shown again,
+    /// and a click on the only signature visible on page two resolves to it. Here that is m0, whose two sharps
+    /// are still in force on the system that opens with m1.
+    ///
+    /// It answered `nil` until 2026-09-12, which kept the invention away at the cost of making the glyph
+    /// unclickable — the bug QA hit in page mode.
+    @Test("A system-head key restatement names the bar that declared it, not its own")
     func keyRestatement() {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         var score = Self.score([Self.chord(.whole)])
@@ -131,7 +141,7 @@ struct LayoutMeasureIdentityTests {
             if case .keySignature = $0 { true } else { false }
         }
         #expect(keys.count == 2)
-        let allMatch3 = keys.allSatisfy { $0.elementID == nil }
+        let allMatch3 = keys.allSatisfy { $0.elementID == .keySignature(measureIndex: 0) }
         #expect(allMatch3)
     }
 

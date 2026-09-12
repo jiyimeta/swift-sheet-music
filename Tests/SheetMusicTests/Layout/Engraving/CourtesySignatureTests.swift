@@ -479,7 +479,13 @@ import Testing
                 }
             }
             #expect(announcements.count == 2)
-            #expect(announcements.allSatisfy { $0.elementID == nil })
+            // **An announcement names the bar it announces.** It declares nothing itself — the declaration is
+            // in m2, on the next system — but it is the only place those glyphs appear before the break, so a
+            // reader clicking them means that declaration. They used to carry no identity at all, which made
+            // them unclickable while the thing they show sat a system away from the click.
+            #expect(announcements.allSatisfy { $0.elementID != nil })
+            #expect(announcements.contains { $0.elementID == .keySignature(measureIndex: 2) })
+            #expect(announcements.contains { $0.elementID == .timeSignature(measureIndex: 2) })
         }
 
         @Test("a time-only courtesy keeps a single end barline")

@@ -61,9 +61,12 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// Tuplet bracket / number area. Hit-target for clicking the
     /// "3" / "5" label or the bracket line that spans the tuplet.
     case tuplet(TupletID)
-    /// Selectable clef glyph. Only emitted for clefs whose
-    /// `LayoutElement.clef.anchor` is non-nil — continuation-system
-    /// header clef restatements are not hit-targets.
+    /// Selectable clef glyph. Only emitted for clefs whose `LayoutElement.clef.anchor` is non-nil.
+    ///
+    /// **A restatement names what it restates.** The clef a continuation system opens with declares nothing —
+    /// it redraws whatever is in force — but it is the only clef on that system's screen, so it carries the
+    /// anchor of the declaration it redraws and a click on it selects that. The sticky-header clef stays
+    /// unanchored: that is chrome drawn over the score rather than the score itself.
     case clef(ClefAnchor)
     /// An engraved lyric syllable. `anchor` is the chord that owns it, `verse` its lyric-array index — the
     /// two arguments `SetLyric` takes.

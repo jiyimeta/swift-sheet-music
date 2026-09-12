@@ -80,9 +80,19 @@ struct LayoutElementClefAnchorTests {
         }
     }
 
+    /// **A continuation system's clef names the declaration it restates**, rather than naming nothing.
+    ///
+    /// It used to answer `nil`, on the reasoning that a restatement declares nothing and so has nothing to
+    /// edit. True of the model and wrong about the page: on system four that glyph is the only clef on screen,
+    /// and a host that lets a reader click a clef has to be able to answer the click. `LayoutEngine
+    /// .declaringClefAnchor(before:staff:address:)` resolves it to whichever declaration is in force — an
+    /// earlier explicit clef, or the staff's own default when none precedes it.
+    ///
+    /// The sticky header above is deliberately NOT part of this: it is chrome drawn over the score rather than
+    /// the score itself, and nothing clicks it.
     @available(macOS 15.0, iOS 16.0, *)
-    @Test("continuation-system synthesized clef has nil anchor")
-    func continuationSystemSynthClefHasNilAnchor() throws {
+    @Test("a continuation system's clef names the declaration it restates")
+    func continuationSystemSynthClefNamesItsDeclaration() throws {
         // `harmony-basic` reliably wraps into ≥3 systems at small
         // widths; `multiPartMixedStaves` (used by the other tests
         // here) is short enough that it always fits in one system,
@@ -112,16 +122,21 @@ struct LayoutElementClefAnchorTests {
             )
             return
         }
+        var restatements = 0
         for system in doc.systems.dropFirst() {
             let firstMeasure = try #require(system.measures.first)
             for el in firstMeasure.elements {
                 if case let .clef(_, _, anchor) = el {
+                    restatements += 1
                     #expect(
-                        anchor == nil,
-                        "continuation-system clefs must not be selectable",
+                        anchor != nil,
+                        "a continuation-system clef must name the declaration it restates",
                     )
                 }
             }
         }
+        // The count, not just the absence of failures: an `#expect` inside a loop that never runs passes, and
+        // a fixture that stopped wrapping would report green while testing nothing.
+        #expect(restatements > 0)
     }
 }

@@ -57,7 +57,10 @@ public enum LayoutElement: Sendable, Equatable {
     /// on C while a non-zero key was in force — see
     /// `KeySignatureSteps.cancellationNaturals`. In that case `sharps`
     /// and `flats` are both 0 and the naturals are the only glyphs.
-    /// `measureIndex` names an editable declaration; unaddressable keys and restatements pass `nil`.
+    /// `measureIndex` names the bar whose declaration these glyphs show. An end-of-system COURTESY
+    /// announcement names the bar it announces — the one opening the next system — because the announcement is
+    /// that declaration seen early, and it is the only place those glyphs appear before the break. Keys with no
+    /// addressable declaration at all, and the sticky header's restatements, still pass `nil`.
     case keySignature(
         sharps: Int, flats: Int, clef: NotatedClef,
         naturals: [Int] = [], origin: CGPoint, measureIndex: Int?,
@@ -68,8 +71,9 @@ public enum LayoutElement: Sendable, Equatable {
     /// `denominator` ride along either way — the meter is what they say
     /// even when the page draws a C — so a renderer that has no glyph
     /// for a symbol can still fall back to the numbers.
-    /// `measureIndex` names the bar's meter, including declarations outside its leading run.
-    /// Courtesy announcements and context restatements deliberately pass `nil`.
+    /// `measureIndex` names the bar's meter, including declarations outside its leading run, and an
+    /// end-of-system courtesy announcement names the bar it announces — see `keySignature` above for why a
+    /// restatement carries the identity of what it restates. The sticky header's restatements pass `nil`.
     case timeSignature(
         numerator: Int, denominator: Int,
         symbol: TimeSignatureSymbol = .numeric, origin: CGPoint, measureIndex: Int?,

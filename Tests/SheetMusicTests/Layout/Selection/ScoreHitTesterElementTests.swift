@@ -33,16 +33,28 @@ struct ScoreHitTesterElementTests {
         try ElementHitCommandChecks.apply(#require(tester.itemID(at: point)?.elementID))
     }
 
-    @Test("Double barline strokes hit; the empty gap does not")
+    /// **Measured from the ink, then given the reach every engraved element gets.**
+    ///
+    /// The strokes are what is measured — the skyline's ±2 box misses both of them, which is why this test
+    /// exists — and `ScoreHitTester.elementHitTolerance` then extends each by half a staff space, because a
+    /// hairline is not a target a pointer can be placed on exactly (user report, 2026-09-12). The gap between
+    /// the two strokes is 4.5 pt wide and therefore inside that reach: a barline is one mark, and a click
+    /// between its two strokes means it.
+    ///
+    /// What the tolerance does NOT do is restore the skyline: a point well clear of both strokes still misses,
+    /// which is what keeps this measuring ink rather than a bounding box. The highlight rect is unchanged —
+    /// padding is a click affordance, not geometry.
+    @Test("Double barline strokes hit, and so does the gap between them; well clear of both does not")
     func doubleBarlineInk() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let tester = ScoreHitTester(document: ElementHitFixtures.document([ElementHitFixtures.bar("double")]))
         let target = ScoreHitTarget.barLine(measureIndex: 0, role: .explicit)
         // sp = 10, document origin = (30,40) + (20,10) + (80,80) = (130,130).
-        // Centers ±3, stroke width 1.5. The skyline's ±2 box misses both strokes.
+        // Centers ±3, stroke width 1.5, so the ink spans 126.25…127.75 and 132.25…133.75.
         #expect(tester.hitTest(at: CGPoint(x: 127, y: 130)) == target)
         #expect(tester.hitTest(at: CGPoint(x: 133, y: 130)) == target)
-        #expect(tester.hitTest(at: CGPoint(x: 130, y: 130)) == nil)
+        #expect(tester.hitTest(at: CGPoint(x: 130, y: 130)) == target)
+        #expect(tester.hitTest(at: CGPoint(x: 120, y: 130)) == nil)
         #expect(tester.itemID(at: CGPoint(x: 133, y: 130)) == .element(.barLine(measureIndex: 0, role: .explicit)))
         #expect(try #require(tester.elementHitRect(for: target)) == CGRect(
             x: 126.25, y: 110, width: 7.5, height: 40,

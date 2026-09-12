@@ -38,8 +38,8 @@ extension ScoreHitTester {
                 if contains { return ScoreHitTarget(elementID: id) }
                 continue
             }
-            let padding = navigationUsesText(element) ? document.metrics.sp * Self.textHitTolerance : 0
-            for rect in elementRects(element) where rect
+            let padding = document.metrics.sp * hitTolerance(for: element)
+            for rect in hitRects(element) where rect
                 .offsetBy(dx: base.x, dy: base.y)
                 .insetBy(dx: -padding, dy: -padding).contains(point)
             {
@@ -47,6 +47,44 @@ extension ScoreHitTester {
             }
         }
         return nil
+    }
+
+    /// What a click has to land in to mean `element` — which is NOT always the ink it is drawn with.
+    ///
+    /// **A signature is one thing, so it is one rectangle.** A four-sharp key signature draws four separate
+    /// glyphs on four different staff lines, and testing those separately left the gaps between them dead: the
+    /// run reads as one mark and is engraved as one column, but a click aimed at the middle of it fell straight
+    /// through. Their union is what the eye is aiming at. The same holds for a meter, whose two digits sit one
+    /// above the other with a gap between the rows.
+    ///
+    /// **Everything else keeps its ink separate**, and that is not an oversight: a spanner clipped across a
+    /// system break contributes one rectangle per segment, and unioning those would claim the whole page between
+    /// them. `elementHitRect(for:)` still answers the union for every kind, because a HIGHLIGHT box around a
+    /// selection is a different question from what a click may land in.
+    private func hitRects(_ element: LayoutElement) -> [CGRect] {
+        let rects = elementRects(element)
+        switch element {
+        case .keySignature, .timeSignature:
+            guard let union = rects.dropFirst().reduce(rects.first, { $0?.union($1) }) else { return [] }
+            return [union]
+        default:
+            return rects
+        }
+    }
+
+    /// How far outside its own ink a click may land and still mean `element`, in staff spaces.
+    ///
+    /// Engraved marks are small, and several of them are SMALL ON PURPOSE — a barline is a hairline, a key
+    /// signature's accidentals are thinner than a notehead. Testing their ink alone made them targets a pointer
+    /// had to be placed on exactly, which reads as the app ignoring the click (user report, 2026-09-12). Every
+    /// kind therefore gets the same half staff space of reach that text already had, measured in `sp` so it
+    /// tracks the engraving rather than the zoom.
+    ///
+    /// It stays SMALL deliberately. These targets sit in a dense row — a clef, a key signature and a meter
+    /// inside one header column — so reach taken by one is reach taken from its neighbour, and the ladder's
+    /// first-match rule would hand a generous padding the leftmost of them every time.
+    private func hitTolerance(for element: LayoutElement) -> CGFloat {
+        navigationUsesText(element) ? Self.textHitTolerance : Self.elementHitTolerance
     }
 
     /// Document-space highlight box for an engraved element, without hit padding. Returns nil for a
@@ -58,13 +96,33 @@ extension ScoreHitTester {
     /// Barlines and signatures measure ink independently of their skyline reservations.
     /// Pedals share the same painted glyph bounds with the skyline.
     public func elementHitRect(for target: ScoreHitTarget) -> CGRect? {
-        guard let id = target.elementID else { return nil }
-        var result: CGRect?
+        let rects = elementHitRects(for: target)
+        guard let first = rects.first else { return nil }
+        return rects.dropFirst().reduce(first) { $0.union($1) }
+    }
+
+    /// The same geometry, ONE RECTANGLE PER PLACE the element is drawn, in document order.
+    ///
+    /// `elementHitRect(for:)` unions these, which is the right answer for "how big is this thing" and the wrong
+    /// one for "where is this thing". An identity can be drawn in places that are nowhere near each other: a
+    /// spanner clipped across a system break, and — since restatements began naming what they restate — a key
+    /// signature whose declaration sits at the head of one system while its courtesy announcement sits at the
+    /// trailing edge of the one before. Unioning those spans the gap between two systems, so a host floating a
+    /// control beside the selection needs the pieces rather than their envelope.
+    ///
+    /// Empty for a target with no element identity or no laid-out geometry.
+    public func elementHitRects(for target: ScoreHitTarget) -> [CGRect] {
+        guard let id = target.elementID else { return [] }
+        var result: [CGRect] = []
         func include(_ elements: [LayoutElement], base: CGPoint) {
             for element in elements where element.elementID == id {
+                var combined: CGRect?
                 for rect in elementRects(element) {
                     let shifted = rect.offsetBy(dx: base.x, dy: base.y)
-                    result = result.map { $0.union(shifted) } ?? shifted
+                    combined = combined.map { $0.union(shifted) } ?? shifted
+                }
+                if let combined {
+                    result.append(combined)
                 }
             }
         }

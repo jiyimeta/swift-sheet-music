@@ -47,6 +47,17 @@ extension LayoutEngine {
         /// others.
         let keys: [CourtesyKeySignature]
         let time: CourtesyTimeSignature?
+        /// The bar this announcement is ABOUT — the one opening the next
+        /// system, whose declaration these glyphs restate.
+        ///
+        /// Carried so the emitted glyphs can name it. An announcement is
+        /// not a second declaration, but it is the same one seen early,
+        /// and a host that lets a reader click a signature has to be able
+        /// to answer the click: without this the announcement had no
+        /// identity at all and was simply unclickable, while the bar it
+        /// announces sat on the next system where the click was aimed
+        /// nowhere near it.
+        let announcedMeasureIndex: Int
         /// Anchor of the FIRST accidental, relative to the announcing
         /// measure's content width. Half a glyph inside the key column's
         /// left edge, because the renderer centers each glyph on its
@@ -196,7 +207,7 @@ extension LayoutEngine {
             }
         }
         guard !courtesyKeys.isEmpty || courtesyTime != nil else { return nil }
-        return band(keys: courtesyKeys, time: courtesyTime, metrics: metrics)
+        return band(keys: courtesyKeys, time: courtesyTime, announcing: measureIdx, metrics: metrics)
     }
 
     /// Lay the announced columns out and size the band that holds them.
@@ -212,6 +223,7 @@ extension LayoutEngine {
     private static func band(
         keys: [CourtesyKeySignature],
         time: CourtesyTimeSignature?,
+        announcing measureIdx: Int,
         metrics: StaffMetrics,
     ) -> TrailingCourtesy {
         let gap = courtesyGap(sp: metrics.sp)
@@ -256,6 +268,7 @@ extension LayoutEngine {
         return TrailingCourtesy(
             keys: keys,
             time: time,
+            announcedMeasureIndex: measureIdx,
             keyOriginDx: gap
                 + KeySignatureSteps.glyphWidth(sp: metrics.sp) / 2,
             timeOriginDx: timeColumnStart + timeGlyphWidth / 2,
@@ -300,7 +313,10 @@ extension LayoutEngine {
                     x: contentWidth + courtesy.keyOriginDx,
                     y: staffMidY,
                 ),
-                measureIndex: nil,
+                // The bar being announced, not the bar doing the announcing:
+                // these glyphs restate the next system's declaration, and
+                // that declaration is what a click on them means.
+                measureIndex: courtesy.announcedMeasureIndex,
             ))
         }
         if let time = courtesy.time {
@@ -313,7 +329,7 @@ extension LayoutEngine {
                     y: staffMidY
                         + metrics.sp * lineGeometry.centerOffsetSp,
                 ),
-                measureIndex: nil,
+                measureIndex: courtesy.announcedMeasureIndex,
             ))
         }
         return out
