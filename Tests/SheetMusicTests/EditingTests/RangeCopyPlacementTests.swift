@@ -24,20 +24,16 @@ struct RangeCopyPlacementTests {
         .chord(Chord(duration: .quarter, notes: [Note(pitch: pitch, tpc: 14)]))
     }
 
-    private static func context() -> (RangeCopyGeometry, [Fraction]) {
-        let score = EditingFixtures.parityFixture()
-        return (
-            RangeCopyGeometry(staff: flute, in: score),
-            score.effectiveMeasureDurations(partIndex: 0, staffIndex: 0),
-        )
+    private static func context() -> RangeCopyGeometry {
+        RangeCopyGeometry(staff: flute, in: EditingFixtures.parityFixture())
     }
 
     @Test("a stream that fits in one bar becomes one piece")
     func oneBar() throws {
-        let (geometry, durations) = Self.context()
+        let geometry = Self.context()
         let pieces = try #require(RangeCopyPlacement.pieces(
             of: Self.stream([(0, Self.quarter(60)), (480, Self.quarter(62))]),
-            at: 960, sourceStartTick: 0, geometry: geometry, division: 480, measureDurations: durations,
+            at: 960, sourceStartTick: 0, geometry: geometry, division: 480,
         ))
         #expect(pieces.count == 1)
         #expect(pieces[0].measureIndex == 0)
@@ -47,10 +43,10 @@ struct RangeCopyPlacementTests {
 
     @Test("a stream crossing a barline splits into two pieces")
     func crossesBarline() throws {
-        let (geometry, durations) = Self.context()
+        let geometry = Self.context()
         let pieces = try #require(RangeCopyPlacement.pieces(
             of: Self.stream([(0, Self.quarter(60)), (480, Self.quarter(62))]),
-            at: 1440, sourceStartTick: 0, geometry: geometry, division: 480, measureDurations: durations,
+            at: 1440, sourceStartTick: 0, geometry: geometry, division: 480,
         ))
         #expect(pieces.count == 2)
         #expect(pieces[0].measureIndex == 0)
@@ -63,11 +59,10 @@ struct RangeCopyPlacementTests {
 
     @Test("a chord straddling a barline becomes a tied chain on both sides")
     func tiedAcrossBarline() throws {
-        let (geometry, durations) = Self.context()
+        let geometry = Self.context()
         let half = VoiceElement.chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)]))
         let pieces = try #require(RangeCopyPlacement.pieces(
             of: Self.stream([(0, half)]), at: 1440, sourceStartTick: 0, geometry: geometry, division: 480,
-            measureDurations: durations,
         ))
         #expect(pieces.count == 2)
         guard case let .chord(first) = pieces[0].elements[0], case let .chord(second) = pieces[1].elements[0]
@@ -80,7 +75,7 @@ struct RangeCopyPlacementTests {
 
     @Test("a tuplet that lands inside one piece is carried as an index range")
     func tupletCarried() throws {
-        let (geometry, durations) = Self.context()
+        let geometry = Self.context()
         let third = VoiceElement.chord(Chord(
             duration: .fraction(Fraction(numerator: 160, denominator: 1920)),
             notes: [Note(pitch: 60, tpc: 14)],
@@ -90,7 +85,7 @@ struct RangeCopyPlacementTests {
                 [(0, third), (160, third), (320, third)],
                 tuplets: [(startTick: 0, endTick: 480, normalNotes: 2, actualNotes: 3)],
             ),
-            at: 960, sourceStartTick: 0, geometry: geometry, division: 480, measureDurations: durations,
+            at: 960, sourceStartTick: 0, geometry: geometry, division: 480,
         ))
         #expect(pieces.count == 1)
         #expect(pieces[0].tuplets.count == 1)
@@ -100,14 +95,13 @@ struct RangeCopyPlacementTests {
 
     @Test("an element that fits is copied verbatim, dots and all")
     func doesNotDecomposeWhatFits() throws {
-        let (geometry, durations) = Self.context()
+        let geometry = Self.context()
         let dotted = VoiceElement.chord(Chord(
             duration: .fraction(Fraction(numerator: 3, denominator: 8)),
             notes: [Note(pitch: 60, tpc: 14)],
         ))
         let pieces = try #require(RangeCopyPlacement.pieces(
             of: Self.stream([(0, dotted)]), at: 0, sourceStartTick: 0, geometry: geometry, division: 480,
-            measureDurations: durations,
         ))
         #expect(pieces.count == 1)
         #expect(pieces[0].elements == [dotted])
@@ -115,11 +109,11 @@ struct RangeCopyPlacementTests {
 
     @Test("placement measures from the range start, so a voice's leading gap survives")
     func keepsLeadingGap() throws {
-        let (geometry, durations) = Self.context()
+        let geometry = Self.context()
         // The range starts at tick 0 but this voice's first selected note is on beat 2.
         let pieces = try #require(RangeCopyPlacement.pieces(
             of: Self.stream([(480, Self.quarter(60))]), at: 1920, sourceStartTick: 0, geometry: geometry,
-            division: 480, measureDurations: durations,
+            division: 480,
         ))
         #expect(pieces.count == 1)
         #expect(pieces[0].measureIndex == 1)
@@ -128,10 +122,10 @@ struct RangeCopyPlacementTests {
 
     @Test("a destination past the last bar has no placement")
     func pastTheEnd() {
-        let (geometry, durations) = Self.context()
+        let geometry = Self.context()
         #expect(RangeCopyPlacement.pieces(
             of: Self.stream([(0, Self.quarter(60))]),
-            at: 7680, sourceStartTick: 0, geometry: geometry, division: 480, measureDurations: durations,
+            at: 7680, sourceStartTick: 0, geometry: geometry, division: 480,
         ) == nil)
     }
 }

@@ -28,7 +28,7 @@ enum RangeCopyPlacement {
     /// Returns `nil` when the destination runs past `geometry.totalTicks` — the caller appends bars and retries.
     static func pieces(
         of stream: RangeCopySource.Stream, at destinationTick: Int, sourceStartTick: Int,
-        geometry: RangeCopyGeometry, division: Int, measureDurations: [Fraction],
+        geometry: RangeCopyGeometry, division: Int,
     ) -> [Piece]? {
         var result: [Piece] = []
         var currentMeasure: Int?

@@ -117,12 +117,9 @@ extension DuplicateRange {
         in scratch: inout Score, ids: inout EIDAllocator, commands: inout [any EditCommand],
     ) throws {
         let geometry = RangeCopyGeometry(staff: stream.staff, in: scratch)
-        let durations = scratch.effectiveMeasureDurations(
-            partIndex: stream.staff.partIndex, staffIndex: stream.staff.staffIndexInPart,
-        )
         guard let pieces = RangeCopyPlacement.pieces(
             of: stream, at: destinationTick, sourceStartTick: sourceStartTick,
-            geometry: geometry, division: scratch.division, measureDurations: durations,
+            geometry: geometry, division: scratch.division,
         ) else {
             // The measures were appended before any stream was placed, so running out of staff here means the
             // copy needs more room than the range's own staff measured — a staff in shorter bars than the first.
