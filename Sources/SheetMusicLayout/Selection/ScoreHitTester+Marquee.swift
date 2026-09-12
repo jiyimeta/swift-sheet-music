@@ -95,4 +95,67 @@ extension ScoreHitTester {
         }
         return lo
     }
+
+    /// Chord/rest ids whose layout bbox comes within `tolerance` of `point`, **nearest first**.
+    ///
+    /// The distance is measured to the bbox, not to its centre, and an `EventColumn`'s bbox is already the
+    /// element's own hit target expanded by the radius `ScoreHitTester` accepts (`sp * 1.2` about a notehead,
+    /// `sp * 1.8 × sp * 2.5` about a rest). So `tolerance` reads as exactly one thing: **how far past an element's
+    /// own target a click may miss and still mean it.** A click inside a bbox is distance 0.
+    ///
+    /// Ties keep visit order — systems top-to-bottom, then `centerX` ascending — so two voices stacked in one
+    /// column resolve the way every other ordered query here does.
+    ///
+    /// Distinct from `itemIDs(in:)`, which answers a rectangle's contents for marquee selection and has no reason
+    /// to rank them. Ranking is the whole point here: a near-miss rescue that returns the FIRST item in document
+    /// order rather than the closest one reaches left past the element the user was aiming at.
+    public func itemIDs(near point: CGPoint, within tolerance: CGFloat) -> [ScoreItemID] {
+        guard tolerance >= 0 else { return [] }
+        var ranked: [(distance: CGFloat, order: Int, id: ScoreItemID)] = []
+        var order = 0
+        for system in document.systems {
+            let sysMinY = system.origin.y
+            let sysMaxY = sysMinY + system.size.height
+            guard sysMaxY >= point.y - tolerance,
+                  sysMinY <= point.y + tolerance
+            else { continue }
+
+            let columns = system.eventColumns
+            guard !columns.isEmpty else { continue }
+            let local = CGPoint(
+                x: point.x - system.origin.x, y: point.y - system.origin.y,
+            )
+            let tol = system.maxBBoxHalfWidth
+
+            let lo = lowerBoundCenterX(
+                columns: columns,
+                value: local.x - tolerance - tol,
+            )
+            let hi = upperBoundCenterX(
+                columns: columns,
+                value: local.x + tolerance + tol,
+            )
+            guard lo < hi else { continue }
+
+            for i in lo ..< hi {
+                let column = columns[i]
+                order += 1
+                let distance = Self.distance(from: local, to: column.bbox)
+                guard distance <= tolerance else { continue }
+                ranked.append((distance, order, column.id))
+            }
+        }
+        return ranked
+            .sorted { ($0.distance, $0.order) < ($1.distance, $1.order) }
+            .map(\.id)
+    }
+
+    /// Euclidean distance from `point` to the nearest edge of `rect`, and 0 for a point inside it. Written from
+    /// the per-axis overshoots so a degenerate (zero-width or zero-height) bbox behaves like the segment it is,
+    /// rather than falling into `CGRect.intersects`'s three-way edge rule.
+    private static func distance(from point: CGPoint, to rect: CGRect) -> CGFloat {
+        let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
+        let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
+        return (dx * dx + dy * dy).squareRoot()
+    }
 }

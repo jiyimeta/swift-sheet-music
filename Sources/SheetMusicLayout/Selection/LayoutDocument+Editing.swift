@@ -19,33 +19,43 @@ extension LayoutDocument {
     ///
     /// 1. `ScoreHitTester.hitTest(at:)` ladder (notehead → rest → beam → flag → stem → tuplet → clef).
     ///    `.stem`/`.flag`/`.beam` resolve to their first `NoteID`; `.clef` is ignored in v1 (no clef editing UI).
-    /// 2. If the hit's `voiceIndex != activeVoice` and a 44x44 slop rect centered on `point` (via `itemIDs(in:)`)
-    ///    contains an item of the active voice, prefer the first such item (spec §5.5 — the picker targets a
-    ///    voice).
+    /// 2. If the hit's `voiceIndex != activeVoice` and an item of the active voice lies within
+    ///    `nearMissTolerance` of `point` (via `itemIDs(near:within:)`), prefer the nearest such item
+    ///    (spec §5.5 — the picker targets a voice).
     /// 3. No hit → `nil`.
-    public func editingHitTest(at point: CGPoint, activeVoice: Int) -> ScoreItemID? {
+    ///
+    /// `nearMissTolerance` is **how far past an element's own target a click may miss and still mean it**, in
+    /// document points. It is a parameter rather than a constant because it describes the POINTING DEVICE, not the
+    /// score: a fingertip needs several staff spaces of help to land on a notehead, and a mouse pointer needs
+    /// almost none — while a host that gives a pointer the fingertip's reach selects notes a bar away from where
+    /// the user clicked (user report, 2026-09-12). The default is the fingertip value every touch host wants.
+    public func editingHitTest(
+        at point: CGPoint, activeVoice: Int,
+        nearMissTolerance: CGFloat = LayoutDocument.editingNearMissTolerance,
+    ) -> ScoreItemID? {
         let tester = ScoreHitTester(document: self)
-        let slop = Self.slopRect(around: point)
         let hit = tester.hitTest(at: point)
         // A real text hit belongs to the host's text editor. It is not a near miss
         // that should be rescued to a nearby note when the text sits close to a staff.
         if hit?.textID != nil { return nil }
         guard let hit, let item = Self.selectableItem(from: hit) else {
             // The engine's ladder only answers for points inside an element's own geometry, which makes noteheads a
-            // fingertip-sized target at best and a hairline one on a dense system. Fall back to anything within the
-            // slop box so a near miss still lands, preferring the active voice the same way an on-target hit does.
+            // fingertip-sized target at best and a hairline one on a dense system. Fall back to the NEAREST item
+            // within the tolerance so a near miss still lands, preferring the active voice the same way an
+            // on-target hit does.
             //
-            // But only ON a staff. The slop box is 44 document points — several staff spaces at a typical staff size
-            // — so away from this guard it reached out of the page margins and the gaps between systems and pulled in
-            // whatever note was nearest. Tapping empty paper then re-selected instead of deselecting, and there was
-            // no way to put the pad away short of leaving edit mode.
-            guard isOnStaff(point) else { return nil }
-            let nearby = tester.itemIDs(in: slop)
+            // But only ON a staff. The tolerance is several staff spaces for a touch host, so away from this guard
+            // it reached out of the page margins and the gaps between systems and pulled in whatever note was
+            // nearest. Tapping empty paper then re-selected instead of deselecting, and there was no way to put the
+            // pad away short of leaving edit mode.
+            guard isOnStaff(point, tolerance: nearMissTolerance) else { return nil }
+            let nearby = tester.itemIDs(near: point, within: nearMissTolerance)
             return nearby.first { $0.voiceIndex == activeVoice } ?? nearby.first
         }
 
         if item.voiceIndex != activeVoice {
-            if let preferred = tester.itemIDs(in: slop).first(where: { $0.voiceIndex == activeVoice }) {
+            let nearby = tester.itemIDs(near: point, within: nearMissTolerance)
+            if let preferred = nearby.first(where: { $0.voiceIndex == activeVoice }) {
                 return preferred
             }
         }
@@ -53,25 +63,25 @@ extension LayoutDocument {
     }
 
     /// Whether `point` is close enough to a staff for the near-miss rescue to mean anything: inside the staff's own
-    /// drawn lines, or within the same slop the rescue itself reaches, so ledger-line notes and stems still count.
-    /// Anything further out — page margins, the gap between systems — is empty paper, where a tap means "nothing"
-    /// rather than "whatever note is nearest".
+    /// drawn lines, or within the same tolerance the rescue itself reaches, so ledger-line notes and stems still
+    /// count. Anything further out — page margins, the gap between systems — is empty paper, where a tap means
+    /// "nothing" rather than "whatever note is nearest".
     ///
     /// Measured per staff, through `StaffLineGeometry.barLineSpanY(sp:)`. The score-global
     /// `StaffMetrics.staffHeight` is 4 sp for every staff, which is the height of a FIVE-line one: against a 3-line
     /// staff that band reached 2 sp past the bottom line, and since staves now stack by their own line count, that
     /// overshoot lands on the next staff's paper and lets a tap there be rescued to a note in it.
     ///
-    /// Deliberately measured with `editingSlopHalfExtent`, the same number the box uses: a gate tighter than the box
-    /// it guards would refuse rescues the box was built to make, and a looser one would let the rescue reach where
-    /// the box can't.
-    private func isOnStaff(_ point: CGPoint) -> Bool {
+    /// Deliberately measured with the caller's own `tolerance`, the same number the rescue uses: a gate tighter than
+    /// the reach it guards would refuse rescues the reach was built to make, and a looser one would let the rescue
+    /// reach where the tolerance can't.
+    private func isOnStaff(_ point: CGPoint, tolerance: CGFloat) -> Bool {
         for system in systems {
             for (flatIndex, origin) in system.staffOrigins.enumerated() {
                 let span = system.geometry(atFlatIndex: flatIndex).barLineSpanY(sp: metrics.sp)
                 let staffTop = system.origin.y + origin.y
-                if point.y >= staffTop + span.top - Self.editingSlopHalfExtent,
-                   point.y <= staffTop + span.bottom + Self.editingSlopHalfExtent
+                if point.y >= staffTop + span.top - tolerance,
+                   point.y <= staffTop + span.bottom + tolerance
                 {
                     return true
                 }
@@ -80,18 +90,10 @@ extension LayoutDocument {
         return false
     }
 
-    /// How close "close" is, in layout-document points — for the slop box below and for `isOnStaff` above. The JNI
-    /// bridge and any future caller must not invent a second number.
-    public static let editingSlopHalfExtent: CGFloat = 22
-
-    /// Touch slop around a tap, in layout-document points. Used both to prefer the active voice on an on-target hit
-    /// and to rescue a near miss — one constant so the two can't disagree about how close "close" is.
-    private static func slopRect(around point: CGPoint) -> CGRect {
-        CGRect(
-            x: point.x - editingSlopHalfExtent, y: point.y - editingSlopHalfExtent,
-            width: editingSlopHalfExtent * 2, height: editingSlopHalfExtent * 2,
-        )
-    }
+    /// The near-miss tolerance a FINGERTIP needs, in layout-document points — the default `editingHitTest` uses and
+    /// the one every touch host wants. A pointer-driven host passes its own, much smaller, number; see
+    /// `editingHitTest(at:activeVoice:nearMissTolerance:)`.
+    public static let editingNearMissTolerance: CGFloat = 22
 
     /// Reduces a raw hit-test target to the `ScoreItemID` that tapping it selects. `.stem`/`.flag`/`.beam` all
     /// select the first notehead they carry (there's no dedicated selection UI for those geometric elements yet);

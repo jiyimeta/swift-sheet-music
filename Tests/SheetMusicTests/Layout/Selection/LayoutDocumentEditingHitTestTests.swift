@@ -237,13 +237,11 @@
             // The raw ladder must hit voice 1's note directly at its own anchor.
             #expect(tester.hitTest(at: anchor) == .note(noteID))
 
-            let slop = CGRect(
-                x: anchor.x - LayoutDocument.editingSlopHalfExtent,
-                y: anchor.y - LayoutDocument.editingSlopHalfExtent,
-                width: LayoutDocument.editingSlopHalfExtent * 2,
-                height: LayoutDocument.editingSlopHalfExtent * 2,
+            let voice0Item = try #require(
+                tester
+                    .itemIDs(near: anchor, within: LayoutDocument.editingNearMissTolerance)
+                    .first { $0.voiceIndex == 0 },
             )
-            let voice0Item = try #require(tester.itemIDs(in: slop).first { $0.voiceIndex == 0 })
 
             #expect(doc.editingHitTest(at: anchor, activeVoice: 0) == voice0Item)
         }
@@ -319,13 +317,12 @@
                 Issue.record("expected the probe point to land on the clef")
                 return
             }
-            // And confirm nothing else falls inside the same slop box the rescue would search — otherwise this
+            // And confirm nothing else falls within the same tolerance the rescue would search — otherwise this
             // would just be re-testing the near-miss rescue under a different name.
-            let slop = CGRect(
-                x: point.x - LayoutDocument.editingSlopHalfExtent, y: point.y - LayoutDocument.editingSlopHalfExtent,
-                width: LayoutDocument.editingSlopHalfExtent * 2, height: LayoutDocument.editingSlopHalfExtent * 2,
+            #expect(
+                tester.itemIDs(near: point, within: LayoutDocument.editingNearMissTolerance).isEmpty,
+                "expected no item within the near-miss tolerance of the clef probe point",
             )
-            #expect(tester.itemIDs(in: slop).isEmpty, "expected no item within the slop box of the clef probe point")
 
             #expect(doc.editingHitTest(at: point, activeVoice: 0) == nil)
         }
@@ -362,19 +359,19 @@
             #expect(anchor.y < staffTop)
 
             // One point past the gate's own boundary — the tightest honest "outside" — directly above the note so
-            // the slop box below still centers on it horizontally.
-            let probe = CGPoint(x: anchor.x, y: staffTop - LayoutDocument.editingSlopHalfExtent - 1)
+            // the rescue below still reaches it horizontally.
+            let probe = CGPoint(x: anchor.x, y: staffTop - LayoutDocument.editingNearMissTolerance - 1)
 
             // The probe itself must miss the raw ladder — this has to be a near-miss case, not an on-target hit.
             #expect(tester.hitTest(at: probe) == nil)
 
-            let slop = CGRect(
-                x: probe.x - LayoutDocument.editingSlopHalfExtent, y: probe.y - LayoutDocument.editingSlopHalfExtent,
-                width: LayoutDocument.editingSlopHalfExtent * 2, height: LayoutDocument.editingSlopHalfExtent * 2,
-            )
             // The rescue has something to find — so a `nil` result below can only be the on-staff gate at work, not
-            // an empty slop box.
-            #expect(tester.itemIDs(in: slop).contains(.note(id)))
+            // an empty neighbourhood.
+            #expect(
+                tester
+                    .itemIDs(near: probe, within: LayoutDocument.editingNearMissTolerance)
+                    .contains(.note(id)),
+            )
 
             #expect(doc.editingHitTest(at: probe, activeVoice: 0) == nil)
         }
@@ -416,18 +413,18 @@
             let bandBottom = staffTop + 2 * sp
             // The note must sit below the band for this probe to mean anything.
             #expect(anchor.y > bandBottom)
-            let probe = CGPoint(x: anchor.x, y: bandBottom + LayoutDocument.editingSlopHalfExtent + 1)
+            let probe = CGPoint(x: anchor.x, y: bandBottom + LayoutDocument.editingNearMissTolerance + 1)
             // Still inside the band the retired 4 sp rule drew, so the old code accepts this probe and rescues.
-            #expect(probe.y < staffTop + 4 * sp + LayoutDocument.editingSlopHalfExtent)
+            #expect(probe.y < staffTop + 4 * sp + LayoutDocument.editingNearMissTolerance)
 
             // A near miss, not an on-target hit.
             #expect(tester.hitTest(at: probe) == nil)
-            let slop = CGRect(
-                x: probe.x - LayoutDocument.editingSlopHalfExtent, y: probe.y - LayoutDocument.editingSlopHalfExtent,
-                width: LayoutDocument.editingSlopHalfExtent * 2, height: LayoutDocument.editingSlopHalfExtent * 2,
-            )
             // The rescue has something to find, so a nil below can only be the gate.
-            #expect(tester.itemIDs(in: slop).contains(.note(id)))
+            #expect(
+                tester
+                    .itemIDs(near: probe, within: LayoutDocument.editingNearMissTolerance)
+                    .contains(.note(id)),
+            )
 
             #expect(doc.editingHitTest(at: probe, activeVoice: 0) == nil)
         }
