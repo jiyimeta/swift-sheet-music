@@ -31,15 +31,7 @@ public struct SetElementPlacement: EditCommand {
         switch target {
         case let .note(id): VoiceElementID(id)
         case let .chord(id): id
-        case let .text(text):
-            switch text {
-            case let .lyric(anchor, _), let .staffText(anchor, _), let .harmony(anchor): anchor
-            case let .rehearsalMark(index):
-                VoiceElementID(
-                    staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
-                    measureIndex: index, voiceIndex: 0, elementIndex: 0,
-                )
-            }
+        case let .text(text): TextElementProperties.anchor(of: text)
         }
     }
 
@@ -57,7 +49,9 @@ public struct SetElementPlacement: EditCommand {
         }
         switch target {
         case let .text(text):
-            try writeText(text, to: &score)
+            guard TextElementProperties.update(text, in: &score, { $0.placement = placement }) else {
+                throw Self.refused(.targetNotFound(affectedLocation))
+            }
         case let .note(id):
             let slot = VoiceElementID(id)
             guard case var .chord(chord)? = score[slot], chord.notes.indices.contains(id.noteIndexInChord)
@@ -83,51 +77,7 @@ public struct SetElementPlacement: EditCommand {
             guard case let .chord(chord)? = score[id] else { return nil }
             return chord.elementProperties
         case let .text(text):
-            switch text {
-            case let .lyric(anchor, verse):
-                return SetLyric.current(at: anchor, verse: verse, in: score)?.elementProperties
-            case let .staffText(anchor, style):
-                return SetStaffText.laneMark(at: anchor, isSystemText: style == .systemText, in: score)?
-                    .elementProperties
-            case let .harmony(anchor):
-                return SetChordSymbol.current(at: anchor, in: score)?.elementProperties
-            case let .rehearsalMark(index):
-                return RehearsalMarkLane.mark(in: score, measureIndex: index)?.elementProperties
-            }
-        }
-    }
-
-    private func writeText(_ text: ScoreTextID, to score: inout Score) throws {
-        switch text {
-        case let .lyric(anchor, verse):
-            guard case var .chord(chord)? = score[anchor], chord.lyrics.indices.contains(verse)
-            else { throw Self.refused(.targetNotFound(affectedLocation)) }
-            chord.lyrics[verse].elementProperties.placement = placement
-            score[anchor] = .chord(chord)
-        case let .staffText(anchor, style):
-            guard let slot = SetStaffText.laneSlot(
-                at: anchor, isSystemText: style == .systemText, in: score,
-            ), case var .staffText(mark) = score.systemMeasures[slot.measureIndex].elements[slot.elementIndex].element
-            else { throw Self.refused(.targetNotFound(affectedLocation)) }
-            mark.elementProperties.placement = placement
-            score.systemMeasures.updateValue(at: slot.measureIndex) {
-                $0.elements.updateValue(at: slot.elementIndex) { $0.element = .staffText(mark) }
-            }
-        case let .harmony(anchor):
-            guard let slot = SetChordSymbol.harmonySlot(at: anchor, in: score),
-                  case var .harmony(harmony)? = score[slot]
-            else { throw Self.refused(.targetNotFound(affectedLocation)) }
-            harmony.elementProperties.placement = placement
-            score[slot] = .harmony(harmony)
-        case let .rehearsalMark(index):
-            guard score.systemMeasures.indices.contains(index),
-                  let slot = RehearsalMarkLane.markIndex(in: score.systemMeasures[index]),
-                  case var .rehearsalMark(mark) = score.systemMeasures[index].elements[slot].element
-            else { throw Self.refused(.targetNotFound(affectedLocation)) }
-            mark.elementProperties.placement = placement
-            score.systemMeasures.updateValue(at: index) {
-                $0.elements.updateValue(at: slot) { $0.element = .rehearsalMark(mark) }
-            }
+            return TextElementProperties.current(text, in: score)
         }
     }
 }

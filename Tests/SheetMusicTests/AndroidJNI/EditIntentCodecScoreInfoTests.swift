@@ -29,14 +29,19 @@ struct EditIntentCodecScoreInfoTests {
 
     /// The `bytes[1]` framing assumption `EditIntentCodecTests` states: the payload stays under 128 bytes at these
     /// small indices, so the case index is the second byte.
-    @Test func `the wire discriminator is 80`() {
+    ///
+    /// **84, not 80.** This intent was written against a catalogue that ended at 79 and the properties-inspector
+    /// project landed 80…83 first. The index is decided by position in `EditIntentWire`, so the renumber was a
+    /// merge resolution, not a rewrite — and this assertion is what would have caught it had the two crossed the
+    /// other way.
+    @Test func `the wire discriminator is 84`() {
         let bytes = EditIntentCodec.encode(.setScoreInfo(writes: []))
-        #expect(bytes[1] == 80)
+        #expect(bytes[1] == 84)
         #expect(bytes.count < 128)
     }
 
-    /// 79 is still 79 — appending 80 is exactly the change that could have disturbed the case below it.
-    @Test func `appending 80 left 79 where it was`() {
+    /// 79 is still 79 — appending above it is exactly the change that could have disturbed the case below.
+    @Test func `appending above 79 left 79 where it was`() {
         let bytes = EditIntentCodec.encode(
             .setLyricVerse(
                 text: .lyric(

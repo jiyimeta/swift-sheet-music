@@ -94,6 +94,12 @@ extension GraceChord {
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         EIDXML.appendIfNeeded(eid, options: options, to: &children)
+        // A grace is written as a `<Chord>` and read back by `Chord.decode`, so
+        // it shares the chord-level / per-note rule rather than restating it —
+        // see `appendChordLevelSmall`, the one place that decides. Cue graces
+        // are where `<small>` turns up most often, which makes this the common
+        // case rather than the exotic one.
+        let chordCarriesSmall = appendChordLevelSmall(for: notes, to: &children)
         duration.appendDurationXML(to: &children)
         children.append(XMLTreeNode(name: graceType.mscxTag))
         for (noteIndex, note) in notes.enumerated() {
@@ -124,6 +130,7 @@ extension GraceChord {
                     awayFromParent: parentBackwardTieLocation,
                 ),
                 options: options,
+                chordCarriesSmall: chordCarriesSmall,
             ))
         }
         appendPreservedMarkup(preservedMarkup, to: &children, options: options)

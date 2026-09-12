@@ -1339,6 +1339,31 @@ consumed setに載っていない子は往復する。**
 - ~~`ChordRest.small` / `staffMove` / `crossMeasure`~~ **`staffMove`と`crossMeasure`は往復する**
   （どちらもconsumed setに無い）。**`small`だけは落ちる**——`Chord`側のconsumed setに有るのに
   `Chord`に対応fieldが無い（`Note`側の`small`は`Note.isSmall`があるので往復する）
+
+**［2026-09-12 追記］`small`は「落ちる」から「normalizeされて往復する」に変わった。**
+それまでencoder側に`<small>`を書くarmが1つも無く、`Note.isSmall`はdecode専用だった——
+つまり`<Note>`に書かれた`small`も含めて**全部**save時に消えていた（上の「`Note`側の`small`は往復する」は
+decodeのみの話で、encodeは見ていない）。2-pass byte gateはこれを検出できない。
+pass 1とpass 2を比べる仕組みなので、両方が同じように落とすと一致してしまう。
+
+いまは書かれる。ただし**model側にchord-level fieldが無いまま**なので、綴りはmodelが決める:
+
+| 読んだ形 | modelでの姿 | 書き戻す形 |
+| --- | --- | --- |
+| `<Chord><small>1</small>` | 全noteが`isSmall` | `<Chord><small>1</small>`（同じ） |
+| 一部の`<Note><small>1</small>` | 一部のnoteが`isSmall` | 同じnoteに`<Note><small>1</small>` |
+| **全noteに`<Note><small>1</small>`** | 全noteが`isSmall` | **`<Chord><small>1</small>`に昇格** |
+
+3行目が新しく入ったgapで、**単音chordを含むので珍しい形ではない**。MuseScoreでは
+`ChordRest.small`（stemとhookも縮む）と`Note.small`（符頭だけ縮む）は別propertyなので、
+note-levelで書かれたfileを読んで保存すると**見た目が変わりうる**。
+
+これを承知で選んでいる。model側がper-note 1bitしか持たない以上どちらかには倒れるが、
+逆（常にnote-level）にすると、作者がcue chordとして書いた`<Chord><small>`が
+「full-sizeのstemに小さい符頭」に化ける。実際のscoreではそちらの形のほうが多く、損失も大きい。
+**根治はChordにsmall fieldを持たせること**で、それまでは昇格側に倒す。
+実装は`appendChordLevelSmall`（`MSCXEncoder+Chord.swift`）——chord本体とgrace chordの
+両writerが呼ぶ唯一の判定点。
 - ~~`Note`の`headScheme` / `fixed`・`fixedLine` / `tuning` / `ghost` / `deadNote` / `dotsHidden`~~
   **6つともconsumed setに無いので往復する。** `consumedNoteChildren`が挙げているのは
   `Accidental` / `Bend` / `ChordLine` / `Fingering` / `Parenthesis` / `Symbol` / `Spanner` / `Tie` と

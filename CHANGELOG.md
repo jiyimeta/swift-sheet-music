@@ -5,6 +5,52 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **A host's Properties inspector can now write a note's cue size and mute flag, and an engraved
+  text's offset and collision-avoidance override, and can read the flag that governs a beam's
+  visibility.** `SetNoteSmall(at:isSmall:)` writes MuseScore's `<small>` per note; `SetNotePlay(at:play:)`
+  writes `<play>`, muting the note for MIDI while leaving the notehead drawn. `SetTextOffset(_:offset:)`
+  writes an authored offset in spatium units and `SetTextAutoplace(_:autoplace:)` writes the
+  collision-avoidance override; `nil` on either restores the styled position or inherits the default
+  (`true`). Both take a `ScoreTextID` — lyric, staff/system text, harmony, rehearsal mark — because
+  those four are the only carriers whose `offset` and `autoplace` the layout actually reads. A note, a
+  chord, a dynamic and a spanner all carry `ElementProperties` with the same two fields, but on those
+  kinds the values are stored and round-tripped without ever reaching the page, so the commands do not
+  accept them. `SetBeamVisible.current(at:in:)` is now public: `Chord.beamVisible` is meaningful only
+  on the chord that starts a beam group, so this accessor resolves the group's leader before reading it.
+  `nil` means "this selection is in no beam group", not "the beam is hidden" — a host must not collapse
+  the two into one unchecked checkbox. `SetBeamVisible` writes exactly where it is pointed, because its
+  inverse must land on the same slot — so a host constructing the command directly must aim it at
+  `SetBeamVisible.leader(of:in:)`, now also public, rather than at the selected chord. A host driving
+  `EditIntent.setBeamVisible` needs none of this: the planner re-targets from any member to the leader
+  (`ScoreEditSession+VisibilityPlanning.swift`).
+
+### Fixed
+
+- **A cue note no longer loses its size on save.** `Note.isSmall` was decode-only: the decoder read
+  MuseScore's `<small>`, but no encoder ever wrote it back, so a note read as a cue note from an `.mscx`
+  file was silently full-sized again the next time the score was saved. The 2-pass byte gate could not
+  see this, since both passes dropped the flag identically. It is now written in the shape MuseScore
+  uses — one chord-level `<small>` when every note of a chord is small, and a per-note `<small>` when
+  only some are — including on grace chords. Because the model holds one flag per note and has no
+  chord-level field of its own, an all-small chord is always written in the chord-level spelling now,
+  regardless of which spelling the source file used. In MuseScore those are two different properties —
+  chord-level `small` scales the stem and hook as well as the notehead, note-level `small` scales only
+  the notehead — so a single-note cue chord that a file spelled at the note level can render with a
+  smaller stem and hook after a round trip through this package. The gap is deliberate rather than an
+  oversight: the alternative (always writing note-level) would turn an authored cue chord into
+  small noteheads on a full-size stem, the commoner shape and the larger visible loss. Recorded in
+  `docs/musescore-model-parity.md` §5.2.
+
+### Notes
+
+- `EditIntent` gains `.setNoteSmall`, `.setNotePlay`, `.setTextOffset` and `.setTextAutoplace`
+  (wire tags 80–83). It is a public non-frozen enum, so a host switching over it exhaustively needs a
+  `default` clause. No public symbol was removed and no signature changed.
+
 ## [3.0.0] - 2026-09-12
 
 ### Added

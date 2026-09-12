@@ -11,7 +11,13 @@
     "6896807649686055273",
     "-2837842629013091225",
     "6896807649686055273",
-    "-2837842629013091225"
+    "-2837842629013091225",
+    "-4449473588909342092",
+    "-5882645103798738745",
+    "-4449473588909342092",
+    "-4449473588909342092",
+    "-4449473588909342092",
+    "-4449473588909342092"
   ],
   "steps" : [
     {
@@ -54,6 +60,29 @@
     },
     {
       "base64" : "H00KHAoWAAoTAAoQCgwKBAgAEAAQABgAIAIQBBABGAE=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FVAKEgoOCgQIABAAEAAYACACKAAQAQ==",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "FVEKEgoOCgQIABAAEAAYACACKAAQAA==",
+      "op" : "intentBytes"
+    },
+    {
+      "op" : "undo"
+    },
+    {
+      "base64" : "LFIKKQoTAAoQCgwKBAgAEAAQABgAIAIQBBABGQAAAAAAAPg\/IQAAAAAAAADA",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "HFMKGQoTAAoQCgwKBAgAEAAQABgAIAIQBBABGAA=",
+      "op" : "intentBytes"
+    },
+    {
+      "base64" : "LFIKKQoTAAoQCgwKBAgAEAAQABgAIAIQBBAAGQAAAAAAAAAAIQAAAAAAAAAA",
       "op" : "intentBytes"
     }
   ]

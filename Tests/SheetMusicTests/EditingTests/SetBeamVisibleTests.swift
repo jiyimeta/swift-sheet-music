@@ -146,6 +146,24 @@ struct SetBeamVisibleTests {
         #expect(!editor.canRedo)
     }
 
+    @Test("an element in no beam group reads nil, not a default")
+    func unbeamedIsNil() {
+        let score = EditingFixtures.twoConsecutiveC4Chords()
+        #expect(SetBeamVisible.current(at: Self.slot(1), in: score) == nil)
+    }
+
+    @Test("a slot that does not exist reads nil")
+    func absentSlotIsNil() {
+        let score = EditingFixtures.twoBeamedEighths()
+        #expect(SetBeamVisible.current(at: Self.slot(99), in: score) == nil)
+    }
+
+    @Test("a rest inside a bar of beamed chords reads nil")
+    func restIsNil() {
+        let score = EditingFixtures.twoBeamedEighths() // [ts, C4 e, D4 e, r q, r h]
+        #expect(SetBeamVisible.current(at: Self.slot(3), in: score) == nil)
+    }
+
     private static func reason(of error: SheetMusicError?) -> EditRefusal.Reason? {
         guard case let .invalidEdit(refusal)? = error else { return nil }
         return refusal.reason
