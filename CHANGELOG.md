@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-09-12
+
 ### Added
 
 - **A host's Properties inspector can now write a note's cue size and mute flag, and an engraved
@@ -27,6 +29,27 @@ and this project adheres to
   `SetBeamVisible.leader(of:in:)`, now also public, rather than at the selected chord. A host driving
   `EditIntent.setBeamVisible` needs none of this: the planner re-targets from any member to the leader
   (`ScoreEditSession+VisibilityPlanning.swift`).
+
+- **A score's credits can be written.** `EditIntent.setScoreInfo(writes:)` (wire tag 84) and the
+  `SetScoreInfo` command behind it write a score's title, subtitle, composer, arranger, lyricist and
+  copyright. A `ScoreInfoWrite` names a CREDIT rather than a storage location, and each one reaches
+  BOTH places a score keeps one: the `<metaTag>`, and — for the four roles MuseScore gives a text
+  style — the engraved title block. Arranger and copyright have no VBox style (a copyright is a page
+  footer macro), so those two are metadata-only, and that is not a gap to fill later. A score with no
+  leading `<VBox>` gets one, at `Score.blank`'s own 10sp, which is what MuseScore's "Add > Text >
+  Title" does to an empty score. The inverse restores `blocks` and `metaTags` wholesale rather than
+  per field, which is what makes undo exact for a frame the command created, for imported per-text
+  offsets and preserved markup, and for a `<metaTag>` that was absent rather than empty. Plural for
+  `setLyricSyllables`' reason: a credits form saves every field at once and one Save is one undo step.
+
+- **`NotatedClef` knows which note its middle line carries** — `middleLineDiatonicStep` and
+  `middleLinePitch`. `SheetMusicLayout` now derives a notehead's staff step from that property
+  instead of keeping its own copy of the table, since note input needs the same anchor.
+  `Score.clefInForce(at:)` answers which clef a reader is under at a location, carrying mid-score
+  clef changes forward — unlike `authoredClef(at:)`, which answers only for the start of a staff.
+
+- **`MidiRenderer.renderForPlayback(score:)`** — `render(score:)`'s output carried to the barline the
+  music stops in, for a caller handing the sequence to a transport rather than writing a file.
 
 ### Changed
 
@@ -50,6 +73,28 @@ and this project adheres to
 
 ### Fixed
 
+- **Note input ignored the clef.** With no previous note to measure against, a letter key fell back to
+  octave 4 whatever the staff said — A on a bass staff landed three ledger lines above it, and on a
+  freshly created score that is every note typed until the first one lands. The octave now comes from
+  the clef, ported from MuseScore's own `Score::resolveNoteInputParams`: the anchor is
+  `line2pitch(4, clef, Key::C)`, which on a five-line staff is the middle line. The tritone tie-break
+  is asymmetric on purpose (`delta < -6`, not `<=`), so a letter exactly six semitones from the anchor
+  takes the LOWER octave — F under a treble clef is F4, not the F5 an upward tie would pick.
+
+  **This moves the treble staff too**, which is the change a host will see first: C, D and E now land
+  an octave above middle C, inside the staff, where the octave-4 default put them one and two ledger
+  lines below it. A is unchanged. Percussion staves are unchanged — they place by drum line, not by
+  letter, so their clefs anchor on the treble's middle line.
+
+- **Playback stopped the instant the last note released.** What ends playback is the transport running
+  out, and a rest emits no MIDI event, so end-of-track sat one tick past the final note-off: a bar
+  holding a quarter note and three quarter rests stopped a beat in. Hosts should hand a transport
+  `MidiRenderer.renderForPlayback(score:)`, which carries the sequence to the barline of the bar the
+  music stops in — not to the end of the score, which on a template padded out with empty bars would
+  answer an abrupt stop with a long silence. `render(score:)` is deliberately unchanged and stays
+  byte-faithful to MuseScore's own export, whose end-of-track also sits one tick past the final
+  note-off; a file and a playback are different lengths on purpose.
+
 - **A cue note no longer loses its size on save.** `Note.isSmall` was decode-only: the decoder read
   MuseScore's `<small>`, but no encoder ever wrote it back, so a note read as a cue note from an `.mscx`
   file was silently full-sized again the next time the score was saved. The 2-pass byte gate could not
@@ -68,8 +113,13 @@ and this project adheres to
 ### Notes
 
 - `EditIntent` gains `.setNoteSmall`, `.setNotePlay`, `.setTextOffset` and `.setTextAutoplace`
-  (wire tags 80–83). It is a public non-frozen enum, so a host switching over it exhaustively needs a
-  `default` clause. No public symbol was removed and no signature changed.
+  (wire tags 80–83) and `.setScoreInfo` (wire tag 84). It is a public non-frozen enum, so a host
+  switching over it exhaustively needs a `default` clause. No public symbol was removed and no
+  signature changed.
+
+- **Two behavior changes a host may need to tell its own users about**, both described under Fixed:
+  the octave a letter key writes with nothing before it (including on a treble staff), and the length
+  of a playback sequence for a host that adopts `renderForPlayback`.
 ## [3.0.0] - 2026-09-12
 
 ### Added
