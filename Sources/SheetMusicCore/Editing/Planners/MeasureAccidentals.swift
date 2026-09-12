@@ -46,11 +46,6 @@ public enum MeasureAccidentals {
         let keySig = score.activeKey(staff: location.staff, measureIndex: location.measureIndex)
         let letterIndex = letterIndex(forTpc: natural.tpc)
         let keyAlteration = keyAlteration(forLetter: letterIndex, keySig: keySig)
-        // With no previous note to measure against, the CLEF is what says where the staff lives. Measuring the
-        // letter against the note on the middle line puts it in the staff the user is looking at: A under a bass
-        // clef is A2 (the first space) rather than the A4 an octave-4 default writes three ledger lines above it.
-        // Reached for the first note of a staff, and again after every rest the caret lands on with nothing
-        // before it — which on a freshly created score is every note the user types until the first one lands.
         let chosen: (pitch: Int, tpc: Int)?
         if let reference {
             let searchReference = reference - keyAlteration
@@ -63,8 +58,10 @@ public enum MeasureAccidentals {
         } else {
             // Nothing was played, so the CLEF says where the staff lives — MuseScore's own rule for this branch,
             // and the reason A under a bass clef is the A in the first space rather than the A an octave-4 default
-            // wrote three ledger lines above it. `.above` has no chord to stack onto here either, so both rules
-            // take the same answer rather than one of them refusing the key.
+            // wrote three ledger lines above it. Reached for the first note of a staff, and again after every rest
+            // the caret lands on with nothing before it, which on a fresh score is every note until the first one
+            // lands. `.above` has no chord to stack onto here either, so both rules take the same answer rather
+            // than one of them refusing the key.
             chosen = NoteInputPlanner.pitch(
                 forLetter: letter, clefAnchor: score.clefInForce(at: location).middleLinePitch,
             )
