@@ -86,6 +86,61 @@ struct RangeCopyVoiceRebuildTests {
         #expect(total == 1920)
     }
 
+    @Test("no tie crosses into or out of the copied material")
+    func trimsCarryNoTieIntoTheCopy() throws {
+        var score = Self.identifiedFixture()
+        // Measure 2 voice 0 is two tied half notes. [1200, 1680) cuts the second one at both ends, so the
+        // leading trim's head and the trailing trim's first piece both abut the copy.
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 2, start: 1200, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score,
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 2).elements
+        #expect(elements.count == 4)
+        guard case let .chord(head) = elements[1], case let .chord(tail) = elements[3] else {
+            Issue.record("the boundary element should have been trimmed on both sides")
+            return
+        }
+        #expect(head.duration == .eighth)
+        // The copy is not this note's continuation, so the head must not tie into it...
+        #expect(head.notes[0].tieForward == nil)
+        // ...while the partner it really has, in front of the span, is untouched.
+        #expect(head.notes[0].tieBack == 1)
+        #expect(elements[2] == Self.quarter(60))
+        // Symmetrically, nothing ties back out of the copy into the trailing trim.
+        #expect(tail.notes[0].tieBack == nil)
+    }
+
+    @Test("a multi-piece leading trim stays tied inside itself and stops at the copy")
+    func multiPieceTrimTiesOnlyInsideItself() throws {
+        var score = Self.identifiedFixture()
+        // [720, 1200) cuts the FIRST half note of measure 2, whose remainder needs a quarter plus an eighth.
+        // That source note carries `tieForward = 1` into its partner — which the copy now overwrites.
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 2, start: 720, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score,
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 2).elements
+        #expect(elements.count == 5)
+        guard case let .chord(head) = elements[0], case let .chord(continuation) = elements[1],
+              case let .chord(tail) = elements[3]
+        else {
+            Issue.record("the first half note should have been trimmed into two pieces")
+            return
+        }
+        #expect(head.duration == .quarter)
+        #expect(continuation.duration == .eighth)
+        // The trim's own two pieces are one note, so they stay tied to each other.
+        #expect(head.notes[0].tieForward == 1)
+        #expect(continuation.notes[0].tieBack == 1)
+        // The tie that would cross into the copy is gone, even though the source note carried one.
+        #expect(continuation.notes[0].tieForward == nil)
+        #expect(elements[2] == Self.quarter(60))
+        #expect(tail.notes[0].tieBack == nil)
+    }
+
     @Test("a mid-bar clef inside the replaced span survives at its tick")
     func keepsNonTimedElements() throws {
         var score = Self.identifiedFixture()

@@ -93,6 +93,12 @@ extension RangeCopyVoiceRebuild {
     ///
     /// The head keeps the boundary element's identity: it is the same onset, only shorter, so the performer's
     /// element is still there. Its continuation pieces are new material and mint fresh identifiers.
+    ///
+    /// No tie leaves the trim's far end. What follows it is copied material from somewhere else in the score —
+    /// usually a different pitch — not the rest of this note, so a tie across that seam asserts a bond between
+    /// two notes that are not partners. A tie the SOURCE already carried there is cleared too: it pointed at
+    /// whatever stood after the original element, and the copy has overwritten exactly that. Ties INSIDE the
+    /// trim stay, because those pieces really are one note.
     static func leadingTrim(of entry: Entry, upTo spanStart: Int, in context: Context) -> [VoiceSlot] {
         guard case let .chord(chord) = entry.element else { return [] }
         let durations = DurationChangeAlgorithm.alignedDurations(
@@ -101,11 +107,10 @@ extension RangeCopyVoiceRebuild {
         guard let first = durations.first else { return [] }
         var head = chord
         head.duration = first
-        for index in head.notes.indices {
-            head.notes.updateNote(at: index) { $0.tieForward = 1 }
-        }
-        var slots = [VoiceSlot(identity: .keep(entry.eid), element: .chord(head))]
         let continuation = Array(durations.dropFirst())
+        // The head is the trim's far end only when nothing follows it inside the trim.
+        let headElement = settingTie(.chord(head), forward: continuation.isEmpty ? .clear : .set(1))
+        var slots = [VoiceSlot(identity: .keep(entry.eid), element: headElement)]
         guard !continuation.isEmpty else { return slots }
         let pieces: [VoiceElement] = chord.notes.isEmpty
             ? continuation.map { .rest(duration: $0) }
@@ -117,42 +122,64 @@ extension RangeCopyVoiceRebuild {
     /// The part of `entry` that stays behind the span, `[spanEnd, entry.end)`.
     ///
     /// All of it is new material: the onset it belonged to was consumed by the copy, so nothing here may keep
-    /// the boundary element's identity.
+    /// the boundary element's identity. Its first piece carries no `tieBack` for the mirror of the reason the
+    /// leading trim carries no `tieForward` — the copy in front of it is not this note's beginning.
     static func trailingTrim(of entry: Entry, from spanEnd: Int, in context: Context) -> [VoiceSlot] {
         guard case let .chord(chord) = entry.element else { return [] }
         let durations = DurationChangeAlgorithm.alignedDurations(
             forTicks: entry.end - spanEnd, rtickStart: spanEnd, division: context.division,
         )
         guard !durations.isEmpty else { return [] }
-        let pieces: [VoiceElement] = chord.notes.isEmpty
+        var pieces: [VoiceElement] = chord.notes.isEmpty
             ? durations.map { .rest(duration: $0) }
             : DurationChangeAlgorithm.makeChordChain(
                 from: chord, durations: durations, onsetOwnership: .allContinuation,
             )
+        // `.allContinuation` already leaves the first piece untied backwards; stated here so the invariant
+        // survives a change of ownership mode rather than depending on one.
+        if let first = pieces.indices.first { pieces[first] = settingTie(pieces[first], back: .clear) }
         return pieces.map { VoiceSlot(identity: .fresh, element: $0) }
     }
 
     /// `makeChordChain` only knows about its own slice: it clears `tieBack` on its first piece and restores the
-    /// source's own `tieForward` on its last. The leading trim's continuation is the middle of a chain whose
-    /// head is the kept boundary element, so both ends are tied.
+    /// source's own `tieForward` on its last. The leading trim's continuation hangs off the kept head, so it
+    /// ties back to it — and it ends the trim, so its far end is cleared.
     private static func tiedChain(from chord: Chord, durations: [NoteDuration]) -> [VoiceElement] {
         var pieces = DurationChangeAlgorithm.makeChordChain(
             from: chord, durations: durations, onsetOwnership: .allContinuation,
         )
-        if let first = pieces.indices.first { pieces[first] = settingTie(pieces[first], back: 1) }
-        if let last = pieces.indices.last { pieces[last] = settingTie(pieces[last], forward: 1) }
+        if let first = pieces.indices.first { pieces[first] = settingTie(pieces[first], back: .set(1)) }
+        if let last = pieces.indices.last { pieces[last] = settingTie(pieces[last], forward: .clear) }
         return pieces
     }
 
-    /// Sets `tieBack` and/or `tieForward` on every note of a chord element; a `nil` argument leaves that side
-    /// as it is. `Chord.notes` is a `ChordNotes`, whose only mutation path that keeps a note's identifier is
-    /// `updateNote(at:_:)`, so notes are edited through their indices rather than rebuilt.
-    private static func settingTie(_ element: VoiceElement, back: Int? = nil, forward: Int? = nil) -> VoiceElement {
+    /// What to do with one side of a note's tie. `.leave` is not the same as `.clear`: a trim keeps the tie
+    /// that binds it to material the span never touched, and drops only the one that would cross the seam.
+    private enum TieChange {
+        case leave
+        case set(Int)
+        case clear
+
+        func applied(to value: Int?) -> Int? {
+            switch self {
+            case .leave: value
+            case let .set(new): new
+            case .clear: nil
+            }
+        }
+    }
+
+    /// Rewrites `tieBack` and/or `tieForward` on every note of a chord element. `Chord.notes` is a
+    /// `ChordNotes`, whose only mutation path that keeps a note's identifier is `updateNote(at:_:)`, so notes
+    /// are edited through their indices rather than rebuilt.
+    private static func settingTie(
+        _ element: VoiceElement, back: TieChange = .leave, forward: TieChange = .leave,
+    ) -> VoiceElement {
         guard case var .chord(chord) = element else { return element }
         for index in chord.notes.indices {
             chord.notes.updateNote(at: index) {
-                if let back { $0.tieBack = back }
-                if let forward { $0.tieForward = forward }
+                $0.tieBack = back.applied(to: $0.tieBack)
+                $0.tieForward = forward.applied(to: $0.tieForward)
             }
         }
         return .chord(chord)
