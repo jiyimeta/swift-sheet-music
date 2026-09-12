@@ -30,6 +30,14 @@ enum RangeCopyVoiceRebuild {
         )
         let spanStart = piece.startTickInMeasure
         let spanEnd = spanStart + piece.elements.reduce(0) { $0 + context.advance(of: $1) }
+        // Nothing downstream notices a span that runs off the end of the bar: `cut` files the elements past it
+        // into neither `after` nor `trailing`, the rebuild therefore drops them, and `ReplaceVoiceElements`
+        // validates no lengths — so an over-long voice would be written silently. The caller should never send
+        // one, and this is the guard that makes that true of this unit on its own rather than by trust.
+        let measureTicks = context.measureDuration.ticks(division: context.division)
+        guard spanEnd <= measureTicks else {
+            throw refused(.insufficientRoom(neededTicks: spanEnd, availableTicks: measureTicks))
+        }
         let cut = try cut(voice, spanStart: spanStart, spanEnd: spanEnd, in: context)
         let survivors = try survivingTuplets(of: voice, touched: cut.touched)
         let rebuilt = rebuild(piece, cut: cut, spanStart: spanStart, spanEnd: spanEnd, in: context)

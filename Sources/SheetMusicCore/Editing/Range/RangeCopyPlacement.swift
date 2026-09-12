@@ -47,6 +47,10 @@ enum RangeCopyPlacement {
         }
 
         for (absoluteTick, lengthTicks, element) in stream.elements {
+            // A stream holds chords and rests only — `RangeCopySource` builds it from `voiceElements(in:)`,
+            // which yields nothing else — so this drops nothing today. It WOULD drop the source's own non-timed
+            // elements silently on the day spec §6's "copy the range's clefs and signatures" lands: that step
+            // has to place them by tick here rather than let this line swallow them.
             guard case let .chord(chord) = element else { continue }
             var cursor = destinationTick + (absoluteTick - sourceStartTick)
             var remaining = lengthTicks // resolved against the SOURCE bar by RangeCopySource
@@ -63,10 +67,8 @@ enum RangeCopyPlacement {
                 }
                 let startIndex = currentElements.count
                 if isFirstPart, isLastPart {
-                    // The whole element fits here: copy it verbatim, stored duration and all. Decomposing it
-                    // would un-dot a dotted note and shred a tuplet member.
-                    currentElements.append(wholeBarRestSpelling(
-                        of: element, at: position, length: partTicks, geometry: geometry,
+                    currentElements.append(contentsOf: destinationSpelling(
+                        of: chord, at: position, length: partTicks, geometry: geometry, division: division,
                     ))
                 } else {
                     currentElements.append(contentsOf: cutPieces(
@@ -93,16 +95,35 @@ enum RangeCopyPlacement {
         return result.isEmpty ? nil : result
     }
 
-    /// Returns `element` unchanged, except that a rest starting at tick 0 and covering the whole destination bar
-    /// comes back as `.rest(duration: .measure)` — the spelling `DeleteRange`'s collapse produces and the MSCX
-    /// encoder expects. `alignedDurations` would give a half plus a quarter in 3/4 instead.
-    private static func wholeBarRestSpelling(
-        of element: VoiceElement, at position: ScoreTickPosition, length: Int, geometry: RangeCopyGeometry,
-    ) -> VoiceElement {
-        guard element.isRest, position.tick == 0, length == geometry.measureLength(position.measure) else {
-            return element
+    /// How an element that fits its destination bar whole is spelled there.
+    ///
+    /// A stored duration travels verbatim — decomposing it would un-dot a dotted note and shred a tuplet member
+    /// — with one exception. `.measure` is not a length: it is a reference to whichever bar the element sits in,
+    /// resolved anew wherever it is read. Written verbatim into a bar of a different length it silently becomes
+    /// that bar's length instead of the source's, so it is expanded here to the source's real ticks (`length`,
+    /// which `RangeCopySource` already resolved against the SOURCE bar) and re-spelled against the destination.
+    ///
+    /// It goes back to `.measure` only where the destination agrees — a rest starting at tick 0 and exactly
+    /// filling the bar — which is the spelling `DeleteRange`'s collapse produces and the MSCX encoder expects,
+    /// and the one case `alignedDurations` would get wrong (a half plus a quarter in 3/4).
+    private static func destinationSpelling(
+        of chord: Chord, at position: ScoreTickPosition, length: Int, geometry: RangeCopyGeometry, division: Int,
+    ) -> [VoiceElement] {
+        let fillsBar = position.tick == 0 && length == geometry.measureLength(position.measure)
+        if chord.notes.isEmpty, fillsBar { return [.rest(duration: .measure)] }
+        guard case .measure = chord.duration else { return [.chord(chord)] }
+        guard chord.notes.isEmpty else {
+            return DurationChangeAlgorithm.makeChordChain(
+                from: chord,
+                durations: DurationChangeAlgorithm.alignedDurations(
+                    forTicks: length, rtickStart: position.tick, division: division,
+                ),
+                onsetOwnership: .headIsOnset,
+            )
         }
-        return .rest(duration: .measure)
+        return DurationChangeAlgorithm.alignedRests(
+            forTicks: length, rtickStart: position.tick, division: division,
+        )
     }
 
     /// The overhang path: `chord` is being cut into `ticks` worth of material starting at `rtickStart` within the
