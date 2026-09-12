@@ -41,9 +41,11 @@ public struct DuplicateRange: EditCommand {
     ///
     /// Planning runs against a scratch score that each planned command is applied to as it is appended, because
     /// a later step has to see what an earlier one built: a rebuild for an appended bar can only be planned
-    /// against a score that already has that bar. The allocator is scratch for the same reason and no identifier
-    /// minted here reaches a command — the rebuilt slots carry `.fresh` / `.keep`, which is what makes replanning
-    /// against the live allocator at apply time safe.
+    /// against a score that already has that bar. The allocator is scratch for the same reason. A planned command
+    /// may still carry an identifier this scratch allocator minted — `RangeCopyVoiceRebuild`'s boundary trim
+    /// keeps its head under `.keep(eid)`, and in an appended bar that `eid` came from here — but the apply runs
+    /// the identical command sequence from the identical allocator value, so the live allocator mints the same
+    /// identifiers in the same order and every `.keep` names an element that really exists by the time it is read.
     func plan(in score: Score, ids: EIDAllocator) throws -> CompositeEditCommand? {
         guard let source = RangeCopySource(range: range, in: score) else {
             throw Self.refused(.targetNotFound(range.start))
@@ -54,7 +56,7 @@ public struct DuplicateRange: EditCommand {
         let destinationTick = source.startTick + source.lengthTicks
 
         try appendMeasures(
-            reaching: destinationTick + source.lengthTicks, staves: source.staves,
+            reaching: destinationTick + reach(of: source), staves: source.staves,
             in: &scratch, ids: &allocator, commands: &commands,
         )
         for stream in source.streams {
@@ -68,6 +70,17 @@ public struct DuplicateRange: EditCommand {
 }
 
 extension DuplicateRange {
+    /// How far past the destination's start the copy actually reaches — the largest of its streams' reaches.
+    ///
+    /// NOT the range's own length. `Score.voiceElements(in:)` selects by ONSET, so an element whose onset falls
+    /// inside the range is copied whole even where it runs past the range's end (per spec), and its copy reaches
+    /// that much further. Sizing the append pass by the range's length instead leaves the copy short of a bar
+    /// near the end of the score — a voice holding a whole-bar rest under a two-beat selection is enough to do
+    /// it — and the placement then refuses for want of the bar this would have appended.
+    private func reach(of source: RangeCopySource) -> Int {
+        source.streams.map { $0.reach(from: source.startTick) }.max() ?? source.lengthTicks
+    }
+
     /// Appends measure columns until every staff the copy touches reaches `needed` absolute ticks.
     ///
     /// `InsertMeasure` adds a bar to every staff at once, so the loop asks the SHORTEST staff whether there is
@@ -114,7 +127,8 @@ extension DuplicateRange {
             // The measures were appended before any stream was placed, so running out of staff here means the
             // copy needs more room than the range's own staff measured — a staff in shorter bars than the first.
             throw Self.refused(.insufficientRoom(
-                neededTicks: destinationTick + stream.lengthTicks, availableTicks: geometry.totalTicks,
+                neededTicks: destinationTick + stream.reach(from: sourceStartTick),
+                availableTicks: geometry.totalTicks,
             ))
         }
         for piece in pieces {
@@ -157,9 +171,12 @@ extension DuplicateRange {
 }
 
 extension RangeCopySource.Stream {
-    /// How far this stream reaches from the range's start — what a placement failure has to report as needed.
-    var lengthTicks: Int {
-        guard let first = elements.first, let last = elements.last else { return 0 }
-        return last.absoluteTick + last.lengthTicks - first.absoluteTick
+    /// How far this stream reaches past `sourceStartTick`: the END of its last element, not its last onset, and
+    /// measured from the RANGE's start rather than from the stream's own first element — a stream whose first
+    /// selected element starts later than the range lands that much later than the destination, so its reach
+    /// includes the gap.
+    func reach(from sourceStartTick: Int) -> Int {
+        guard let last = elements.last else { return 0 }
+        return last.absoluteTick + last.lengthTicks - sourceStartTick
     }
 }
