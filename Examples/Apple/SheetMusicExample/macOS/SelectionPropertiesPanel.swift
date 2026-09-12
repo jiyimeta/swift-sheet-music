@@ -2,7 +2,7 @@
     import SheetMusic
     import SwiftUI
 
-    /// Small command surface for exercising authored text properties in the example.
+    /// Small command surface for exercising authored text, note and beam properties in the example.
     @available(macOS 15.0, *)
     struct SelectionPropertiesPanel: View {
         enum Action {
@@ -10,59 +10,41 @@
             case color(ScoreColor?)
             case font(SetTextFont.Patch)
             case verse(Int)
+            case offset(ScoreOffset?)
+            case autoplace(Bool?)
+            case noteSmall(Bool)
+            case notePlay(Bool)
+            case beamVisible(Bool)
             case deselect
+        }
+
+        /// The selected note's per-note flags and beam-group state.
+        struct NoteSelection: Equatable {
+            let isSmall: Bool
+            let play: Bool
+            /// `nil` when the note belongs to no beam group at all — a rest, a quarter or longer, a lone eighth.
+            /// The panel must render no beam row in that case, never an unchecked one: nil is not "hidden".
+            let beamVisible: Bool?
         }
 
         let text: ScoreTextID?
         let properties: ElementProperties?
+        let note: NoteSelection?
         let isEditingText: Bool
         let onAction: (Action) -> Void
 
+        @State private var offsetXText = ""
+        @State private var offsetYText = ""
+
         var body: some View {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Text Properties").font(.headline)
+                Text(headline).font(.headline)
                 if let text, let properties {
-                    Text(title(for: text)).font(.subheadline)
-                    Menu("Placement: \(placementLabel(properties.placement))") {
-                        Button("Default") { onAction(.placement(nil)) }
-                        Button("Above") { onAction(.placement(.above)) }
-                        Button("Below") { onAction(.placement(.below)) }
-                    }
-                    Menu("Color") {
-                        Button("Default") { onAction(.color(nil)) }
-                        Button("Red") { onAction(.color(ScoreColor(red: 200, green: 35, blue: 35))) }
-                        Button("Blue") { onAction(.color(ScoreColor(red: 30, green: 90, blue: 210))) }
-                        Button("Green") { onAction(.color(ScoreColor(red: 30, green: 130, blue: 70))) }
-                    }
-                    if case .harmony = text {
-                        Menu("Font Style") {
-                            Button("Default") { onAction(.font(.init(style: .clear))) }
-                            Button("Regular") { onAction(.font(.init(style: .set([])))) }
-                            Button("Bold") { onAction(.font(.init(style: .set(.bold)))) }
-                            Button("Italic") { onAction(.font(.init(style: .set(.italic)))) }
-                            Button("Bold Italic") { onAction(.font(.init(style: .set([.bold, .italic])))) }
-                        }
-                        Menu("Font Size") {
-                            Button("Default") { onAction(.font(.init(size: .clear))) }
-                            ForEach([10, 14, 20, 28], id: \.self) { size in
-                                Button("\(size) pt") { onAction(.font(.init(size: .set(Double(size))))) }
-                            }
-                        }
-                    }
-                    if case let .lyric(_, verse) = text {
-                        Menu("Verse: \(verse + 1)") {
-                            ForEach(0 ..< 4) { destination in
-                                Button("Verse \(destination + 1)") { onAction(.verse(destination)) }
-                            }
-                        }
-                        Text("Moves this syllable only. An occupied verse is kept.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Button("Deselect") { onAction(.deselect) }
-                    Text("Deselect to see the authored color. ⌘Z undoes each change.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    textRows(text: text, properties: properties)
+                } else if let note {
+                    noteRows(note)
                 } else {
-                    Text("Click a lyric, staff / system text, chord symbol, or rehearsal mark.")
+                    Text("Click a note, lyric, staff / system text, chord symbol, or rehearsal mark.")
                         .foregroundStyle(.secondary)
                 }
                 if isEditingText {
@@ -80,10 +62,147 @@
             .background(.background)
         }
 
+        private var headline: String {
+            if text != nil {
+                "Text Properties"
+            } else if note != nil {
+                "Note Properties"
+            } else {
+                "Selection Properties"
+            }
+        }
+
+        @ViewBuilder
+        private func textRows(text: ScoreTextID, properties: ElementProperties) -> some View {
+            Text(title(for: text)).font(.subheadline)
+            Menu("Placement: \(placementLabel(properties.placement))") {
+                Button("Default") { onAction(.placement(nil)) }
+                Button("Above") { onAction(.placement(.above)) }
+                Button("Below") { onAction(.placement(.below)) }
+            }
+            offsetRow(offset: properties.offset)
+            Menu("Auto-place: \(autoplaceLabel(properties.autoplace))") {
+                Button("Default (On)") { onAction(.autoplace(nil)) }
+                Button("On") { onAction(.autoplace(true)) }
+                Button("Off") { onAction(.autoplace(false)) }
+            }
+            Menu("Color") {
+                Button("Default") { onAction(.color(nil)) }
+                Button("Red") { onAction(.color(ScoreColor(red: 200, green: 35, blue: 35))) }
+                Button("Blue") { onAction(.color(ScoreColor(red: 30, green: 90, blue: 210))) }
+                Button("Green") { onAction(.color(ScoreColor(red: 30, green: 130, blue: 70))) }
+            }
+            if case .harmony = text {
+                Menu("Font Style") {
+                    Button("Default") { onAction(.font(.init(style: .clear))) }
+                    Button("Regular") { onAction(.font(.init(style: .set([])))) }
+                    Button("Bold") { onAction(.font(.init(style: .set(.bold)))) }
+                    Button("Italic") { onAction(.font(.init(style: .set(.italic)))) }
+                    Button("Bold Italic") { onAction(.font(.init(style: .set([.bold, .italic])))) }
+                }
+                Menu("Font Size") {
+                    Button("Default") { onAction(.font(.init(size: .clear))) }
+                    ForEach([10, 14, 20, 28], id: \.self) { size in
+                        Button("\(size) pt") { onAction(.font(.init(size: .set(Double(size))))) }
+                    }
+                }
+            }
+            if case let .lyric(_, verse) = text {
+                Menu("Verse: \(verse + 1)") {
+                    ForEach(0 ..< 4) { destination in
+                        Button("Verse \(destination + 1)") { onAction(.verse(destination)) }
+                    }
+                }
+                Text("Moves this syllable only. An occupied verse is kept.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Button("Deselect") { onAction(.deselect) }
+            Text("Deselect to see the authored color. ⌘Z undoes each change.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+
+        @ViewBuilder
+        private func noteRows(_ note: NoteSelection) -> some View {
+            Toggle(isOn: Binding(
+                get: { note.isSmall },
+                set: { onAction(.noteSmall($0)) },
+            )) { Text("Small") }
+            Toggle(isOn: Binding(
+                get: { note.play },
+                set: { onAction(.notePlay($0)) },
+            )) { Text("Play") }
+            if let beamVisible = note.beamVisible {
+                Toggle(isOn: Binding(
+                    get: { beamVisible },
+                    set: { onAction(.beamVisible($0)) },
+                )) { Text("Beam Visible") }
+            }
+            Button("Deselect") { onAction(.deselect) }
+            Text("⌘Z undoes each change.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+
+        private func offsetRow(offset: ScoreOffset?) -> some View {
+            HStack(spacing: 6) {
+                Text("Offset")
+                TextField("X", text: $offsetXText)
+                    .frame(width: 44)
+                    .onSubmit { commitOffset() }
+                TextField("Y", text: $offsetYText)
+                    .frame(width: 44)
+                    .onSubmit { commitOffset() }
+                Button("Set") { commitOffset() }
+                Button("Default") {
+                    offsetXText = ""
+                    offsetYText = ""
+                    onAction(.offset(nil))
+                }
+            }
+            .textFieldStyle(.roundedBorder)
+            .onAppear { syncOffsetText(offset) }
+            .onChange(of: offset) { _, newValue in syncOffsetText(newValue) }
+            // Selecting a different text can carry the same offset (both nil is the common case), which
+            // fires neither `.onAppear` nor the `offset` `.onChange` above — resync on the identity of the
+            // selection itself so a half-typed, uncommitted value can't be left in the field and then
+            // written to the newly selected target by the next "Set".
+            .onChange(of: text) { _, _ in syncOffsetText(offset) }
+        }
+
+        private func syncOffsetText(_ offset: ScoreOffset?) {
+            offsetXText = offset.map { Self.formattedOffsetComponent($0.x) } ?? ""
+            offsetYText = offset.map { Self.formattedOffsetComponent($0.y) } ?? ""
+        }
+
+        private func commitOffset() {
+            let x = Double(offsetXText) ?? 0
+            let y = Double(offsetYText) ?? 0
+            onAction(.offset(ScoreOffset(x: x, y: y)))
+        }
+
+        private static func formattedOffsetComponent(_ value: Double) -> String {
+            // `Int(value)` traps for a non-finite value or one outside `Int`'s range — an `.mscx` can carry
+            // an offset that large (`<offset x="1e30">`), so guard before converting rather than trapping
+            // the whole example. Non-finite values already fall through here on their own:
+            // `truncatingRemainder` returns NaN for both NaN and infinity, so only an out-of-range but
+            // finite whole number needs the explicit check.
+            guard value.truncatingRemainder(dividingBy: 1) == 0, value.isFinite, value.magnitude < 9e18 else {
+                return String(format: "%.2f", value)
+            }
+            return String(Int(value))
+        }
+
         private func placementLabel(_ placement: Placement?) -> String {
             switch placement {
             case .above: "Above"
             case .below: "Below"
+            case nil: "Default"
+            }
+        }
+
+        private func autoplaceLabel(_ autoplace: Bool?) -> String {
+            switch autoplace {
+            case true: "On"
+            case false: "Off"
             case nil: "Default"
             }
         }
@@ -105,6 +224,18 @@
                 measureIndex: 2, voiceIndex: 0, elementIndex: 0,
             )),
             properties: ElementProperties(placement: .below),
+            note: nil,
+            isEditingText: false,
+            onAction: { _ in },
+        )
+        .frame(height: 440)
+    }
+
+    #Preview("Note properties") {
+        SelectionPropertiesPanel(
+            text: nil,
+            properties: nil,
+            note: SelectionPropertiesPanel.NoteSelection(isSmall: false, play: true, beamVisible: true),
             isEditingText: false,
             onAction: { _ in },
         )

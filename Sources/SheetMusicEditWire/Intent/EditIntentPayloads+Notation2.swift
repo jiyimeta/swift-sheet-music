@@ -139,3 +139,35 @@ public struct SetNoteParenthesesIntentWire {
         return (location: location.decoded(), parentheses: ParenthesesTable.modes[Int(parentheses)])
     }
 }
+
+/// Tags: 1 location, 2 isSmall (UInt8: 0 false, nonzero true).
+@WireFormat
+public struct SetNoteSmallIntentWire {
+    public var location: NoteIDWire
+    public var isSmall: UInt8
+
+    public init(location: NoteID, isSmall: Bool) {
+        self.location = NoteIDWire(from: location)
+        self.isSmall = isSmall ? 1 : 0
+    }
+
+    public func decoded() -> (location: NoteID, isSmall: Bool) {
+        (location: location.decoded(), isSmall: isSmall != 0)
+    }
+}
+
+/// Tags: 1 location, 2 play (UInt8: 0 false, nonzero true).
+@WireFormat
+public struct SetNotePlayIntentWire {
+    public var location: NoteIDWire
+    public var play: UInt8
+
+    public init(location: NoteID, play: Bool) {
+        self.location = NoteIDWire(from: location)
+        self.play = play ? 1 : 0
+    }
+
+    public func decoded() -> (location: NoteID, play: Bool) {
+        (location: location.decoded(), play: play != 0)
+    }
+}

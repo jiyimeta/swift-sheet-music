@@ -459,16 +459,7 @@
                 if let score {
                     scoreContent(score: laidOut(score))
                         .safeAreaInset(edge: .trailing, spacing: 0) {
-                            SelectionPropertiesPanel(
-                                text: selectedPropertyText,
-                                properties: selectedPropertyText.flatMap { text in
-                                    inputController.flatMap {
-                                        SetElementPlacement.currentProperties(for: .text(text), in: $0.score)
-                                    }
-                                },
-                                isEditingText: lyricSession.isActive || textSession.isActive,
-                                onAction: applyTextProperty,
-                            )
+                            selectionPropertiesPanel
                         }
                         .popover(item: $clefPopover, arrowEdge: .top) { state in
                             ClefPopover(
@@ -3533,27 +3524,109 @@
             return text
         }
 
+        /// The full `NoteID` behind a single note selection, or `nil` when the selection isn't a note. Used to
+        /// target `SetNoteSmall` / `SetNotePlay` / `SetBeamVisible`, mirroring `selectedPropertyText`'s gating.
+        private var selectedPropertyNoteID: NoteID? {
+            guard layoutMode == .horizontal || layoutMode == .vertical,
+                  case let .single(item) = selection,
+                  case let .note(noteID) = fullEditingItem(item)
+            else { return nil }
+            return noteID
+        }
+
+        /// The selected note's current flags for `SelectionPropertiesPanel` to read. `beamVisible` comes through
+        /// `SetBeamVisible.current(at:in:)` — the accessor Task 4 made public — and is `nil` whenever the note
+        /// belongs to no beam group, which the panel must render as no row at all.
+        private var selectedPropertyNote: SelectionPropertiesPanel.NoteSelection? {
+            guard let noteID = selectedPropertyNoteID,
+                  let controller = inputController,
+                  let note = controller.score[noteID]
+            else { return nil }
+            return SelectionPropertiesPanel.NoteSelection(
+                isSmall: note.isSmall,
+                play: note.play,
+                beamVisible: SetBeamVisible.current(at: VoiceElementID(noteID), in: controller.score),
+            )
+        }
+
+        /// Factored out of the `detail:` closure's modifier chain: inlining this call there pushed the surrounding
+        /// `.onChange` chain past the type-checker's time budget once it gained the `note:` argument.
+        private var selectionPropertiesPanel: some View {
+            SelectionPropertiesPanel(
+                text: selectedPropertyText,
+                properties: selectedPropertyText.flatMap { text in
+                    inputController.flatMap {
+                        SetTextOffset.currentProperties(for: text, in: $0.score)
+                    }
+                },
+                note: selectedPropertyNote,
+                isEditingText: lyricSession.isActive || textSession.isActive,
+                onAction: applyTextProperty,
+            )
+        }
+
         private func applyTextProperty(_ action: SelectionPropertiesPanel.Action) {
-            guard let controller = inputController, let text = selectedPropertyText,
-                  !lyricSession.isActive, !textSession.isActive
+            guard let controller = inputController, !lyricSession.isActive, !textSession.isActive
             else { return }
-            let command: any EditCommand
-            var resultingText = text
             switch action {
-            case let .placement(value): command = SetElementPlacement(.text(text), placement: value)
-            case let .color(value): command = SetElementColor(.text(text), color: value)
-            case let .font(patch): command = SetTextFont(text, patch: patch)
+            case let .placement(value):
+                guard let text = selectedPropertyText else { return }
+                applyTextEdit(
+                    SetElementPlacement(.text(text), placement: value), reselecting: text, controller: controller,
+                )
+            case let .color(value):
+                guard let text = selectedPropertyText else { return }
+                applyTextEdit(SetElementColor(.text(text), color: value), reselecting: text, controller: controller)
+            case let .font(patch):
+                guard let text = selectedPropertyText else { return }
+                applyTextEdit(SetTextFont(text, patch: patch), reselecting: text, controller: controller)
             case let .verse(verse):
-                guard case let .lyric(anchor, _) = text else { return }
-                command = SetLyricVerse(text, toVerse: verse)
-                resultingText = .lyric(anchor: anchor, verse: verse)
+                guard let text = selectedPropertyText, case let .lyric(anchor, _) = text else { return }
+                applyTextEdit(
+                    SetLyricVerse(text, toVerse: verse),
+                    reselecting: .lyric(anchor: anchor, verse: verse), controller: controller,
+                )
+            case let .offset(value):
+                guard let text = selectedPropertyText else { return }
+                applyTextEdit(SetTextOffset(text, offset: value), reselecting: text, controller: controller)
+            case let .autoplace(value):
+                guard let text = selectedPropertyText else { return }
+                applyTextEdit(SetTextAutoplace(text, autoplace: value), reselecting: text, controller: controller)
+            case let .noteSmall(value):
+                guard let noteID = selectedPropertyNoteID else { return }
+                applyNoteEdit(SetNoteSmall(at: noteID, isSmall: value), noteID: noteID, controller: controller)
+            case let .notePlay(value):
+                guard let noteID = selectedPropertyNoteID else { return }
+                applyNoteEdit(SetNotePlay(at: noteID, play: value), noteID: noteID, controller: controller)
+            case let .beamVisible(value):
+                guard let noteID = selectedPropertyNoteID else { return }
+                let location = VoiceElementID(noteID)
+                // Mirrors `ScoreEditSession+VisibilityPlanning.swift:31` exactly. The `?? location` fallback
+                // is unreachable from this row: it only renders when `SetBeamVisible.current(at:in:)` is
+                // non-nil, which requires `leader(of:in:)` to already be non-nil for this same location.
+                let target = SetBeamVisible.leader(of: location, in: controller.score) ?? location
+                applyNoteEdit(SetBeamVisible(at: target, visible: value), noteID: noteID, controller: controller)
             case .deselect:
                 selection = .none
-                return
             }
+        }
+
+        private func applyTextEdit(
+            _ command: any EditCommand, reselecting text: ScoreTextID, controller: NoteInputController,
+        ) {
             do {
                 try controller.apply(command, undoManager: undoManager)
-                selectFullItem(.text(resultingText))
+                selectFullItem(.text(text))
+                errorMessage = nil
+            } catch {
+                errorMessage = exampleErrorDescription(error)
+            }
+        }
+
+        private func applyNoteEdit(_ command: any EditCommand, noteID: NoteID, controller: NoteInputController) {
+            do {
+                try controller.apply(command, undoManager: undoManager)
+                selectFullItem(.note(noteID))
                 errorMessage = nil
             } catch {
                 errorMessage = exampleErrorDescription(error)

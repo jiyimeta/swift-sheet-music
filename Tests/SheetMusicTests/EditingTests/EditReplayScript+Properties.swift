@@ -1,7 +1,7 @@
 @testable import SheetMusicCore
 
 extension EditReplayScript {
-    /// Eleven accepting steps over `EditingFixtures.twoConsecutiveC4Chords()` covering intents 76...79.
+    /// Seventeen accepting steps over `EditingFixtures.twoConsecutiveC4Chords()` covering intents 76...83.
     /// The fixture has no lyrics or property overrides. Step 1 creates the lyric; step 4 seeds all three font
     /// fields that step 5 distinguishes, so clearing and leaving unchanged both act on non-default values.
     ///
@@ -12,12 +12,16 @@ extension EditReplayScript {
     /// Hand-derived fingerprint spread (one-based steps, initial state S0): steps 1...5 each introduce a new
     /// state S1...S5: lyric, lyric color, note color, font seed, mixed patch. Step 6 undoes to S4; step 7 reapplies
     /// to S5. Step 8 introduces S6 by moving the lyric, and step 9 introduces S7 by setting its placement.
-    /// Step 10 undoes to S6; step 11 reapplies to S7. Thus twelve observations contain eight distinct states.
-    /// These changes are all fingerprinted: lyric text/verse, both colors, font face/size/style and placement.
-    /// The floor is eight, derived before recording, with no margin that could hide an inert mutation.
+    /// Step 10 undoes to S6; step 11 reapplies to S7. Steps 12/13, appended for the properties-inspector project,
+    /// each introduce a new state — S8 (note cue-size) and S9 (note silent-playback) — since both `Note.isSmall`
+    /// and `Note.play` are hashed (`ScoreFingerprintHasher.swift:154-155`). Step 14 undoes to S8. Steps 15...17 set
+    /// then clear an authored offset and toggle auto-place on the verse-2 lyric; `offset` and `autoplace` are
+    /// deliberately unhashed (`ElementPropertyFingerprintTests`), so all three leave the fingerprint at S8. Thus
+    /// eighteen observations contain ten distinct states: the original eight plus the two the note flags add.
+    /// The floor is ten, derived before recording, with no margin that could hide an inert mutation.
     ///
     /// Undo/reapply follows the lyrics chain's convention: no `.redo` step, since the device harness interprets
-    /// a missing `step-N.bin` as undo. Zero-based asset indices 5 and 9 are the only missing step files.
+    /// a missing `step-N.bin` as undo. Zero-based asset indices 5, 9 and 13 are the only missing step files.
     static func properties(staff: StaffAddress) -> [EditReplayStep] {
         let first = VoiceElementID(staff: staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1)
         let note = NoteID(
@@ -53,6 +57,16 @@ extension EditReplayScript {
             placement,
             .undo,
             placement,
+            // Intents 80...83, appended for the properties-inspector project. Steps 12/13 (the note flags) move
+            // the fingerprint — both are hashed. Step 14 undoes 13. Steps 15...17 (offset set/clear, autoplace)
+            // deliberately do not move the fingerprint, so they add recorded steps without adding distinct
+            // fingerprints; they address `movedLyric` (verse 2), the lyric's only address from step 8 onward.
+            .intent(.setNoteSmall(at: note, isSmall: true)),
+            .intent(.setNotePlay(at: note, play: false)),
+            .undo,
+            .intent(.setTextOffset(text: movedLyric, offset: ScoreOffset(x: 1.5, y: -2))),
+            .intent(.setTextAutoplace(text: movedLyric, autoplace: false)),
+            .intent(.setTextOffset(text: movedLyric, offset: nil)),
         ]
     }
 }

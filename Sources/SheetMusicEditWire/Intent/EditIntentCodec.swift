@@ -113,6 +113,10 @@ import Wirelet
 /// 77 = setElementPlacement(SetElementPlacementIntentWire), see EditIntentPayloads+Properties.swift
 /// 78 = setTextFont(SetTextFontIntentWire), see EditIntentPayloads+TextFont.swift
 /// 79 = setLyricVerse(SetLyricVerseIntentWire), see EditIntentPayloads+TextFont.swift
+/// 80 = setNoteSmall(SetNoteSmallIntentWire), see EditIntentPayloads+Notation2.swift
+/// 81 = setNotePlay(SetNotePlayIntentWire), see EditIntentPayloads+Notation2.swift
+/// 82 = setTextOffset(SetTextOffsetIntentWire), see EditIntentPayloads+Properties.swift
+/// 83 = setTextAutoplace(SetTextAutoplaceIntentWire), see EditIntentPayloads+Properties.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -122,7 +126,9 @@ import Wirelet
 /// range group. Cases 41…49 were appended for its mark group. Cases 50…57 were appended for its note / chord
 /// group. Cases 58…61 were appended for its visibility group. Cases 62…72 were appended for its spanner group.
 /// Case 73 was appended for its harmony group. Cases 74 and 75 were appended for the macOS score-text-entry
-/// project (spec 2026-09-07), and 75 is the catalogue's last.
+/// project (spec 2026-09-07). Cases 76…79 were appended for selection and editing (color, placement, text font,
+/// lyric verse). Cases 80…83 were appended for the properties-inspector project (spec 2026-09-12) — note
+/// small/play and element offset/autoplace — and 83 is the catalogue's last.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -1068,6 +1074,14 @@ public enum EditIntentWire {
     case setElementPlacement(SetElementPlacementIntentWire)
     case setTextFont(SetTextFontIntentWire)
     case setLyricVerse(SetLyricVerseIntentWire)
+    /// Appended for the properties inspector — index 80. Never renumber anything above it.
+    case setNoteSmall(SetNoteSmallIntentWire)
+    /// Appended for the properties inspector — index 81. Never renumber anything above it.
+    case setNotePlay(SetNotePlayIntentWire)
+    /// Appended for the properties inspector — index 82. Never renumber anything above it.
+    case setTextOffset(SetTextOffsetIntentWire)
+    /// Appended for the properties inspector — index 83. Never renumber anything above it.
+    case setTextAutoplace(SetTextAutoplaceIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1266,6 +1280,14 @@ public enum EditIntentWire {
             self = .setTextFont(SetTextFontIntentWire(text: text, patch: patch))
         case let .setLyricVerse(text, destination):
             self = .setLyricVerse(SetLyricVerseIntentWire(text: text, toVerse: destination))
+        case let .setNoteSmall(location, isSmall):
+            self = .setNoteSmall(SetNoteSmallIntentWire(location: location, isSmall: isSmall))
+        case let .setNotePlay(location, play):
+            self = .setNotePlay(SetNotePlayIntentWire(location: location, play: play))
+        case let .setTextOffset(text, offset):
+            self = .setTextOffset(SetTextOffsetIntentWire(target: text, offset: offset))
+        case let .setTextAutoplace(text, autoplace):
+            self = .setTextAutoplace(SetTextAutoplaceIntentWire(target: text, autoplace: autoplace))
         }
     }
 
@@ -1526,6 +1548,18 @@ public enum EditIntentWire {
         case let .setLyricVerse(wire):
             let decoded = try wire.decoded()
             return .setLyricVerse(text: decoded.text, toVerse: decoded.toVerse)
+        case let .setNoteSmall(wire):
+            let decoded = wire.decoded()
+            return .setNoteSmall(at: decoded.location, isSmall: decoded.isSmall)
+        case let .setNotePlay(wire):
+            let decoded = wire.decoded()
+            return .setNotePlay(at: decoded.location, play: decoded.play)
+        case let .setTextOffset(wire):
+            let decoded = wire.decoded()
+            return .setTextOffset(text: decoded.target, offset: decoded.offset)
+        case let .setTextAutoplace(wire):
+            let decoded = wire.decoded()
+            return .setTextAutoplace(text: decoded.target, autoplace: decoded.autoplace)
         }
     }
 }

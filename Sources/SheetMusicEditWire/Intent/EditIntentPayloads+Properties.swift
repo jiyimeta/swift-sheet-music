@@ -122,3 +122,44 @@ public struct SetElementPlacementIntentWire {
         return (target.decoded(), value)
     }
 }
+
+/// Tags: 1 target, 2 hasOffset, 3 x, 4 y. Doubles, like the tempo and fermata payloads: `ScoreOffset` is two
+/// spatium-unit Doubles and quantizing them here would silently move ink a host placed by hand.
+/// When absent, writers emit zeroed placeholders and readers ignore them.
+@WireFormat
+public struct SetTextOffsetIntentWire {
+    public var target: ScoreTextIDWire
+    public var hasOffset: UInt8
+    public var x: Double
+    public var y: Double
+
+    public init(target: ScoreTextID, offset: ScoreOffset?) {
+        self.target = ScoreTextIDWire(from: target)
+        hasOffset = offset == nil ? 0 : 1
+        x = offset?.x ?? 0
+        y = offset?.y ?? 0
+    }
+
+    public func decoded() -> (target: ScoreTextID, offset: ScoreOffset?) {
+        (target: target.decoded(), offset: hasOffset == 0 ? nil : ScoreOffset(x: x, y: y))
+    }
+}
+
+/// Tags: 1 target, 2 hasAutoplace, 3 autoplace (UInt8: 0 false, nonzero true; 0 placeholder when absent).
+/// Three states, not two: nil inherits the default, false pins the element, true overrides an inherited false.
+@WireFormat
+public struct SetTextAutoplaceIntentWire {
+    public var target: ScoreTextIDWire
+    public var hasAutoplace: UInt8
+    public var autoplace: UInt8
+
+    public init(target: ScoreTextID, autoplace: Bool?) {
+        self.target = ScoreTextIDWire(from: target)
+        hasAutoplace = autoplace == nil ? 0 : 1
+        self.autoplace = (autoplace ?? false) ? 1 : 0
+    }
+
+    public func decoded() -> (target: ScoreTextID, autoplace: Bool?) {
+        (target: target.decoded(), autoplace: hasAutoplace == 0 ? nil : autoplace != 0)
+    }
+}

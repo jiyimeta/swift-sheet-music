@@ -85,6 +85,35 @@ struct EditIntentCodecPropertiesTests {
         #expect(EditIntentCodec.encode(.setLyricSyllables(writes: []))[1] == 74)
     }
 
+    @Test("discriminators 80 and 81 remain note-small and note-play")
+    func noteFlagDiscriminators() {
+        #expect(EditIntentCodec.encode(.setNoteSmall(at: Self.note, isSmall: true))[1] == 80)
+        #expect(EditIntentCodec.encode(.setNotePlay(at: Self.note, play: true))[1] == 81)
+    }
+
+    @Test("literal bytes pin intent 82 and the fixed64 offset field layout")
+    func offsetBytes() throws {
+        let intent = EditIntent.setTextOffset(
+            text: .rehearsalMark(measureIndex: 0), offset: ScoreOffset(x: 1, y: -2),
+        )
+        // 29-byte record: outer length 28, discriminator 82, tag 1, 25-byte payload.
+        // Payload: target = rehearsalMark(0) (5 bytes), hasOffset = 1 (2 bytes),
+        // x = 1.0 and y = -2.0 as fixed64 little-endian doubles (9 bytes each, tag + 8-byte value).
+        let expected: [UInt8] = [
+            0x1C, 0x52, 0x0A, 0x19,
+            0x0A, 0x03, 0x03, 0x08, 0x00,
+            0x10, 0x01,
+            0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F,
+            0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0,
+        ]
+        #expect(Array(EditIntentCodec.encode(intent)) == expected)
+        #expect(try EditIntentCodec.decode(.init(expected)) == intent)
+        #expect(
+            EditIntentCodec
+                .encode(.setTextAutoplace(text: .rehearsalMark(measureIndex: 0), autoplace: nil))[1] == 83,
+        )
+    }
+
     @Test("presence flags accept any nonzero value and clearing ignores the placeholder")
     func presenceFlags() throws {
         let target = SetElementColor.Target.text(.rehearsalMark(measureIndex: 0))

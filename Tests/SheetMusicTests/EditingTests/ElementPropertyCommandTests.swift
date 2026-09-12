@@ -1,4 +1,5 @@
 @testable import SheetMusicCore
+import SheetMusicMSCX
 import Testing
 
 @Suite("Element property commands")
@@ -185,6 +186,8 @@ struct ElementPropertyCommandTests {
             [
                 EditIntent.setElementColor(target: .text(text), color: nil),
                 EditIntent.setElementPlacement(target: .text(text), placement: nil),
+                EditIntent.setTextOffset(text: text, offset: nil),
+                EditIntent.setTextAutoplace(text: text, autoplace: nil),
             ]
         }
         intents += [
@@ -268,5 +271,86 @@ struct ElementPropertyCommandTests {
         let signature = VoiceElementID(staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 0)
         #expect(!session.apply(.setElementPlacement(target: .chord(signature), placement: nil)))
         #expect(session.lastRefusal?.reason == .wrongElementKind(at: signature, expected: .chordOrRest))
+    }
+
+    private static let texts: [ScoreTextID] = [
+        .lyric(anchor: chord, verse: 1),
+        .staffText(anchor: chord, style: .staffText),
+        .staffText(anchor: chord, style: .systemText),
+        .harmony(anchor: chord),
+        .rehearsalMark(measureIndex: 0),
+    ]
+
+    @Test("offset is written to each text kind and the inverse restores it", arguments: texts)
+    func offsetRoundTrips(_ target: ScoreTextID) throws {
+        var score = try Self.populated()
+        let offset = ScoreOffset(x: 1.5, y: -2.25)
+        let inverse = try SetTextOffset(target, offset: offset).apply(to: &score)
+        #expect(SetTextOffset.currentProperties(for: target, in: score)?.offset == offset)
+        try inverse.apply(to: &score)
+        #expect(SetTextOffset.currentProperties(for: target, in: score)?.offset == nil)
+    }
+
+    @Test("auto-place is written to each text kind and the inverse restores it", arguments: texts)
+    func autoplaceRoundTrips(_ target: ScoreTextID) throws {
+        var score = try Self.populated()
+        let inverse = try SetTextAutoplace(target, autoplace: false).apply(to: &score)
+        #expect(SetTextAutoplace.currentProperties(for: target, in: score)?.autoplace == false)
+        try inverse.apply(to: &score)
+        #expect(SetTextAutoplace.currentProperties(for: target, in: score)?.autoplace == nil)
+    }
+
+    /// The distinction the planner depends on: an ABSENT carrier is refused, an inherited value is not.
+    @Test("an absent carrier is refused, and clearing an already-clear value succeeds")
+    func absentIsRefusedAndClearingIsNot() throws {
+        var score = try Self.populated()
+        let missingVerse = ScoreTextID.lyric(anchor: Self.chord, verse: 9)
+        let offsetError = #expect(throws: SheetMusicError.self) {
+            try SetTextOffset(missingVerse, offset: nil).apply(to: &score)
+        }
+        guard case let .invalidEdit(offsetRefusal)? = offsetError else { Issue.record("expected refusal"); return }
+        // `TextElementProperties.update` reports absence as `false` and lets the caller throw with its own
+        // name, so the stamped operation must be the calling command, not the shared helper.
+        #expect(offsetRefusal.operation == "SetTextOffset")
+        let autoplaceError = #expect(throws: SheetMusicError.self) {
+            try SetTextAutoplace(missingVerse, autoplace: nil).apply(to: &score)
+        }
+        guard case let .invalidEdit(autoplaceRefusal)? = autoplaceError else {
+            Issue.record("expected refusal")
+            return
+        }
+        #expect(autoplaceRefusal.operation == "SetTextAutoplace")
+
+        let present = ScoreTextID.lyric(anchor: Self.chord, verse: 1)
+        #expect(SetTextOffset.currentProperties(for: present, in: score)?.offset == nil)
+        try SetTextOffset(present, offset: nil).apply(to: &score)
+        try SetTextAutoplace(present, autoplace: nil).apply(to: &score)
+    }
+
+    /// Writing one text's offset must not touch the other text sharing its beat.
+    @Test("staff text and system text keep independent offsets")
+    func staffAndSystemTextAreIndependent() throws {
+        var score = try Self.populated()
+        let staffText = ScoreTextID.staffText(anchor: Self.chord, style: .staffText)
+        let systemText = ScoreTextID.staffText(anchor: Self.chord, style: .systemText)
+        try SetTextOffset(staffText, offset: ScoreOffset(x: 3, y: 4)).apply(to: &score)
+        #expect(SetTextOffset.currentProperties(for: staffText, in: score)?.offset
+            == ScoreOffset(x: 3, y: 4))
+        #expect(SetTextOffset.currentProperties(for: systemText, in: score)?.offset == nil)
+    }
+
+    /// The four fields already round-trip; what this pins is that the COMMANDS write the same field the codec
+    /// reads. A command writing a lookalike would pass every in-memory test above and lose the value on save.
+    @Test("offset and auto-place written by command survive an MSCX round trip")
+    func survivesMSCXRoundTrip() throws {
+        var score = try Self.populated()
+        let lyric = ScoreTextID.lyric(anchor: Self.chord, verse: 1)
+        try SetTextOffset(lyric, offset: ScoreOffset(x: 1.5, y: -2)).apply(to: &score)
+        try SetTextAutoplace(lyric, autoplace: false).apply(to: &score)
+
+        let reloaded = try MSCXParser.parse(MSCXEncoder.encode(score))
+        #expect(SetTextOffset.currentProperties(for: lyric, in: reloaded)?.offset
+            == ScoreOffset(x: 1.5, y: -2))
+        #expect(SetTextAutoplace.currentProperties(for: lyric, in: reloaded)?.autoplace == false)
     }
 }

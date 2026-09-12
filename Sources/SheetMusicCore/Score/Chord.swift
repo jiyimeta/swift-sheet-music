@@ -85,6 +85,11 @@ public struct Chord: Sendable, Equatable {
     /// `startingBeam->add(chord); startingBeam = nullptr;`). The beam
     /// then owns the whole group, so one flag governs every member.
     ///
+    /// Because the flag belongs to the group rather than to this chord, a consumer reading it off an arbitrary
+    /// member gets a value that governs nothing. `SetBeamVisible.current(at:in:)` resolves the group's leader and
+    /// returns the flag that does govern — use it rather than this property whenever the chord in hand is not
+    /// known to be the leader.
+    ///
     /// Default `true`. When false the beam BARS are not drawn; the
     /// chords are still beamed logically, so no flag glyphs appear
     /// either. Independent of `stemVisible` and of note visibility —
