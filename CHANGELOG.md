@@ -7,6 +7,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`EditIntent.duplicateRange(over:)` (wire 85) and `DuplicateRange`: MuseScore's `R`, repeating a range
+  selection immediately after itself across measures, staves and voices.** Tuplets are carried; bars are
+  appended when the copy runs past the end of the score; the destination's own clefs, signatures and other
+  non-timed elements are kept.
+
 ## [3.1.0] - 2026-09-12
 
 ### Added

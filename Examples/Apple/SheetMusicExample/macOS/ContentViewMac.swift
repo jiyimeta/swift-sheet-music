@@ -1129,6 +1129,31 @@
                     default: break
                     }
                 }
+                // R: repeat the current range selection immediately after
+                // itself (MuseScore's Repeat selection). Unmodified, so it
+                // must run ahead of note input, which also owns bare
+                // letter keys — `r` isn't one of `NoteInputKeyMap`'s note
+                // names or duration digits, so nothing here is shadowed.
+                if event.modifierFlags.isDisjoint(
+                    with: [.command, .control, .option, .shift],
+                ),
+                    !event.isARepeat,
+                    let chars = event.charactersIgnoringModifiers,
+                    chars.first?.lowercased() == "r",
+                    let controller = inputController,
+                    let range = selectedRange()
+                {
+                    do {
+                        try controller.apply(
+                            DuplicateRange(over: range),
+                            undoManager: undoManager,
+                        )
+                        adoptEditedScore(controller.score)
+                    } catch {
+                        errorMessage = exampleErrorDescription(error)
+                    }
+                    return nil
+                }
                 // ⌘3 / ⌘5 / ⌘7 / …: convert the selected chord/rest
                 // into a tuplet (triplet / quintuplet / septuplet …).
                 // Matches MuseScore's macOS shortcut.
@@ -2629,7 +2654,27 @@
             guard case let .single(item) = selection,
                   let full = fullEditingItem(item)
             else { return nil }
-            switch full {
+            return Self.voiceElementID(full)
+        }
+
+        /// `VoiceElementRange` derived from the current `.range` selection, or nil when the selection isn't a
+        /// range or either endpoint isn't a chord/rest. `VoiceElementRange`'s own semantics are exactly a ⇧-click
+        /// range selection's (see its doc comment), so the two full item IDs are all `DuplicateRange` needs — no
+        /// staff/measure/voice enumeration of the kind `collectRangePayload` does for the ⌘C/⌘X/⌘V clipboard.
+        private func selectedRange() -> VoiceElementRange? {
+            guard case let .range(anchor, target) = selection,
+                  let fullAnchor = fullEditingItem(anchor),
+                  let fullTarget = fullEditingItem(target),
+                  let start = Self.voiceElementID(fullAnchor),
+                  let end = Self.voiceElementID(fullTarget)
+            else { return nil }
+            return VoiceElementRange(start: start, end: end)
+        }
+
+        /// Shared by `selectedVoiceElementID()` and `selectedRange()`: a full `ScoreItemID` resolves to a
+        /// `VoiceElementID` only when it names a note or a rest.
+        private static func voiceElementID(_ item: ScoreItemID) -> VoiceElementID? {
+            switch item {
             case let .note(note): return VoiceElementID(note)
             case let .rest(rest): return VoiceElementID(rest)
             default: return nil

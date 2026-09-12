@@ -66,8 +66,9 @@ own substantive logic.
 | `SetRestDuration` | 1..7 (rest selected) | — |
 | `ReplaceVoiceElement` | primitive (used by note-input letter keys) | primitive |
 | `ReplaceVoiceElements` | primitive | primitive |
-| `PasteVoiceElement` | ⌘V (single, cross-measure spill) | — |
-| `PasteVoiceElements` | ⌘V (range, multi-element, cross-measure spill, tuplet-aware) | — |
+| `PasteVoiceElement` | ⌘V (single element, rebalanced within the measure) | — |
+| `PasteVoiceElements` | ⌘V (range, multi-element, tuplet-aware, within one measure) | — |
+| `DuplicateRange` | `R` (repeat selection: copies the range to just after itself) | — |
 | `InsertMeasure` | menu command (structural) | — |
 | `DeleteMeasure` | menu command (structural) | — |
 | `CreateTuplet` | ⌘+digit on a non-tuplet element | — |
