@@ -28,6 +28,26 @@ and this project adheres to
   `EditIntent.setBeamVisible` needs none of this: the planner re-targets from any member to the leader
   (`ScoreEditSession+VisibilityPlanning.swift`).
 
+### Changed
+
+- **A near miss now resolves to the nearest element, and how near "near" is became the host's to
+  say.** `LayoutDocument.editingHitTest(at:activeVoice:)` gained a `nearMissTolerance:` parameter,
+  defaulted to the fingertip value it has always used, so existing callers are unchanged. The
+  tolerance describes the POINTING DEVICE rather than the score: a fingertip needs several staff
+  spaces of help to land on a notehead, while a pointer that is given the same reach selects notes
+  the user clicked nowhere near — measured at seven staff spaces on a 14-point staff, which is more
+  than a staff height and a half.
+
+  Two things behind it changed with it. The rescue used to take the FIRST id out of a 44 × 44 slop
+  box, which is document order, so a click that fell between two notes resolved to the one on its
+  left however much closer the one on its right was; it now takes the nearest. And "within the slop
+  box" became "within `nearMissTolerance` of the element's own hit target", measured by
+  `ScoreHitTester.itemIDs(near:within:)` (new, public) to an `EventColumn`'s bbox — which already
+  carries the radius the ladder accepts — so the number now reads as one thing: how far past an
+  element's own target a click may miss and still mean it.
+
+  `LayoutDocument.editingSlopHalfExtent` is renamed `editingNearMissTolerance` to match, same value.
+
 ### Fixed
 
 - **A cue note no longer loses its size on save.** `Note.isSmall` was decode-only: the decoder read
@@ -50,7 +70,6 @@ and this project adheres to
 - `EditIntent` gains `.setNoteSmall`, `.setNotePlay`, `.setTextOffset` and `.setTextAutoplace`
   (wire tags 80–83). It is a public non-frozen enum, so a host switching over it exhaustively needs a
   `default` clause. No public symbol was removed and no signature changed.
-
 ## [3.0.0] - 2026-09-12
 
 ### Added
