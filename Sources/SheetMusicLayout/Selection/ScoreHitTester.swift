@@ -438,8 +438,11 @@ public struct ScoreHitTester: Sendable {
         measure: LayoutMeasure,
         base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
-        let halfWidth = sp * 1.0 // glyph width ≈ 2 sp
-        let halfHeight = sp * 2.5 // glyph height ≈ 5 sp
+        // The glyph's own box (≈ 2 sp wide, ≈ 5 sp tall), plus the reach every engraved element gets — see
+        // `ScoreHitTester.elementHitTolerance`. A clef is narrow enough that its ink alone made it a target a
+        // pointer had to be placed on exactly.
+        let halfWidth = sp * (1.0 + Self.elementHitTolerance)
+        let halfHeight = sp * (2.5 + Self.elementHitTolerance)
         for el in measure.elements {
             guard case let .clef(rawType, origin, anchor) = el,
                   let anchor

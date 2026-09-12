@@ -12,6 +12,13 @@ extension ScoreHitTester {
     /// excludes this padding. Overlapping click boxes resolve in element emission order.
     static let textHitTolerance: CGFloat = 0.25
 
+    /// Click tolerance outside an engraved ELEMENT's ink, in spatium units — see
+    /// `ScoreHitTester+Element.swift`'s `hitTolerance(for:)` for why every kind gets the same small reach, and
+    /// `hitClef` for the one target that applies it to a glyph box rather than to measured ink.
+    ///
+    /// Half a staff space. Highlight geometry excludes it, exactly as it excludes the text padding above.
+    static let elementHitTolerance: CGFloat = 0.5
+
     /// Maximum distance from the rendered arc centerline, in spatium units.
     /// Chosen to match the local beam-segment threshold in `ScoreHitTester`.
     static let curveHitToleranceSp: CGFloat = 0.7

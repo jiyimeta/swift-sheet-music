@@ -226,6 +226,11 @@ public final class LayoutCache: @unchecked Sendable {
         /// every other input is unchanged.
         let lineCount: Int
         let initialClefRawType: String?
+        /// The declaration a synthesized leading clef restates. Part of the key because two systems can
+        /// synthesize the SAME raw type while restating different declarations — a staff that changes from
+        /// treble to treble8vb and back reads "treble" in both places, and the identity the glyph carries has
+        /// to follow the declaration rather than the glyph.
+        let initialClefAnchor: ClefAnchor?
         let initialKeyForSynth: Int?
         let headerSchedule: LayoutEngine.HeaderSchedule
         let tickColumns: [Int: CGFloat]

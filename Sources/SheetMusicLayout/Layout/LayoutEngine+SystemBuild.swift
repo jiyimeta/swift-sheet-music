@@ -244,6 +244,15 @@ extension LayoutEngine {
                 let synthClef: String? = synthesizeClefHere
                     ? clefs[staffIdx].rawType
                     : nil
+                // Which declaration that synthesized clef is restating. Resolved HERE rather than inside
+                // placement because only this level can see the bars before this system — placement is handed
+                // one measure. See `placeMeasureElements`'s own emission comment for why a restatement names
+                // the declaration it restates.
+                let synthClefAnchor: ClefAnchor? = synthesizeClefHere
+                    ? declaringClefAnchor(
+                        before: measureIdx, staff: staff, address: allStaves[staffIdx].address,
+                    )
+                    : nil
                 let synthKey: Int? = synthesizeKeySigHere
                     ? keys[staffIdx]
                     : nil
@@ -284,6 +293,7 @@ extension LayoutEngine {
                     activeKey: keys[staffIdx],
                     lineCount: staffGeometries[staffIdx].lineCount,
                     initialClefRawType: synthClef,
+                    initialClefAnchor: synthClefAnchor,
                     initialKeyForSynth: synthKey,
                     headerSchedule: schedule,
                     tickColumns: tickCols,
@@ -331,6 +341,7 @@ extension LayoutEngine {
                         activeKey: keys[staffIdx],
                         lineGeometry: staffGeometries[staffIdx],
                         initialClefRawType: synthClef,
+                        initialClefAnchor: synthClefAnchor,
                         initialKeyForSynth: synthKey,
                         headerSchedule: schedule,
                         tickColumns: tickCols,

@@ -66,6 +66,9 @@ extension LayoutEngine {
         activeKey: Int = 0,
         lineGeometry: StaffLineGeometry,
         initialClefRawType: String? = nil,
+        // The declaration a synthesized leading clef RESTATES — see the emission site below for why a
+        // restatement carries the identity of what it restates rather than none at all.
+        initialClefAnchor: ClefAnchor? = nil,
         initialKeyForSynth: Int? = nil,
         headerSchedule: HeaderSchedule,
         tickColumns: [Int: CGFloat],
@@ -391,9 +394,17 @@ extension LayoutEngine {
             // Emit the synthesized leading clef exactly once, at the top
             // of the first voice to process it.
             if remainingSynthClef, let rawType = initialClefRawType {
-                let synthAnchor: ClefAnchor? = isFirstSystem
-                    ? .staffDefault(staffAddress)
-                    : nil
+                // **A continuation system's clef restates a declaration, and it names the one it restates.**
+                // It used to name nothing at all past the first system — the reasoning being that a restatement
+                // is not a declaration and so has nothing to edit. True, and beside the point once a host lets
+                // a reader click a clef: the glyph at the head of system four is the only clef on screen there,
+                // and answering "that is not a thing" to a click on it is wrong however defensible the identity
+                // rule is. `initialClefAnchor` is the declaration in force here, resolved by the caller, which
+                // is the one that can see the bars before this system.
+                //
+                // Falls back to the staff's own default, which is what a first system's synthesized clef has
+                // always named and is still correct when no explicit clef precedes this point.
+                let synthAnchor = initialClefAnchor ?? .staffDefault(staffAddress)
                 out.append(.clef(
                     rawType: rawType,
                     origin: CGPoint(
