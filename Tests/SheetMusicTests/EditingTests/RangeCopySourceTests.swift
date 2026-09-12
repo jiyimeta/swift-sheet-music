@@ -101,4 +101,66 @@ struct RangeCopySourceTests {
             range: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(9, 0)), in: score,
         ) == nil)
     }
+
+    /// One measure, one voice, one chord carrying a non-empty `spanners` — built locally rather than by
+    /// mutating the shared fixture, so `twoBeats`'s expected `Chord` literals keep meaning "no spanners".
+    @Test("a chord's spanners are cleared on copy")
+    func spannersCleared() throws {
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .chord(Chord(
+                    duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
+                    spanners: [Spanner(kind: .slur, rawType: "Slur", nextMeasuresOffset: 1)],
+                )),
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+            ])]),
+        ])
+        let score = Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+        let source = try #require(RangeCopySource(
+            range: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 0)), in: score,
+        ))
+        let stream = try #require(source.streams.first)
+        guard case let .chord(copied) = stream.elements[0].element else {
+            Issue.record("expected a chord")
+            return
+        }
+        #expect(copied.spanners.isEmpty)
+    }
+
+    /// Two measures, one voice: `Voice` (and `VoiceRef`) is scoped to a single measure, so this exercises the
+    /// re-keying to (staff, voice) that stitches a stream across a bar line, plus the per-measure tuplet lookup
+    /// landing its bounds on the SECOND measure's absolute ticks.
+    @Test("a single voice spanning two measures stays one stream, ascending across the bar line")
+    func twoMeasureSingleVoiceStream() throws {
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+            ])]),
+            Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])),
+            ])]),
+        ])
+        var score = Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+        _ = try CreateTuplet(at: Self.slot(1, 0), actualNotes: 3, normalNotes: 2).apply(to: &score)
+
+        let source = try #require(RangeCopySource(
+            range: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(1, 2)), in: score,
+        ))
+        #expect(source.streams.count == 1)
+        let stream = try #require(source.streams.first)
+        #expect(stream.staff == Self.flute)
+        #expect(stream.voiceIndex == 0)
+        #expect(stream.elements.map(\.absoluteTick) == [0, 480, 1920, 2080, 2240])
+        #expect(stream.tuplets.count == 1)
+        let tuplet = try #require(stream.tuplets.first)
+        #expect(tuplet.startTick == 1920)
+        #expect(tuplet.endTick == 2400)
+        #expect(tuplet.normalNotes == 2)
+        #expect(tuplet.actualNotes == 3)
+    }
 }
