@@ -12,8 +12,8 @@ and this project adheres to
 - **A host's Properties inspector can now write a note's cue size and mute flag, and an engraved
   text's offset and collision-avoidance override, and can read the flag that governs a beam's
   visibility.** `SetNoteSmall(at:isSmall:)` writes MuseScore's `<small>` per note; `SetNotePlay(at:play:)`
-  writes `<play>`, muting the note for MIDI while leaving the notehead drawn. `SetElementOffset(_:offset:)`
-  writes an authored offset in spatium units and `SetElementAutoplace(_:autoplace:)` writes the
+  writes `<play>`, muting the note for MIDI while leaving the notehead drawn. `SetTextOffset(_:offset:)`
+  writes an authored offset in spatium units and `SetTextAutoplace(_:autoplace:)` writes the
   collision-avoidance override; `nil` on either restores the styled position or inherits the default
   (`true`). Both take a `ScoreTextID` — lyric, staff/system text, harmony, rehearsal mark — because
   those four are the only carriers whose `offset` and `autoplace` the layout actually reads. A note, a
@@ -47,7 +47,7 @@ and this project adheres to
 
 ### Notes
 
-- `EditIntent` gains `.setNoteSmall`, `.setNotePlay`, `.setElementOffset` and `.setElementAutoplace`
+- `EditIntent` gains `.setNoteSmall`, `.setNotePlay`, `.setTextOffset` and `.setTextAutoplace`
   (wire tags 80–83). It is a public non-frozen enum, so a host switching over it exhaustively needs a
   `default` clause. No public symbol was removed and no signature changed.
 

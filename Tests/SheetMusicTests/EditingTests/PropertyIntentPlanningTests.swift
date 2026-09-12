@@ -19,11 +19,11 @@ struct PropertyIntentPlanningTests {
     private static let intents: [EditIntent] = [
         .setNoteSmall(at: note, isSmall: true),
         .setNotePlay(at: note, play: false),
-        .setElementOffset(target: .lyric(anchor: chord, verse: 0), offset: ScoreOffset(x: 1, y: -2)),
-        .setElementOffset(target: .lyric(anchor: chord, verse: 0), offset: ScoreOffset(x: 0, y: 0)),
-        .setElementOffset(target: .lyric(anchor: chord, verse: 0), offset: nil),
-        .setElementAutoplace(target: .lyric(anchor: chord, verse: 0), autoplace: false),
-        .setElementAutoplace(target: .lyric(anchor: chord, verse: 0), autoplace: nil),
+        .setTextOffset(text: .lyric(anchor: chord, verse: 0), offset: ScoreOffset(x: 1, y: -2)),
+        .setTextOffset(text: .lyric(anchor: chord, verse: 0), offset: ScoreOffset(x: 0, y: 0)),
+        .setTextOffset(text: .lyric(anchor: chord, verse: 0), offset: nil),
+        .setTextAutoplace(text: .lyric(anchor: chord, verse: 0), autoplace: false),
+        .setTextAutoplace(text: .lyric(anchor: chord, verse: 0), autoplace: nil),
     ]
 
     @Test("each intent survives an encode and decode unchanged", arguments: intents)
@@ -41,7 +41,7 @@ struct PropertyIntentPlanningTests {
         #expect(session.lastRefusal?.reason == .nothingToApply)
 
         #expect(session.apply(
-            .setElementOffset(target: .lyric(anchor: Self.chord, verse: 0), offset: nil),
+            .setTextOffset(text: .lyric(anchor: Self.chord, verse: 0), offset: nil),
         ) == false)
         #expect(session.lastRefusal?.reason == .nothingToApply)
     }
@@ -50,7 +50,7 @@ struct PropertyIntentPlanningTests {
     func absentCarrierIsRefusedNotSkipped() throws {
         let session = try ScoreEditSession(score: Self.populated())
         #expect(session.apply(
-            .setElementOffset(target: .lyric(anchor: Self.chord, verse: 9), offset: nil),
+            .setTextOffset(text: .lyric(anchor: Self.chord, verse: 9), offset: nil),
         ) == false)
         let reason = try #require(session.lastRefusal?.reason)
         #expect(reason != .nothingToApply)

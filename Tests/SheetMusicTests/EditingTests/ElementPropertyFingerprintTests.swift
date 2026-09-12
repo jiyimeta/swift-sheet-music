@@ -20,7 +20,7 @@ struct ElementPropertyFingerprintTests {
     func offsetIsNotHashed() throws {
         let base = try Self.withLyric()
         var moved = base
-        try SetElementOffset(.lyric(anchor: Self.chord, verse: 0), offset: ScoreOffset(x: 2, y: 3))
+        try SetTextOffset(.lyric(anchor: Self.chord, verse: 0), offset: ScoreOffset(x: 2, y: 3))
             .apply(to: &moved)
         #expect(moved.stableFingerprint == base.stableFingerprint)
     }
@@ -29,7 +29,7 @@ struct ElementPropertyFingerprintTests {
     func autoplaceIsNotHashed() throws {
         let base = try Self.withLyric()
         var pinned = base
-        try SetElementAutoplace(.lyric(anchor: Self.chord, verse: 0), autoplace: false).apply(to: &pinned)
+        try SetTextAutoplace(.lyric(anchor: Self.chord, verse: 0), autoplace: false).apply(to: &pinned)
         #expect(pinned.stableFingerprint == base.stableFingerprint)
     }
 }

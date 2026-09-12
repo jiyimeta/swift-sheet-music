@@ -3556,7 +3556,7 @@
                 text: selectedPropertyText,
                 properties: selectedPropertyText.flatMap { text in
                     inputController.flatMap {
-                        SetElementOffset.currentProperties(for: text, in: $0.score)
+                        SetTextOffset.currentProperties(for: text, in: $0.score)
                     }
                 },
                 note: selectedPropertyNote,
@@ -3588,10 +3588,10 @@
                 )
             case let .offset(value):
                 guard let text = selectedPropertyText else { return }
-                applyTextEdit(SetElementOffset(text, offset: value), reselecting: text, controller: controller)
+                applyTextEdit(SetTextOffset(text, offset: value), reselecting: text, controller: controller)
             case let .autoplace(value):
                 guard let text = selectedPropertyText else { return }
-                applyTextEdit(SetElementAutoplace(text, autoplace: value), reselecting: text, controller: controller)
+                applyTextEdit(SetTextAutoplace(text, autoplace: value), reselecting: text, controller: controller)
             case let .noteSmall(value):
                 guard let noteID = selectedPropertyNoteID else { return }
                 applyNoteEdit(SetNoteSmall(at: noteID, isSmall: value), noteID: noteID, controller: controller)

@@ -455,10 +455,10 @@ public enum EditIntent: Sendable, Equatable {
     case setNotePlay(at: NoteID, play: Bool)
 
     /// One engraved text's authored offset in spatium units; nil restores the styled position. Text only —
-    /// see `SetElementOffset` for why. Appended for the properties-inspector project — wire tag 82.
-    case setElementOffset(target: ScoreTextID, offset: ScoreOffset?)
+    /// see `SetTextOffset` for why. Appended for the properties-inspector project — wire tag 82.
+    case setTextOffset(text: ScoreTextID, offset: ScoreOffset?)
 
     /// One engraved text's collision-avoidance override; nil inherits the default. Text only. Appended for the
     /// properties-inspector project — wire tag 83.
-    case setElementAutoplace(target: ScoreTextID, autoplace: Bool?)
+    case setTextAutoplace(text: ScoreTextID, autoplace: Bool?)
 }

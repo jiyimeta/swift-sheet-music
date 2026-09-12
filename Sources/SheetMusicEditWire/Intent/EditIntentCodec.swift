@@ -115,8 +115,8 @@ import Wirelet
 /// 79 = setLyricVerse(SetLyricVerseIntentWire), see EditIntentPayloads+TextFont.swift
 /// 80 = setNoteSmall(SetNoteSmallIntentWire), see EditIntentPayloads+Notation2.swift
 /// 81 = setNotePlay(SetNotePlayIntentWire), see EditIntentPayloads+Notation2.swift
-/// 82 = setElementOffset(SetElementOffsetIntentWire), see EditIntentPayloads+Properties.swift
-/// 83 = setElementAutoplace(SetElementAutoplaceIntentWire), see EditIntentPayloads+Properties.swift
+/// 82 = setTextOffset(SetTextOffsetIntentWire), see EditIntentPayloads+Properties.swift
+/// 83 = setTextAutoplace(SetTextAutoplaceIntentWire), see EditIntentPayloads+Properties.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -1079,9 +1079,9 @@ public enum EditIntentWire {
     /// Appended for the properties inspector — index 81. Never renumber anything above it.
     case setNotePlay(SetNotePlayIntentWire)
     /// Appended for the properties inspector — index 82. Never renumber anything above it.
-    case setElementOffset(SetElementOffsetIntentWire)
+    case setTextOffset(SetTextOffsetIntentWire)
     /// Appended for the properties inspector — index 83. Never renumber anything above it.
-    case setElementAutoplace(SetElementAutoplaceIntentWire)
+    case setTextAutoplace(SetTextAutoplaceIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1284,10 +1284,10 @@ public enum EditIntentWire {
             self = .setNoteSmall(SetNoteSmallIntentWire(location: location, isSmall: isSmall))
         case let .setNotePlay(location, play):
             self = .setNotePlay(SetNotePlayIntentWire(location: location, play: play))
-        case let .setElementOffset(target, offset):
-            self = .setElementOffset(SetElementOffsetIntentWire(target: target, offset: offset))
-        case let .setElementAutoplace(target, autoplace):
-            self = .setElementAutoplace(SetElementAutoplaceIntentWire(target: target, autoplace: autoplace))
+        case let .setTextOffset(text, offset):
+            self = .setTextOffset(SetTextOffsetIntentWire(target: text, offset: offset))
+        case let .setTextAutoplace(text, autoplace):
+            self = .setTextAutoplace(SetTextAutoplaceIntentWire(target: text, autoplace: autoplace))
         }
     }
 
@@ -1554,12 +1554,12 @@ public enum EditIntentWire {
         case let .setNotePlay(wire):
             let decoded = wire.decoded()
             return .setNotePlay(at: decoded.location, play: decoded.play)
-        case let .setElementOffset(wire):
+        case let .setTextOffset(wire):
             let decoded = wire.decoded()
-            return .setElementOffset(target: decoded.target, offset: decoded.offset)
-        case let .setElementAutoplace(wire):
+            return .setTextOffset(text: decoded.target, offset: decoded.offset)
+        case let .setTextAutoplace(wire):
             let decoded = wire.decoded()
-            return .setElementAutoplace(target: decoded.target, autoplace: decoded.autoplace)
+            return .setTextAutoplace(text: decoded.target, autoplace: decoded.autoplace)
         }
     }
 }

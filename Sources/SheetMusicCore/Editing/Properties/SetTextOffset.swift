@@ -16,33 +16,33 @@ import SheetMusicFoundation
 /// > Note: This command is sugar over the lane and chord writes `TextElementProperties` owns. It exists to give
 /// > the operation a domain-meaningful name and to centralise the small bit of validation it performs. See
 /// > `docs/edit-commands.md` for the policy.
-public struct SetElementOffset: EditCommand {
-    public let target: ScoreTextID
+public struct SetTextOffset: EditCommand {
+    public let text: ScoreTextID
     public let offset: ScoreOffset?
 
-    public init(_ target: ScoreTextID, offset: ScoreOffset?) {
-        self.target = target
+    public init(_ text: ScoreTextID, offset: ScoreOffset?) {
+        self.text = text
         self.offset = offset
     }
 
     public var affectedLocation: VoiceElementID {
-        TextElementProperties.anchor(of: target)
+        TextElementProperties.anchor(of: text)
     }
 
     /// Nil means the target is absent; a present carrier with an inherited offset still returns properties.
     /// The planner must distinguish these so clearing a missing target is refused instead of skipped.
-    public static func currentProperties(for target: ScoreTextID, in score: Score) -> ElementProperties? {
-        TextElementProperties.current(target, in: score)
+    public static func currentProperties(for text: ScoreTextID, in score: Score) -> ElementProperties? {
+        TextElementProperties.current(text, in: score)
     }
 
     @discardableResult
     public func apply(to score: inout Score, ids: inout EIDAllocator) throws -> any EditCommand {
-        guard let old = Self.currentProperties(for: target, in: score) else {
+        guard let old = Self.currentProperties(for: text, in: score) else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
-        guard TextElementProperties.update(target, in: &score, { $0.offset = offset }) else {
+        guard TextElementProperties.update(text, in: &score, { $0.offset = offset }) else {
             throw Self.refused(.targetNotFound(affectedLocation))
         }
-        return SetElementOffset(target, offset: old.offset)
+        return SetTextOffset(text, offset: old.offset)
     }
 }

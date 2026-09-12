@@ -93,8 +93,8 @@ struct EditIntentCodecPropertiesTests {
 
     @Test("literal bytes pin intent 82 and the fixed64 offset field layout")
     func offsetBytes() throws {
-        let intent = EditIntent.setElementOffset(
-            target: .rehearsalMark(measureIndex: 0), offset: ScoreOffset(x: 1, y: -2),
+        let intent = EditIntent.setTextOffset(
+            text: .rehearsalMark(measureIndex: 0), offset: ScoreOffset(x: 1, y: -2),
         )
         // 29-byte record: outer length 28, discriminator 82, tag 1, 25-byte payload.
         // Payload: target = rehearsalMark(0) (5 bytes), hasOffset = 1 (2 bytes),
@@ -110,7 +110,7 @@ struct EditIntentCodecPropertiesTests {
         #expect(try EditIntentCodec.decode(.init(expected)) == intent)
         #expect(
             EditIntentCodec
-                .encode(.setElementAutoplace(target: .rehearsalMark(measureIndex: 0), autoplace: nil))[1] == 83,
+                .encode(.setTextAutoplace(text: .rehearsalMark(measureIndex: 0), autoplace: nil))[1] == 83,
         )
     }
 

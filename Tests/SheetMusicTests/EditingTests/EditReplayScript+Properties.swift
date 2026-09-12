@@ -64,9 +64,9 @@ extension EditReplayScript {
             .intent(.setNoteSmall(at: note, isSmall: true)),
             .intent(.setNotePlay(at: note, play: false)),
             .undo,
-            .intent(.setElementOffset(target: movedLyric, offset: ScoreOffset(x: 1.5, y: -2))),
-            .intent(.setElementAutoplace(target: movedLyric, autoplace: false)),
-            .intent(.setElementOffset(target: movedLyric, offset: nil)),
+            .intent(.setTextOffset(text: movedLyric, offset: ScoreOffset(x: 1.5, y: -2))),
+            .intent(.setTextAutoplace(text: movedLyric, autoplace: false)),
+            .intent(.setTextOffset(text: movedLyric, offset: nil)),
         ]
     }
 }

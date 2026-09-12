@@ -127,7 +127,7 @@ public struct SetElementPlacementIntentWire {
 /// spatium-unit Doubles and quantizing them here would silently move ink a host placed by hand.
 /// When absent, writers emit zeroed placeholders and readers ignore them.
 @WireFormat
-public struct SetElementOffsetIntentWire {
+public struct SetTextOffsetIntentWire {
     public var target: ScoreTextIDWire
     public var hasOffset: UInt8
     public var x: Double
@@ -148,7 +148,7 @@ public struct SetElementOffsetIntentWire {
 /// Tags: 1 target, 2 hasAutoplace, 3 autoplace (UInt8: 0 false, nonzero true; 0 placeholder when absent).
 /// Three states, not two: nil inherits the default, false pins the element, true overrides an inherited false.
 @WireFormat
-public struct SetElementAutoplaceIntentWire {
+public struct SetTextAutoplaceIntentWire {
     public var target: ScoreTextIDWire
     public var hasAutoplace: UInt8
     public var autoplace: UInt8

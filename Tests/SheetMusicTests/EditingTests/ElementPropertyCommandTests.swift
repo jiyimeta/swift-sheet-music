@@ -186,8 +186,8 @@ struct ElementPropertyCommandTests {
             [
                 EditIntent.setElementColor(target: .text(text), color: nil),
                 EditIntent.setElementPlacement(target: .text(text), placement: nil),
-                EditIntent.setElementOffset(target: text, offset: nil),
-                EditIntent.setElementAutoplace(target: text, autoplace: nil),
+                EditIntent.setTextOffset(text: text, offset: nil),
+                EditIntent.setTextAutoplace(text: text, autoplace: nil),
             ]
         }
         intents += [
@@ -285,19 +285,19 @@ struct ElementPropertyCommandTests {
     func offsetRoundTrips(_ target: ScoreTextID) throws {
         var score = try Self.populated()
         let offset = ScoreOffset(x: 1.5, y: -2.25)
-        let inverse = try SetElementOffset(target, offset: offset).apply(to: &score)
-        #expect(SetElementOffset.currentProperties(for: target, in: score)?.offset == offset)
+        let inverse = try SetTextOffset(target, offset: offset).apply(to: &score)
+        #expect(SetTextOffset.currentProperties(for: target, in: score)?.offset == offset)
         try inverse.apply(to: &score)
-        #expect(SetElementOffset.currentProperties(for: target, in: score)?.offset == nil)
+        #expect(SetTextOffset.currentProperties(for: target, in: score)?.offset == nil)
     }
 
     @Test("auto-place is written to each text kind and the inverse restores it", arguments: texts)
     func autoplaceRoundTrips(_ target: ScoreTextID) throws {
         var score = try Self.populated()
-        let inverse = try SetElementAutoplace(target, autoplace: false).apply(to: &score)
-        #expect(SetElementAutoplace.currentProperties(for: target, in: score)?.autoplace == false)
+        let inverse = try SetTextAutoplace(target, autoplace: false).apply(to: &score)
+        #expect(SetTextAutoplace.currentProperties(for: target, in: score)?.autoplace == false)
         try inverse.apply(to: &score)
-        #expect(SetElementAutoplace.currentProperties(for: target, in: score)?.autoplace == nil)
+        #expect(SetTextAutoplace.currentProperties(for: target, in: score)?.autoplace == nil)
     }
 
     /// The distinction the planner depends on: an ABSENT carrier is refused, an inherited value is not.
@@ -306,25 +306,25 @@ struct ElementPropertyCommandTests {
         var score = try Self.populated()
         let missingVerse = ScoreTextID.lyric(anchor: Self.chord, verse: 9)
         let offsetError = #expect(throws: SheetMusicError.self) {
-            try SetElementOffset(missingVerse, offset: nil).apply(to: &score)
+            try SetTextOffset(missingVerse, offset: nil).apply(to: &score)
         }
         guard case let .invalidEdit(offsetRefusal)? = offsetError else { Issue.record("expected refusal"); return }
         // `TextElementProperties.update` reports absence as `false` and lets the caller throw with its own
         // name, so the stamped operation must be the calling command, not the shared helper.
-        #expect(offsetRefusal.operation == "SetElementOffset")
+        #expect(offsetRefusal.operation == "SetTextOffset")
         let autoplaceError = #expect(throws: SheetMusicError.self) {
-            try SetElementAutoplace(missingVerse, autoplace: nil).apply(to: &score)
+            try SetTextAutoplace(missingVerse, autoplace: nil).apply(to: &score)
         }
         guard case let .invalidEdit(autoplaceRefusal)? = autoplaceError else {
             Issue.record("expected refusal")
             return
         }
-        #expect(autoplaceRefusal.operation == "SetElementAutoplace")
+        #expect(autoplaceRefusal.operation == "SetTextAutoplace")
 
         let present = ScoreTextID.lyric(anchor: Self.chord, verse: 1)
-        #expect(SetElementOffset.currentProperties(for: present, in: score)?.offset == nil)
-        try SetElementOffset(present, offset: nil).apply(to: &score)
-        try SetElementAutoplace(present, autoplace: nil).apply(to: &score)
+        #expect(SetTextOffset.currentProperties(for: present, in: score)?.offset == nil)
+        try SetTextOffset(present, offset: nil).apply(to: &score)
+        try SetTextAutoplace(present, autoplace: nil).apply(to: &score)
     }
 
     /// Writing one text's offset must not touch the other text sharing its beat.
@@ -333,10 +333,10 @@ struct ElementPropertyCommandTests {
         var score = try Self.populated()
         let staffText = ScoreTextID.staffText(anchor: Self.chord, style: .staffText)
         let systemText = ScoreTextID.staffText(anchor: Self.chord, style: .systemText)
-        try SetElementOffset(staffText, offset: ScoreOffset(x: 3, y: 4)).apply(to: &score)
-        #expect(SetElementOffset.currentProperties(for: staffText, in: score)?.offset
+        try SetTextOffset(staffText, offset: ScoreOffset(x: 3, y: 4)).apply(to: &score)
+        #expect(SetTextOffset.currentProperties(for: staffText, in: score)?.offset
             == ScoreOffset(x: 3, y: 4))
-        #expect(SetElementOffset.currentProperties(for: systemText, in: score)?.offset == nil)
+        #expect(SetTextOffset.currentProperties(for: systemText, in: score)?.offset == nil)
     }
 
     /// The four fields already round-trip; what this pins is that the COMMANDS write the same field the codec
@@ -345,12 +345,12 @@ struct ElementPropertyCommandTests {
     func survivesMSCXRoundTrip() throws {
         var score = try Self.populated()
         let lyric = ScoreTextID.lyric(anchor: Self.chord, verse: 1)
-        try SetElementOffset(lyric, offset: ScoreOffset(x: 1.5, y: -2)).apply(to: &score)
-        try SetElementAutoplace(lyric, autoplace: false).apply(to: &score)
+        try SetTextOffset(lyric, offset: ScoreOffset(x: 1.5, y: -2)).apply(to: &score)
+        try SetTextAutoplace(lyric, autoplace: false).apply(to: &score)
 
         let reloaded = try MSCXParser.parse(MSCXEncoder.encode(score))
-        #expect(SetElementOffset.currentProperties(for: lyric, in: reloaded)?.offset
+        #expect(SetTextOffset.currentProperties(for: lyric, in: reloaded)?.offset
             == ScoreOffset(x: 1.5, y: -2))
-        #expect(SetElementAutoplace.currentProperties(for: lyric, in: reloaded)?.autoplace == false)
+        #expect(SetTextAutoplace.currentProperties(for: lyric, in: reloaded)?.autoplace == false)
     }
 }

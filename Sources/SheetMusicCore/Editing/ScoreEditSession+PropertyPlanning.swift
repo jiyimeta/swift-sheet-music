@@ -21,14 +21,14 @@ extension ScoreEditSession {
             if let current = SetElementPlacement.currentProperties(for: target, in: score),
                current.placement == placement { return nil }
             return SetElementPlacement(target, placement: placement)
-        case let .setElementOffset(target, offset):
-            if let current = SetElementOffset.currentProperties(for: target, in: score),
+        case let .setTextOffset(text, offset):
+            if let current = SetTextOffset.currentProperties(for: text, in: score),
                current.offset == offset { return nil }
-            return SetElementOffset(target, offset: offset)
-        case let .setElementAutoplace(target, autoplace):
-            if let current = SetElementAutoplace.currentProperties(for: target, in: score),
+            return SetTextOffset(text, offset: offset)
+        case let .setTextAutoplace(text, autoplace):
+            if let current = SetTextAutoplace.currentProperties(for: text, in: score),
                current.autoplace == autoplace { return nil }
-            return SetElementAutoplace(target, autoplace: autoplace)
+            return SetTextAutoplace(text, autoplace: autoplace)
         default:
             return nil
         }

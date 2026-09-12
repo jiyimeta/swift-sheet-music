@@ -1,7 +1,7 @@
 import SheetMusicFoundation
 
 /// Resolves a `ScoreTextID` to the `ElementProperties` it addresses, and writes them back, for
-/// `SetElementOffset` and `SetElementAutoplace`.
+/// `SetTextOffset` and `SetTextAutoplace`.
 ///
 /// This switch used to be copied in each command that needed it, encoding the same four lookup rules: a
 /// lyric by verse inside its anchor chord, staff and system text by lane slot, harmony by harmony slot, and

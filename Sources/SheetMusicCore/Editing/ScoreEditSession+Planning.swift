@@ -141,7 +141,7 @@ extension ScoreEditSession {
             return notationCommand(for: intent, in: score)
         case .setElementVisible, .setNoteVisible, .setStemVisible, .setBeamVisible, .setTextVisible:
             return visibilityCommand(for: intent, in: score)
-        case .setElementColor, .setElementPlacement, .setElementOffset, .setElementAutoplace:
+        case .setElementColor, .setElementPlacement, .setTextOffset, .setTextAutoplace:
             return propertyCommand(for: intent, in: score)
         case let .setTextFont(text, patch):
             if let current = SetTextFont.current(text, in: score), !patch.changes(current) {
