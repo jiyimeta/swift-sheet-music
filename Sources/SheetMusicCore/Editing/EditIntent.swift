@@ -461,4 +461,11 @@ public enum EditIntent: Sendable, Equatable {
     /// One engraved text's collision-avoidance override; nil inherits the default. Text only. Appended for the
     /// properties-inspector project — wire tag 83.
     case setTextAutoplace(text: ScoreTextID, autoplace: Bool?)
+
+    /// Write the score's credit fields — title, subtitle, composer, arranger, lyricist, copyright — into both the
+    /// `<metaTag>` dictionary and the engraved title frame, creating that frame when the score has none.
+    ///
+    /// Plural for `setLyricSyllables`' reason: a credits form saves every field at once and one Save has to be one
+    /// undo step. See `ScoreInfoWrite` for why one field reaches two places.
+    case setScoreInfo(writes: [ScoreInfoWrite])
 }

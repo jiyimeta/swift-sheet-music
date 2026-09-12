@@ -2333,7 +2333,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         if let cached = renderedMidiCache, cached.score == score {
             return cached.midi
         }
-        var midi = try MidiRenderer.render(score: score)
+        // `renderForPlayback`, not `render`: this SMF becomes the transport, and the transport's end is what stops
+        // playback (`!sequencer.isPlaying` below, `backend.isAtEnd` on the injected path). A bar whose music stops
+        // on beat one has to keep running to its barline, and rests emit no events to carry it there. The export
+        // paths deliberately keep calling `render` — MuseScore's own file ends at the last note-off.
+        var midi = try MidiRenderer.renderForPlayback(score: score)
         // Collapse the MuseScore-exact multi-port SMF onto the live
         // engine's single-port channel set BEFORE anything downstream
         // (sequencer load, `postProcessForMIDISynth`'s tick-0 stripping)

@@ -148,6 +148,9 @@ extension ScoreEditSession {
                 return nil
             }
             return SetTextFont(text, patch: patch)
+        case let .setScoreInfo(writes):
+            guard !writes.isEmpty, !SetScoreInfo.isRestatement(writes, in: score) else { return nil }
+            return SetScoreInfo(writes: writes)
         case let .setLyricVerse(text, destination):
             if case let .lyric(anchor, verse) = text, verse == destination,
                let current = SetLyric.current(at: anchor, verse: verse, in: score), !current.text.isEmpty

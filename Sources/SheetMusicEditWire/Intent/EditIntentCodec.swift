@@ -117,6 +117,7 @@ import Wirelet
 /// 81 = setNotePlay(SetNotePlayIntentWire), see EditIntentPayloads+Notation2.swift
 /// 82 = setTextOffset(SetTextOffsetIntentWire), see EditIntentPayloads+Properties.swift
 /// 83 = setTextAutoplace(SetTextAutoplaceIntentWire), see EditIntentPayloads+Properties.swift
+/// 84 = setScoreInfo(SetScoreInfoIntentWire), see EditIntentPayloads+ScoreInfo.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -128,7 +129,8 @@ import Wirelet
 /// Case 73 was appended for its harmony group. Cases 74 and 75 were appended for the macOS score-text-entry
 /// project (spec 2026-09-07). Cases 76…79 were appended for selection and editing (color, placement, text font,
 /// lyric verse). Cases 80…83 were appended for the properties-inspector project (spec 2026-09-12) — note
-/// small/play and element offset/autoplace — and 83 is the catalogue's last.
+/// small/play and element offset/autoplace. Case 84 was appended for the score-credits write path, and 84 is
+/// the catalogue's last.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -768,6 +770,20 @@ import Wirelet
 /// tag 1: text     ScoreTextIDWire, see ScoreItemIDCodec.swift (lyric / staffText / harmony / rehearsalMark)
 /// tag 2: visible  u8, varint — 0 hidden, non-zero shown (the same rule as intents 58…61)
 /// ```
+///
+/// `SetScoreInfoIntentWire` (`setScoreInfo`'s payload). Repeated for `setLyricSyllables`' reason rather than
+/// `setJumps`': a credits form saves every field at once and the whole save is one undo step on the far side:
+/// ```
+/// tag 1: writes  repeated ScoreInfoWriteWire — may be empty, which the far side plans as nothing to apply
+/// ```
+///
+/// `ScoreInfoWriteWire` fields, in tag order:
+/// ```
+/// tag 1: field    u8, varint — 0 title / 1 subtitle / 2 composer / 3 arranger / 4 lyricist / 5 copyright,
+///                 else throws
+/// tag 2: hasText  u8, varint — 0 = clear the credit, 1 = write `text`
+/// tag 3: text     string — the credit as typed; "" when hasText == 0
+/// ```
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -1082,6 +1098,8 @@ public enum EditIntentWire {
     case setTextOffset(SetTextOffsetIntentWire)
     /// Appended for the properties inspector — index 83. Never renumber anything above it.
     case setTextAutoplace(SetTextAutoplaceIntentWire)
+    /// Appended for the score-credits write path — index 84. Never renumber anything above it.
+    case setScoreInfo(SetScoreInfoIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1270,6 +1288,8 @@ public enum EditIntentWire {
             self = .setChordSymbol(SetChordSymbolIntentWire(location: location, name: name, harmonyType: harmonyType))
         case let .setLyricSyllables(writes):
             self = .setLyricSyllables(SetLyricSyllablesIntentWire(writes: writes))
+        case let .setScoreInfo(writes):
+            self = .setScoreInfo(SetScoreInfoIntentWire(writes: writes))
         case let .setTextVisible(text, visible):
             self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
         case let .setElementColor(target, color):
@@ -1533,6 +1553,8 @@ public enum EditIntentWire {
             return .setChordSymbol(at: decoded.location, name: decoded.name, harmonyType: decoded.harmonyType)
         case let .setLyricSyllables(wire):
             return try .setLyricSyllables(writes: wire.decoded())
+        case let .setScoreInfo(wire):
+            return try .setScoreInfo(writes: wire.decoded())
         case let .setTextVisible(wire):
             let decoded = wire.decoded()
             return .setTextVisible(text: decoded.text, visible: decoded.visible)

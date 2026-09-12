@@ -32,27 +32,10 @@ public enum PitchStaffPosition {
         let diatonicFromC = tpcLetters[((tpc + 1) % 7 + 7) % 7]
         let octave = octaveFor(midiPitch: midiPitch, diatonicFromC: diatonicFromC)
         let diatonicAbs = octave * 7 + diatonicFromC
-        // Diatonic step of the note sitting on the middle staff line
-        // for each clef. Octave-transposing clefs shift the reference
-        // by ±7 (one diatonic octave) or ±14 (two octaves).
-        let midLineDiatonic: Int
-        switch clef {
-        case .treble: midLineDiatonic = 4 * 7 + 6 // B4
-        case .treble8va: midLineDiatonic = 5 * 7 + 6 // B5
-        case .treble8vb: midLineDiatonic = 3 * 7 + 6 // B3
-        case .treble15ma: midLineDiatonic = 6 * 7 + 6 // B6
-        case .treble15mb: midLineDiatonic = 2 * 7 + 6 // B2
-        case .bass: midLineDiatonic = 3 * 7 + 1 // D3
-        case .bass8va: midLineDiatonic = 4 * 7 + 1 // D4
-        case .bass8vb: midLineDiatonic = 2 * 7 + 1 // D2
-        case .soprano: midLineDiatonic = 4 * 7 + 4 // G4
-        case .alto: midLineDiatonic = 4 * 7 + 0 // C4
-        case .tenor: midLineDiatonic = 3 * 7 + 5 // A3
-        case .baritone: midLineDiatonic = 3 * 7 + 3 // F3
-        case .percussion: midLineDiatonic = 4 * 7 + 6 // positional (B4)
-        case .percussion2: midLineDiatonic = 4 * 7 + 6 // positional (B4)
-        }
-        return StaffStep(diatonicAbs - midLineDiatonic)
+        // Which note the middle line carries is the clef's own property (`NotatedClef.middleLineDiatonicStep`),
+        // not layout's: note input needs the same anchor to choose the octave a letter key writes into an empty
+        // staff, and a second copy of this table is a second answer waiting to drift from this one.
+        return StaffStep(diatonicAbs - clef.middleLineDiatonicStep)
     }
 
     /// The octave number implied by a MIDI pitch + diatonic letter.

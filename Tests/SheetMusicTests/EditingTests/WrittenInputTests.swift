@@ -102,13 +102,15 @@ struct WrittenInputTests {
         let expected = try #require(MeasureAccidentals.plannedPitch(
             forLetter: "C", nearestTo: nil, at: Self.slot, in: score.writtenPitchView(),
         ))
-        #expect(expected.pitch == 61) // written C♯4
+        // Written C♯5. The octave is the clef's — the nearest C to a treble staff's middle line — and is
+        // incidental here; the SPELLING (C♯, tpc 21) is what this test is about. See `ClefDefaultOctaveTests`.
+        #expect(expected.pitch == 73)
         #expect(expected.tpc == 21)
 
         let planned = try #require(MeasureAccidentals.plannedConcertPitch(
             forWrittenLetter: "C", nearestTo: nil, at: Self.slot, in: score,
         ))
-        #expect(planned.pitch == expected.pitch - 2) // concert B♮3
+        #expect(planned.pitch == expected.pitch - 2) // concert B♮4
         #expect(planned.tpc == expected.tpc - 2)
 
         // The half that actually matters: written back into the score, the staff reads what was asked for.
@@ -168,7 +170,11 @@ struct WrittenInputTests {
         ))
         let read = try #require(displayed(in: writing(planned.pitch, planned.tpc, into: score)))
         #expect(read.tpc == 14) // written C natural — A♭ major leaves C alone
-        #expect(read.pitch == 60)
+        // C5, not middle C: with no previous note the octave comes from the clef, and the nearest C to a treble
+        // staff's middle line (B4) is the one inside the staff. The octave is incidental to what this test is
+        // about — the SPELLING above is — but it is pinned rather than ignored so a later change has to be
+        // deliberate. See `ClefDefaultOctaveTests`.
+        #expect(read.pitch == 72)
     }
 
     /// The bar's own accidental state is read in the WRITTEN space too, not just the key. A written C♮ earlier in

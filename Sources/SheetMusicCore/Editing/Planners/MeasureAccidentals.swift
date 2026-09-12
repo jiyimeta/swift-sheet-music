@@ -46,16 +46,28 @@ public enum MeasureAccidentals {
         let keySig = score.activeKey(staff: location.staff, measureIndex: location.measureIndex)
         let letterIndex = letterIndex(forTpc: natural.tpc)
         let keyAlteration = keyAlteration(forLetter: letterIndex, keySig: keySig)
-        let searchReference = reference.map { $0 - keyAlteration }
+        // With no previous note to measure against, the CLEF is what says where the staff lives. Measuring the
+        // letter against the note on the middle line puts it in the staff the user is looking at: A under a bass
+        // clef is A2 (the first space) rather than the A4 an octave-4 default writes three ledger lines above it.
+        // Reached for the first note of a staff, and again after every rest the caret lands on with nothing
+        // before it — which on a freshly created score is every note the user types until the first one lands.
         let chosen: (pitch: Int, tpc: Int)?
-        switch octaveRule {
-        case .nearest:
-            chosen = NoteInputPlanner.pitch(forLetter: letter, nearestTo: searchReference)
-        case .above:
-            // `.above` has nothing to be above without a reference, so it falls back to the nearest rule's own
-            // no-reference answer (the letter in octave 4) rather than refusing the key.
-            chosen = searchReference.flatMap { NoteInputPlanner.pitch(forLetter: letter, above: $0) }
-                ?? NoteInputPlanner.pitch(forLetter: letter, nearestTo: searchReference)
+        if let reference {
+            let searchReference = reference - keyAlteration
+            switch octaveRule {
+            case .nearest:
+                chosen = NoteInputPlanner.pitch(forLetter: letter, nearestTo: searchReference)
+            case .above:
+                chosen = NoteInputPlanner.pitch(forLetter: letter, above: searchReference)
+            }
+        } else {
+            // Nothing was played, so the CLEF says where the staff lives — MuseScore's own rule for this branch,
+            // and the reason A under a bass clef is the A in the first space rather than the A an octave-4 default
+            // wrote three ledger lines above it. `.above` has no chord to stack onto here either, so both rules
+            // take the same answer rather than one of them refusing the key.
+            chosen = NoteInputPlanner.pitch(
+                forLetter: letter, clefAnchor: score.clefInForce(at: location).middleLinePitch,
+            )
         }
         guard let nearestNatural = chosen else { return nil }
         let octave = nearestNatural.pitch / 12 - 1
