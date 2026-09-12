@@ -142,6 +142,42 @@ import Testing
             })
         }
 
+        /// **The one QA found in page mode** (2026-09-12): on page two the redrawn key signature is the only
+        /// signature on the sheet, and it used to answer nothing. It now names the bar that declared what it is
+        /// redrawing — here m0, whose one sharp is still in force on the system that opens with m2's change...
+        /// except that m2 declares its own, so the system-head redraw to check is the one for m0's sharp on the
+        /// system that does NOT contain m0.
+        @Test("a system-head key signature resolves to the bar that declared it")
+        func continuationKeySignature() throws {
+            guard #available(macOS 15.0, *) else { return }
+            // No clef change, so the second system's head carries only the redrawn signature.
+            let doc = layout(Self.score(clefChange: false))
+            let continuation = try system(notContaining: 0, in: doc)
+            let redraws = continuation.measures.flatMap { measure in
+                measure.elements.compactMap { element -> Int?? in
+                    guard case let .keySignature(_, _, _, _, _, index) = element else { return nil }
+                    return .some(index)
+                }
+            }
+            #expect(!redraws.isEmpty)
+            // Every signature drawn at a system head names a bar — none of them answers `nil` any more.
+            #expect(redraws.allSatisfy { $0 != nil })
+        }
+
+        /// The key-signature resolver on its own, the twin of `declaringAnchor` below.
+        @Test("the key signature in force is the last one declared before the bar")
+        func declaringKeyMeasure() {
+            let staff = Self.score(clefChange: false).parts[0].staves[0]
+
+            // m0 declares one sharp; m1 declares nothing, so it reads m0's.
+            #expect(LayoutEngine.declaringKeySignatureMeasure(before: 1, staff: staff) == 0)
+            #expect(LayoutEngine.declaringKeySignatureMeasure(before: 2, staff: staff) == 0)
+            // m2 declares two flats, so m3 reads m2's.
+            #expect(LayoutEngine.declaringKeySignatureMeasure(before: 3, staff: staff) == 2)
+            // Nothing precedes m0.
+            #expect(LayoutEngine.declaringKeySignatureMeasure(before: 0, staff: staff) == nil)
+        }
+
         /// The resolver on its own: the last clef declared before a bar is what that bar reads, and a bar with
         /// no clef before it reads the staff's own default.
         @Test("the declaration in force is the last one before the bar")

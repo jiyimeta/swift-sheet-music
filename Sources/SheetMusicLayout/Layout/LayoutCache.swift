@@ -232,6 +232,10 @@ public final class LayoutCache: @unchecked Sendable {
         /// to follow the declaration rather than the glyph.
         let initialClefAnchor: ClefAnchor?
         let initialKeyForSynth: Int?
+        /// The bar a synthesized leading key signature restates, part of the key for the same reason
+        /// `initialClefAnchor` is: two systems can redraw the same NUMBER of sharps while restating different
+        /// declarations.
+        let initialKeyMeasureIndex: Int?
         let headerSchedule: LayoutEngine.HeaderSchedule
         let tickColumns: [Int: CGFloat]
         let division: Int

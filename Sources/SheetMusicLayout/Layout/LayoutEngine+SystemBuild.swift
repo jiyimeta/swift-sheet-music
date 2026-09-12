@@ -256,6 +256,10 @@ extension LayoutEngine {
                 let synthKey: Int? = synthesizeKeySigHere
                     ? keys[staffIdx]
                     : nil
+                // Which bar's declaration that redraw shows — the key-signature sibling of `synthClefAnchor`.
+                let synthKeyMeasure: Int? = synthesizeKeySigHere
+                    ? declaringKeySignatureMeasure(before: measureIdx, staff: staff)
+                    : nil
                 let part = context.score.parts[allStaves[staffIdx].address.partIndex]
                 let isPitchedStaff = !part.instrument.useDrumset && staff.group != "percussion"
                 let drumMap: [Int: Int]? =
@@ -295,6 +299,7 @@ extension LayoutEngine {
                     initialClefRawType: synthClef,
                     initialClefAnchor: synthClefAnchor,
                     initialKeyForSynth: synthKey,
+                    initialKeyMeasureIndex: synthKeyMeasure,
                     headerSchedule: schedule,
                     tickColumns: tickCols,
                     division: context.score.division,
@@ -343,6 +348,7 @@ extension LayoutEngine {
                         initialClefRawType: synthClef,
                         initialClefAnchor: synthClefAnchor,
                         initialKeyForSynth: synthKey,
+                        initialKeyMeasureIndex: synthKeyMeasure,
                         headerSchedule: schedule,
                         tickColumns: tickCols,
                         division: context.score.division,

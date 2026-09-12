@@ -30,4 +30,26 @@ extension LayoutEngine {
         }
         return .staffDefault(address)
     }
+
+    /// The bar whose key-signature declaration is in force at the head of `measureIndex` — what a system-head
+    /// redraw of the signature is a redraw OF.
+    ///
+    /// The key-signature twin of `declaringClefAnchor(before:staff:address:)`, and it exists for the same
+    /// reason: on page two of a paged score the redrawn signature is the only one on the sheet, so a click on it
+    /// has to resolve to the declaration it shows. `nil` when no bar before this one declares a signature — the
+    /// staff is in C, there is nothing to redraw, and the engine synthesizes no glyph either.
+    ///
+    /// **Voice zero, and the LAST declaration in the bar wins**, matching `SetKeySignature`'s own scope: it
+    /// writes the leading signature run of voice zero, and within a bar the later element is the one still in
+    /// force when the bar ends.
+    static func declaringKeySignatureMeasure(before measureIndex: Int, staff: Staff) -> Int? {
+        for index in stride(from: min(measureIndex, staff.measures.count) - 1, through: 0, by: -1) {
+            guard let voice = staff.measures[index].voices.first else { continue }
+            for element in voice.elements.reversed() {
+                guard case .keySignature = element else { continue }
+                return index
+            }
+        }
+        return nil
+    }
 }

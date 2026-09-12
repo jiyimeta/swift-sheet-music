@@ -70,6 +70,9 @@ extension LayoutEngine {
         // restatement carries the identity of what it restates rather than none at all.
         initialClefAnchor: ClefAnchor? = nil,
         initialKeyForSynth: Int? = nil,
+        // The bar whose key-signature declaration a synthesized leading signature RESTATES — the sibling of
+        // `initialClefAnchor`, resolved by the caller for the same reason.
+        initialKeyMeasureIndex: Int? = nil,
         headerSchedule: HeaderSchedule,
         tickColumns: [Int: CGFloat],
         division: Int,
@@ -434,7 +437,12 @@ extension LayoutEngine {
                     origin: CGPoint(
                         x: headerSchedule.keySigX, y: staffMidY,
                     ),
-                    measureIndex: nil,
+                    // Same rule the synthesized clef above follows: a system-head redraw names the declaration
+                    // it redraws. On page two of a paged score this glyph is the only key signature on the
+                    // sheet, so answering "not a thing" to a click on it is wrong however true it is that the
+                    // redraw declares nothing. `initialKeyMeasureIndex` is that declaration's bar, resolved by
+                    // the caller, which is the level that can see the bars before this system.
+                    measureIndex: initialKeyMeasureIndex,
                 ))
                 remainingSynthKeySig = false
             }
