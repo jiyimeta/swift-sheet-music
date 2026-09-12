@@ -54,9 +54,11 @@ public struct DuplicateRange: EditCommand {
         var allocator = ids
         var commands: [any EditCommand] = []
         let destinationTick = source.startTick + source.lengthTicks
+        let limit = destinationTick + reach(of: source)
 
+        try requireOneTickAxis(across: source.staves, upTo: limit, in: score)
         try appendMeasures(
-            reaching: destinationTick + reach(of: source), staves: source.staves,
+            reaching: limit, staves: source.staves,
             in: &scratch, ids: &allocator, commands: &commands,
         )
         for stream in source.streams {
@@ -79,6 +81,37 @@ extension DuplicateRange {
     /// it — and the placement then refuses for want of the bar this would have appended.
     private func reach(of source: RangeCopySource) -> Int {
         source.streams.map { $0.reach(from: source.startTick) }.max() ?? source.lengthTicks
+    }
+
+    /// Refuses a copy whose staves do not lay their measures out identically over the span it touches.
+    ///
+    /// The range's own ticks — `source.startTick`, and so the destination — are measured on the FIRST covered
+    /// staff's axis, while each stream's element ticks are measured on its own staff's, and `RangeCopyPlacement`
+    /// subtracts one from the other. That subtraction is an identity only while the two axes agree. They can
+    /// disagree: `actualLength` is a per-measure, per-staff fact, so one staff can carry a pickup bar its
+    /// neighbor does not, and a copy spanning the divergence would land that staff's material at a tick meaning
+    /// something else there. Copying across staves in different barrings needs a destination resolved per staff
+    /// — a design of its own — so until then it is refused rather than written wrong.
+    ///
+    /// `insufficientRoom` states the two lengths that disagree. It is the nearest existing reason: the
+    /// destination measure this copy needs is not the size the plan measured it to be.
+    private func requireOneTickAxis(across staves: [StaffAddress], upTo limit: Int, in score: Score) throws {
+        guard let first = staves.first else { return }
+        let anchor = RangeCopyGeometry(staff: first, in: score)
+        for staff in staves.dropFirst() {
+            let other = RangeCopyGeometry(staff: staff, in: score)
+            // Only the measures the copy can reach matter; a staff free to differ past the copy still does.
+            for index in anchor.measureStarts.indices where anchor.measureStarts[index] < limit {
+                guard other.measureStarts.indices.contains(index),
+                      other.measureStarts[index] == anchor.measureStarts[index],
+                      other.measureLength(index) == anchor.measureLength(index)
+                else {
+                    throw Self.refused(.insufficientRoom(
+                        neededTicks: anchor.measureLength(index), availableTicks: other.measureLength(index),
+                    ))
+                }
+            }
+        }
     }
 
     /// Appends measure columns until every staff the copy touches reaches `needed` absolute ticks.

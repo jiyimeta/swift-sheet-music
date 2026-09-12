@@ -7,6 +7,7 @@ import Testing
 @Suite("DuplicateRange (irregular bars)")
 struct DuplicateRangeIrregularBarTests {
     private static let flute = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+    private static let cello = StaffAddress(partIndex: 1, staffIndexInPart: 0)
 
     private static func slot(_ measure: Int, _ element: Int, voice: Int = 0, staff: StaffAddress = flute)
         -> VoiceElementID
@@ -46,6 +47,30 @@ struct DuplicateRangeIrregularBarTests {
         ])
         return Score(division: 480, parts: [
             Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+    }
+
+    /// Two staves whose measure 0 disagrees: the flute's is a one-beat pickup, the cello's a full 4/4 bar. Every
+    /// later bar agrees, so only a copy that starts here can notice.
+    private static func stavesDisagreeingOverMeasureZero() -> Score {
+        let flute = Staff(defaultClefType: "G", measures: [
+            Measure(
+                voices: [Voice(elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)), quarter(60, 14),
+                ])],
+                actualLength: Fraction(numerator: 1, denominator: 4),
+            ),
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+        ])
+        let cello = Staff(defaultClefType: "F", measures: [
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+        ])
+        return Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [flute]),
+            Part(id: "2", trackName: "Cello", instrument: Instrument(id: "cello"), staves: [cello]),
         ])
     }
 
@@ -92,5 +117,20 @@ struct DuplicateRangeIrregularBarTests {
         #expect(throws: SheetMusicError.self) {
             _ = try RangeCopyVoiceRebuild.command(for: piece, staff: Self.flute, voiceIndex: 0, in: score)
         }
+    }
+
+    @Test("a range whose staves disagree about a measure's length is refused")
+    func refusesDisagreeingStaves() {
+        var score = Self.stavesDisagreeingOverMeasureZero()
+        let before = score
+        // Both staves' measure 0. The range's ticks are measured on the flute's one-beat bar, while the cello's
+        // material is placed on its own four-beat axis — the subtraction that puts the copy after the original
+        // is the same on both, so one of the two staves must land wrong.
+        #expect(throws: SheetMusicError.self) {
+            _ = try DuplicateRange(over: VoiceElementRange(
+                start: Self.slot(0, 1), end: Self.slot(0, 0, staff: Self.cello),
+            )).apply(to: &score)
+        }
+        #expect(score == before)
     }
 }
