@@ -77,15 +77,27 @@ struct ScoreHitTesterNavigationTests {
         let fallback = try #require(LayoutElementShape.autoplacedRects(
             for: element, kind: shapeKind, metrics: ElementHitFixtures.metrics,
         ).first).offsetBy(dx: 50, dy: 50)
+        // A glyph marker's reach is its ink plus `elementHitTolerance`, so the box a miss has to clear is the
+        // PADDED one. Taken from the constant rather than spelled as 5 points, so the search and the hit test
+        // cannot drift apart: whatever this predicate accepts is by construction out of the glyph's reach.
+        let padding = ElementHitFixtures.metrics.sp * ScoreHitTester.elementHitTolerance
+        let reachable = boxes.map { $0.insetBy(dx: -padding, dy: -padding) }
+        // Just outside the ink but inside the tolerance still reaches the glyph — pinned here so the miss below
+        // means "beyond the mark's reach" rather than "the tolerance quietly went away".
+        let near = CGPoint(x: box.maxX + padding / 2, y: box.midY)
+        #expect(!box.contains(near))
+        #expect(tester.hitTest(at: near) == target)
         let candidates = (1 ... 99).map {
             CGPoint(x: fallback.minX + fallback.width * CGFloat($0) / 100, y: fallback.midY)
         }
         let miss = try #require(candidates.first { point in
-            fallback.contains(point) && boxes.allSatisfy { !$0.contains(point) }
+            fallback.contains(point) && reachable.allSatisfy { !$0.contains(point) }
         })
-        // Liveness guards: the miss would be a false hit if marker text fallback were used.
+        // Liveness guards: the miss would be a false hit if marker text fallback were used. It sits deep inside
+        // the label rectangle the renderer never draws, and clear of every box the glyph can be clicked in.
         #expect(fallback.contains(miss))
         #expect(boxes.allSatisfy { !$0.contains(miss) })
+        #expect(reachable.allSatisfy { !$0.contains(miss) })
         #expect(tester.hitTest(at: miss) == nil)
     }
 
