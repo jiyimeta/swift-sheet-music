@@ -11,20 +11,21 @@ and this project adheres to
 
 - **`EditIntent.duplicateRange(over:)` (wire 85) and `DuplicateRange`: MuseScore's `R`, repeating a range
   selection immediately after itself across measures, staves and voices.** An element whose onset falls
-  inside the range but sounds past its end is truncated to what remains, never copied whole. A tuplet the
-  copy carries survives only where every one of its members fits a single destination bar; a destination
-  tuplet the copy cuts only partly is torn down and its uncovered remainder refilled with plain rests, the
-  same way MuseScore's own paste destroys one. The copy carries the range's own clefs and breaths and its
-  whole staff-annotation family — dynamics, fermatas, chord symbols, sticking, expression, capos, string
-  tunings, figured bass, symbols and fret diagrams — plus any slur or line spanner whose anchor and resolved
-  end both lie inside the range. Landing, it clears the destination's staff annotations under it, and of
-  what it carries only a clef, a breath or a chord symbol can supersede a destination element: those are the
-  kinds a segment holds one of per track, so a copied one takes the destination's place at that tick rather
-  than standing beside it. It also shortens a destination hairpin, ottava, trill or vibrato reaching into
-  its span, removes a destination slur that does the same outright, removes any other spanner lying wholly
-  inside the span along with the material it was anchored to, and clears the tie on either boundary
-  neighbor — across a barline too — that pointed into the material it just overwrote. Bars are appended
-  when the copy runs past the end of the score. A
+  inside the range but sounds past its end is truncated to what remains, never copied whole — except a
+  tuplet member, which is never truncated, because MuseScore forbids the partial tuplet that truncation
+  would create. A tuplet the copy carries survives only where every one of its members fits a single
+  destination bar; a destination tuplet the copy cuts only partly is torn down and its uncovered remainder
+  refilled with plain rests, the same way MuseScore's own paste destroys one. The copy carries the range's
+  own clefs and breaths and its whole staff-annotation family — dynamics, fermatas, chord symbols,
+  sticking, expression, capos, string tunings, figured bass, symbols and fret diagrams — plus any slur or
+  line spanner whose anchor and resolved end both lie inside the range. Landing, it clears the
+  destination's staff annotations under it, and of what it carries only a clef, a breath or a chord symbol
+  can supersede a destination element: those are the kinds a segment holds one of per track, so a copied
+  one takes the destination's place at that tick rather than standing beside it. It also shortens a
+  destination hairpin, ottava, trill or vibrato reaching into its span, removes a destination slur that
+  does the same outright, removes any other spanner lying wholly inside the span along with the material it
+  was anchored to, and clears the tie on either boundary neighbor — across a barline too — that pointed
+  into the material it just overwrote. Bars are appended when the copy runs past the end of the score. A
   range covering staves that are barred differently over the copied span — a pickup bar written on one
   staff and not on another — refuses with `insufficientRoom`, because the copy's offset is one subtraction
   for every staff and two barrings cannot both be right.
