@@ -43,7 +43,8 @@ public struct DuplicateRange: EditCommand, RangeCopyWriting {
     /// selection ends. Everything after that is `RangeCopyWriting.writeCommands(for:at:in:ids:)`, shared with
     /// `PasteRange`.
     func plan(in score: Score, ids: EIDAllocator) throws -> CompositeEditCommand? {
-        guard let source = try RangeCopySource(range: range, in: score) else {
+        guard let source = try RangeCopySource(range: range, in: score, operation: String(describing: Self.self))
+        else {
             throw Self.refused(.targetNotFound(range.start))
         }
         let destinationTick = source.startTick + source.lengthTicks

@@ -45,7 +45,7 @@ extension RangeCopySource {
     static func tupletBounds(
         for ids: [VoiceElementID], staff: StaffAddress, voiceIndex: Int,
         lowBound: VoiceElementID, highBound: VoiceElementID,
-        infoByLocation: [MeasureElementLocation: (tick: Int, length: Int)], score: Score,
+        infoByLocation: [MeasureElementLocation: (tick: Int, length: Int)], score: Score, operation: String,
     ) throws -> [(startTick: Int, endTick: Int, normalNotes: Int, actualNotes: Int)] {
         var measureOrder: [Int] = []
         for id in ids where !measureOrder.contains(id.measureIndex) {
@@ -62,7 +62,7 @@ extension RangeCopySource {
                 let startPresent = presentIndices.contains(span.startIndex)
                 let endPresent = presentIndices.contains(span.endIndex)
                 guard startPresent, endPresent else {
-                    throw Self.refused(.insideTuplet(at: startPresent ? highBound : lowBound))
+                    throw Self.refused(.insideTuplet(at: startPresent ? highBound : lowBound), operation: operation)
                 }
                 let startLocation = MeasureElementLocation(measureIndex: measureIndex, elementIndex: span.startIndex)
                 let endLocation = MeasureElementLocation(measureIndex: measureIndex, elementIndex: span.endIndex)

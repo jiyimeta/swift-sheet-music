@@ -67,7 +67,13 @@ struct RangeCopySource {
     /// on either side — a range must cover every tuplet it touches from its first member to its last, through
     /// every nesting level (MuseScore's `Selection::canCopy`, `select.cpp:1394-1465`), so this refuses the whole
     /// copy rather than silently drop the bracket the way an earlier version of this package did.
-    init?(range: VoiceElementRange, in score: Score) throws {
+    ///
+    /// `operation` names the command this resolution is serving — `DuplicateRange` reads a range of the score
+    /// being edited, `PasteRange` reads a payload's own whole extent through `init?(payload:)` — and it stamps
+    /// whichever refusal `.insideTuplet` above raises. There is deliberately no default: this initializer is
+    /// shared by both, and a default would quietly restore the bug where a paste refused in here was reported
+    /// to the host as a repeat-selection.
+    init?(range: VoiceElementRange, in score: Score, operation: String) throws {
         let targets = score.voiceElements(in: range)
         guard !targets.isEmpty,
               let startOnset = score.onset(of: range.start), let endOnset = score.onset(of: range.end),
@@ -98,7 +104,7 @@ struct RangeCopySource {
 
         streams = try Self.makeStreams(
             from: targets, in: score, rangeStart: start, rangeEnd: end,
-            lowBound: lowBound, highBound: highBound,
+            lowBound: lowBound, highBound: highBound, operation: operation,
         )
         guard !streams.isEmpty else { return nil }
     }
@@ -116,15 +122,17 @@ struct RangeCopySource {
 }
 
 extension RangeCopySource {
-    static func refused(_ reason: EditRefusal.Reason) -> SheetMusicError {
-        .invalidEdit(EditRefusal(operation: "DuplicateRange", reason: reason))
+    /// A refusal stamped with the CALLING command's name. There is deliberately no default, for the reason
+    /// `init?(range:in:operation:)` gives: this resolution is shared by `DuplicateRange` and `PasteRange`.
+    static func refused(_ reason: EditRefusal.Reason, operation: String) -> SheetMusicError {
+        .invalidEdit(EditRefusal(operation: operation, reason: reason))
     }
 
     /// One stream per (staff, voice). `voiceElements(in:)` yields ids in staff, measure, voice, element order, so
     /// appending in encounter order keeps every stream's own elements ascending with no separate sort.
     private static func makeStreams(
         from targets: [VoiceElementID], in score: Score, rangeStart: Int, rangeEnd: Int,
-        lowBound: VoiceElementID, highBound: VoiceElementID,
+        lowBound: VoiceElementID, highBound: VoiceElementID, operation: String,
     ) throws -> [Stream] {
         var order: [StreamKey] = []
         var idsByKey: [StreamKey: [VoiceElementID]] = [:]
@@ -142,7 +150,7 @@ extension RangeCopySource {
             return try makeStream(
                 key: key, ids: ids, geometry: geometry, score: score,
                 rangeStart: rangeStart, rangeEnd: rangeEnd,
-                lowBound: lowBound, highBound: highBound,
+                lowBound: lowBound, highBound: highBound, operation: operation,
             )
         }
     }
@@ -157,7 +165,7 @@ extension RangeCopySource {
     private static func makeStream(
         key: StreamKey, ids: [VoiceElementID], geometry: RangeCopyGeometry, score: Score,
         rangeStart: Int, rangeEnd: Int,
-        lowBound: VoiceElementID, highBound: VoiceElementID,
+        lowBound: VoiceElementID, highBound: VoiceElementID, operation: String,
     ) throws -> Stream? {
         let sourceDurations = score.effectiveMeasureDurations(
             partIndex: key.staff.partIndex, staffIndex: key.staff.staffIndexInPart,
@@ -218,7 +226,7 @@ extension RangeCopySource {
         )
         let tuplets = try tupletBounds(
             for: ids, staff: key.staff, voiceIndex: key.voiceIndex, lowBound: lowBound, highBound: highBound,
-            infoByLocation: infoByLocation, score: score,
+            infoByLocation: infoByLocation, score: score, operation: operation,
         )
         spanners += RangeCopySpanners.lineSpanners(
             for: ids, staff: key.staff, voiceIndex: key.voiceIndex, geometry: geometry,
