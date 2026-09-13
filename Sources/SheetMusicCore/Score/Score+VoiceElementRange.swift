@@ -11,11 +11,31 @@ extension Score {
         else { return [] }
         let lo = min(range.start.staff, range.end.staff)
         let hi = max(range.start.staff, range.end.staff)
-        let posLo = min(startOnset, endOnset)
-        let posHi = max(startEnd, endEnd)
+        return voiceElements(
+            staves: allStaves.map(\.address).filter { (lo ... hi).contains($0) },
+            from: min(startOnset, endOnset), to: max(startEnd, endEnd),
+        )
+    }
 
+    /// The same resolution as `voiceElements(in:)`, with the region stated outright rather than read off two
+    /// slots: the staves to cover, and the half-open tick span `[posLo, posHi)` to cover them over.
+    ///
+    /// A `VoiceElementRange` derives its staff span from its two bounds' staves and its tick span from those same
+    /// two bounds' onsets and ends, so a pair of slots cannot state an arbitrary region — covering a staff that
+    /// stands at neither temporal extreme costs one of the two exact ticks. A caller that knows its extent
+    /// independently (a clipboard payload: every staff it carries, over its own whole length) states it here
+    /// instead of searching for two slots that happen to encode it, and `voiceElements(in:)` above becomes the
+    /// special case where they do. One walk, so one resolution rule for the whole range-command family.
+    ///
+    /// `posLo` and `posHi` are expected to come from `onset(of:)` and `end(of:)` of real elements, as the
+    /// delegation above does: `ScoreTickPosition` compares measure-first, so `(m, barTicks)` and `(m + 1, 0)`
+    /// name one instant without being equal, and taking the edges from the same source as the positions being
+    /// filtered keeps the comparison consistent.
+    func voiceElements(
+        staves: [StaffAddress], from posLo: ScoreTickPosition, to posHi: ScoreTickPosition,
+    ) -> [VoiceElementID] {
         var result: [VoiceElementID] = []
-        for (address, staff) in allStaves where (lo ... hi).contains(address) {
+        for (address, staff) in allStaves where staves.contains(address) {
             let durations = staff.measures.effectiveMeasureDurations()
             for measureIndex in posLo.measure ... posHi.measure where staff.measures.indices.contains(measureIndex) {
                 for (voiceIndex, voice) in staff.measures[measureIndex].voices.enumerated() {

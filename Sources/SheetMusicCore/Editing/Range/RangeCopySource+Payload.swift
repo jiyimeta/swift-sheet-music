@@ -7,72 +7,47 @@ import SheetMusicFoundation
 /// payload entry point is a seam of its own — everything here is about a score that arrived from outside, while
 /// the main file is about a range of the score already open.
 extension RangeCopySource {
-    /// The whole extent of `payload`, read as copy material: its own first timed slot to its own last, handed to
-    /// `init?(range:in:operation:)` so every rule that path enforces — the half-open span, the clamp and its
-    /// tuplet-member exemption, the outer-tie clearing, the spanner collection — applies to a pasted payload
-    /// exactly as it already applies to a duplicated range. `nil` when the payload holds no chord or rest, OR
-    /// when its own extent cuts a tuplet: `init?(range:in:operation:)` throws `.insideTuplet` for that, and a
-    /// payload has no channel to report a throw, so a payload that cannot be resolved is simply unreadable
-    /// rather than a thrown error. The `operation` this passes downstream is always `"PasteRange"` — the payload
-    /// entry point exists for exactly one caller.
+    /// The whole extent of `payload`, read as copy material: every staff it carries, over the span from its own
+    /// earliest onset to its own latest end, handed to `init?(extent:in:operation:)` so every rule that path
+    /// enforces — the half-open span, the clamp and its tuplet-member exemption, the outer-tie clearing, the
+    /// spanner collection — applies to a pasted payload exactly as it already applies to a duplicated range.
+    /// `nil` when the payload holds no chord or rest, OR when its own extent cuts a tuplet:
+    /// `init?(extent:in:operation:)` throws `.insideTuplet` for that, and a payload has no channel to report a
+    /// throw, so a payload that cannot be resolved is simply unreadable rather than a thrown error. The
+    /// `operation` this passes downstream is always `"PasteRange"` — the payload entry point exists for exactly
+    /// one caller.
     ///
     /// Which of the two `nil` causes it was is still recoverable, and `PasteRange.refusalReason(forUnusable:at:)`
-    /// recovers it by re-running `wholeExtentBounds(in:)` and the resolution on the failure path — so the
-    /// distinction costs a second resolution only when the paste is already being refused, and no rule is
-    /// stated twice.
+    /// recovers it by re-running `wholeExtent(in:)` and the resolution on the failure path — so the distinction
+    /// costs a second resolution only when the paste is already being refused, and no rule is stated twice.
     init?(payload: Score) {
-        guard let bounds = Self.wholeExtentBounds(in: payload),
-              let resolved = try? RangeCopySource(
-                  range: VoiceElementRange(start: bounds.start, end: bounds.end), in: payload,
-                  operation: "PasteRange",
-              )
+        guard let extent = Self.wholeExtent(in: payload),
+              let resolved = try? RangeCopySource(extent: extent, in: payload, operation: "PasteRange")
         else { return nil }
         self = resolved
     }
 
-    /// The two slots that state `score`'s whole extent for `init?(range:in:operation:)`.
+    /// `score`'s whole extent, stated outright: every one of its staves, over `[earliest onset, latest end)`.
     ///
-    /// `Score.voiceElements(in:)` derives its STAFF SPAN from `range.start.staff`/`range.end.staff` alone,
-    /// independently of the tick span the same two slots also supply. Handing it the globally-earliest-onset
-    /// chord and the globally-latest-end chord as-is — `firstTimedSlot(in:)`/`lastTimedSlot(in:)` — therefore
-    /// collapses the span to ONE staff whenever both chords happen to live there, which they do whenever the
-    /// payload's staves run the same length (the ordinary case: two staves copied out of the same bar-range tie
-    /// at both the onset and the end, and ties are resolved to whichever staff sorts first). Every OTHER staff's
-    /// material is then silently dropped by the caller's tick filter, which only looks at staves inside that
-    /// collapsed span at all.
+    /// This is the region a payload has always meant, and it is now said directly instead of being encoded into
+    /// a pair of slots. That encoding could not be made general: `Score.voiceElements(in:)` reads a range's
+    /// staff span off the two bounds' staves and its tick span off those same two bounds, so a payload whose
+    /// staves do not both stand at both temporal extremes had to surrender one of the four facts. Two successive
+    /// approximations surrendered a different one — first the staff span collapsed to whichever staff won both
+    /// ties, then re-addressing one slot onto the missing outer staff pulled the tick span in to that staff's
+    /// own local extreme — and ordinary piano writing (the lower staff alone reaching both extremes, through two
+    /// different elements) still lost a staff's worth of material. `Extent` removes the encoding step, so there
+    /// is nothing left to surrender.
     ///
-    /// The fix re-addresses one slot onto whichever payload staff the pair is missing, WITHOUT touching the tick
-    /// values it already got right: if the low slot's staff is not the payload's lowest, a chord on that lowest
-    /// staff whose own onset matches the SAME tick exactly is substituted (a dense voice's own last element
-    /// always reaches its own local end, so this succeeds whenever that staff was not itself trimmed short of
-    /// the true extreme — in particular, it always succeeds when the two staves tie, which is the case this
-    /// exists for). The high slot is fixed the same way against the payload's highest staff. `nil` only when
-    /// `score` has no staff or no chord at all.
-    ///
-    /// > Note: when a substitution's exact match is NOT addressable — the outer staff was itself trimmed short
-    /// > of the extreme the other staff reaches — this falls back to that staff's own most extreme chord, which
-    /// > restores the correct staff span at the cost of the tick match. That residual case is NOT fully general:
-    /// > a staff that reaches both the payload's true low and true high through two DIFFERENT elements (a note,
-    /// > a rest, then another note, none of them the payload's dominant sound) can still lose whichever extreme
-    /// > the substitution did not preserve, because two slots cannot restate three or four independent facts
-    /// > (two staff addresses, two exact ticks) when nothing on the other staff shares any of them. Fixing that
-    /// > fully needs `RangeCopySource`'s resolution to accept a staff span alongside the range, or to build its
-    /// > streams straight from the payload without going through `VoiceElementRange` at all — out of scope here.
-    static func wholeExtentBounds(in score: Score) -> (start: VoiceElementID, end: VoiceElementID)? {
-        guard let globalFirst = firstTimedSlot(in: score), let globalLast = lastTimedSlot(in: score),
-              let firstStaff = score.allStaves.first?.address, let lastStaff = score.allStaves.last?.address,
-              let globalMinOnset = score.onset(of: globalFirst), let globalMaxEnd = score.end(of: globalLast)
+    /// `nil` only when `score` has no chord or rest at all.
+    static func wholeExtent(in score: Score) -> Extent? {
+        guard let first = firstTimedSlot(in: score), let last = lastTimedSlot(in: score),
+              let lower = score.onset(of: first), let upper = score.end(of: last)
         else { return nil }
-
-        var start = globalFirst
-        var end = globalLast
-        if min(start.staff, end.staff) != firstStaff {
-            start = staffSlot(in: score, staff: firstStaff, exactOnset: globalMinOnset) ?? start
-        }
-        if max(start.staff, end.staff) != lastStaff {
-            end = staffSlot(in: score, staff: lastStaff, exactEnd: globalMaxEnd) ?? end
-        }
-        return (start, end)
+        return Extent(
+            staves: score.allStaves.map(\.address), lower: lower, upper: upper,
+            lowBound: first, highBound: last,
+        )
     }
 
     /// The chord or rest with the EARLIEST ONSET anywhere in `score`, compared across every staff rather than
@@ -96,27 +71,6 @@ extension RangeCopySource {
             .compactMap { id in score.end(of: id).map { (id, $0) } }
             .max { $0.1 < $1.1 }
             .map(\.0)
-    }
-
-    /// A chord or rest on `staff` whose onset is exactly `target`, or — when none matches — that staff's own
-    /// earliest chord. `nil` only when `staff` has no chord at all in `score`. See `wholeExtentBounds(in:)`'s
-    /// note for when the fallback still leaves a tick gap.
-    private static func staffSlot(in score: Score, staff: StaffAddress, exactOnset target: ScoreTickPosition)
-        -> VoiceElementID?
-    {
-        let candidates = chordSlots(in: score).filter { $0.staff == staff }
-        if let exact = candidates.first(where: { score.onset(of: $0) == target }) { return exact }
-        return candidates.compactMap { id in score.onset(of: id).map { (id, $0) } }.min { $0.1 < $1.1 }?.0
-    }
-
-    /// The mirror of `staffSlot(in:staff:exactOnset:)`: a chord or rest on `staff` whose END is exactly `target`,
-    /// or that staff's own latest chord.
-    private static func staffSlot(in score: Score, staff: StaffAddress, exactEnd target: ScoreTickPosition)
-        -> VoiceElementID?
-    {
-        let candidates = chordSlots(in: score).filter { $0.staff == staff }
-        if let exact = candidates.first(where: { score.end(of: $0) == target }) { return exact }
-        return candidates.compactMap { id in score.end(of: id).map { (id, $0) } }.max { $0.1 < $1.1 }?.0
     }
 
     /// Every chord or rest in `score`, staff by staff in display order, measure/voice/element order within each.

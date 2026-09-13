@@ -73,40 +73,29 @@ struct RangeCopySource {
     /// whichever refusal `.insideTuplet` above raises. There is deliberately no default: this initializer is
     /// shared by both, and a default would quietly restore the bug where a paste refused in here was reported
     /// to the host as a repeat-selection.
+    /// The extent is derived here exactly as `Score.voiceElements(in:)` derives it — staves `min...max` of the
+    /// two bounds' staves, ticks `[earlier onset, later end)` — and then handed to `init?(extent:in:operation:)`,
+    /// which is where the resolution itself lives. A range is the special case of an extent whose four facts
+    /// happen to be readable off a pair of slots.
     init?(range: VoiceElementRange, in score: Score, operation: String) throws {
-        let targets = score.voiceElements(in: range)
-        guard !targets.isEmpty,
-              let startOnset = score.onset(of: range.start), let endOnset = score.onset(of: range.end),
+        guard let startOnset = score.onset(of: range.start), let endOnset = score.onset(of: range.end),
               let startEnd = score.end(of: range.start), let endEnd = score.end(of: range.end)
         else { return nil }
-
-        // `voiceElements(in:)` yields ids in staff order, so the staff of the first id is the range's first
-        // staff regardless of which bound (`start` or `end`) named it.
-        var orderedStaves: [StaffAddress] = []
-        for target in targets where !orderedStaves.contains(target.staff) {
-            orderedStaves.append(target.staff)
-        }
-        guard let firstStaff = orderedStaves.first else { return nil }
-        staves = orderedStaves
-
-        let anchor = RangeCopyGeometry(staff: firstStaff, in: score)
-        let low = min(startOnset, endOnset)
-        let high = max(startEnd, endEnd)
-        guard let start = anchor.absolute(low), let end = anchor.absolute(high) else { return nil }
-        startTick = start
-        lengthTicks = end - start
+        let lo = min(range.start.staff, range.end.staff)
+        let hi = max(range.start.staff, range.end.staff)
 
         // Which of the caller's two named bounds is the earlier (`lowBound`) and later (`highBound`) one, so a
         // partial-tuplet refusal can name the SPECIFIC bound that lands inside the tuplet rather than either one
         // — `range.start`/`range.end` may be given in either temporal order.
-        let lowBound = startOnset <= endOnset ? range.start : range.end
-        let highBound = startOnset <= endOnset ? range.end : range.start
-
-        streams = try Self.makeStreams(
-            from: targets, in: score, rangeStart: start, rangeEnd: end,
-            lowBound: lowBound, highBound: highBound, operation: operation,
+        try self.init(
+            extent: Extent(
+                staves: score.allStaves.map(\.address).filter { (lo ... hi).contains($0) },
+                lower: min(startOnset, endOnset), upper: max(startEnd, endEnd),
+                lowBound: startOnset <= endOnset ? range.start : range.end,
+                highBound: startOnset <= endOnset ? range.end : range.start,
+            ),
+            in: score, operation: operation,
         )
-        guard !streams.isEmpty else { return nil }
     }
 
     /// The three payload facts a relocated copy has to restate. `RangeCopySource+Payload.swift` is the only
@@ -128,9 +117,11 @@ extension RangeCopySource {
         .invalidEdit(EditRefusal(operation: operation, reason: reason))
     }
 
-    /// One stream per (staff, voice). `voiceElements(in:)` yields ids in staff, measure, voice, element order, so
-    /// appending in encounter order keeps every stream's own elements ascending with no separate sort.
-    private static func makeStreams(
+    /// One stream per (staff, voice). `voiceElements(staves:from:to:)` yields ids in staff, measure, voice,
+    /// element order, so appending in encounter order keeps every stream's own elements ascending with no
+    /// separate sort. Internal rather than private because `init?(extent:in:operation:)`, the one caller, lives
+    /// in `RangeCopySource+Extent.swift`.
+    static func makeStreams(
         from targets: [VoiceElementID], in score: Score, rangeStart: Int, rangeEnd: Int,
         lowBound: VoiceElementID, highBound: VoiceElementID, operation: String,
     ) throws -> [Stream] {

@@ -106,9 +106,9 @@ extension PasteRange {
     /// That initializer is non-throwing and collapses two different failures into `nil`: a payload with no chord
     /// or rest in it at all, and a payload whose own extent cuts a tuplet. MuseScore tells the user which — its
     /// list paste raises `DEST_TUPLET` as its own dialog (`mscoreerrorscontroller.cpp:124-152`) — so the
-    /// information has somewhere to go, and this recovers it by re-running `wholeExtentBounds(in:)` and the
-    /// resolution itself, the SAME two steps `init?(payload:)` took, rather than by re-deriving what either of
-    /// them decides. The cost is a second resolution of a paste that is already being refused.
+    /// information has somewhere to go, and this recovers it by re-running `wholeExtent(in:)` and the resolution
+    /// itself, the SAME two steps `init?(payload:)` took, rather than by re-deriving what either of them
+    /// decides. The cost is a second resolution of a paste that is already being refused.
     ///
     /// `.insideTuplet` is re-addressed to `location` deliberately. The bound the resolution refused is a slot in
     /// the PAYLOAD, whose measure and staff numbering means nothing in the score the host is showing; the slot
@@ -116,12 +116,9 @@ extension PasteRange {
     private static func refusalReason(forUnusable payload: Score, at location: VoiceElementID)
         -> EditRefusal.Reason
     {
-        guard let bounds = RangeCopySource.wholeExtentBounds(in: payload) else { return .emptyPayload }
+        guard let extent = RangeCopySource.wholeExtent(in: payload) else { return .emptyPayload }
         do {
-            _ = try RangeCopySource(
-                range: VoiceElementRange(start: bounds.start, end: bounds.end), in: payload,
-                operation: "PasteRange",
-            )
+            _ = try RangeCopySource(extent: extent, in: payload, operation: "PasteRange")
             return .targetNotFound(location)
         } catch let SheetMusicError.invalidEdit(refusal) {
             if case .insideTuplet = refusal.reason { return .insideTuplet(at: location) }
