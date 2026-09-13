@@ -185,6 +185,28 @@ struct DeleteRangeTests {
         #expect(voice.tupletSpans.map(\.endIndex) == [2])
     }
 
+    /// What a host collapses its range selection onto after ⌫. `DeleteRange.affectedLocation` can only report
+    /// `range.start`, which is the anchor of a backward-drawn range and, after a collapse, an index that no longer
+    /// exists — so the session plans `.deleteRange` to its composite and reports the planner's own answer.
+    @Test("the session reports the first rest the delete wrote, whichever way the range was drawn")
+    func reportsTheFirstRest() {
+        let forward = ScoreEditSession(score: EditingFixtures.parityFixture())
+        #expect(forward.apply(.deleteRange(over: VoiceElementRange(start: Self.slot(0, 2), end: Self.slot(0, 3)))))
+        #expect(forward.lastAffectedLocation == Self.slot(0, 2))
+
+        // Shift+← draws this one: the anchor is element 3 and the target element 2, so `range.start` is the LATER
+        // slot and naming it would land the selection one beat past the rest the delete wrote.
+        let backward = ScoreEditSession(score: EditingFixtures.parityFixture())
+        #expect(backward.apply(.deleteRange(over: VoiceElementRange(start: Self.slot(0, 3), end: Self.slot(0, 2)))))
+        #expect(backward.lastAffectedLocation == Self.slot(0, 2))
+
+        // The whole bar-voice, so it collapses: the measure rest lands right after the time signature, at element
+        // 1, and the range's own start (element 4) is not an index the bar still has.
+        let collapsed = ScoreEditSession(score: EditingFixtures.parityFixture())
+        #expect(collapsed.apply(.deleteRange(over: VoiceElementRange(start: Self.slot(0, 4), end: Self.slot(0, 1)))))
+        #expect(collapsed.lastAffectedLocation == Self.slot(0, 1))
+    }
+
     @Test("a range that resolves to nothing is refused")
     func refusesUnresolvable() {
         var score = EditingFixtures.parityFixture()
