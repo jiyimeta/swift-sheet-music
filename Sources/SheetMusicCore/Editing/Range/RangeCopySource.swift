@@ -73,29 +73,12 @@ struct RangeCopySource {
     /// whichever refusal `.insideTuplet` above raises. There is deliberately no default: this initializer is
     /// shared by both, and a default would quietly restore the bug where a paste refused in here was reported
     /// to the host as a repeat-selection.
-    /// The extent is derived here exactly as `Score.voiceElements(in:)` derives it — staves `min...max` of the
-    /// two bounds' staves, ticks `[earlier onset, later end)` — and then handed to `init?(extent:in:operation:)`,
-    /// which is where the resolution itself lives. A range is the special case of an extent whose four facts
-    /// happen to be readable off a pair of slots.
+    /// The extent comes from `Extent.init?(range:in:)`, the one place that derivation lives, and is handed to
+    /// `init?(extent:in:operation:)`, which is where the resolution itself lives. A range is the special case of
+    /// an extent whose four facts happen to be readable off a pair of slots.
     init?(range: VoiceElementRange, in score: Score, operation: String) throws {
-        guard let startOnset = score.onset(of: range.start), let endOnset = score.onset(of: range.end),
-              let startEnd = score.end(of: range.start), let endEnd = score.end(of: range.end)
-        else { return nil }
-        let lo = min(range.start.staff, range.end.staff)
-        let hi = max(range.start.staff, range.end.staff)
-
-        // Which of the caller's two named bounds is the earlier (`lowBound`) and later (`highBound`) one, so a
-        // partial-tuplet refusal can name the SPECIFIC bound that lands inside the tuplet rather than either one
-        // — `range.start`/`range.end` may be given in either temporal order.
-        try self.init(
-            extent: Extent(
-                staves: score.allStaves.map(\.address).filter { (lo ... hi).contains($0) },
-                lower: min(startOnset, endOnset), upper: max(startEnd, endEnd),
-                lowBound: startOnset <= endOnset ? range.start : range.end,
-                highBound: startOnset <= endOnset ? range.end : range.start,
-            ),
-            in: score, operation: operation,
-        )
+        guard let extent = Extent(range: range, in: score) else { return nil }
+        try self.init(extent: extent, in: score, operation: operation)
     }
 
     /// The three payload facts a relocated copy has to restate. `RangeCopySource+Payload.swift` is the only

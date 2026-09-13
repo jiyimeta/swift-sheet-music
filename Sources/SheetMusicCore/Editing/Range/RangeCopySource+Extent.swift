@@ -68,3 +68,31 @@ extension RangeCopySource {
         guard !streams.isEmpty else { return nil }
     }
 }
+
+extension RangeCopySource.Extent {
+    /// The extent a `VoiceElementRange` states, derived the one way `Score.voiceElements(in:)` derives it:
+    /// staves `min ... max` of the two bounds' staves, ticks `[earlier onset, later end)`, and the two bounds
+    /// put in chronological order by `Score.chronologicalBounds(of:)` so a partial-tuplet refusal can name the
+    /// specific bound that landed inside the tuplet — a range's two bounds may be given in either temporal
+    /// order.
+    ///
+    /// Every range-side caller comes through here: `RangeCopySource.init?(range:in:operation:)` for `R`, and
+    /// `RangeCopyPayload.score(for:in:)` for ⌘C. Keeping a private copy of this derivation is what let the
+    /// payload builder miss a fact the resolution already had — the boundary measure's new length — so the
+    /// derivation is stated once and read from here.
+    ///
+    /// `nil` when either bound does not resolve in `score`.
+    init?(range: VoiceElementRange, in score: Score) {
+        guard let startOnset = score.onset(of: range.start), let endOnset = score.onset(of: range.end),
+              let startEnd = score.end(of: range.start), let endEnd = score.end(of: range.end),
+              let bounds = score.chronologicalBounds(of: range)
+        else { return nil }
+        let lo = min(range.start.staff, range.end.staff)
+        let hi = max(range.start.staff, range.end.staff)
+        self.init(
+            staves: score.allStaves.map(\.address).filter { (lo ... hi).contains($0) },
+            lower: min(startOnset, endOnset), upper: max(startEnd, endEnd),
+            lowBound: bounds.earlier, highBound: bounds.later,
+        )
+    }
+}

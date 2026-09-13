@@ -4,9 +4,11 @@ import SheetMusicFoundation
 /// material. `MSCXEncoder.encode(_:)` and `MSCXParser.parse(_:)` already round-trip a `Score` in memory, so the
 /// payload needs no format of its own — this type only carves the source score down to what the range covers.
 ///
-/// The resolution rule is the same one every other range command uses: `Score.voiceElements(in:)` for the
-/// covered slots, and `onset(of:)`/`end(of:)` on both bounds (taking the earlier onset and the later end) for
-/// the tick span, since the two bounds may be given in either order and may name different staves.
+/// The region is the same one every other range command reads, and it is read from the same place:
+/// `RangeCopySource.Extent.init?(range:in:)` states the staff span and the `[earlier onset, later end)` tick
+/// span once, and this type carves against that rather than re-deriving it. An earlier version derived its own
+/// copy here, which is how it came to miss a fact the resolution already had — the boundary measure's new
+/// length once the trim has cut material off its front.
 ///
 /// This is deliberately much smaller than `RangeCopySource`, which builds the material `DuplicateRange` inserts
 /// back into the SAME score: there is no tuplet-boundary refusal, no spanner re-anchoring, no outer-tie
@@ -19,18 +21,19 @@ enum RangeCopyPayload {
     /// The copied range as a self-contained score: the covered staves, the covered measures, each voice
     /// trimmed to the range's tick span. `nil` when the range resolves to nothing.
     static func score(for range: VoiceElementRange, in score: Score) -> Score? {
-        guard !score.voiceElements(in: range).isEmpty,
-              let startOnset = score.onset(of: range.start), let endOnset = score.onset(of: range.end),
-              let startEnd = score.end(of: range.start), let endEnd = score.end(of: range.end)
+        guard let extent = RangeCopySource.Extent(range: range, in: score) else { return nil }
+        return self.score(for: extent, in: score)
+    }
+
+    /// The same, from an extent already stated. `nil` when the extent selects no chord or rest.
+    static func score(for extent: RangeCopySource.Extent, in score: Score) -> Score? {
+        guard !score.voiceElements(staves: extent.staves, from: extent.lower, to: extent.upper).isEmpty
         else { return nil }
 
-        let low = min(startOnset, endOnset)
-        let high = max(startEnd, endEnd)
+        let low = extent.lower
+        let high = extent.upper
         guard low < high else { return nil }
         let measureRange = low.measure ... high.measure
-
-        let staffLow = min(range.start.staff, range.end.staff)
-        let staffHigh = max(range.start.staff, range.end.staff)
 
         var parts: [Part] = []
         for partIndex in score.parts.indices {
@@ -38,7 +41,7 @@ enum RangeCopyPayload {
             var staves: [Staff] = []
             for staffIndex in part.staves.indices {
                 let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
-                guard (staffLow ... staffHigh).contains(address),
+                guard extent.staves.contains(address),
                       let copied = copiedStaff(
                           part.staves[staffIndex], measureRange: measureRange, low: low, high: high,
                           division: score.division,
