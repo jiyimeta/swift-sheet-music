@@ -79,6 +79,7 @@ enum RangeCopyPayload {
                 low: low, high: high, division: division,
             )
         }
+        shortenFirstMeasure(in: &measures, nominal: durations[measureRange.lowerBound], by: low, division: division)
         ensureLeadingTimeSignature(
             in: &measures, prevailing: prevailingTimeSignature(in: staff, upTo: measureRange.lowerBound),
         )
@@ -168,6 +169,34 @@ enum RangeCopyPayload {
             trimmed.tuplets.removeSubrange(position ..< (position + 1))
         }
         return trimmed
+    }
+
+    /// Says how long the first payload measure now is, when the range's start cut material off its front.
+    ///
+    /// `trimmedVoice` drops the boundary measure's out-of-span chords, which slides the survivors to the FRONT
+    /// of that measure — but the measure keeps its nominal length, so every later measure of the payload starts
+    /// `low.tick` ticks too late and the payload carries a hole of exactly that size at the end of its first
+    /// bar. A paste then reproduces the hole and, being that much longer than its own material, appends a bar
+    /// that should not exist.
+    ///
+    /// MuseScore never writes a barline-padded fragment: `Selection::staffMimeData` (`dom/select.cpp:1090-1140`)
+    /// writes `<StaffList tick="tickStart" len=…>` with a per-voice `<voiceOffset>` measured from the
+    /// selection's own start, so the fragment is rebased rather than padded. This model already spells "a bar
+    /// that is not its nominal length" as `Measure.actualLength` (`<Measure len>`), which
+    /// `[Measure].effectiveMeasureDurations()` reads and `RangeCopyGeometry` builds `measureStarts` from — so
+    /// stating the trimmed length here rebases the payload in the vocabulary it is already written in, and it
+    /// survives the MSCX round trip the payload takes.
+    ///
+    /// The LAST measure is deliberately left at its nominal length. Nothing follows it to be displaced, and a
+    /// chord whose onset is inside the span but whose sounding length runs past it survives the trim whole, so
+    /// shortening that bar to the span's end could leave it overfull.
+    private static func shortenFirstMeasure(
+        in measures: inout [Measure], nominal: Fraction, by low: ScoreTickPosition, division: Int,
+    ) {
+        guard low.tick > 0, let first = measures.indices.first else { return }
+        let remaining = nominal - Fraction(ticks: low.tick, division: division)
+        guard remaining.numerator > 0 else { return }
+        measures[first].actualLength = remaining
     }
 
     /// Inserts `.timeSignature(prevailing)` at the front of the first kept measure's first voice when no voice

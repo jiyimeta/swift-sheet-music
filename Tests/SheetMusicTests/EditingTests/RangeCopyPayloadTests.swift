@@ -33,6 +33,46 @@ struct RangeCopyPayloadTests {
         return source
     }
 
+    /// Three 4/4 bars on one staff: bar 0 `[4/4, q60 q62 q64 q65]`, bar 1 `[q67 q69 q71 q72]`, bar 2 four
+    /// quarter rests. The shape a mid-bar, cross-barline copy needs — beat 3 of bar 0 through beat 2 of bar 1 is
+    /// four contiguous quarters that no single bar contains.
+    static func threeBarsOfQuarters() -> Score {
+        func chord(_ pitch: Int, _ tpc: Int) -> VoiceElement {
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: pitch, tpc: tpc)]))
+        }
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                chord(60, 14), chord(62, 16), chord(64, 18), chord(65, 13),
+            ])]),
+            Measure(voices: [Voice(elements: [chord(67, 15), chord(69, 17), chord(71, 19), chord(72, 14)])]),
+            Measure(voices: [Voice(elements: [
+                .rest(duration: .quarter), .rest(duration: .quarter),
+                .rest(duration: .quarter), .rest(duration: .quarter),
+            ])]),
+        ])
+        return Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+    }
+
+    @Test("a copy that starts mid-bar carries no hole at the end of its first bar")
+    func midBarCopyLeavesNoHole() throws {
+        // Beat 3 of bar 0 through beat 2 of bar 1: four contiguous quarters, 64 65 67 69.
+        let source = Self.threeBarsOfQuarters()
+        let payload = try #require(RangeCopyPayload.score(
+            for: VoiceElementRange(start: Self.slot(0, 3), end: Self.slot(1, 1)), in: source,
+        ))
+        // The trim slides bar 0's survivors to the front of a bar that still claims its nominal length, so the
+        // payload's own bar 1 starts a beat-and-a-half too late unless the trimmed bar says how long it now is.
+        #expect(payload.parts[0].staves[0].measures[0].actualLength == Fraction(numerator: 1, denominator: 2))
+
+        let resolved = try #require(RangeCopySource(payload: payload))
+        #expect(resolved.lengthTicks == 1920)
+        #expect(resolved.streams.count == 1)
+        #expect(try #require(resolved.streams.first).elements.map(\.absoluteTick) == [0, 480, 960, 1440])
+    }
+
     @Test("a one-bar range becomes a one-bar score carrying that bar's notes")
     func oneBar() throws {
         let source = EditingFixtures.parityFixture()

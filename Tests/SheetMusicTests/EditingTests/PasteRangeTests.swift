@@ -42,6 +42,32 @@ struct PasteRangeTests {
         ])
     }
 
+    /// A quarter chord, spelled the way `RangeCopyPayloadTests.threeBarsOfQuarters()` spells it.
+    private static func quarter(_ pitch: Int, _ tpc: Int) -> VoiceElement {
+        .chord(Chord(duration: .quarter, notes: [Note(pitch: pitch, tpc: tpc)]))
+    }
+
+    @Test("a copy that starts mid-bar and crosses a barline pastes whole, appending nothing")
+    func pastesAMidBarCrossBarlineCopy() throws {
+        // Beat 3 of bar 0 through beat 2 of bar 1 — four contiguous quarters, 64 65 67 69 — landed on bar 2
+        // beat 1, where they fill the bar exactly. The only paste test whose SOURCE is neither bar-aligned nor
+        // confined to one measure.
+        var score = RangeCopyPayloadTests.threeBarsOfQuarters()
+        let text = try Self.payloadText(
+            VoiceElementRange(start: Self.slot(0, 3), end: Self.slot(1, 1)), in: score,
+        )
+        _ = try Self.paste(text, at: Self.slot(2, 0)).apply(to: &score)
+
+        #expect(try Self.voice(score, 2).elements == [
+            Self.quarter(64, 18), Self.quarter(65, 13), Self.quarter(67, 15), Self.quarter(69, 17),
+        ])
+        #expect(try #require(score[Self.flute]).measures.count == 3)
+        // The bars the copy came from are untouched, so nothing slid while the payload was being carved.
+        #expect(try Self.voice(score, 1).elements == [
+            Self.quarter(67, 15), Self.quarter(69, 17), Self.quarter(71, 19), Self.quarter(72, 14),
+        ])
+    }
+
     @Test("a payload that will not parse is refused and changes nothing")
     func refusesGarbage() throws {
         var score = EditingFixtures.parityFixture()
