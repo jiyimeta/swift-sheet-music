@@ -78,10 +78,8 @@ extension RangeCopyVoiceRebuild {
     /// The ticks at which `elements` — the piece about to be written, walked from `origin` — places a harmony
     /// of its own.
     ///
-    /// `RangeCopyPlacement` builds every piece from chords and rests only today (see the comment at its own
-    /// `pieces(of:at:sourceStartTick:geometry:division:)`), so this always returns empty until a later task
-    /// lets a copy carry its source's chord symbols — at which point a destination harmony landed on becomes
-    /// eligible for the drop `place(untimed:spanStart:spanEnd:into:in:)` does not apply to it.
+    /// A carried chord symbol advances the cursor by nothing, so it shares the tick of the chord it precedes —
+    /// which is exactly the tick a destination symbol would have to stand at to be the one MuseScore replaces.
     static func pieceHarmonyTicks(in elements: [VoiceElement], from origin: Int, in context: Context) -> Set<Int> {
         var ticks: Set<Int> = []
         var cursor = origin

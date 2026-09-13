@@ -1,23 +1,33 @@
 import SheetMusicFoundation
 
-/// The material a `DuplicateRange` copies: the range's chords and rests, grouped by the voice they live in and
-/// stamped with the absolute tick each one starts at.
+/// The material a `DuplicateRange` copies: the range's chords and rests plus the non-timed elements standing
+/// among them, grouped by the voice they live in and stamped with the absolute tick each one starts at.
 ///
-/// Resolution goes through `Score.voiceElements(in:)` so the source is exactly what every other range command acts
-/// on — one resolution rule for the whole family, and a range that names two staves or is given end-first behaves
-/// here as it does there. Non-timed elements are not collected: `voiceElements(in:)` already restricts itself to
-/// `.chord` elements (which is also how rests are represented in this model), so a duplicate carries notes and
-/// rests, per the spec.
+/// Chords and rests are resolved through `Score.voiceElements(in:)` so the source is exactly what every other
+/// range command acts on — one resolution rule for the whole family, and a range that names two staves or is
+/// given end-first behaves here as it does there. That call filters on `case .chord`, so the non-timed elements
+/// are gathered by a second walk of the same measures (`untimedElements(for:key:geometry:durations:score:
+/// rangeStart:rangeEnd:)`) and merged back in at their own ticks.
+///
+/// Which non-timed kinds travel is decided by what MuseScore's PASTE accepts, not by what its copy writes: the
+/// clipboard payload is every non-generated element of every in-range segment (`twrite.cpp:3520-3617`), but the
+/// read side handles only clef (`read460.cpp:704-715`), breath (`717-728`) and the annotation list (`664-703`),
+/// and silently drops key signature, time signature, barline and rehearsal mark (`739-744`). Carrying the
+/// dropped kinds would make a duplicate state something a MuseScore paste never states.
 ///
 /// A range that covers a tuplet only partially cannot be copied at all: `init?(range:in:)` throws
 /// `.insideTuplet` rather than producing a `Stream` whose bracket silently dropped its members.
 struct RangeCopySource {
+    /// One copied element: where it starts on its staff's absolute tick axis, how long it is THERE (zero for a
+    /// non-timed element, which has no duration to resolve), and the element itself.
+    typealias CopiedElement = (absoluteTick: Int, lengthTicks: Int, element: VoiceElement)
+
     struct Stream {
         let staff: StaffAddress
         let voiceIndex: Int
-        /// Chords and rests only, each with the absolute tick it starts at and its length already resolved
-        /// against the SOURCE bar, ascending.
-        let elements: [(absoluteTick: Int, lengthTicks: Int, element: VoiceElement)]
+        /// The copied material, ascending by tick. A non-timed element carries `lengthTicks == 0` and precedes
+        /// a chord at the same tick, which is where it stands in the source voice.
+        let elements: [CopiedElement]
         /// Source tuplets whose members are entirely inside this stream, as absolute tick bounds.
         let tuplets: [(startTick: Int, endTick: Int, normalNotes: Int, actualNotes: Int)]
     }
@@ -38,10 +48,15 @@ struct RangeCopySource {
     }
 
     /// A tuplet's endpoints are `Voice.elements` indices, which only make sense together with the measure that
-    /// owns the `Voice` they index into.
-    private struct MeasureElementLocation: Hashable {
+    /// owns the `Voice` they index into. Ordering one against another is voice order across the whole stream,
+    /// which is how the timed and non-timed passes are merged back together.
+    fileprivate struct MeasureElementLocation: Hashable, Comparable {
         let measureIndex: Int
         let elementIndex: Int
+
+        static func < (lhs: Self, rhs: Self) -> Bool {
+            (lhs.measureIndex, lhs.elementIndex) < (rhs.measureIndex, rhs.elementIndex)
+        }
     }
 
     /// `nil` when the range resolves to no element at all. Throws `.insideTuplet` when the range cuts a tuplet
@@ -78,7 +93,8 @@ struct RangeCopySource {
         let highBound = startOnset <= endOnset ? range.end : range.start
 
         streams = try Self.makeStreams(
-            from: targets, in: score, rangeEnd: end, lowBound: lowBound, highBound: highBound,
+            from: targets, in: score, rangeStart: start, rangeEnd: end,
+            lowBound: lowBound, highBound: highBound,
         )
         guard !streams.isEmpty else { return nil }
     }
@@ -92,7 +108,7 @@ extension RangeCopySource {
     /// One stream per (staff, voice). `voiceElements(in:)` yields ids in staff, measure, voice, element order, so
     /// appending in encounter order keeps every stream's own elements ascending with no separate sort.
     private static func makeStreams(
-        from targets: [VoiceElementID], in score: Score, rangeEnd: Int,
+        from targets: [VoiceElementID], in score: Score, rangeStart: Int, rangeEnd: Int,
         lowBound: VoiceElementID, highBound: VoiceElementID,
     ) throws -> [Stream] {
         var order: [StreamKey] = []
@@ -109,7 +125,8 @@ extension RangeCopySource {
             geometries[key.staff] = geometry
             guard let ids = idsByKey[key] else { return nil }
             return try makeStream(
-                key: key, ids: ids, geometry: geometry, score: score, rangeEnd: rangeEnd,
+                key: key, ids: ids, geometry: geometry, score: score,
+                rangeStart: rangeStart, rangeEnd: rangeEnd,
                 lowBound: lowBound, highBound: highBound,
             )
         }
@@ -118,14 +135,20 @@ extension RangeCopySource {
     /// Builds one (staff, voice) stream: the copied elements with cleared spanners and outer ties, plus the
     /// tuplets that survived intact. Throws `.insideTuplet` when a tuplet this stream touches is not covered
     /// from its first member to its last (`tupletBounds(for:key:lowBound:highBound:infoByLocation:score:)`).
+    ///
+    /// The non-timed elements are merged in only after `clearOuterTies` has run, because that pass reaches for
+    /// the stream's first and last CHORD — a clef sitting at either end would hide the chord whose outer tie has
+    /// to go.
     private static func makeStream(
-        key: StreamKey, ids: [VoiceElementID], geometry: RangeCopyGeometry, score: Score, rangeEnd: Int,
+        key: StreamKey, ids: [VoiceElementID], geometry: RangeCopyGeometry, score: Score,
+        rangeStart: Int, rangeEnd: Int,
         lowBound: VoiceElementID, highBound: VoiceElementID,
     ) throws -> Stream? {
         let sourceDurations = score.effectiveMeasureDurations(
             partIndex: key.staff.partIndex, staffIndex: key.staff.staffIndexInPart,
         )
-        var elements: [(absoluteTick: Int, lengthTicks: Int, element: VoiceElement)] = []
+        var elements: [CopiedElement] = []
+        var elementLocations: [MeasureElementLocation] = []
         var infoByLocation: [MeasureElementLocation: (tick: Int, length: Int)] = [:]
         for id in ids {
             guard let onset = score.onset(of: id), let absolute = geometry.absolute(onset),
@@ -150,16 +173,116 @@ extension RangeCopySource {
             }
             let location = MeasureElementLocation(measureIndex: id.measureIndex, elementIndex: id.elementIndex)
             infoByLocation[location] = (tick: absolute, length: length)
+            elementLocations.append(location)
             elements.append((absoluteTick: absolute, lengthTicks: length, element: element))
         }
         guard !elements.isEmpty else { return nil }
         clearOuterTies(&elements)
 
+        let untimed = untimedElements(
+            for: ids, key: key, geometry: geometry, durations: sourceDurations, score: score,
+            rangeStart: rangeStart, rangeEnd: rangeEnd,
+        )
         let tuplets = try tupletBounds(
             for: ids, key: key, lowBound: lowBound, highBound: highBound,
             infoByLocation: infoByLocation, score: score,
         )
-        return Stream(staff: key.staff, voiceIndex: key.voiceIndex, elements: elements, tuplets: tuplets)
+        return Stream(
+            staff: key.staff, voiceIndex: key.voiceIndex,
+            elements: merged(timed: elements, at: elementLocations, untimed: untimed), tuplets: tuplets,
+        )
+    }
+
+    /// The in-range non-timed elements of one stream, in voice order, each stamped with the tick the voice's
+    /// cursor had reached, `lengthTicks == 0`, and the location that puts it back among the chords.
+    ///
+    /// `Score.voiceElements(in:)` cannot supply these — it filters on `case .chord` — so the voice is walked
+    /// directly over the measures the stream's own chords touched. A voice the range does not reach in a given
+    /// measure contributes no chord there either, so that measure set is the same one either walk would pick.
+    ///
+    /// The cursor moves by `cursorAdvance(division:in:)` rather than by summed durations: it is what
+    /// `Score.onset(of:)` walks with, so a `.locationShift` among the elements leaves this walk agreeing with
+    /// the ticks the chords were stamped with.
+    private static func untimedElements(
+        for ids: [VoiceElementID], key: StreamKey, geometry: RangeCopyGeometry, durations: [Fraction],
+        score: Score, rangeStart: Int, rangeEnd: Int,
+    ) -> [(location: MeasureElementLocation, copied: CopiedElement)] {
+        var measureOrder: [Int] = []
+        for id in ids where !measureOrder.contains(id.measureIndex) {
+            measureOrder.append(id.measureIndex)
+        }
+
+        var collected: [(location: MeasureElementLocation, copied: CopiedElement)] = []
+        for measureIndex in measureOrder {
+            let ref = VoiceRef(staff: key.staff, measureIndex: measureIndex, voiceIndex: key.voiceIndex)
+            guard let voice = score[voice: ref], durations.indices.contains(measureIndex),
+                  geometry.measureStarts.indices.contains(measureIndex)
+            else { continue }
+            let measureDuration = durations[measureIndex]
+            var tick = geometry.measureStarts[measureIndex]
+            for index in voice.elements.indices {
+                let element = voice.elements[index]
+                if isCopyable(element), tick >= rangeStart, tick < rangeEnd {
+                    collected.append((
+                        location: MeasureElementLocation(measureIndex: measureIndex, elementIndex: index),
+                        copied: (absoluteTick: tick, lengthTicks: 0, element: element),
+                    ))
+                }
+                tick += element.cursorAdvance(division: score.division, in: measureDuration)
+            }
+        }
+        return collected
+    }
+
+    /// Whether a non-timed element is one MuseScore's paste would accept — clef (`read460.cpp:704-715`), breath
+    /// (`717-728`), ambitus, and the segment-annotation list at `664-703`.
+    ///
+    /// Everything else is false, and for three different reasons. Key signature, time signature and barline are
+    /// in the payload but the paste drops them on the floor (`739-744`). `.measureRepeat` stands for a whole
+    /// bar's content and `.locationShift` moves the voice's one cursor for the rest of the bar, so neither means
+    /// the same thing anywhere else. `.spanner` needs its partner re-anchored, which is its own task.
+    /// `.preserved` is markup this library does not model, so there is no knowing whether MuseScore's reader
+    /// would take it.
+    private static func isCopyable(_ element: VoiceElement) -> Bool {
+        switch element {
+        case .clef, .breath, .ambitus, .dynamic, .fermata, .harmony, .sticking, .expression, .capo,
+             .stringTunings, .figuredBass, .symbol, .fretDiagram:
+            true
+        case .chord, .keySignature, .timeSignature, .barLine, .measureRepeat, .locationShift, .spanner,
+             .preserved:
+            false
+        }
+    }
+
+    /// Merges the two passes back into one stream in SOURCE VOICE ORDER, not by tick.
+    ///
+    /// The tick cannot decide it: a non-timed element occupies none, so it shares the tick of whatever chord
+    /// follows it, and the two would tie. Voice order says which came first, and it is the order that carries the
+    /// meaning — an annotation attaches to the segment the chord opens, and a clef placed after its note would be
+    /// read as applying to the next one instead. Both lists are already ascending in that order (`ids` arrives
+    /// from `voiceElements(in:)` in measure-then-element order, and `untimedElements` walks the same measures in
+    /// the same order), so one linear pass is enough. `locations` is parallel to `timed`, one entry per element.
+    private static func merged(
+        timed: [CopiedElement], at locations: [MeasureElementLocation],
+        untimed: [(location: MeasureElementLocation, copied: CopiedElement)],
+    ) -> [CopiedElement] {
+        guard !untimed.isEmpty, timed.count == locations.count else { return timed }
+        var result: [CopiedElement] = []
+        result.reserveCapacity(timed.count + untimed.count)
+        var timedIndex = timed.startIndex
+        var untimedIndex = untimed.startIndex
+        while timedIndex < timed.endIndex || untimedIndex < untimed.endIndex {
+            let takeUntimed = untimedIndex < untimed.endIndex
+                && (timedIndex >= timed.endIndex || untimed[untimedIndex].location < locations[timedIndex])
+            if takeUntimed {
+                result.append(untimed[untimedIndex].copied)
+                untimedIndex += 1
+            } else {
+                result.append(timed[timedIndex])
+                timedIndex += 1
+            }
+        }
+        return result
     }
 
     /// Tuplets live on the (per-measure) `Voice`, so this walks the distinct measures the stream touched. A
@@ -213,7 +336,7 @@ extension RangeCopySource {
 /// note of the last. A tie binds two specific notes and neither partner was copied; a tie between two copied
 /// chords stays. `Chord.notes` is a `ChordNotes`, whose only mutation path that keeps a note's identifier is
 /// `updateNote(at:_:)`, so notes are edited through their indices rather than rebuilt.
-private func clearOuterTies(_ elements: inout [(absoluteTick: Int, lengthTicks: Int, element: VoiceElement)]) {
+private func clearOuterTies(_ elements: inout [RangeCopySource.CopiedElement]) {
     guard let firstIndex = elements.indices.first, let lastIndex = elements.indices.last else { return }
     if case var .chord(chord) = elements[firstIndex].element {
         for noteIndex in chord.notes.indices {

@@ -6,7 +6,8 @@ import SheetMusicFoundation
 /// A chord cut by a boundary becomes a tied chain (`DurationChangeAlgorithm.alignedDurations` on each side, tied
 /// through), a rest becomes beat-aligned rests. A tuplet survives only when every one of its members lands inside
 /// one piece — a bracket cannot span a barline, and the members still sound right without it because their stored
-/// durations are sounding ticks.
+/// durations are sounding ticks. A non-timed element the stream carries (`lengthTicks == 0`) is placed at its own
+/// offset, joining the piece that owns that tick without consuming any of the bar's budget.
 enum RangeCopyPlacement {
     struct Piece {
         let measureIndex: Int
@@ -23,6 +24,44 @@ enum RangeCopyPlacement {
         let elementIndex: Int
     }
 
+    /// The pieces under construction, one destination measure at a time.
+    ///
+    /// Ticks only ever advance, so a stream never returns to a measure it has left: `open(measure:at:)` on a
+    /// different measure therefore closes the one before it, and a given measure index owns at most one `Piece`.
+    private struct Accumulator {
+        private(set) var pieces: [Piece] = []
+        /// The current piece's elements. Readable so a caller can name the slice it just appended.
+        private(set) var elements: [VoiceElement] = []
+        private var measureIndex: Int?
+        private var startTickInMeasure = 0
+
+        /// Starts the piece for `measure` — whose first element sits at `tick` within it — or continues the one
+        /// already open there.
+        mutating func open(measure: Int, at tick: Int) {
+            guard measureIndex != measure else { return }
+            flush()
+            measureIndex = measure
+            startTickInMeasure = tick
+        }
+
+        mutating func append(_ element: VoiceElement) {
+            elements.append(element)
+        }
+
+        mutating func append(contentsOf newElements: [VoiceElement]) {
+            elements.append(contentsOf: newElements)
+        }
+
+        mutating func flush() {
+            guard let measure = measureIndex, !elements.isEmpty else { return }
+            pieces.append(Piece(
+                measureIndex: measure, startTickInMeasure: startTickInMeasure, elements: elements, tuplets: [],
+            ))
+            elements = []
+            measureIndex = nil
+        }
+    }
+
     /// Places every element of `stream` at `destinationTick + (its absoluteTick - sourceStartTick)`, cutting
     /// only what overhangs a destination barline.
     /// Returns `nil` when the destination runs past `geometry.totalTicks` — the caller appends bars and retries.
@@ -30,28 +69,21 @@ enum RangeCopyPlacement {
         of stream: RangeCopySource.Stream, at destinationTick: Int, sourceStartTick: Int,
         geometry: RangeCopyGeometry, division: Int,
     ) -> [Piece]? {
-        var result: [Piece] = []
-        var currentMeasure: Int?
-        var currentStart = 0
-        var currentElements: [VoiceElement] = []
+        var accumulator = Accumulator()
         // Where each source tuplet's members ended up, keyed by its index into `stream.tuplets`.
         var tupletMembers: [Int: [TupletMember]] = [:]
 
-        func flush() {
-            guard let measure = currentMeasure, !currentElements.isEmpty else { return }
-            result.append(Piece(
-                measureIndex: measure, startTickInMeasure: currentStart, elements: currentElements, tuplets: [],
-            ))
-            currentElements = []
-            currentMeasure = nil
-        }
-
         for (absoluteTick, lengthTicks, element) in stream.elements {
-            // A stream holds chords and rests only — `RangeCopySource` builds it from `voiceElements(in:)`,
-            // which yields nothing else — so this drops nothing today. It WOULD drop the source's own non-timed
-            // elements silently on the day spec §6's "copy the range's clefs and signatures" lands: that step
-            // has to place them by tick here rather than let this line swallow them.
-            guard case let .chord(chord) = element else { continue }
+            guard case let .chord(chord) = element else {
+                // A non-timed element the copy carries — a clef, a dynamic, a chord symbol. It is placed at its
+                // own offset and nothing else: it has no extent, so the cut path below would have nothing to
+                // cut, and it must not move the cursor, or whatever shares its tick would land a beat late.
+                let landing = destinationTick + (absoluteTick - sourceStartTick)
+                guard let position = geometry.position(atAbsolute: landing) else { return nil }
+                accumulator.open(measure: position.measure, at: position.tick)
+                accumulator.append(element)
+                continue
+            }
             var cursor = destinationTick + (absoluteTick - sourceStartTick)
             var remaining = lengthTicks // resolved against the SOURCE bar by RangeCopySource
             var isFirstPart = true
@@ -60,39 +92,46 @@ enum RangeCopyPlacement {
                 let measureEnd = geometry.measureStarts[position.measure] + geometry.measureLength(position.measure)
                 let partTicks = min(remaining, measureEnd - cursor)
                 let isLastPart = partTicks == remaining
-                if currentMeasure != position.measure {
-                    flush()
-                    currentMeasure = position.measure
-                    currentStart = position.tick
-                }
-                let startIndex = currentElements.count
+                accumulator.open(measure: position.measure, at: position.tick)
+                let startIndex = accumulator.elements.count
                 if isFirstPart, isLastPart {
-                    currentElements.append(contentsOf: destinationSpelling(
+                    accumulator.append(contentsOf: destinationSpelling(
                         of: chord, at: position, length: partTicks, geometry: geometry, division: division,
                     ))
                 } else {
-                    currentElements.append(contentsOf: cutPieces(
+                    accumulator.append(contentsOf: cutPieces(
                         of: chord, ticks: partTicks, rtickStart: position.tick, division: division,
                         isHead: isFirstPart, endsElement: isLastPart,
                     ))
                 }
-                for (tupletIndex, tuplet) in stream.tuplets.enumerated()
-                    where tuplet.startTick <= absoluteTick && absoluteTick < tuplet.endTick
-                {
-                    tupletMembers[tupletIndex, default: []].append(
-                        contentsOf: (startIndex ..< currentElements.count).map {
-                            TupletMember(measureIndex: position.measure, elementIndex: $0)
-                        },
-                    )
-                }
+                record(
+                    &tupletMembers, of: stream, coveringSourceTick: absoluteTick,
+                    measure: position.measure, elementIndices: startIndex ..< accumulator.elements.count,
+                )
                 cursor += partTicks
                 remaining -= partTicks
                 isFirstPart = false
             }
         }
-        flush()
+        accumulator.flush()
+        var result = accumulator.pieces
         attachTuplets(tupletMembers, of: stream, to: &result)
         return result.isEmpty ? nil : result
+    }
+
+    /// Files `elementIndices` — the slots one source element just filled in the piece for `measure` — under every
+    /// source tuplet whose tick span covers that element's own onset.
+    private static func record(
+        _ tupletMembers: inout [Int: [TupletMember]], of stream: RangeCopySource.Stream,
+        coveringSourceTick absoluteTick: Int, measure: Int, elementIndices: Range<Int>,
+    ) {
+        for (tupletIndex, tuplet) in stream.tuplets.enumerated()
+            where tuplet.startTick <= absoluteTick && absoluteTick < tuplet.endTick
+        {
+            tupletMembers[tupletIndex, default: []].append(
+                contentsOf: elementIndices.map { TupletMember(measureIndex: measure, elementIndex: $0) },
+            )
+        }
     }
 
     /// How an element that fits its destination bar whole is spelled there.

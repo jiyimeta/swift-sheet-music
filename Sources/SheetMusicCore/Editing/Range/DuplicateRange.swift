@@ -201,12 +201,15 @@ extension DuplicateRange {
 }
 
 extension RangeCopySource.Stream {
-    /// How far this stream reaches past `sourceStartTick`: the END of its last element, not its last onset, and
-    /// measured from the RANGE's start rather than from the stream's own first element — a stream whose first
-    /// selected element starts later than the range lands that much later than the destination, so its reach
-    /// includes the gap.
+    /// How far this stream reaches past `sourceStartTick`: the furthest END any of its elements has, not its last
+    /// onset, and measured from the RANGE's start rather than from the stream's own first element — a stream
+    /// whose first selected element starts later than the range lands that much later than the destination, so
+    /// its reach includes the gap.
+    ///
+    /// The maximum rather than the last entry, because the last entry need not be the furthest: a stream can end
+    /// on a non-timed element, whose `lengthTicks` is zero, sitting at the same tick a chord before it already
+    /// sounds through.
     func reach(from sourceStartTick: Int) -> Int {
-        guard let last = elements.last else { return 0 }
-        return last.absoluteTick + last.lengthTicks - sourceStartTick
+        elements.map { $0.absoluteTick + $0.lengthTicks - sourceStartTick }.max() ?? 0
     }
 }

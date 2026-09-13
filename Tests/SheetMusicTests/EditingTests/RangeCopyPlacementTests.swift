@@ -12,8 +12,11 @@ struct RangeCopyPlacementTests {
         RangeCopySource.Stream(
             staff: flute, voiceIndex: 0,
             elements: elements.map { pair in
-                // Every fixture element below carries a plain duration, so its length is its own tick count.
-                guard case let .chord(chord) = pair.1 else { fatalError("fixture elements are chords or rests") }
+                // Every chord fixture below carries a plain duration, so its length is its own tick count. A
+                // non-timed element has no length at all, which is how `RangeCopySource` stamps one.
+                guard case let .chord(chord) = pair.1 else {
+                    return (absoluteTick: pair.0, lengthTicks: 0, element: pair.1)
+                }
                 return (absoluteTick: pair.0, lengthTicks: chord.duration.ticks(division: 480), element: pair.1)
             },
             tuplets: tuplets,
@@ -118,6 +121,36 @@ struct RangeCopyPlacementTests {
         #expect(pieces.count == 1)
         #expect(pieces[0].measureIndex == 1)
         #expect(pieces[0].startTickInMeasure == 480)
+    }
+
+    @Test("a zero-length element lands at its offset and does not move the cursor")
+    func placesNonTimedElements() throws {
+        let geometry = Self.context()
+        let clef = VoiceElement.clef(Clef(concertClefType: "F"))
+        let pieces = try #require(RangeCopyPlacement.pieces(
+            of: Self.stream([(0, Self.quarter(60)), (480, clef), (480, Self.quarter(62))]),
+            at: 960, sourceStartTick: 0, geometry: geometry, division: 480,
+        ))
+        #expect(pieces.count == 1)
+        #expect(pieces[0].startTickInMeasure == 960)
+        // The clef sits between the two quarters rather than after them: it consumed none of the bar's budget,
+        // so the second quarter still starts one beat after the first.
+        #expect(pieces[0].elements == [Self.quarter(60), clef, Self.quarter(62)])
+    }
+
+    @Test("a zero-length element landing on a destination barline opens the next piece")
+    func nonTimedElementOpensThePieceItLandsIn() throws {
+        let geometry = Self.context()
+        let clef = VoiceElement.clef(Clef(concertClefType: "F"))
+        let pieces = try #require(RangeCopyPlacement.pieces(
+            of: Self.stream([(0, Self.quarter(60)), (480, clef), (480, Self.quarter(62))]),
+            at: 1440, sourceStartTick: 0, geometry: geometry, division: 480,
+        ))
+        #expect(pieces.count == 2)
+        #expect(pieces[0].elements == [Self.quarter(60)])
+        #expect(pieces[1].measureIndex == 1)
+        #expect(pieces[1].startTickInMeasure == 0)
+        #expect(pieces[1].elements == [clef, Self.quarter(62)])
     }
 
     @Test("a destination past the last bar has no placement")
