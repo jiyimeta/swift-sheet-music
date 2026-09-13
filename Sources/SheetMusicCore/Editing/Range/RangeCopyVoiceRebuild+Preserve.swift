@@ -61,30 +61,62 @@ extension RangeCopyVoiceRebuild {
         }
     }
 
+    /// The tick span the rebuild actually clears: the piece's own span, widened over every destination tuplet
+    /// it covers only partly.
+    ///
+    /// MuseScore does not refuse a gap that cuts a tuplet at the DESTINATION. By the time `makeGap` is making
+    /// room the operation is already committed, so it deletes the whole top-level tuplet and respells the part
+    /// of it the gap does not cover as plain rests (`cmd.cpp:1370-1392`, `1403-1432`). The asymmetry with the
+    /// source side — where `RangeCopySource` still refuses a range that cuts a tuplet — is deliberate: nothing
+    /// has happened yet when the range is read, so refusing there costs nothing.
+    ///
+    /// Widening is a fixpoint, because swallowing one tuplet can reach into the next.
+    static func clearedGap(
+        forSpan spanStart: Int, _ spanEnd: Int, of voice: Voice, in context: Context,
+    ) -> Range<Int> {
+        var starts: [Int] = []
+        var ends: [Int] = []
+        var tick = 0
+        for element in voice.elements.values {
+            starts.append(tick)
+            tick += context.advance(of: element)
+            ends.append(tick)
+        }
+        var low = spanStart
+        var high = spanEnd
+        var widened = true
+        while widened {
+            widened = false
+            for span in voice.tupletSpans {
+                // A dangling endpoint resolves to -1, and such a tuplet draws nothing.
+                guard starts.indices.contains(span.startIndex), ends.indices.contains(span.endIndex) else {
+                    continue
+                }
+                let start = starts[span.startIndex]
+                let end = ends[span.endIndex]
+                // Only a tuplet the gap reaches INTO but does not already cover moves either bound.
+                guard start < high, low < end, start < low || end > high else { continue }
+                low = min(low, start)
+                high = max(high, end)
+                widened = true
+            }
+        }
+        return low ..< high
+    }
+
     /// The destination tuplets that survive, as indices into `voice.tuplets`.
     ///
-    /// A tuplet the span fully contains is dropped — the rule `PasteVoiceElements` already applies, since the
-    /// bracket's members are being replaced wholesale — and one the span only partly covers is refused: the
-    /// members left behind no longer state the ratio the bracket printed.
-    static func survivingTuplets(of voice: Voice, touched: ClosedRange<Int>?) throws -> [Int] {
+    /// A tuplet the cleared gap reaches is dropped — the rule `PasteVoiceElements` already applies, since the
+    /// bracket's members are being replaced wholesale. `clearedGap(forSpan:_:of:in:)` ran first, so every
+    /// tuplet `touched` reaches is covered from its first member to its last by the time this runs, and the
+    /// ticks of a destroyed one that the piece does not fill come back as plain rests.
+    static func survivingTuplets(of voice: Voice, touched: ClosedRange<Int>?) -> [Int] {
         var survivors: [Int] = []
         for (index, span) in voice.tupletSpans.enumerated() {
             // A dangling endpoint resolves to -1. Such a tuplet draws nothing, so it is not carried forward.
             guard span.startIndex >= 0, span.endIndex >= 0 else { continue }
-            guard let touched else {
-                survivors.append(index)
-                continue
-            }
-            guard touched.lowerBound <= span.endIndex, span.startIndex <= touched.upperBound else {
-                survivors.append(index)
-                continue
-            }
-            guard touched.lowerBound <= span.startIndex, span.endIndex <= touched.upperBound else {
-                throw refused(.tupletOverlap(
-                    rangeStart: touched.lowerBound, rangeEnd: touched.upperBound,
-                    tupletStart: span.startIndex, tupletEnd: span.endIndex,
-                ))
-            }
+            let reached = touched.map { $0.lowerBound <= span.endIndex && span.startIndex <= $0.upperBound }
+            if reached != true { survivors.append(index) }
         }
         return survivors
     }

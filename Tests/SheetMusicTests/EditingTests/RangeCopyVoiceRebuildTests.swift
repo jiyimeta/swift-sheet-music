@@ -182,19 +182,67 @@ struct RangeCopyVoiceRebuildTests {
         }
     }
 
-    @Test("a destination tuplet the span only partly covers refuses")
-    func refusesPartialTuplet() throws {
+    @Test("a destination tuplet the span only partly covers is torn down and its remainder refilled")
+    func destroysPartialTuplet() throws {
         var score = Self.identifiedFixture()
+        // Measure 0 is `4/4 | C4 D4 r r`. Turning the quarter rest at tick 960 into a triplet gives it three
+        // 160-tick members across [960, 1440).
         _ = try CreateTuplet(
             at: VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 3),
             actualNotes: 3, normalNotes: 2,
         ).apply(to: &score)
-        #expect(throws: SheetMusicError.self) {
-            _ = try RangeCopyVoiceRebuild.command(
-                for: Self.piece(measure: 0, start: 1200, elements: [Self.quarter(60)]),
-                staff: Self.flute, voiceIndex: 0, in: score,
-            )
-        }
+        #expect(Self.voice(score, 0).tupletSpans.count == 1)
+        // [1200, 1680) starts inside the triplet's second member and ends inside the quarter rest at 1440, so
+        // the span covers the triplet only partly. MuseScore's `makeGap` tears the whole bracket out.
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 1200, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score,
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+        #expect(Self.voice(score, 0).tupletSpans.isEmpty)
+        // The triplet's [960, 1200) head is gone as a tuplet and back as a plain eighth rest; [1680, 1920) is
+        // the trailing trim of the quarter rest the span also cut.
+        #expect(elements == [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+            .rest(duration: .eighth),
+            Self.quarter(60),
+            .rest(duration: .eighth),
+        ])
+        let total = elements.values.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
+        #expect(total == 1920)
+    }
+
+    @Test("a destination tuplet the span reaches from inside is torn down on the far side too")
+    func destroysTupletReachedFromTheLeft() throws {
+        var score = Self.identifiedFixture()
+        // The triplet again occupies [960, 1440); this time the span STARTS in front of it and stops inside it,
+        // so the uncovered remainder is on the tuplet's far side rather than its near one.
+        _ = try CreateTuplet(
+            at: VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 3),
+            actualNotes: 3, normalNotes: 2,
+        ).apply(to: &score)
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 720, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score,
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+        #expect(Self.voice(score, 0).tupletSpans.isEmpty)
+        // D4 is trimmed to [480, 720), the copy runs [720, 1200), and [1200, 1440) — the triplet's uncovered
+        // tail — comes back as a plain eighth rest in front of the untouched quarter rest at 1440.
+        #expect(elements == [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .eighth, notes: [Note(pitch: 62, tpc: 16)])),
+            Self.quarter(60),
+            .rest(duration: .eighth),
+            .rest(duration: .quarter),
+        ])
+        let total = elements.values.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
+        #expect(total == 1920)
     }
 
     @Test("a destination tuplet the span fully covers is dropped")

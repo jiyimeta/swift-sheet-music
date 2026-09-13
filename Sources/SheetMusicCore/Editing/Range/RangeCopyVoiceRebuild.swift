@@ -38,9 +38,12 @@ enum RangeCopyVoiceRebuild {
         guard spanEnd <= measureTicks else {
             throw refused(.insufficientRoom(neededTicks: spanEnd, availableTicks: measureTicks))
         }
-        let cut = try cut(voice, spanStart: spanStart, spanEnd: spanEnd, in: context)
-        let survivors = try survivingTuplets(of: voice, touched: cut.touched)
-        let rebuilt = rebuild(piece, cut: cut, spanStart: spanStart, spanEnd: spanEnd, in: context)
+        // A destination tuplet the piece covers only partly is destroyed rather than refused, so what actually
+        // gets cleared is the span widened over every such bracket.
+        let gap = clearedGap(forSpan: spanStart, spanEnd, of: voice, in: context)
+        let cut = try cut(voice, spanStart: gap.lowerBound, spanEnd: gap.upperBound, in: context)
+        let survivors = survivingTuplets(of: voice, touched: cut.touched)
+        let rebuilt = rebuild(piece, cut: cut, gap: gap, spanStart: spanStart, spanEnd: spanEnd, in: context)
 
         return ReplaceVoiceElements(
             staff: staff, measureIndex: piece.measureIndex, voiceIndex: voiceIndex, slots: rebuilt.slots,
@@ -122,28 +125,43 @@ extension RangeCopyVoiceRebuild {
 }
 
 extension RangeCopyVoiceRebuild {
-    /// The whole new slot array, in voice order: what precedes the span, the leading boundary element's
-    /// remainder, the piece with the preserved non-timed elements spliced back in, the trailing boundary
-    /// element's remainder, and what follows the span.
+    /// The whole new slot array, in voice order: what precedes the gap, the leading boundary element's
+    /// remainder, the gap's own content with the preserved non-timed elements spliced back in, the trailing
+    /// boundary element's remainder, and what follows the gap.
+    ///
+    /// The gap is the piece's span widened over every destination tuplet the span covered only partly, so it
+    /// can be longer than the piece on either side. Those uncovered ticks belonged to a tuplet that is now
+    /// destroyed, and they come back as plain rests: a tuplet member stores its SOUNDING duration, so the ticks
+    /// on each side sum to a plain length `alignedRests` can spell with no ratio arithmetic at all.
     private static func rebuild(
-        _ piece: RangeCopyPlacement.Piece, cut: Cut, spanStart: Int, spanEnd: Int, in context: Context,
+        _ piece: RangeCopyPlacement.Piece, cut: Cut, gap: Range<Int>, spanStart: Int, spanEnd: Int,
+        in context: Context,
     ) -> Rebuilt {
         var rebuilt = Rebuilt()
         for entry in cut.before {
             rebuilt.keep(entry)
         }
         if let leading = cut.leading {
-            rebuilt.slots += leadingTrim(of: leading, upTo: spanStart, in: context)
+            rebuilt.slots += leadingTrim(of: leading, upTo: gap.lowerBound, in: context)
         }
 
+        let head = DurationChangeAlgorithm.alignedRests(
+            forTicks: spanStart - gap.lowerBound, rtickStart: gap.lowerBound, division: context.division,
+        )
+        let tail = DurationChangeAlgorithm.alignedRests(
+            forTicks: gap.upperBound - spanEnd, rtickStart: spanEnd, division: context.division,
+        )
         var pending = cut.preserved
-        var cursor = spanStart
-        for element in piece.elements {
+        var cursor = gap.lowerBound
+        for (offset, element) in (head + piece.elements + tail).enumerated() {
             while let next = pending.first, next.start <= cursor {
                 rebuilt.keep(next)
                 pending.removeFirst()
             }
-            rebuilt.pieceSlotIndices.append(rebuilt.slots.count)
+            // Only the piece's own elements are named by a carried tuplet; the refill rests are not.
+            if offset >= head.count, offset < head.count + piece.elements.count {
+                rebuilt.pieceSlotIndices.append(rebuilt.slots.count)
+            }
             rebuilt.slots.append(VoiceSlot(identity: .fresh, element: element))
             cursor += context.advance(of: element)
         }
@@ -152,7 +170,7 @@ extension RangeCopyVoiceRebuild {
         }
 
         if let trailing = cut.trailing {
-            rebuilt.slots += trailingTrim(of: trailing, from: spanEnd, in: context)
+            rebuilt.slots += trailingTrim(of: trailing, from: gap.upperBound, in: context)
         }
         for entry in cut.after {
             rebuilt.keep(entry)

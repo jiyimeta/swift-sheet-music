@@ -293,6 +293,40 @@ struct DuplicateRangeTests {
         #expect(score == before)
     }
 
+    /// `C4 D4` on beats 1-2, then a half note on beats 3-4 turned into a triplet — three 320-tick members
+    /// across [960, 1920). The triplet is DESTINATION material: nothing selects it.
+    private static func quartersThenTriplet() throws -> Score {
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                Self.quarter(60, 14), Self.quarter(62, 16),
+                .chord(Chord(duration: .half, notes: [Note(pitch: 64, tpc: 18)])),
+            ])]),
+        ])
+        var score = Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+        _ = try CreateTuplet(at: Self.slot(0, 2), actualNotes: 3, normalNotes: 2).apply(to: &score)
+        return score
+    }
+
+    @Test("a copy landing partway into a destination tuplet destroys it and refills the remainder")
+    func destroysPartiallyOverlappedDestinationTuplet() throws {
+        var score = try Self.quartersThenTriplet()
+        #expect(Self.voice(score, 0).tupletSpans.count == 1)
+        // D4 alone: [480, 960), so the copy lands on [960, 1440) — the triplet's first member and half of its
+        // second. MuseScore's `makeGap` deletes the whole bracket and spells the uncovered [1440, 1920) as
+        // plain rests rather than refusing the paste.
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 1)))
+            .apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+        #expect(Self.voice(score, 0).tupletSpans.isEmpty)
+        #expect(elements == [
+            Self.quarter(60, 14), Self.quarter(62, 16), Self.quarter(62, 16), .rest(duration: .quarter),
+        ])
+        let total = elements.values.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
+        #expect(total == 1920)
+    }
+
     @Test("a range covering the whole tuplet plus the following beat succeeds")
     func repeatsWholeTupletPlusFollowingBeat() throws {
         var score = try Self.tripletThenQuarter()
