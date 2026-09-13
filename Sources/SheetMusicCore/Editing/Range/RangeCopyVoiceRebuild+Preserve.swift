@@ -101,7 +101,12 @@ extension RangeCopyVoiceRebuild {
     /// source side — where `RangeCopySource` still refuses a range that cuts a tuplet — is deliberate: nothing
     /// has happened yet when the range is read, so refusing there costs nothing.
     ///
-    /// Widening is a fixpoint, because swallowing one tuplet can reach into the next.
+    /// Widening is a fixpoint rather than a single pass, and NOT because one tuplet can reach into the next:
+    /// sibling tuplets never overlap, so swallowing one can only reach material that lies between them. The
+    /// two shapes that do need a second pass are a NESTED tuplet — nothing in this package mints one, but
+    /// `MSCXDecoder+Voice.swift` builds them off a `tupletStack`, so a loaded file can carry one, and widening
+    /// over the outer bracket is what brings the inner one's extent inside the gap — and a malformed voice
+    /// whose spans genuinely overlap, which must still terminate on a covering gap rather than loop.
     static func clearedGap(
         forSpan spanStart: Int, _ spanEnd: Int, of voice: Voice, in context: Context,
     ) -> Range<Int> {
@@ -115,10 +120,13 @@ extension RangeCopyVoiceRebuild {
         }
         var low = spanStart
         var high = spanEnd
+        // `tupletSpans` is computed: it re-resolves every bracket's two endpoints against `elements` on each
+        // read, so the loop below must not be the thing that reads it.
+        let spans = voice.tupletSpans
         var widened = true
         while widened {
             widened = false
-            for span in voice.tupletSpans {
+            for span in spans {
                 // A dangling endpoint resolves to -1, and such a tuplet draws nothing.
                 guard starts.indices.contains(span.startIndex), ends.indices.contains(span.endIndex) else {
                     continue

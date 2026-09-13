@@ -22,6 +22,30 @@ struct RangeCopyVoiceRebuildTests {
         score.parts[0].staves[0].measures[measure].voices[index]
     }
 
+    /// One 4/4 bar whose first three beats are a 3:2 bracket — a dotted half turned into three 480-tick
+    /// members across [0, 1440) — followed by a plain quarter. A span covering only the middle member leaves an
+    /// uncovered member on EACH side of the piece.
+    private static func tripletAcrossThreeBeats() throws -> Score {
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .chord(Chord(
+                    duration: .fraction(Fraction(numerator: 3, denominator: 4)), notes: [Note(pitch: 62, tpc: 16)],
+                )),
+                Self.quarter(62),
+            ])]),
+        ])
+        var score = Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        _ = try CreateTuplet(
+            at: VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 0),
+            actualNotes: 3, normalNotes: 2,
+        ).apply(to: &score)
+        return score
+    }
+
     /// The fixture is built from raw values, so every slot starts unassigned. A rebuild keeps surviving
     /// elements by identifier, so the destination has to carry real ones before a command can name them.
     private static func identifiedFixture() -> Score {
@@ -279,6 +303,70 @@ struct RangeCopyVoiceRebuildTests {
             Self.quarter(60),
             .rest(duration: .eighth),
             .rest(duration: .quarter),
+        ])
+        let total = elements.values.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
+        #expect(total == 1920)
+    }
+
+    @Test("a remainder that no plain duration spells exactly still adds up to the ticks it replaced")
+    func refillsAnUnspellableRemainder() throws {
+        var score = Self.identifiedFixture()
+        // The triplet occupies [960, 1440) as three 160-tick members. The span covers the LAST TWO of them
+        // exactly, so the remainder is one whole member — 160 ticks, which is not a power-of-two duration at
+        // any dot count. MuseScore spells it as plain rests anyway: `makeGap` calls `setRest(..., 0, false)`
+        // right after `cmdDeleteTuplet`, the `0` being the tuplet argument, under "take care not to recreate
+        // tuplet we just deleted" (`cmd.cpp:1424-1426`). So the refill is three rests — a sixteenth (120), a
+        // sixty-fourth (30) and a 10-tick remainder fraction — and it is the ARITHMETIC that has to hold,
+        // not the shape of the list.
+        _ = try CreateTuplet(
+            at: VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 3),
+            actualNotes: 3, normalNotes: 2,
+        ).apply(to: &score)
+        let third = VoiceElement.chord(Chord(
+            duration: .fraction(Fraction(numerator: 320, denominator: 1920)), notes: [Note(pitch: 60, tpc: 14)],
+        ))
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 1120, elements: [third]),
+            staff: Self.flute, voiceIndex: 0, in: score,
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+        #expect(Self.voice(score, 0).tupletSpans.isEmpty)
+        // timeSig, C4, D4, the three refill rests, the copy, the untouched quarter rest at 1440. Guarded so a
+        // regression that drops the refill reports an expectation rather than trapping the slice below — a
+        // trap would take the whole run down with it and hide every other result.
+        #expect(elements.count == 8)
+        guard elements.count == 8 else { return }
+        let refill = Array(elements.values[3 ... 5])
+        // Hoisted: SwiftFormat's `preferKeyPath` rewrites the closure form to `\.isRest`, which the `#expect`
+        // macro then expands into a `rethrows` call it will not accept without `try`. Outside the macro both
+        // tools are happy.
+        let refillIsAllRests = refill.allSatisfy(\.isRest)
+        #expect(refillIsAllRests)
+        #expect(refill.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) } == 160)
+        #expect(elements[6] == third)
+        #expect(elements[7] == .rest(duration: .quarter))
+        let total = elements.values.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
+        #expect(total == 1920)
+    }
+
+    @Test("a span landing strictly inside a tuplet refills uncovered members on both sides")
+    func refillsBothSidesOfADestroyedTuplet() throws {
+        var score = try Self.tripletAcrossThreeBeats()
+        #expect(Self.voice(score, 0).tupletSpans.count == 1)
+        // The bracket runs [0, 1440) as three 480-tick members. The span is the MIDDLE member exactly, so both
+        // the head and the tail of the refill are non-empty — the case the other tuplet tests each zero one
+        // side of.
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 480, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score,
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+        #expect(Self.voice(score, 0).tupletSpans.isEmpty)
+        // Both members are a plain 480 ticks once the ratio is gone, so both sides spell as one quarter rest.
+        #expect(elements == [
+            .rest(duration: .quarter), Self.quarter(60), .rest(duration: .quarter), Self.quarter(62),
         ])
         let total = elements.values.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
         #expect(total == 1920)
