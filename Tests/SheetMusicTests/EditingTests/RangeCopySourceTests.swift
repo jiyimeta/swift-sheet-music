@@ -15,7 +15,7 @@ struct RangeCopySourceTests {
     @Test("two beats of one voice become one stream with absolute ticks")
     func twoBeats() throws {
         let score = EditingFixtures.parityFixture()
-        let source = try #require(RangeCopySource(
+        let source = try #require(try RangeCopySource(
             range: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 2)), in: score,
         ))
         #expect(source.startTick == 0)
@@ -35,7 +35,7 @@ struct RangeCopySourceTests {
     @Test("a range covering two staves yields a stream per staff")
     func twoStaves() throws {
         let score = EditingFixtures.parityFixture()
-        let source = try #require(RangeCopySource(
+        let source = try #require(try RangeCopySource(
             range: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 1, staff: Self.cello)), in: score,
         ))
         #expect(source.staves == [Self.flute, Self.cello])
@@ -45,7 +45,7 @@ struct RangeCopySourceTests {
     @Test("a bar with two voices yields a stream per voice")
     func twoVoices() throws {
         let score = EditingFixtures.parityFixture()
-        let source = try #require(RangeCopySource(
+        let source = try #require(try RangeCopySource(
             range: VoiceElementRange(start: Self.slot(1, 0), end: Self.slot(1, 3)), in: score,
         ))
         let flute = source.streams.filter { $0.staff == Self.flute }
@@ -56,7 +56,7 @@ struct RangeCopySourceTests {
     func tupletBounds() throws {
         var score = EditingFixtures.parityFixture()
         _ = try CreateTuplet(at: Self.slot(0, 1), actualNotes: 3, normalNotes: 2).apply(to: &score)
-        let source = try #require(RangeCopySource(
+        let source = try #require(try RangeCopySource(
             range: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 3)), in: score,
         ))
         let stream = try #require(source.streams.first)
@@ -71,7 +71,7 @@ struct RangeCopySourceTests {
     @Test("a whole-bar rest is measured, not crashed on")
     func measureRestLength() throws {
         let score = EditingFixtures.parityFixture()
-        let source = try #require(RangeCopySource(
+        let source = try #require(try RangeCopySource(
             range: VoiceElementRange(start: Self.slot(3, 0), end: Self.slot(3, 0)), in: score,
         ))
         let stream = try #require(source.streams.first)
@@ -100,7 +100,7 @@ struct RangeCopySourceTests {
         let range = VoiceElementRange(
             start: Self.slot(0, 2, voice: 1), end: Self.slot(0, 3, voice: 1),
         )
-        let source = try #require(RangeCopySource(range: range, in: score))
+        let source = try #require(try RangeCopySource(range: range, in: score))
         #expect(source.lengthTicks == 960)
         let overhangingStream = try #require(source.streams.first { $0.voiceIndex == 0 })
         #expect(overhangingStream.elements.map(\.absoluteTick) == [960, 1440])
@@ -112,7 +112,7 @@ struct RangeCopySourceTests {
     @Test("the copy's outer ties are cleared and inner ones kept")
     func outerTiesCleared() throws {
         let score = EditingFixtures.parityFixture() // bar 2 is two tied E4 halves
-        let source = try #require(RangeCopySource(
+        let source = try #require(try RangeCopySource(
             range: VoiceElementRange(start: Self.slot(2, 0), end: Self.slot(2, 1)), in: score,
         ))
         let stream = try #require(source.streams.first)
@@ -126,11 +126,51 @@ struct RangeCopySourceTests {
     }
 
     @Test("a range that resolves to nothing yields nil")
-    func unresolvable() {
+    func unresolvable() throws {
         let score = EditingFixtures.parityFixture()
-        #expect(RangeCopySource(
+        #expect(try RangeCopySource(
             range: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(9, 0)), in: score,
         ) == nil)
+    }
+
+    /// A dotted half (three quarter beats) turned into a triplet, followed by a plain quarter. The triplet's
+    /// members land at indices 0-2; the quarter is index 3.
+    private static func tripletThenQuarter() throws -> Score {
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .chord(Chord(
+                    duration: .fraction(Fraction(numerator: 3, denominator: 4)), notes: [Note(pitch: 60, tpc: 14)],
+                )),
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+            ])]),
+        ])
+        var score = Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+        _ = try CreateTuplet(at: Self.slot(0, 0), actualNotes: 3, normalNotes: 2).apply(to: &score)
+        return score
+    }
+
+    @Test("a range starting inside a tuplet is refused")
+    func refusesTupletCutAtStart() throws {
+        let score = try Self.tripletThenQuarter()
+        // Second triplet member (index 1) through the trailing quarter (index 3): the range's low bound
+        // lands after the tuplet's first member, so the tuplet is only partly covered.
+        #expect(throws: SheetMusicError.self) {
+            _ = try RangeCopySource(
+                range: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 3)), in: score,
+            )
+        }
+    }
+
+    @Test("a range covering a whole tuplet plus what follows is not refused")
+    func toleratesWholeTupletPlusFollowingBeat() throws {
+        let score = try Self.tripletThenQuarter()
+        let source = try #require(try RangeCopySource(
+            range: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 3)), in: score,
+        ))
+        let stream = try #require(source.streams.first)
+        #expect(stream.tuplets.count == 1)
     }
 
     /// One measure, one voice, one chord carrying a non-empty `spanners` — built locally rather than by
@@ -149,7 +189,7 @@ struct RangeCopySourceTests {
         let score = Score(division: 480, parts: [
             Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
         ])
-        let source = try #require(RangeCopySource(
+        let source = try #require(try RangeCopySource(
             range: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 0)), in: score,
         ))
         let stream = try #require(source.streams.first)
@@ -179,7 +219,7 @@ struct RangeCopySourceTests {
         ])
         _ = try CreateTuplet(at: Self.slot(1, 0), actualNotes: 3, normalNotes: 2).apply(to: &score)
 
-        let source = try #require(RangeCopySource(
+        let source = try #require(try RangeCopySource(
             range: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(1, 2)), in: score,
         ))
         #expect(source.streams.count == 1)

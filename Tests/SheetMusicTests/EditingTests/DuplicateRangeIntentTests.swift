@@ -33,6 +33,38 @@ struct DuplicateRangeIntentTests {
         }
     }
 
+    /// A dotted half (three quarter beats) turned into a triplet, followed by a plain quarter. The triplet's
+    /// members land at indices 0-2; the quarter is index 3.
+    private static func tripletThenQuarter() throws -> Score {
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .chord(Chord(
+                    duration: .fraction(Fraction(numerator: 3, denominator: 4)), notes: [Note(pitch: 60, tpc: 14)],
+                )),
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+            ])]),
+        ])
+        var score = Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+        _ = try CreateTuplet(at: Self.slot(0, 0), actualNotes: 3, normalNotes: 2).apply(to: &score)
+        return score
+    }
+
+    @Test("a range that cuts a tuplet refuses with insideTuplet, and leaves the score untouched")
+    func refusesPartialTuplet() throws {
+        let score = try Self.tripletThenQuarter()
+        let session = ScoreEditSession(score: score)
+        #expect(!session.apply(.duplicateRange(over: VoiceElementRange(
+            start: Self.slot(0, 1), end: Self.slot(0, 3),
+        ))))
+        guard case .insideTuplet = session.lastRefusal?.reason else {
+            Issue.record("expected insideTuplet, got \(String(describing: session.lastRefusal?.reason))")
+            return
+        }
+        #expect(session.score.stableFingerprint == score.stableFingerprint)
+    }
+
     @Test("element identifiers survive apply, undo and redo")
     func identityRoundTrips() {
         let session = ScoreEditSession(score: EditingFixtures.parityFixture())

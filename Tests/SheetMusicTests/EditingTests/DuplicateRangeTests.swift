@@ -260,4 +260,49 @@ struct DuplicateRangeTests {
                 .apply(to: &score)
         }
     }
+
+    /// A dotted half (three quarter beats) turned into a triplet, followed by a plain quarter — "beats 1-3 are a
+    /// triplet, beat 4 is a quarter" per the task brief. The triplet's members land at indices 0-2; the quarter
+    /// is index 3.
+    private static func tripletThenQuarter() throws -> Score {
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .chord(Chord(
+                    duration: .fraction(Fraction(numerator: 3, denominator: 4)), notes: [Note(pitch: 60, tpc: 14)],
+                )),
+                Self.quarter(62, 16),
+            ])]),
+        ])
+        var score = Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+        _ = try CreateTuplet(at: Self.slot(0, 0), actualNotes: 3, normalNotes: 2).apply(to: &score)
+        return score
+    }
+
+    @Test("a range covering a tuplet only partially is refused, and leaves the score untouched")
+    func refusesPartialTuplet() throws {
+        var score = try Self.tripletThenQuarter()
+        let before = score
+        // The triplet's second member (index 1) through the trailing quarter (index 3): the range starts one
+        // member into the triplet, so the bracket cannot be stated on the copy.
+        #expect(throws: SheetMusicError.self) {
+            _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 3)))
+                .apply(to: &score)
+        }
+        #expect(score == before)
+    }
+
+    @Test("a range covering the whole tuplet plus the following beat succeeds")
+    func repeatsWholeTupletPlusFollowingBeat() throws {
+        var score = try Self.tripletThenQuarter()
+        // The range's own bar (four beats) is exactly one measure, so the copy lands in a freshly appended
+        // measure 1 rather than sharing measure 0 with the source the way `repeatsTuplet` does.
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 3)))
+            .apply(to: &score)
+        #expect(Self.voice(score, 0).tupletSpans.count == 1)
+        let copiedSpans = Self.voice(score, 1).tupletSpans
+        #expect(copiedSpans.count == 1)
+        #expect(copiedSpans.allSatisfy { $0.actualNotes == 3 })
+    }
 }

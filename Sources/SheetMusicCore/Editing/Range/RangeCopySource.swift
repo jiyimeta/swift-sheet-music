@@ -8,6 +8,9 @@ import SheetMusicFoundation
 /// here as it does there. Non-timed elements are not collected: `voiceElements(in:)` already restricts itself to
 /// `.chord` elements (which is also how rests are represented in this model), so a duplicate carries notes and
 /// rests, per the spec.
+///
+/// A range that covers a tuplet only partially cannot be copied at all: `init?(range:in:)` throws
+/// `.insideTuplet` rather than producing a `Stream` whose bracket silently dropped its members.
 struct RangeCopySource {
     struct Stream {
         let staff: StaffAddress
@@ -41,8 +44,11 @@ struct RangeCopySource {
         let elementIndex: Int
     }
 
-    /// `nil` when the range resolves to no element at all.
-    init?(range: VoiceElementRange, in score: Score) {
+    /// `nil` when the range resolves to no element at all. Throws `.insideTuplet` when the range cuts a tuplet
+    /// on either side — a range must cover every tuplet it touches from its first member to its last, through
+    /// every nesting level (MuseScore's `Selection::canCopy`, `select.cpp:1394-1465`), so this refuses the whole
+    /// copy rather than silently drop the bracket the way an earlier version of this package did.
+    init?(range: VoiceElementRange, in score: Score) throws {
         let targets = score.voiceElements(in: range)
         guard !targets.isEmpty,
               let startOnset = score.onset(of: range.start), let endOnset = score.onset(of: range.end),
@@ -65,15 +71,30 @@ struct RangeCopySource {
         startTick = start
         lengthTicks = end - start
 
-        streams = Self.makeStreams(from: targets, in: score, rangeEnd: end)
+        // Which of the caller's two named bounds is the earlier (`lowBound`) and later (`highBound`) one, so a
+        // partial-tuplet refusal can name the SPECIFIC bound that lands inside the tuplet rather than either one
+        // — `range.start`/`range.end` may be given in either temporal order.
+        let lowBound = startOnset <= endOnset ? range.start : range.end
+        let highBound = startOnset <= endOnset ? range.end : range.start
+
+        streams = try Self.makeStreams(
+            from: targets, in: score, rangeEnd: end, lowBound: lowBound, highBound: highBound,
+        )
         guard !streams.isEmpty else { return nil }
     }
 }
 
 extension RangeCopySource {
+    static func refused(_ reason: EditRefusal.Reason) -> SheetMusicError {
+        .invalidEdit(EditRefusal(operation: "DuplicateRange", reason: reason))
+    }
+
     /// One stream per (staff, voice). `voiceElements(in:)` yields ids in staff, measure, voice, element order, so
     /// appending in encounter order keeps every stream's own elements ascending with no separate sort.
-    private static func makeStreams(from targets: [VoiceElementID], in score: Score, rangeEnd: Int) -> [Stream] {
+    private static func makeStreams(
+        from targets: [VoiceElementID], in score: Score, rangeEnd: Int,
+        lowBound: VoiceElementID, highBound: VoiceElementID,
+    ) throws -> [Stream] {
         var order: [StreamKey] = []
         var idsByKey: [StreamKey: [VoiceElementID]] = [:]
         for id in targets {
@@ -83,19 +104,24 @@ extension RangeCopySource {
         }
 
         var geometries: [StaffAddress: RangeCopyGeometry] = [:]
-        return order.compactMap { key in
+        return try order.compactMap { key in
             let geometry = geometries[key.staff] ?? RangeCopyGeometry(staff: key.staff, in: score)
             geometries[key.staff] = geometry
             guard let ids = idsByKey[key] else { return nil }
-            return makeStream(key: key, ids: ids, geometry: geometry, score: score, rangeEnd: rangeEnd)
+            return try makeStream(
+                key: key, ids: ids, geometry: geometry, score: score, rangeEnd: rangeEnd,
+                lowBound: lowBound, highBound: highBound,
+            )
         }
     }
 
     /// Builds one (staff, voice) stream: the copied elements with cleared spanners and outer ties, plus the
-    /// tuplets that survived intact.
+    /// tuplets that survived intact. Throws `.insideTuplet` when a tuplet this stream touches is not covered
+    /// from its first member to its last (`tupletBounds(for:key:lowBound:highBound:infoByLocation:score:)`).
     private static func makeStream(
         key: StreamKey, ids: [VoiceElementID], geometry: RangeCopyGeometry, score: Score, rangeEnd: Int,
-    ) -> Stream? {
+        lowBound: VoiceElementID, highBound: VoiceElementID,
+    ) throws -> Stream? {
         let sourceDurations = score.effectiveMeasureDurations(
             partIndex: key.staff.partIndex, staffIndex: key.staff.staffIndexInPart,
         )
@@ -129,17 +155,29 @@ extension RangeCopySource {
         guard !elements.isEmpty else { return nil }
         clearOuterTies(&elements)
 
-        let tuplets = tupletBounds(for: ids, key: key, infoByLocation: infoByLocation, score: score)
+        let tuplets = try tupletBounds(
+            for: ids, key: key, lowBound: lowBound, highBound: highBound,
+            infoByLocation: infoByLocation, score: score,
+        )
         return Stream(staff: key.staff, voiceIndex: key.voiceIndex, elements: elements, tuplets: tuplets)
     }
 
-    /// Tuplets live on the (per-measure) `Voice`, so this walks the distinct measures the stream touched and keeps
-    /// only spans whose FIRST and LAST member both survived the copy — a partially covered tuplet has no ratio
-    /// left to state.
+    /// Tuplets live on the (per-measure) `Voice`, so this walks the distinct measures the stream touched. A
+    /// tuplet the copied elements never reach is left alone; one they reach through only SOME of its members is
+    /// not something a copy can state — MuseScore refuses the whole operation rather than drop the bracket
+    /// (`Selection::canCopy`, `select.cpp:1394-1465`), so this throws `.insideTuplet` naming whichever of the
+    /// range's two bounds is the one that landed inside the tuplet, rather than silently keeping only the spans
+    /// whose first and last member both survived.
+    ///
+    /// `ids` is a contiguous, onset-ordered slice of the voice per measure (that is what `voiceElements(in:)`
+    /// selects), so within one measure a tuplet's first member is missing only when the covered slice starts
+    /// after it (the range's earlier bound, `lowBound`), and its last member is missing only when the slice ends
+    /// before it (the range's later bound, `highBound`) — there is no other way for `ids` to touch some of a
+    /// tuplet's members without touching its first or last.
     private static func tupletBounds(
-        for ids: [VoiceElementID], key: StreamKey,
+        for ids: [VoiceElementID], key: StreamKey, lowBound: VoiceElementID, highBound: VoiceElementID,
         infoByLocation: [MeasureElementLocation: (tick: Int, length: Int)], score: Score,
-    ) -> [(startTick: Int, endTick: Int, normalNotes: Int, actualNotes: Int)] {
+    ) throws -> [(startTick: Int, endTick: Int, normalNotes: Int, actualNotes: Int)] {
         var measureOrder: [Int] = []
         for id in ids where !measureOrder.contains(id.measureIndex) {
             measureOrder.append(id.measureIndex)
@@ -149,7 +187,14 @@ extension RangeCopySource {
         for measureIndex in measureOrder {
             let ref = VoiceRef(staff: key.staff, measureIndex: measureIndex, voiceIndex: key.voiceIndex)
             guard let voice = score[voice: ref] else { continue }
+            let presentIndices = Set(ids.filter { $0.measureIndex == measureIndex }.map(\.elementIndex))
             for span in voice.tupletSpans {
+                guard !presentIndices.isDisjoint(with: span.startIndex ... span.endIndex) else { continue }
+                let startPresent = presentIndices.contains(span.startIndex)
+                let endPresent = presentIndices.contains(span.endIndex)
+                guard startPresent, endPresent else {
+                    throw Self.refused(.insideTuplet(at: startPresent ? highBound : lowBound))
+                }
                 let startLocation = MeasureElementLocation(measureIndex: measureIndex, elementIndex: span.startIndex)
                 let endLocation = MeasureElementLocation(measureIndex: measureIndex, elementIndex: span.endIndex)
                 guard let start = infoByLocation[startLocation], let end = infoByLocation[endLocation]

@@ -47,7 +47,7 @@ public struct DuplicateRange: EditCommand {
     /// the identical command sequence from the identical allocator value, so the live allocator mints the same
     /// identifiers in the same order and every `.keep` names an element that really exists by the time it is read.
     func plan(in score: Score, ids: EIDAllocator) throws -> CompositeEditCommand? {
-        guard let source = RangeCopySource(range: range, in: score) else {
+        guard let source = try RangeCopySource(range: range, in: score) else {
             throw Self.refused(.targetNotFound(range.start))
         }
         var scratch = score
