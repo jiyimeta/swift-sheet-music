@@ -25,26 +25,33 @@ extension RangeCopyVoiceRebuild {
     /// rewrites, so they may be applied in any order relative to the rebuilds.
     static func barlineTieSeals(
         for pieces: [RangeCopyPlacement.Piece], staff: StaffAddress, voiceIndex: Int, in score: Score,
+        operation: String,
     ) -> [ReplaceVoiceElement] {
         guard let first = pieces.first, let last = pieces.last else { return [] }
         let durations = score.effectiveMeasureDurations(
             partIndex: staff.partIndex, staffIndex: staff.staffIndexInPart,
         )
         var commands: [ReplaceVoiceElement] = []
-        if let gap = gap(of: first, staff: staff, voiceIndex: voiceIndex, durations: durations, in: score),
-           gap.lowerBound == 0, first.measureIndex > 0,
-           let command = untied(
-               .forward, inMeasure: first.measureIndex - 1, staff: staff, voiceIndex: voiceIndex, in: score,
-           )
+        if let gap = gap(
+            of: first, staff: staff, voiceIndex: voiceIndex, durations: durations, in: score,
+            operation: operation,
+        ),
+            gap.lowerBound == 0, first.measureIndex > 0,
+            let command = untied(
+                .forward, inMeasure: first.measureIndex - 1, staff: staff, voiceIndex: voiceIndex, in: score,
+            )
         {
             commands.append(command)
         }
-        if let gap = gap(of: last, staff: staff, voiceIndex: voiceIndex, durations: durations, in: score),
-           durations.indices.contains(last.measureIndex),
-           gap.upperBound == durations[last.measureIndex].ticks(division: score.division),
-           let command = untied(
-               .back, inMeasure: last.measureIndex + 1, staff: staff, voiceIndex: voiceIndex, in: score,
-           )
+        if let gap = gap(
+            of: last, staff: staff, voiceIndex: voiceIndex, durations: durations, in: score,
+            operation: operation,
+        ),
+            durations.indices.contains(last.measureIndex),
+            gap.upperBound == durations[last.measureIndex].ticks(division: score.division),
+            let command = untied(
+                .back, inMeasure: last.measureIndex + 1, staff: staff, voiceIndex: voiceIndex, in: score,
+            )
         {
             commands.append(command)
         }
@@ -63,13 +70,16 @@ extension RangeCopyVoiceRebuild {
     /// covers only partly. `nil` for a measure or voice the staff does not have.
     private static func gap(
         of piece: RangeCopyPlacement.Piece, staff: StaffAddress, voiceIndex: Int, durations: [Fraction],
-        in score: Score,
+        in score: Score, operation: String,
     ) -> Range<Int>? {
         let ref = VoiceRef(staff: staff, measureIndex: piece.measureIndex, voiceIndex: voiceIndex)
         guard let voice = score[voice: ref], durations.indices.contains(piece.measureIndex) else { return nil }
+        // Nothing on this path refuses today, so the operation goes unread — it is carried rather than faked
+        // because a `Context` that named the wrong command would be a trap the day one of these calls grows a
+        // refusal.
         let context = Context(
             division: score.division, measureDuration: durations[piece.measureIndex], ref: ref,
-            geometry: RangeCopyGeometry(staff: staff, in: score),
+            geometry: RangeCopyGeometry(staff: staff, in: score), operation: operation,
         )
         let spanStart = piece.startTickInMeasure
         let spanEnd = spanStart + piece.elements.reduce(0) { $0 + context.advance(of: $1) }

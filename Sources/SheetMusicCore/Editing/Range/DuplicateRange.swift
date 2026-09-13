@@ -47,7 +47,12 @@ public struct DuplicateRange: EditCommand, RangeCopyWriting {
             throw Self.refused(.targetNotFound(range.start))
         }
         let destinationTick = source.startTick + source.lengthTicks
-        let commands = try writeCommands(for: source, at: destinationTick, in: score, ids: ids)
+        // `RangeCopySource` measures `startTick` on the first staff the range covers, so that is the axis the
+        // destination tick is stated on.
+        guard let axis = source.staves.first else { return nil }
+        let commands = try writeCommands(
+            for: source, at: destinationTick, onAxisOf: axis, in: score, ids: ids,
+        )
         return commands.isEmpty ? nil : CompositeEditCommand(commands: commands, location: range.start)
     }
 }

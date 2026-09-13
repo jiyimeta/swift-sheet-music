@@ -98,6 +98,77 @@ struct PasteRangeTests {
         #expect(fluteAfter == fluteBefore)
     }
 
+    /// A bar's total, walked the way `Score.onset(of:)` walks it. A paste that splits across a barline must
+    /// leave every bar it touched exactly as long as it found it.
+    private static func ticks(_ voice: Voice) -> Int {
+        voice.elements.reduce(0) {
+            $0 + $1.cursorAdvance(division: 480, in: Fraction(numerator: 4, denominator: 4))
+        }
+    }
+
+    @Test("a mid-bar paste splits at the barline, seals the tie it cut, and changes no bar's length")
+    func splitsAtTheBarline() throws {
+        var score = EditingFixtures.parityFixture()
+        // Four quarters — a whole 4/4 bar's worth — landed on beat 3, so half of it belongs to the next bar.
+        let text = try Self.payloadText(
+            VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 4)), in: score,
+        )
+        _ = try Self.paste(text, at: Self.slot(1, 2)).apply(to: &score)
+
+        let landed = try Self.voice(score, 1)
+        #expect(landed.elements == [
+            .rest(duration: .quarter), .rest(duration: .quarter),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+        ])
+
+        // Bar 2 held two tied half notes; the copy's tail covers the first of them exactly, so it is replaced
+        // and the survivor's `tieBack` has to have been cleared — that is the seal, and it is a pass a paste
+        // landing at tick 0 never reaches.
+        let crossed = try Self.voice(score, 2)
+        let tieBacks = crossed.elements.compactMap { element -> [Int?]? in
+            guard case let .chord(chord) = element, !chord.notes.isEmpty else { return nil }
+            return chord.notes.map(\.tieBack)
+        }
+        #expect(tieBacks == [[nil]])
+        #expect(crossed.elements.first == .rest(duration: .quarter))
+
+        #expect(Self.ticks(landed) == 1920)
+        #expect(Self.ticks(crossed) == 1920)
+    }
+
+    @Test("a paste refused inside the shared rebuild names PasteRange, not DuplicateRange")
+    func rebuildRefusalNamesTheCommand() throws {
+        var score = EditingFixtures.parityFixture()
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        // A `.locationShift` inside the span the paste will clear: `RangeCopyVoiceRebuild` refuses it, and the
+        // refusal is raised in the pass `DuplicateRange` shares.
+        var blocked = try Self.voice(score, 1)
+        blocked.elements.insert(
+            .locationShift(delta: Fraction(numerator: 1, denominator: 8)), at: 2, id: ids.next(),
+        )
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[1].voices[0] = blocked
+            }
+        }
+        let before = score
+        let text = try Self.payloadText(
+            VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 4)), in: score,
+        )
+        let error = #expect(throws: SheetMusicError.self) {
+            _ = try Self.paste(text, at: Self.slot(1, 0)).apply(to: &score)
+        }
+        guard case let .invalidEdit(refusal)? = error else {
+            Issue.record("expected an invalidEdit refusal, got \(String(describing: error))")
+            return
+        }
+        #expect(refusal.operation == "PasteRange")
+        #expect(refusal.code == "edit.blockedByUntimedElement")
+        #expect(score == before)
+    }
+
     @Test("a payload holding no chord or rest is refused as an empty payload")
     func refusesEmptyPayload() throws {
         var score = EditingFixtures.parityFixture()

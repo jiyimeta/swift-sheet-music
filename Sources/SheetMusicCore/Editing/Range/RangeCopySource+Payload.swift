@@ -73,12 +73,22 @@ extension RangeCopySource {
     /// A payload is renumbered from zero — `RangeCopyPayload.score(for:in:)` drops the parts the range did not
     /// cover — so its staff addresses mean nothing in the score being pasted into. The translation is by
     /// POSITION in display order: the payload's first staff lands on `anchor`, its second on the staff below
-    /// that one, and so on, which is where MuseScore's own `pasteStaff` puts them and what makes pasting onto a
-    /// selected staff mean anything at all. Voice indices are NOT shifted — a payload's voice 2 is the
-    /// destination's voice 2, exactly as in MuseScore.
+    /// that one, and so on, which is where MuseScore's own `pasteStaff` puts them (`read410.cpp:400-402`) and
+    /// what makes pasting onto a selected staff mean anything at all. Voice indices are NOT shifted — a
+    /// payload's voice 2 is the destination's voice 2, exactly as in MuseScore.
     ///
-    /// `nil` when the payload needs more staves than the destination has at or below `anchor`, or when `anchor`
-    /// is not a staff of `score`: both are a paste with nowhere to land rather than one to write partially.
+    /// > Note: MuseScore does NOT refuse a clipboard taller than the staves below the anchor. It logs "paste
+    /// > beyond staves" and pastes the staves that fit (`read410.cpp:404-407`). The divergence here is
+    /// > DELIBERATE: a paste that silently drops half its material is worse than one the host can report, and
+    /// > `PasteRange` has a structured refusal channel MuseScore's `LOGD` does not. A later parity audit should
+    /// > leave this alone rather than "fix" it back.
+    ///
+    /// `nil` when the anchor is not a staff of `score`, or when the material needs more staves than the score
+    /// has below it. **The second case is DEFENSIVE, not reachable from this package's own copy path**: a
+    /// payload `RangeCopyPayload.score(for:in:)` produced can never be taller than the score it was cut from,
+    /// and pasting into that same score therefore always fits. It exists for a hand-built payload, or one that
+    /// arrived from a taller document. That is also why the refusal names the anchor rather than working out
+    /// which staff was missing — nothing can currently see the difference.
     func relocated(from payload: Score, onto anchor: StaffAddress, in score: Score) -> RangeCopySource? {
         let payloadStaves = payload.allStaves.map(\.address)
         let destinationStaves = score.allStaves.map(\.address)

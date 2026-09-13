@@ -11,8 +11,13 @@ import SheetMusicFoundation
 /// `.keep(its existing EID)`.
 enum RangeCopyVoiceRebuild {
     /// The `ReplaceVoiceElements` that writes `piece` into `(staff, piece.measureIndex, voiceIndex)`.
+    ///
+    /// `operation` names the command this rebuild is serving. Two of them share this pass, so it cannot name
+    /// itself: a paste refused in here must reach the host as a `PasteRange`, not as the `DuplicateRange` this
+    /// unit was first written for.
     static func command(
         for piece: RangeCopyPlacement.Piece, staff: StaffAddress, voiceIndex: Int, in score: Score,
+        operation: String,
     ) throws -> ReplaceVoiceElements {
         let ref = VoiceRef(staff: staff, measureIndex: piece.measureIndex, voiceIndex: voiceIndex)
         let measureDurations = score.effectiveMeasureDurations(
@@ -21,13 +26,13 @@ enum RangeCopyVoiceRebuild {
         guard let voice = score[voice: ref], measureDurations.indices.contains(piece.measureIndex) else {
             throw refused(.targetNotFound(VoiceElementID(
                 staff: staff, measureIndex: piece.measureIndex, voiceIndex: voiceIndex, elementIndex: 0,
-            )))
+            )), operation: operation)
         }
-        guard !piece.elements.isEmpty else { throw refused(.emptyPayload) }
+        guard !piece.elements.isEmpty else { throw refused(.emptyPayload, operation: operation) }
 
         let context = Context(
             division: score.division, measureDuration: measureDurations[piece.measureIndex], ref: ref,
-            geometry: RangeCopyGeometry(staff: staff, in: score),
+            geometry: RangeCopyGeometry(staff: staff, in: score), operation: operation,
         )
         let spanStart = piece.startTickInMeasure
         let spanEnd = spanStart + piece.elements.reduce(0) { $0 + context.advance(of: $1) }
@@ -37,7 +42,9 @@ enum RangeCopyVoiceRebuild {
         // one, and this is the guard that makes that true of this unit on its own rather than by trust.
         let measureTicks = context.measureDuration.ticks(division: context.division)
         guard spanEnd <= measureTicks else {
-            throw refused(.insufficientRoom(neededTicks: spanEnd, availableTicks: measureTicks))
+            throw refused(
+                .insufficientRoom(neededTicks: spanEnd, availableTicks: measureTicks), operation: operation,
+            )
         }
         // A destination tuplet the piece covers only partly is destroyed rather than refused, so what actually
         // gets cleared is the span widened over every such bracket.
@@ -52,8 +59,11 @@ enum RangeCopyVoiceRebuild {
         )
     }
 
-    static func refused(_ reason: EditRefusal.Reason) -> SheetMusicError {
-        .invalidEdit(EditRefusal(operation: "DuplicateRange", reason: reason))
+    /// A refusal stamped with the CALLING command's name. There is deliberately no default: this pass serves
+    /// both `DuplicateRange` and `PasteRange`, and a default would quietly restore the bug where every paste
+    /// refused in here was reported to the host as a repeat-selection.
+    static func refused(_ reason: EditRefusal.Reason, operation: String) -> SheetMusicError {
+        .invalidEdit(EditRefusal(operation: operation, reason: reason))
     }
 }
 
@@ -67,6 +77,10 @@ extension RangeCopyVoiceRebuild {
         /// has to resolve a spanner's stored end, which counts MEASURES from its anchor and so cannot be read
         /// without knowing where the bars are.
         let geometry: RangeCopyGeometry
+        /// The name of the COMMAND this rebuild is running for — `"DuplicateRange"` or `"PasteRange"` — so a
+        /// refusal raised in here reaches the host stamped with the operation the user actually performed.
+        /// This pass is shared, and a hardcoded name would report every ⌘V as an `R`.
+        let operation: String
 
         /// The absolute tick this rebuild's own measure starts at; `nil` for a measure the staff does not have.
         var measureStart: Int? {

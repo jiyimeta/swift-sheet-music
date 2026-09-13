@@ -46,7 +46,7 @@ struct RangeCopyVoiceRebuildTieTests {
         // first quarter is filed into `before` as-is unless the cut itself clears its tie.
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(start: 480, elements: [Self.quarter(70), Self.quarter(71), Self.quarter(72)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score).elements
@@ -64,7 +64,7 @@ struct RangeCopyVoiceRebuildTieTests {
         // third quarter (index 2, tied back to the second) is filed into `after` as-is unless the cut clears it.
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(start: 0, elements: [Self.quarter(70), Self.quarter(71)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score).elements

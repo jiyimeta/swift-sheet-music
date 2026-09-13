@@ -69,7 +69,11 @@ public struct PasteRange: EditCommand, RangeCopyWriting {
         else {
             throw Self.refused(.targetNotFound(location))
         }
-        let commands = try writeCommands(for: source, at: destinationTick, in: score, ids: ids)
+        // The destination tick was just measured on `location.staff`, so that is the axis every stream's
+        // placement is stated against — never the first staff that happens to carry material.
+        let commands = try writeCommands(
+            for: source, at: destinationTick, onAxisOf: location.staff, in: score, ids: ids,
+        )
         return commands.isEmpty ? nil : CompositeEditCommand(commands: commands, location: location)
     }
 }

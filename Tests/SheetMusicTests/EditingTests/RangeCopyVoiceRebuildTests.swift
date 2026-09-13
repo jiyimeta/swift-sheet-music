@@ -60,7 +60,7 @@ struct RangeCopyVoiceRebuildTests {
         var score = Self.identifiedFixture()
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60), Self.quarter(62)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         #expect(Self.voice(score, 0).elements == [
@@ -78,7 +78,7 @@ struct RangeCopyVoiceRebuildTests {
         let survivors = (0 ... 2).map { before.eid(at: $0) }
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60), Self.quarter(62)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let after = Self.voice(score, 0).elements
@@ -95,7 +95,7 @@ struct RangeCopyVoiceRebuildTests {
         // [1200, 1680) cuts the quarter rest at 960 and the quarter rest at 1440.
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 0, start: 1200, elements: [Self.quarter(60)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score, 0).elements
@@ -117,7 +117,7 @@ struct RangeCopyVoiceRebuildTests {
         // leading trim's head and the trailing trim's first piece both abut the copy.
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 2, start: 1200, elements: [Self.quarter(60)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score, 2).elements
@@ -143,7 +143,7 @@ struct RangeCopyVoiceRebuildTests {
         // That source note carries `tieForward = 1` into its partner — which the copy now overwrites.
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 2, start: 720, elements: [Self.quarter(60)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score, 2).elements
@@ -174,7 +174,7 @@ struct RangeCopyVoiceRebuildTests {
         ).apply(to: &score)
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60), Self.quarter(62)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score, 0).elements
@@ -203,7 +203,7 @@ struct RangeCopyVoiceRebuildTests {
         }
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60), Self.quarter(62)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score, 0).elements
@@ -240,7 +240,7 @@ struct RangeCopyVoiceRebuildTests {
         #expect(throws: SheetMusicError.self) {
             _ = try RangeCopyVoiceRebuild.command(
                 for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60), Self.quarter(62)]),
-                staff: Self.flute, voiceIndex: 0, in: score,
+                staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
             )
         }
     }
@@ -259,7 +259,7 @@ struct RangeCopyVoiceRebuildTests {
         // the span covers the triplet only partly. MuseScore's `makeGap` tears the whole bracket out.
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 0, start: 1200, elements: [Self.quarter(60)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score, 0).elements
@@ -289,7 +289,7 @@ struct RangeCopyVoiceRebuildTests {
         ).apply(to: &score)
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 0, start: 720, elements: [Self.quarter(60)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score, 0).elements
@@ -327,7 +327,7 @@ struct RangeCopyVoiceRebuildTests {
         ))
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 0, start: 1120, elements: [third]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score, 0).elements
@@ -359,7 +359,7 @@ struct RangeCopyVoiceRebuildTests {
         // side of.
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 0, start: 480, elements: [Self.quarter(60)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let elements = Self.voice(score, 0).elements
@@ -381,7 +381,7 @@ struct RangeCopyVoiceRebuildTests {
         ).apply(to: &score)
         let command = try RangeCopyVoiceRebuild.command(
             for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60)]),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         #expect(Self.voice(score, 0).tupletSpans.isEmpty)
@@ -399,7 +399,7 @@ struct RangeCopyVoiceRebuildTests {
                 measure: 0, start: 960, elements: [third, third, third],
                 tuplets: [(range: 0 ... 2, normalNotes: 2, actualNotes: 3)],
             ),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let spans = Self.voice(score, 0).tupletSpans
@@ -426,7 +426,7 @@ struct RangeCopyVoiceRebuildTests {
                 measure: 0, start: 960, elements: [third, third, third],
                 tuplets: [(range: 0 ... 2, normalNotes: 2, actualNotes: 3)],
             ),
-            staff: Self.flute, voiceIndex: 0, in: score,
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
         )
         _ = try command.apply(to: &score)
         let spans = Self.voice(score, 0).tupletSpans

@@ -115,7 +115,9 @@ struct DuplicateRangeIrregularBarTests {
             elements: [Self.quarter(60, 14), Self.quarter(62, 16), Self.quarter(64, 18)], tuplets: [],
         )
         #expect(throws: SheetMusicError.self) {
-            _ = try RangeCopyVoiceRebuild.command(for: piece, staff: Self.flute, voiceIndex: 0, in: score)
+            _ = try RangeCopyVoiceRebuild.command(
+                for: piece, staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+            )
         }
     }
 

@@ -107,7 +107,9 @@ extension RangeCopyVoiceRebuild {
         }
         switch entry.element {
         case .locationShift, .measureRepeat:
-            throw refused(.blockedByUntimedElement(at: context.location(entry.index)))
+            throw refused(
+                .blockedByUntimedElement(at: context.location(entry.index)), operation: context.operation,
+            )
         case let .spanner(spanner):
             guard spannerSurvivesGap(
                 spanner, anchoredAt: entry.start, spanStart: spanStart, spanEnd: spanEnd, in: context,
