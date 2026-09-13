@@ -7,6 +7,33 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Deleting now means "turn what I selected into rests", and nothing more.** Both delete intents
+  used to reach outside the selection: `.delete(at:)` collapsed the whole bar-voice to a measure rest
+  whenever every OTHER timed slot happened to be a rest already, so deleting the half note in a bar of
+  "half note + half rest" swallowed a rest nobody had selected; and `.deleteRange(over:)` resolved to
+  nothing at all when the range held no chord, so selecting a bar's two half rests and deleting did
+  nothing. Both collapses are now gated on COVERAGE: a bar-voice becomes one measure rest when the
+  edit clears every timed slot it has, and otherwise keeps every slot the edit did not name. The
+  half-note bar now gives back two half rests, and a range of nothing but rests that covers its bar
+  collapses like any other full-bar selection. **This changes the score a host's ⌫ produces**, which
+  is why it is a breaking change rather than a fix.
+- **A range delete re-spells what it cleared on the metric grid.** The covered slots of each bar-voice
+  are replaced by the rests that total their combined length
+  (`DurationChangeAlgorithm.alignedDurations`, the same fill a shortened note leaves behind), so two
+  dotted eighths deleted together come back as a quarter rest plus an eighth rest rather than as two
+  dotted eighth rests, and beats 2–4 of a 4/4 bar come back as a quarter plus a half. Slots outside
+  the range are untouched, a clef inside it keeps its exact tick, and tuplet members keep their own
+  length and their bracket. A run whose fill lands on the very lengths it replaced keeps each rest's
+  identifier and spelling, so a covered `.measure` rest is not rewritten as the literal `.whole` that
+  totals the same ticks. `.delete(at:)` is unchanged here: one slot still becomes one rest of its own
+  length, the way MuseScore distinguishes a click-delete from a range delete.
+- `FullMeasureRestCollapse.plan(deleting:in:)` is now `plan(clearing:in:of:)`, taking the set of
+  element indices the caller is clearing and the `VoiceRef` they live in. `DeleteRange` plans one
+  `ReplaceVoiceElements` per touched bar-voice instead of one `DeleteVoiceElement` per chord followed
+  by a collapse pass.
+
 ## [3.1.0] - 2026-09-12
 
 ### Added

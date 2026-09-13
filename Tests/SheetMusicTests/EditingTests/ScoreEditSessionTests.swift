@@ -158,10 +158,8 @@ struct ScoreEditSessionTests {
     /// `FullMeasureRestCollapse.Plan` hands back `restElementIndex` separately: `lastAffectedLocation` has to be
     /// built from that, not trusted to the underlying command's own report.
     @Test func `a bar-emptying delete lands the selection on the new rest, not element 0`() {
-        var score = EditingFixtures.fourQuarterRests()
         let slot = VoiceElementID(EditingFixtures.restID(element: 1))
-        score[slot] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
-        let session = ScoreEditSession(score: score)
+        let session = ScoreEditSession(score: EditingFixtures.wholeChordBar())
         #expect(session.apply(.delete(at: slot)))
         #expect(session.lastAffectedLocation == VoiceElementID(
             staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1,

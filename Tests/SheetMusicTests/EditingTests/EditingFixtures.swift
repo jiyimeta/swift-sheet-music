@@ -71,6 +71,18 @@ enum EditingFixtures {
         return Score(division: 480, parts: [part])
     }
 
+    /// A 4/4 bar holding a leading time signature and one whole-note chord on C4, and nothing else — the only shape
+    /// `.delete` collapses to a measure rest, since clearing that slot leaves the bar-voice with no timed content
+    /// at all. The time signature is what makes the new rest land at element index 1 rather than 0.
+    static func wholeChordBar() -> Score {
+        let voice = Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)])),
+        ])
+        let staff = Staff(measures: [Measure(voices: [voice])])
+        return Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
+    }
+
     /// Same, but element index 1 is a quarter chord on C4 (pitch 60, tpc 14).
     static func chordAtIndex1() -> Score {
         var score = fourQuarterRests()

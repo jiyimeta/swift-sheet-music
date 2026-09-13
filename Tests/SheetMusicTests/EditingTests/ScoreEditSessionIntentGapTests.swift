@@ -183,16 +183,30 @@ struct ScoreEditSessionIntentGapTests {
         #expect(voice.elements.count == 4)
     }
 
-    /// Contrast with the test above: `.delete` keeps its collapse, because ⌫ means "empty this bar" rather than
-    /// "make this slot this long". The two intents want opposite spellings of the same underlying delete.
-    @Test func `delete still collapses the bar it empties`() throws {
-        let session = ScoreEditSession(score: EditingFixtures.chordAtIndex1())
+    /// Contrast with the test above: `.delete` collapses too, but only when the slot it clears is the bar-voice's
+    /// ONLY timed one. ⌫ means "clear what I selected", so a bar that still has rests in it keeps them rather than
+    /// letting one deleted note swallow them.
+    @Test func `delete collapses a bar whose only timed slot it clears`() throws {
+        let session = ScoreEditSession(score: EditingFixtures.wholeChordBar())
         let slot = VoiceElementID(EditingFixtures.restID(element: 1))
 
         #expect(session.apply(.delete(at: slot)))
 
         let voice = try #require(session.score[EditingFixtures.staff0]?.measures[0].voices[0])
         #expect(voice.elements.count == 2) // time signature + one measure rest
+        #expect(voice.elements[1] == .rest(duration: .measure))
+    }
+
+    @Test func `delete leaves the rests it did not clear alone`() throws {
+        let session = ScoreEditSession(score: EditingFixtures.chordAtIndex1())
+        let slot = VoiceElementID(EditingFixtures.restID(element: 1))
+
+        #expect(session.apply(.delete(at: slot)))
+
+        let voice = try #require(session.score[EditingFixtures.staff0]?.measures[0].voices[0])
+        // Time signature + four quarter rests: the deleted note's slot, and the three nobody touched.
+        #expect(voice.elements.count == 5)
+        #expect(voice.elements[1] == .rest(duration: .quarter))
     }
 
     @Test func `writeRest over a rest is the plain re-time`() {

@@ -19,7 +19,20 @@ extension ScoreEditSession {
             return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
         case let .deleteRange(range):
             let command = DeleteRange(over: range)
-            return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
+            // The one intent here that hands back the PLANNED COMPOSITE rather than the command. A command's
+            // `affectedLocation` is a pure function of its inputs, so `DeleteRange` can only ever report
+            // `range.start` — which is the ANCHOR of a backward-drawn range (Shift+← draws one), and, when the bar
+            // collapses to a single measure rest, an element index that no longer exists. The composite carries the
+            // planner's own answer instead: the first rest the delete actually wrote. That is the slot a host
+            // collapses its range selection onto, so getting it wrong is visible, not bookkeeping.
+            //
+            // A plan that THROWS still falls back to the command, for the reason the doc comment above gives: the
+            // refusal is the command's to raise at apply time, where the session records it.
+            do {
+                return try command.plan(in: score, ids: ids)
+            } catch {
+                return command
+            }
         case let .setAccidentalsInRange(range, accidental):
             let command = SetAccidentalsInRange(over: range, accidental: accidental)
             return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }

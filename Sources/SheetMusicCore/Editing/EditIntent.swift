@@ -16,6 +16,9 @@ public enum EditIntent: Sendable, Equatable {
     case inputNote(at: RestID, pitch: Int, tpc: Int, duration: NoteDuration?)
     case setRestDuration(at: VoiceElementID, duration: NoteDuration)
     case setChordDuration(at: VoiceElementID, duration: NoteDuration)
+    /// Turn the chord or rest at `at` into a rest of the same length, and change nothing else in the bar. The one
+    /// exception is a slot that is its bar-voice's ONLY timed element: clearing it leaves a silent bar, spelled as
+    /// one `.measure` rest. This is `.deleteRange`'s rule read for a range of one.
     case delete(at: VoiceElementID)
     /// Several intents as one undo step.
     indirect case composite([EditIntent])
@@ -230,8 +233,11 @@ public enum EditIntent: Sendable, Equatable {
     /// when no chord gains a note; refused as `.invalidInterval` outside ±1…±10.
     case addIntervalToSelection(over: VoiceElementRange, steps: Int)
 
-    /// Turn every chord in `over` into a rest, collapsing each bar-voice left all-rests into one measure rest.
-    /// Resolves to nothing to apply when the range holds no chord.
+    /// Turn everything `over` covers into rests, and nothing outside it. Per bar-voice, the covered slots are
+    /// re-spelled as the metric-aligned rests that total their combined length; a bar-voice the range covers
+    /// ENTIRELY collapses to one measure rest instead, tuplets dissolved. Rests are re-spelled like anything else,
+    /// so a range holding only rests is not automatically inert. Tuplet members keep their own length and their
+    /// bracket. Resolves to nothing to apply when no bar-voice would read differently afterwards.
     case deleteRange(over: VoiceElementRange)
 
     /// Apply `accidental` to every note in `over` (letter kept, pitch moved), or clear the glyph with `nil`.

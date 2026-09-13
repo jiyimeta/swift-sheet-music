@@ -62,14 +62,14 @@ struct RangePlanningIdentityTests {
         let command = DeleteRange(over: range)
         let planned = try command.detailedPlan(in: before, ids: initial)
         let plan = try #require(planned)
-        #expect(plan.commands.count == 3)
+        // One command, not three: the whole bar-voice is covered, so the collapse IS the rewrite rather than a
+        // second pass over two deletes that already ran.
+        #expect(plan.commands.count == 1)
         let collapse = try #require(plan.commands.last as? ReplaceVoiceElements)
-        #expect(collapse.slots == [VoiceSlot(
-            identity: .keep(Fixture.minted(initial, 1)), element: .rest(duration: .measure),
-        )])
+        #expect(collapse.slots == [VoiceSlot(identity: .fresh, element: .rest(duration: .measure))])
         #expect(Fixture.ids(Fixture.elements(plan.result)) == [Fixture.minted(initial, 1)])
         #expect(Fixture.elements(plan.result).values == [.rest(duration: .measure)])
-        #expect(plan.idAllocator == Fixture.advanced(initial, by: 2))
+        #expect(plan.idAllocator == Fixture.advanced(initial, by: 1))
         Fixture.expectSameScore(editor.score, before)
         #expect(editor.idAllocator == initial)
         try editor.apply(command)
