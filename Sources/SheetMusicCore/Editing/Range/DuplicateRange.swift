@@ -177,6 +177,14 @@ extension DuplicateRange {
                 availableTicks: geometry.totalTicks,
             ))
         }
+        // Before the pieces land, so the gap each edge is measured against is still the one the rebuild will
+        // clear — a destination tuplet the copy cuts widens it, and the rebuild destroys that tuplet.
+        for command in RangeCopyVoiceRebuild.barlineTieSeals(
+            for: pieces, staff: stream.staff, voiceIndex: stream.voiceIndex, in: scratch,
+        ) {
+            _ = try command.apply(to: &scratch, ids: &ids)
+            commands.append(command)
+        }
         for piece in pieces {
             try createVoices(
                 upTo: stream.voiceIndex, staff: stream.staff, measureIndex: piece.measureIndex,
