@@ -17,6 +17,23 @@ extension Score {
         )
     }
 
+    /// `range`'s two bounds in chronological order — the one with the earlier onset first, ties kept as
+    /// `(start, end)` — rather than the order `.staff`/`.measureIndex` addresses would suggest. `nil` when
+    /// either bound's onset does not resolve in this score.
+    ///
+    /// `start` and `end` are only "first" and "second" by construction: a range's two bounds may fall on either
+    /// staff in either order, so whichever one actually sounds first cannot be read off their addresses.
+    /// Ordering by address instead of by onset is exactly the defect class this package's range-copy work found
+    /// and fixed twice while it was being built — a bound picked by address rather than by time silently drops
+    /// material outside the span the caller actually meant. Use this instead of comparing `.staff` or
+    /// `.measureIndex` directly whenever "sorted" is supposed to mean "in time".
+    public func chronologicalBounds(
+        of range: VoiceElementRange,
+    ) -> (earlier: VoiceElementID, later: VoiceElementID)? {
+        guard let startOnset = onset(of: range.start), let endOnset = onset(of: range.end) else { return nil }
+        return startOnset <= endOnset ? (range.start, range.end) : (range.end, range.start)
+    }
+
     /// The same resolution as `voiceElements(in:)`, with the region stated outright rather than read off two
     /// slots: the staves to cover, and the half-open tick span `[posLo, posHi)` to cover them over.
     ///

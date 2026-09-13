@@ -12,6 +12,9 @@ import SheetMusicFoundation
 /// back into the SAME score: there is no tuplet-boundary refusal, no spanner re-anchoring, no outer-tie
 /// clearing. A payload is landed by the paste engine those types already serve, so the shaping this type does
 /// not do here is done once, downstream, for both a duplicate and a paste.
+///
+/// Internal on purpose: a host reaches this through `Score.clipboardDocument(for:)` below, under a name that
+/// says what the result IS rather than how this type built it.
 enum RangeCopyPayload {
     /// The copied range as a self-contained score: the covered staves, the covered measures, each voice
     /// trimmed to the range's tick span. `nil` when the range resolves to nothing.
@@ -197,5 +200,25 @@ enum RangeCopyPayload {
             if let found { prevailing = found }
         }
         return prevailing
+    }
+}
+
+extension Score {
+    /// The document a ⌘C on `range` puts on the clipboard: a whole, self-contained `Score` — not a fragment
+    /// addressed against this score — holding exactly the staves and measures `range` covers, with the range's
+    /// own tick span made absolute (measure zero of the result is the range's first measure) and its prevailing
+    /// time signature made explicit when the range starts mid-score.
+    ///
+    /// Encode the result with `MSCXEncoder.encode(_:)` before writing it to a pasteboard. That pairing —
+    /// `clipboardDocument(for:)` to build the document, `MSCXEncoder`/`MSCXParser` to round-trip its bytes — is
+    /// the whole design, and it does not show up by inspection alone: `SheetMusicMSCX` (where `MSCXEncoder`
+    /// lives) depends on `SheetMusicCore`, so nothing in this package can encode the document itself, and a host
+    /// linking both is the only place the pairing can be completed. The bytes this produces are exactly what
+    /// `PasteRange`'s `payload` parameter expects back from a `PasteRange.PayloadReader` (in practice,
+    /// `MSCXParser.parse`).
+    ///
+    /// `nil` when `range` resolves to nothing — an empty selection, or bounds that do not resolve in this score.
+    public func clipboardDocument(for range: VoiceElementRange) -> Score? {
+        RangeCopyPayload.score(for: range, in: self)
     }
 }
