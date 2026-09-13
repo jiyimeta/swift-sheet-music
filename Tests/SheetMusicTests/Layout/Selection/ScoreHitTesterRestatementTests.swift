@@ -142,6 +142,30 @@ import Testing
             })
         }
 
+        /// The consequence of a restatement naming its declaration: one anchor is now drawn in more than one
+        /// place, systems apart. A host floating a control beside the selection needs the places rather than
+        /// their envelope — `clefHitRect` answers with the declaration, `clefHitRects` with all of them.
+        @Test("a clef redrawn on the next system reports one rectangle per place")
+        func clefHitRectsPerPlace() throws {
+            guard #available(macOS 15.0, *) else { return }
+            // No clef change, so the only clef in the score is m0's — and the second system opens by redrawing it.
+            let doc = layout(Self.score(clefChange: false))
+            let continuation = try system(notContaining: 0, in: doc)
+            let drawn = continuation.measures.flatMap(\.elements).compactMap { element -> ClefAnchor? in
+                guard case let .clef(_, _, anchor) = element else { return nil }
+                return anchor
+            }
+            let anchor = try #require(drawn.first)
+            let tester = ScoreHitTester(document: doc)
+
+            let rects = tester.clefHitRects(for: anchor)
+
+            #expect(rects.count == 2)
+            // Document order, and the two are a system apart — which is exactly why their union is not an answer.
+            #expect(rects.count == 2 && rects[0].maxY < rects[1].minY)
+            #expect(tester.clefHitRect(for: anchor) == rects.first)
+        }
+
         /// **The one QA found in page mode** (2026-09-12): on page two the redrawn key signature is the only
         /// signature on the sheet, and it used to answer nothing. It now names the bar that declared what it is
         /// redrawing — here m0, whose one sharp is still in force on the system that opens with m2's change...

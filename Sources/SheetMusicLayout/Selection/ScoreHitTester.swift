@@ -461,7 +461,7 @@ public struct ScoreHitTester: Sendable {
 
     /// y-offset applied by the renderer for `rawType`. Kept in
     /// sync with `ScoreLayerBuilder.drawClef`'s switch.
-    private static func clefYOffset(
+    static func clefYOffset(
         rawType: String, sp: CGFloat,
     ) -> CGFloat {
         switch NotatedClef(rawType: rawType) {
@@ -515,37 +515,5 @@ public struct ScoreHitTester: Sendable {
         let ex = point.x - closestX
         let ey = point.y - closestY
         return (ex * ex + ey * ey).squareRoot()
-    }
-
-    /// Document-coord rectangle of the clef glyph identified by
-    /// `anchor`. Returns nil when no layout element matches —
-    /// e.g. after a re-layout invalidates the anchor.
-    public func clefHitRect(for anchor: ClefAnchor) -> CGRect? {
-        let sp = document.metrics.sp
-        for system in document.systems {
-            for measure in system.measures {
-                let base = CGPoint(
-                    x: system.origin.x + measure.origin.x,
-                    y: system.origin.y + measure.origin.y,
-                )
-                for el in measure.elements {
-                    guard case let .clef(rawType, origin, elAnchor) = el,
-                          elAnchor == anchor
-                    else { continue }
-                    let yOffset = Self.clefYOffset(
-                        rawType: rawType, sp: sp,
-                    )
-                    let centerX = base.x + origin.x
-                    let centerY = base.y + origin.y + yOffset
-                    return CGRect(
-                        x: centerX - sp,
-                        y: centerY - sp * 2.5,
-                        width: sp * 2,
-                        height: sp * 5,
-                    )
-                }
-            }
-        }
-        return nil
     }
 }
