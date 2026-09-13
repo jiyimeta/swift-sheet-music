@@ -35,7 +35,12 @@ struct RangePlanningTests {
         #expect(session.lastRefusal?.reason == .nothingToApply)
         #expect(!session.apply(.transposeRange(over: Self.rests, semitones: 5, respellInKey: false)))
         #expect(!session.apply(.addIntervalToSelection(over: Self.chords, steps: 1)))
-        #expect(!session.apply(.deleteRange(over: Self.rests)))
+        // Not `Self.rests`: a range covering a bar-voice's whole rhythm is never inert, rests or not — measure 1's
+        // four quarter rests collapse to one measure rest. Measure 3 already IS one measure rest, so there is
+        // genuinely nothing for the delete to write.
+        #expect(!session.apply(.deleteRange(
+            over: VoiceElementRange(start: Self.slot(3, 0), end: Self.slot(3, 0)),
+        )))
         #expect(!session.apply(.setAccidentalsInRange(over: Self.chords, accidental: nil)))
         // Not `Self.rests`: measure 1 also holds a second voice — one whole-measure rest — whose onset falls
         // inside `Self.rests`' tick span too (`Score.voiceElements(in:)` resolves every voice, by design), so no

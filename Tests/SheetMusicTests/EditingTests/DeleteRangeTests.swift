@@ -13,18 +13,21 @@ struct DeleteRangeTests {
         score.parts[0].staves[0].measures[measure].voices[index]
     }
 
-    @Test("every chord becomes a rest; a bar left all-rests collapses to one measure rest")
-    func deletesAndCollapses() throws {
+    @Test("the covered slots become the rests that spell their combined length")
+    func deletedRunIsRespelled() throws {
         var score = EditingFixtures.parityFixture() // m0: [ts, C4 q, D4 q, r, r]
         _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 2))).apply(to: &score)
         #expect(Self.voice(score, 0).elements == [
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4)), .rest(duration: .measure),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(duration: .half), .rest(duration: .quarter), .rest(duration: .quarter),
         ])
         #expect(Self.voice(score, 0).tuplets.isEmpty)
     }
 
-    @Test("a bar that still holds a note keeps its rhythm")
-    func partialDeleteKeepsRhythm() throws {
+    /// The rule this command exists to keep: the two quarter rests the range did NOT cover are still two quarter
+    /// rests. Before 2026-09-13 deleting the two notes collapsed the whole bar to a measure rest, swallowing them.
+    @Test("rests outside the range are left exactly as they are")
+    func restsOutsideTheRangeSurvive() throws {
         var score = EditingFixtures.parityFixture()
         _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 1))).apply(to: &score)
         #expect(Self.voice(score, 0).elements == [
@@ -35,10 +38,20 @@ struct DeleteRangeTests {
         ])
     }
 
-    /// The mirror of `partialDeleteKeepsRhythm`: the survivor sits at tick 0 rather than after the deleted slot.
-    /// The collapse used to be planned against whatever element started at tick 0 — which here is the C4 nobody
-    /// deleted — and `FullMeasureRestCollapse` exempts the slot it is named with from its all-rests check, so the
-    /// bar collapsed and took the C4 with it.
+    /// The spec's own example: two dotted eighths deleted together total 6/16, which reads as a quarter rest plus an
+    /// eighth rest — not as the two dotted eighth rests a slot-by-slot delete would leave.
+    @Test("two dotted eighths come back as a quarter rest plus an eighth rest")
+    func dottedRunIsRespelledOnTheGrid() throws {
+        var score = Self.dottedEighthBar()
+        _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 2))).apply(to: &score)
+        #expect(Self.voice(score, 0).elements == [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(duration: .quarter), .rest(duration: .eighth),
+            .rest(duration: .quarter), .rest(duration: .eighth), .rest(duration: .quarter),
+        ])
+    }
+
+    /// The mirror of `restsOutsideTheRangeSurvive`: the survivor sits at tick 0 rather than after the deleted slot.
     @Test("a survivor on beat 1 is kept when a later beat is deleted")
     func survivorOnBeatOneIsKept() throws {
         var score = EditingFixtures.parityFixture() // m0: [ts, C4 q, D4 q, r, r]
@@ -50,18 +63,18 @@ struct DeleteRangeTests {
         ])
     }
 
-    @Test("deleting beats 2-4 of a full bar keeps beat 1 and its rhythm")
+    @Test("deleting beats 2-4 of a full bar keeps beat 1 and spells the rest as one quarter plus one half")
     func deletingTailKeepsBeatOne() throws {
         var score = Self.fourChordBar()
         _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(0, 2), end: Self.slot(0, 4))).apply(to: &score)
         #expect(Self.voice(score, 0).elements == [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
-            .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+            .rest(duration: .quarter), .rest(duration: .half),
         ])
     }
 
-    @Test("deleting all four beats still collapses to one measure rest")
+    @Test("deleting all four beats collapses to one measure rest")
     func deletingEveryBeatCollapses() throws {
         var score = Self.fourChordBar()
         _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 4))).apply(to: &score)
@@ -88,6 +101,17 @@ struct DeleteRangeTests {
         return score
     }
 
+    /// A 4/4 bar opening with two dotted eighths (3/16 + 3/16), then rests filling the remaining 10/16.
+    private static func dottedEighthBar() -> Score {
+        let dotted = NoteDuration.eighth.dotted(1)
+        return VoiceIdentityFixtures.score([[Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: dotted, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: dotted, notes: [Note(pitch: 62, tpc: 16)])),
+            .rest(duration: .quarter), .rest(duration: .eighth), .rest(duration: .quarter),
+        ])]])
+    }
+
     @Test("undo restores the score exactly, collapse included")
     func undoIsExact() throws {
         var score = EditingFixtures.parityFixture()
@@ -111,12 +135,54 @@ struct DeleteRangeTests {
         #expect(Self.voice(score, 0, 1).elements == [.rest(duration: .measure)])
     }
 
-    @Test("a range of rests is left exactly as it is")
-    func restsAreLeftAlone() throws {
+    /// A range that holds nothing but rests is not inert: covering the bar's whole rhythm means the bar is silent,
+    /// and a silent bar is one measure rest. `parityFixture`'s bar 1 is four quarter rests.
+    @Test("a bar's worth of rests collapses to one measure rest")
+    func coveredRestsCollapse() throws {
+        var score = EditingFixtures.parityFixture()
+        _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(1, 0), end: Self.slot(1, 3))).apply(to: &score)
+        #expect(Self.voice(score, 1).elements == [.rest(duration: .measure)])
+        #expect(Self.voice(score, 1, 1).elements == [.rest(duration: .measure)])
+    }
+
+    /// Part of that same bar, though, is re-spelled and nothing else moves: the first two quarter rests total a
+    /// half, the last two stay put.
+    @Test("part of a bar's rests is re-spelled without touching the rest of it")
+    func partOfTheRestsIsRespelled() throws {
+        var score = EditingFixtures.parityFixture()
+        _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(1, 0), end: Self.slot(1, 1))).apply(to: &score)
+        #expect(Self.voice(score, 1).elements == [
+            .rest(duration: .half), .rest(duration: .quarter), .rest(duration: .quarter),
+        ])
+    }
+
+    /// A `.measure` rest the range covers on its own is already the spelling the collapse would write, so the
+    /// command has nothing to do — and must not rewrite it as the literal `.whole` that totals the same ticks.
+    @Test("a measure rest covered on its own is left as it is")
+    func measureRestIsInert() throws {
         var score = EditingFixtures.parityFixture()
         let before = score
-        _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(1, 0), end: Self.slot(1, 3))).apply(to: &score)
+        _ = try DeleteRange(over: VoiceElementRange(start: Self.slot(3, 0), end: Self.slot(3, 0))).apply(to: &score)
         #expect(score == before)
+    }
+
+    /// Tuplet members keep their own length and their bracket: folding them into a metric fill would be dissolving
+    /// the tuplet, which is not what deleting its notes means.
+    @Test("a partly covered triplet keeps its bracket and its member lengths")
+    func tupletMembersAreClearedInPlace() throws {
+        var score = TupletIdentityFixtures.score([
+            VoiceIdentityFixtures.chord(), VoiceIdentityFixtures.chord(), VoiceIdentityFixtures.chord(),
+        ])
+        let range = VoiceElementRange(
+            start: VoiceIdentityFixtures.location(0), end: VoiceIdentityFixtures.location(1),
+        )
+        _ = try DeleteRange(over: range).apply(to: &score)
+        let voice = TupletIdentityFixtures.voice(score)
+        #expect(voice.elements.values == [
+            .rest(duration: .quarter), .rest(duration: .quarter), VoiceIdentityFixtures.chord(),
+        ])
+        #expect(voice.tupletSpans.map(\.startIndex) == [0])
+        #expect(voice.tupletSpans.map(\.endIndex) == [2])
     }
 
     @Test("a range that resolves to nothing is refused")

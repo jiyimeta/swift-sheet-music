@@ -151,8 +151,10 @@ enum EditReplayScript {
         // Step 8a: shorten measure 2's seeded chord — a setChordDuration wire pin — before deleting it. The shrink
         // inserts a trailing rest AFTER element 1, so element 1 itself, which step 8b targets next, doesn't move.
         let step8a = EditReplayStep.intent(.setChordDuration(at: slot(2, 1), duration: .eighth))
-        // Step 8b: delete that same chord. It was the only non-rest content left in measure 2, so this collapses
-        // the whole bar to a single measure rest (`FullMeasureRestCollapse`) rather than leaving a hole.
+        // Step 8b: delete that same chord. Step 8a's shrink left a trailing rest beside it, so this does NOT
+        // collapse the bar — the rests nobody selected stay, and the chord's slot becomes an eighth rest. (It did
+        // collapse before 2026-09-13, when `FullMeasureRestCollapse` fired on "everything else is already a rest"
+        // instead of on coverage.)
         let step8b = EditReplayStep.intent(.delete(at: slot(2, 1)))
         // Step 9: remove the tuplet steps 5a/5b built. `RemoveTuplet` keeps the first member WITH notes as the
         // replacement content, so this collapses back to a single G4 quarter (step 5b's write), not silence.

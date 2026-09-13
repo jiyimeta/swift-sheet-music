@@ -55,13 +55,18 @@ extension ScoreEditSession {
             }
             return SetChordDuration(at: location, duration: duration)
         case let .delete(location):
-            // A delete that empties its bar leaves ONE measure rest, not a hole — the same rule the write side
-            // spells as `.measure` rather than `.whole`. `ReplaceVoiceElements.affectedLocation` always reports
-            // element 0 (usually the clef or time signature the rest lands after, not the rest itself), so the
-            // collapse's own `restElementIndex` is threaded through explicitly rather than trusted to the command's
-            // own report — otherwise `lastAffectedLocation` would name the wrong element after every bar-emptying
-            // delete, exactly as `FullMeasureRestCollapse.Plan.restElementIndex`'s doc comment warns.
-            if let plan = FullMeasureRestCollapse.plan(deleting: location, in: score) {
+            // Deleting the voice's ONLY timed slot leaves ONE measure rest, not a whole rest that merely totals the
+            // same ticks — the same rule the write side spells as `.measure`. It is the single-slot reading of the
+            // range rule: a bar-voice whose every timed slot is being cleared reads as "silent bar". Anything left
+            // over — even a rest — keeps the bar's rhythm and this falls through to a plain same-length rest.
+            // `ReplaceVoiceElements.affectedLocation` always reports element 0 (usually the clef or time signature
+            // the rest lands after, not the rest itself), so the collapse's own `restElementIndex` is threaded
+            // through explicitly rather than trusted to the command's own report — otherwise `lastAffectedLocation`
+            // would name the wrong element after every bar-emptying delete, exactly as
+            // `FullMeasureRestCollapse.Plan.restElementIndex`'s doc comment warns.
+            if let plan = FullMeasureRestCollapse.plan(
+                clearing: [location.elementIndex], in: VoiceRef(location), of: score,
+            ) {
                 return CompositeEditCommand(
                     commands: [plan.command],
                     location: VoiceElementID(

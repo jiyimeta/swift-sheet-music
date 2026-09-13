@@ -1,12 +1,17 @@
 import SheetMusicFoundation
 
-/// Turns "the last note in this voice-measure just got deleted" into a single full-measure rest.
+/// Turns "the caller is about to clear every timed slot in this voice-measure" into a single full-measure rest.
 ///
-/// `DeleteVoiceElement` swaps the element for a rest of the SAME duration, which keeps the measure's total length
-/// right but leaves the leftovers of whatever rhythm used to be there — delete the quarter note in front of three
-/// quarter rests and you get four quarter rests, when what the measure now means is simply "silent bar". MuseScore
-/// writes that as one measure-filling rest (`NoteDuration.measure`, engraved as a whole rest whatever the meter),
-/// and so does this.
+/// Clearing a slot leaves a rest of the same length behind, which keeps the measure's tick total right but spells a
+/// silent bar as the leftovers of whatever rhythm used to be there — four quarter rests where what the measure now
+/// means is simply "silent bar". MuseScore writes that as one measure-filling rest (`NoteDuration.measure`,
+/// engraved as a whole rest whatever the meter), and so does this.
+///
+/// **The collapse is gated on COVERAGE, not on what survives.** It applies only when the caller is clearing every
+/// timed slot of the voice — a rest the user did not select is a rest the edit may not touch, so a bar holding a
+/// half note and a half rest gives back two half rests when only the note is deleted, never a measure rest. (Before
+/// 2026-09-13 the test was "is everything else already a rest?", which let one deleted note swallow rests nobody
+/// had selected.)
 ///
 /// The collapse is planned BEFORE the delete rather than applied after it, so the whole thing stays one command and
 /// therefore one undo step: `ReplaceVoiceElements` subsumes the delete instead of following it.
@@ -19,26 +24,15 @@ public enum FullMeasureRestCollapse {
         public let restElementIndex: Int
     }
 
-    /// A plan for deleting `location`, or `nil` when the delete doesn't empty the measure — in which case the caller
-    /// falls back to a plain `DeleteVoiceElement`.
+    /// A plan for clearing the timed slots `covered` of `voice`, or `nil` when they are not all of them — in which
+    /// case the caller falls back to whatever it does with a partial clear (`DeleteVoiceElement` for one slot, an
+    /// aligned rest fill for a range). Also `nil` when the voice already reads as one measure rest.
     ///
     /// Non-timed elements (clef / key sig / time sig / barline / harmony / …) are carried over untouched and in
     /// order; only the timed run collapses. Tuplets go with it: their bracket spans element indices that no longer
     /// exist once the run is one slot long.
-    public static func plan(deleting location: VoiceElementID, in score: Score) -> Plan? {
-        guard let staff = score[location.staff],
-              staff.measures.indices.contains(location.measureIndex)
-        else { return nil }
-        let voices = staff.measures[location.measureIndex].voices
-        guard voices.indices.contains(location.voiceIndex) else { return nil }
-        let voice = voices[location.voiceIndex]
-        guard voice.elements.indices.contains(location.elementIndex) else { return nil }
-
-        // Every other timed slot has to be a rest already — otherwise deleting this one leaves music behind and the
-        // measure keeps its rhythm.
-        for (index, element) in voice.elements.enumerated() where index != location.elementIndex {
-            if case let .chord(chord) = element, !chord.notes.isEmpty { return nil }
-        }
+    public static func plan(clearing covered: Set<Int>, in ref: VoiceRef, of score: Score) -> Plan? {
+        guard let voice = score[voice: ref] else { return nil }
 
         var elements: [VoiceSlot] = []
         var restElementIndex: Int?
@@ -47,6 +41,8 @@ public enum FullMeasureRestCollapse {
                 elements.append(VoiceSlot(identity: .keep(voice.elements.eid(at: index)), element: element))
                 continue
             }
+            // A timed slot the caller is NOT clearing keeps the bar's rhythm, whether it holds notes or not.
+            guard covered.contains(index) else { return nil }
             if restElementIndex == nil {
                 restElementIndex = elements.count
                 elements.append(VoiceSlot(
@@ -61,9 +57,9 @@ public enum FullMeasureRestCollapse {
 
         return Plan(
             command: ReplaceVoiceElements(
-                staff: location.staff,
-                measureIndex: location.measureIndex,
-                voiceIndex: location.voiceIndex,
+                staff: ref.staff,
+                measureIndex: ref.measureIndex,
+                voiceIndex: ref.voiceIndex,
                 slots: elements,
                 tuplets: [],
             ),
