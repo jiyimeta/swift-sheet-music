@@ -157,7 +157,10 @@ extension MSCXTopLevelStaff {
         }
         return MSCXTopLevelStaff(
             mscxID: id,
-            measures: measures,
+            // A tie is two half-spanners, and a file can carry one whose
+            // other half is gone. MuseScore drops such a side while reading;
+            // so do we, here, where the whole staff is finally in hand.
+            measures: MSCXTiePairing.pruningUnpairedTies(in: measures),
             systemElementsByMeasure: systemElementsByMeasure,
             systemElementEIDsByMeasure: systemElementEIDsByMeasure,
             measureEIDs: measureEIDs,
