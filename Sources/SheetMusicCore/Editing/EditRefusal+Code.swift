@@ -35,6 +35,8 @@ extension EditRefusal {
             "edit.emptyPayload"
         case .unreadablePayload:
             "edit.unreadablePayload"
+        case .noPayloadReader:
+            "edit.noPayloadReader"
         case .nothingToUndo:
             "edit.nothingToUndo"
         case .nothingToRedo:

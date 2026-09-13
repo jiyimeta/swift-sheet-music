@@ -476,4 +476,11 @@ public enum EditIntent: Sendable, Equatable {
     /// voice indices. Bars are appended when the copy runs past the end of the score. Chords and rests travel;
     /// the range's own clefs and signatures do not.
     case duplicateRange(over: VoiceElementRange)
+
+    // Appended for the clipboard project (spec 2026-09-13) — index 86.
+
+    /// Write the material a `.mscx` payload carries into the score at `location`, overwriting from there — ⌘V for
+    /// a range copy. The payload is a self-contained score, so it may have come from another document or another
+    /// window; a payload that will not parse is refused rather than partially applied.
+    case pasteRange(at: VoiceElementID, payload: String)
 }

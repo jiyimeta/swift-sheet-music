@@ -81,13 +81,22 @@ public struct PasteRange: EditCommand, RangeCopyWriting {
 extension PasteRange {
     /// The payload parsed back into a score, or `.unreadablePayload`.
     ///
-    /// Every way the reader can fail collapses into the one reason on purpose: a host cannot act differently on
+    /// Every way the PARSER can fail collapses into the one reason on purpose: a host cannot act differently on
     /// "not XML at all" than on "XML that is not a score", and the underlying error is a parser's, phrased for a
     /// file the user chose to open rather than for bytes that happened to be on a pasteboard.
+    ///
+    /// One exception: `readPayload` itself can refuse before it ever looks at the bytes — `ScoreEditSession`'s
+    /// default `payloadReader` does exactly that, with `.noPayloadReader`, when no host has wired a real one in.
+    /// That refusal is passed through unchanged rather than relabeled `.unreadablePayload`: the two name different
+    /// problems (nobody configured the session versus the clipboard held garbage), and collapsing them here would
+    /// undo the distinction `ScoreEditSession`'s default exists to make.
     private func readPayloadScore() throws -> Score {
         do {
             return try readPayload(Data(payload.utf8))
         } catch {
+            if case let SheetMusicError.invalidEdit(refusal) = error, refusal.reason == .noPayloadReader {
+                throw error
+            }
             throw Self.refused(.unreadablePayload)
         }
     }

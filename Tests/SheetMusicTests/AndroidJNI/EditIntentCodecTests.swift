@@ -243,6 +243,9 @@ struct EditIntentCodecTests {
             .respellRange(over: range, mode: .preferFlats),
             // Appended for the duplicate-range project (spec 2026-09-13) — index 85.
             .duplicateRange(over: range),
+            // Appended for the clipboard project (spec 2026-09-13) — index 86. The payload string carries a `<`
+            // and an `&` so the round trip covers XML-flavored text getting escaped and unescaped correctly.
+            .pasteRange(at: slot, payload: "<Chord duration=\"1/4\"> & </Chord>"),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)

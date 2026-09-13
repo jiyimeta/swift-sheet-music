@@ -19,6 +19,7 @@ extension ScoreEditSession {
     /// `.composite` exceeds `maxCompositeIntentDepth`.
     static func command( // swiftlint:disable:this function_body_length
         for intent: EditIntent, in score: Score, ids: EIDAllocator, depth: Int,
+        payloadReader: @escaping PasteRange.PayloadReader = ScoreEditSession.refusingPayloadReader,
     ) throws -> (any EditCommand)? {
         switch intent {
         case let .inputNote(location, pitch, tpc, duration):
@@ -90,7 +91,9 @@ extension ScoreEditSession {
             //
             // The scratch score is a value copy and never leaves this function; a member that throws while being
             // planned forward is left to throw again for real at apply time, where the refusal is recorded.
-            let commands = try compositeCommands(for: intents, in: score, ids: ids, depth: depth)
+            let commands = try compositeCommands(
+                for: intents, in: score, ids: ids, depth: depth, payloadReader: payloadReader,
+            )
             guard let first = commands.first else { return nil }
             guard commands.count > 1 else { return first }
             return CompositeEditCommand(commands: commands, location: first.affectedLocation)
@@ -131,8 +134,8 @@ extension ScoreEditSession {
         case .setLayoutBreak, .setBarLine, .setRepeatBarLines, .setMeasureRepeat, .moveToVoice:
             return structuralParityCommand(for: intent, in: score)
         case .transposeRange, .addIntervalToSelection, .deleteRange, .setAccidentalsInRange, .setDurationInRange,
-             .respellRange, .duplicateRange:
-            return rangeCommand(for: intent, in: score, ids: ids)
+             .respellRange, .duplicateRange, .pasteRange:
+            return rangeCommand(for: intent, in: score, ids: ids, payloadReader: payloadReader)
         case .setClef, .removeClef, .setTempo, .setStaffText, .setDynamic, .setFermata, .setBreath, .setJumps,
              .setMarkers, .setChordSymbol, .setLyricSyllables:
             return markCommand(for: intent, in: score)
@@ -178,12 +181,15 @@ extension ScoreEditSession {
     /// back.
     private static func compositeCommands(
         for intents: [EditIntent], in score: Score, ids: EIDAllocator, depth: Int,
+        payloadReader: @escaping PasteRange.PayloadReader,
     ) throws -> [any EditCommand] {
         var scratch = ids
         var working = score
         var commands: [any EditCommand] = []
         for intent in intents {
-            guard let planned = try command(for: intent, in: working, ids: scratch, depth: depth + 1) else { continue }
+            guard let planned = try command(
+                for: intent, in: working, ids: scratch, depth: depth + 1, payloadReader: payloadReader,
+            ) else { continue }
             _ = try? planned.apply(to: &working, ids: &scratch)
             commands.append(planned)
         }

@@ -48,6 +48,13 @@ public struct EditRefusal: Sendable, Hashable {
         /// rather than a bug. It deliberately carries NO score address: nothing about the score being pasted
         /// into is wrong, and naming a slot in it would point a host's copy at the innocent party.
         case unreadablePayload
+        /// `PasteRange` was asked to plan or apply, but the `ScoreEditSession` it ran through carries no
+        /// `payloadReader` — the default every session is constructed with, which refuses rather than guess at a
+        /// format it cannot read. Distinct from `.unreadablePayload` on purpose: that reason means the bytes were
+        /// looked at and rejected, so a host reads it as "bad clipboard contents"; this one means the bytes were
+        /// never looked at at all, so a host reads it as "wire up `MSCXParser.parse` at the seam that links
+        /// `SheetMusicMSCX`" — sending it to its own wiring rather than to the clipboard.
+        case noPayloadReader
         case nothingToUndo
         case nothingToRedo
         case compositeTooDeep(limit: Int)
@@ -215,6 +222,8 @@ public struct EditRefusal: Sendable, Hashable {
             "empty payload"
         case .unreadablePayload:
             "the payload could not be read as a score"
+        case .noPayloadReader:
+            "no payload reader was supplied"
         case .nothingToUndo:
             "nothing to undo"
         case .nothingToRedo:

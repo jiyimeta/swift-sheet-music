@@ -113,3 +113,18 @@ public struct DuplicateRangeIntentWire {
         range.decoded()
     }
 }
+
+@WireFormat
+public struct PasteRangeIntentWire {
+    public var location: VoiceElementIDWire
+    public var payload: String
+
+    public init(location: VoiceElementID, payload: String) {
+        self.location = VoiceElementIDWire(from: location)
+        self.payload = payload
+    }
+
+    public func decoded() -> (location: VoiceElementID, payload: String) {
+        (location: location.decoded(), payload: payload)
+    }
+}
