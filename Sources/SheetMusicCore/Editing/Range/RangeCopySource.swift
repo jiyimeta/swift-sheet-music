@@ -65,7 +65,7 @@ struct RangeCopySource {
         startTick = start
         lengthTicks = end - start
 
-        streams = Self.makeStreams(from: targets, in: score)
+        streams = Self.makeStreams(from: targets, in: score, rangeEnd: end)
         guard !streams.isEmpty else { return nil }
     }
 }
@@ -73,7 +73,7 @@ struct RangeCopySource {
 extension RangeCopySource {
     /// One stream per (staff, voice). `voiceElements(in:)` yields ids in staff, measure, voice, element order, so
     /// appending in encounter order keeps every stream's own elements ascending with no separate sort.
-    private static func makeStreams(from targets: [VoiceElementID], in score: Score) -> [Stream] {
+    private static func makeStreams(from targets: [VoiceElementID], in score: Score, rangeEnd: Int) -> [Stream] {
         var order: [StreamKey] = []
         var idsByKey: [StreamKey: [VoiceElementID]] = [:]
         for id in targets {
@@ -87,14 +87,14 @@ extension RangeCopySource {
             let geometry = geometries[key.staff] ?? RangeCopyGeometry(staff: key.staff, in: score)
             geometries[key.staff] = geometry
             guard let ids = idsByKey[key] else { return nil }
-            return makeStream(key: key, ids: ids, geometry: geometry, score: score)
+            return makeStream(key: key, ids: ids, geometry: geometry, score: score, rangeEnd: rangeEnd)
         }
     }
 
     /// Builds one (staff, voice) stream: the copied elements with cleared spanners and outer ties, plus the
     /// tuplets that survived intact.
     private static func makeStream(
-        key: StreamKey, ids: [VoiceElementID], geometry: RangeCopyGeometry, score: Score,
+        key: StreamKey, ids: [VoiceElementID], geometry: RangeCopyGeometry, score: Score, rangeEnd: Int,
     ) -> Stream? {
         let sourceDurations = score.effectiveMeasureDurations(
             partIndex: key.staff.partIndex, staffIndex: key.staff.staffIndexInPart,
@@ -107,8 +107,15 @@ extension RangeCopySource {
                   // `tickCount(division:in:)` resolves a `.measure` duration against its own bar's effective
                   // duration; `NoteDuration.ticks(division:)` traps on one, so a whole-bar rest must never reach
                   // it here.
-                  let length = element.tickCount(division: score.division, in: sourceDurations[id.measureIndex])
+                  let storedLength = element.tickCount(division: score.division, in: sourceDurations[id.measureIndex])
             else { continue }
+            // MuseScore's paste opens a gap of exactly the selection's length and shortens the trailing
+            // ChordRest to fit it (`read460.cpp:603-633`) rather than copying it whole. `voiceElements(in:)`
+            // selects by onset, so an element that starts inside the range but sounds past its end still
+            // arrives here — clamp what it reports so the duplicate never runs longer than the range itself.
+            let length = min(storedLength, rangeEnd - absolute)
+            // Starts at or past the range's end: never really in the range despite the onset test admitting it.
+            guard length > 0 else { continue }
             if case var .chord(chord) = element {
                 // A slur's stored end is an offset in measures from the chord that starts it, so it cannot
                 // survive a copy that may land on a different barring.

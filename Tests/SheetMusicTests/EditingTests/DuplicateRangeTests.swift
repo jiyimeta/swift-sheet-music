@@ -128,22 +128,77 @@ struct DuplicateRangeTests {
         #expect(score.parts[1].staves[0].measures.count == 5)
     }
 
-    @Test("an element copied whole because its onset was in range gets the bar it overhangs into")
-    func appendsForMaterialOutlastingTheRange() throws {
+    @Test("an element whose onset was in range but that sounds past it is truncated, not copied whole")
+    func truncatesMaterialOutlastingTheRange() throws {
         var score = Self.wholeBarRestUnderTheLastBar()
         // Two beats of the last bar's voice 0. Voice 1's whole-bar rest is selected with them — the selection
-        // goes by ONSET — so the copy reaches two beats past the copied range's own end, into a bar that does
-        // not exist yet. Sizing the append by the range's length instead refuses this outright.
+        // goes by ONSET — but MuseScore parity truncates it to the range's own two beats rather than copying it
+        // whole, so nothing needs appending: the old (wrong) behavior copied the whole bar's rest and spilled a
+        // half note into a bar that did not exist yet.
         _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(1, 0), end: Self.slot(1, 1)))
             .apply(to: &score)
-        #expect(score.parts[0].staves[0].measures.count == 3)
+        #expect(score.parts[0].staves[0].measures.count == 2)
         #expect(Self.voice(score, 1).elements == [
             Self.quarter(60, 14), Self.quarter(62, 16), Self.quarter(60, 14), Self.quarter(62, 16),
         ])
-        // The whole-bar rest's copy starts on beat 3 of the last bar and spills a half note into the new one.
+        // The whole-bar rest is truncated to the two beats (beats 3-4) the range covers — it no longer reaches
+        // into a new bar at all. Splitting it there also re-spells its own leading half (beats 1-2, still the
+        // original rest's identity, just shortened).
         #expect(Self.voice(score, 1, 1).elements == [.rest(duration: .half), .rest(duration: .half)])
-        #expect(score.parts[0].staves[0].measures[2].voices.count == 2)
-        #expect(Self.voice(score, 2, 1).elements == [.rest(duration: .half), .rest(duration: .half)])
+    }
+
+    /// A 4/4 bar (voice 0: three quarter rests then a half note starting on beat 4 that would sound 480 ticks
+    /// past the bar; voice 1: four quarter rests) followed by a second bar of four distinct quarters in each
+    /// voice, so the material after the copy carries a fingerprint of its own. Mirrors
+    /// `RangeCopySourceTests.lastElementClampedToRangeEnd`'s shape.
+    private static func overhangingHalfNoteBeforeASentinelBar() -> Score {
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [
+                Voice(elements: [
+                    .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+                    .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
+                ]),
+                Voice(elements: [
+                    .rest(duration: .quarter), .rest(duration: .quarter),
+                    .rest(duration: .quarter), .rest(duration: .quarter),
+                ]),
+            ]),
+            Measure(voices: [
+                Voice(elements: [
+                    Self.quarter(72, 14), Self.quarter(74, 16), Self.quarter(76, 18), Self.quarter(77, 19),
+                ]),
+                Voice(elements: [
+                    Self.quarter(79, 21), Self.quarter(81, 23), Self.quarter(83, 12), Self.quarter(84, 14),
+                ]),
+            ]),
+        ])
+        return Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+    }
+
+    @Test("an element that sounds past the range's end is truncated, and only its own two beats are overwritten")
+    func truncatesOverhangingElement() throws {
+        var score = Self.overhangingHalfNoteBeforeASentinelBar()
+        // Voice 1's beats 3-4 anchor the range; `voiceElements(in:)` selects by onset, so voice 0's beat-3 rest
+        // and its overhanging beat-4 half note come along too.
+        _ = try DuplicateRange(over: VoiceElementRange(
+            start: Self.slot(0, 2, voice: 1), end: Self.slot(0, 3, voice: 1),
+        )).apply(to: &score)
+
+        // Still two bars: the truncated copy fits inside the two beats it owns, so nothing needed appending —
+        // the old (wrong) behavior copied the half note whole and forced a third bar into existence.
+        #expect(score.parts[0].staves[0].measures.count == 2)
+        #expect(Self.voice(score, 1).elements[0] == .rest(duration: .quarter))
+        guard case let .chord(truncated) = Self.voice(score, 1).elements[1] else {
+            Issue.record("expected the truncated half note re-spelled as a chord")
+            return
+        }
+        #expect(truncated.duration == .quarter)
+        #expect(truncated.notes.map(\.pitch) == [60])
+        // Beats 3-4 of the destination bar are untouched — the write did not run past the two beats it owns.
+        #expect(Self.voice(score, 1).elements[2] == Self.quarter(76, 18))
+        #expect(Self.voice(score, 1).elements[3] == Self.quarter(77, 19))
     }
 
     @Test("undo restores the score exactly, appended measures included")

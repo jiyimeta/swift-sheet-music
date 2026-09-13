@@ -98,10 +98,14 @@ enum RangeCopyPlacement {
     /// How an element that fits its destination bar whole is spelled there.
     ///
     /// A stored duration travels verbatim — decomposing it would un-dot a dotted note and shred a tuplet member
-    /// — with one exception. `.measure` is not a length: it is a reference to whichever bar the element sits in,
-    /// resolved anew wherever it is read. Written verbatim into a bar of a different length it silently becomes
-    /// that bar's length instead of the source's, so it is expanded here to the source's real ticks (`length`,
-    /// which `RangeCopySource` already resolved against the SOURCE bar) and re-spelled against the destination.
+    /// — but only while it still describes the whole element. Two things make that untrue. `.measure` is not a
+    /// length: it is a reference to whichever bar the element sits in, resolved anew wherever it is read.
+    /// Written verbatim into a bar of a different length it silently becomes that bar's length instead of the
+    /// source's, so it is expanded here to the source's real ticks (`length`, which `RangeCopySource` already
+    /// resolved against the SOURCE bar) and re-spelled against the destination. And `RangeCopySource` clamps
+    /// `length` when the element's onset was inside the range but it sounded past the range's own end — a
+    /// truncated element no longer has its stored duration either, so it takes the same re-spelling as
+    /// `.measure` rather than traveling with a duration that describes more than the `length` it was given.
     ///
     /// It goes back to `.measure` only where the destination agrees — a rest starting at tick 0 and exactly
     /// filling the bar — which is the spelling `DeleteRange`'s collapse produces and the MSCX encoder expects,
@@ -111,7 +115,15 @@ enum RangeCopyPlacement {
     ) -> [VoiceElement] {
         let fillsBar = position.tick == 0 && length == geometry.measureLength(position.measure)
         if chord.notes.isEmpty, fillsBar { return [.rest(duration: .measure)] }
-        guard case .measure = chord.duration else { return [.chord(chord)] }
+        // `NoteDuration.ticks(division:)` traps on `.measure`, so it is checked first; every other case is safe
+        // to resolve directly since it carries its own fixed tick count.
+        let matchesStored: Bool
+        if case .measure = chord.duration {
+            matchesStored = false
+        } else {
+            matchesStored = chord.duration.ticks(division: division) == length
+        }
+        guard !matchesStored else { return [.chord(chord)] }
         guard chord.notes.isEmpty else {
             return DurationChangeAlgorithm.makeChordChain(
                 from: chord,

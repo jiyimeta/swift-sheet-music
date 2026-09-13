@@ -78,6 +78,37 @@ struct RangeCopySourceTests {
         #expect(stream.elements.map(\.lengthTicks) == [1920])
     }
 
+    /// A 4/4 bar with two voices: voice 1 is four quarters (beats 1-4); voice 0 is two quarter rests (beats 1-2),
+    /// a quarter rest (beat 3), then a half note starting on beat 4 that runs 480 ticks past the bar itself. The
+    /// range is anchored on voice 1's beats 3-4 (elements 2 and 3, tick 960 to 1920) — since `voiceElements(in:)`
+    /// selects by onset across every voice, that also picks up voice 0's beat-3 rest and beat-4 half note, whose
+    /// onset (1440) is inside the range even though it sounds through tick 2400, 480 ticks past the range's own
+    /// end (1920).
+    @Test("an element that sounds past the range's end is clamped to what remains, not copied whole")
+    func lastElementClampedToRangeEnd() throws {
+        let overhanging = Voice(elements: [
+            .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+            .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
+        ])
+        let anchor = Voice(elements: [
+            .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+        ])
+        let staff = Staff(defaultClefType: "G", measures: [Measure(voices: [overhanging, anchor])])
+        let score = Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+        let range = VoiceElementRange(
+            start: Self.slot(0, 2, voice: 1), end: Self.slot(0, 3, voice: 1),
+        )
+        let source = try #require(RangeCopySource(range: range, in: score))
+        #expect(source.lengthTicks == 960)
+        let overhangingStream = try #require(source.streams.first { $0.voiceIndex == 0 })
+        #expect(overhangingStream.elements.map(\.absoluteTick) == [960, 1440])
+        let last = try #require(overhangingStream.elements.last)
+        #expect(last.lengthTicks == 480)
+        #expect(last.element == .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])))
+    }
+
     @Test("the copy's outer ties are cleared and inner ones kept")
     func outerTiesCleared() throws {
         let score = EditingFixtures.parityFixture() // bar 2 is two tied E4 halves
