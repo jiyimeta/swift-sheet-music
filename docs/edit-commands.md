@@ -69,6 +69,7 @@ own substantive logic.
 | `PasteVoiceElement` | ⌘V (single element, rebalanced within the measure) | — |
 | `PasteVoiceElements` | ⌘V (range, multi-element, tuplet-aware, within one measure) | — |
 | `DuplicateRange` | `R` (repeat selection: copies the range to just after itself; appends bars when the copy runs past the end of the score; carries the range's own clefs, breaths, slurs and lines and its staff annotations — dynamics, fermatas, chord symbols, expression, sticking, capos, string tunings, figured bass, symbols and fret diagrams. Landing, it clears the destination's staff annotations under it, except a clef, breath or chord symbol at the same tick: a copied one supersedes, a copied one arrived replaces the destination one. The rules MuseScore's own paste applies) | — |
+| `PasteRange` | ⌘V (a copied range: writes a clipboard payload's material — a small, self-contained `Score` of its own, so it may have come from another score or another window — into the destination through `DuplicateRange`'s own write pass, so every rule a duplicate obeys a paste obeys too) | sugar |
 | `InsertMeasure` | menu command (structural) | — |
 | `DeleteMeasure` | menu command (structural) | — |
 | `CreateTuplet` | ⌘+digit on a non-tuplet element | — |

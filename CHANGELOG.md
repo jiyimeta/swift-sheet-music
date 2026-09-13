@@ -44,6 +44,26 @@ and this project adheres to
   for a tuplet the span only reaches later — because destroying at one end and bailing at the other would be
   incoherent.
 
+- **`EditIntent.pasteRange(at:payload:)` (wire 86) and `PasteRange`: MuseScore's ⌘V, pasting a copied range back
+  into a score.** The payload is not a fragment addressed against the score it was cut from — it is a small,
+  self-contained `.mscx` document, so a paste can land in a different score, or a different window, with neither
+  one knowing about the other. Two symbols are now public because a host cannot wire ⌘C/⌘V without them:
+  `Score.clipboardDocument(for:) -> Score?` builds the payload document a ⌘C puts on the clipboard (a host
+  encodes the result with `MSCXEncoder` before it reaches a real pasteboard), and `Score.chronologicalBounds(of:)`
+  orders a range's two bounds by onset rather than by address — the fact a host needs to place the ⌘V caret at
+  whichever bound sounds first, since the two may fall on either staff in either order. Once a host's own
+  reader — in practice `MSCXParser.parse`, supplied because `SheetMusicMSCX` cannot be imported from this module
+  without a cycle — turns the payload's bytes back into a `Score`, a paste is `DuplicateRange`'s own write pass
+  with the payload standing in for the range: every rule a duplicate obeys — tuplets that only survive where they
+  fit, ties sealed across the destination barline, staff annotations cleared and superseded, measures appended
+  past the end — a paste obeys for free.
+
+  A copied single rest pastes as nothing, matching MuseScore: the resolution `voiceElements(in:)` performs only
+  ever names chords, so a rest-only selection makes `clipboardDocument(for:)` return `nil` and there is nothing to
+  put on the clipboard in the first place. Reading MuseScore's own clipboard format is not implemented — this
+  package produces and reads only its own `.mscx` payload — and a host's branch by pasteboard type is the
+  extension point where that, and a single-element payload, would join.
+
 ## [3.1.0] - 2026-09-12
 
 ### Added
