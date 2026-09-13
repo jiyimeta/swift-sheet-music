@@ -37,7 +37,40 @@ extension RangeCopyVoiceRebuild {
             }
         }
         if let low, let high { result.touched = low ... high }
+        sealBoundaryTies(in: &result)
         return result
+    }
+
+    /// Clears the tie a boundary neighbour no longer has a partner for.
+    ///
+    /// When the span's edge falls exactly on an element boundary, the main walk above produces no leading or
+    /// trailing trim: the neighbouring destination chord is filed into `before`/`after` untouched, ties and all.
+    /// Left alone it would still point across the seam at whatever the copy puts there — usually a different
+    /// pitch. `leadingTrim`/`trailingTrim` already do this for the half-covered case; this is the same rule for
+    /// the case where there is no trim to carry it. MuseScore's own removal clears both tie ends of the note it
+    /// takes out (`editing/addremoveelement.cpp:203-224`); this applies that to the one side that survives.
+    ///
+    /// `before.last` is the boundary chord whenever `leading` is `nil` and `before` is non-empty: ticks are
+    /// contiguous, so nothing can be filed into `before` after the element whose end lands exactly on
+    /// `spanStart`. The search on the `after` side is not similarly free: an untimed element sharing the
+    /// boundary chord's tick (a mid-bar clef, say) can be appended first, so the boundary chord is found by kind
+    /// rather than by position.
+    private static func sealBoundaryTies(in cut: inout Cut) {
+        if cut.leading == nil, let index = cut.before.lastIndex(where: \.isTimed) {
+            cut.before[index] = retied(cut.before[index], forward: .clear)
+        }
+        if cut.trailing == nil, let index = cut.after.firstIndex(where: \.isTimed) {
+            cut.after[index] = retied(cut.after[index], back: .clear)
+        }
+    }
+
+    /// `Entry` is immutable, so rewriting a note's tie means rebuilding the entry around the changed element.
+    private static func retied(_ entry: Entry, back: TieChange = .leave, forward: TieChange = .leave) -> Entry {
+        Entry(
+            index: entry.index, eid: entry.eid,
+            element: settingTie(entry.element, back: back, forward: forward),
+            start: entry.start, advance: entry.advance,
+        )
     }
 
     /// A non-timed element is placed by its own tick alone: it has no extent to be half-covered by.
@@ -110,7 +143,10 @@ extension RangeCopyVoiceRebuild {
             case .breath: self = .breath
             case .ambitus: self = .ambitus
             case .harmony: self = .harmony
-            default: return nil
+            case .locationShift, .measureRepeat, .spanner, .keySignature, .timeSignature, .barLine, .preserved,
+                 .dynamic, .fermata, .sticking, .expression, .capo, .stringTunings, .figuredBass, .symbol,
+                 .fretDiagram, .chord:
+                return nil
             }
         }
     }

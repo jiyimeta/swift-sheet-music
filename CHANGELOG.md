@@ -10,11 +10,28 @@ and this project adheres to
 ### Added
 
 - **`EditIntent.duplicateRange(over:)` (wire 85) and `DuplicateRange`: MuseScore's `R`, repeating a range
-  selection immediately after itself across measures, staves and voices.** Tuplets are carried; bars are
-  appended when the copy runs past the end of the score; the destination's own clefs, signatures and other
-  non-timed elements are kept. A range covering staves that are barred differently over the copied span —
-  a pickup bar written on one staff and not on another — refuses with `insufficientRoom`, because the copy's
-  offset is one subtraction for every staff and two barrings cannot both be right.
+  selection immediately after itself across measures, staves and voices.** An element whose onset falls
+  inside the range but sounds past its end is truncated to what remains, never copied whole. A tuplet the
+  copy carries survives only where every one of its members fits a single destination bar; a destination
+  tuplet the copy cuts only partly is torn down and its uncovered remainder refilled with plain rests, the
+  same way MuseScore's own paste destroys one. The copy carries the range's own clefs, key/time signatures,
+  breaths, ambituses, harmonies and unmodeled markup with it — superseding a destination element of the same
+  kind at the same tick rather than standing beside it — and the slurs and the four spanner kinds MuseScore's
+  paste re-anchors (hairpin, ottava, trill, vibrato) that lie wholly inside the range; landing, it clears the
+  destination's staff annotations (dynamics, fermatas, and the rest of that family) under it, shortens or
+  removes a destination spanner reaching into its span, and clears the tie on either boundary neighbor that
+  pointed into the material it just overwrote. Bars are appended when the copy runs past the end of the
+  score. A range covering staves that are barred differently over the copied span — a pickup bar written on
+  one staff and not on another — refuses with `insufficientRoom`, because the copy's offset is one
+  subtraction for every staff and two barrings cannot both be right.
+
+  Two of these deviate from MuseScore on purpose. Appending bars at the score's end is one: MuseScore's own
+  `R` does nothing there, because it anchors the repeated material on the ChordRest FOLLOWING the selection
+  and a repeat landing past the last bar has none to anchor on, where this package appends the bars a host
+  would otherwise have to insert by hand first. Refusing a range whose selection cuts a tuplet only partly is
+  the other: MuseScore's own `Selection::canCopy` disables the action with no reason surfaced
+  (`select.cpp:1394-1465`), while `RangeCopySource` throws a structured `.insideTuplet` refusal naming
+  whichever of the range's two bounds landed inside the bracket.
 
 ## [3.1.0] - 2026-09-12
 

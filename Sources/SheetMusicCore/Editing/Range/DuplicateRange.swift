@@ -89,11 +89,12 @@ public struct DuplicateRange: EditCommand {
 extension DuplicateRange {
     /// How far past the destination's start the copy actually reaches — the largest of its streams' reaches.
     ///
-    /// NOT the range's own length. `Score.voiceElements(in:)` selects by ONSET, so an element whose onset falls
-    /// inside the range is copied whole even where it runs past the range's end (per spec), and its copy reaches
-    /// that much further. Sizing the append pass by the range's length instead leaves the copy short of a bar
-    /// near the end of the score — a voice holding a whole-bar rest under a two-beat selection is enough to do
-    /// it — and the placement then refuses for want of the bar this would have appended.
+    /// Usually equal to `source.lengthTicks`, but not asserted to be: `RangeCopySource` clamps every element's
+    /// reported length to what remains of the range (an onset inside the range whose stored duration would
+    /// sound past the range's end is truncated there, never copied whole), so no stream can reach further than
+    /// the range itself — but a stream whose own last selected element ends short of the range's end reaches
+    /// that much less. Measuring per stream rather than assuming `lengthTicks` keeps the append pass honest
+    /// about what each stream actually carries instead of asserting a length nothing in it fills.
     private func reach(of source: RangeCopySource) -> Int {
         source.streams.map { $0.reach(from: source.startTick) }.max() ?? source.lengthTicks
     }
