@@ -64,9 +64,7 @@ extension ScoreEditSession {
             // through explicitly rather than trusted to the command's own report — otherwise `lastAffectedLocation`
             // would name the wrong element after every bar-emptying delete, exactly as
             // `FullMeasureRestCollapse.Plan.restElementIndex`'s doc comment warns.
-            if let plan = FullMeasureRestCollapse.plan(
-                clearing: [location.elementIndex], in: VoiceRef(location), of: score,
-            ) {
+            if let plan = FullMeasureRestCollapse.plan(deleting: location, in: score) {
                 return CompositeEditCommand(
                     commands: [plan.command],
                     location: VoiceElementID(
