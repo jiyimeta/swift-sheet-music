@@ -58,9 +58,11 @@ and this project adheres to
   fit, ties sealed across the destination barline, staff annotations cleared and superseded, measures appended
   past the end — a paste obeys for free.
 
-  A copied single rest pastes as nothing, matching MuseScore: the resolution `voiceElements(in:)` performs only
-  ever names chords, so a rest-only selection makes `clipboardDocument(for:)` return `nil` and there is nothing to
-  put on the clipboard in the first place. Reading MuseScore's own clipboard format is not implemented — this
+  A copied single rest pastes as nothing, matching MuseScore — but that is a rule a host enforces, not one this
+  package imposes: no `acceptDrop` in MuseScore's tree accepts a `REST`, so a one-element copy of one is refused
+  at the destination, silently. A RANGE of rests copies and pastes normally, as it must: `voiceElements(in:)`
+  names rests as well as chords — a rest is a chord carrying no notes — so empty bars carve into a payload like
+  any others. Reading MuseScore's own clipboard format is not implemented — this
   package produces and reads only its own `.mscx` payload — and a host's branch by pasteboard type is the
   extension point where that, and a single-element payload, would join.
 
