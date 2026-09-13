@@ -13,7 +13,7 @@ struct RangeCopyPayloadTests {
     /// One bar, 4/4: `[timeSignature, tripletA, tripletB, tripletC, restQ, restQ, restQ]` — a standard eighth
     /// triplet (2 in the time of 3, each member `1/12` of a whole note = 160 ticks at division 480, summing to
     /// one quarter beat) followed by three plain quarter rests filling the remaining three beats.
-    private static func tripletFixture() -> Score {
+    static func tripletFixture() -> Score {
         var source = EditingFixtures.parityFixture()
         let tripletMember = Fraction(numerator: 1, denominator: 12)
         source.parts.updateValue(at: 0) { part in
@@ -164,17 +164,70 @@ struct RangeCopyPayloadTests {
         #expect(payload.parts.count == 2)
     }
 
-    @Test("the payload survives an encode and parse round trip")
+    /// Four 4/4 bars on one staff, built so that one bar carries one of everything a copy has to survive:
+    ///
+    /// - bar 0 — `[4/4, dynamic f, q60 (slurred to the next note), q62, clef F, triplet ×3 at 1/12, q rest]`.
+    /// - bar 1 — a crescendo hairpin anchored at its downbeat and reaching into bar 2, over four quarter rests.
+    /// - bar 2 — four quarter rests under a dynamic of its own: a destination that is not empty.
+    /// - bar 3 — four quarter rests, so a paste onto bar 2 appends nothing.
+    static func richFourBarFixture() -> Score {
+        let tripletMember = Fraction(numerator: 1, denominator: 12)
+        func member(_ pitch: Int, _ tpc: Int) -> VoiceElement {
+            .chord(Chord(duration: .fraction(tripletMember), notes: [Note(pitch: pitch, tpc: tpc)]))
+        }
+        let quarterRests: [VoiceElement] = [
+            .rest(duration: .quarter), .rest(duration: .quarter),
+            .rest(duration: .quarter), .rest(duration: .quarter),
+        ]
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(
+                elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .dynamic(Dynamic(subtype: "f", velocity: 96)),
+                    .chord(Chord(
+                        duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
+                        spanners: [Spanner(
+                            kind: .slur, rawType: "Slur",
+                            nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
+                        )],
+                    )),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+                    .clef(Clef(concertClefType: "F")),
+                    member(64, 18), member(65, 13), member(67, 15),
+                    .rest(duration: .quarter),
+                ],
+                tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 5, endIndex: 7)],
+            )]),
+            Measure(voices: [Voice(elements: [
+                .spanner(Spanner(
+                    kind: .hairpin, rawType: "HairPin",
+                    nextMeasuresOffset: 1, nextFractionsOffset: Fraction(numerator: 1, denominator: 2),
+                    hairpin: Spanner.HairpinPayload(subtype: .crescendo),
+                )),
+            ] + quarterRests)]),
+            Measure(voices: [Voice(elements: [.dynamic(Dynamic(subtype: "p", velocity: 49))] + quarterRests)]),
+            Measure(voices: [Voice(elements: quarterRests)]),
+        ])
+        return Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+    }
+
+    @Test("the payload survives an encode and parse round trip, note for note")
     func roundTrips() throws {
-        let source = EditingFixtures.parityFixture()
+        // The load-bearing half of "the payload needs no format of its own". Asserting a part count and one
+        // voice's element count passed just as well against an encoder that dropped every pitch, duration, tie,
+        // clef and tuplet — so the bar carries one of each and the whole staff is compared.
+        let source = Self.richFourBarFixture()
         let payload = try #require(RangeCopyPayload.score(
-            for: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 4)), in: source,
+            for: VoiceElementRange(start: Self.slot(0, 2), end: Self.slot(0, 8)), in: source,
         ))
-        let data = try MSCXEncoder.encode(payload)
-        let parsed = try MSCXParser.parse(data)
+        let parsed = try MSCXParser.parse(MSCXEncoder.encode(payload))
         #expect(parsed.parts.count == payload.parts.count)
-        let original = payload.parts[0].staves[0].measures[0].voices[0].elements.count
-        #expect(parsed.parts[0].staves[0].measures[0].voices[0].elements.count == original)
+        #expect(parsed.stableFingerprint == payload.stableFingerprint)
+        let before = try #require(payload.parts.first?.staves.first).measures
+        let after = try #require(parsed.parts.first?.staves.first).measures
+        #expect(after == before)
     }
 
     @Test("a range starting on a measure with no time signature of its own inherits the prevailing one")
