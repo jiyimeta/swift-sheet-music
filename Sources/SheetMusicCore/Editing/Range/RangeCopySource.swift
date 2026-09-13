@@ -118,41 +118,46 @@ struct RangeCopySource {
         self = resolved
     }
 
-    /// The earliest chord or rest in `score`, in display order (staff, then measure, voice, element).
+    /// The chord or rest with the EARLIEST ONSET anywhere in `score`, compared across every staff rather than
+    /// picked from staff-address order. A staff-major pick would be wrong whenever the first-addressed staff
+    /// rests through the payload's opening beat while another staff already sounds at tick zero — a plain offset
+    /// entry, and one `RangeCopyPayload.score(for:in:)` can legitimately produce, since it trims each staff's
+    /// boundary measure independently and only the staff that owned the original range's bound is guaranteed a
+    /// chord exactly at that tick.
     private static func firstTimedSlot(in score: Score) -> VoiceElementID? {
+        chordSlots(in: score)
+            .compactMap { id in score.onset(of: id).map { (id, $0) } }
+            .min { $0.1 < $1.1 }
+            .map(\.0)
+    }
+
+    /// The chord or rest with the LATEST END anywhere in `score` — the mirror of `firstTimedSlot(in:)`, and for
+    /// the same reason: the last-addressed staff is not guaranteed to be the one still sounding when every other
+    /// staff has already finished.
+    private static func lastTimedSlot(in score: Score) -> VoiceElementID? {
+        chordSlots(in: score)
+            .compactMap { id in score.end(of: id).map { (id, $0) } }
+            .max { $0.1 < $1.1 }
+            .map(\.0)
+    }
+
+    /// Every chord or rest in `score`, staff by staff in display order, measure/voice/element order within each.
+    private static func chordSlots(in score: Score) -> [VoiceElementID] {
+        var result: [VoiceElementID] = []
         for (address, staff) in score.allStaves {
             for (measureIndex, measure) in staff.measures.enumerated() {
                 for (voiceIndex, voice) in measure.voices.enumerated() {
                     for (elementIndex, element) in voice.elements.enumerated() {
                         guard case .chord = element else { continue }
-                        return VoiceElementID(
+                        result.append(VoiceElementID(
                             staff: address, measureIndex: measureIndex,
                             voiceIndex: voiceIndex, elementIndex: elementIndex,
-                        )
+                        ))
                     }
                 }
             }
         }
-        return nil
-    }
-
-    /// The latest chord or rest in `score`, in reverse display order — the mirror of `firstTimedSlot(in:)`, which
-    /// is what keeps the pair naming the payload's actual first and last staff when it covers more than one.
-    private static func lastTimedSlot(in score: Score) -> VoiceElementID? {
-        for (address, staff) in score.allStaves.reversed() {
-            for (measureIndex, measure) in staff.measures.enumerated().reversed() {
-                for (voiceIndex, voice) in measure.voices.enumerated().reversed() {
-                    for (elementIndex, element) in voice.elements.enumerated().reversed() {
-                        guard case .chord = element else { continue }
-                        return VoiceElementID(
-                            staff: address, measureIndex: measureIndex,
-                            voiceIndex: voiceIndex, elementIndex: elementIndex,
-                        )
-                    }
-                }
-            }
-        }
-        return nil
+        return result
     }
 }
 

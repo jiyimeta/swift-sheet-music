@@ -360,4 +360,54 @@ struct RangeCopySourceTests {
     func emptyPayload() {
         #expect(RangeCopySource(payload: Score(division: 480)) == nil)
     }
+
+    /// Two staves, two measures of 4/4 at division 480. The flute rests through the whole of measure 0 (a
+    /// single measure-rest chord) and only starts sounding in measure 1; the cello does the opposite — four
+    /// quarters in measure 0, then rests through measure 1.
+    ///
+    /// The payload's original range starts on the cello's SECOND quarter (measure 0, tick 480) and ends on the
+    /// flute's LAST quarter (measure 1, tick 1440-1920), so both measures become boundary measures. The
+    /// flute's measure-0 rest starts at tick 0 — before the range's low bound — so `RangeCopyPayload` drops it
+    /// outright rather than clip it: the flute's own first surviving chord in the payload is not in measure 0
+    /// at all, while the cello's is. A staff-address-major search for the payload's "first" chord would start
+    /// with the flute, find nothing there until measure 1, and report a start too late to include the cello's
+    /// still-earlier material.
+    private static func offsetEntryAcrossTwoStaves() -> Score {
+        func quarter(_ pitch: Int) -> VoiceElement {
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: pitch, tpc: 14)]))
+        }
+        let flute = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)), .rest(duration: .measure),
+            ])]),
+            Measure(voices: [Voice(elements: [quarter(60), quarter(62), quarter(64), quarter(65)])]),
+        ])
+        let cello = Staff(defaultClefType: "F", measures: [
+            Measure(voices: [Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                quarter(48), quarter(50), quarter(52), quarter(53),
+            ])]),
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])]),
+        ])
+        return Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [flute]),
+            Part(id: "2", trackName: "Cello", instrument: Instrument(id: "cello"), staves: [cello]),
+        ])
+    }
+
+    @Test("a payload's first/last slot is found by comparing onsets across every staff, not by staff address")
+    func offsetEntryPayloadKeepsTheEarlierStaff() throws {
+        let original = Self.offsetEntryAcrossTwoStaves()
+        let payload = try #require(RangeCopyPayload.score(
+            for: VoiceElementRange(start: Self.slot(0, 2, staff: Self.cello), end: Self.slot(1, 3)), in: original,
+        ))
+        let source = try #require(RangeCopySource(payload: payload))
+        #expect(source.streams.count == 2)
+        let celloStream = try #require(source.streams.first { $0.staff == Self.cello })
+        let fluteStream = try #require(source.streams.first { $0.staff == Self.flute })
+        // Under the bug, the cello's three measure-0 quarters are silently dropped and only its measure-1
+        // whole rest survives — this is the assertion that catches it.
+        #expect(celloStream.elements.count == 4)
+        #expect(fluteStream.elements.count == 4)
+    }
 }
