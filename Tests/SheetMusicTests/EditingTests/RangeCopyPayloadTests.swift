@@ -53,6 +53,60 @@ struct RangeCopyPayloadTests {
         #expect(parsed.parts[0].staves[0].measures[0].voices[0].elements.count == original)
     }
 
+    @Test("a range starting on a measure with no time signature of its own inherits the prevailing one")
+    func insertsPrevailingTimeSignature() throws {
+        // Measure 0 carries the fixture's leading time signature; measure 1 has none of its own — the shape a
+        // real second measure has (`EditingFixtures.twoMeasuresOfQuarterRests()`'s own doc comment).
+        let source = EditingFixtures.twoMeasuresOfQuarterRests()
+        let payload = try #require(RangeCopyPayload.score(
+            for: VoiceElementRange(start: Self.slot(1, 0), end: Self.slot(1, 3)), in: source,
+        ))
+        let elements = payload.parts[0].staves[0].measures[0].voices[0].elements
+        let first = try #require(elements.first)
+        guard case let .timeSignature(timeSignature) = first else {
+            Issue.record("expected the payload's first measure to open with the inherited time signature")
+            return
+        }
+        #expect(timeSignature == TimeSignature(numerator: 4, denominator: 4))
+    }
+
+    @Test("a spanner, location shift and measure repeat in a boundary measure are excluded from the payload")
+    func excludesUnsafeUntimedKindsAtBoundary() throws {
+        var source = EditingFixtures.parityFixture()
+        source.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[0] = Voice(elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .locationShift(delta: Fraction(numerator: 0, denominator: 4)),
+                    .spanner(Spanner(
+                        kind: .hairpin, rawType: "HairPin",
+                        hairpin: Spanner.HairpinPayload(subtype: .crescendo),
+                    )),
+                    .measureRepeat(MeasureRepeat(numMeasures: 1, duration: .quarter)),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+                    .rest(duration: .quarter), .rest(duration: .quarter),
+                ])
+            }
+        }
+        let payload = try #require(RangeCopyPayload.score(
+            for: VoiceElementRange(start: Self.slot(0, 4), end: Self.slot(0, 7)), in: source,
+        ))
+        let elements = payload.parts[0].staves[0].measures[0].voices[0].elements
+        let hasUnsafeKind = elements.contains { element in
+            switch element {
+            case .locationShift, .measureRepeat, .spanner: true
+            default: false
+            }
+        }
+        #expect(!hasUnsafeKind)
+        let pitches = elements.compactMap { element -> Int? in
+            guard case let .chord(chord) = element, let note = chord.notes.first else { return nil }
+            return note.pitch
+        }
+        #expect(pitches == [60, 62])
+    }
+
     @Test("a range that resolves to nothing yields nil")
     func unresolvable() {
         let source = EditingFixtures.parityFixture()

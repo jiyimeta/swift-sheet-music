@@ -87,8 +87,16 @@ enum RangeCopyPayload {
 
     /// A kept measure, unchanged except at the range's own boundary: `measureIndex == low.measure` or
     /// `== high.measure` drops the chords and rests whose onset falls outside `low ..< high`, in every voice.
-    /// Every non-timed element — clef, key/time signature, annotations — is kept regardless of its tick, which
-    /// is what "leaving everything else" means: only the timed material is being clipped to the span.
+    /// Most non-timed elements — clef, key/time signature, annotations — are kept regardless of their tick,
+    /// which is what "leaving everything else" means: only the timed material is being clipped to the span.
+    ///
+    /// `.locationShift`, `.measureRepeat` and `.spanner` are the exception, and are dropped outright at this
+    /// boundary rather than swept in with the rest — the same three kinds `RangeCopySource.isCopyable(_:)`
+    /// never carries, for the same reason: a jog moves the voice's one cursor for ticks this trim may have
+    /// just cut away, a measure repeat stands for a whole bar the trim can partially remove, and a spanner's
+    /// reach is not known here to still end inside the payload. Carrying any of them across a cut risks a
+    /// self-contained score that names material the trim took out. A measure this function never touches (not
+    /// `low.measure`/`high.measure`) keeps all three untouched, since nothing around them was cut.
     private static func trimmedMeasure(
         _ measure: Measure, measureIndex: Int, measureDuration: Fraction,
         low: ScoreTickPosition, high: ScoreTickPosition, division: Int,
@@ -100,12 +108,15 @@ enum RangeCopyPayload {
             var kept: [VoiceElement] = []
             for element in voice.elements {
                 defer { tick += element.cursorAdvance(division: division, in: measureDuration) }
-                guard case .chord = element else {
-                    kept.append(element)
+                switch element {
+                case .chord:
+                    let position = ScoreTickPosition(measure: measureIndex, tick: tick)
+                    if position >= low, position < high {
+                        kept.append(element)
+                    }
+                case .locationShift, .measureRepeat, .spanner:
                     continue
-                }
-                let position = ScoreTickPosition(measure: measureIndex, tick: tick)
-                if position >= low, position < high {
+                default:
                     kept.append(element)
                 }
             }
