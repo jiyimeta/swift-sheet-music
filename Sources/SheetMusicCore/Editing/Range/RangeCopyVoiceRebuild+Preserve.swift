@@ -51,8 +51,8 @@ extension RangeCopyVoiceRebuild {
     /// its own tick, matching MuseScore, where these live on their own segment types rather than as the
     /// annotations `makeGap1`'s `deleteAnnotationsFromRange` clears (`cmd.cpp:1504`, `edit.cpp:3734-3759`). A
     /// dynamic, fermata, harmony, and the rest of the segment-annotation family are cleared instead — the copy
-    /// landing on them is exactly what that MuseScore pass destroys. `.spanner` is left as it stood before this
-    /// change; a future task partitions it. A `.harmony` is kept here unconditionally; `rebuild(_:cut:gap:
+    /// landing on them is exactly what that MuseScore pass destroys. A `.spanner` goes the same way unless it is
+    /// a volta, which is skipped. A `.harmony` is kept here unconditionally; `rebuild(_:cut:gap:
     /// spanStart:spanEnd:in:)` drops it afterward when the piece brings one of its own to the same tick, via
     /// `pieceHarmonyTicks(in:from:in:)`.
     private static func place(
@@ -65,7 +65,15 @@ extension RangeCopyVoiceRebuild {
         switch entry.element {
         case .locationShift, .measureRepeat:
             throw refused(.blockedByUntimedElement(at: context.location(entry.index)))
-        case .clef, .keySignature, .timeSignature, .barLine, .breath, .ambitus, .preserved, .harmony, .spanner:
+        case let .spanner(spanner) where spanner.kind == .volta:
+            result.preserved.append(entry)
+        case .spanner:
+            // A line spanner ANCHORED in the gap is removed with the material it was anchored to —
+            // `makeGap1`'s `deleteOrShortenOutSpannersFromRange` (`edit.cpp:3638-3702`). One anchored before
+            // the gap is shortened instead, which this walk never sees; `RangeCopySpanners.clearDestination`
+            // does it from the score's own axis. A volta is skipped (`:3659`) and so is caught above.
+            break
+        case .clef, .keySignature, .timeSignature, .barLine, .breath, .ambitus, .preserved, .harmony:
             result.preserved.append(entry)
         case .dynamic, .fermata, .sticking, .expression, .capo, .stringTunings, .figuredBass, .symbol,
              .fretDiagram:

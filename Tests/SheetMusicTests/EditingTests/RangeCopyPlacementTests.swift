@@ -20,6 +20,7 @@ struct RangeCopyPlacementTests {
                 return (absoluteTick: pair.0, lengthTicks: chord.duration.ticks(division: 480), element: pair.1)
             },
             tuplets: tuplets,
+            spanners: [],
         )
     }
 

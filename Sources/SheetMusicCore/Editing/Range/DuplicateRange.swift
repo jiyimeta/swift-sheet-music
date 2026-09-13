@@ -62,11 +62,23 @@ public struct DuplicateRange: EditCommand {
             in: &scratch, ids: &allocator, commands: &commands,
         )
         for stream in source.streams {
+            // Before the material, so a destination spanner reaching into the span is gone by the time a copied
+            // one is anchored there — `SpannerPlacement.refuseDuplicate` throws on a second spanner of the same
+            // kind at one anchor.
+            try RangeCopySpanners.clearDestination(
+                forStream: stream, at: destinationTick, sourceStartTick: source.startTick,
+                in: &scratch, ids: &allocator, commands: &commands,
+            )
             try write(
                 stream, at: destinationTick, sourceStartTick: source.startTick,
                 in: &scratch, ids: &allocator, commands: &commands,
             )
         }
+        // A post-pass: the copied spanners' offsets are written against the destination's real geometry, which
+        // only exists once every `ReplaceVoiceElements` above has landed on the scratch score.
+        try RangeCopySpanners.recreate(
+            source, at: destinationTick, in: &scratch, ids: &allocator, commands: &commands,
+        )
         return commands.isEmpty ? nil : CompositeEditCommand(commands: commands, location: range.start)
     }
 }

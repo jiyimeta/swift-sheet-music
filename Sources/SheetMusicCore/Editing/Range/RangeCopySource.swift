@@ -30,6 +30,10 @@ struct RangeCopySource {
         let elements: [CopiedElement]
         /// Source tuplets whose members are entirely inside this stream, as absolute tick bounds.
         let tuplets: [(startTick: Int, endTick: Int, normalNotes: Int, actualNotes: Int)]
+        /// Spanners lying entirely inside the range, as absolute SOURCE tick bounds. They travel beside
+        /// `elements` rather than inside them — see `RangeCopySpanners` for why nothing rides through the
+        /// placement — and are re-anchored at the destination by `RangeCopySpanners.recreate(_:at:…)`.
+        let spanners: [RangeCopySpanners.Copied]
     }
 
     let streams: [Stream]
@@ -150,6 +154,7 @@ extension RangeCopySource {
         var elements: [CopiedElement] = []
         var elementLocations: [MeasureElementLocation] = []
         var infoByLocation: [MeasureElementLocation: (tick: Int, length: Int)] = [:]
+        var spanners: [RangeCopySpanners.Copied] = []
         for id in ids {
             guard let onset = score.onset(of: id), let absolute = geometry.absolute(onset),
                   var element = score[id], sourceDurations.indices.contains(id.measureIndex),
@@ -167,8 +172,13 @@ extension RangeCopySource {
             guard length > 0 else { continue }
             if case var .chord(chord) = element {
                 // A slur's stored end is an offset in measures from the chord that starts it, so it cannot
-                // survive a copy that may land on a different barring.
-                chord.spanners = []
+                // survive a copy that may land on a different barring: the ones lying wholly inside the range
+                // are set aside here and re-anchored at the destination, and the chord travels with an empty
+                // array either way.
+                spanners += RangeCopySpanners.take(
+                    from: &chord, at: onset, absoluteTick: absolute, geometry: geometry,
+                    division: score.division, range: rangeStart ..< rangeEnd,
+                )
                 element = .chord(chord)
             }
             let location = MeasureElementLocation(measureIndex: id.measureIndex, elementIndex: id.elementIndex)
@@ -187,9 +197,14 @@ extension RangeCopySource {
             for: ids, key: key, lowBound: lowBound, highBound: highBound,
             infoByLocation: infoByLocation, score: score,
         )
+        spanners += RangeCopySpanners.lineSpanners(
+            for: ids, staff: key.staff, voiceIndex: key.voiceIndex, geometry: geometry,
+            durations: sourceDurations, score: score, range: rangeStart ..< rangeEnd,
+        )
         return Stream(
             staff: key.staff, voiceIndex: key.voiceIndex,
             elements: merged(timed: elements, at: elementLocations, untimed: untimed), tuplets: tuplets,
+            spanners: spanners,
         )
     }
 
@@ -240,9 +255,10 @@ extension RangeCopySource {
     /// Everything else is false, and for three different reasons. Key signature, time signature and barline are
     /// in the payload but the paste drops them on the floor (`739-744`). `.measureRepeat` stands for a whole
     /// bar's content and `.locationShift` moves the voice's one cursor for the rest of the bar, so neither means
-    /// the same thing anywhere else. `.spanner` needs its partner re-anchored, which is its own task.
-    /// `.preserved` is markup this library does not model, so there is no knowing whether MuseScore's reader
-    /// would take it.
+    /// the same thing anywhere else. `.spanner` needs its partner re-anchored against the destination's own
+    /// barring, so it travels beside the elements rather than among them — `RangeCopySpanners.lineSpanners(for:…)`
+    /// collects it and `RangeCopySpanners.recreate(_:at:…)` writes it back. `.preserved` is markup this library
+    /// does not model, so there is no knowing whether MuseScore's reader would take it.
     private static func isCopyable(_ element: VoiceElement) -> Bool {
         switch element {
         case .clef, .breath, .ambitus, .dynamic, .fermata, .harmony, .sticking, .expression, .capo,
