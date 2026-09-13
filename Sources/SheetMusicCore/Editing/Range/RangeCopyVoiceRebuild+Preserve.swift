@@ -52,9 +52,9 @@ extension RangeCopyVoiceRebuild {
     /// annotations `makeGap1`'s `deleteAnnotationsFromRange` clears (`cmd.cpp:1504`, `edit.cpp:3734-3759`). A
     /// dynamic, fermata, harmony, and the rest of the segment-annotation family are cleared instead — the copy
     /// landing on them is exactly what that MuseScore pass destroys. A `.spanner` goes the same way unless it is
-    /// a volta, which is skipped. A `.harmony` is kept here unconditionally; `rebuild(_:cut:gap:
-    /// spanStart:spanEnd:in:)` drops it afterward when the piece brings one of its own to the same tick, via
-    /// `pieceHarmonyTicks(in:from:in:)`.
+    /// a volta, which is skipped. Every kind kept here is kept UNCONDITIONALLY; `rebuild(_:cut:gap:
+    /// spanStart:spanEnd:in:)` drops a clef, breath, ambitus or harmony afterward when the piece brings one of
+    /// the same kind to the same tick, via `pieceSupersededSlots(in:from:in:)`.
     private static func place(
         untimed entry: Entry, spanStart: Int, spanEnd: Int, into result: inout Cut, in context: Context,
     ) throws {
@@ -83,19 +83,55 @@ extension RangeCopyVoiceRebuild {
         }
     }
 
-    /// The ticks at which `elements` — the piece about to be written, walked from `origin` — places a harmony
-    /// of its own.
+    /// A non-timed kind a segment holds only ONE of per track, so a copied element of that kind takes the
+    /// destination's place rather than standing beside it.
     ///
-    /// A carried chord symbol advances the cursor by nothing, so it shares the tick of the chord it precedes —
-    /// which is exactly the tick a destination symbol would have to stand at to be the one MuseScore replaces.
-    static func pieceHarmonyTicks(in elements: [VoiceElement], from origin: Int, in context: Context) -> Set<Int> {
-        var ticks: Set<Int> = []
+    /// MuseScore's paste replaces rather than adds: clef and breath go through `undoChangeElement`
+    /// (`read460.cpp:704-715`, `717-728`), and a chord symbol is dropped from the destination on the same
+    /// condition (`656-661`, with `cmd.cpp:1502`). Without this, duplicating onto a bar that already carries a
+    /// mid-bar clef would leave the destination's clef AND the copied one at a single tick — which is not
+    /// something a score can mean, and not what MuseScore writes.
+    ///
+    /// `nil` for every other element: a kind the copy does not carry has nothing to lose its place to, and a
+    /// kind that can legitimately repeat at one tick must not be deduplicated by tick either.
+    enum SupersededKind: Hashable {
+        case clef
+        case breath
+        case ambitus
+        case harmony
+
+        init?(_ element: VoiceElement) {
+            switch element {
+            case .clef: self = .clef
+            case .breath: self = .breath
+            case .ambitus: self = .ambitus
+            case .harmony: self = .harmony
+            default: return nil
+            }
+        }
+    }
+
+    /// One (kind, tick) pair the piece about to be written occupies.
+    struct SupersededSlot: Hashable {
+        let kind: SupersededKind
+        let tick: Int
+    }
+
+    /// Every (kind, tick) at which `elements` — the piece about to be written, walked from `origin` — brings a
+    /// non-timed element that supersedes the destination's.
+    ///
+    /// A carried non-timed element advances the cursor by nothing, so it shares the tick of the chord it
+    /// precedes — which is exactly the tick a destination element has to stand at to be the one it replaces.
+    static func pieceSupersededSlots(
+        in elements: [VoiceElement], from origin: Int, in context: Context,
+    ) -> Set<SupersededSlot> {
+        var slots: Set<SupersededSlot> = []
         var cursor = origin
         for element in elements {
-            if case .harmony = element { ticks.insert(cursor) }
+            if let kind = SupersededKind(element) { slots.insert(SupersededSlot(kind: kind, tick: cursor)) }
             cursor += context.advance(of: element)
         }
-        return ticks
+        return slots
     }
 
     /// The tick span the rebuild actually clears: the piece's own span, widened over every destination tuplet

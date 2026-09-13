@@ -68,6 +68,89 @@ struct DuplicateRangeCarriedElementsTests {
         ])
     }
 
+    /// Two 4/4 bars of four quarters. Bar 0 (the source) carries a bass clef at tick 480. Bar 1 (the
+    /// destination) carries an alto clef at tick 480 — where the copy lands its own — and a treble clef at tick
+    /// 1440, which the copy covers but brings no clef to.
+    private static func clefsOverTwoBars() -> Score {
+        score([
+            Measure(voices: [Voice(elements: [
+                quarter(60, 14),
+                .clef(Clef(concertClefType: "F")),
+                quarter(62, 16), quarter(64, 18), quarter(65, 19),
+            ])]),
+            Measure(voices: [Voice(elements: [
+                quarter(72, 14),
+                .clef(Clef(concertClefType: "C")),
+                quarter(74, 16), quarter(76, 18),
+                .clef(Clef(concertClefType: "G")),
+                quarter(77, 19),
+            ])]),
+        ])
+    }
+
+    /// MuseScore's paste REPLACES a clef rather than adding beside one — `read460.cpp:704-715` writes it through
+    /// `undoChangeElement` — so a copy that brings its own clef to a tick the destination already has one at
+    /// must not leave two clefs on a single segment.
+    @Test("a destination clef is replaced only where the copy brings one to the same tick")
+    func replacesOnlyTheCoveredClef() throws {
+        var score = Self.clefsOverTwoBars()
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 4)))
+            .apply(to: &score)
+        let clefTypes = Self.voice(score, 1).elements.values.compactMap { element -> String? in
+            guard case let .clef(clef) = element else { return nil }
+            return clef.concertClefType
+        }
+        // The alto clef at tick 480 loses its place to the copied bass clef; the treble clef at tick 1440 keeps
+        // its own, because the copy brings nothing of that kind there. Two clefs, never three.
+        #expect(clefTypes == ["F", "G"])
+        #expect(Self.voice(score, 1).elements == [
+            Self.quarter(60, 14),
+            .clef(Clef(concertClefType: "F")),
+            Self.quarter(62, 16), Self.quarter(64, 18),
+            .clef(Clef(concertClefType: "G")),
+            Self.quarter(65, 19),
+        ])
+    }
+
+    /// The same shape as `clefsOverTwoBars`, for the two other kinds a segment holds one of per track. The
+    /// source brings a comma breath and an ambitus at tick 480; the destination has a tick breath and a
+    /// different ambitus there, plus an ambitus at tick 1440 the copy never reaches the kind of.
+    private static func breathsAndAmbitusesOverTwoBars() -> Score {
+        score([
+            Measure(voices: [Voice(elements: [
+                quarter(60, 14),
+                .breath(Breath(kind: .breathMark(.comma), pause: 0)),
+                .ambitus(Ambitus(topPitch: 72, topTpc: 14, bottomPitch: 60, bottomTpc: 14)),
+                quarter(62, 16), quarter(64, 18), quarter(65, 19),
+            ])]),
+            Measure(voices: [Voice(elements: [
+                quarter(72, 14),
+                .breath(Breath(kind: .breathMark(.tick), pause: 0)),
+                .ambitus(Ambitus(topPitch: 79, topTpc: 16, bottomPitch: 55, bottomTpc: 16)),
+                quarter(74, 16), quarter(76, 18),
+                .ambitus(Ambitus(topPitch: 81, topTpc: 18, bottomPitch: 57, bottomTpc: 18)),
+                quarter(77, 19),
+            ])]),
+        ])
+    }
+
+    @Test("a destination breath and ambitus are replaced only where the copy brings the same kind to the tick")
+    func replacesOnlyTheCoveredBreathAndAmbitus() throws {
+        var score = Self.breathsAndAmbitusesOverTwoBars()
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 5)))
+            .apply(to: &score)
+        #expect(Self.voice(score, 1).elements == [
+            Self.quarter(60, 14),
+            .breath(Breath(kind: .breathMark(.comma), pause: 0)),
+            .ambitus(Ambitus(topPitch: 72, topTpc: 14, bottomPitch: 60, bottomTpc: 14)),
+            Self.quarter(62, 16), Self.quarter(64, 18),
+            // The destination's third ambitus stood at tick 1440, which the copy covers but brings no ambitus
+            // to, so it is the one kept.
+            .ambitus(Ambitus(topPitch: 81, topTpc: 18, bottomPitch: 57, bottomTpc: 18)),
+            Self.quarter(65, 19),
+        ])
+    }
+
     /// Two 4/4 bars of four quarters. Bar 0 (the source) opens with a chord symbol. Bar 1 (the destination)
     /// carries one at tick 0 — which the copy's own lands on — and one at tick 960, which it does not.
     private static func chordSymbolsOverTwoBars() -> Score {

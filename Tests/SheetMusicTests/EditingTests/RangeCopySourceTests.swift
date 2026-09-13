@@ -200,10 +200,15 @@ struct RangeCopySourceTests {
         #expect(copied.spanners.isEmpty)
     }
 
-    /// One 4/4 bar of four quarters carrying, besides the notes, a mid-bar clef and dynamic at tick 480 and a key
-    /// signature and a barline at tick 960. MuseScore's paste accepts the clef and the annotation list
-    /// (`read460.cpp:664-715`) and silently drops key signature, time signature, barline and rehearsal mark
-    /// (`739-744`), so a copy that carried the latter would state something the paste never states.
+    /// One 4/4 bar of four quarters carrying, besides the notes, a mid-bar clef and dynamic at tick 480, a key
+    /// signature and a barline at tick 960, and a second dynamic at tick 960. MuseScore's paste accepts the clef
+    /// and the annotation list (`read460.cpp:664-715`) and silently drops key signature, time signature, barline
+    /// and rehearsal mark (`739-744`), so a copy that carried the latter would state something the paste never
+    /// states.
+    ///
+    /// The second dynamic is what makes a range ending at tick 960 test its own end bound: it is COPYABLE and it
+    /// sits exactly on the boundary, where the key signature and barline beside it would be refused on kind
+    /// alone no matter how the bound were written.
     private static func barWithNonTimedElements() -> Score {
         let staff = Staff(defaultClefType: "G", measures: [
             Measure(voices: [Voice(elements: [
@@ -213,6 +218,7 @@ struct RangeCopySourceTests {
                 .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
                 .keySignature(KeySignature(concertKey: 2)),
                 .barLine(BarLine(subtype: "double")),
+                .dynamic(Dynamic(subtype: "f", velocity: 96)),
                 .chord(Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])),
                 .chord(Chord(duration: .quarter, notes: [Note(pitch: 65, tpc: 19)])),
             ])]),
@@ -226,33 +232,39 @@ struct RangeCopySourceTests {
     func carriesNonTimedElements() throws {
         let score = Self.barWithNonTimedElements()
         let source = try #require(try RangeCopySource(
-            range: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 7)), in: score,
+            range: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 8)), in: score,
         ))
         let stream = try #require(source.streams.first)
         // The clef and the dynamic both stand at tick 480, ahead of the note whose segment they attach to.
-        #expect(stream.elements.map(\.absoluteTick) == [0, 480, 480, 480, 960, 1440])
+        #expect(stream.elements.map(\.absoluteTick) == [0, 480, 480, 480, 960, 960, 1440])
         #expect(stream.elements.map(\.element) == [
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
             .clef(Clef(concertClefType: "F")),
             .dynamic(Dynamic(subtype: "mf", velocity: 64)),
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+            .dynamic(Dynamic(subtype: "f", velocity: 96)),
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])),
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 65, tpc: 19)])),
         ])
         // A non-timed element carries no length of its own; nothing resolves a duration for it.
-        #expect(stream.elements.map(\.lengthTicks) == [480, 0, 0, 480, 480, 480])
+        #expect(stream.elements.map(\.lengthTicks) == [480, 0, 0, 480, 0, 480, 480])
     }
 
-    @Test("a non-timed element outside the range is not carried")
-    func leavesNonTimedElementsOutsideTheRange() throws {
+    @Test("a copyable non-timed element sitting exactly on the range's end tick is not carried")
+    func leavesNonTimedElementsAtTheRangeEnd() throws {
         let score = Self.barWithNonTimedElements()
-        // Beats 1-2 only: [0, 960). The clef and dynamic at tick 480 are inside it; nothing sits at 960 or later
-        // that this range may take.
+        // Beats 1-2 only: [0, 960). The clef and the "mf" at tick 480 are inside it; the "f" at tick 960 is a
+        // kind this copy DOES carry, standing exactly on the end bound, so only the bound can keep it out.
         let source = try #require(try RangeCopySource(
             range: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 3)), in: score,
         ))
         let stream = try #require(source.streams.first)
         #expect(stream.elements.map(\.absoluteTick) == [0, 480, 480, 480])
+        let dynamicSubtypes = stream.elements.compactMap { copied -> String? in
+            guard case let .dynamic(dynamic) = copied.element else { return nil }
+            return dynamic.subtype
+        }
+        #expect(dynamicSubtypes == ["mf"])
         let clefCount = stream.elements.filter { if case .clef = $0.element { true } else { false } }.count
         #expect(clefCount == 1)
     }
