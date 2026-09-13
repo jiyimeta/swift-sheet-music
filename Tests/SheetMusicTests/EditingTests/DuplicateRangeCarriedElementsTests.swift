@@ -112,9 +112,9 @@ struct DuplicateRangeCarriedElementsTests {
         ])
     }
 
-    /// The same shape as `clefsOverTwoBars`, for the two other kinds a segment holds one of per track. The
-    /// source brings a comma breath and an ambitus at tick 480; the destination has a tick breath and a
-    /// different ambitus there, plus an ambitus at tick 1440 the copy never reaches the kind of.
+    /// The same shape as `clefsOverTwoBars`, for the breath — and for the ambitus, which is neither carried
+    /// nor superseded. The source brings a comma breath and an ambitus at tick 480; the destination has a tick
+    /// breath and a different ambitus there, plus a second ambitus at tick 1440.
     private static func breathsAndAmbitusesOverTwoBars() -> Score {
         score([
             Measure(voices: [Voice(elements: [
@@ -134,18 +134,20 @@ struct DuplicateRangeCarriedElementsTests {
         ])
     }
 
-    @Test("a destination breath and ambitus are replaced only where the copy brings the same kind to the tick")
-    func replacesOnlyTheCoveredBreathAndAmbitus() throws {
+    @Test("a destination breath is replaced where the copy brings one; the destination's ambituses all stay")
+    func replacesOnlyTheCoveredBreath() throws {
         var score = Self.breathsAndAmbitusesOverTwoBars()
         _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 5)))
             .apply(to: &score)
         #expect(Self.voice(score, 1).elements == [
             Self.quarter(60, 14),
+            // Both destination ambituses survive: MuseScore's paste has no Ambitus branch at all — the tag
+            // falls into `read460.cpp:741-744`'s "element %s not handled" catch-all — so nothing arrives to
+            // take their place, and an ambitus lives in the segment's element list rather than among the
+            // annotations `deleteAnnotationsFromRange` clears.
+            .ambitus(Ambitus(topPitch: 79, topTpc: 16, bottomPitch: 55, bottomTpc: 16)),
             .breath(Breath(kind: .breathMark(.comma), pause: 0)),
-            .ambitus(Ambitus(topPitch: 72, topTpc: 14, bottomPitch: 60, bottomTpc: 14)),
             Self.quarter(62, 16), Self.quarter(64, 18),
-            // The destination's third ambitus stood at tick 1440, which the copy covers but brings no ambitus
-            // to, so it is the one kept.
             .ambitus(Ambitus(topPitch: 81, topTpc: 18, bottomPitch: 57, bottomTpc: 18)),
             Self.quarter(65, 19),
         ])

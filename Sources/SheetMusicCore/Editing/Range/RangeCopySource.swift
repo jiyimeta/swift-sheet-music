@@ -54,7 +54,7 @@ struct RangeCopySource {
     /// A tuplet's endpoints are `Voice.elements` indices, which only make sense together with the measure that
     /// owns the `Voice` they index into. Ordering one against another is voice order across the whole stream,
     /// which is how the timed and non-timed passes are merged back together.
-    fileprivate struct MeasureElementLocation: Hashable, Comparable {
+    struct MeasureElementLocation: Hashable, Comparable {
         let measureIndex: Int
         let elementIndex: Int
 
@@ -155,6 +155,9 @@ extension RangeCopySource {
         var elementLocations: [MeasureElementLocation] = []
         var infoByLocation: [MeasureElementLocation: (tick: Int, length: Int)] = [:]
         var spanners: [RangeCopySpanners.Copied] = []
+        let tupletMembers = tupletMemberLocations(
+            for: ids, staff: key.staff, voiceIndex: key.voiceIndex, score: score,
+        )
         for id in ids {
             guard let onset = score.onset(of: id), let absolute = geometry.absolute(onset),
                   var element = score[id], sourceDurations.indices.contains(id.measureIndex),
@@ -163,11 +166,21 @@ extension RangeCopySource {
                   // it here.
                   let storedLength = element.tickCount(division: score.division, in: sourceDurations[id.measureIndex])
             else { continue }
+            let location = MeasureElementLocation(measureIndex: id.measureIndex, elementIndex: id.elementIndex)
             // MuseScore's paste opens a gap of exactly the selection's length and shortens the trailing
             // ChordRest to fit it (`read460.cpp:603-633`) rather than copying it whole. `voiceElements(in:)`
             // selects by onset, so an element that starts inside the range but sounds past its end still
             // arrives here — clamp what it reports so the duplicate never runs longer than the range itself.
-            let length = min(storedLength, rangeEnd - absolute)
+            //
+            // A TUPLET MEMBER is exempt, exactly as MuseScore exempts it: `if (!cr->tuplet())` guards the
+            // shorten (`read460.cpp:626-629`, "we don't allow copy of partial tuplet anyhow"). This is
+            // reachable even though `tupletBounds(for:…)` refuses a partially covered tuplet, because that
+            // refusal is about ONSETS: every member can be selected while the last member's END still falls
+            // past the range. Clamping there would truncate that member and re-spell it, leaving the carried
+            // bracket naming a member count the voice no longer has.
+            let length = tupletMembers.contains(location)
+                ? storedLength
+                : min(storedLength, rangeEnd - absolute)
             // Starts at or past the range's end: never really in the range despite the onset test admitting it.
             guard length > 0 else { continue }
             if case var .chord(chord) = element {
@@ -181,7 +194,6 @@ extension RangeCopySource {
                 )
                 element = .chord(chord)
             }
-            let location = MeasureElementLocation(measureIndex: id.measureIndex, elementIndex: id.elementIndex)
             infoByLocation[location] = (tick: absolute, length: length)
             elementLocations.append(location)
             elements.append((absoluteTick: absolute, lengthTicks: length, element: element))
@@ -194,7 +206,7 @@ extension RangeCopySource {
             rangeStart: rangeStart, rangeEnd: rangeEnd,
         )
         let tuplets = try tupletBounds(
-            for: ids, key: key, lowBound: lowBound, highBound: highBound,
+            for: ids, staff: key.staff, voiceIndex: key.voiceIndex, lowBound: lowBound, highBound: highBound,
             infoByLocation: infoByLocation, score: score,
         )
         spanners += RangeCopySpanners.lineSpanners(
@@ -250,22 +262,28 @@ extension RangeCopySource {
     }
 
     /// Whether a non-timed element is one MuseScore's paste would accept — clef (`read460.cpp:704-715`), breath
-    /// (`717-728`), ambitus, and the segment-annotation list at `664-703`.
+    /// (`717-728`) and the segment-annotation list at `664-703`.
     ///
-    /// Everything else is false, and for three different reasons. Key signature, time signature and barline are
-    /// in the payload but the paste drops them on the floor (`739-744`). `.measureRepeat` stands for a whole
-    /// bar's content and `.locationShift` moves the voice's one cursor for the rest of the bar, so neither means
-    /// the same thing anywhere else. `.spanner` needs its partner re-anchored against the destination's own
-    /// barring, so it travels beside the elements rather than among them — `RangeCopySpanners.lineSpanners(for:…)`
-    /// collects it and `RangeCopySpanners.recreate(_:at:…)` writes it back. `.preserved` is markup this library
-    /// does not model, so there is no knowing whether MuseScore's reader would take it.
+    /// Everything else is false, and for four different reasons. Key signature, time signature and barline are
+    /// in the payload but the paste drops them on the floor (`739-744`). An ambitus is in the payload too and
+    /// has no branch of its own at all: it falls into the same catch-all, which logs "element %s not handled"
+    /// and skips it. `.measureRepeat` stands for a whole bar's content and `.locationShift` moves the voice's
+    /// one cursor for the rest of the bar, so neither means the same thing anywhere else. `.spanner` needs its
+    /// partner re-anchored against the destination's own barring, so it travels beside the elements rather than
+    /// among them — `RangeCopySpanners.lineSpanners(for:…)` collects it and `RangeCopySpanners.recreate(_:at:…)`
+    /// writes it back. `.preserved` is markup this library does not model, so there is no knowing whether
+    /// MuseScore's reader would take it.
+    ///
+    /// > Important: the kinds this answers true for, intersected with the kinds
+    /// > `RangeCopyVoiceRebuild.place(untimed:spanStart:spanEnd:into:in:)` preserves, must be exactly
+    /// > `RangeCopyVoiceRebuild.SupersededKind`. Read that function's note before moving a kind in or out.
     private static func isCopyable(_ element: VoiceElement) -> Bool {
         switch element {
-        case .clef, .breath, .ambitus, .dynamic, .fermata, .harmony, .sticking, .expression, .capo,
+        case .clef, .breath, .dynamic, .fermata, .harmony, .sticking, .expression, .capo,
              .stringTunings, .figuredBass, .symbol, .fretDiagram:
             true
         case .chord, .keySignature, .timeSignature, .barLine, .measureRepeat, .locationShift, .spanner,
-             .preserved:
+             .ambitus, .preserved:
             false
         }
     }
@@ -299,52 +317,6 @@ extension RangeCopySource {
             }
         }
         return result
-    }
-
-    /// Tuplets live on the (per-measure) `Voice`, so this walks the distinct measures the stream touched. A
-    /// tuplet the copied elements never reach is left alone; one they reach through only SOME of its members is
-    /// not something a copy can state — MuseScore refuses the whole operation rather than drop the bracket
-    /// (`Selection::canCopy`, `select.cpp:1394-1465`), so this throws `.insideTuplet` naming whichever of the
-    /// range's two bounds is the one that landed inside the tuplet, rather than silently keeping only the spans
-    /// whose first and last member both survived.
-    ///
-    /// `ids` is a contiguous, onset-ordered slice of the voice per measure (that is what `voiceElements(in:)`
-    /// selects), so within one measure a tuplet's first member is missing only when the covered slice starts
-    /// after it (the range's earlier bound, `lowBound`), and its last member is missing only when the slice ends
-    /// before it (the range's later bound, `highBound`) — there is no other way for `ids` to touch some of a
-    /// tuplet's members without touching its first or last.
-    private static func tupletBounds(
-        for ids: [VoiceElementID], key: StreamKey, lowBound: VoiceElementID, highBound: VoiceElementID,
-        infoByLocation: [MeasureElementLocation: (tick: Int, length: Int)], score: Score,
-    ) throws -> [(startTick: Int, endTick: Int, normalNotes: Int, actualNotes: Int)] {
-        var measureOrder: [Int] = []
-        for id in ids where !measureOrder.contains(id.measureIndex) {
-            measureOrder.append(id.measureIndex)
-        }
-
-        var tuplets: [(startTick: Int, endTick: Int, normalNotes: Int, actualNotes: Int)] = []
-        for measureIndex in measureOrder {
-            let ref = VoiceRef(staff: key.staff, measureIndex: measureIndex, voiceIndex: key.voiceIndex)
-            guard let voice = score[voice: ref] else { continue }
-            let presentIndices = Set(ids.filter { $0.measureIndex == measureIndex }.map(\.elementIndex))
-            for span in voice.tupletSpans {
-                guard !presentIndices.isDisjoint(with: span.startIndex ... span.endIndex) else { continue }
-                let startPresent = presentIndices.contains(span.startIndex)
-                let endPresent = presentIndices.contains(span.endIndex)
-                guard startPresent, endPresent else {
-                    throw Self.refused(.insideTuplet(at: startPresent ? highBound : lowBound))
-                }
-                let startLocation = MeasureElementLocation(measureIndex: measureIndex, elementIndex: span.startIndex)
-                let endLocation = MeasureElementLocation(measureIndex: measureIndex, elementIndex: span.endIndex)
-                guard let start = infoByLocation[startLocation], let end = infoByLocation[endLocation]
-                else { continue }
-                tuplets.append((
-                    startTick: start.tick, endTick: end.tick + end.length,
-                    normalNotes: span.normalNotes, actualNotes: span.actualNotes,
-                ))
-            }
-        }
-        return tuplets
     }
 }
 

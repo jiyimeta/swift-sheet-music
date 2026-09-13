@@ -80,15 +80,24 @@ extension RangeCopyVoiceRebuild {
     /// whole bar's content, so neither can be carried through material written over the ticks it governs
     /// without changing what the bar means.
     ///
-    /// A clef, a signature, a barline, a breath, an ambitus, or unmodeled `.preserved` markup is re-emitted at
+    /// A clef, a signature, a barline, a breath, or unmodeled `.preserved` markup is re-emitted at
     /// its own tick, matching MuseScore, where these live on their own segment types rather than as the
-    /// annotations `makeGap1`'s `deleteAnnotationsFromRange` clears (`cmd.cpp:1504`, `edit.cpp:3734-3759`). A
-    /// dynamic, fermata, harmony, and the rest of the segment-annotation family are cleared instead — the copy
-    /// landing on them is exactly what that MuseScore pass destroys. A `.spanner` goes the same way only for the
-    /// four kinds `RangeCopySpanners.isShortenedOutOfGaps(_:)` names. Every kind kept here is kept
-    /// UNCONDITIONALLY; `rebuild(_:cut:gap:
-    /// spanStart:spanEnd:in:)` drops a clef, breath, ambitus or harmony afterward when the piece brings one of
-    /// the same kind to the same tick, via `pieceSupersededSlots(in:from:in:)`.
+    /// annotations `makeGap1`'s `deleteAnnotationsFromRange` clears (`cmd.cpp:1504`, `edit.cpp:3734-3759`). An
+    /// ambitus is kept for a different reason: MuseScore holds it in the segment's element list rather than
+    /// among its annotations, so no gap pass reaches it at all. A dynamic, fermata, harmony, and the rest of
+    /// the segment-annotation family are cleared instead — the copy landing on them is exactly what that
+    /// MuseScore pass destroys. A `.spanner` is decided by `spannerFate(of:anchoredAt:spanStart:spanEnd:in:)`.
+    /// Every kind kept here is kept UNCONDITIONALLY; `rebuild(_:cut:gap:spanStart:spanEnd:in:)` drops a clef,
+    /// breath or harmony afterward when the piece brings one of the same kind to the same tick, via
+    /// `pieceSupersededSlots(in:from:in:)`.
+    ///
+    /// > Important: `SupersededKind` must stay EXACTLY the intersection of `RangeCopySource.isCopyable(_:)` and
+    /// > the kinds this function preserves. Three exhaustive switches encode that invariant with no compiler
+    /// > link between them: exhaustiveness catches a NEW `VoiceElement` case, and nothing at all catches an
+    /// > existing case moved from one bucket to another. Moving a kind into or out of either list means
+    /// > revisiting all three — a kind the copy carries but this drops would leave the destination's copy of it
+    /// > superseded by nothing, and a kind this preserves that the copy does not carry can never be superseded
+    /// > and so must not be named here.
     private static func place(
         untimed entry: Entry, spanStart: Int, spanEnd: Int, into result: inout Cut, in context: Context,
     ) throws {
@@ -99,17 +108,11 @@ extension RangeCopyVoiceRebuild {
         switch entry.element {
         case .locationShift, .measureRepeat:
             throw refused(.blockedByUntimedElement(at: context.location(entry.index)))
-        case let .spanner(spanner) where !RangeCopySpanners.isShortenedOutOfGaps(spanner.kind):
+        case let .spanner(spanner):
+            guard spannerSurvivesGap(
+                spanner, anchoredAt: entry.start, spanStart: spanStart, spanEnd: spanEnd, in: context,
+            ) else { break }
             result.preserved.append(entry)
-        case .spanner:
-            // A hairpin, ottava, trill or vibrato ANCHORED in the gap goes with the material it was anchored
-            // to — `makeGap1`'s `deleteOrShortenOutSpannersFromRange` (`edit.cpp:3638-3702`). No other kind
-            // does: that pass collects only those four (`:3641-3646`) and skips a volta and anything
-            // system-flagged (`:3659`), so a pedal or a text line standing here is preserved above. The other
-            // two outcomes this walk cannot reach — a line reaching INTO the gap from an earlier bar, and one
-            // anchored here that reaches PAST the gap — are `RangeCopySpanners.clearDestination`'s, which
-            // works from the score's own absolute axis.
-            break
         case .clef, .keySignature, .timeSignature, .barLine, .breath, .ambitus, .preserved, .harmony:
             result.preserved.append(entry)
         case .dynamic, .fermata, .sticking, .expression, .capo, .stringTunings, .figuredBass, .symbol,
@@ -118,6 +121,36 @@ extension RangeCopyVoiceRebuild {
         case .chord:
             preconditionFailure("place(untimed:...) is only reached for a non-timed entry")
         }
+    }
+
+    /// Whether a `.spanner` ANCHORED inside the gap is re-emitted rather than removed with the material it was
+    /// anchored to — `makeGap1`'s `deleteOrShortenOutSpannersFromRange` (`edit.cpp:3638-3702`), read in its own
+    /// order.
+    ///
+    /// The pass first skips a volta and anything system-flagged (`:3659`), which is why a volta survives here
+    /// whatever its extent. Then comes the branch that is KIND-AGNOSTIC: a spanner whose start lies in
+    /// `[t1, t2)` and whose end lies in `(t1, t2]` is removed outright (`:3683-3685`), pedal and text line
+    /// included. Only after that does the four-kind set (`:3641-3646`) gate anything, and it gates the
+    /// `moveStart` / `moveEnd` shorten branches alone (`:3690-3698`). So a hairpin, ottava, trill or vibrato
+    /// anchored here is removed either way — wholly inside it goes with the gap, and reaching past it, it is
+    /// re-written at the gap's far edge by `RangeCopySpanners.restart(_:in:ids:commands:)` — while any other
+    /// kind anchored here that reaches PAST the gap is outside the pass entirely and stays put.
+    ///
+    /// The remaining outcome this walk cannot see is a spanner reaching INTO the gap from an earlier bar; that
+    /// one is `RangeCopySpanners.clearDestination`'s, which works from the score's own absolute axis.
+    private static func spannerSurvivesGap(
+        _ spanner: Spanner, anchoredAt anchorTick: Int, spanStart: Int, spanEnd: Int, in context: Context,
+    ) -> Bool {
+        guard spanner.kind != .volta else { return true }
+        if RangeCopySpanners.isShortenedOutOfGaps(spanner.kind) { return false }
+        guard let measureStart = context.measureStart,
+              let absoluteEnd = RangeCopySpanners.endTick(
+                  of: spanner, anchoredAt: ScoreTickPosition(measure: context.ref.measureIndex, tick: anchorTick),
+                  geometry: context.geometry, division: context.division,
+              )
+        else { return true }
+        let end = absoluteEnd - measureStart
+        return !(end > spanStart && end <= spanEnd)
     }
 
     /// A non-timed kind a segment holds only ONE of per track, so a copied element of that kind takes the
@@ -131,21 +164,23 @@ extension RangeCopyVoiceRebuild {
     ///
     /// `nil` for every other element: a kind the copy does not carry has nothing to lose its place to, and a
     /// kind that can legitimately repeat at one tick must not be deduplicated by tick either.
+    ///
+    /// > Important: this list is EXACTLY the intersection of `RangeCopySource.isCopyable(_:)` and the kinds
+    /// > `place(untimed:spanStart:spanEnd:into:in:)` preserves, and nothing in the compiler ties the three
+    /// > switches together. Read that function's note before moving a kind between buckets.
     enum SupersededKind: Hashable {
         case clef
         case breath
-        case ambitus
         case harmony
 
         init?(_ element: VoiceElement) {
             switch element {
             case .clef: self = .clef
             case .breath: self = .breath
-            case .ambitus: self = .ambitus
             case .harmony: self = .harmony
             case .locationShift, .measureRepeat, .spanner, .keySignature, .timeSignature, .barLine, .preserved,
-                 .dynamic, .fermata, .sticking, .expression, .capo, .stringTunings, .figuredBass, .symbol,
-                 .fretDiagram, .chord:
+                 .ambitus, .dynamic, .fermata, .sticking, .expression, .capo, .stringTunings, .figuredBass,
+                 .symbol, .fretDiagram, .chord:
                 return nil
             }
         }
@@ -308,7 +343,7 @@ extension RangeCopyVoiceRebuild {
 
     /// What to do with one side of a note's tie. `.leave` is not the same as `.clear`: a trim keeps the tie
     /// that binds it to material the span never touched, and drops only the one that would cross the seam.
-    private enum TieChange {
+    enum TieChange {
         case leave
         case set(Int)
         case clear
@@ -325,7 +360,7 @@ extension RangeCopyVoiceRebuild {
     /// Rewrites `tieBack` and/or `tieForward` on every note of a chord element. `Chord.notes` is a
     /// `ChordNotes`, whose only mutation path that keeps a note's identifier is `updateNote(at:_:)`, so notes
     /// are edited through their indices rather than rebuilt.
-    private static func settingTie(
+    static func settingTie(
         _ element: VoiceElement, back: TieChange = .leave, forward: TieChange = .leave,
     ) -> VoiceElement {
         guard case var .chord(chord) = element else { return element }

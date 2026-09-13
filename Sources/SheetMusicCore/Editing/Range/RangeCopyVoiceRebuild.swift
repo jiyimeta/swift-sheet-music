@@ -27,6 +27,7 @@ enum RangeCopyVoiceRebuild {
 
         let context = Context(
             division: score.division, measureDuration: measureDurations[piece.measureIndex], ref: ref,
+            geometry: RangeCopyGeometry(staff: staff, in: score),
         )
         let spanStart = piece.startTickInMeasure
         let spanEnd = spanStart + piece.elements.reduce(0) { $0 + context.advance(of: $1) }
@@ -62,6 +63,17 @@ extension RangeCopyVoiceRebuild {
         let division: Int
         let measureDuration: Fraction
         let ref: VoiceRef
+        /// The staff's measures on one absolute axis. A rebuild is measure-local everywhere except where it
+        /// has to resolve a spanner's stored end, which counts MEASURES from its anchor and so cannot be read
+        /// without knowing where the bars are.
+        let geometry: RangeCopyGeometry
+
+        /// The absolute tick this rebuild's own measure starts at; `nil` for a measure the staff does not have.
+        var measureStart: Int? {
+            geometry.measureStarts.indices.contains(ref.measureIndex)
+                ? geometry.measureStarts[ref.measureIndex]
+                : nil
+        }
 
         /// How far `element` moves the voice's running tick. Never sum `NoteDuration.ticks(division:)` instead:
         /// only `cursorAdvance` resolves a `.measure` rest (the plain call traps on one) and honors a

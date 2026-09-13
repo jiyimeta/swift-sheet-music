@@ -109,6 +109,44 @@ struct RangeCopySourceTests {
         #expect(last.element == .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])))
     }
 
+    /// A 4/4 bar with two voices. Voice 0 is a dotted half turned into a 3:2 triplet — members at ticks 0, 480
+    /// and 960, each 480 long — followed by a plain quarter. Voice 1 is eight eighth rests, and the range is
+    /// anchored on those: elements 0 through 4 run from tick 0 to tick 1200, so every triplet member's ONSET
+    /// falls inside the range while the last member's END (1440) is 240 ticks past it.
+    private static func tripletUnderAShorterRange() throws -> Score {
+        let triplet = Voice(elements: [
+            .chord(Chord(
+                duration: .fraction(Fraction(numerator: 3, denominator: 4)), notes: [Note(pitch: 60, tpc: 14)],
+            )),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+        ])
+        let anchor = Voice(elements: (0 ..< 8).map { _ in VoiceElement.rest(duration: .eighth) })
+        let staff = Staff(defaultClefType: "G", measures: [Measure(voices: [triplet, anchor])])
+        var score = Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+        _ = try CreateTuplet(at: Self.slot(0, 0), actualNotes: 3, normalNotes: 2).apply(to: &score)
+        return score
+    }
+
+    @Test("a tuplet member sounding past the range's end is copied whole, not clamped")
+    func tupletMemberExemptFromTheRangeEndClamp() throws {
+        let score = try Self.tripletUnderAShorterRange()
+        let source = try #require(try RangeCopySource(
+            range: VoiceElementRange(start: Self.slot(0, 0, voice: 1), end: Self.slot(0, 4, voice: 1)),
+            in: score,
+        ))
+        #expect(source.lengthTicks == 1200)
+        let triplet = try #require(source.streams.first { $0.voiceIndex == 0 })
+        // `read460.cpp:626-629` exempts a ChordRest inside a tuplet from the shorten-the-last-CR step ("we
+        // don't allow copy of partial tuplet anyhow"). Clamping the last member would truncate and re-spell
+        // it, leaving the carried bracket naming a member count the voice no longer has.
+        #expect(triplet.elements.map(\.lengthTicks) == [480, 480, 480])
+        let bracket = try #require(triplet.tuplets.first)
+        #expect(bracket.startTick == 0)
+        #expect(bracket.endTick == 1440)
+    }
+
     @Test("the copy's outer ties are cleared and inner ones kept")
     func outerTiesCleared() throws {
         let score = EditingFixtures.parityFixture() // bar 2 is two tied E4 halves

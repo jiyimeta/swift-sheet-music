@@ -267,8 +267,8 @@ struct RangeCopySpannersTests {
         #expect(kept.first?.nextFractionsOffset == Fraction(ticks: 1440, division: 480))
     }
 
-    @Test("a destination pedal standing inside the copy's span survives it")
-    func leavesAPedalInsideTheSpan() throws {
+    @Test("a destination pedal lying wholly inside the copy's span is removed with the material under it")
+    func removesAPedalInsideTheSpan() throws {
         var score = Self.score([
             Measure(voices: [Voice(elements: [
                 Self.quarter(60, 14), Self.quarter(62, 16),
@@ -278,8 +278,29 @@ struct RangeCopySpannersTests {
         ])
         _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 1)))
             .apply(to: &score)
-        // The copy lands on beats 3 and 4, where the pedal stands. A hairpin there would go; a pedal is outside
-        // the pass and stays, at its own tick among the new material.
+        // The copy lands on beats 3 and 4, which is where the pedal starts and where it ends. MuseScore's
+        // wholly-inside branch is kind-agnostic — `undoRemoveElement(sp)` for any spanner whose start is in
+        // `[t1, t2)` and whose end is in `(t1, t2]` (`edit.cpp:3683-3685`), with only a volta and a
+        // system-flagged spanner skipped ahead of it (`:3659`). The four-kind set gates the SHORTEN branches
+        // below it (`:3690-3698`), not this one, so a pedal buried in the gap goes the way a hairpin does.
+        #expect(Self.lineSpanners(score, 0).isEmpty)
+    }
+
+    @Test("a destination pedal anchored inside the copy's span but reaching past it survives")
+    func leavesAPedalReachingOutOfTheSpan() throws {
+        var score = Self.score([
+            Measure(voices: [Voice(elements: [
+                Self.quarter(60, 14), Self.quarter(62, 16),
+                .spanner(Self.pedal(measures: 1, fractions: nil)),
+                Self.quarter(64, 18), Self.quarter(65, 19),
+            ])]),
+            Self.quarterRestBar,
+        ])
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 1)))
+            .apply(to: &score)
+        // Anchored at beat 3 — inside the span — but ending in the next bar, so it is neither wholly inside
+        // the gap nor one of the four kinds `moveStart` shortens: MuseScore's pass leaves it entirely alone,
+        // and it stays at its own tick among the new material.
         let kept = Self.lineSpanners(score, 0)
         #expect(kept.count == 1)
         #expect(kept.first?.kind == .pedal)
