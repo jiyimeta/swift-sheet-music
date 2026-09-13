@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-09-14
+
 ### Added
 
 - **`EditIntent.duplicateRange(over:)` (wire 85) and `DuplicateRange`: MuseScore's `R`, repeating a range
@@ -78,7 +80,33 @@ and this project adheres to
   package produces and reads only its own `.mscx` payload — and a host's branch by pasteboard type is the
   extension point where that, and a single-element payload, would join.
 
+- **A host can now let a reader click a clef, a signature or a barline and get the answer they aimed at.**
+  Every engraved element gets the same half staff space of reach text already had (`elementHitTolerance`), so a
+  barline hairline and a two-space-wide clef stop being targets a pointer has to land on exactly; highlight
+  geometry is unchanged, because the padding is a click affordance and not the mark's frame. A key or time
+  signature tests the UNION of its glyphs rather than each accidental's ink separately — the run is engraved as
+  one column and read as one mark, so the gaps between four sharps are no longer dead. Everything else keeps its
+  ink separate on purpose: a spanner clipped across a system break contributes one rect per segment, and unioning
+  those would claim the page between them. `elementHitRects(for:)` and `clefHitRects(for:)` are added beside the
+  singular forms, returning one rectangle per place in document order rather than their envelope, because an
+  identity can now be drawn in places that sit systems apart and a host floating a control beside a selection
+  needs somewhere sensible to put it. `ClefGlyph.inkExtentSp(for:)` reports a clef's real ink, measured with
+  CoreText against the Bravura this package ships rather than copied out of the metadata JSON: a G clef's curl
+  runs 4.4 sp above the G line while its tail hangs 2.6 sp below it, so the old symmetrical 2.5 sp box opened a
+  control over the curl instead of above it. The hit TEST is untouched — it has its own tolerance and never read
+  these rectangles.
+
 ### Changed
+
+- **A restated clef or signature now names what it restates, where before it named nothing.** A courtesy
+  key/time signature at a system's trailing edge, and the clef every continuation system opens with, carried no
+  identity: a restatement declares nothing, so there was nothing to edit at it. That is right about the model and
+  wrong about the page — on system four the restated clef is the only clef on screen, and answering "not a thing"
+  to a click on it is wrong however defensible the rule is. A courtesy announcement now names the bar it
+  announces, and a continuation clef the declaration in force (`LayoutEngine.declaringClefAnchor`,
+  `LayoutEngine.declaringKeySignatureMeasure(before:staff:)`). A redraw still must not name its OWN bar: that
+  would invent a declaration the score does not contain, and an edit addressed there would write one. The sticky
+  header stays unanchored — it is chrome drawn over the score rather than the score itself.
 
 - **Deleting now means "turn what I selected into rests", and nothing more.** Both delete intents
   used to reach outside the selection: `.delete(at:)` collapsed the whole bar-voice to a measure rest
