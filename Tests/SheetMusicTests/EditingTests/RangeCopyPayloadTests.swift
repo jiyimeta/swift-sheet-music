@@ -194,18 +194,33 @@ struct RangeCopyPayloadTests {
         #expect(timeSignature == TimeSignature(numerator: 4, denominator: 4))
     }
 
-    @Test("a spanner, location shift and measure repeat in a boundary measure are excluded from the payload")
-    func excludesUnsafeUntimedKindsAtBoundary() throws {
+    /// A crescendo hairpin reaching three quarters forward from wherever it is anchored.
+    private static func hairpin() -> VoiceElement {
+        .spanner(Spanner(
+            kind: .hairpin, rawType: "HairPin",
+            nextFractionsOffset: Fraction(numerator: 3, denominator: 4),
+            hairpin: Spanner.HairpinPayload(subtype: .crescendo),
+        ))
+    }
+
+    private static func spannerCount(_ elements: IdentifiedArray<VoiceElement>) -> Int {
+        elements.filter { if case .spanner = $0 { true } else { false } }.count
+    }
+
+    @Test("a location shift and a measure repeat in a boundary measure are excluded; a spanner in span is not")
+    func excludesCursorAndBarStandInsAtBoundary() throws {
+        // The two kinds a cut boundary really does invalidate. A `.locationShift` moves the voice's ONE cursor,
+        // and the trim may have taken away the chords it was jogging past, so it would re-date everything after
+        // it; a `.measureRepeat` stands for a whole bar's content, and a boundary measure is exactly the bar the
+        // trim can partially remove. Neither can be restated from what survives. A `.spanner` is not that: its
+        // only hazard is positional, and it is the hazard the chords already have.
         var source = EditingFixtures.parityFixture()
         source.parts.updateValue(at: 0) { part in
             part.staves.updateValue(at: 0) { staff in
                 staff.measures[0].voices[0] = Voice(elements: [
                     .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
                     .locationShift(delta: Fraction(numerator: 0, denominator: 4)),
-                    .spanner(Spanner(
-                        kind: .hairpin, rawType: "HairPin",
-                        hairpin: Spanner.HairpinPayload(subtype: .crescendo),
-                    )),
+                    Self.hairpin(),
                     .measureRepeat(MeasureRepeat(numMeasures: 1, duration: .quarter)),
                     .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
                     .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
@@ -219,16 +234,74 @@ struct RangeCopyPayloadTests {
         let elements = payload.parts[0].staves[0].measures[0].voices[0].elements
         let hasUnsafeKind = elements.contains { element in
             switch element {
-            case .locationShift, .measureRepeat, .spanner: true
+            case .locationShift, .measureRepeat: true
             default: false
             }
         }
         #expect(!hasUnsafeKind)
+        #expect(Self.spannerCount(elements) == 1)
         let pitches = elements.compactMap { element -> Int? in
             guard case let .chord(chord) = element, let note = chord.notes.first else { return nil }
             return note.pitch
         }
         #expect(pitches == [60, 62])
+    }
+
+    @Test("a line spanner inside a one-bar copy reaches the resolved payload")
+    func carriesALineSpannerAcrossAOneBarCopy() throws {
+        // Both of a one-bar copy's boundaries are that one bar, so "drop it at a boundary measure" dropped every
+        // line spanner a one-bar ⌘C could have carried. `R` over the identical range keeps it.
+        var source = EditingFixtures.parityFixture()
+        source.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[0] = Voice(elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    Self.hairpin(),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 65, tpc: 13)])),
+                ])
+            }
+        }
+        let range = VoiceElementRange(start: Self.slot(0, 2), end: Self.slot(0, 5))
+        let payload = try #require(RangeCopyPayload.score(for: range, in: source))
+        let pasted = try #require(RangeCopySource(payload: payload))
+        let duplicatedSource = try RangeCopySource(range: range, in: source, operation: "DuplicateRange")
+        let duplicated = try #require(duplicatedSource)
+        let pastedSpanners = try #require(pasted.streams.first).spanners
+        let duplicatedSpanners = try #require(duplicated.streams.first).spanners
+        #expect(pastedSpanners.count == 1)
+        #expect(pastedSpanners.count == duplicatedSpanners.count)
+    }
+
+    @Test("a spanner anchored before the copied span goes with the material it named")
+    func dropsASpannerAnchoredOutsideTheSpan() throws {
+        // The positional hazard, and the reason a `.spanner` is tested for its own tick rather than kept
+        // unconditionally: the trim slides the boundary measure's survivors to the front, so a spanner anchored
+        // ahead of the range would arrive at the payload's very first tick and claim material the range never
+        // asked for.
+        var source = EditingFixtures.parityFixture()
+        source.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[0] = Voice(elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    Self.hairpin(),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])),
+                    .chord(Chord(duration: .quarter, notes: [Note(pitch: 65, tpc: 13)])),
+                ])
+            }
+        }
+        // Starts on beat 3, leaving the hairpin's anchor outside the span.
+        let payload = try #require(RangeCopyPayload.score(
+            for: VoiceElementRange(start: Self.slot(0, 4), end: Self.slot(0, 5)), in: source,
+        ))
+        let elements = payload.parts[0].staves[0].measures[0].voices[0].elements
+        #expect(Self.spannerCount(elements) == 0)
+        let resolved = try #require(RangeCopySource(payload: payload))
+        #expect(try #require(resolved.streams.first).spanners.isEmpty)
     }
 
     @Test("a bar with a triplet copied whole keeps the tuplet, its ratio and its member count")

@@ -110,13 +110,26 @@ enum RangeCopyPayload {
         return trimmed
     }
 
-    /// One voice at the boundary: drops the chords and rests whose onset falls outside `low ..< high`, and the
-    /// `.locationShift`/`.measureRepeat`/`.spanner` kinds `RangeCopySource.isCopyable(_:)` also never carries —
-    /// a jog moves the voice's one cursor for ticks this trim may have just cut away, a measure repeat stands
-    /// for a whole bar the trim can partially remove, and a spanner's reach is not known here to still end
-    /// inside the payload. Every other non-timed element — clef, key/time signature, annotations — is kept
-    /// regardless of its tick, which is what "leaving everything else" means: only the timed material and
-    /// those three unsafe kinds are being clipped to the span.
+    /// One voice at the boundary: drops the chords, rests and `.spanner`s whose own tick falls outside
+    /// `low ..< high`, and the `.locationShift`/`.measureRepeat` kinds outright.
+    ///
+    /// Those two are the kinds a cut boundary genuinely invalidates, and neither can be restated from what
+    /// survives: a jog moves the voice's ONE cursor past ticks this trim may have just cut away, so it would
+    /// re-date everything after it in the bar, and a measure repeat stands for a whole bar's content while a
+    /// boundary measure is precisely the bar the trim can partially remove.
+    ///
+    /// A `.spanner` is not one of them. Its hazard is positional and it is the hazard the chords already have:
+    /// the trim slides the survivors to the front of the boundary measure, so a spanner anchored AHEAD of the
+    /// range would arrive at the payload's first tick and claim material the range never asked for. Testing its
+    /// own tick removes that and keeps the rest — which matters because both boundaries of a one-bar copy are
+    /// that one bar, so excluding the kind cost every hairpin, pedal, ottava, trill, vibrato, text line, palm
+    /// mute and let ring a one-bar ⌘C could carry, while slurs (riding on `Chord.spanners`, untouched here)
+    /// survived and made the loss look arbitrary. A spanner reaching PAST the payload is not this function's
+    /// problem: `RangeCopySpanners.lineSpanners(for:…)` is all-or-nothing against the payload's own extent and
+    /// drops it there, exactly as it does for a duplicate.
+    ///
+    /// Every other non-timed element — clef, key/time signature, annotations — is kept regardless of its tick,
+    /// which is what "leaving everything else" means.
     ///
     /// `Voice.tuplets` rides through the same removal `Voice.removeElements(at:)` gives any other edit: a
     /// tuplet whose members are all cut drops with them, and one whose members all survive keeps its bracket,
@@ -143,10 +156,10 @@ enum RangeCopyPayload {
             let element = voice.elements[index]
             defer { tick += element.cursorAdvance(division: division, in: measureDuration) }
             switch element {
-            case .chord:
+            case .chord, .spanner:
                 let position = ScoreTickPosition(measure: measureIndex, tick: tick)
                 if !(position >= low && position < high) { removed.insert(index) }
-            case .locationShift, .measureRepeat, .spanner:
+            case .locationShift, .measureRepeat:
                 removed.insert(index)
             default:
                 break
