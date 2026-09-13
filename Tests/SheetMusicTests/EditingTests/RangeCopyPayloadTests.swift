@@ -10,6 +10,29 @@ struct RangeCopyPayloadTests {
         VoiceElementID(staff: flute, measureIndex: measure, voiceIndex: 0, elementIndex: element)
     }
 
+    /// One bar, 4/4: `[timeSignature, tripletA, tripletB, tripletC, restQ, restQ, restQ]` — a standard eighth
+    /// triplet (2 in the time of 3, each member `1/12` of a whole note = 160 ticks at division 480, summing to
+    /// one quarter beat) followed by three plain quarter rests filling the remaining three beats.
+    private static func tripletFixture() -> Score {
+        var source = EditingFixtures.parityFixture()
+        let tripletMember = Fraction(numerator: 1, denominator: 12)
+        source.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[0] = Voice(
+                    elements: [
+                        .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                        .chord(Chord(duration: .fraction(tripletMember), notes: [Note(pitch: 60, tpc: 14)])),
+                        .chord(Chord(duration: .fraction(tripletMember), notes: [Note(pitch: 62, tpc: 16)])),
+                        .chord(Chord(duration: .fraction(tripletMember), notes: [Note(pitch: 64, tpc: 18)])),
+                        .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+                    ],
+                    tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)],
+                )
+            }
+        }
+        return source
+    }
+
     @Test("a one-bar range becomes a one-bar score carrying that bar's notes")
     func oneBar() throws {
         let source = EditingFixtures.parityFixture()
@@ -105,6 +128,37 @@ struct RangeCopyPayloadTests {
             return note.pitch
         }
         #expect(pitches == [60, 62])
+    }
+
+    @Test("a bar with a triplet copied whole keeps the tuplet, its ratio and its member count")
+    func keepsWholeTuplet() throws {
+        let source = Self.tripletFixture()
+        let payload = try #require(RangeCopyPayload.score(
+            for: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 6)), in: source,
+        ))
+        let voice = payload.parts[0].staves[0].measures[0].voices[0]
+        #expect(voice.tuplets.count == 1)
+        let tuplet = try #require(voice.tuplets.first)
+        #expect(tuplet.normalNotes == 2)
+        #expect(tuplet.actualNotes == 3)
+        let span = try #require(voice.tupletSpans.first)
+        #expect(span.endIndex - span.startIndex + 1 == 3)
+    }
+
+    @Test("a tuplet the range only partly covers loses its bracket but keeps its surviving members")
+    func dropsPartlyCoveredTupletBracket() throws {
+        // Starts on the triplet's SECOND member, cutting the first one out of the copied span.
+        let source = Self.tripletFixture()
+        let payload = try #require(RangeCopyPayload.score(
+            for: VoiceElementRange(start: Self.slot(0, 2), end: Self.slot(0, 6)), in: source,
+        ))
+        let voice = payload.parts[0].staves[0].measures[0].voices[0]
+        #expect(voice.tuplets.isEmpty)
+        let pitches = voice.elements.compactMap { element -> Int? in
+            guard case let .chord(chord) = element, let note = chord.notes.first else { return nil }
+            return note.pitch
+        }
+        #expect(pitches == [62, 64])
     }
 
     @Test("a range that resolves to nothing yields nil")

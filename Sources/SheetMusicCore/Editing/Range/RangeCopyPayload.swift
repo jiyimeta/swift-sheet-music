@@ -86,17 +86,8 @@ enum RangeCopyPayload {
     }
 
     /// A kept measure, unchanged except at the range's own boundary: `measureIndex == low.measure` or
-    /// `== high.measure` drops the chords and rests whose onset falls outside `low ..< high`, in every voice.
-    /// Most non-timed elements — clef, key/time signature, annotations — are kept regardless of their tick,
-    /// which is what "leaving everything else" means: only the timed material is being clipped to the span.
-    ///
-    /// `.locationShift`, `.measureRepeat` and `.spanner` are the exception, and are dropped outright at this
-    /// boundary rather than swept in with the rest — the same three kinds `RangeCopySource.isCopyable(_:)`
-    /// never carries, for the same reason: a jog moves the voice's one cursor for ticks this trim may have
-    /// just cut away, a measure repeat stands for a whole bar the trim can partially remove, and a spanner's
-    /// reach is not known here to still end inside the payload. Carrying any of them across a cut risks a
-    /// self-contained score that names material the trim took out. A measure this function never touches (not
-    /// `low.measure`/`high.measure`) keeps all three untouched, since nothing around them was cut.
+    /// `== high.measure` trims every voice to the span. A measure this function never touches (not
+    /// `low.measure`/`high.measure`) is returned as-is, since nothing around it was cut.
     private static func trimmedMeasure(
         _ measure: Measure, measureIndex: Int, measureDuration: Fraction,
         low: ScoreTickPosition, high: ScoreTickPosition, division: Int,
@@ -104,23 +95,71 @@ enum RangeCopyPayload {
         guard measureIndex == low.measure || measureIndex == high.measure else { return measure }
         var trimmed = measure
         trimmed.voices = measure.voices.map { voice in
-            var tick = 0
-            var kept: [VoiceElement] = []
-            for element in voice.elements {
-                defer { tick += element.cursorAdvance(division: division, in: measureDuration) }
-                switch element {
-                case .chord:
-                    let position = ScoreTickPosition(measure: measureIndex, tick: tick)
-                    if position >= low, position < high {
-                        kept.append(element)
-                    }
-                case .locationShift, .measureRepeat, .spanner:
-                    continue
-                default:
-                    kept.append(element)
-                }
+            trimmedVoice(
+                voice, measureIndex: measureIndex, measureDuration: measureDuration,
+                low: low, high: high, division: division,
+            )
+        }
+        return trimmed
+    }
+
+    /// One voice at the boundary: drops the chords and rests whose onset falls outside `low ..< high`, and the
+    /// `.locationShift`/`.measureRepeat`/`.spanner` kinds `RangeCopySource.isCopyable(_:)` also never carries —
+    /// a jog moves the voice's one cursor for ticks this trim may have just cut away, a measure repeat stands
+    /// for a whole bar the trim can partially remove, and a spanner's reach is not known here to still end
+    /// inside the payload. Every other non-timed element — clef, key/time signature, annotations — is kept
+    /// regardless of its tick, which is what "leaving everything else" means: only the timed material and
+    /// those three unsafe kinds are being clipped to the span.
+    ///
+    /// `Voice.tuplets` rides through the same removal `Voice.removeElements(at:)` gives any other edit: a
+    /// tuplet whose members are all cut drops with them, and one whose members all survive keeps its bracket,
+    /// endpoints pulled inward for whatever the trim removed ahead of it.
+    ///
+    /// A tuplet only PARTLY covered — some members inside the span, some outside it — is the case a range's
+    /// own boundary can create even though `removeElements(at:)` alone would still keep it, ratio unchanged,
+    /// endpoints merely shrunk to the survivors. That is "carried half-formed" in the sense the earlier
+    /// `.spanner` exclusion already established: a bracket claiming a note count the payload no longer has.
+    /// Nothing is lost musically either way — a tuplet member's stored duration is already its resolved
+    /// sounding length, not a plain fraction resolved against the bracket at read time — so this drops only
+    /// the BRACKET for such a tuplet, not its surviving members: they stay as plain, untupleted material,
+    /// which is what the user's own range legitimately asked for. `partlyCoveredPositions` below is computed
+    /// against `voice.tupletSpans`'s ORIGINAL order before any removal, and reused as an index into
+    /// `trimmed.tuplets` afterward: `removeElements(at:)` only ever drops entries (never reorders or inserts),
+    /// so the k-th surviving span is exactly `trimmed.tuplets[k]`.
+    private static func trimmedVoice(
+        _ voice: Voice, measureIndex: Int, measureDuration: Fraction,
+        low: ScoreTickPosition, high: ScoreTickPosition, division: Int,
+    ) -> Voice {
+        var tick = 0
+        var removed: Set<Int> = []
+        for index in voice.elements.indices {
+            let element = voice.elements[index]
+            defer { tick += element.cursorAdvance(division: division, in: measureDuration) }
+            switch element {
+            case .chord:
+                let position = ScoreTickPosition(measure: measureIndex, tick: tick)
+                if !(position >= low && position < high) { removed.insert(index) }
+            case .locationShift, .measureRepeat, .spanner:
+                removed.insert(index)
+            default:
+                break
             }
-            return Voice(elements: kept)
+        }
+
+        var partlyCoveredPositions: [Int] = []
+        var survivorPosition = 0
+        for span in voice.tupletSpans {
+            let members = Array(span.startIndex ... span.endIndex)
+            let survivorCount = members.filter { !removed.contains($0) }.count
+            guard survivorCount > 0 else { continue } // Fully removed: dropped below, no position to reserve.
+            if survivorCount < members.count { partlyCoveredPositions.append(survivorPosition) }
+            survivorPosition += 1
+        }
+
+        var trimmed = voice
+        trimmed.removeElements(at: removed)
+        for position in partlyCoveredPositions.sorted(by: >) {
+            trimmed.tuplets.removeSubrange(position ..< (position + 1))
         }
         return trimmed
     }
