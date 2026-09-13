@@ -42,10 +42,19 @@ extension RangeCopyVoiceRebuild {
 
     /// A non-timed element is placed by its own tick alone: it has no extent to be half-covered by.
     ///
-    /// One inside the span is re-emitted where it stood — except a `.locationShift` or a `.measureRepeat`,
-    /// which are refused. A jog moves the voice's one cursor for the rest of the bar, and a measure repeat
-    /// stands for the whole bar's content; neither can be carried through material written over the ticks it
-    /// governs without changing what the bar means.
+    /// One inside the span is refused, kept, or dropped by kind. A `.locationShift` or a `.measureRepeat` is
+    /// refused: a jog moves the voice's one cursor for the rest of the bar, and a measure repeat stands for the
+    /// whole bar's content, so neither can be carried through material written over the ticks it governs
+    /// without changing what the bar means.
+    ///
+    /// A clef, a signature, a barline, a breath, an ambitus, or unmodeled `.preserved` markup is re-emitted at
+    /// its own tick, matching MuseScore, where these live on their own segment types rather than as the
+    /// annotations `makeGap1`'s `deleteAnnotationsFromRange` clears (`cmd.cpp:1504`, `edit.cpp:3734-3759`). A
+    /// dynamic, fermata, harmony, and the rest of the segment-annotation family are cleared instead — the copy
+    /// landing on them is exactly what that MuseScore pass destroys. `.spanner` is left as it stood before this
+    /// change; a future task partitions it. A `.harmony` is kept here unconditionally; `rebuild(_:cut:gap:
+    /// spanStart:spanEnd:in:)` drops it afterward when the piece brings one of its own to the same tick, via
+    /// `pieceHarmonyTicks(in:from:in:)`.
     private static func place(
         untimed entry: Entry, spanStart: Int, spanEnd: Int, into result: inout Cut, in context: Context,
     ) throws {
@@ -56,9 +65,31 @@ extension RangeCopyVoiceRebuild {
         switch entry.element {
         case .locationShift, .measureRepeat:
             throw refused(.blockedByUntimedElement(at: context.location(entry.index)))
-        default:
+        case .clef, .keySignature, .timeSignature, .barLine, .breath, .ambitus, .preserved, .harmony, .spanner:
             result.preserved.append(entry)
+        case .dynamic, .fermata, .sticking, .expression, .capo, .stringTunings, .figuredBass, .symbol,
+             .fretDiagram:
+            break
+        case .chord:
+            preconditionFailure("place(untimed:...) is only reached for a non-timed entry")
         }
+    }
+
+    /// The ticks at which `elements` — the piece about to be written, walked from `origin` — places a harmony
+    /// of its own.
+    ///
+    /// `RangeCopyPlacement` builds every piece from chords and rests only today (see the comment at its own
+    /// `pieces(of:at:sourceStartTick:geometry:division:)`), so this always returns empty until a later task
+    /// lets a copy carry its source's chord symbols — at which point a destination harmony landed on becomes
+    /// eligible for the drop `place(untimed:spanStart:spanEnd:into:in:)` does not apply to it.
+    static func pieceHarmonyTicks(in elements: [VoiceElement], from origin: Int, in context: Context) -> Set<Int> {
+        var ticks: Set<Int> = []
+        var cursor = origin
+        for element in elements {
+            if case .harmony = element { ticks.insert(cursor) }
+            cursor += context.advance(of: element)
+        }
+        return ticks
     }
 
     /// The tick span the rebuild actually clears: the piece's own span, widened over every destination tuplet

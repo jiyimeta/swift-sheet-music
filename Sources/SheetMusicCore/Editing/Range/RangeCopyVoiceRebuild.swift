@@ -102,8 +102,9 @@ extension RangeCopyVoiceRebuild {
     struct Cut {
         var before: [Entry] = []
         var after: [Entry] = []
-        /// Non-timed elements standing inside the span — a mid-bar clef, a signature, a dynamic. Re-emitted at
-        /// their own tick rather than dropped.
+        /// The non-timed elements standing inside the span that survive the copy — a mid-bar clef, a signature
+        /// — re-emitted at their own tick. A staff annotation the copy lands on (a dynamic, a fermata, ...) is
+        /// not among them; `RangeCopyVoiceRebuild.place(untimed:spanStart:spanEnd:into:in:)` drops it instead.
         var preserved: [Entry] = []
         /// The element the span starts inside, when it does not start on an element boundary.
         var leading: Entry?
@@ -151,7 +152,14 @@ extension RangeCopyVoiceRebuild {
         let tail = DurationChangeAlgorithm.alignedRests(
             forTicks: gap.upperBound - spanEnd, rtickStart: spanEnd, division: context.division,
         )
-        var pending = cut.preserved
+        // MuseScore keeps a destination chord symbol through the gap and drops it only where the payload lands
+        // one of its own on the same tick (`cmd.cpp:1502`, `read460.cpp:656-661`). Every other kept kind has no
+        // such condition, so this is the only filter `cut.preserved` needs before splicing back in.
+        let harmonyTicksFromPiece = pieceHarmonyTicks(in: piece.elements, from: spanStart, in: context)
+        var pending = cut.preserved.filter { entry in
+            guard case .harmony = entry.element else { return true }
+            return !harmonyTicksFromPiece.contains(entry.start)
+        }
         var cursor = gap.lowerBound
         for (offset, element) in (head + piece.elements + tail).enumerated() {
             while let next = pending.first, next.start <= cursor {

@@ -160,6 +160,45 @@ struct RangeCopyVoiceRebuildTests {
         #expect(elements[4] == Self.quarter(60))
     }
 
+    @Test("a copy clears the dynamics and fermatas it lands on, but not one outside its span")
+    func deletesAnnotationsUnderTheCopy() throws {
+        var score = Self.identifiedFixture()
+        var ids = EIDAllocator()
+        var voice = Self.voice(score, 0)
+        // Outside the [960, 1920) span the copy will replace: stands at tick 0, well before it.
+        voice.elements.insert(.dynamic(Dynamic(subtype: "p", velocity: 40)), at: 1, id: ids.next())
+        // Inside the span, all three landing at tick 960 (the rest that used to sit there is now at index 7).
+        voice.elements.insert(.clef(Clef(concertClefType: "F")), at: 4, id: ids.next())
+        let clefEID = voice.elements.eid(at: 4)
+        voice.elements.insert(.dynamic(Dynamic(subtype: "mf", velocity: 64)), at: 5, id: ids.next())
+        voice.elements.insert(.fermata(Fermata(subtype: "fermataAbove")), at: 6, id: ids.next())
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[0] = voice
+            }
+        }
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60), Self.quarter(62)]),
+            staff: Self.flute, voiceIndex: 0, in: score,
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+
+        // The mid-bar clef survives, keeping its own identifier, and leads the copied material. It lands at
+        // index 4 rather than 3 because the untouched dynamic ahead of the span (index 1) is still there.
+        #expect(elements.eid(at: 4) == clefEID)
+        #expect(elements[4] == .clef(Clef(concertClefType: "F")))
+        #expect(elements[5] == Self.quarter(60))
+
+        let dynamicSubtypes = elements.values.compactMap { element -> String? in
+            guard case let .dynamic(dynamic) = element else { return nil }
+            return dynamic.subtype
+        }
+        // Neither in-span annotation comes back; the dynamic that stood outside the span is untouched.
+        #expect(dynamicSubtypes == ["p"])
+        #expect(!elements.values.contains { if case .fermata = $0 { true } else { false } })
+    }
+
     @Test("a locationShift inside the replaced span refuses")
     func refusesLocationShift() throws {
         var score = EditingFixtures.parityFixture()
