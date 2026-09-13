@@ -35,6 +35,37 @@ public enum ClefGlyph {
         }
     }
 
+    /// How far the clef's INK reaches above and below the point `glyph(for:)`
+    /// positions it at, in staff spaces.
+    ///
+    /// A clef is far from symmetrical about its own anchor — a G clef's tail
+    /// hangs 2.6 sp below the G line while its curl runs 4.4 sp above it — so
+    /// a host that wants to float something beside the glyph, or draw a box
+    /// around it, cannot get there from the anchor and a single half-height.
+    ///
+    /// Measured with CoreText against the Bravura this package ships
+    /// (`SheetMusicLayoutApple/Fonts/Resources/Bravura.otf`, em = 4 sp,
+    /// 2026-09-13) rather than copied from the metadata JSON, so the numbers
+    /// describe the font actually being drawn.
+    public static func inkExtentSp(
+        for clef: NotatedClef,
+    ) -> (above: CGFloat, below: CGFloat) {
+        switch clef {
+        case .treble: (4.392, 2.632)
+        case .treble8va: (5.280, 2.632)
+        case .treble15ma: (5.276, 2.632)
+        case .treble8vb: (4.392, 3.512)
+        case .treble15mb: (4.392, 3.524)
+        case .bass: (1.048, 2.540)
+        case .bass8va: (1.980, 2.540)
+        case .bass8vb: (1.048, 2.976)
+        // One glyph for all four C clefs; only where it sits differs.
+        case .soprano, .alto, .tenor, .baritone: (2.024, 2.024)
+        case .percussion: (1.0, 1.0)
+        case .percussion2: (1.844, 1.860)
+        }
+    }
+
     /// Extra Y offset, in staff spaces, that `clef` picks up on a staff
     /// drawing other than five lines. Added to the emitted clef origin,
     /// so every renderer inherits it through `LayoutElement.clef`
