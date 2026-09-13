@@ -7,6 +7,77 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`EditIntent.duplicateRange(over:)` (wire 85) and `DuplicateRange`: MuseScore's `R`, repeating a range
+  selection immediately after itself across measures, staves and voices.** An element whose onset falls
+  inside the range but sounds past its end is truncated to what remains, never copied whole — except a
+  tuplet member, which is never truncated, because MuseScore forbids the partial tuplet that truncation
+  would create. A tuplet the copy carries survives only where every one of its members fits a single
+  destination bar; a destination tuplet the copy cuts only partly is torn down and its uncovered remainder
+  refilled with plain rests, the same way MuseScore's own paste destroys one. The copy carries the range's
+  own clefs and breaths and its whole staff-annotation family — dynamics, fermatas, chord symbols,
+  sticking, expression, capos, string tunings, figured bass, symbols and fret diagrams — plus any slur or
+  line spanner whose anchor and resolved end both lie inside the range. Landing, it clears the
+  destination's staff annotations under it, and of what it carries only a clef, a breath or a chord symbol
+  can supersede a destination element: those are the kinds a segment holds one of per track, so a copied
+  one takes the destination's place at that tick rather than standing beside it. It also shortens a
+  destination hairpin, ottava, trill or vibrato reaching into its span, removes a destination slur that
+  does the same outright, removes any other spanner lying wholly inside the span along with the material it
+  was anchored to, and clears the tie on either boundary neighbor — across a barline too — that pointed
+  into the material it just overwrote. Bars are appended when the copy runs past the end of the score. A
+  range covering staves that are barred differently over the copied span — a pickup bar written on one
+  staff and not on another — refuses with `insufficientRoom`, because the copy's offset is one subtraction
+  for every staff and two barrings cannot both be right.
+
+  Two of these deviate from MuseScore on purpose. Appending bars at the score's end is one: MuseScore's own
+  `R` does nothing there, because it anchors the repeated material on the ChordRest FOLLOWING the selection
+  and a repeat landing past the last bar has none to anchor on, where this package appends the bars a host
+  would otherwise have to insert by hand first. Refusing a range whose selection cuts a tuplet only partly is
+  NOT a deviation — MuseScore refuses too (`Selection::canCopy`'s `checkStartForPartialCopy` /
+  `checkEndForPartialCopy` set `MsError::SOURCE_PARTIAL_TUPLET`, `select.cpp:1394-1465`, and `R` checks
+  `canCopy()` before doing anything, `notationinteraction.cpp:5297`); naming which of the range's two bounds
+  landed inside the bracket is this package's own nicety, not a divergence. The real second deviation is what
+  happens when the copy's DESTINATION starts inside a tuplet: MuseScore's paste bails out of the whole
+  operation silently there (`if (dst->isInsideTupletOnStaff(dstStaffIdx)) { done = true; break; }`, with no
+  error, `read460.cpp:415-418`), while this package tears the tuplet down and proceeds — the same as it does
+  for a tuplet the span only reaches later — because destroying at one end and bailing at the other would be
+  incoherent.
+
+- **`EditIntent.pasteRange(at:payload:)` (wire 86) and `PasteRange`: MuseScore's ⌘V, pasting a copied range back
+  into a score.** The payload is not a fragment addressed against the score it was cut from — it is a small,
+  self-contained `.mscx` document, so a paste can land in a different score, or a different window, with neither
+  one knowing about the other. Two symbols are now public because a host cannot wire ⌘C/⌘V without them:
+  `Score.clipboardDocument(for:) -> Score?` builds the payload document a ⌘C puts on the clipboard (a host
+  encodes the result with `MSCXEncoder` before it reaches a real pasteboard), and `Score.chronologicalBounds(of:)`
+  orders a range's two bounds by onset rather than by address — the fact a host needs to place the ⌘V caret at
+  whichever bound sounds first, since the two may fall on either staff in either order. Once a host's own
+  reader — in practice `MSCXParser.parse`, supplied because `SheetMusicMSCX` cannot be imported from this module
+  without a cycle — turns the payload's bytes back into a `Score`, a paste is `DuplicateRange`'s own write pass
+  with the payload standing in for the range: every rule a duplicate obeys — tuplets that only survive where they
+  fit, ties sealed across the destination barline, staff annotations cleared and superseded, measures appended
+  past the end — a paste obeys for free.
+
+  `clipboardDocument(for:)` answers `nil` for a REFUSED copy as well as for an empty selection, and a host has to
+  read it as one: a range that cuts a tuplet — covering some of its members but not all — cannot be copied, so
+  the pasteboard must be left alone and the user told, rather than an empty payload written. That is MuseScore's
+  own answer (`NotationInteraction::copySelection` asks `Selection::canCopy()` first and reports
+  `SOURCE_PARTIAL_TUPLET`, `select.cpp:1410, 1446, 1454`), and it is the only answer consistent with `R`, which
+  refuses the identical selection: ⌘C and ⌘V are together the same operation `R` is, so one of them quietly
+  producing untupleted material where `R` said no would be the two disagreeing about one selection. A copy that
+  starts mid-bar is rebased rather than barline-padded, the way MuseScore's `<StaffList>` is, so the payload's
+  own bars line up with its material; the meter a copied bar inherits when it declares none of its own does not
+  cost that bar its tuplets; and a hairpin, pedal, ottava, trill, vibrato, text line, palm mute or let ring
+  anchored inside the copied span travels with it, as a slur already did.
+
+  A copied single rest pastes as nothing, matching MuseScore — but that is a rule a host enforces, not one this
+  package imposes: no `acceptDrop` in MuseScore's tree accepts a `REST`, so a one-element copy of one is refused
+  at the destination, silently. A RANGE of rests copies and pastes normally, as it must: `voiceElements(in:)`
+  names rests as well as chords — a rest is a chord carrying no notes — so empty bars carve into a payload like
+  any others. Reading MuseScore's own clipboard format is not implemented — this
+  package produces and reads only its own `.mscx` payload — and a host's branch by pasteboard type is the
+  extension point where that, and a single-element payload, would join.
+
 ### Changed
 
 - **Deleting now means "turn what I selected into rests", and nothing more.** Both delete intents

@@ -14,14 +14,35 @@ import SheetMusicFoundation
 /// stateful surface — `apply`, `undo` / `redo`, `lastRefusal`.
 public final class ScoreEditSession {
     private let editor: ScoreEditor
+    private let payloadReader: PasteRange.PayloadReader
 
     /// The part ids the current `partIndexMapping` is measured from — the score's ids at `init`, re-taken by
     /// `consumePartIndexMapping()`.
     private var partIDBaseline: [String]
 
-    public init(score: Score) {
+    /// `payloadReader` turns a `.pasteRange` intent's bytes back into a `Score` — `PasteRange`'s own doc comment
+    /// explains why this arrives as a closure rather than a direct call to `MSCXParser.parse`: `SheetMusicCore`
+    /// cannot import `SheetMusicMSCX` (that dependency runs the other way), so a paste-capable host passes
+    /// `MSCXParser.parse` once, at the seam where it already links the format.
+    ///
+    /// Defaulted so every existing caller of `ScoreEditSession(score:)` keeps compiling unchanged. A session built
+    /// with the default refuses any `.pasteRange` intent with `.noPayloadReader` — never `.unreadablePayload`,
+    /// which would send a host that simply forgot to wire the reader off looking at its clipboard instead of at
+    /// its own construction site.
+    public init(
+        score: Score,
+        payloadReader: @escaping PasteRange.PayloadReader = { _ in throw PasteRange.refused(.noPayloadReader) },
+    ) {
         editor = ScoreEditor(score: score)
         partIDBaseline = score.parts.map(\.id)
+        self.payloadReader = payloadReader
+    }
+
+    /// The default `payloadReader`: refuses every payload with `.noPayloadReader` without looking at the bytes.
+    /// Its own declaration rather than only the `init` default above, so the internal planner tests further down
+    /// this file's sibling `+Planning.swift` (and `rangeCommand`'s tests) have the same refusal to default to.
+    static let refusingPayloadReader: PasteRange.PayloadReader = { _ in
+        throw PasteRange.refused(.noPayloadReader)
     }
 
     public var idAllocator: EIDAllocator {
@@ -62,7 +83,9 @@ public final class ScoreEditSession {
         planningScore.assignMissingIDs(using: &planningIDs)
         let planned: (any EditCommand)?
         do {
-            planned = try Self.command(for: intent, in: planningScore, ids: planningIDs, depth: 0)
+            planned = try Self.command(
+                for: intent, in: planningScore, ids: planningIDs, depth: 0, payloadReader: payloadReader,
+            )
         } catch {
             lastRefusal = Self.refusal(for: error, operation: "apply")
             return false

@@ -1,15 +1,21 @@
 import SheetMusicFoundation
 
-/// `ScoreEditSession`'s planning half for the parity project's range intents (35…40). Its own file for the reason
+/// `ScoreEditSession`'s planning half for the parity project's range intents (35…40), plus the two later range
+/// intents appended alongside them — `.duplicateRange` (85) and `.pasteRange` (86). Its own file for the reason
 /// `+StructuralParityPlanning.swift` exists: `+Planning.swift` sits at its line budget.
 ///
-/// One rule for all six: the command's own `plan(in:)` decides whether there is anything to do. `nil` from it is the
-/// session's `.nothingToApply` (transposing by zero, deleting rests, re-timing a range already at that length);
+/// One rule for all eight: the command's own `plan(in:)` decides whether there is anything to do. `nil` from it is
+/// the session's `.nothingToApply` (transposing by zero, deleting rests, re-timing a range already at that length);
 /// a `plan` that THROWS is not swallowed into `nil` — the command is returned as it is, so the refusal is raised
 /// again at apply time, where the session records it. An empty resolved range is such a refusal
-/// (`.targetNotFound`), never a silent nothing: the intent named something that is not there.
+/// (`.targetNotFound`), never a silent nothing: the intent named something that is not there. `.pasteRange` is the
+/// one case here whose `plan` needs more than the score and the allocator, which is why this function alone in the
+/// file carries a `payloadReader`.
 extension ScoreEditSession {
-    static func rangeCommand(for intent: EditIntent, in score: Score, ids: EIDAllocator) -> (any EditCommand)? {
+    static func rangeCommand(
+        for intent: EditIntent, in score: Score, ids: EIDAllocator,
+        payloadReader: @escaping PasteRange.PayloadReader,
+    ) -> (any EditCommand)? {
         switch intent {
         case let .transposeRange(range, semitones, respellInKey):
             let command = TransposeRange(over: range, semitones: semitones, respellInKey: respellInKey)
@@ -41,6 +47,12 @@ extension ScoreEditSession {
             return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
         case let .respellRange(range, mode):
             let command = RespellRange(over: range, mode: mode)
+            return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
+        case let .duplicateRange(range):
+            let command = DuplicateRange(over: range)
+            return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
+        case let .pasteRange(location, payload):
+            let command = PasteRange(at: location, payload: payload, readPayload: payloadReader)
             return unlessInert(command, in: score) { try command.plan(in: $0, ids: ids) }
         default:
             // Reached only through `command(for:in:depth:)`'s grouped case, which already narrows the intent;

@@ -100,3 +100,31 @@ public struct RespellRangeIntentWire {
         return (range: range.decoded(), mode: mode)
     }
 }
+
+@WireFormat
+public struct DuplicateRangeIntentWire {
+    public var range: VoiceElementRangeWire
+
+    public init(range: VoiceElementRange) {
+        self.range = VoiceElementRangeWire(from: range)
+    }
+
+    public func decoded() -> VoiceElementRange {
+        range.decoded()
+    }
+}
+
+@WireFormat
+public struct PasteRangeIntentWire {
+    public var location: VoiceElementIDWire
+    public var payload: String
+
+    public init(location: VoiceElementID, payload: String) {
+        self.location = VoiceElementIDWire(from: location)
+        self.payload = payload
+    }
+
+    public func decoded() -> (location: VoiceElementID, payload: String) {
+        (location: location.decoded(), payload: payload)
+    }
+}

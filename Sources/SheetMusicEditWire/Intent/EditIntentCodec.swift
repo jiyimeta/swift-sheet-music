@@ -118,6 +118,8 @@ import Wirelet
 /// 82 = setTextOffset(SetTextOffsetIntentWire), see EditIntentPayloads+Properties.swift
 /// 83 = setTextAutoplace(SetTextAutoplaceIntentWire), see EditIntentPayloads+Properties.swift
 /// 84 = setScoreInfo(SetScoreInfoIntentWire), see EditIntentPayloads+ScoreInfo.swift
+/// 85 = duplicateRange(DuplicateRangeIntentWire), see EditIntentPayloads+Range.swift
+/// 86 = pasteRange(PasteRangeIntentWire), see EditIntentPayloads+Range.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -129,8 +131,9 @@ import Wirelet
 /// Case 73 was appended for its harmony group. Cases 74 and 75 were appended for the macOS score-text-entry
 /// project (spec 2026-09-07). Cases 76…79 were appended for selection and editing (color, placement, text font,
 /// lyric verse). Cases 80…83 were appended for the properties-inspector project (spec 2026-09-12) — note
-/// small/play and element offset/autoplace. Case 84 was appended for the score-credits write path, and 84 is
-/// the catalogue's last.
+/// small/play and element offset/autoplace. Case 84 was appended for the score-credits write path. Case 85 was
+/// appended for the duplicate-range project (spec 2026-09-13). Case 86 was appended for the clipboard project
+/// (spec 2026-09-13), and 86 is the catalogue's last.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -1100,6 +1103,10 @@ public enum EditIntentWire {
     case setTextAutoplace(SetTextAutoplaceIntentWire)
     /// Appended for the score-credits write path — index 84. Never renumber anything above it.
     case setScoreInfo(SetScoreInfoIntentWire)
+    /// Appended for the duplicate-range project (spec 2026-09-13) — index 85. Never renumber anything above it.
+    case duplicateRange(DuplicateRangeIntentWire)
+    /// Appended for the clipboard project (spec 2026-09-13) — index 86. Never renumber anything above it.
+    case pasteRange(PasteRangeIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1290,6 +1297,10 @@ public enum EditIntentWire {
             self = .setLyricSyllables(SetLyricSyllablesIntentWire(writes: writes))
         case let .setScoreInfo(writes):
             self = .setScoreInfo(SetScoreInfoIntentWire(writes: writes))
+        case let .duplicateRange(range):
+            self = .duplicateRange(DuplicateRangeIntentWire(range: range))
+        case let .pasteRange(location, payload):
+            self = .pasteRange(PasteRangeIntentWire(location: location, payload: payload))
         case let .setTextVisible(text, visible):
             self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
         case let .setElementColor(target, color):
@@ -1555,6 +1566,11 @@ public enum EditIntentWire {
             return try .setLyricSyllables(writes: wire.decoded())
         case let .setScoreInfo(wire):
             return try .setScoreInfo(writes: wire.decoded())
+        case let .duplicateRange(wire):
+            return .duplicateRange(over: wire.decoded())
+        case let .pasteRange(wire):
+            let decoded = wire.decoded()
+            return .pasteRange(at: decoded.location, payload: decoded.payload)
         case let .setTextVisible(wire):
             let decoded = wire.decoded()
             return .setTextVisible(text: decoded.text, visible: decoded.visible)

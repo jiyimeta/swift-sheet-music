@@ -43,6 +43,18 @@ public struct EditRefusal: Sendable, Hashable {
         case tupletOverlap(rangeStart: Int, rangeEnd: Int, tupletStart: Int, tupletEnd: Int)
         case duplicatePitch(Int)
         case emptyPayload
+        /// A clipboard payload could not be read back into a score at all — `PasteRange` was handed bytes that
+        /// are not the document this package writes. A pasteboard can hold anything, so this is ordinary input
+        /// rather than a bug. It deliberately carries NO score address: nothing about the score being pasted
+        /// into is wrong, and naming a slot in it would point a host's copy at the innocent party.
+        case unreadablePayload
+        /// `PasteRange` was asked to plan or apply, but the `ScoreEditSession` it ran through carries no
+        /// `payloadReader` — the default every session is constructed with, which refuses rather than guess at a
+        /// format it cannot read. Distinct from `.unreadablePayload` on purpose: that reason means the bytes were
+        /// looked at and rejected, so a host reads it as "bad clipboard contents"; this one means the bytes were
+        /// never looked at at all, so a host reads it as "wire up `MSCXParser.parse` at the seam that links
+        /// `SheetMusicMSCX`" — sending it to its own wiring rather than to the clipboard.
+        case noPayloadReader
         case nothingToUndo
         case nothingToRedo
         case compositeTooDeep(limit: Int)
@@ -177,102 +189,6 @@ public struct EditRefusal: Sendable, Hashable {
         case noTieBetween(start: NoteID, end: NoteID)
     }
 
-    /// Stable dotted identifier under the `edit.` namespace.
-    public var code: String {
-        switch reason {
-        case .targetNotFound:
-            "edit.targetNotFound"
-        case .noteNotFound:
-            "edit.noteNotFound"
-        case .staffNotFound:
-            "edit.staffNotFound"
-        case .wrongElementKind:
-            "edit.wrongElementKind"
-        case .insufficientRoom:
-            "edit.insufficientRoom"
-        case .blockedByUntimedElement:
-            "edit.blockedByUntimedElement"
-        case .insideTuplet:
-            "edit.insideTuplet"
-        case .indivisibleTuplet:
-            "edit.indivisibleTuplet"
-        case .invalidTupletRatio:
-            "edit.invalidTupletRatio"
-        case .tupletOverlap:
-            "edit.tupletOverlap"
-        case .duplicatePitch:
-            "edit.duplicatePitch"
-        case .emptyPayload:
-            "edit.emptyPayload"
-        case .nothingToUndo:
-            "edit.nothingToUndo"
-        case .nothingToRedo:
-            "edit.nothingToRedo"
-        case .compositeTooDeep:
-            "edit.compositeTooDeep"
-        case .nothingToApply:
-            "edit.nothingToApply"
-        case .cannotDeleteOnlyMeasure:
-            "edit.cannotDeleteOnlyMeasure"
-        case .cannotRemoveLastPart:
-            "edit.cannotRemoveLastPart"
-        case .cannotRemoveInitialSignature:
-            "edit.cannotRemoveInitialSignature"
-        case .rebarWouldSplitTuplet:
-            "edit.rebarWouldSplitTuplet"
-        case .rebarWouldDisplaceBarlineMarker:
-            "edit.rebarWouldDisplaceBarlineMarker"
-        case .invalidTimeSignatureValue:
-            "edit.invalidTimeSignatureValue"
-        case .timeSignatureSymbolMismatch:
-            "edit.timeSignatureSymbolMismatch"
-        case .emptyRehearsalMarkText:
-            "edit.emptyRehearsalMarkText"
-        case .voiceAlreadyExists:
-            "edit.voiceAlreadyExists"
-        case .invalidRepeatCount:
-            "edit.invalidRepeatCount"
-        case .invalidMeasureRepeatSpan:
-            "edit.invalidMeasureRepeatSpan"
-        case .measureRepeatSpanNotEmpty:
-            "edit.measureRepeatSpanNotEmpty"
-        case .voiceMismatch:
-            "edit.voiceMismatch"
-        case .destinationNotFree:
-            "edit.destinationNotFree"
-        case .invalidTransposition:
-            "edit.invalidTransposition"
-        case .invalidInterval:
-            "edit.invalidInterval"
-        case .emptyStaffText:
-            "edit.emptyStaffText"
-        case .emptyChordSymbol:
-            "edit.emptyChordSymbol"
-        case .occupiedLyricVerse:
-            "edit.occupiedLyricVerse"
-        case .invalidVerse:
-            "edit.invalidVerse"
-        case .emptyLyricText:
-            "edit.emptyLyricText"
-        case .noNextChord:
-            "edit.noNextChord"
-        case .chordTooSmall:
-            "edit.chordTooSmall"
-        case .notDottable:
-            "edit.notDottable"
-        case .notBeamed:
-            "edit.notBeamed"
-        case .duplicateSpanner:
-            "edit.duplicateSpanner"
-        case .noSpannerAtLocation:
-            "edit.noSpannerAtLocation"
-        case .unexpected:
-            "edit.unexpected"
-        case .noTieBetween:
-            "edit.noTieBetween"
-        }
-    }
-
     /// `"<operation>: <derived English>"`.
     public var developerDescription: String {
         "\(operation): \(reasonDescription)"
@@ -304,6 +220,10 @@ public struct EditRefusal: Sendable, Hashable {
             "pitch \(pitch) already exists in the chord"
         case .emptyPayload:
             "empty payload"
+        case .unreadablePayload:
+            "the payload could not be read as a score"
+        case .noPayloadReader:
+            "no payload reader was supplied"
         case .nothingToUndo:
             "nothing to undo"
         case .nothingToRedo:

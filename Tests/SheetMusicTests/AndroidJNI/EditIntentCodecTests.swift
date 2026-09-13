@@ -241,6 +241,11 @@ struct EditIntentCodecTests {
             .setAccidentalsInRange(over: range, accidental: nil),
             .setDurationInRange(over: range, duration: .fraction(Fraction(numerator: 3, denominator: 8))),
             .respellRange(over: range, mode: .preferFlats),
+            // Appended for the duplicate-range project (spec 2026-09-13) — index 85.
+            .duplicateRange(over: range),
+            // Appended for the clipboard project (spec 2026-09-13) — index 86. The payload string carries a `<`
+            // and an `&` so the round trip covers XML-flavored text getting escaped and unescaped correctly.
+            .pasteRange(at: slot, payload: "<Chord duration=\"1/4\"> & </Chord>"),
         ]
         for intent in intents {
             #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
@@ -342,6 +347,14 @@ struct EditIntentCodecTests {
         #expect(EditIntentCodec.encode(.setAccidentalsInRange(over: range, accidental: nil))[1] == 38)
         #expect(EditIntentCodec.encode(.setDurationInRange(over: range, duration: .half))[1] == 39)
         #expect(EditIntentCodec.encode(.respellRange(over: range, mode: .simplest))[1] == 40)
+        // Appended for the duplicate-range project (spec 2026-09-13). `.duplicateRange`'s payload is a range —
+        // byte-identical to `.deleteRange`'s at index 37 — so the discriminator is the only thing standing
+        // between repeating a selection and erasing it.
+        #expect(EditIntentCodec.encode(.duplicateRange(over: range))[1] == 85)
+        // Appended for the clipboard project (spec 2026-09-13). Read from a one-character payload for the same
+        // `bytes[1]` framing reason `setRehearsalMark` above uses a one-character mark: a real `.mscx` document
+        // runs to thousands of bytes and would push the frame's own length prefix well past 127.
+        #expect(EditIntentCodec.encode(.pasteRange(at: slot, payload: "x"))[1] == 86)
     }
 
     /// A `PartPlan` is the one intent payload that is not scalars-only, so its round trip has to be checked field

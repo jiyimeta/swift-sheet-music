@@ -1,0 +1,438 @@
+@testable import SheetMusicCore
+import Testing
+
+@Suite("RangeCopyVoiceRebuild")
+struct RangeCopyVoiceRebuildTests {
+    private static let flute = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+
+    private static func quarter(_ pitch: Int) -> VoiceElement {
+        .chord(Chord(duration: .quarter, notes: [Note(pitch: pitch, tpc: 14)]))
+    }
+
+    private static func piece(
+        measure: Int, start: Int, elements: [VoiceElement],
+        tuplets: [(range: ClosedRange<Int>, normalNotes: Int, actualNotes: Int)] = [],
+    ) -> RangeCopyPlacement.Piece {
+        RangeCopyPlacement.Piece(
+            measureIndex: measure, startTickInMeasure: start, elements: elements, tuplets: tuplets,
+        )
+    }
+
+    private static func voice(_ score: Score, _ measure: Int, _ index: Int = 0) -> Voice {
+        score.parts[0].staves[0].measures[measure].voices[index]
+    }
+
+    /// One 4/4 bar whose first three beats are a 3:2 bracket — a dotted half turned into three 480-tick
+    /// members across [0, 1440) — followed by a plain quarter. A span covering only the middle member leaves an
+    /// uncovered member on EACH side of the piece.
+    private static func tripletAcrossThreeBeats() throws -> Score {
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .chord(Chord(
+                    duration: .fraction(Fraction(numerator: 3, denominator: 4)), notes: [Note(pitch: 62, tpc: 16)],
+                )),
+                Self.quarter(62),
+            ])]),
+        ])
+        var score = Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        _ = try CreateTuplet(
+            at: VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 0),
+            actualNotes: 3, normalNotes: 2,
+        ).apply(to: &score)
+        return score
+    }
+
+    /// The fixture is built from raw values, so every slot starts unassigned. A rebuild keeps surviving
+    /// elements by identifier, so the destination has to carry real ones before a command can name them.
+    private static func identifiedFixture() -> Score {
+        var score = EditingFixtures.parityFixture()
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        return score
+    }
+
+    @Test("the piece replaces its tick span and leaves the rest of the bar alone")
+    func replacesSpan() throws {
+        var score = Self.identifiedFixture()
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60), Self.quarter(62)]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        #expect(Self.voice(score, 0).elements == [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+            Self.quarter(60), Self.quarter(62),
+        ])
+    }
+
+    @Test("the destination elements the span does not reach keep their identifiers")
+    func keepsSurvivingIdentifiers() throws {
+        var score = Self.identifiedFixture()
+        let before = Self.voice(score, 0).elements
+        let survivors = (0 ... 2).map { before.eid(at: $0) }
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60), Self.quarter(62)]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let after = Self.voice(score, 0).elements
+        #expect((0 ... 2).map { after.eid(at: $0) } == survivors)
+        // The copied material must not reuse a destination identifier.
+        #expect(!survivors.contains(after.eid(at: 3)))
+        #expect(!survivors.contains(after.eid(at: 4)))
+    }
+
+    @Test("a boundary element the span half-covers is trimmed, and its head keeps its identity")
+    func trimsBoundaryElements() throws {
+        var score = Self.identifiedFixture()
+        let headEID = Self.voice(score, 0).elements.eid(at: 3)
+        // [1200, 1680) cuts the quarter rest at 960 and the quarter rest at 1440.
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 1200, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+        // timeSig, q60, q62, leading trim (960..1200), the copy (1200..1680), trailing trim (1680..1920).
+        #expect(elements.count == 6)
+        #expect(elements.eid(at: 3) == headEID)
+        #expect(elements[3] == .rest(duration: .eighth))
+        #expect(elements[4] == Self.quarter(60))
+        #expect(elements[5] == .rest(duration: .eighth))
+        // The bar still adds up to 1920 ticks.
+        let total = elements.values.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
+        #expect(total == 1920)
+    }
+
+    @Test("no tie crosses into or out of the copied material")
+    func trimsCarryNoTieIntoTheCopy() throws {
+        var score = Self.identifiedFixture()
+        // Measure 2 voice 0 is two tied half notes. [1200, 1680) cuts the second one at both ends, so the
+        // leading trim's head and the trailing trim's first piece both abut the copy.
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 2, start: 1200, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 2).elements
+        #expect(elements.count == 4)
+        guard case let .chord(head) = elements[1], case let .chord(tail) = elements[3] else {
+            Issue.record("the boundary element should have been trimmed on both sides")
+            return
+        }
+        #expect(head.duration == .eighth)
+        // The copy is not this note's continuation, so the head must not tie into it...
+        #expect(head.notes[0].tieForward == nil)
+        // ...while the partner it really has, in front of the span, is untouched.
+        #expect(head.notes[0].tieBack == 1)
+        #expect(elements[2] == Self.quarter(60))
+        // Symmetrically, nothing ties back out of the copy into the trailing trim.
+        #expect(tail.notes[0].tieBack == nil)
+    }
+
+    @Test("a multi-piece leading trim stays tied inside itself and stops at the copy")
+    func multiPieceTrimTiesOnlyInsideItself() throws {
+        var score = Self.identifiedFixture()
+        // [720, 1200) cuts the FIRST half note of measure 2, whose remainder needs a quarter plus an eighth.
+        // That source note carries `tieForward = 1` into its partner — which the copy now overwrites.
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 2, start: 720, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 2).elements
+        #expect(elements.count == 5)
+        guard case let .chord(head) = elements[0], case let .chord(continuation) = elements[1],
+              case let .chord(tail) = elements[3]
+        else {
+            Issue.record("the first half note should have been trimmed into two pieces")
+            return
+        }
+        #expect(head.duration == .quarter)
+        #expect(continuation.duration == .eighth)
+        // The trim's own two pieces are one note, so they stay tied to each other.
+        #expect(head.notes[0].tieForward == 1)
+        #expect(continuation.notes[0].tieBack == 1)
+        // The tie that would cross into the copy is gone, even though the source note carried one.
+        #expect(continuation.notes[0].tieForward == nil)
+        #expect(elements[2] == Self.quarter(60))
+        #expect(tail.notes[0].tieBack == nil)
+    }
+
+    @Test("a mid-bar clef inside the replaced span survives at its tick")
+    func keepsNonTimedElements() throws {
+        var score = Self.identifiedFixture()
+        _ = try SetClef(
+            before: VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 3),
+            clef: .bass,
+        ).apply(to: &score)
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60), Self.quarter(62)]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+        #expect(elements.contains { if case .clef = $0 { true } else { false } })
+        // The clef sits at tick 960, so it must lead the copied material rather than trail it.
+        #expect({ if case .clef = elements[3] { true } else { false } }())
+        #expect(elements[4] == Self.quarter(60))
+    }
+
+    @Test("a copy clears the dynamics and fermatas it lands on, but not one outside its span")
+    func deletesAnnotationsUnderTheCopy() throws {
+        var score = Self.identifiedFixture()
+        var ids = EIDAllocator()
+        var voice = Self.voice(score, 0)
+        // Outside the [960, 1920) span the copy will replace: stands at tick 0, well before it.
+        voice.elements.insert(.dynamic(Dynamic(subtype: "p", velocity: 40)), at: 1, id: ids.next())
+        // Inside the span, all three landing at tick 960 (the rest that used to sit there is now at index 7).
+        voice.elements.insert(.clef(Clef(concertClefType: "F")), at: 4, id: ids.next())
+        let clefEID = voice.elements.eid(at: 4)
+        voice.elements.insert(.dynamic(Dynamic(subtype: "mf", velocity: 64)), at: 5, id: ids.next())
+        voice.elements.insert(.fermata(Fermata(subtype: "fermataAbove")), at: 6, id: ids.next())
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[0] = voice
+            }
+        }
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60), Self.quarter(62)]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+
+        // The mid-bar clef survives, keeping its own identifier, and leads the copied material. It lands at
+        // index 4 rather than 3 because the untouched dynamic ahead of the span (index 1) is still there.
+        #expect(elements.eid(at: 4) == clefEID)
+        #expect(elements[4] == .clef(Clef(concertClefType: "F")))
+        #expect(elements[5] == Self.quarter(60))
+
+        let dynamicSubtypes = elements.values.compactMap { element -> String? in
+            guard case let .dynamic(dynamic) = element else { return nil }
+            return dynamic.subtype
+        }
+        // Neither in-span annotation comes back; the dynamic that stood outside the span is untouched.
+        #expect(dynamicSubtypes == ["p"])
+        #expect(!elements.values.contains { if case .fermata = $0 { true } else { false } })
+    }
+
+    @Test("a locationShift inside the replaced span refuses")
+    func refusesLocationShift() throws {
+        var score = EditingFixtures.parityFixture()
+        var ids = EIDAllocator()
+        score.assignMissingIDs(using: &ids)
+        var voice = Self.voice(score, 0)
+        voice.elements.insert(
+            .locationShift(delta: Fraction(numerator: 1, denominator: 8)), at: 3, id: ids.next(),
+        )
+        score.parts.updateValue(at: 0) { part in
+            part.staves.updateValue(at: 0) { staff in
+                staff.measures[0].voices[0] = voice
+            }
+        }
+        #expect(throws: SheetMusicError.self) {
+            _ = try RangeCopyVoiceRebuild.command(
+                for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60), Self.quarter(62)]),
+                staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+            )
+        }
+    }
+
+    @Test("a destination tuplet the span only partly covers is torn down and its remainder refilled")
+    func destroysPartialTuplet() throws {
+        var score = Self.identifiedFixture()
+        // Measure 0 is `4/4 | C4 D4 r r`. Turning the quarter rest at tick 960 into a triplet gives it three
+        // 160-tick members across [960, 1440).
+        _ = try CreateTuplet(
+            at: VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 3),
+            actualNotes: 3, normalNotes: 2,
+        ).apply(to: &score)
+        #expect(Self.voice(score, 0).tupletSpans.count == 1)
+        // [1200, 1680) starts inside the triplet's second member and ends inside the quarter rest at 1440, so
+        // the span covers the triplet only partly. MuseScore's `makeGap` tears the whole bracket out.
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 1200, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+        #expect(Self.voice(score, 0).tupletSpans.isEmpty)
+        // The triplet's [960, 1200) head is gone as a tuplet and back as a plain eighth rest; [1680, 1920) is
+        // the trailing trim of the quarter rest the span also cut.
+        #expect(elements == [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
+            .rest(duration: .eighth),
+            Self.quarter(60),
+            .rest(duration: .eighth),
+        ])
+        let total = elements.values.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
+        #expect(total == 1920)
+    }
+
+    @Test("a destination tuplet the span reaches from inside is torn down on the far side too")
+    func destroysTupletReachedFromTheLeft() throws {
+        var score = Self.identifiedFixture()
+        // The triplet again occupies [960, 1440); this time the span STARTS in front of it and stops inside it,
+        // so the uncovered remainder is on the tuplet's far side rather than its near one.
+        _ = try CreateTuplet(
+            at: VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 3),
+            actualNotes: 3, normalNotes: 2,
+        ).apply(to: &score)
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 720, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+        #expect(Self.voice(score, 0).tupletSpans.isEmpty)
+        // D4 is trimmed to [480, 720), the copy runs [720, 1200), and [1200, 1440) — the triplet's uncovered
+        // tail — comes back as a plain eighth rest in front of the untouched quarter rest at 1440.
+        #expect(elements == [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .eighth, notes: [Note(pitch: 62, tpc: 16)])),
+            Self.quarter(60),
+            .rest(duration: .eighth),
+            .rest(duration: .quarter),
+        ])
+        let total = elements.values.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
+        #expect(total == 1920)
+    }
+
+    @Test("a remainder that no plain duration spells exactly still adds up to the ticks it replaced")
+    func refillsAnUnspellableRemainder() throws {
+        var score = Self.identifiedFixture()
+        // The triplet occupies [960, 1440) as three 160-tick members. The span covers the LAST TWO of them
+        // exactly, so the remainder is one whole member — 160 ticks, which is not a power-of-two duration at
+        // any dot count. MuseScore spells it as plain rests anyway: `makeGap` calls `setRest(..., 0, false)`
+        // right after `cmdDeleteTuplet`, the `0` being the tuplet argument, under "take care not to recreate
+        // tuplet we just deleted" (`cmd.cpp:1424-1426`). So the refill is three rests — a sixteenth (120), a
+        // sixty-fourth (30) and a 10-tick remainder fraction — and it is the ARITHMETIC that has to hold,
+        // not the shape of the list.
+        _ = try CreateTuplet(
+            at: VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 3),
+            actualNotes: 3, normalNotes: 2,
+        ).apply(to: &score)
+        let third = VoiceElement.chord(Chord(
+            duration: .fraction(Fraction(numerator: 320, denominator: 1920)), notes: [Note(pitch: 60, tpc: 14)],
+        ))
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 1120, elements: [third]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+        #expect(Self.voice(score, 0).tupletSpans.isEmpty)
+        // timeSig, C4, D4, the three refill rests, the copy, the untouched quarter rest at 1440. Guarded so a
+        // regression that drops the refill reports an expectation rather than trapping the slice below — a
+        // trap would take the whole run down with it and hide every other result.
+        #expect(elements.count == 8)
+        guard elements.count == 8 else { return }
+        let refill = Array(elements.values[3 ... 5])
+        // Hoisted: SwiftFormat's `preferKeyPath` rewrites the closure form to `\.isRest`, which the `#expect`
+        // macro then expands into a `rethrows` call it will not accept without `try`. Outside the macro both
+        // tools are happy.
+        let refillIsAllRests = refill.allSatisfy(\.isRest)
+        #expect(refillIsAllRests)
+        #expect(refill.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) } == 160)
+        #expect(elements[6] == third)
+        #expect(elements[7] == .rest(duration: .quarter))
+        let total = elements.values.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
+        #expect(total == 1920)
+    }
+
+    @Test("a span landing strictly inside a tuplet refills uncovered members on both sides")
+    func refillsBothSidesOfADestroyedTuplet() throws {
+        var score = try Self.tripletAcrossThreeBeats()
+        #expect(Self.voice(score, 0).tupletSpans.count == 1)
+        // The bracket runs [0, 1440) as three 480-tick members. The span is the MIDDLE member exactly, so both
+        // the head and the tail of the refill are non-empty — the case the other tuplet tests each zero one
+        // side of.
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 480, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let elements = Self.voice(score, 0).elements
+        #expect(Self.voice(score, 0).tupletSpans.isEmpty)
+        // Both members are a plain 480 ticks once the ratio is gone, so both sides spell as one quarter rest.
+        #expect(elements == [
+            .rest(duration: .quarter), Self.quarter(60), .rest(duration: .quarter), Self.quarter(62),
+        ])
+        let total = elements.values.reduce(0) { $0 + ($1.tickCount(division: 480) ?? 0) }
+        #expect(total == 1920)
+    }
+
+    @Test("a destination tuplet the span fully covers is dropped")
+    func dropsContainedTuplet() throws {
+        var score = Self.identifiedFixture()
+        _ = try CreateTuplet(
+            at: VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 3),
+            actualNotes: 3, normalNotes: 2,
+        ).apply(to: &score)
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(measure: 0, start: 960, elements: [Self.quarter(60)]),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        #expect(Self.voice(score, 0).tupletSpans.isEmpty)
+    }
+
+    @Test("a carried tuplet reaches the score as a real tuplet")
+    func writesTuplet() throws {
+        var score = Self.identifiedFixture()
+        let third = VoiceElement.chord(Chord(
+            duration: .fraction(Fraction(numerator: 160, denominator: 1920)),
+            notes: [Note(pitch: 60, tpc: 14)],
+        ))
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(
+                measure: 0, start: 960, elements: [third, third, third],
+                tuplets: [(range: 0 ... 2, normalNotes: 2, actualNotes: 3)],
+            ),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let spans = Self.voice(score, 0).tupletSpans
+        #expect(spans.count == 1)
+        #expect(spans[0].actualNotes == 3)
+        #expect(spans[0].endIndex - spans[0].startIndex == 2)
+        #expect(spans[0].startIndex == 3)
+    }
+
+    @Test("a surviving destination tuplet and a carried one are emitted in span order")
+    func ordersTupletSpans() throws {
+        var score = Self.identifiedFixture()
+        // A triplet on the quarter at tick 0 — entirely before the replaced span.
+        _ = try CreateTuplet(
+            at: VoiceElementID(staff: Self.flute, measureIndex: 0, voiceIndex: 0, elementIndex: 1),
+            actualNotes: 3, normalNotes: 2,
+        ).apply(to: &score)
+        let third = VoiceElement.chord(Chord(
+            duration: .fraction(Fraction(numerator: 160, denominator: 1920)),
+            notes: [Note(pitch: 60, tpc: 14)],
+        ))
+        let command = try RangeCopyVoiceRebuild.command(
+            for: Self.piece(
+                measure: 0, start: 960, elements: [third, third, third],
+                tuplets: [(range: 0 ... 2, normalNotes: 2, actualNotes: 3)],
+            ),
+            staff: Self.flute, voiceIndex: 0, in: score, operation: "DuplicateRange",
+        )
+        _ = try command.apply(to: &score)
+        let spans = Self.voice(score, 0).tupletSpans
+        #expect(spans.count == 2)
+        #expect(spans.map(\.startIndex) == spans.map(\.startIndex).sorted())
+        #expect(spans[0].startIndex == 1)
+        #expect(spans[1].startIndex == 5)
+    }
+}
