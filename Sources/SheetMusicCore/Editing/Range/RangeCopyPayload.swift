@@ -203,14 +203,18 @@ enum RangeCopyPayload {
     /// there already declares one. A range that starts mid-score inherits its meter from an earlier measure the
     /// payload does not carry, and a parser reading the payload alone — in another score, another window — has
     /// nothing else to resolve `.measure` durations against.
+    ///
+    /// Through `Voice.prependElement(_:)`, never by rebuilding the voice from its element array:
+    /// `Voice.init(elements:)` defaults `tuplets` to `[]` and mints every slot unidentified, so a rebuild cost
+    /// the bar both its brackets and its element ids — and the bar that reaches here is by definition one with
+    /// no time signature of its own, which is the shape every non-first bar has.
     private static func ensureLeadingTimeSignature(in measures: inout [Measure], prevailing: TimeSignature) {
         guard let first = measures.indices.first, measures[first].voices.indices.contains(0) else { return }
         let alreadyDeclared = measures[first].voices.contains { voice in
             voice.elements.contains { if case .timeSignature = $0 { true } else { false } }
         }
         guard !alreadyDeclared else { return }
-        let leadingVoice = measures[first].voices[0]
-        measures[first].voices[0] = Voice(elements: [.timeSignature(prevailing)] + Array(leadingVoice.elements))
+        measures[first].voices[0].prependElement(.timeSignature(prevailing))
     }
 
     /// The time signature carried forward to `measureIndex`, exactly the rule `[Measure].effectiveMeasureDurations()`

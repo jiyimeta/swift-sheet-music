@@ -91,6 +91,28 @@ extension Voice {
         }
     }
 
+    /// Puts `element` at the front, keeping every existing slot's identity and every tuplet over the same
+    /// members. The mirror of `removeElements(at:)`, and it exists for the same reason: rebuilding a voice from
+    /// a plain element array is what silently drops both.
+    ///
+    /// Literal (`.index`) endpoints are the ones that have to move — they count slots, and every slot just
+    /// moved along by one. An `.element` endpoint names its member by identity and follows it for nothing.
+    ///
+    /// The new slot is deliberately unidentified. The element is synthesized rather than copied from anywhere,
+    /// so there is no identifier it should carry, and the callers that need one mint it through
+    /// `assignMissingIDs(using:)` at their own chokepoint.
+    mutating func prependElement(_ element: VoiceElement) {
+        var pairs: [(EID, VoiceElement)] = [(.invalid, element)]
+        pairs += elements.indices.map { (elements.eid(at: $0), elements[$0]) }
+        elements = IdentifiedArray(pairs)
+        tuplets.mapValues { tuplet in
+            var moved = tuplet
+            if case let .index(index) = moved.first { moved.first = .index(index + 1) }
+            if case let .index(index) = moved.last { moved.last = .index(index + 1) }
+            return moved
+        }
+    }
+
     private func inwardEndpoint(
         _ endpoint: TupletEndpoint, at index: Int, removing removed: Set<Int>,
     ) -> TupletEndpoint {

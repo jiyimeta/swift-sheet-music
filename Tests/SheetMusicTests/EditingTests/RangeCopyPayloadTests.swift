@@ -56,6 +56,67 @@ struct RangeCopyPayloadTests {
         ])
     }
 
+    /// Two 4/4 bars: bar 0 `[4/4, r r r r]`, and bar 1 — carrying NO time signature of its own, the shape every
+    /// non-first bar has — `[triplet ×3 at 1/12, r r r]` under a 2-in-the-time-of-3 bracket. `tripletFixture()`
+    /// puts its triplet in measure 0, which already declares a meter, so only this shape reaches
+    /// `ensureLeadingTimeSignature` with a tuplet to lose.
+    private static func tripletInSecondBarFixture() -> Score {
+        let tripletMember = Fraction(numerator: 1, denominator: 12)
+        func member(_ pitch: Int, _ tpc: Int) -> VoiceElement {
+            .chord(Chord(duration: .fraction(tripletMember), notes: [Note(pitch: pitch, tpc: tpc)]))
+        }
+        let staff = Staff(defaultClefType: "G", measures: [
+            Measure(voices: [Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .rest(duration: .quarter), .rest(duration: .quarter),
+                .rest(duration: .quarter), .rest(duration: .quarter),
+            ])]),
+            Measure(voices: [Voice(
+                elements: [
+                    member(60, 14), member(62, 16), member(64, 18),
+                    .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+                ],
+                tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2)],
+            )]),
+        ])
+        return Score(division: 480, parts: [
+            Part(id: "1", trackName: "Flute", instrument: Instrument(id: "flute"), staves: [staff]),
+        ])
+    }
+
+    @Test("inheriting a time signature does not cost the copied bar its tuplet")
+    func inheritedTimeSignatureKeepsTuplets() throws {
+        let source = Self.tripletInSecondBarFixture()
+        let payload = try #require(RangeCopyPayload.score(
+            for: VoiceElementRange(start: Self.slot(1, 0), end: Self.slot(1, 5)), in: source,
+        ))
+        let voice = payload.parts[0].staves[0].measures[0].voices[0]
+        #expect(voice.tuplets.count == 1)
+        let span = try #require(voice.tupletSpans.first)
+        #expect(span.normalNotes == 2)
+        #expect(span.actualNotes == 3)
+        // The inherited time signature took index 0, so the bracket's literal endpoints have to have moved with
+        // the members they name: the triplet stands at 1...3 now, not at 0...2.
+        #expect(span.startIndex == 1)
+        #expect(span.endIndex == 3)
+    }
+
+    @Test("inheriting a time signature does not cost the copied bar its element identifiers")
+    func inheritedTimeSignatureKeepsElementIDs() throws {
+        var source = Self.tripletInSecondBarFixture()
+        var ids = EIDAllocator()
+        source.assignMissingIDs(using: &ids)
+        let payload = try #require(RangeCopyPayload.score(
+            for: VoiceElementRange(start: Self.slot(1, 0), end: Self.slot(1, 5)), in: source,
+        ))
+        let copied = payload.parts[0].staves[0].measures[0].voices[0].elements
+        let original = try #require(source[Self.flute]).measures[1].voices[0].elements
+        // `Score.clipboardDocument(for:)` is public, so a host sees these: the synthesized time signature is the
+        // one slot with no identity, and every copied slot carries the source's.
+        #expect(copied.eid(at: 0) == .invalid)
+        #expect((1 ..< copied.count).map { copied.eid(at: $0) } == original.indices.map { original.eid(at: $0) })
+    }
+
     @Test("a copy that starts mid-bar carries no hole at the end of its first bar")
     func midBarCopyLeavesNoHole() throws {
         // Beat 3 of bar 0 through beat 2 of bar 1: four contiguous quarters, 64 65 67 69.
