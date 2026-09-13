@@ -51,8 +51,9 @@ extension RangeCopyVoiceRebuild {
     /// its own tick, matching MuseScore, where these live on their own segment types rather than as the
     /// annotations `makeGap1`'s `deleteAnnotationsFromRange` clears (`cmd.cpp:1504`, `edit.cpp:3734-3759`). A
     /// dynamic, fermata, harmony, and the rest of the segment-annotation family are cleared instead — the copy
-    /// landing on them is exactly what that MuseScore pass destroys. A `.spanner` goes the same way unless it is
-    /// a volta, which is skipped. Every kind kept here is kept UNCONDITIONALLY; `rebuild(_:cut:gap:
+    /// landing on them is exactly what that MuseScore pass destroys. A `.spanner` goes the same way only for the
+    /// four kinds `RangeCopySpanners.isShortenedOutOfGaps(_:)` names. Every kind kept here is kept
+    /// UNCONDITIONALLY; `rebuild(_:cut:gap:
     /// spanStart:spanEnd:in:)` drops a clef, breath, ambitus or harmony afterward when the piece brings one of
     /// the same kind to the same tick, via `pieceSupersededSlots(in:from:in:)`.
     private static func place(
@@ -65,13 +66,16 @@ extension RangeCopyVoiceRebuild {
         switch entry.element {
         case .locationShift, .measureRepeat:
             throw refused(.blockedByUntimedElement(at: context.location(entry.index)))
-        case let .spanner(spanner) where spanner.kind == .volta:
+        case let .spanner(spanner) where !RangeCopySpanners.isShortenedOutOfGaps(spanner.kind):
             result.preserved.append(entry)
         case .spanner:
-            // A line spanner ANCHORED in the gap is removed with the material it was anchored to —
-            // `makeGap1`'s `deleteOrShortenOutSpannersFromRange` (`edit.cpp:3638-3702`). One anchored before
-            // the gap is shortened instead, which this walk never sees; `RangeCopySpanners.clearDestination`
-            // does it from the score's own axis. A volta is skipped (`:3659`) and so is caught above.
+            // A hairpin, ottava, trill or vibrato ANCHORED in the gap goes with the material it was anchored
+            // to — `makeGap1`'s `deleteOrShortenOutSpannersFromRange` (`edit.cpp:3638-3702`). No other kind
+            // does: that pass collects only those four (`:3641-3646`) and skips a volta and anything
+            // system-flagged (`:3659`), so a pedal or a text line standing here is preserved above. The other
+            // two outcomes this walk cannot reach — a line reaching INTO the gap from an earlier bar, and one
+            // anchored here that reaches PAST the gap — are `RangeCopySpanners.clearDestination`'s, which
+            // works from the score's own absolute axis.
             break
         case .clef, .keySignature, .timeSignature, .barLine, .breath, .ambitus, .preserved, .harmony:
             result.preserved.append(entry)

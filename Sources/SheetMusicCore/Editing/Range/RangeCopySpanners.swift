@@ -9,11 +9,10 @@ import SheetMusicFoundation
 /// rest of the segment-anchored family are written only when both ends are inside the selection
 /// (`twrite.cpp:3560-3571`); they are never clipped to fit.
 ///
-/// Nothing is carried through `RangeCopyPlacement`, not even a spanner that travels. Two reasons: the stored
-/// offsets are measured against the SOURCE barring and the copy may land on a different one, and a chord cut by
-/// a destination barline becomes a tied chain whose every link would inherit the array. So the copy side only
-/// COLLECTS — as a pair of absolute source ticks — and `recreate(_:at:in:ids:commands:)` re-anchors each one
-/// against the destination after the material is there to anchor to.
+/// Nothing is carried through `RangeCopyPlacement`, not even a spanner that travels: the stored offsets are
+/// measured against the SOURCE barring and the copy may land on a different one. So the copy side only COLLECTS
+/// — as a pair of absolute source ticks — and `recreate(_:at:in:ids:commands:)` re-anchors each one against the
+/// destination after the material is there to anchor to.
 enum RangeCopySpanners {
     /// One spanner the copy carries: where it starts and ends on the SOURCE staff's absolute tick axis, plus the
     /// spanner itself, whose own `nextMeasuresOffset` / `nextFractionsOffset` still describe the source and are
@@ -28,6 +27,34 @@ enum RangeCopySpanners {
         let spanner: Spanner
     }
 
+    /// A destination spanner whose START the copy's span swallowed but whose END reaches past it: MuseScore
+    /// moves the start to the gap's far edge rather than deleting the spanner (`moveStart` →
+    /// `SPANNER_TICK = t2`, `edit.cpp:3689-3700`). The element itself goes with the material the rebuild
+    /// replaces, so this is the request to write it again at `startTick`, still ending where it ended.
+    struct Restart {
+        let staff: StaffAddress
+        let voiceIndex: Int
+        /// Absolute destination tick the spanner starts at now — the far edge of the span the copy took.
+        let startTick: Int
+        /// Absolute destination tick it still ends at.
+        let endTick: Int
+        let spanner: Spanner
+    }
+
+    /// Whether `deleteOrShortenOutSpannersFromRange` acts on this kind at all.
+    ///
+    /// MuseScore's pass is narrower than "every line": it collects hairpin, ottava, trill and vibrato and no
+    /// other kind (`edit.cpp:3641-3646`), then additionally skips a volta and anything system-flagged (`:3659`).
+    /// So a pedal, a text line, a palm mute, a let ring, a glissando or an unmodeled `.other` standing where a
+    /// paste lands is left exactly as it was — neither removed nor clipped — and this package must leave it
+    /// alone too, both when it stands inside the gap and when it reaches into one.
+    static func isShortenedOutOfGaps(_ kind: Spanner.Kind) -> Bool {
+        switch kind {
+        case .hairpin, .ottava, .trill, .vibrato: true
+        case .volta, .slur, .pedal, .textLine, .glissando, .palmMute, .letRing, .other: false
+        }
+    }
+
     /// The absolute tick `spanner`'s stored offsets resolve to, for a spanner anchored at `anchor`.
     ///
     /// `nextMeasuresOffset` counts MEASURES and `nextFractionsOffset` is measured from the anchor's own rtick, so
@@ -36,11 +63,16 @@ enum RangeCopySpanners {
     /// each step subtracts a measure's width and adds the same width back through `measureStarts`, so the
     /// absolute tick never moves. This file works on the absolute axis throughout, so it needs no walk at all.
     ///
+    /// A negative `<measures>` is clamped away the way `LayoutEngine.slurEndAnchor` clamps it (`max(0, …)`), so
+    /// the tick this answers is the one a consumer will draw. MuseScore's own MS3 barline-crossing shape puts
+    /// the negative sign on the FRACTION instead (`<measures>1</measures><fractions>-1/2</fractions>`), which
+    /// needs no clamp and still resolves exactly.
+    ///
     /// `nil` when the offset names a measure the staff does not have.
     static func endTick(
         of spanner: Spanner, anchoredAt anchor: ScoreTickPosition, geometry: RangeCopyGeometry, division: Int,
     ) -> Int? {
-        let measure = anchor.measure + spanner.nextMeasuresOffset
+        let measure = anchor.measure + max(0, spanner.nextMeasuresOffset)
         guard geometry.measureStarts.indices.contains(measure) else { return nil }
         return geometry.measureStarts[measure] + anchor.tick
             + (spanner.nextFractionsOffset?.ticks(division: division) ?? 0)

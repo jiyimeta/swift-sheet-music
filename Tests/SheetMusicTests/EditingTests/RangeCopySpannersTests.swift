@@ -47,6 +47,13 @@ struct RangeCopySpannersTests {
         )
     }
 
+    /// A pedal: a line spanner MuseScore's gap pass does NOT collect, so nothing here may remove or clip it.
+    private static func pedal(measures: Int, fractions: Fraction?) -> Spanner {
+        Spanner(
+            kind: .pedal, rawType: "Pedal", nextMeasuresOffset: measures, nextFractionsOffset: fractions,
+        )
+    }
+
     /// The spanners the chord at `index` of `measure`'s voice 0 carries.
     private static func chordSpanners(_ score: Score, _ measure: Int, _ index: Int) -> [Spanner] {
         guard case let .chord(chord) = voice(score, measure).elements[index] else { return [] }
@@ -179,5 +186,126 @@ struct RangeCopySpannersTests {
         // It still starts on beat 1 and now stops where the copy begins, on beat 3 (`edit.cpp:3689-3700`).
         #expect(remaining.first?.nextMeasuresOffset == 0)
         #expect(remaining.first?.nextFractionsOffset == Fraction(ticks: 960, division: 480))
+    }
+
+    // MARK: - Destination side: the bounds at both ends of the gap
+
+    /// Four bars: the first carries the material and the spanner under test, and the copy of bar 0 lands on
+    /// bar 1. A spanner ending in bar 3 therefore arches clean over the copy's span with neither endpoint in it.
+    private static func fourBars(opening elements: [VoiceElement]) -> Score {
+        score([
+            Measure(voices: [Voice(elements: elements)]),
+            quarterRestBar, quarterRestBar, quarterRestBar,
+        ])
+    }
+
+    @Test("a destination slur that arches over the whole copy is left alone")
+    func keepsASlurSpanningTheWholeSpan() throws {
+        var score = Self.fourBars(opening: [
+            Self.quarter(60, 14, spanners: [Self.slur(measures: 3, fractions: nil)]),
+            Self.quarter(62, 16), Self.quarter(64, 18), Self.quarter(65, 19),
+        ])
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 3)))
+            .apply(to: &score)
+        // MuseScore's removal test is `tick2 >= t1 && tick2 < t2`; this arc's end chord is past `t2`, so nothing
+        // it touches is being overwritten and it keeps the offsets it had.
+        let kept = Self.chordSpanners(score, 0, 0)
+        #expect(kept.count == 1)
+        #expect(kept.first?.nextMeasuresOffset == 3)
+        #expect(kept.first?.nextFractionsOffset == nil)
+    }
+
+    @Test("a destination hairpin that arches over the whole copy is left alone")
+    func keepsAHairpinSpanningTheWholeSpan() throws {
+        var score = Self.fourBars(opening: [
+            .spanner(Self.hairpin(measures: 3, fractions: nil)),
+            Self.quarter(60, 14), Self.quarter(62, 16), Self.quarter(64, 18), Self.quarter(65, 19),
+        ])
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 4)))
+            .apply(to: &score)
+        // `moveEnd`'s test is `tick2 > t1 && tick2 <= t2`; this one ends past `t2`, so it is not shortened.
+        let kept = Self.lineSpanners(score, 0)
+        #expect(kept.count == 1)
+        #expect(kept.first?.nextMeasuresOffset == 3)
+        #expect(kept.first?.nextFractionsOffset == nil)
+    }
+
+    @Test("a destination slur whose end chord is the copy's first is removed")
+    func removesASlurEndingOnTheSpanStart() throws {
+        var score = Self.score([
+            Measure(voices: [Voice(elements: [
+                Self.quarter(60, 14, spanners: [
+                    Self.slur(measures: 0, fractions: Fraction(ticks: 960, division: 480)),
+                ]),
+                Self.quarter(62, 16), Self.quarter(64, 18), Self.quarter(65, 19),
+            ])]),
+        ])
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 1)))
+            .apply(to: &score)
+        // The arc ended on beat 3, which is the first chord the copy overwrites — the closed lower bound of
+        // MuseScore's `tick2 >= t1` is exactly this case.
+        #expect(Self.chordSpanners(score, 0, 0).isEmpty)
+    }
+
+    // MARK: - Destination side: the kinds the gap pass does not collect
+
+    @Test("a destination pedal reaching into the copy's span is not shortened")
+    func leavesAPedalReachingIntoTheSpan() throws {
+        var score = Self.score([
+            Measure(voices: [Voice(elements: [
+                .spanner(Self.pedal(measures: 0, fractions: Fraction(ticks: 1440, division: 480))),
+                Self.quarter(60, 14), Self.quarter(62, 16), Self.quarter(64, 18), Self.quarter(65, 19),
+            ])]),
+        ])
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 2)))
+            .apply(to: &score)
+        // `deleteOrShortenOutSpannersFromRange` collects hairpin, ottava, trill and vibrato and no other kind
+        // (`edit.cpp:3641-3646`), so a pedal in the same position as the shortened hairpin above keeps its end.
+        let kept = Self.lineSpanners(score, 0)
+        #expect(kept.count == 1)
+        #expect(kept.first?.kind == .pedal)
+        #expect(kept.first?.nextFractionsOffset == Fraction(ticks: 1440, division: 480))
+    }
+
+    @Test("a destination pedal standing inside the copy's span survives it")
+    func leavesAPedalInsideTheSpan() throws {
+        var score = Self.score([
+            Measure(voices: [Voice(elements: [
+                Self.quarter(60, 14), Self.quarter(62, 16),
+                .spanner(Self.pedal(measures: 0, fractions: Fraction(ticks: 960, division: 480))),
+                Self.quarter(64, 18), Self.quarter(65, 19),
+            ])]),
+        ])
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 1)))
+            .apply(to: &score)
+        // The copy lands on beats 3 and 4, where the pedal stands. A hairpin there would go; a pedal is outside
+        // the pass and stays, at its own tick among the new material.
+        let kept = Self.lineSpanners(score, 0)
+        #expect(kept.count == 1)
+        #expect(kept.first?.kind == .pedal)
+    }
+
+    // MARK: - Destination side: the start-side shorten
+
+    @Test("a destination hairpin the copy's span starts inside is restarted at the span's far edge")
+    func restartsAHairpinWhoseStartTheSpanSwallowed() throws {
+        var score = Self.score([
+            Measure(voices: [Voice(elements: [
+                Self.quarter(60, 14), Self.quarter(62, 16),
+                .spanner(Self.hairpin(measures: 1, fractions: nil)),
+                Self.quarter(64, 18), Self.quarter(65, 19),
+            ])]),
+            Self.quarterRestBar,
+        ])
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 0), end: Self.slot(0, 1)))
+            .apply(to: &score)
+        // It began on beat 3 of bar 0, which the copy takes, and ended on beat 3 of bar 1, which the copy does
+        // not reach. MuseScore's `moveStart` re-homes it to the gap's far edge rather than deleting it.
+        #expect(Self.lineSpanners(score, 0).isEmpty)
+        let moved = Self.lineSpanners(score, 1)
+        #expect(moved.count == 1)
+        #expect(moved.first?.kind == .hairpin)
+        #expect(moved.first?.nextMeasuresOffset == 0)
+        #expect(moved.first?.nextFractionsOffset == Fraction(ticks: 960, division: 480))
     }
 }

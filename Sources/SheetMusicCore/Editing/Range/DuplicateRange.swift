@@ -61,11 +61,12 @@ public struct DuplicateRange: EditCommand {
             reaching: limit, staves: source.staves,
             in: &scratch, ids: &allocator, commands: &commands,
         )
+        var restarts: [RangeCopySpanners.Restart] = []
         for stream in source.streams {
-            // Before the material, so a destination spanner reaching into the span is gone by the time a copied
-            // one is anchored there — `SpannerPlacement.refuseDuplicate` throws on a second spanner of the same
-            // kind at one anchor.
-            try RangeCopySpanners.clearDestination(
+            // Before the material, so a destination spanner reaching into the span is already gone — and its
+            // survivors already shortened — by the time a copied one is anchored there. Otherwise
+            // `RangeCopySpanners`' own same-kind guard would drop the copy's spanner instead of the stale one.
+            restarts += try RangeCopySpanners.clearDestination(
                 forStream: stream, at: destinationTick, sourceStartTick: source.startTick,
                 in: &scratch, ids: &allocator, commands: &commands,
             )
@@ -74,11 +75,13 @@ public struct DuplicateRange: EditCommand {
                 in: &scratch, ids: &allocator, commands: &commands,
             )
         }
-        // A post-pass: the copied spanners' offsets are written against the destination's real geometry, which
-        // only exists once every `ReplaceVoiceElements` above has landed on the scratch score.
+        // Two post-passes: the offsets of a copied spanner, and of a destination one whose start the copy
+        // swallowed, are both written against the destination's real geometry — which only exists once every
+        // `ReplaceVoiceElements` above has landed on the scratch score.
         try RangeCopySpanners.recreate(
             source, at: destinationTick, in: &scratch, ids: &allocator, commands: &commands,
         )
+        try RangeCopySpanners.restart(restarts, in: &scratch, ids: &allocator, commands: &commands)
         return commands.isEmpty ? nil : CompositeEditCommand(commands: commands, location: range.start)
     }
 }
