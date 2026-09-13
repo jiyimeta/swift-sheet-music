@@ -103,61 +103,15 @@ struct RangeCopySource {
         guard !streams.isEmpty else { return nil }
     }
 
-    /// The whole extent of `payload`, read as copy material: its own first timed slot to its own last, handed to
-    /// `init?(range:in:)` so every rule that path enforces — the half-open span, the clamp and its tuplet-member
-    /// exemption, the outer-tie clearing, the spanner collection — applies to a pasted payload exactly as it
-    /// already applies to a duplicated range. `nil` when the payload holds no chord or rest, OR when its own
-    /// extent cuts a tuplet: `init?(range:in:)` throws `.insideTuplet` for that, and a payload has no channel to
-    /// report a throw, so a payload that cannot be resolved is simply unreadable rather than a thrown error.
-    init?(payload: Score) {
-        guard let first = Self.firstTimedSlot(in: payload), let last = Self.lastTimedSlot(in: payload),
-              let resolved = try? RangeCopySource(
-                  range: VoiceElementRange(start: first, end: last), in: payload,
-              )
-        else { return nil }
-        self = resolved
-    }
-
-    /// The chord or rest with the EARLIEST ONSET anywhere in `score`, compared across every staff rather than
-    /// picked from staff-address order. A staff-major pick would be wrong whenever the first-addressed staff
-    /// rests through the payload's opening beat while another staff already sounds at tick zero — a plain offset
-    /// entry, and one `RangeCopyPayload.score(for:in:)` can legitimately produce, since it trims each staff's
-    /// boundary measure independently and only the staff that owned the original range's bound is guaranteed a
-    /// chord exactly at that tick.
-    private static func firstTimedSlot(in score: Score) -> VoiceElementID? {
-        chordSlots(in: score)
-            .compactMap { id in score.onset(of: id).map { (id, $0) } }
-            .min { $0.1 < $1.1 }
-            .map(\.0)
-    }
-
-    /// The chord or rest with the LATEST END anywhere in `score` — the mirror of `firstTimedSlot(in:)`, and for
-    /// the same reason: the last-addressed staff is not guaranteed to be the one still sounding when every other
-    /// staff has already finished.
-    private static func lastTimedSlot(in score: Score) -> VoiceElementID? {
-        chordSlots(in: score)
-            .compactMap { id in score.end(of: id).map { (id, $0) } }
-            .max { $0.1 < $1.1 }
-            .map(\.0)
-    }
-
-    /// Every chord or rest in `score`, staff by staff in display order, measure/voice/element order within each.
-    private static func chordSlots(in score: Score) -> [VoiceElementID] {
-        var result: [VoiceElementID] = []
-        for (address, staff) in score.allStaves {
-            for (measureIndex, measure) in staff.measures.enumerated() {
-                for (voiceIndex, voice) in measure.voices.enumerated() {
-                    for (elementIndex, element) in voice.elements.enumerated() {
-                        guard case .chord = element else { continue }
-                        result.append(VoiceElementID(
-                            staff: address, measureIndex: measureIndex,
-                            voiceIndex: voiceIndex, elementIndex: elementIndex,
-                        ))
-                    }
-                }
-            }
-        }
-        return result
+    /// The three payload facts a relocated copy has to restate. `RangeCopySource+Payload.swift` is the only
+    /// caller: `PasteRange` re-addresses a payload's streams onto the destination's staves, and every other
+    /// field of the resolved source — the material, the ticks, the tuplets, the spanners — carries over
+    /// untouched.
+    init(streams: [Stream], startTick: Int, lengthTicks: Int, staves: [StaffAddress]) {
+        self.streams = streams
+        self.startTick = startTick
+        self.lengthTicks = lengthTicks
+        self.staves = staves
     }
 }
 
