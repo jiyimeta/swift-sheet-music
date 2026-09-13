@@ -17,8 +17,9 @@ and this project adheres to
   nothing. Both collapses are now gated on COVERAGE: a bar-voice becomes one measure rest when the
   edit clears every timed slot it has, and otherwise keeps every slot the edit did not name. The
   half-note bar now gives back two half rests, and a range of nothing but rests that covers its bar
-  collapses like any other full-bar selection. **This changes the score a host's ⌫ produces**, which
-  is why it is a breaking change rather than a fix.
+  collapses like any other full-bar selection. **This changes the score a host's ⌫ produces** — a
+  behavior change, not an API one: nothing a host calls has changed shape, so a host picks it up by
+  updating and needs no edits of its own.
 - **A range delete re-spells what it cleared on the metric grid.** The covered slots of each bar-voice
   are replaced by the rests that total their combined length
   (`DurationChangeAlgorithm.alignedDurations`, the same fill a shortened note leaves behind), so two
@@ -29,10 +30,11 @@ and this project adheres to
   identifier and spelling, so a covered `.measure` rest is not rewritten as the literal `.whole` that
   totals the same ticks. `.delete(at:)` is unchanged here: one slot still becomes one rest of its own
   length, the way MuseScore distinguishes a click-delete from a range delete.
-- `FullMeasureRestCollapse.plan(deleting:in:)` is now `plan(clearing:in:of:)`, taking the set of
-  element indices the caller is clearing and the `VoiceRef` they live in. `DeleteRange` plans one
-  `ReplaceVoiceElements` per touched bar-voice instead of one `DeleteVoiceElement` per chord followed
-  by a collapse pass.
+- `FullMeasureRestCollapse.plan(deleting:in:)` keeps its signature and answers the new rule for the
+  one slot it names. The general form it now delegates to is new:
+  `plan(clearing:in:of:)`, taking the set of element indices being cleared and the `VoiceRef` they
+  live in. `DeleteRange` plans one `ReplaceVoiceElements` per touched bar-voice instead of one
+  `DeleteVoiceElement` per chord followed by a collapse pass.
 
 ## [3.1.0] - 2026-09-12
 

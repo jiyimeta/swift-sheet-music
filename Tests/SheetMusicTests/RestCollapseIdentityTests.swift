@@ -55,6 +55,15 @@ struct RestCollapseIdentityTests {
         Fixture.expectSameScore(editor.score, before)
     }
 
+    /// The one-slot entry point `.delete` uses is the same rule read for a range of one: it collapses only when the
+    /// slot it names is the bar-voice's only timed one.
+    @Test func deletingOneSlotReadsTheSameRule() {
+        let alone = Fixture.score(elements: [Fixture.time, Fixture.chord(.whole)])
+        #expect(FullMeasureRestCollapse.plan(deleting: Fixture.location(1), in: alone) != nil)
+        let beside = Fixture.score(elements: [Fixture.time, Fixture.chord(.half), .rest(duration: .half)])
+        #expect(FullMeasureRestCollapse.plan(deleting: Fixture.location(1), in: beside) == nil)
+    }
+
     /// The rule the collapse is gated on: coverage, not what survives. A rest the caller is not clearing is a rest
     /// it may not swallow, so neither of these partial clears plans a collapse — the bar keeps its two half slots.
     @Test func partialCoverageDoesNotCollapse() {

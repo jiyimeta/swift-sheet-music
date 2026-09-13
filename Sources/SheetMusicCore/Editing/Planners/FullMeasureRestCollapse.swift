@@ -24,6 +24,12 @@ public enum FullMeasureRestCollapse {
         public let restElementIndex: Int
     }
 
+    /// A plan for clearing the single slot `location` names — the one-slot reading of the rule below, and what
+    /// `.delete` asks for. Collapses only when that slot is its bar-voice's ONLY timed one.
+    public static func plan(deleting location: VoiceElementID, in score: Score) -> Plan? {
+        plan(clearing: [location.elementIndex], in: VoiceRef(location), of: score)
+    }
+
     /// A plan for clearing the timed slots `covered` of `voice`, or `nil` when they are not all of them — in which
     /// case the caller falls back to whatever it does with a partial clear (`DeleteVoiceElement` for one slot, an
     /// aligned rest fill for a range). Also `nil` when the voice already reads as one measure rest.
