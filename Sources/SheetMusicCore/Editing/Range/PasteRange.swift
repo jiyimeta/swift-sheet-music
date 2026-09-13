@@ -103,28 +103,19 @@ extension PasteRange {
 
     /// Why `RangeCopySource.init?(payload:)` came back `nil`.
     ///
-    /// That initializer is non-throwing and collapses two different failures into `nil`: a payload with no chord
-    /// or rest in it at all, and a payload whose own extent cuts a tuplet. MuseScore tells the user which — its
-    /// list paste raises `DEST_TUPLET` as its own dialog (`mscoreerrorscontroller.cpp:124-152`) — so the
-    /// information has somewhere to go, and this recovers it by re-running `wholeExtent(in:)` and the resolution
-    /// itself, the SAME two steps `init?(payload:)` took, rather than by re-deriving what either of them
-    /// decides. The cost is a second resolution of a paste that is already being refused.
+    /// A payload with no chord or rest in it at all is the one cause worth its own reason, and
+    /// `wholeExtent(in:)` — the first of the two steps that initializer takes — is exactly the step that fails
+    /// for it, so asking it again is the whole recovery. Everything else the resolution can refuse is a payload
+    /// whose edges do not resolve against its own staves, which names no slot of the score the host is showing
+    /// and so is reported at the slot the user tried to paste onto.
     ///
-    /// `.insideTuplet` is re-addressed to `location` deliberately. The bound the resolution refused is a slot in
-    /// the PAYLOAD, whose measure and staff numbering means nothing in the score the host is showing; the slot
-    /// the user can actually be pointed at is the one they tried to paste onto.
+    /// A partial-tuplet refusal is not reachable from here and is deliberately not looked for: the span
+    /// `wholeExtent(in:)` states covers every chord the payload has, so no tuplet in it can be cut, and the
+    /// refusal that used to be remapped belongs to the COPY instead — `RangeCopyPayload.score(for:in:)` makes
+    /// it, so a range that cuts a tuplet never reaches a pasteboard.
     private static func refusalReason(forUnusable payload: Score, at location: VoiceElementID)
         -> EditRefusal.Reason
     {
-        guard let extent = RangeCopySource.wholeExtent(in: payload) else { return .emptyPayload }
-        do {
-            _ = try RangeCopySource(extent: extent, in: payload, operation: "PasteRange")
-            return .targetNotFound(location)
-        } catch let SheetMusicError.invalidEdit(refusal) {
-            if case .insideTuplet = refusal.reason { return .insideTuplet(at: location) }
-            return refusal.reason
-        } catch {
-            return .targetNotFound(location)
-        }
+        RangeCopySource.wholeExtent(in: payload) == nil ? .emptyPayload : .targetNotFound(location)
     }
 }

@@ -319,20 +319,23 @@ struct RangeCopyPayloadTests {
         #expect(span.endIndex - span.startIndex + 1 == 3)
     }
 
-    @Test("a tuplet the range only partly covers loses its bracket but keeps its surviving members")
-    func dropsPartlyCoveredTupletBracket() throws {
-        // Starts on the triplet's SECOND member, cutting the first one out of the copied span.
+    @Test("a range that cuts a tuplet is refused at ⌘C, exactly as R over the same range refuses it")
+    func refusesARangeThatCutsATuplet() throws {
+        // Starts on the triplet's SECOND member, cutting the first one out of the copied span. MuseScore refuses
+        // the COPY here — `NotationInteraction::copySelection` asks `Selection::canCopy()` first and reports
+        // `SOURCE_PARTIAL_TUPLET` (`dom/select.cpp:1410, 1446, 1454`) — and "R is a copy plus a paste" is the
+        // premise this whole design rests on, so the two cannot disagree about one selection.
         let source = Self.tripletFixture()
-        let payload = try #require(RangeCopyPayload.score(
-            for: VoiceElementRange(start: Self.slot(0, 2), end: Self.slot(0, 6)), in: source,
-        ))
-        let voice = payload.parts[0].staves[0].measures[0].voices[0]
-        #expect(voice.tuplets.isEmpty)
-        let pitches = voice.elements.compactMap { element -> Int? in
-            guard case let .chord(chord) = element, let note = chord.notes.first else { return nil }
-            return note.pitch
+        let range = VoiceElementRange(start: Self.slot(0, 2), end: Self.slot(0, 6))
+        #expect(RangeCopyPayload.score(for: range, in: source) == nil)
+
+        let error = #expect(throws: SheetMusicError.self) {
+            _ = try RangeCopySource(range: range, in: source, operation: "DuplicateRange")
         }
-        #expect(pitches == [62, 64])
+        guard case let .invalidEdit(refusal)? = error, case .insideTuplet = refusal.reason else {
+            Issue.record("expected R to refuse the same range with .insideTuplet, got \(String(describing: error))")
+            return
+        }
     }
 
     @Test("a range that resolves to nothing yields nil")

@@ -58,6 +58,18 @@ and this project adheres to
   fit, ties sealed across the destination barline, staff annotations cleared and superseded, measures appended
   past the end — a paste obeys for free.
 
+  `clipboardDocument(for:)` answers `nil` for a REFUSED copy as well as for an empty selection, and a host has to
+  read it as one: a range that cuts a tuplet — covering some of its members but not all — cannot be copied, so
+  the pasteboard must be left alone and the user told, rather than an empty payload written. That is MuseScore's
+  own answer (`NotationInteraction::copySelection` asks `Selection::canCopy()` first and reports
+  `SOURCE_PARTIAL_TUPLET`, `select.cpp:1410, 1446, 1454`), and it is the only answer consistent with `R`, which
+  refuses the identical selection: ⌘C and ⌘V are together the same operation `R` is, so one of them quietly
+  producing untupleted material where `R` said no would be the two disagreeing about one selection. A copy that
+  starts mid-bar is rebased rather than barline-padded, the way MuseScore's `<StaffList>` is, so the payload's
+  own bars line up with its material; the meter a copied bar inherits when it declares none of its own does not
+  cost that bar its tuplets; and a hairpin, pedal, ottava, trill, vibrato, text line, palm mute or let ring
+  anchored inside the copied span travels with it, as a slur already did.
+
   A copied single rest pastes as nothing, matching MuseScore — but that is a rule a host enforces, not one this
   package imposes: no `acceptDrop` in MuseScore's tree accepts a `REST`, so a one-element copy of one is refused
   at the destination, silently. A RANGE of rests copies and pastes normally, as it must: `voiceElements(in:)`

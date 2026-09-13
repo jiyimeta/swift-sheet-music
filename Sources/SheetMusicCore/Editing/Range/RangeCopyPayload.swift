@@ -19,16 +19,30 @@ import SheetMusicFoundation
 /// says what the result IS rather than how this type built it.
 enum RangeCopyPayload {
     /// The copied range as a self-contained score: the covered staves, the covered measures, each voice
-    /// trimmed to the range's tick span. `nil` when the range resolves to nothing.
+    /// trimmed to the range's tick span. `nil` when the range resolves to nothing, and `nil` when it cuts a
+    /// tuplet — see `score(for:in:)` below for why the second one is a refusal rather than a shrug.
     static func score(for range: VoiceElementRange, in score: Score) -> Score? {
         guard let extent = RangeCopySource.Extent(range: range, in: score) else { return nil }
         return self.score(for: extent, in: score)
     }
 
-    /// The same, from an extent already stated. `nil` when the extent selects no chord or rest.
+    /// The same, from an extent already stated.
+    ///
+    /// `nil` when the extent selects no chord or rest, and `nil` when it cuts a tuplet — a range must cover
+    /// every tuplet it touches from its first member to its last. Both answers come from asking
+    /// `RangeCopySource` to resolve the extent and taking `nil` or a throw as a refusal, which is the point:
+    /// `R` IS a copy plus a paste, so ⌘C refuses exactly the selections `R` refuses, by construction rather
+    /// than by two rules kept in step. MuseScore refuses the copy in the same place —
+    /// `NotationInteraction::copySelection` asks `Selection::canCopy()` before writing anything and reports
+    /// `SOURCE_PARTIAL_TUPLET` (`dom/select.cpp:1410, 1446, 1454`).
+    ///
+    /// The resolved material itself is discarded. It is the copy side's own shaping — clamped lengths, cleared
+    /// outer ties, collected spanners — addressed against the SOURCE score's tick axis, while a payload is a
+    /// score of its own; the shaping is applied downstream, once, when the payload is landed. So the
+    /// resolution runs here only for its verdict, and the `operation` it would stamp a refusal with never
+    /// leaves this function.
     static func score(for extent: RangeCopySource.Extent, in score: Score) -> Score? {
-        guard !score.voiceElements(staves: extent.staves, from: extent.lower, to: extent.upper).isEmpty
-        else { return nil }
+        guard (try? RangeCopySource(extent: extent, in: score, operation: "CopyRange")) != nil else { return nil }
 
         let low = extent.lower
         let high = extent.upper
@@ -135,17 +149,10 @@ enum RangeCopyPayload {
     /// tuplet whose members are all cut drops with them, and one whose members all survive keeps its bracket,
     /// endpoints pulled inward for whatever the trim removed ahead of it.
     ///
-    /// A tuplet only PARTLY covered — some members inside the span, some outside it — is the case a range's
-    /// own boundary can create even though `removeElements(at:)` alone would still keep it, ratio unchanged,
-    /// endpoints merely shrunk to the survivors. That is "carried half-formed" in the sense the earlier
-    /// `.spanner` exclusion already established: a bracket claiming a note count the payload no longer has.
-    /// Nothing is lost musically either way — a tuplet member's stored duration is already its resolved
-    /// sounding length, not a plain fraction resolved against the bracket at read time — so this drops only
-    /// the BRACKET for such a tuplet, not its surviving members: they stay as plain, untupleted material,
-    /// which is what the user's own range legitimately asked for. `partlyCoveredPositions` below is computed
-    /// against `voice.tupletSpans`'s ORIGINAL order before any removal, and reused as an index into
-    /// `trimmed.tuplets` afterward: `removeElements(at:)` only ever drops entries (never reorders or inserts),
-    /// so the k-th surviving span is exactly `trimmed.tuplets[k]`.
+    /// Those are the only two cases that reach here. A tuplet only PARTLY covered would be the third, and
+    /// `score(for:in:)` has already refused the whole copy for it — `RangeCopySource.tupletBounds(for:…)`
+    /// throws `.insideTuplet` unless every tuplet the range touches is covered from its first member to its
+    /// last, so a bracket can never arrive here claiming a note count the payload no longer has.
     private static func trimmedVoice(
         _ voice: Voice, measureIndex: Int, measureDuration: Fraction,
         low: ScoreTickPosition, high: ScoreTickPosition, division: Int,
@@ -166,21 +173,8 @@ enum RangeCopyPayload {
             }
         }
 
-        var partlyCoveredPositions: [Int] = []
-        var survivorPosition = 0
-        for span in voice.tupletSpans {
-            let members = Array(span.startIndex ... span.endIndex)
-            let survivorCount = members.filter { !removed.contains($0) }.count
-            guard survivorCount > 0 else { continue } // Fully removed: dropped below, no position to reserve.
-            if survivorCount < members.count { partlyCoveredPositions.append(survivorPosition) }
-            survivorPosition += 1
-        }
-
         var trimmed = voice
         trimmed.removeElements(at: removed)
-        for position in partlyCoveredPositions.sorted(by: >) {
-            trimmed.tuplets.removeSubrange(position ..< (position + 1))
-        }
         return trimmed
     }
 
@@ -266,7 +260,13 @@ extension Score {
     /// `PasteRange`'s `payload` parameter expects back from a `PasteRange.PayloadReader` (in practice,
     /// `MSCXParser.parse`).
     ///
-    /// `nil` when `range` resolves to nothing — an empty selection, or bounds that do not resolve in this score.
+    /// `nil` is a REFUSAL as well as an empty answer, and a host has to treat it as one: the copy is refused
+    /// when `range` resolves to nothing — an empty selection, or bounds that do not resolve in this score — and
+    /// equally when `range` cuts a tuplet, covering some of its members but not all. `EditIntent.duplicateRange`
+    /// (`R`) refuses that second case outright, MuseScore refuses the copy itself for it
+    /// (`Selection::canCopy()` → `SOURCE_PARTIAL_TUPLET`), and a ⌘C that quietly produced untupleted material
+    /// where `R` on the same selection said no would be the two disagreeing about one selection. Leave the
+    /// pasteboard alone on `nil` and tell the user the selection cannot be copied; do not write an empty payload.
     public func clipboardDocument(for range: VoiceElementRange) -> Score? {
         RangeCopyPayload.score(for: range, in: self)
     }

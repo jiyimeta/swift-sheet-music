@@ -11,15 +11,17 @@ extension RangeCopySource {
     /// earliest onset to its own latest end, handed to `init?(extent:in:operation:)` so every rule that path
     /// enforces — the half-open span, the clamp and its tuplet-member exemption, the outer-tie clearing, the
     /// spanner collection — applies to a pasted payload exactly as it already applies to a duplicated range.
-    /// `nil` when the payload holds no chord or rest, OR when its own extent cuts a tuplet:
-    /// `init?(extent:in:operation:)` throws `.insideTuplet` for that, and a payload has no channel to report a
-    /// throw, so a payload that cannot be resolved is simply unreadable rather than a thrown error. The
-    /// `operation` this passes downstream is always `"PasteRange"` — the payload entry point exists for exactly
-    /// one caller.
+    /// `nil` when the payload holds no chord or rest, or when its edges do not resolve on the staff its
+    /// material starts on. The `operation` this passes downstream is always `"PasteRange"` — the payload entry
+    /// point exists for exactly one caller.
     ///
-    /// Which of the two `nil` causes it was is still recoverable, and `PasteRange.refusalReason(forUnusable:at:)`
-    /// recovers it by re-running `wholeExtent(in:)` and the resolution on the failure path — so the distinction
-    /// costs a second resolution only when the paste is already being refused, and no rule is stated twice.
+    /// A partial-tuplet refusal is deliberately NOT among the causes, even though `init?(extent:in:operation:)`
+    /// can raise one: `wholeExtent(in:)` sets the span to `[earliest onset, latest end)` over every staff, so
+    /// every chord in the payload is inside it and no tuplet can be cut by it. That refusal belongs to the COPY
+    /// — `RangeCopyPayload.score(for:in:)` makes it, so a range that cuts a tuplet never becomes a payload in
+    /// the first place — and `PasteRange.refusalReason(forUnusable:at:)` therefore has only the empty case to
+    /// tell apart, which it reads off `wholeExtent(in:)` alone. `try?` here swallows a throw that cannot happen
+    /// rather than one that is being ignored.
     init?(payload: Score) {
         guard let extent = Self.wholeExtent(in: payload),
               let resolved = try? RangeCopySource(extent: extent, in: payload, operation: "PasteRange")
