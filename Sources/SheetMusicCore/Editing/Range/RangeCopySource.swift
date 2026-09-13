@@ -102,6 +102,58 @@ struct RangeCopySource {
         )
         guard !streams.isEmpty else { return nil }
     }
+
+    /// The whole extent of `payload`, read as copy material: its own first timed slot to its own last, handed to
+    /// `init?(range:in:)` so every rule that path enforces — the half-open span, the clamp and its tuplet-member
+    /// exemption, the outer-tie clearing, the spanner collection — applies to a pasted payload exactly as it
+    /// already applies to a duplicated range. `nil` when the payload holds no chord or rest, OR when its own
+    /// extent cuts a tuplet: `init?(range:in:)` throws `.insideTuplet` for that, and a payload has no channel to
+    /// report a throw, so a payload that cannot be resolved is simply unreadable rather than a thrown error.
+    init?(payload: Score) {
+        guard let first = Self.firstTimedSlot(in: payload), let last = Self.lastTimedSlot(in: payload),
+              let resolved = try? RangeCopySource(
+                  range: VoiceElementRange(start: first, end: last), in: payload,
+              )
+        else { return nil }
+        self = resolved
+    }
+
+    /// The earliest chord or rest in `score`, in display order (staff, then measure, voice, element).
+    private static func firstTimedSlot(in score: Score) -> VoiceElementID? {
+        for (address, staff) in score.allStaves {
+            for (measureIndex, measure) in staff.measures.enumerated() {
+                for (voiceIndex, voice) in measure.voices.enumerated() {
+                    for (elementIndex, element) in voice.elements.enumerated() {
+                        guard case .chord = element else { continue }
+                        return VoiceElementID(
+                            staff: address, measureIndex: measureIndex,
+                            voiceIndex: voiceIndex, elementIndex: elementIndex,
+                        )
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// The latest chord or rest in `score`, in reverse display order — the mirror of `firstTimedSlot(in:)`, which
+    /// is what keeps the pair naming the payload's actual first and last staff when it covers more than one.
+    private static func lastTimedSlot(in score: Score) -> VoiceElementID? {
+        for (address, staff) in score.allStaves.reversed() {
+            for (measureIndex, measure) in staff.measures.enumerated().reversed() {
+                for (voiceIndex, voice) in measure.voices.enumerated().reversed() {
+                    for (elementIndex, element) in voice.elements.enumerated().reversed() {
+                        guard case .chord = element else { continue }
+                        return VoiceElementID(
+                            staff: address, measureIndex: measureIndex,
+                            voiceIndex: voiceIndex, elementIndex: elementIndex,
+                        )
+                    }
+                }
+            }
+        }
+        return nil
+    }
 }
 
 extension RangeCopySource {

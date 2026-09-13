@@ -341,4 +341,23 @@ struct RangeCopySourceTests {
         #expect(tuplet.normalNotes == 2)
         #expect(tuplet.actualNotes == 3)
     }
+
+    @Test("a payload score reads as one stream per voice, spanning its whole extent")
+    func fromPayload() throws {
+        let original = EditingFixtures.parityFixture()
+        let payload = try #require(RangeCopyPayload.score(
+            for: VoiceElementRange(start: Self.slot(0, 1), end: Self.slot(0, 2)), in: original,
+        ))
+        let source = try #require(RangeCopySource(payload: payload))
+        #expect(source.startTick == 0)
+        #expect(source.lengthTicks == 960)
+        #expect(source.streams.count == 1)
+        let stream = try #require(source.streams.first)
+        #expect(stream.elements.map(\.lengthTicks) == [480, 480])
+    }
+
+    @Test("a payload with no chords or rests yields nil")
+    func emptyPayload() {
+        #expect(RangeCopySource(payload: Score(division: 480)) == nil)
+    }
 }
