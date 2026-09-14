@@ -7,6 +7,46 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`EditIntent.transposeScore(semitones:transposeKeySignatures:respellInKey:)` (wire 88) and `TransposeScore`:
+  MuseScore's Tools ▸ Transpose over the whole score, as one undo step.** The difference from `TransposeRange`
+  is what the operation MEANS rather than how much of the score it covers: this is a change of key, so the key
+  signatures move with the notes and what the piece claims to be in stays true of what it plays. Every bar that
+  declares a key moves, not just the first, so a modulation keeps its distance from the new home key; bar 1
+  moves whether or not it writes a signature down, because C major is spelled by an absent signature as often
+  as by an empty one. The keys are written first and the notes planned against the result, so `respellInKey`
+  spells each note in the key it lands in — a C-major piece moved up two semitones reads in D with F♯ and C♯ in
+  the signature, not in C with an accidental on every one of them. A key moves seven fifths per semitone, read
+  back into the −7…+7 a signature can be written with by taking the reading with FEWER accidentals (C up a
+  semitone is D♭, not C♯); the tritone is the one genuine tie and the direction of travel breaks it, up landing
+  on the sharp side and down on the flat side.
+
+  Refused entire as `.transpositionOutOfRange` — a new refusal reason — when any note could not move and stay
+  inside MIDI 0…127. `TransposeRange` leaves such a note where it is, and the two differ on purpose: a range
+  transpose is a local edit the user is looking at, while a whole-score move that left three notes behind
+  would change the music in a place nobody is looking. Chord symbols do not move (`docs/edit-commands.md` §C,
+  "Chord-symbol transposition" — a written symbol carries no transposable root).
+
+- **`EditIntent.setDotsInRange(over:dots:)` (wire 87) and `SetDotsInRange`: MuseScore's `.` key over a range
+  selection, as one undo step.** The range form of `SetDots`, and it cannot be spelled as `SetDurationInRange`
+  because a dot count is not a length: each slot keeps the BASE it is spelled with today and only the dots
+  move, so a range holding a quarter and an eighth becomes a dotted quarter and a dotted eighth rather than two
+  of one thing. Written in ascending onset order with an onset a lengthening already swallowed skipped, the
+  rule every range command follows. Refused whole when any element is inside a tuplet and for a count outside
+  0…3; a slot whose length has no dotted spelling — a `.measure` rest — is skipped rather than refused, because
+  an empty bar is an ordinary thing to find inside a range and one of them must not take the whole command
+  down.
+
+### Fixed
+
+- **A transposition moves a chord's grace notes with it.** `TransposeRange` moved the chord's own notes and
+  left its ornaments sounding in the key the music had just left. Grace notes are the one pitched thing in the
+  model a `NoteID` cannot address — `Chord.graceNotesBefore` / `graceNotesAfter` hold whole `GraceChord`s
+  rather than notes of the parent chord — so `SetNotePitch` could not reach them; they now move via a
+  whole-element replace at `.same` identity, every slot identifier surviving. `TransposeScore` shares the same
+  arithmetic, so both commands spell an ornament the same way.
+
 ## [3.2.0] - 2026-09-14
 
 ### Added

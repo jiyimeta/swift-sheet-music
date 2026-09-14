@@ -7,8 +7,9 @@ import SheetMusicFoundation
 /// the key in force at its chain's head; with `respellInKey` the result is re-spelled to the simplest reading in
 /// that key (`PitchSpelling.tpc(forPitch:keySig:mode:)`) instead. A tie chain is one sounding note written across
 /// several slots, so the whole chain moves when ANY member is in range, and the accidental is written on the head
-/// alone — the far side of a tie carries none. A note the shift cannot keep inside MIDI 0…127 stays as it is, chain
-/// and all. Percussion staves are skipped: a drum has no pitch to move.
+/// alone — the far side of a tie carries none. A chord's grace notes move with it (`TranspositionPlanner`'s
+/// whole-element replace; they are the one pitched thing a `NoteID` cannot address). A note the shift cannot keep
+/// inside MIDI 0…127 stays as it is, chain and all. Percussion staves are skipped: a drum has no pitch to move.
 ///
 /// Refused as `.invalidTransposition` past two octaves and as `.targetNotFound` when the range resolves to nothing.
 ///
@@ -50,26 +51,9 @@ public struct TransposeRange: EditCommand {
         var visited: Set<NoteID> = []
         return try RangeEditPlanner.plan(over: range, in: score, ids: ids) { target, working in
             guard RangeEditPlanner.isPitched(target.staff, in: working) else { return [] }
-            return RangeEditPlanner.unvisitedTieChains(of: target, in: working, visited: &visited)
-                .flatMap { retune(chain: $0, in: working) }
-        }?.composite
-    }
-
-    /// `SetNotePitch` for every member of one chain, all carrying the head's shifted pitch and tpc; `[]` when the
-    /// shift would leave MIDI range.
-    private func retune(chain: [NoteID], in score: Score) -> [any EditCommand] {
-        guard let head = chain.first, let note = score[head] else { return [] }
-        let keySig = score.activeKey(at: head)
-        guard var shifted = note.shifted(bySemitones: semitones, in: keySig) else { return [] }
-        if respellInKey {
-            shifted.tpc = PitchSpelling.tpc(forPitch: shifted.pitch, keySig: keySig, mode: .simplest)
-            shifted.accidental = PitchSpelling.displayedAccidental(forTpc: shifted.tpc, in: keySig)
-        }
-        return chain.map { member in
-            SetNotePitch(
-                at: member, pitch: shifted.pitch, tpc: shifted.tpc,
-                accidental: member == head ? shifted.accidental : nil,
+            return TranspositionPlanner.steps(
+                at: target, in: working, semitones: semitones, respellInKey: respellInKey, visited: &visited,
             )
-        }
+        }?.composite
     }
 }

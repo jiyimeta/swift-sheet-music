@@ -95,6 +95,7 @@ own substantive logic.
 | `SetMeasureRepeat` | not in the example — host command registry | — |
 | `MoveToVoice` | not in the example — host command registry | sugar |
 | `TransposeRange` | not in the example — host command registry | sugar |
+| `TransposeScore` | not in the example — host command registry (a change of KEY over the whole score: the key signatures move with the notes, every declaring bar and bar 1 included, and the notes are spelled in the key they land in. Refused entire when a note would leave MIDI 0…127 — the opposite call from `TransposeRange`, which leaves such a note where the user can see it) | sugar |
 | `AddIntervalToSelection` | not in the example — host command registry | sugar |
 | `DeleteRange` | not in the example — host command registry | sugar |
 | `SetAccidentalsInRange` | not in the example — host command registry | sugar |
@@ -115,6 +116,7 @@ own substantive logic.
 | `SetArpeggio` | not in the example — host command registry | sugar |
 | `SetGlissando` | not in the example — host command registry | sugar |
 | `SetDots` | not in the example — host command registry | sugar |
+| `SetDotsInRange` | not in the example — host command registry (each element keeps its own base, so a quarter and an eighth dot to 3/8 and 3/16; a length with no dotted spelling is skipped rather than refused) | sugar |
 | `SetChordLine` | not in the example — host command registry | sugar |
 | `SetNoteParentheses` | not in the example — host command registry | sugar |
 | `SetElementVisible` | not in the example — host command registry | sugar |

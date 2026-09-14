@@ -127,6 +127,11 @@ public struct EditRefusal: Sendable, Hashable {
         /// `TransposeRange` was asked for more than two octaves in one step. MuseScore's transpose dialog stops
         /// there too; anything wider is two edits, and a relayed payload is data this must bound.
         case invalidTransposition(semitones: Int)
+        /// `TransposeScore` found a chord it could not move: one of its notes (a grace note counts) would land
+        /// outside MIDI 0…127. The whole move is refused rather than written with that chord left behind, because
+        /// a whole-score transposition changes bars nobody is looking at — `TransposeRange` makes the opposite
+        /// call for the opposite reason, its target being the handful of bars on screen.
+        case transpositionOutOfRange(at: VoiceElementID, semitones: Int)
         /// `AddIntervalToSelection` was asked for an interval MuseScore's Alt+1…9 does not name: `|steps|` must be
         /// 1 (unison) … 9 (ninth).
         case invalidInterval(steps: Int)
@@ -262,6 +267,8 @@ public struct EditRefusal: Sendable, Hashable {
             "element at \(location) is in the way of the moved chord"
         case let .invalidTransposition(semitones):
             "a transposition spans at most two octaves (got \(semitones))"
+        case let .transpositionOutOfRange(location, semitones):
+            "moving by \(semitones) semitones would push the chord at \(location) outside MIDI 0…127"
         case let .invalidInterval(steps):
             "an interval is ±1 (unison) … ±9 (ninth) (got \(steps))"
         case .emptyStaffText:
