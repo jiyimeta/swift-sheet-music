@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-09-15
+
 ### Added
 
 - **`EditIntent.transposeScore(semitones:transposeKeySignatures:respellInKey:)` (wire 88) and `TransposeScore`:
