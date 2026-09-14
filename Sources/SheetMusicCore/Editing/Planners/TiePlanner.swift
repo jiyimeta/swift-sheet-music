@@ -50,7 +50,7 @@ public enum TiePlanner {
     }
 
     /// The note `noteID`'s `tieForward` lands on, or nil when it carries no tie forward.
-    private static func tiedNote(after noteID: NoteID, in score: Score) -> NoteID? {
+    static func tiedNote(after noteID: NoteID, in score: Score) -> NoteID? {
         guard case let .chord(chord)? = score[VoiceElementID(noteID)],
               chord.notes.indices.contains(noteID.noteIndexInChord),
               chord.notes[noteID.noteIndexInChord].tieForward != nil,
@@ -69,7 +69,7 @@ public enum TiePlanner {
     }
 
     /// The mirror: the note whose `tieForward` lands on `noteID`, or nil when it carries no tie back.
-    private static func tiedNote(before noteID: NoteID, in score: Score) -> NoteID? {
+    static func tiedNote(before noteID: NoteID, in score: Score) -> NoteID? {
         guard case let .chord(chord)? = score[VoiceElementID(noteID)],
               chord.notes.indices.contains(noteID.noteIndexInChord),
               chord.notes[noteID.noteIndexInChord].tieBack != nil,

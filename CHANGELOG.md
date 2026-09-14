@@ -40,6 +40,24 @@ and this project adheres to
 
 ### Fixed
 
+- **Deleting one end of a tie no longer leaves the other end silent, or sounding forever.** A tie is a link
+  between two notes and only one of them is addressed when the other is removed, so every edit that took a
+  chord out of a voice left the survivor pointing at nothing. That is audible rather than cosmetic, because
+  `MidiRenderer` reads the two flags the way MuseScore does: `tieBack` suppresses the note-on (the sound is
+  supposed to be running already) and `tieForward` suppresses the note-off (the sound is supposed to continue).
+  A survivor left with a dangling `tieBack` was therefore never struck and simply did not play; one left with a
+  dangling `tieForward` was never released and sounded until something else stopped it. Two faces of one bug,
+  and which one a user saw depended only on which end of the tie they deleted.
+
+  Fixed with a post-edit pass (`DanglingTies`) hung where `ScoreEditSession` already hangs the accidental
+  repairs, and rolled into the same undo step. That reaches every command that can strand a tie —
+  `DeleteVoiceElement`, `DeleteRange`, the full-measure-rest collapse, `DeleteMeasure`, `RemoveNoteFromChord`,
+  and every lengthening that swallows the element after it — rather than making nine commands each remember the
+  rule. MuseScore clears both ends of every tie a removed chord carried
+  (`editing/addremoveelement.cpp:203-224`); this reaches the same state from the other direction, by asking
+  each surviving flag whether it still has a partner. The scan covers the bars whose bytes moved plus one on
+  each side, since a tie crosses at most one barline and the survivor's own bar is byte-identical.
+
 - **A transposition moves a chord's grace notes with it.** `TransposeRange` moved the chord's own notes and
   left its ornaments sounding in the key the music had just left. Grace notes are the one pitched thing in the
   model a `NoteID` cannot address — `Chord.graceNotesBefore` / `graceNotesAfter` hold whole `GraceChord`s
