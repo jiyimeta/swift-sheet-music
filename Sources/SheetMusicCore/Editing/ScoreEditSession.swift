@@ -95,7 +95,7 @@ public final class ScoreEditSession {
             return false
         }
         do {
-            try editor.apply(Self.renotatingAccidentals(planned, from: planningScore, ids: planningIDs))
+            try editor.apply(Self.repairing(planned, from: planningScore, ids: planningIDs))
         } catch {
             lastRefusal = Self.refusal(for: error, operation: "apply")
             return false
@@ -104,20 +104,40 @@ public final class ScoreEditSession {
         return true
     }
 
-    /// `command` with the accidental-glyph repairs its own edit makes necessary bundled onto it, as one undo step —
-    /// or `command` untouched when it needs none (the common case) or when the engine would refuse it anyway.
+    /// `command` with both post-edit repair passes bundled onto it, as one undo step — or `command` untouched when
+    /// it needs neither (the common case) or when the engine would refuse it anyway.
     ///
-    /// A stored glyph is only true relative to what precedes it in the bar, so any edit that changes a pitch, adds a
-    /// note, or removes one can leave a LATER note in that bar saying the wrong thing. MuseScore re-runs its
-    /// accidental state over the measure after every such edit; `MeasureAccidentals` is that pass, and this is where
-    /// it hangs. Both images run it, from the same scalars, which is why the repairs never have to cross the wire.
+    /// A stored accidental glyph is only true relative to what precedes it in the bar, so any edit that changes a
+    /// pitch, adds a note, or removes one can leave a LATER note in that bar saying the wrong thing. MuseScore
+    /// re-runs its accidental state over the measure after every such edit; `MeasureAccidentals` is that pass.
+    /// A tie is true only relative to the note at its other end, so any edit that takes a chord out of a voice can
+    /// leave the survivor pointing at nothing — inaudible or unstoppable, depending on which end went;
+    /// `DanglingTies` is that pass. Both are hung here rather than written into each command for the same reason:
+    /// every command that can cause the damage would otherwise have to remember the rule, including the ones not
+    /// written yet. Both images run them from the same scalars, which is why the repairs never cross the wire.
     ///
-    /// The repairs are planned against the POST-edit score, so the command is applied to a throwaway copy first.
-    /// That copy is also what tells us a refused edit needs no repairs at all.
-    private static func renotatingAccidentals(
+    /// Both are planned against the POST-edit score, so the command is applied to a throwaway copy first. That copy
+    /// is also what tells us a refused edit needs no repairs at all.
+    ///
+    /// The seals are planned against a preview that already carries the accidental repairs, because both passes
+    /// write whole elements: a seal built from the pre-repair score would carry the old glyph back in and undo the
+    /// repair it lands on top of. The reverse order is not available — a repair cannot be planned against a score
+    /// the seals have not been written into either — so one of them has to go second, and it is the one whose
+    /// input the other does not change (`MeasureAccidentals` reads pitches and glyphs, never tie flags).
+    private static func repairing(
         _ command: any EditCommand, from score: Score, ids: EIDAllocator,
     ) -> any EditCommand {
-        renotationPlan(command, from: score, ids: ids)?.command ?? command
+        guard let plan = renotationPlan(command, from: score, ids: ids) else { return command }
+        var scratch = plan.idAllocator
+        var preview = plan.preview
+        for repair in plan.repairs {
+            guard (try? repair.apply(to: &preview, ids: &scratch)) != nil else { return plan.command }
+        }
+        let seals = DanglingTies.sealCommands(in: preview, changedFrom: score)
+        guard !seals.isEmpty else { return plan.command }
+        return CompositeEditCommand(
+            commands: [command] + plan.repairs + seals, location: command.affectedLocation,
+        )
     }
 
     /// Retains the preview and allocator that produced the diff-driven repairs; a refused preview has no plan.

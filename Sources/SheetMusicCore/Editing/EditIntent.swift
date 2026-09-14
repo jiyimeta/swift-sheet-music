@@ -489,4 +489,22 @@ public enum EditIntent: Sendable, Equatable {
     /// a range copy. The payload is a self-contained score, so it may have come from another document or another
     /// window; a payload that will not parse is refused rather than partially applied.
     case pasteRange(at: VoiceElementID, payload: String)
+
+    // Appended for the score-transposition project (spec 2026-09-14) — indices 87 and 88.
+
+    /// Set `dots` (0…3) on every chord and rest in `over`, each keeping the BASE length it is spelled with today —
+    /// a quarter and an eighth become a dotted quarter and a dotted eighth, not two of one thing. Written in
+    /// ascending onset order, skipping onsets an earlier lengthening consumed. Refused whole as `.insideTuplet`
+    /// when any element is inside a tuplet and as `.notDottable` for a count outside 0…3; a slot whose length has
+    /// no dotted spelling (a `.measure` rest) is skipped rather than refused. Resolves to nothing to apply when
+    /// every element already reads that way.
+    case setDotsInRange(over: VoiceElementRange, dots: Int)
+
+    /// Move every note in the score by `semitones` (−24…24) — a change of KEY, not a pitch edit over a wide
+    /// selection. With `transposeKeySignatures` every key signature moves too, bar 1 included whether or not it
+    /// writes one down; the keys are written first so `respellInKey` spells each note in the key it lands in.
+    /// Chord symbols do not move (`docs/edit-commands.md` §C). Resolves to nothing to apply for zero semitones;
+    /// refused as `.invalidTransposition` past two octaves and as `.transpositionOutOfRange` when any note could
+    /// not stay inside MIDI 0…127.
+    case transposeScore(semitones: Int, transposeKeySignatures: Bool, respellInKey: Bool)
 }

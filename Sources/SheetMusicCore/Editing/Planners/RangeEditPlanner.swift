@@ -38,8 +38,19 @@ enum RangeEditPlanner {
         over range: VoiceElementRange, in score: Score, ids: EIDAllocator,
         step: (_ target: VoiceElementID, _ working: Score) throws -> [any EditCommand],
     ) throws -> Plan? {
+        try plan(targets: score.voiceElements(in: range), in: score, ids: ids, step: step)
+    }
+
+    /// The same walk with its targets stated outright rather than resolved from two slots — what a command covering
+    /// the WHOLE score needs (`TransposeScore`), since a `VoiceElementRange` derives its staff span and its tick
+    /// span from its two bounds and so cannot name "every staff, every bar" without a pair of slots that happen to
+    /// encode it. The targets are expected in the same ascending-onset, document order `voiceElements(in:)` yields;
+    /// the re-resolution below assumes it.
+    static func plan(
+        targets: [VoiceElementID], in score: Score, ids: EIDAllocator,
+        step: (_ target: VoiceElementID, _ working: Score) throws -> [any EditCommand],
+    ) throws -> Plan? {
         var scratch = ids
-        let targets = score.voiceElements(in: range)
         guard let first = targets.first else { return nil }
         var plan = Plan(commands: [], location: first, result: score, idAllocator: scratch)
         for target in targets {

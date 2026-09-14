@@ -120,6 +120,8 @@ import Wirelet
 /// 84 = setScoreInfo(SetScoreInfoIntentWire), see EditIntentPayloads+ScoreInfo.swift
 /// 85 = duplicateRange(DuplicateRangeIntentWire), see EditIntentPayloads+Range.swift
 /// 86 = pasteRange(PasteRangeIntentWire), see EditIntentPayloads+Range.swift
+/// 87 = setDotsInRange(SetDotsInRangeIntentWire), see EditIntentPayloads+Range.swift
+/// 88 = transposeScore(TransposeScoreIntentWire), see EditIntentPayloads+Range.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -133,7 +135,8 @@ import Wirelet
 /// lyric verse). Cases 80…83 were appended for the properties-inspector project (spec 2026-09-12) — note
 /// small/play and element offset/autoplace. Case 84 was appended for the score-credits write path. Case 85 was
 /// appended for the duplicate-range project (spec 2026-09-13). Case 86 was appended for the clipboard project
-/// (spec 2026-09-13), and 86 is the catalogue's last.
+/// (spec 2026-09-13). Cases 87 and 88 were appended for the score-transposition project (spec 2026-09-14) — the
+/// range form of the dot key, and the whole-score transposition — and 88 is the catalogue's last.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -475,6 +478,21 @@ import Wirelet
 /// ```
 /// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
 /// tag 2: mode   u8, varint — 0 simplest / 1 prefer sharps / 2 prefer flats, else throws
+/// ```
+///
+/// `SetDotsInRangeIntentWire` (`setDotsInRange`'s payload, index 87 — listed here with the rest of the range
+/// family rather than at the end, since that is where a reader looks for it):
+/// ```
+/// tag 1: range  VoiceElementRangeWire, see ReferenceCodecs.swift
+/// tag 2: dots   i32, zig-zag varint — 0…3
+/// ```
+///
+/// `TransposeScoreIntentWire` (`transposeScore`'s payload, index 88 — it carries no location at all, the whole
+/// score being its target):
+/// ```
+/// tag 1: semitones               i32, zig-zag varint — −24…24
+/// tag 2: transposeKeySignatures  u8, varint — 0 / 1
+/// tag 3: respellInKey            u8, varint — 0 / 1
 /// ```
 ///
 /// `SetClefIntentWire` (`setClef`'s payload):
@@ -1107,6 +1125,10 @@ public enum EditIntentWire {
     case duplicateRange(DuplicateRangeIntentWire)
     /// Appended for the clipboard project (spec 2026-09-13) — index 86. Never renumber anything above it.
     case pasteRange(PasteRangeIntentWire)
+    /// Appended for the score-transposition project (spec 2026-09-14) — index 87. Never renumber anything above it.
+    case setDotsInRange(SetDotsInRangeIntentWire)
+    /// Appended for the score-transposition project (spec 2026-09-14) — index 88. Never renumber anything above it.
+    case transposeScore(TransposeScoreIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1301,6 +1323,12 @@ public enum EditIntentWire {
             self = .duplicateRange(DuplicateRangeIntentWire(range: range))
         case let .pasteRange(location, payload):
             self = .pasteRange(PasteRangeIntentWire(location: location, payload: payload))
+        case let .setDotsInRange(range, dots):
+            self = .setDotsInRange(SetDotsInRangeIntentWire(range: range, dots: dots))
+        case let .transposeScore(semitones, transposeKeySignatures, respellInKey):
+            self = .transposeScore(TransposeScoreIntentWire(
+                semitones: semitones, transposeKeySignatures: transposeKeySignatures, respellInKey: respellInKey,
+            ))
         case let .setTextVisible(text, visible):
             self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
         case let .setElementColor(target, color):
@@ -1571,6 +1599,15 @@ public enum EditIntentWire {
         case let .pasteRange(wire):
             let decoded = wire.decoded()
             return .pasteRange(at: decoded.location, payload: decoded.payload)
+        case let .setDotsInRange(wire):
+            let decoded = wire.decoded()
+            return .setDotsInRange(over: decoded.range, dots: decoded.dots)
+        case let .transposeScore(wire):
+            let decoded = wire.decoded()
+            return .transposeScore(
+                semitones: decoded.semitones, transposeKeySignatures: decoded.transposeKeySignatures,
+                respellInKey: decoded.respellInKey,
+            )
         case let .setTextVisible(wire):
             let decoded = wire.decoded()
             return .setTextVisible(text: decoded.text, visible: decoded.visible)

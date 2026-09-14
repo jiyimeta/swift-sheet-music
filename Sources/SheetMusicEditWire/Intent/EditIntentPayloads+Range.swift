@@ -128,3 +128,43 @@ public struct PasteRangeIntentWire {
         (location: location.decoded(), payload: payload)
     }
 }
+
+// Appended for the score-transposition project (spec 2026-09-14) — intents 87 and 88. `TransposeScoreIntentWire`
+// lives here rather than in a file of its own because it is `TransposeRangeIntentWire` with the range taken away:
+// the two must stay in step, and a reader comparing them should not have to open two files.
+
+@WireFormat
+public struct SetDotsInRangeIntentWire {
+    public var range: VoiceElementRangeWire
+    public var dots: Int32
+
+    public init(range: VoiceElementRange, dots: Int) {
+        self.range = VoiceElementRangeWire(from: range)
+        self.dots = Int32(dots)
+    }
+
+    public func decoded() -> (range: VoiceElementRange, dots: Int) {
+        (range: range.decoded(), dots: Int(dots))
+    }
+}
+
+@WireFormat
+public struct TransposeScoreIntentWire {
+    public var semitones: Int32
+    public var transposeKeySignatures: UInt8
+    public var respellInKey: UInt8
+
+    public init(semitones: Int, transposeKeySignatures: Bool, respellInKey: Bool) {
+        self.semitones = Int32(semitones)
+        self.transposeKeySignatures = transposeKeySignatures ? 1 : 0
+        self.respellInKey = respellInKey ? 1 : 0
+    }
+
+    public func decoded() -> (semitones: Int, transposeKeySignatures: Bool, respellInKey: Bool) {
+        (
+            semitones: Int(semitones),
+            transposeKeySignatures: transposeKeySignatures != 0,
+            respellInKey: respellInKey != 0,
+        )
+    }
+}

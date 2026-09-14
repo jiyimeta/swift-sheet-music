@@ -75,6 +75,8 @@ extension EditRefusal {
             "edit.destinationNotFree"
         case .invalidTransposition:
             "edit.invalidTransposition"
+        case .transpositionOutOfRange:
+            "edit.transpositionOutOfRange"
         case .invalidInterval:
             "edit.invalidInterval"
         case .emptyStaffText:
