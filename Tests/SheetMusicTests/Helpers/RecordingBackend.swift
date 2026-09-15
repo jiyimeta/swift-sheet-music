@@ -17,6 +17,11 @@
         var isAtEnd = false
         private(set) var volumeSends: [(channel: UInt8, cc7: UInt8)] = []
         private(set) var programSends: [(channel: UInt8, program: UInt8)] = []
+        private(set) var prepareCallCount = 0
+        private(set) var stopCallCount = 0
+        private(set) var teardownCallCount = 0
+        private(set) var rateValues: [Float] = []
+        private(set) var tuningValues: [(cents: Double, semitones: Int)] = []
         /// Pre-roll length the last `play` was given, or nil when it was a plain one.
         private(set) var countInSeconds: TimeInterval?
         /// Offset the last-loaded metronome sequence declared.
@@ -36,7 +41,7 @@
         /// the export built for itself.
         private(set) var offlineInstance: RecordingBackend?
         private(set) var offlineSampleRate: Double?
-        private var timeline: PlaybackTimeline?
+        private(set) var timeline: PlaybackTimeline?
 
         func clearRecordings() {
             volumeSends.removeAll()
@@ -54,7 +59,10 @@
 
         func prepare(
             soundfontURL _: URL?, metronomeSoundfontURL _: URL?, drumChannels _: Set<UInt8>,
-        ) {}
+        ) {
+            prepareCallCount += 1
+        }
+
         func loadSequence(_ midi: MidiFile, timeline: PlaybackTimeline) {
             lastSequence = midi
             self.timeline = timeline
@@ -93,15 +101,25 @@
         }
 
         func pause() {}
-        func stop() {}
+        func stop() {
+            stopCallCount += 1
+            currentPositionSeconds = 0
+        }
+
         func seek(toTick tick: Int) {
             seekCalls.append(tick)
             guard let timeline else { return }
             currentPositionSeconds = timeline.seconds(atTick: Double(tick))
         }
 
-        func setRate(_: Float) {}
-        func setTuning(cents _: Double, transposeSemitones _: Int) {}
+        func setRate(_ rate: Float) {
+            rateValues.append(rate)
+        }
+
+        func setTuning(cents: Double, transposeSemitones: Int) {
+            tuningValues.append((cents, transposeSemitones))
+        }
+
         func setProgram(channel: UInt8, program: UInt8) {
             programSends.append((channel, program))
         }
@@ -112,6 +130,8 @@
 
         func startNote(channel _: UInt8, pitch _: UInt8, velocity _: UInt8) {}
         func stopNote(channel _: UInt8, pitch _: UInt8) {}
-        func teardown() {}
+        func teardown() {
+            teardownCallCount += 1
+        }
     }
 #endif
