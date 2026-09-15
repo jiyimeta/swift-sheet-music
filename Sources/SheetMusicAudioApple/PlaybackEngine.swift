@@ -6,6 +6,20 @@ import SheetMusicAudioCore
 import SheetMusicCore
 import SheetMusicMIDI
 
+/// Describes how `PlaybackEngine.replaceScore(with:)` handled a prepared score.
+public enum ScoreReplacementOutcome: Sendable, Equatable {
+    /// The score was swapped in place while keeping the synth, SoundFont,
+    /// audio graph, mixer channel state, rate, tuning, transpose, master gain,
+    /// and metronome state.
+    case swappedInPlace
+
+    /// The engine fell back to a full `prepare(score:)`.
+    case fullyPrepared
+
+    /// Nothing changed because an export was in flight.
+    case ignoredWhileExporting
+}
+
 /// Audio playback for `Score`s, backed by `AVAudioEngine` and two
 /// `AVAudioUnitMIDIInstrument` (AUMIDISynth) units: one for all
 /// pitched channels and one for GM channel 9 (percussion).
@@ -89,18 +103,21 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// The live single-port channel layout for the prepared score —
     /// one strip per (part × distinct instrument), collapsing the
     /// MuseScore-exact multi-port SMF onto the 16 channels a single
-    /// synth has. Rebuilt in `prepareSynth(score:)`; `nil` before the
-    /// first prepare.
+    /// synth has. Rebuilt from the score-derived channel layout; `nil`
+    /// before the first prepare.
     private(set) var liveChannelPlan: LiveChannelPlan?
     /// Live MIDI channel per mixer strip identity. Keyed the same way
     /// as `mixerChannels`, so every strip — not just each staff's
     /// tick-0 primary — can be addressed directly.
     private var instrumentMIDIChannels: [MixerChannel.Kind: UInt8] = [:]
     /// Per-flat-staff channel switches, ascending by tick. Precomputed
-    /// in `prepareSynth(score:)` because the engine does not retain the
-    /// prepared `Score`. Empty for a staff whose part never changes
-    /// instrument.
+    /// beside the prepared score-derived layout. Empty for a staff whose
+    /// part never changes instrument.
     private var staffChannelSwitches: [Int: [(tick: Int, channel: UInt8)]] = [:]
+    /// Synth, channel, and score-default mixer inputs used by the most
+    /// recent full prepare. A prepared score can use the fast replacement
+    /// path only when this layout is still installed unchanged.
+    private var loadedChannelLayout: PlaybackChannelLayout?
 
     /// Master output stage. The score synth and the metronome both feed
     /// `scoreGainMixer`, whose `outputVolume` is the user's master gain
@@ -214,7 +231,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// re-assembles the SMF (shift + pre-roll) on every start; caching
     /// the render keeps per-play cost at re-assembly + `sequencer.load`
     /// rather than a full re-render of every note.
-    private var renderedMidiCache: (score: Score, midi: MidiFile)?
+    private(set) var renderedMidiCache: (score: Score, midi: MidiFile)?
     /// Most recent rate set by the host. Stored separately from the
     /// sequencer so the value survives `buildSequencer` rebuilds —
     /// every fresh `AVAudioSequencer` starts at 1.0 and we re-apply
@@ -704,20 +721,62 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// start the audio engine. Idempotent: calling again with a
     /// different score replaces the samplers.
     ///
-    /// Synchronous and potentially slow on first call:
-    /// `kMusicDeviceProperty_SoundBankURL` + the preload program-change
-    /// dance blocks while the SF2 file is parsed (tens of ms per file
-    /// is typical, more on iPhone for the full GM SF2). Wrap the call
-    /// in `Task.detached(priority: .userInitiated) { … }` if you want
-    /// the UI to stay responsive during score load.
-    public func prepare(score: Score) throws { // swiftlint:disable:this function_body_length
-        // If an export is in flight the caller is expected to cancel its
-        // `Task` before calling `prepare(score:)` on a different score.
-        // We don't cancel for them — but we do refuse to tear down the
-        // samplers under the exporter's feet.
-        if state == .exporting {
-            return
+    /// Synchronous and potentially slow on first call: SoundFont loading and
+    /// preset preparation still happen here. For an edited score, build a
+    /// `PreparedPlayback` in a detached task and pass it to
+    /// `replaceScore(with:)`; an unchanged backend layout then avoids this
+    /// graph work as well as the score render.
+    public func prepare(score: Score) throws {
+        guard state != .exporting else { return }
+        try prepare(
+            score: score,
+            derivation: PreparedPlayback.derive(score: score),
+            renderedMidi: nil,
+        )
+    }
+
+    /// Replaces the prepared score while retaining an identical backend audio
+    /// layout. A layout change, an unprepared engine, or the AUMIDISynth path
+    /// falls back to the same full graph preparation as `prepare(score:)`.
+    @discardableResult
+    public func replaceScore(
+        with prepared: PreparedPlayback,
+    ) throws -> ScoreReplacementOutcome {
+        guard state != .exporting else { return .ignoredWhileExporting }
+        guard usingBackend,
+              loadedScore != nil,
+              loadedChannelLayout == prepared.channelLayout
+        else {
+            try prepare(
+                score: prepared.score,
+                derivation: prepared.derivation,
+                renderedMidi: prepared.renderedMidi,
+            )
+            return .fullyPrepared
         }
+
+        lastGraphRestartError = nil
+        stop()
+        cancelActivePreview()
+        clearLoop()
+        sequencer = nil
+        sequencerScore = nil
+        sequenceMap = .identity
+        sequencerHasPreRoll = false
+        backendMetronomeHasPreRoll = false
+        installScoreDerivedState(
+            score: prepared.score,
+            derivation: prepared.derivation,
+            renderedMidi: prepared.renderedMidi,
+        )
+        return .swappedInPlace
+    }
+
+    private func prepare(
+        score: Score,
+        derivation: PlaybackScoreDerivation,
+        renderedMidi: MidiFile?,
+    ) throws { // swiftlint:disable:this function_body_length
         loadedScore = score
         // A host that reads `lastGraphRestartError` and re-`prepare`s on it (the recovery path its own doc
         // describes) needs this to actually dismiss — it was never cleared here before, so `@Observable` state
@@ -746,20 +805,6 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         sequenceMap = .identity
         sequencerHasPreRoll = false
         backendMetronomeHasPreRoll = false
-        renderedMidiCache = nil
-        let preparedTimeline = PlaybackTimeline(score: score)
-        timeline = preparedTimeline
-        unroll = MidiRenderer.playbackUnroll(score: score)
-        unrolledTimeMap = UnrolledTimeMap(unroll: unroll, timeline: preparedTimeline)
-        // UNROLLED (not notated) — playback drives the sequencer's
-        // rendered SMF, which has repeats + jumps expanded. A body
-        // metronome track built from notated ticks alone would end at
-        // the notated length and go silent on a repeat's 2nd pass (or
-        // any jump), even though the score keeps playing. The count-in
-        // pre-roll click track (`CountInBeats.Result.beats`, assembled
-        // separately in `buildCountInSequencer`) is unaffected — it
-        // always plays from a fixed start, once.
-        metronomeBeats = PlaybackTimeline.unrolledMetronomeBeats(score: score)
         // Resolve the metronome's SoundFont through the click provider:
         // `.clickSamples` builds an SF2 from the host's WAVs, `.soundFont`
         // uses a host SF2, and `.defaultGM` (or no provider) falls back to
@@ -777,14 +822,21 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         liveChannelPlan = nil
         instrumentMIDIChannels.removeAll()
         staffChannelSwitches.removeAll()
+        loadedChannelLayout = nil
+
+        installScoreDerivedState(
+            score: score,
+            derivation: derivation,
+            renderedMidi: renderedMidi,
+        )
 
         // Category / activation per `audioSessionPolicy` — see `PlaybackEngine+AudioSession`. Deliberately BEFORE
         // `prepareSynth`: the synths are built against whatever route the session ends up on.
         configureAudioSessionForPrepare()
 
-        try prepareSynth(score: score)
+        try prepareSynth(channelLayout: derivation.channelLayout)
 
-        rebuildMixerChannels(for: score)
+        replaceMixerChannels(derivation.channelLayout.mixerChannels)
         applyMixerState()
 
         if !engine.isRunning {
@@ -799,6 +851,27 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // `sequencer.start()` to win the race against the SMF's tick-0
         // program-change events, so playback behavior is unchanged.
         reapplyMixerPrograms()
+    }
+
+    private func installScoreDerivedState(
+        score: Score,
+        derivation: PlaybackScoreDerivation,
+        renderedMidi: MidiFile?,
+    ) {
+        loadedScore = score
+        timeline = derivation.timeline
+        unroll = derivation.unroll
+        unrolledTimeMap = derivation.unrolledTimeMap
+        metronomeBeats = derivation.metronomeBeats
+        loadedChannelLayout = derivation.channelLayout
+        liveChannelPlan = derivation.channelLayout.liveChannelPlan
+        staffMIDIChannels = derivation.channelLayout.staffMIDIChannels
+        staffIsDrum = derivation.channelLayout.staffIsDrum
+        instrumentMIDIChannels = derivation.channelLayout.instrumentMIDIChannels
+        staffChannelSwitches = derivation.staffChannelSwitches.mapValues { switches in
+            switches.map { (tick: $0.tick, channel: $0.channel) }
+        }
+        renderedMidiCache = renderedMidi.map { (score, $0) }
     }
 
     /// Swap the SoundFont resolver and reload every sampler for the
@@ -933,82 +1006,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// coarse-tuning transpose without re-pitching drums; a drumless score doesn't pay for a second full-SoundFont
     /// load. Loads the GM SoundFont into each built unit, configures pitch-bend on the melodic unit, and applies the
     /// current calibration + transpose.
-    private func prepareSynth(score: Score) throws { // swiftlint:disable:this function_body_length
+    private func prepareSynth(channelLayout: PlaybackChannelLayout) throws {
         let url = resolver.defaultGMSoundfontURL
-        let plan = LiveChannelPlan.build(score: score)
-        liveChannelPlan = plan
-        instrumentMIDIChannels = Dictionary(
-            uniqueKeysWithValues: plan.strips.map { strip in
-                (
-                    MixerChannel.Kind.instrument(
-                        partIndex: strip.partIndex, ordinal: strip.ordinal,
-                    ),
-                    UInt8(clamping: strip.liveChannel),
-                )
-            },
-        )
-        // Each staff's tick-0 channel is its part's ordinal-0 strip —
-        // the LIVE (deduped, single-port) channel, not the rendered
-        // SMF's per-instance channel, so cursor / preview addressing
-        // stays in sync with what `MidiChannelRemap` puts on the wire.
-        let channels: [Int] = score.allStaves.map { entry in
-            plan.strip(partIndex: entry.address.partIndex, ordinal: 0)?
-                .liveChannel ?? 0
-        }
-
-        // Measure tick bases for the switch table. Deliberately the
-        // plain duration sum, NOT `MidiRenderer.measureTicks` (which
-        // also budgets breath pauses): a tap preview is a UI affordance,
-        // and the one-bar imprecision after a breath-pause-bearing
-        // measure is inaudible. Playback routing correctness comes from
-        // the renderer, which uses its own bases.
-        var bases: [Int] = []
-        var acc = 0
-        for duration in score.effectiveMeasureDurations() {
-            bases.append(acc)
-            acc += duration.ticks(division: score.division)
-        }
-        staffChannelSwitches = [:]
-        for (idx, entry) in score.allStaves.enumerated() {
-            let partIndex = entry.address.partIndex
-            let timeline = score.instrumentTimeline(forPart: partIndex)
-            guard timeline.count > 1 else { continue }
-            staffChannelSwitches[idx] = timeline.enumerated()
-                .compactMap { timelineIndex, point in
-                    guard bases.indices.contains(point.measureIndex),
-                          let ordinal = plan.dedupedOrdinal(
-                              partIndex: partIndex,
-                              timelineIndex: timelineIndex,
-                          ),
-                          let strip = plan.strip(
-                              partIndex: partIndex, ordinal: ordinal,
-                          )
-                    else { return nil }
-                    return (
-                        bases[point.measureIndex]
-                            + point.position.ticks(division: score.division),
-                        UInt8(clamping: strip.liveChannel),
-                    )
-                }
-                .sorted { $0.0 < $1.0 }
-        }
 
         // SwiftySynth path: one persistent source node + SoundFont reload, no
         // per-channel AU units. Populate the same staff→channel / drum maps the
         // mixer and cursor rely on, then hand the SoundFont + drum channels to
         // the backend.
         if let backend {
-            var drumChannels: Set<UInt8> = []
-            for (idx, entry) in score.allStaves.enumerated() {
-                let part = score.part(at: entry.address)
-                let isDrums = part?.instrument.useDrumset == true
-                let midiCh = UInt8(
-                    clamping: idx < channels.count ? channels[idx] : 0,
-                )
-                staffMIDIChannels[idx] = midiCh
-                staffIsDrum[idx] = isDrums
-                if isDrums { drumChannels.insert(midiCh) }
-            }
             // Attach + connect once; the node persists across re-prepares
             // (a `reloadSoundfont` only re-loads the SF2 into it).
             if backend.outputNode.engine == nil {
@@ -1028,7 +1033,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             backend.prepare(
                 soundfontURL: url,
                 metronomeSoundfontURL: clickResolver.resolvedSoundFontURL(),
-                drumChannels: drumChannels,
+                drumChannels: channelLayout.drumChannels,
             )
             // The fresh synth resets tuning/rate; push the engine's persisted
             // A4 calibration, transpose, and playback rate back onto it.
@@ -1039,7 +1044,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             return
         }
 
-        let hasDrums = score.parts.contains { $0.instrument.useDrumset }
+        let hasDrums = channelLayout.liveChannelPlan.strips.contains {
+            $0.instrument.useDrumset
+        }
 
         // Melodic unit — all pitched channels.
         let melodic = MIDISynthBuilder.make()
@@ -1072,17 +1079,6 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             percussionSynth = percussion
         }
         applyTuning()
-
-        for (idx, entry) in score.allStaves.enumerated() {
-            let part = score.part(at: entry.address)
-            let isDrums = part?.instrument.useDrumset == true
-            let midiCh = UInt8(
-                clamping: idx < channels.count
-                    ? channels[idx] : 0,
-            )
-            staffMIDIChannels[idx] = midiCh
-            staffIsDrum[idx] = isDrums
-        }
     }
 
     /// Briefly play the note identified by `noteID` on the shared
@@ -1400,7 +1396,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     /// Absolute tick of `noteID` within `score`, on the same plain
     /// (non-breath-budgeted) measure tick bases used to build
-    /// `staffChannelSwitches` — see `prepareSynth(score:)`. `0` when
+    /// `staffChannelSwitches` — see `PreparedPlayback`. `0` when
     /// the id doesn't resolve to a measure index.
     private func absoluteTick(of noteID: NoteID, in score: Score) -> Int {
         let inMeasure = score.resolveTickInMeasure(for: .note(noteID)) ?? 0
@@ -2337,17 +2333,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // playback (`!sequencer.isPlaying` below, `backend.isAtEnd` on the injected path). A bar whose music stops
         // on beat one has to keep running to its barline, and rests emit no events to carry it there. The export
         // paths deliberately keep calling `render` — MuseScore's own file ends at the last note-off.
-        var midi = try MidiRenderer.renderForPlayback(score: score)
-        // Collapse the MuseScore-exact multi-port SMF onto the live
-        // engine's single-port channel set BEFORE anything downstream
-        // (sequencer load, `postProcessForMIDISynth`'s tick-0 stripping)
-        // sees it — see `MidiChannelRemap`. `liveChannelPlan` is built
-        // in `prepareSynth`, which always runs before this is first
-        // called from a play / seek path; a `nil` plan (unprepared
-        // engine) leaves the raw rendered channels untouched.
-        if let liveChannelPlan {
-            MidiChannelRemap.apply(midi: &midi, plan: liveChannelPlan)
-        }
+        let layout = loadedChannelLayout ?? PlaybackChannelLayout(score: score)
+        let midi = try PreparedPlayback.render(score: score, channelLayout: layout)
         renderedMidiCache = (score, midi)
         return midi
     }
@@ -2769,6 +2756,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         liveChannelPlan = nil
         instrumentMIDIChannels.removeAll()
         staffChannelSwitches.removeAll()
+        loadedChannelLayout = nil
         metronome.teardown()
         // The engine no longer holds any audio, so the exclusive claim a `.mixUntilPlay` host escalated to is spent:
         // a later `prepare(score:)` on this same instance is a fresh score load and starts out mixing again. Hosts

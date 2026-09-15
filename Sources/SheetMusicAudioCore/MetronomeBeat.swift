@@ -124,8 +124,15 @@ extension PlaybackTimeline {
     /// pre-roll and `AnacrusisTests` depend on notated ticks — this is
     /// an additive projection for PLAYBACK consumers only.
     public static func unrolledMetronomeBeats(score: Score) -> [MetronomeBeat] {
-        let notated = metronomeBeats(score: score)
         let unroll = MidiRenderer.playbackUnroll(score: score)
+        return unrolledMetronomeBeats(score: score, unroll: unroll)
+    }
+
+    package static func unrolledMetronomeBeats(
+        score: Score,
+        unroll: PlaybackUnroll,
+    ) -> [MetronomeBeat] {
+        let notated = metronomeBeats(score: score)
         var result: [MetronomeBeat] = []
         result.reserveCapacity(notated.count)
         for beat in notated {

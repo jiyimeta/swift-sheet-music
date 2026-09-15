@@ -7,6 +7,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`PreparedPlayback` and `PlaybackEngine.replaceScore(with:)` move score-derived playback work ahead of Play.**
+  Hosts can render an edited score away from the main actor, then swap it into an existing backend-backed engine
+  without rebuilding its SoundFont, metronome, audio graph, or user mixer state when the channel layout is unchanged.
+
 ## [3.3.0] - 2026-09-15
 
 ### Added

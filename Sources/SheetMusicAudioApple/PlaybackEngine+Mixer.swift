@@ -54,40 +54,11 @@ extension PlaybackEngine {
     /// Rebuild the channel array from `score`'s LIVE channel plan — one
     /// strip per (part × distinct instrument), plus the metronome.
     /// Existing volume / mute / solo state is dropped — a new score is
-    /// a new mix. Called from `prepare(score:)`, right after
-    /// `prepareSynth(score:)` has stored an identical plan in
-    /// `liveChannelPlan` — reused here rather than rebuilt, so there is
-    /// only ONE `LiveChannelPlan.build` per prepare (same reasoning as
-    /// the `staffChannels` single-source-of-truth this task closed:
-    /// `assignChannels` + a full `systemMeasures` walk per part is not
-    /// something worth paying for twice). Falls back to a fresh build
-    /// if ever called before a plan exists. Initial slider values come
-    /// from MSCX `<controller ctrl="7" value="N"/>`, stored on each
-    /// strip's `InstrumentChannel.volume` (0...127). MuseScore's default
-    /// is 100/127.
+    /// a new mix. The same core derivation supplies `prepare(score:)` and
+    /// `PreparedPlayback`, keeping labels and score-default channel values
+    /// in one place.
     func rebuildMixerChannels(for score: Score) {
-        let plan = liveChannelPlan ?? LiveChannelPlan.build(score: score)
-        var channels: [MixerChannel] = []
-        channels.reserveCapacity(plan.strips.count + 1)
-        for strip in plan.strips {
-            let labels = plan.labels(for: strip, in: score)
-            channels.append(MixerChannel(
-                id: .instrument(
-                    partIndex: strip.partIndex, ordinal: strip.ordinal,
-                ),
-                name: labels.displayName,
-                partName: labels.partName,
-                instrumentName: labels.instrumentName,
-                volume: Float(max(0, min(127, strip.instrument.channel.volume))) / 127,
-                program: UInt8(clamping: strip.instrument.channel.program),
-                isDrums: strip.instrument.useDrumset,
-            ))
-        }
-        channels.append(MixerChannel(
-            id: .metronome,
-            name: "Metronome",
-        ))
-        replaceMixerChannels(channels)
+        replaceMixerChannels(PlaybackChannelLayout(score: score).mixerChannels)
     }
 
     /// Push the current mixer state into the live audio graph. Mute /
