@@ -144,7 +144,7 @@ test("builds a mixer strip per part, carrying the score's patches", async ({ pag
     }),
   );
   expect(selected).toEqual(["33. Electric Bass (finger)", "84. Lead 5 (charang)"]);
-  expect(await page.locator(".strip .patch").first().locator("option")).toHaveCount(128);
+  await expect(page.locator(".strip .patch").first().locator("option")).toHaveCount(128);
 });
 
 test("clicking the score seeks the cursor there", async ({ page }) => {

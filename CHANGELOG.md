@@ -27,6 +27,10 @@ and this project adheres to
   gate in `EditReplayGoldenTests` reads each Kotlin replay test's constant out of its source and compares it
   with the chain's step count, so the next chain to grow fails in `swift test` rather than on a device.
 
+- **The mixer's patch-option assertion is awaited.** `playback.spec.ts` called a Playwright matcher without
+  awaiting it, so the test returned before the assertion resolved and it then ran against a closed page
+  (`Protocol error … session closed`, `Received: undefined`). Same code, green or red depending on timing.
+
 ## [3.3.0] - 2026-09-15
 
 ### Added
