@@ -15,6 +15,15 @@ and this project adheres to
 
 ### Fixed
 
+- **Copying the first note of a bar no longer takes the bar's clef with it.** A range copy carried every
+  clef and breath from its first tick on, so copying a note out of a score's first bar — or out of any bar that
+  opens with a clef change — put that clef on the clipboard, and pasting it anywhere else wrote a clef change
+  nobody asked for. MuseScore starts a range at its first ChordRest segment and writes the clipboard from there
+  (`Score::selectRange`, `TWrite::writeSegments`); the Clef and Breath segments at the same tick sort ahead of it
+  and are never copied. `RangeCopySource` now leaves a clef or breath standing exactly on the range's first tick
+  behind, which covers ⌘C/⌘V and `R` alike. The segment annotations at that tick — a dynamic, a chord symbol —
+  still come along, and a clef change anywhere later in the range is still carried.
+
 - **The Android workflows set up the SDK again.** `android-actions/setup-android`'s default package list still
   names the obsolete `tools` package, and Google has since withdrawn it from the SDK repository, so
   `sdkmanager tools` now exits on `Failed to find package 'tools'` and takes the whole job down before a single

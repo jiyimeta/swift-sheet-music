@@ -242,7 +242,9 @@ extension RangeCopySource {
             var tick = geometry.measureStarts[measureIndex]
             for index in voice.elements.indices {
                 let element = voice.elements[index]
-                if isCopyable(element), tick >= rangeStart, tick < rangeEnd {
+                if isCopyable(element), tick >= rangeStart, tick < rangeEnd,
+                   !(tick == rangeStart && standsAheadOfTheRange(element))
+                {
                     collected.append((
                         location: MeasureElementLocation(measureIndex: measureIndex, elementIndex: index),
                         copied: (absoluteTick: tick, lengthTicks: 0, element: element),
@@ -278,6 +280,23 @@ extension RangeCopySource {
         case .chord, .keySignature, .timeSignature, .barLine, .measureRepeat, .locationShift, .spanner,
              .ambitus, .preserved:
             false
+        }
+    }
+
+    /// Whether a copyable element standing exactly on the range's START tick is context the range opens under
+    /// rather than material inside it: a clef or a breath.
+    ///
+    /// MuseScore starts a range at its first ChordRest SEGMENT (`Score::selectRange`, `dom/score.cpp:2893, 2943`)
+    /// and writes the clipboard from that segment on (`TWrite::writeSegments`, `rw/write/twrite.cpp:3598`). A clef
+    /// and a breath each live in a segment of their own that sorts AHEAD of the ChordRest segment at the same
+    /// tick, so they are never written — which is why copying the first note of a score does not paste the
+    /// score's opening clef as a clef change, and a bar opening with a clef change pastes under the destination's
+    /// clef. The segment annotations at that tick (a dynamic, a chord symbol, a fermata) belong to the ChordRest
+    /// segment itself, so they stay.
+    private static func standsAheadOfTheRange(_ element: VoiceElement) -> Bool {
+        switch element {
+        case .clef, .breath: true
+        default: false
         }
     }
 

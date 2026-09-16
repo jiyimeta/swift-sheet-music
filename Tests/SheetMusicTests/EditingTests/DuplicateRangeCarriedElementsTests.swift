@@ -68,6 +68,72 @@ struct DuplicateRangeCarriedElementsTests {
         ])
     }
 
+    /// A score's first bar: four quarters OPENING with the score's own clef, key and meter plus a dynamic, all at
+    /// tick 0.
+    private static func openingBar() -> Measure {
+        Measure(voices: [Voice(elements: [
+            .clef(Clef(concertClefType: "G")),
+            .keySignature(KeySignature(concertKey: 0)),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .dynamic(Dynamic(subtype: "p", velocity: 49)),
+            quarter(60, 14), quarter(62, 16), quarter(64, 18), quarter(65, 19),
+        ])])
+    }
+
+    /// Two 4/4 bars of four quarters: `openingBar()`, then a bar opening with a clef change and a chord symbol
+    /// at tick 0 and carrying a breath at tick 480, ahead of its second quarter.
+    private static func barsOpeningWithClefs() -> Score {
+        score([
+            openingBar(),
+            Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "F")),
+                .harmony(Harmony(name: "C")),
+                quarter(48, 14),
+                .breath(Breath(kind: .breathMark(.comma), pause: 0)),
+                quarter(50, 16), quarter(52, 18), quarter(53, 19),
+            ])]),
+        ])
+    }
+
+    /// MuseScore starts a range at its first ChordRest SEGMENT (`Score::selectRange`, `dom/score.cpp:2893, 2943`)
+    /// and writes the clipboard from that segment on (`TWrite::writeSegments`), so the Clef and Breath segments
+    /// that precede it at the same tick are never copied — the clef a copied bar opens under is the context it
+    /// was read in, not material. The segment annotations at that tick (a dynamic, a chord symbol) belong to
+    /// the ChordRest segment itself, so they do come along.
+    @Test("a clef standing at the range's first tick is not carried; the annotations beside it are")
+    func leavesTheClefTheRangeOpensUnder() throws {
+        var score = Self.score([Self.openingBar()])
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(0, 4), end: Self.slot(0, 7)))
+            .apply(to: &score)
+        #expect(Self.voice(score, 1).elements == [
+            .dynamic(Dynamic(subtype: "p", velocity: 49)),
+            Self.quarter(60, 14), Self.quarter(62, 16), Self.quarter(64, 18), Self.quarter(65, 19),
+        ])
+    }
+
+    @Test("a clef change opening a mid-score bar is not carried when the range starts on that bar")
+    func leavesAMidScoreClefChangeTheRangeOpensUnder() throws {
+        var score = Self.barsOpeningWithClefs()
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(1, 2), end: Self.slot(1, 6)))
+            .apply(to: &score)
+        #expect(Self.voice(score, 2).elements == [
+            .harmony(Harmony(name: "C")),
+            Self.quarter(48, 14),
+            .breath(Breath(kind: .breathMark(.comma), pause: 0)),
+            Self.quarter(50, 16), Self.quarter(52, 18), Self.quarter(53, 19),
+        ])
+    }
+
+    @Test("a breath standing at the range's first tick is not carried either")
+    func leavesTheBreathTheRangeOpensAfter() throws {
+        var score = Self.barsOpeningWithClefs()
+        // Starts on bar 1's second quarter, so the comma that closes the first one stands at the start tick.
+        _ = try DuplicateRange(over: VoiceElementRange(start: Self.slot(1, 4), end: Self.slot(1, 6)))
+            .apply(to: &score)
+        let breaths = Self.voice(score, 2).elements.values.filter { if case .breath = $0 { true } else { false } }
+        #expect(breaths.isEmpty)
+    }
+
     /// Two 4/4 bars of four quarters. Bar 0 (the source) carries a bass clef at tick 480. Bar 1 (the
     /// destination) carries an alto clef at tick 480 — where the copy lands its own — and a treble clef at tick
     /// 1440, which the copy covers but brings no clef to.
