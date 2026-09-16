@@ -17,6 +17,11 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
     let name: String
     /// Directory name under `Android/SheetMusicAndroid/src/androidTest/assets/`.
     let androidAssetDir: String
+    /// File name of the instrumented test that replays this chain on a device, under
+    /// `Android/SheetMusicAndroid/src/androidTest/kotlin/io/github/jiyimeta/sheetmusic/`. Read by
+    /// `EditReplayGoldenTests`'s step-count gate: that test's hand-maintained `EXPECTED_STEP_COUNT` has to equal
+    /// `steps(_:).count`, and nothing but an emulator run used to say so.
+    let androidTestFileName: String
     /// Basename (no extension) of the chain's `Web/sheet-music-web/test/fixtures/` `.mscx` / `.json` pair.
     let webFixtureStem: String
     /// Builds a fresh score for the chain. A closure rather than a stored `Score` so every consumer starts from an
@@ -57,6 +62,7 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
     static let standard = ReplayChain(
         name: "standard",
         androidAssetDir: "editReplay",
+        androidTestFileName: "EditSessionReplayTest.kt",
         webFixtureStem: "edit-replay",
         fixture: { EditingFixtures.replayFixture() },
         steps: { EditReplayScript.standard(staff: $0) },
@@ -76,6 +82,7 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
     static let parity = ReplayChain(
         name: "parity",
         androidAssetDir: "editReplay-parity",
+        androidTestFileName: "EditSessionReplayParityTest.kt",
         webFixtureStem: "edit-replay-parity",
         fixture: { EditingFixtures.parityFixture() },
         steps: { EditReplayScript.parity(staff: $0) },
@@ -99,6 +106,7 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
     static let lyrics = ReplayChain(
         name: "lyrics",
         androidAssetDir: "editReplay-lyrics",
+        androidTestFileName: "EditSessionReplayLyricsTest.kt",
         webFixtureStem: "edit-replay-lyrics",
         fixture: { EditingFixtures.twoConsecutiveC4Chords() },
         steps: { EditReplayScript.lyrics(staff: $0) },
@@ -113,6 +121,7 @@ struct ReplayChain: Sendable, CustomTestStringConvertible {
     static let properties = ReplayChain(
         name: "properties",
         androidAssetDir: "editReplay-properties",
+        androidTestFileName: "EditSessionReplayPropertiesTest.kt",
         webFixtureStem: "edit-replay-properties",
         fixture: { EditingFixtures.twoConsecutiveC4Chords() },
         steps: { EditReplayScript.properties(staff: $0) },

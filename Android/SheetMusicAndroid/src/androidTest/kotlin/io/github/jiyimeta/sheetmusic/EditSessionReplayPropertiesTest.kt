@@ -8,25 +8,29 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Replays `ReplayChain.properties`: eleven accepting steps covering property intents 76…79 through JNI.
+ * Replays `ReplayChain.properties`: seventeen accepting steps covering property intents 76…83 through JNI.
  * Like [EditSessionReplayLyricsTest], this relays Swift-recorded opaque bytes into a separately linked engine
  * and compares every fingerprint with the host goldens. Kotlin does not construct the intents here.
  *
  * The script colors a lyric and a notehead, seeds font overrides, applies a set/clear/unchanged font patch,
  * moves the lyric to a free verse, and sets its placement. Font and placement each include undo/reapply.
+ * The properties-inspector project appended intents 80…83: the two note flags (cue size, silent playback),
+ * one of them undone, then an authored offset set and cleared around an auto-place toggle. Offset and
+ * auto-place are deliberately unhashed, so those last three steps leave the fingerprint where it was — they
+ * are here to prove the bytes decode and apply on device, not to move the state.
  * No step is expected to fail; refusal behavior belongs in command unit tests until the replay harness
  * supports expected failures across its recorders and consumers.
  *
  * Assets are recorded by `EditReplayGoldenTests` under `editReplay-properties/`: `fixture.mscx`,
- * `goldens.txt`, and nine `step-N.bin` files. Zero-based indices 5 and 9 have no binary because they are
- * undos; the next step re-applies the same intent bytes. The host's hand-derived fingerprint floor is eight:
- * initial state plus seven new states, with four undo/reapply observations revisiting earlier states.
+ * `goldens.txt`, and fourteen `step-N.bin` files. Zero-based indices 5, 9 and 13 have no binary because they
+ * are undos; for 5 and 9 the next step re-applies the same intent bytes. The host's hand-derived fingerprint
+ * floor is ten: initial state plus nine new states, with the remaining observations revisiting earlier ones.
  */
 @RunWith(AndroidJUnit4::class)
 class EditSessionReplayPropertiesTest {
     companion object {
         /** Must track `EditReplayScript.properties(staff:).count` on the host exactly. */
-        private const val EXPECTED_STEP_COUNT = 11
+        private const val EXPECTED_STEP_COUNT = 17
 
         private const val ASSET_DIR = "editReplay-properties"
     }
