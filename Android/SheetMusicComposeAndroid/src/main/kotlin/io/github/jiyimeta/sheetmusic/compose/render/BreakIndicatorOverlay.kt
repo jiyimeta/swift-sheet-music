@@ -96,39 +96,39 @@ private fun DrawScope.drawBadge(
     val topLeft = Offset(centreX - BADGE_WIDTH_PX / 2, centreY - BADGE_HEIGHT_PX / 2)
     val size = Size(BADGE_WIDTH_PX, BADGE_HEIGHT_PX)
     val isLine = indicator.kind == KIND_LINE
+    val color = if (isLine) LINE_BREAK_COLOR else PAGE_BREAK_COLOR
 
-    drawRoundRect(
-        color = if (isLine) LINE_BREAK_COLOR else PAGE_BREAK_COLOR,
-        topLeft = topLeft,
-        size = size,
-        cornerRadius = CornerRadius(BADGE_CORNER_PX, BADGE_CORNER_PX),
-    )
-
+    // Ink only, with no filled plate behind it — the same choice the Apple badges
+    // make. The badge is authoring chrome over the music, and a solid colored block
+    // at the end of every broken measure pulled the eye away from the notation.
+    //
     // A glyph rather than an icon font: two badges is not worth a dependency, and
     // an SF-Symbol-shaped mark would not be available here anyway. A line break
-    // gets a return arrow (one stroke down, one across); a page break gets a
-    // horizontal rule, the same visual distinction the Apple badges make.
+    // gets a return arrow (one stroke down, one across); a page break gets an
+    // outlined page, the same visual distinction the Apple badges make.
     val inset = 3.5f
     val stroke = Stroke(width = 1.5f)
     if (isLine) {
         drawLine(
-            color = Color.White,
+            color = color,
             start = Offset(topLeft.x + size.width - inset, topLeft.y + inset),
             end = Offset(topLeft.x + size.width - inset, centreY),
             strokeWidth = stroke.width,
         )
         drawLine(
-            color = Color.White,
+            color = color,
             start = Offset(topLeft.x + size.width - inset, centreY),
             end = Offset(topLeft.x + inset, centreY),
             strokeWidth = stroke.width,
         )
     } else {
-        drawLine(
-            color = Color.White,
-            start = Offset(topLeft.x + inset, centreY),
-            end = Offset(topLeft.x + size.width - inset, centreY),
-            strokeWidth = stroke.width,
+        val pageWidth = size.height * 0.75f
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(centreX - pageWidth / 2, topLeft.y + stroke.width / 2),
+            size = Size(pageWidth, size.height - stroke.width),
+            cornerRadius = CornerRadius(BADGE_CORNER_PX, BADGE_CORNER_PX),
+            style = stroke,
         )
     }
 }

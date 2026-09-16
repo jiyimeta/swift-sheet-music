@@ -124,21 +124,20 @@ public struct BreakIndicatorOverlay: View {
     }
 }
 
-/// One small badge — a rounded rectangle with an SF Symbol
-/// approximating MuseScore's break-indicator iconography.
+/// One small badge — an outlined SF Symbol approximating MuseScore's break-indicator iconography.
+///
+/// Ink only, with no filled plate behind it and no filled symbol. The badge is authoring chrome sitting on top of
+/// the music, and a solid colored block at the end of every broken measure pulled the eye away from the notation
+/// it annotates; an outline in the same hue still reads as "a break is here" without competing with the staff.
 @available(macOS 15.0, *)
 private struct BreakIndicatorBadge: View {
     let kind: BreakIndicatorOverlay.BreakKind
 
     var body: some View {
         Image(systemName: symbolName)
-            .font(.system(size: 9, weight: .medium))
-            .foregroundStyle(.white)
+            .font(.system(size: 10, weight: .regular))
+            .foregroundStyle(badgeColor)
             .frame(width: 16, height: 12)
-            .background(
-                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(badgeColor),
-            )
             .accessibilityLabel(accessibilityLabel)
     }
 
@@ -147,9 +146,8 @@ private struct BreakIndicatorBadge: View {
         // `arrow.turn.down.left` is the closest stock approximation
         // of MuseScore's "↵" line-break icon.
         case .line: return "arrow.turn.down.left"
-        // Page break: a "doc" with a downward arrow conveys
-        // "force a page break here".
-        case .page: return "doc.fill"
+        // Page break: an outlined page conveys "force a page break here".
+        case .page: return "doc"
         }
     }
 

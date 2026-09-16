@@ -7,6 +7,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Line- and page-break badges are drawn as outlines.** `BreakIndicatorOverlay` (Apple) and the Compose
+  `BreakIndicatorOverlay` drew a solid colored plate with a white glyph, and a page break used the filled `doc.fill`
+  symbol; at the end of every broken measure that block pulled the eye away from the notation it annotates. Both
+  now draw the glyph alone in the badge's hue — a return arrow for a line break, an outlined page for a page
+  break — at the same position and size.
+
 ### Added
 
 - **`PreparedPlayback` and `PlaybackEngine.replaceScore(with:)` move score-derived playback work ahead of Play.**
