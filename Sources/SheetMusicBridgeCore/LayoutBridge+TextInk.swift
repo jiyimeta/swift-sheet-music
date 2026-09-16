@@ -42,12 +42,17 @@ extension LayoutBridge {
         }
     }
 
+    /// `properties` is the element's font override. Its size reaches the wire through the `.text` command's own
+    /// size and its bold/italic through `setTextStyle`; its face has no opcode and is dropped, as a chord symbol's
+    /// is (`encodeHarmony`).
     static func emitRoleText(
-        text: String, style: TextStyleType, originX: Double, originY: Double,
-        sp: Double, anchor: TextInkPoint, into out: inout [DrawCommand],
+        text: String, style: TextStyleType, properties: TextProperties = TextProperties(),
+        originX: Double, originY: Double, sp: Double, anchor: TextInkPoint, into out: inout [DrawCommand],
     ) {
-        let font = TextInkGeometry.font(for: style, metrics: StaffMetrics(staffSize: CGFloat(sp) * 4))
-        withTextStyle(styleFlags(for: style), into: &out) { out in
+        let font = TextInkGeometry.font(
+            for: style, overrides: properties, metrics: StaffMetrics(staffSize: CGFloat(sp) * 4),
+        )
+        withTextStyle(styleFlags(for: style, overrides: properties), into: &out) { out in
             emitAnchoredText(
                 text: text,
                 font: font,

@@ -285,16 +285,17 @@ extension ScoreLayerBuilder {
 
     static func drawRehearsalMark( // swiftlint:disable:this function_body_length
         text: String, origin: CGPoint,
-        frame: TextFrameType, color: CGColor,
+        frame: TextFrameType, properties: TextProperties, color: CGColor,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) -> [CAShapeLayer] {
         guard !text.isEmpty else { return [] }
         // MuseScore `Sid::rehearsalMarkFontSize` = 14 pt with
         // `FontSpatiumDependent = true`; resolved through
-        // `TextStyleType.rehearsalMark` (Edwin 14 pt bold).
+        // `TextStyleType.rehearsalMark` (Edwin 14 pt bold), then the
+        // mark's own font override.
         let style = ResolvedTextStyle.resolve(
-            .rehearsalMark, metrics: metrics,
+            .rehearsalMark, overrides: properties, metrics: metrics,
         )
         let textSize = style.pointSize
         let font = style.ctFont
@@ -322,7 +323,7 @@ extension ScoreLayerBuilder {
         }
 
         let shape = TextInkGeometry.rehearsalFrame(
-            text: text, font: TextInkGeometry.font(for: .rehearsalMark, metrics: metrics),
+            text: text, font: TextInkGeometry.font(for: .rehearsalMark, overrides: properties, metrics: metrics),
             origin: origin, sp: metrics.sp, frame: frame,
         )
         let lineWidth = RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp)

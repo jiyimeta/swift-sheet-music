@@ -22,16 +22,16 @@ extension LayoutElement {
     ///   are engraved text but not editable text.
     public var textID: ScoreTextID? {
         switch self {
-        case let .textMark(.lyrics(_, verse, anchor, _), _, _):
+        case let .textMark(.lyrics(_, verse, anchor, _, _), _, _):
             guard let anchor else { return nil }
             return .lyric(anchor: anchor, verse: verse)
-        case let .staffText(_, _, _, style, anchor, _):
+        case let .staffText(_, _, _, style, anchor, _, _):
             guard let anchor, style == .staffText || style == .systemText else { return nil }
             return .staffText(anchor: anchor, style: style)
         case let .harmony(harmony):
             guard let anchor = harmony.anchor else { return nil }
             return .harmony(anchor: anchor)
-        case let .rehearsalMark(_, _, _, _, measureIndex, _):
+        case let .rehearsalMark(_, _, _, _, measureIndex, _, _):
             return .rehearsalMark(measureIndex: measureIndex)
         default:
             return nil

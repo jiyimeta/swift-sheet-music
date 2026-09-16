@@ -139,13 +139,17 @@ extension ScoreLayerBuilder {
                     parent.addSublayer(layer)
                 }
             }
-        case let .textMark(.tempo, text, p):
-            drawTempoText(text: text, origin: shift(p), metrics: metrics, height: height, into: parent)
+        case let .textMark(.tempo(_, tempoColor, properties), text, p):
+            drawTempoText(
+                text: text, origin: shift(p), properties: properties,
+                color: tempoColor.map(scoreColorToCGColor) ?? inkColor,
+                metrics: metrics, height: height, into: parent,
+            )
         case let .textMark(
-            .lyrics(lyricColor, _, _, _), text, p,
+            .lyrics(lyricColor, _, _, _, properties), text, p,
         ):
             let style = ResolvedTextStyle.resolve(
-                .lyricsOdd, metrics: metrics,
+                .lyricsOdd, overrides: properties, metrics: metrics,
             )
             if let layer = textLayer(
                 text: text, at: shift(p),
@@ -249,13 +253,13 @@ extension ScoreLayerBuilder {
                 kind: kind, text: text, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .rehearsalMark(text, p, frame, color, _, _):
+        case let .rehearsalMark(text, p, frame, color, _, _, properties):
             // The frame is attached alongside the letter: MuseScore
             // tints a selected text's frame too, from the same
             // `curColor` (`TDraw::drawTextBase`), so a selected boxed
             // "A" turns blue box and all.
             for layer in drawRehearsalMark(
-                text: text, origin: shift(p), frame: frame,
+                text: text, origin: shift(p), frame: frame, properties: properties,
                 color: color.map(scoreColorToCGColor) ?? Self.inkColor,
                 metrics: metrics, height: height, into: parent,
             ) {
@@ -283,13 +287,13 @@ extension ScoreLayerBuilder {
             {
                 parent.addSublayer(layer)
             }
-        case let .staffText(text, p, color, style, _, _):
-            // Author-supplied staff/system text. Color and offset
+        case let .staffText(text, p, color, style, _, _, properties):
+            // Author-supplied staff/system text. Color, font and offset
             // (already baked into `p` by placement) come from the
             // source `.mscx`. Bottom-leading anchor at `p` matches
             // the placement convention used for dynamics/tempo.
             let resolvedStyle = ResolvedTextStyle.resolve(
-                style, metrics: metrics,
+                style, overrides: properties, metrics: metrics,
             )
             if !text.isEmpty,
                let layer = textLayer(

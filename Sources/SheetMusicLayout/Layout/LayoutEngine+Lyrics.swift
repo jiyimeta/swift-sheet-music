@@ -386,6 +386,25 @@ extension LayoutEngine {
         )
     }
 
+    /// `lyricsTextWidth(_:sp:)` for one syllable, honoring its authored font override.
+    ///
+    /// Without a face, size or style override this IS the legacy measurement, unchanged — every score that never
+    /// set one keeps its spacing to the bit. With one, the syllable is measured in the font the renderers draw it
+    /// in (`TextInkGeometry.font(for: .lyricsOdd, overrides:)`), since the legacy system-semibold stand-in has no
+    /// face, size or style to override. The two measurements are not continuous: a bold override measures in
+    /// Edwin, not in the stand-in, and may come out narrower than the un-overridden syllable did.
+    ///
+    /// Instrument names reuse the two-argument form (`LayoutEngine+Wrapping`) and are deliberately not routed here.
+    static func lyricsTextWidth(
+        _ text: String, properties: TextProperties, metrics: StaffMetrics,
+    ) -> CGFloat {
+        guard properties.hasFontOverride else { return lyricsTextWidth(text, sp: metrics.sp) }
+        guard !text.isEmpty else { return 0 }
+        return FontMetrics.provider.typographicWidth(
+            text: text, font: TextInkGeometry.font(for: .lyricsOdd, overrides: properties, metrics: metrics),
+        )
+    }
+
     /// Y offset from the lyric text's center anchor down to where
     /// the melisma rule should be drawn. MuseScore positions the
     /// rule at the lyric font's underline level, i.e. baseline +
@@ -430,6 +449,7 @@ extension LayoutEngine {
     static func emitMelismaLine(
         chordX: CGFloat,
         lyricText: String,
+        lyricProperties: TextProperties = TextProperties(),
         lyricTicks: Int,
         lyricsY: CGFloat,
         tickCursor: Int,
@@ -478,7 +498,7 @@ extension LayoutEngine {
         // glyph). MuseScore matches the rule to the syllable's
         // bbox right edge plus a quarter-staff-space.
         let textWidth = Self.lyricsTextWidth(
-            lyricText, sp: metrics.sp,
+            lyricText, properties: lyricProperties, metrics: metrics,
         )
         let lineStartX = chordX + textWidth / 2 + metrics.sp * 0.25
         // Only emit if there is actually a visible line to draw —

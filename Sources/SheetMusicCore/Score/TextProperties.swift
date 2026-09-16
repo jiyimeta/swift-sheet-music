@@ -40,6 +40,20 @@ public struct TextProperties: Sendable, Equatable {
             && frameType == nil && framePadding == nil
     }
 
+    /// True when a field that changes the glyphs themselves — face, size or style — is set. The frame fields do
+    /// not count: they box the text, they do not change how it is measured or drawn. Layout takes its override
+    /// path only when this is true, so a score whose text carries no font override lays out exactly as it did
+    /// before overrides were honored.
+    package var hasFontOverride: Bool {
+        face != nil || size != nil || style != nil
+    }
+
+    /// The three font fields alone, with the frame fields dropped — what a layout element carries to its
+    /// renderers, none of which draws `frameType` or `framePadding` from it.
+    package var fontOverrides: TextProperties {
+        TextProperties(face: face, size: size, style: style)
+    }
+
     /// Convenience: resolve each field against `style`'s row in
     /// `TextStyleDefaults`, returning a fully-populated
     /// `TextStyleDefaults` value. Mirrors MuseScore's per-property

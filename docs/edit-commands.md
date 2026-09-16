@@ -104,6 +104,7 @@ own substantive logic.
 | `SetClef` | not in the example — host command registry | sugar |
 | `RemoveClef` | not in the example — host command registry | sugar |
 | `SetTempo` | not in the example — host command registry | — |
+| `SetTempoFont` | not in the example — a host's text inspector (a tempo marking's face / size / style, by `SetTempo`'s anchor) | — |
 | `SetStaffText` | not in the example — host command registry | — |
 | `SetDynamic` | not in the example — host command registry | sugar |
 | `SetFermata` | not in the example — host command registry | sugar |
@@ -208,7 +209,7 @@ the next person will otherwise re-derive them:
 | --- | --- |
 | `SetElementColor` (76) | The row said the field sits on the four text kinds. It is also on `Note` and `Chord` — but **`Chord.elementProperties.color` reaches nothing**: the layout takes a chord's colour from its notes. Five carriers, not six, and the exclusion is named in the command's doc comment so nobody completes the set later. |
 | `SetElementPlacement` (77) | Lyric、StaffText / SystemText、RehearsalMark、Harmonyはelement override → score style → kind defaultの順でsideを解決し、実staff edgeからbaselineを配置します。offset後もsideを維持してautoplaceし、`autoplace=false` は固定位置のobstacleとして扱います。Lyricのhyphen / melisma / system continuationはsideとverseでrowを共有します。Note / Chordのgeneric placementは保存・編集できますが、pitchやstem directionを変更せず描画上inertです。 |
-| `SetTextFont` (78) | The row said "`TextProperties` on all four". True of storage, false of use: only Harmony resolves it, and only `face`, `size` and bold/italic from `style` — not underline, strike, `frameType` or `framePadding`. And **none of the four was hashed** by `stableFingerprint`, so the fingerprint work had to grow before the command could exist. |
+| `SetTextFont` (78) | The row said "`TextProperties` on all four". True of storage, false of use: only Harmony resolves it, and only `face`, `size` and bold/italic from `style` — not underline, strike, `frameType` or `framePadding`. And **none of the four was hashed** by `stableFingerprint`, so the fingerprint work had to grow before the command could exist. *(Since closed: lyric, staff/system text and rehearsal mark now measure and draw `face`, `size` and bold/italic too, and a rehearsal mark its `frameType` while its own `frame` is the default rectangle. The tempo marking takes the same patch through `SetTempoFont` (89) and its color through `SetElementColor.Target.tempo`.)* |
 | `SetLyricVerse` (79) | The row said `SetLyric` owns the repair invariant. It does not — repair lives in `LyricInputPlanner` and is driven by the terminator the user typed. A verse move has no terminator, so **neighbours are deliberately not repaired**, and a hyphen or melisma the syllable participated in can be left pointing at a row it no longer occupies. An occupied destination is refused rather than swapped. |
 
 The shape common to all four: the row described what the model

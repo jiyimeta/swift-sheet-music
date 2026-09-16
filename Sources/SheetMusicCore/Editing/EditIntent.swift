@@ -439,8 +439,9 @@ public enum EditIntent: Sendable, Equatable {
     /// `.targetNotFound` when the score carries no such text.
     case setTextVisible(text: ScoreTextID, visible: Bool)
 
-    /// Set or clear one text's or individual note's author color. Whole-chord color is not rendered;
-    /// SetElementColor deliberately excludes it. An unchanged value plans to nil; a missing target is refused.
+    /// Set or clear one text's, individual note's or tempo marking's author color. Whole-chord color is not
+    /// rendered; SetElementColor deliberately excludes it. An unchanged value plans to nil; a missing target is
+    /// refused.
     case setElementColor(target: SetElementColor.Target, color: ScoreColor?)
 
     /// Set or clear authored placement on one text, note, or whole chord. MSCX preserves the override;
@@ -507,4 +508,11 @@ public enum EditIntent: Sendable, Equatable {
     /// refused as `.invalidTransposition` past two octaves and as `.transpositionOutOfRange` when any note could
     /// not stay inside MIDI 0…127.
     case transposeScore(semitones: Int, transposeKeySignatures: Bool, respellInKey: Bool)
+
+    // Appended for the text font and color inspector — index 89.
+
+    /// `.setTextFont`'s patch, applied to the tempo marking at the beat of the chord or rest at `anchor` — the
+    /// address `.setTempo` and `ScoreElementID.tempo` use, which is why this is not a fifth `ScoreTextID`. An
+    /// unchanged patch plans to nothing; a beat with no tempo is refused as `.targetNotFound`. See `SetTempoFont`.
+    case setTempoFont(anchor: VoiceElementID, patch: SetTextFont.Patch)
 }

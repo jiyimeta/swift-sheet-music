@@ -122,6 +122,7 @@ import Wirelet
 /// 86 = pasteRange(PasteRangeIntentWire), see EditIntentPayloads+Range.swift
 /// 87 = setDotsInRange(SetDotsInRangeIntentWire), see EditIntentPayloads+Range.swift
 /// 88 = transposeScore(TransposeScoreIntentWire), see EditIntentPayloads+Range.swift
+/// 89 = setTempoFont(SetTempoFontIntentWire), see EditIntentPayloads+TextFont.swift
 /// ```
 ///
 /// Cases 5…11 were appended in SP1, 12…13 in SP2, 14…15 for M1 solo scratch creation, 16…18 for M2 ensemble
@@ -136,7 +137,8 @@ import Wirelet
 /// small/play and element offset/autoplace. Case 84 was appended for the score-credits write path. Case 85 was
 /// appended for the duplicate-range project (spec 2026-09-13). Case 86 was appended for the clipboard project
 /// (spec 2026-09-13). Cases 87 and 88 were appended for the score-transposition project (spec 2026-09-14) — the
-/// range form of the dot key, and the whole-score transposition — and 88 is the catalogue's last.
+/// range form of the dot key, and the whole-score transposition. Case 89 was appended for the text font and color
+/// inspector — a tempo marking's font patch — and 89 is the catalogue's last.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -1129,6 +1131,8 @@ public enum EditIntentWire {
     case setDotsInRange(SetDotsInRangeIntentWire)
     /// Appended for the score-transposition project (spec 2026-09-14) — index 88. Never renumber anything above it.
     case transposeScore(TransposeScoreIntentWire)
+    /// Appended for the text font and color inspector — index 89. Never renumber anything above it.
+    case setTempoFont(SetTempoFontIntentWire)
 
     /// One `switch` over every intent, past the length rule and for the same reason `decoded(depth:)` states: the
     /// compiler's insistence that every case be encoded here is the only thing standing between an appended
@@ -1329,6 +1333,8 @@ public enum EditIntentWire {
             self = .transposeScore(TransposeScoreIntentWire(
                 semitones: semitones, transposeKeySignatures: transposeKeySignatures, respellInKey: respellInKey,
             ))
+        case let .setTempoFont(anchor, patch):
+            self = .setTempoFont(SetTempoFontIntentWire(anchor: anchor, patch: patch))
         case let .setTextVisible(text, visible):
             self = .setTextVisible(SetTextVisibleIntentWire(text: text, visible: visible))
         case let .setElementColor(target, color):
@@ -1608,6 +1614,9 @@ public enum EditIntentWire {
                 semitones: decoded.semitones, transposeKeySignatures: decoded.transposeKeySignatures,
                 respellInKey: decoded.respellInKey,
             )
+        case let .setTempoFont(wire):
+            let decoded = try wire.decoded()
+            return .setTempoFont(anchor: decoded.anchor, patch: decoded.patch)
         case let .setTextVisible(wire):
             let decoded = wire.decoded()
             return .setTextVisible(text: decoded.text, visible: decoded.visible)

@@ -154,8 +154,22 @@
         /// each only by an appended `identity:` naming the drawn staff,
         /// the measure and the list index; no other line moved. Both
         /// sample lines matched the ones derived by hand before the run.
+        ///
+        /// **Re-recorded when text font overrides reached layout.** The
+        /// tree this branched from already hashed to d0750a60… rather than
+        /// the committed f4f11d06…, so the constant was stale before this
+        /// change too. Against that parent's recorded digest (3889 lines
+        /// both sides): every `staffText` / `rehearsalMark` / lyric and tempo
+        /// `textMark` line gains its new payload, and once the empty ones
+        /// (`properties` all nil, tempo `color: nil`) are stripped from both
+        /// digests, 64 of 66 fixture blocks are identical to the character.
+        /// The two that move are `guitarbend_simple.mscx` (both wraps, 30
+        /// lines each): its two `<SystemText>` carry `<size>7</size>`, now
+        /// measured at 7 pt instead of the style's 10, so the texts sit
+        /// lower and the system is 3.1 pt shorter. No other fixture carries
+        /// a face, size or style override or a tempo color.
         private static let expectedDigestSHA256 =
-            "f4f11d06c9a780386a0a169c392ab822af2c89f80ab35489e83c8818c385d35a"
+            "31ea67d407ab1abc6a9a1875b54981332b982f21ebc34098f17de95d84a57288"
 
         @Test("write digest")
         func writeDigest() throws {

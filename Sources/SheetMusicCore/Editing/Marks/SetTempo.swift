@@ -81,12 +81,27 @@ public struct SetTempo: EditCommand {
 
     /// The marking at the anchor's beat, or `nil` when there is none (or the anchor does not resolve).
     static func current(at anchor: VoiceElementID, in score: Score) -> Marking? {
+        guard let tempo = tempo(at: anchor, in: score) else { return nil }
+        return Marking(beatsPerSecond: tempo.beatsPerSecond, beatNote: tempo.beatNote, beatDots: tempo.beatDots)
+    }
+
+    /// The whole tempo at the anchor's beat — the one `current` reads the marking from, and the one the
+    /// color and font writes (`SetElementColor.Target.tempo`, `SetTempoFont`) address.
+    static func tempo(at anchor: VoiceElementID, in score: Score) -> Tempo? {
+        guard let slot = slot(at: anchor, in: score),
+              case let .tempo(tempo) = score.systemMeasures[slot.measureIndex].elements[slot.elementIndex].element
+        else { return nil }
+        return tempo
+    }
+
+    /// Where that tempo sits in the lane: its bar, and its index within that bar's elements. `nil` when the beat
+    /// carries no tempo or the anchor does not resolve.
+    static func slot(at anchor: VoiceElementID, in score: Score) -> (measureIndex: Int, elementIndex: Int)? {
         guard let position = SystemLaneSlot.position(of: anchor, in: score),
               let measure = score[system: MeasureRef(measureIndex: anchor.measureIndex)],
-              let index = SystemLaneSlot.firstIndex(in: measure, at: position, where: isTempo),
-              case let .tempo(tempo) = measure.elements[index].element
+              let index = SystemLaneSlot.firstIndex(in: measure, at: position, where: isTempo)
         else { return nil }
-        return Marking(beatsPerSecond: tempo.beatsPerSecond, beatNote: tempo.beatNote, beatDots: tempo.beatDots)
+        return (anchor.measureIndex, index)
     }
 
     static func isTempo(_ positioned: PositionedSystemElement) -> Bool {

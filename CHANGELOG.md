@@ -28,6 +28,27 @@ and this project adheres to
   now draw the glyph alone in the badge's hue — a return arrow for a line break, an outlined page for a page
   break — at the same position and size.
 
+- **A text's authored font is measured and drawn, not just saved.** `TextProperties`' face, size and bold/italic
+  on a lyric, a staff or system text, a rehearsal mark and a tempo marking were written by `SetTextFont` and
+  round-tripped through MSCX, but layout measured and both Apple renderers drew every one of them in its style's
+  default font — only a chord symbol honored them. Layout now measures the override wherever it measures the
+  text (ink and hit rects, the skyline, the lyric row's baseline, and for a lyric its width in chord spacing,
+  hyphens and the melisma start), and the CALayer and Canvas renderers draw it. A tempo marking's author color is
+  drawn too. The Android draw program carries size and bold/italic through its existing `.text` size and
+  `setTextStyle`, and color through `setColor` — including a lyric's color, which it had never emitted; the
+  face has no opcode and stays unsupported there, as it is for chord symbols. The draw-program format is
+  unchanged. A rehearsal mark also draws an authored `frameType` while its own `frame` is the default rectangle,
+  which is the frame the MSCX encoder saves.
+
+  A text that sets no face, size or style lays out exactly as before: the override path is taken only when one
+  of those three is set, so frame-only properties change nothing, and the lyric width keeps its long-standing
+  system-font measurement. Instrument-name width, which shares that measurement, is untouched.
+
+  To carry the font to the renderers, `LayoutElement.staffText` and `.rehearsalMark` gain a trailing
+  `properties: TextProperties` (face, size and style only), `TextMarkKind.lyrics` gains the same, and
+  `TextMarkKind.tempo` gains `color` and `properties`. All are defaulted, so construction sites compile unchanged;
+  a positional pattern over these cases needs one more `_`.
+
 ### Added
 
 - **A host can edit the title block in place: `LayoutDocument.creditTextLines`, `creditTextLine(at:tolerance:)` and
@@ -37,6 +58,16 @@ and this project adheres to
   `.setScoreInfo`. Only what that command can write back is reported: the first frame text of each field's style,
   on one line. The placement the renderers draw from moved down beside it as `LayoutTitleFrame.placedLines(origin:)`
   (with `LayoutFrameText.Anchor.horizontalFraction`), so the screen, the PDF and a host's editor read one answer.
+
+- **A tempo marking's color and font are editable.** `SetElementColor.Target.tempo(anchor:)` colors the tempo
+  at a chord or rest's beat — the address `SetTempo` and `ScoreElementID.tempo` already use — and the new
+  `SetTempoFont` / `EditIntent.setTempoFont(anchor:patch:)` applies `SetTextFont`'s three-state patch to it. Both
+  plan through `ScoreEditSession` with the usual no-op and `.targetNotFound` rules and undo like the text
+  commands. On the wire the color target is appended as index 2 of `ElementColorTargetWire` and the font intent
+  as index 89 (`SetTempoFontIntentWire`, the anchor followed by intent 78's patch fields); no earlier index moves.
+  `stableFingerprint` now feeds a tempo's color (tag 105) and font overrides (106…110) by occupants, so a score
+  without them keeps its hash. A tempo was not given a `ScoreTextID`, which would have let one mark be selected
+  under two names.
 
 - **`PreparedPlayback` and `PlaybackEngine.replaceScore(with:)` move score-derived playback work ahead of Play.**
   Hosts can render an edited score away from the main actor, then swap it into an existing backend-backed engine

@@ -44,10 +44,9 @@ extension LayoutDocument {
             let point = LayoutEngine.placedTextOrigin(
                 text: "", role: role, properties: elementProperties, style: placementStyle, x: x,
                 lineGeometry: system.geometry(atFlatIndex: index), metrics: metrics,
-                font: TextInkGeometry.font(
-                    for: textStyle, overrides: kind == .chordSymbol ? textProperties : TextProperties(),
-                    metrics: metrics,
-                ), center: kind == .chordSymbol,
+                // Every kind's engraving now measures its authored font, so the blank caret does too.
+                font: TextInkGeometry.font(for: textStyle, overrides: textProperties, metrics: metrics),
+                center: kind == .chordSymbol,
             )
             return CGPoint(x: point.x, y: point.y + system.origin.y + system.staffOrigins[index].y - 2 * system.sp)
         }
