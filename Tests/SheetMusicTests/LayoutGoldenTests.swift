@@ -168,8 +168,18 @@
         /// measured at 7 pt instead of the style's 10, so the texts sit
         /// lower and the system is 3.1 pt shorter. No other fixture carries
         /// a face, size or style override or a tempo color.
+        ///
+        /// **Re-recorded when signature and grace-note identities joined
+        /// the text-font branch.** 644 of 3890 lines changed, each only in
+        /// an identity payload: a key or time signature's trailing
+        /// `measureIndex: Optional(n)` became `identity:` naming the same
+        /// bar plus the glyph's staff, and every `LayoutChordNote` gained a
+        /// `graceNoteID` (`nil` on ordinary heads, the grace's own address
+        /// on grace heads). With those two payloads rewritten back to the
+        /// bare bar index and the grace id dropped on both sides, the merged
+        /// digest and the text-font branch's are identical line for line.
         private static let expectedDigestSHA256 =
-            "31ea67d407ab1abc6a9a1875b54981332b982f21ebc34098f17de95d84a57288"
+            "c19936084d83afa7e6ab4192fa1daa869ef0573fc51835d11cd64543352082e0"
 
         @Test("write digest")
         func writeDigest() throws {
