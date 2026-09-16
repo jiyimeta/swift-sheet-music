@@ -92,6 +92,7 @@ extension LayoutEngine {
         maxAboveVerse: Int = 0,
         tickColumns: [Int: CGFloat],
         headerContentStartX: CGFloat,
+        isSystemHead: Bool,
         measureWidth: CGFloat,
         metrics: StaffMetrics,
         out: inout [LayoutElement],
@@ -110,18 +111,13 @@ extension LayoutEngine {
             lyric: continuation.lyric, verse: continuation.verseIndex, maxAboveVerse: maxAboveVerse,
             style: style, x: 0, lineGeometry: lineGeometry, metrics: metrics,
         ).y + Self.melismaLineYOffset(sp: metrics.sp)
-        // Start at x=0 (the measure's left boundary) for mid-system
-        // continuations so the rule visually touches the previous
-        // measure's anchor rule. When the measure carries a clef /
-        // key-sig / time-sig redraw (system-start, or a mid-piece
-        // change), bump past it so the rule doesn't run under the
-        // glyphs. Detection: the baseline `contentStartX` for a
-        // header-free measure is `sp * 2` (see `computeHeaderSchedule`'s
-        // `clefX`); anything higher indicates a redraw.
-        let hasHeaderRedraw = headerContentStartX > metrics.sp * 2.1
-        let lineStartX: CGFloat = hasHeaderRedraw
-            ? headerContentStartX
-            : 0
+        // At a system's head the rule starts past the restated clef and key, which it must not run under. Anywhere
+        // else it starts at x=0, the measure's left boundary, so it meets the previous measure's rule at the
+        // barline — even when this measure opens with a clef, key, meter or start-repeat change. Those glyphs sit
+        // inside the staff and the rule runs below it, so there is nothing to avoid, and starting after them
+        // left a gap exactly as wide as the change. MuseScore segments a `LyricsLine` per system and pulls only
+        // the system's first segment in past the header (`lyricslayout.cpp:765-779`).
+        let lineStartX: CGFloat = isSystemHead ? headerContentStartX : 0
         let withinMeasureRightX = max(
             headerContentStartX + metrics.sp,
             measureWidth - metrics.sp,

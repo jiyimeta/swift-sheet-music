@@ -24,6 +24,13 @@ and this project adheres to
   behind, which covers ⌘C/⌘V and `R` alike. The segment annotations at that tick — a dynamic, a chord symbol —
   still come along, and a clef change anywhere later in the range is still carried.
 
+- **A melisma's extender line runs unbroken through a mid-system clef, key, meter or start-repeat change.** The
+  line's continuation in each later measure started after whatever header that measure drew, while the previous
+  measure's rule stops at the barline, so the line showed a gap exactly as wide as the change (26–44 pt on a
+  28-point staff). The glyphs sit inside the staff and the rule runs below it, so there was nothing to avoid:
+  only a system's first measure now starts the rule past its header, which is where MuseScore pulls a
+  `LyricsLine` segment in (`lyricslayout.cpp:765-779`).
+
 - **The Android workflows set up the SDK again.** `android-actions/setup-android`'s default package list still
   names the obsolete `tools` package, and Google has since withdrawn it from the SDK repository, so
   `sdkmanager tools` now exits on `Failed to find package 'tools'` and takes the whole job down before a single

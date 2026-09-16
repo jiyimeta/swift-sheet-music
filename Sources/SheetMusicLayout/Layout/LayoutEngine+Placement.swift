@@ -1989,6 +1989,8 @@ extension LayoutEngine {
                 maxAboveVerse: maxAboveLyricVerse,
                 tickColumns: tickColumns,
                 headerContentStartX: headerSchedule.contentStartX,
+                // Only a system's first measure synthesizes the opening clef (`buildSystem`'s `j == 0`).
+                isSystemHead: initialClefRawType != nil,
                 measureWidth: width,
                 metrics: metrics,
                 out: &out,
