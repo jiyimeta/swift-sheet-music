@@ -55,47 +55,19 @@ public enum TitleFrameRenderer {
         let fontSize: CGFloat
     }
 
-    /// Multi-line `<Text>` blocks (e.g. test-platinum.mscx's three
-    /// Lyricist lyric columns) need each line placed at its own y
-    /// with the same horizontal anchor — `Canvas.resolve` only takes
-    /// a `Text` literal, so SwiftUI's `.multilineTextAlignment`
-    /// modifier can't reach it. We split on `\n` and place
-    /// line-by-line.
+    /// `LayoutTitleFrame.placedLines(origin:)` in SwiftUI's anchor
+    /// vocabulary. The placement itself lives in SheetMusicLayout so a
+    /// host placing an inline editor over a credit reads the same
+    /// answer the renderers draw from.
     static func placedLines(
         _ frame: LayoutTitleFrame, origin: CGPoint = .zero,
     ) -> [PlacedLine] {
-        frame.texts.flatMap { placedLines(of: $0, origin: origin) }
-    }
-
-    private static func placedLines(
-        of entry: LayoutFrameText, origin: CGPoint,
-    ) -> [PlacedLine] {
-        let lines = entry.text.split(
-            separator: "\n", omittingEmptySubsequences: false,
-        ).map(String.init)
-        // SwiftUI's `Text` resolves with the system line-height
-        // factor (~1.2× point size). Match that so per-line stacking
-        // matches what `.multilineTextAlignment` would have produced
-        // had we been able to use it directly.
-        let lineHeight = entry.fontSize * 1.2
-        let pos = CGPoint(
-            x: origin.x + entry.position.x,
-            y: origin.y + entry.position.y,
-        )
-        let topY: CGFloat = entry.anchor.isBottom
-            ? pos.y - CGFloat(lines.count) * lineHeight
-            : pos.y
-        let lineAnchor = topAnchor(for: entry.anchor)
-
-        return lines.enumerated().map { idx, line in
+        frame.placedLines(origin: origin).map { line in
             PlacedLine(
-                text: line,
-                position: CGPoint(
-                    x: pos.x,
-                    y: topY + CGFloat(idx) * lineHeight,
-                ),
-                anchor: lineAnchor,
-                fontSize: entry.fontSize,
+                text: line.text,
+                position: line.position,
+                anchor: UnitPoint(x: line.horizontalAnchor, y: 0),
+                fontSize: line.fontSize,
             )
         }
     }
@@ -125,29 +97,5 @@ public enum TitleFrameRenderer {
                 ofSize: size, weight: .regular,
             ) as CTFont
         #endif
-    }
-
-    /// SwiftUI anchor for the *top edge* of a single line. Used by
-    /// the per-line placement above — the bottom-anchored input
-    /// case is handled by shifting the starting `y` upward, not by
-    /// flipping the per-line anchor.
-    private static func topAnchor(
-        for anchor: LayoutFrameText.Anchor,
-    ) -> UnitPoint {
-        switch anchor {
-        case .topLeading, .bottomLeading: .topLeading
-        case .top, .bottom: .top
-        case .topTrailing, .bottomTrailing: .topTrailing
-        }
-    }
-}
-
-@available(macOS 15.0, *)
-extension LayoutFrameText.Anchor {
-    fileprivate var isBottom: Bool {
-        switch self {
-        case .bottomLeading, .bottom, .bottomTrailing: true
-        case .topLeading, .top, .topTrailing: false
-        }
     }
 }

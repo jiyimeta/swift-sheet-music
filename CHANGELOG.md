@@ -30,6 +30,14 @@ and this project adheres to
 
 ### Added
 
+- **A host can edit the title block in place: `LayoutDocument.creditTextLines`, `creditTextLine(at:tolerance:)` and
+  `creditTextLine(for:)`.** Each `CreditTextLine` names the `ScoreInfoWrite.Field` it is, its text and size, the
+  anchor point and horizontal alignment the renderer places it by, and its box in document coordinates — enough to
+  find the credit under a double-click and to sit an inline editor over it, then write it back with
+  `.setScoreInfo`. Only what that command can write back is reported: the first frame text of each field's style,
+  on one line. The placement the renderers draw from moved down beside it as `LayoutTitleFrame.placedLines(origin:)`
+  (with `LayoutFrameText.Anchor.horizontalFraction`), so the screen, the PDF and a host's editor read one answer.
+
 - **`PreparedPlayback` and `PlaybackEngine.replaceScore(with:)` move score-derived playback work ahead of Play.**
   Hosts can render an edited score away from the main actor, then swap it into an existing backend-backed engine
   without rebuilding its SoundFont, metronome, audio graph, or user mixer state when the channel layout is unchanged.
