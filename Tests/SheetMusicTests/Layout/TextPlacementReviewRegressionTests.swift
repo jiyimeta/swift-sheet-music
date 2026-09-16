@@ -37,8 +37,11 @@ struct TextPlacementReviewRegressionTests {
             .command)
         _ = try deletion.apply(to: &preview)
         let empty = TextPlacementFixtures.layout(preview)
+        // The emptied syllable's font is read from the full score like its element properties: its own font
+        // centers it off the row now that layout honors it, and the caret must not jump when text is typed back.
         let after = try #require(empty.lyricEntryOrigin(
             at: cursor, placementStyle: score.style.textPlacement, elementProperties: own.elementProperties,
+            textProperties: own.properties,
         ))
         #expect(abs(before.x - after.x) < 0.001)
         #expect(abs(relativeY(before, in: filled) - relativeY(after, in: empty)) < 0.001)

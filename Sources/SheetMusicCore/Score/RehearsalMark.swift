@@ -84,4 +84,13 @@ public struct RehearsalMark: Sendable, Equatable {
             visible: visible, color: color, offset: offset,
         )
     }
+
+    /// The frame this mark is saved with, and so the one layout draws. The mark has two carriers for one
+    /// `<frameType>`: `frame`, where the MSCX decoder lifts it, and `properties.frameType`, which `SetTextFont`
+    /// writes. The encoder folds them the way this does — `frame` wins unless it is the default rectangle — so a
+    /// frame edit is drawn exactly when it would survive a save. A decoded mark never carries the second, which
+    /// keeps every existing score's frame where it was.
+    package var drawnFrame: TextFrameType {
+        frame != .rectangle ? frame : properties.frameType ?? frame
+    }
 }

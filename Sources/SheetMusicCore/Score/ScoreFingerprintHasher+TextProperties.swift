@@ -13,7 +13,8 @@ extension FNV1a {
     }
 
     /// Five consecutive tags per carrier: lyric 85...89, rehearsal mark 90...94,
-    /// staff/system text 95...99, harmony 100...104. Previous occupants end at note placement's tag 84.
+    /// staff/system text 95...99, harmony 100...104, tempo 106...110 (tempo's color is 105).
+    /// Previous occupants end at note placement's tag 84.
     /// Nil emits nothing, including no presence byte: scores without overrides retain their committed hashes.
     /// Explicit empty strings, zero sizes/styles/padding and frame .none are occupants, not inheritance.
     mutating func combineOccupied(_ properties: TextProperties, firstTag: Int) {
@@ -37,5 +38,16 @@ extension FNV1a {
             combine(firstTag + 4)
             combine(framePadding)
         }
+    }
+
+    /// A color alone, for a carrier whose visibility and placement no command writes — the tempo marking.
+    /// Same bytes as the color half of `combineOccupied(_:colorTag:placementTag:)`, and the same nil rule.
+    mutating func combineOccupiedColor(_ color: ScoreColor?, tag: Int) {
+        guard let color else { return }
+        combine(tag)
+        combine(color.red)
+        combine(color.green)
+        combine(color.blue)
+        combine(color.alpha)
     }
 }

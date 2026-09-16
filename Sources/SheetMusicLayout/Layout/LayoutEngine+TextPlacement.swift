@@ -43,18 +43,33 @@ extension LayoutEngine {
         let origin = placedTextOrigin(
             text: lyric.text, role: .lyrics, properties: lyric.elementProperties,
             style: style, x: x, lineGeometry: lineGeometry, metrics: metrics,
-            font: TextInkGeometry.font(for: .lyricsOdd, metrics: metrics), center: true,
+            font: TextInkGeometry.font(for: .lyricsOdd, overrides: lyric.properties, metrics: metrics), center: true,
         )
         let row = side == .above ? verse - maxAboveVerse : verse
         return CGPoint(x: origin.x, y: origin.y + CGFloat(row) * metrics.sp * lyricVerseStrideInSpatiums)
     }
 
     static func lyricAnchorCorrectionY(lyric: Lyric, metrics: StaffMetrics) -> CGFloat {
-        let font = TextInkGeometry.font(for: .lyricsOdd, metrics: metrics)
+        let font = TextInkGeometry.font(for: .lyricsOdd, overrides: lyric.properties, metrics: metrics)
         let provider = FontMetrics.provider
         let extra = TextInkGeometry.typographicSize(text: lyric.text, font: font).height
             - provider.ascent(font: font) - provider.descent(font: font)
-        return CGFloat(lyric.elementProperties.offset?.y ?? 0) * metrics.sp + extra / 2
+        let correction = CGFloat(lyric.elementProperties.offset?.y ?? 0) * metrics.sp + extra / 2
+        guard lyric.properties.hasFontOverride else { return correction }
+        // Not the row's displacement either, so a caret recovering the row takes it out with the rest.
+        return correction + lyricCenterShift(properties: lyric.properties, metrics: metrics)
+    }
+
+    /// How far below the lyric row's center a syllable's center sits because of its own font. The syllable shares
+    /// the row's BASELINE and centers its (ascent − descent) band on it, so a taller font raises the center.
+    /// Zero, without any arithmetic, when `properties` carries no face, size or style override.
+    static func lyricCenterShift(properties: TextProperties, metrics: StaffMetrics) -> CGFloat {
+        guard properties.hasFontOverride else { return 0 }
+        let provider = FontMetrics.provider
+        let row = TextInkGeometry.font(for: .lyricsOdd, metrics: metrics)
+        let own = TextInkGeometry.font(for: .lyricsOdd, overrides: properties, metrics: metrics)
+        return (provider.ascent(font: row) - provider.descent(font: row)) / 2
+            - (provider.ascent(font: own) - provider.descent(font: own)) / 2
     }
 
     static func harmonyPlacementRole(_ harmony: Harmony) -> TextPlacementRole {

@@ -1,6 +1,7 @@
 import SheetMusicFoundation
 
-/// Planning for the four `ElementProperties` writes — color, placement, offset and auto-place.
+/// Planning for the four `ElementProperties` writes — color, placement, offset and auto-place — and for the
+/// tempo marking's font patch, which joined them for the same budget reason.
 ///
 /// Factored out of `ScoreEditSession+Planning`'s main switch for the reason that switch states about its own
 /// other folds: it sits at SwiftLint's body budget, and four `case let` arms with a no-op check each would put
@@ -29,6 +30,9 @@ extension ScoreEditSession {
             if let current = SetTextAutoplace.currentProperties(for: text, in: score),
                current.autoplace == autoplace { return nil }
             return SetTextAutoplace(text, autoplace: autoplace)
+        case let .setTempoFont(anchor, patch):
+            if let current = SetTempoFont.current(at: anchor, in: score), !patch.changes(current) { return nil }
+            return SetTempoFont(anchor: anchor, patch: patch)
         default:
             return nil
         }

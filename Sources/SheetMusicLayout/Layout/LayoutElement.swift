@@ -204,6 +204,11 @@ public enum LayoutElement: Sendable, Equatable {
     /// `<Swing>` marking and an instrument-change instruction are separate model elements that merely reach
     /// the page through this layout case, and a lane element positioned at a tick no chord starts (the
     /// `<location>`-shifted case `SystemLaneSlot` documents) has no voice element to name.
+    ///
+    /// `properties` is the text's authored font override — face, size and style only (`fontOverrides`); every
+    /// consumer resolves it against `style` through `TextInkGeometry.font(for:overrides:metrics:)`, so what
+    /// layout measures is what the renderers draw. Empty for swing and instrument-change text, which no command
+    /// writes a font to.
     case staffText(
         text: String,
         origin: CGPoint,
@@ -211,6 +216,7 @@ public enum LayoutElement: Sendable, Equatable {
         style: TextStyleType,
         anchor: VoiceElementID?,
         placement: TextPlacementMetadata? = nil,
+        properties: TextProperties = TextProperties(),
     )
     /// Pre-typeset chord symbol with a baked-in run list (text +
     /// SMuFL accidental glyphs) and total width. The placement
@@ -263,6 +269,9 @@ public enum LayoutElement: Sendable, Equatable {
     /// it is for, rather than a caller inferring it from where the element happens to have been filed.
     /// (The multi-measure-rest collapse is the one path where a layout measure is not one source bar, and it
     /// bypasses `placeMeasureElements` entirely, so no rehearsal mark is emitted through it.)
+    ///
+    /// `properties` is the mark's authored font override (face, size, style), measured and drawn like
+    /// `.staffText`'s. The frame it is boxed in is already resolved into `frame`.
     case rehearsalMark(
         text: String,
         origin: CGPoint,
@@ -270,6 +279,7 @@ public enum LayoutElement: Sendable, Equatable {
         color: ScoreColor?,
         measureIndex: Int,
         placement: TextPlacementMetadata? = nil,
+        properties: TextProperties = TextProperties(),
     )
     /// Navigation owned by the first drawn staff's measure list, in the input score's coordinates.
     /// Same-origin jumps retain distinct identities. At overlapping ink, only the first is
@@ -425,20 +435,29 @@ public enum LayoutElement: Sendable, Equatable {
     public enum TextMarkKind: Sendable, Equatable {
         /// The chord with notes accepted by `SetDynamic`, not the marking slot.
         case dynamic(anchor: VoiceElementID?)
-        /// The timed element accepted by `SetTempo`, or nil when the lane tick has no onset.
-        case tempo(anchor: VoiceElementID?)
+        /// The timed element accepted by `SetTempo`, or nil when the lane tick has no onset. `color` is the
+        /// marking's author color (`nil` = default ink) and `properties` its font override (face, size, style),
+        /// which sizes the number and the metronome glyph together.
+        case tempo(
+            anchor: VoiceElementID?,
+            color: ScoreColor? = nil,
+            properties: TextProperties = TextProperties(),
+        )
         /// Lyric syllable. Carries the author-supplied color
         /// (`<Lyrics><color>`) from `Lyric.elementProperties.color`
         /// and the lyric-array index used as its verse. `anchor`
         /// identifies the chord that owns the syllable so render-only
         /// consumers can address it without mutating the score model.
-        /// `nil` color = default ink. Dynamics / tempo inherit their
-        /// style color and don't carry a per-element override here.
+        /// `nil` color = default ink. Dynamics inherit their style
+        /// color and don't carry a per-element override here.
+        /// `properties` is the syllable's font override (face, size, style); without one, spacing keeps its
+        /// long-standing measurement (`LayoutEngine.lyricsTextWidth`).
         case lyrics(
             color: ScoreColor? = nil,
             verse: Int = 0,
             anchor: VoiceElementID? = nil,
             placement: TextPlacementMetadata? = nil,
+            properties: TextProperties = TextProperties(),
         )
     }
 }

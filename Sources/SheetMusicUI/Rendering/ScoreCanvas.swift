@@ -246,15 +246,18 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .textMark(.tempo, text, p):
+        case let .textMark(.tempo(_, tempoColor, properties), text, p):
             TextMarkRenderer.drawTempo(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics,
+                origin: shift(p), properties: properties,
+                color: tempoColor.map { Color(scoreColor: $0) } ?? .primary,
+                metrics: metrics,
             )
-        case let .textMark(.lyrics(lyricColor, _, _, _), text, p):
+        case let .textMark(.lyrics(lyricColor, _, _, _, properties), text, p):
             TextMarkRenderer.drawLyric(
                 context: &context, text: text,
                 origin: shift(p),
+                properties: properties,
                 color: lyricColor.map { Color(scoreColor: $0) } ?? .primary,
                 metrics: metrics,
             )
@@ -362,10 +365,11 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, kind: kind, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .rehearsalMark(text, p, frame, color, _, _):
+        case let .rehearsalMark(text, p, frame, color, _, _, properties):
             RehearsalMarkRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p), frame: frame, color: color,
+                properties: properties,
                 metrics: metrics,
             )
         case let .jump(text, p, _):
@@ -383,12 +387,13 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .staffText(text, p, color, style, _, _):
+        case let .staffText(text, p, color, style, _, _, properties):
             StaffTextRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p),
                 color: color,
                 style: style,
+                properties: properties,
                 metrics: metrics,
             )
         case let .harmony(lh):

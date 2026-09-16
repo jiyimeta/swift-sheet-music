@@ -76,7 +76,7 @@ import Testing
             case .transposeRange, .setAccidentalsInRange, .respellRange:
                 .preserved
             // Text and part-level value writes.
-            case .setTextVisible, .setTextFont, .setLyricSyllables, .setLyricVerse,
+            case .setTextVisible, .setTextFont, .setTempoFont, .setLyricSyllables, .setLyricVerse,
                  .setPartNames, .setDrumsetEntry:
                 .preserved
             // The two rows P3 added to the table.

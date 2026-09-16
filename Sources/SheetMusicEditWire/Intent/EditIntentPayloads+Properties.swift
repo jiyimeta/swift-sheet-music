@@ -7,16 +7,19 @@ import Wirelet
 // Every field is mandatory. Presence is UInt8 (zero = absent, any nonzero = present).
 // When absent, writers emit a zero-valued placeholder and readers ignore it.
 
-/// Color supports text and individual notes only. Case indices are persistent: 0 text, 1 note.
+/// Color supports text, individual notes and tempo markings. Case indices are persistent and append-only:
+/// 0 text, 1 note, 2 tempo (the anchor `SetTempo` addresses it by).
 @WireFormatChoice
 public enum ElementColorTargetWire {
     case text(ScoreTextIDWire)
     case note(NoteIDWire)
+    case tempo(VoiceElementIDWire)
 
     public init(from target: SetElementColor.Target) {
         switch target {
         case let .text(id): self = .text(ScoreTextIDWire(from: id))
         case let .note(id): self = .note(NoteIDWire(from: id))
+        case let .tempo(anchor): self = .tempo(VoiceElementIDWire(from: anchor))
         }
     }
 
@@ -24,6 +27,7 @@ public enum ElementColorTargetWire {
         switch self {
         case let .text(id): .text(id.decoded())
         case let .note(id): .note(id.decoded())
+        case let .tempo(anchor): .tempo(anchor: anchor.decoded())
         }
     }
 }

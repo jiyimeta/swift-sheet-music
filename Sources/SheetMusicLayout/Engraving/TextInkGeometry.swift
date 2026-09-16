@@ -75,22 +75,22 @@ public enum TextInkGeometry {
     /// but no painted ink, so callers must not substitute an anchor-sized fallback.
     public static func rects(for element: LayoutElement, metrics: StaffMetrics) -> [CGRect]? {
         switch element {
-        case let .textMark(.lyrics, text, origin):
+        case let .textMark(.lyrics(_, _, _, _, properties), text, origin):
             return rect(
                 text: text,
-                font: font(for: .lyricsOdd, metrics: metrics),
+                font: font(for: .lyricsOdd, overrides: properties, metrics: metrics),
                 origin: origin,
                 anchor: CGPoint(x: 0.5, y: 0.5),
             ).map { [$0] } ?? []
-        case let .staffText(text, origin, _, style, _, _):
+        case let .staffText(text, origin, _, style, _, _, properties):
             return rect(
                 text: text,
-                font: font(for: style, metrics: metrics),
+                font: font(for: style, overrides: properties, metrics: metrics),
                 origin: origin,
                 anchor: CGPoint(x: 0, y: 1),
             ).map { [$0] } ?? []
-        case let .rehearsalMark(text, origin, frame, _, _, _):
-            return rehearsalRects(text: text, origin: origin, frame: frame, metrics: metrics)
+        case let .rehearsalMark(text, origin, frame, _, _, _, properties):
+            return rehearsalRects(text: text, origin: origin, frame: frame, properties: properties, metrics: metrics)
         case let .harmony(harmony):
             return harmonyRects(harmony, metrics: metrics)
         default: return labelRects(for: element, metrics: metrics)
@@ -98,10 +98,11 @@ public enum TextInkGeometry {
     }
 
     private static func rehearsalRects(
-        text: String, origin: CGPoint, frame: RehearsalMark.FrameKind, metrics: StaffMetrics,
+        text: String, origin: CGPoint, frame: RehearsalMark.FrameKind, properties: TextProperties,
+        metrics: StaffMetrics,
     ) -> [CGRect] {
         guard !text.isEmpty else { return [] }
-        let font = font(for: .rehearsalMark, metrics: metrics)
+        let font = font(for: .rehearsalMark, overrides: properties, metrics: metrics)
         let pad = RehearsalMarkFrame.paddingSp(sp: metrics.sp)
         var result = rect(
             text: text,

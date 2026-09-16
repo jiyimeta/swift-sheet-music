@@ -1189,7 +1189,7 @@ extension LayoutEngine {
         for lyric in lyrics where !lyric.text.isEmpty {
             widest = max(
                 widest,
-                lyricsTextWidth(lyric.text, sp: metrics.sp),
+                lyricsTextWidth(lyric.text, properties: lyric.properties, metrics: metrics),
             )
         }
         return widest

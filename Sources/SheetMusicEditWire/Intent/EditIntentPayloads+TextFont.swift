@@ -24,6 +24,101 @@ public struct SetTextFontIntentWire {
 
     public init(text: ScoreTextID, patch: SetTextFont.Patch) {
         self.text = ScoreTextIDWire(from: text)
+        let fields = PatchWireFields(patch)
+        faceState = fields.faceState
+        face = fields.face
+        sizeState = fields.sizeState
+        size = fields.size
+        styleState = fields.styleState
+        style = fields.style
+        frameTypeState = fields.frameTypeState
+        frameType = fields.frameType
+        framePaddingState = fields.framePaddingState
+        framePadding = fields.framePadding
+    }
+
+    public func decoded() throws -> (text: ScoreTextID, patch: SetTextFont.Patch) {
+        let fields = PatchWireFields(
+            faceState: faceState, face: face, sizeState: sizeState, size: size, styleState: styleState,
+            style: style, frameTypeState: frameTypeState, frameType: frameType,
+            framePaddingState: framePaddingState, framePadding: framePadding,
+        )
+        return try (text.decoded(), fields.patch())
+    }
+}
+
+/// Intent 89. Tag 1 is the tempo's anchor — the chord or rest `SetTempo` addresses it by — and tags 2...11 are
+/// intent 78's patch fields, in the same order, states and placeholders.
+@WireFormat
+public struct SetTempoFontIntentWire {
+    public var anchor: VoiceElementIDWire
+    public var faceState: UInt8
+    public var face: String
+    public var sizeState: UInt8
+    public var size: Double
+    public var styleState: UInt8
+    public var style: Int64
+    public var frameTypeState: UInt8
+    public var frameType: UInt8
+    public var framePaddingState: UInt8
+    public var framePadding: Double
+
+    public init(anchor: VoiceElementID, patch: SetTextFont.Patch) {
+        self.anchor = VoiceElementIDWire(from: anchor)
+        let fields = PatchWireFields(patch)
+        faceState = fields.faceState
+        face = fields.face
+        sizeState = fields.sizeState
+        size = fields.size
+        styleState = fields.styleState
+        style = fields.style
+        frameTypeState = fields.frameTypeState
+        frameType = fields.frameType
+        framePaddingState = fields.framePaddingState
+        framePadding = fields.framePadding
+    }
+
+    public func decoded() throws -> (anchor: VoiceElementID, patch: SetTextFont.Patch) {
+        let fields = PatchWireFields(
+            faceState: faceState, face: face, sizeState: sizeState, size: size, styleState: styleState,
+            style: style, frameTypeState: frameTypeState, frameType: frameType,
+            framePaddingState: framePaddingState, framePadding: framePadding,
+        )
+        return try (anchor.decoded(), fields.patch())
+    }
+}
+
+/// The ten flattened patch fields both font payloads carry, encoded and decoded in one place so the two
+/// intents cannot drift apart on a state or frame value.
+private struct PatchWireFields {
+    var faceState: UInt8
+    var face: String
+    var sizeState: UInt8
+    var size: Double
+    var styleState: UInt8
+    var style: Int64
+    var frameTypeState: UInt8
+    var frameType: UInt8
+    var framePaddingState: UInt8
+    var framePadding: Double
+
+    init(
+        faceState: UInt8, face: String, sizeState: UInt8, size: Double, styleState: UInt8, style: Int64,
+        frameTypeState: UInt8, frameType: UInt8, framePaddingState: UInt8, framePadding: Double,
+    ) {
+        self.faceState = faceState
+        self.face = face
+        self.sizeState = sizeState
+        self.size = size
+        self.styleState = styleState
+        self.style = style
+        self.frameTypeState = frameTypeState
+        self.frameType = frameType
+        self.framePaddingState = framePaddingState
+        self.framePadding = framePadding
+    }
+
+    init(_ patch: SetTextFont.Patch) {
         faceState = patch.face.wireState
         face = patch.face.wireValue ?? ""
         sizeState = patch.size.wireState
@@ -40,8 +135,8 @@ public struct SetTextFontIntentWire {
         framePadding = patch.framePadding.wireValue ?? 0
     }
 
-    public func decoded() throws -> (text: ScoreTextID, patch: SetTextFont.Patch) {
-        let patch = try SetTextFont.Patch(
+    func patch() throws -> SetTextFont.Patch {
+        try SetTextFont.Patch(
             face: update(faceState) { face },
             size: update(sizeState) { size },
             style: update(styleState) {
@@ -58,7 +153,6 @@ public struct SetTextFontIntentWire {
             },
             framePadding: update(framePaddingState) { framePadding },
         )
-        return (text.decoded(), patch)
     }
 
     private func update<Value: Sendable & Equatable>(

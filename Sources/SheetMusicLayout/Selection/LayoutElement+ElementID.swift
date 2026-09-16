@@ -17,7 +17,7 @@ extension LayoutElement {
             return measureIndex.map { .barLine(measureIndex: $0, role: role) }
         case let .textMark(.dynamic(anchor), _, _):
             return anchor.map { .dynamic(anchor: $0) }
-        case let .textMark(.tempo(anchor), _, _):
+        case let .textMark(.tempo(anchor, _, _), _, _):
             return anchor.map { .tempo(anchor: $0) }
         case let .fermata(_, _, anchor):
             return anchor.map { .fermata(anchor: $0) }

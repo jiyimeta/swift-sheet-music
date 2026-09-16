@@ -1014,7 +1014,7 @@ extension LayoutEngine {
                         guard lyric.visible || options.showsInvisibleElements
                         else {
                             let textWidth = Self.lyricsTextWidth(
-                                lyric.text, sp: metrics.sp,
+                                lyric.text, properties: lyric.properties, metrics: metrics,
                             )
                             previousLyric[row] = LyricTrail(
                                 centerX: origin.x,
@@ -1038,6 +1038,7 @@ extension LayoutEngine {
                                 verse: verseIdx,
                                 anchor: lyricAnchor,
                                 placement: placement,
+                                properties: lyric.properties.fontOverrides,
                             ),
                             text: lyric.text,
                             origin: origin,
@@ -1048,7 +1049,7 @@ extension LayoutEngine {
                             invisibleOut.append(lyricElement)
                         }
                         let textWidth = Self.lyricsTextWidth(
-                            lyric.text, sp: metrics.sp,
+                            lyric.text, properties: lyric.properties, metrics: metrics,
                         )
                         // Hyphens between this syllable and the
                         // previous one in the same verse. Only the
@@ -1115,6 +1116,7 @@ extension LayoutEngine {
                             emitMelismaLine(
                                 chordX: origin.x,
                                 lyricText: lyric.text,
+                                lyricProperties: lyric.properties,
                                 lyricTicks: lyric.ticks,
                                 lyricsY: melismaLineY,
                                 tickCursor: tickCursor,
@@ -2014,11 +2016,17 @@ extension LayoutEngine {
                 // `t.beatGlyph` is the marking's beat note as Bravura "Individual notes" glyphs (e.g. a quarter
                 // U+E1D5, or a dotted quarter U+E1D5 U+E1E7). Renderers split the string into Bravura-glyph and
                 // Edwin-text runs via `MusicTextRuns.runs`.
+                // Color and font ride along for the renderers. Neither moves the origin, which is a fixed offset
+                // from the staff rather than a measured one.
                 let element = LayoutElement.textMark(
-                    kind: .tempo(anchor: systemLaneAnchor(
-                        atTick: tick, in: measure, staff: staffAddress,
-                        measureIndex: measureIndex, measureDuration: measureDuration, division: division,
-                    )),
+                    kind: .tempo(
+                        anchor: systemLaneAnchor(
+                            atTick: tick, in: measure, staff: staffAddress,
+                            measureIndex: measureIndex, measureDuration: measureDuration, division: division,
+                        ),
+                        color: t.elementProperties.color,
+                        properties: t.properties.fontOverrides,
+                    ),
                     text: "\(t.beatGlyph) = \(value)",
                     origin: CGPoint(
                         x: xAtTick
@@ -2037,7 +2045,8 @@ extension LayoutEngine {
                     origin: placedTextOrigin(
                         text: st.text, role: role, properties: st.elementProperties,
                         style: textPlacementStyle, x: xAtTick, lineGeometry: lineGeometry, metrics: metrics,
-                        font: TextInkGeometry.font(for: st.styleType, metrics: metrics), center: false,
+                        font: TextInkGeometry.font(for: st.styleType, overrides: st.properties, metrics: metrics),
+                        center: false,
                     ),
                     color: st.color,
                     style: st.styleType,
@@ -2050,6 +2059,7 @@ extension LayoutEngine {
                         division: division,
                     ),
                     placement: TextPlacementMetadata(side: side, autoplace: st.elementProperties.autoplace ?? true),
+                    properties: st.properties.fontOverrides,
                 )
                 if st.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .swing(s):
@@ -2101,13 +2111,14 @@ extension LayoutEngine {
                     origin: placedTextOrigin(
                         text: rm.text, role: .rehearsalMark, properties: rm.elementProperties,
                         style: textPlacementStyle, x: originX, lineGeometry: lineGeometry, metrics: metrics,
-                        font: TextInkGeometry.font(for: .rehearsalMark, metrics: metrics), center: false,
-                        padding: RehearsalMarkFrame.paddingSp(sp: metrics.sp),
+                        font: TextInkGeometry.font(for: .rehearsalMark, overrides: rm.properties, metrics: metrics),
+                        center: false, padding: RehearsalMarkFrame.paddingSp(sp: metrics.sp),
                     ),
-                    frame: rm.frame,
+                    frame: rm.drawnFrame,
                     color: rm.color,
                     measureIndex: measureIndex,
                     placement: TextPlacementMetadata(side: side, autoplace: rm.elementProperties.autoplace ?? true),
+                    properties: rm.properties.fontOverrides,
                 )
                 if rm.visible {
                     out.append(rehearsalElement)
