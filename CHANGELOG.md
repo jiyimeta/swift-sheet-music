@@ -20,6 +20,13 @@ and this project adheres to
   `sdkmanager tools` now exits on `Failed to find package 'tools'` and takes the whole job down before a single
   Swift file is compiled. Both workflows ask for `platform-tools` alone; nothing here used the legacy SDK Tools.
 
+- **`EditSessionReplayPropertiesTest` replays the whole properties chain again.** The properties-inspector
+  project grew `ReplayChain.properties` from eleven steps to seventeen and re-recorded its assets, but the
+  device-side `EXPECTED_STEP_COUNT` stayed at eleven, so the instrumented run failed on the golden count
+  (`expected:<12> but was:<18>`) — an emulator run was the only thing that ever read that constant. A new host
+  gate in `EditReplayGoldenTests` reads each Kotlin replay test's constant out of its source and compares it
+  with the chain's step count, so the next chain to grow fails in `swift test` rather than on a device.
+
 ## [3.3.0] - 2026-09-15
 
 ### Added

@@ -51,15 +51,17 @@
     struct EditReplayGoldenTests {
         private static let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
-        /// `Android/SheetMusicAndroid/src/androidTest/assets/<chain.androidAssetDir>/`, resolved via `#filePath` so
-        /// it is correct regardless of the process's current directory — unlike a path relative to wherever
-        /// `swift test` happens to have been invoked from.
+        /// The package root, resolved via `#filePath` so every path below is correct regardless of the process's
+        /// current directory — unlike a path relative to wherever `swift test` happens to have been invoked from.
+        fileprivate static let packageRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // AndroidJNI
+            .deletingLastPathComponent() // SheetMusicTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // package root
+
+        /// `Android/SheetMusicAndroid/src/androidTest/assets/<chain.androidAssetDir>/`.
         private func assetsDir(for chain: ReplayChain) -> URL {
-            URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent() // AndroidJNI
-                .deletingLastPathComponent() // SheetMusicTests
-                .deletingLastPathComponent() // Tests
-                .deletingLastPathComponent() // package root
+            Self.packageRoot
                 .appendingPathComponent("Android/SheetMusicAndroid/src/androidTest/assets")
                 .appendingPathComponent(chain.androidAssetDir)
         }
@@ -179,6 +181,40 @@
             #expect(
                 committedFixture == liveFixtureData,
                 "\(chain.androidAssetDir)/fixture.mscx drifted from the live encoding of the chain's fixture",
+            )
+        }
+    }
+
+    /// The device-side step counts, checked on the host.
+    ///
+    /// Each Kotlin replay test hard-codes `EXPECTED_STEP_COUNT` so a truncated `goldens.txt` fails with a count
+    /// mismatch instead of silently replaying fewer steps than its chain has. That constant is maintained by hand,
+    /// and until this gate the only thing that ever read it was an emulator run in the Android workflow: when the
+    /// properties-inspector project grew `ReplayChain.properties` from eleven steps to seventeen and re-recorded its
+    /// assets, `EditSessionReplayPropertiesTest.kt` went on asserting twelve goldens against the eighteen this suite
+    /// had just written, and the break surfaced on CI days later rather than in `swift test`.
+    ///
+    /// Deliberately reads the Kotlin source rather than holding a second copy of the number: that file is the only
+    /// place the device takes the count from, so anything else would just move the drift somewhere new.
+    extension EditReplayGoldenTests {
+        @Test("each Kotlin replay test's EXPECTED_STEP_COUNT tracks its chain", arguments: ReplayChain.all)
+        func kotlinStepCountTracksChain(chain: ReplayChain) throws {
+            let kotlinDir = Self.packageRoot.appendingPathComponent(
+                "Android/SheetMusicAndroid/src/androidTest/kotlin/io/github/jiyimeta/sheetmusic",
+            )
+            let path = kotlinDir.appendingPathComponent(chain.androidTestFileName)
+            let source = try String(contentsOf: path, encoding: .utf8)
+            let marker = "EXPECTED_STEP_COUNT = "
+            let range = try #require(
+                source.range(of: marker),
+                "\(chain.androidTestFileName) declares no \(marker.trimmingCharacters(in: .whitespaces)) to check",
+            )
+            let digits = source[range.upperBound...].prefix { $0.isNumber }
+            let declared = try #require(Int(digits), "\(chain.androidTestFileName)'s count is not a number")
+            let actual = chain.steps(Self.staff).count
+            #expect(
+                declared == actual,
+                "\(chain.androidTestFileName) replays \(declared) steps but the chain has \(actual)",
             )
         }
     }
