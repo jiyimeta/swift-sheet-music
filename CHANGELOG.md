@@ -13,6 +13,13 @@ and this project adheres to
   Hosts can render an edited score away from the main actor, then swap it into an existing backend-backed engine
   without rebuilding its SoundFont, metronome, audio graph, or user mixer state when the channel layout is unchanged.
 
+### Fixed
+
+- **The Android workflows set up the SDK again.** `android-actions/setup-android`'s default package list still
+  names the obsolete `tools` package, and Google has since withdrawn it from the SDK repository, so
+  `sdkmanager tools` now exits on `Failed to find package 'tools'` and takes the whole job down before a single
+  Swift file is compiled. Both workflows ask for `platform-tools` alone; nothing here used the legacy SDK Tools.
+
 ## [3.3.0] - 2026-09-15
 
 ### Added

@@ -54,7 +54,16 @@ jobs:
           echo "/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin" >> "$GITHUB_PATH"
           swift --version
 
+      # `packages` overrides the action's default of `tools platform-tools`.
+      # Google withdrew the obsolete `tools` package from the SDK repository,
+      # so `sdkmanager tools` now fails with "Failed to find package 'tools'"
+      # and takes the whole job with it. Nothing here needs the legacy SDK
+      # Tools; `platform-tools` still supplies adb and friends. v4 ships the
+      # same default, so bumping the action does not make this `with:` block
+      # redundant — dropping it would bring the failure straight back.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install required NDK
         run: sdkmanager "ndk;27.3.13750724"
