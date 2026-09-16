@@ -156,3 +156,36 @@ public struct TupletIDWire {
         )
     }
 }
+
+// MARK: - GraceNoteID
+
+/// ```
+/// GraceNoteIDWire
+///   tag 1: parent                 VoiceElementIDWire
+///   tag 2: isAfter                bool, varint — `GraceNoteID.Side` has two cases, so a Bool is lossless
+///   tag 3: graceIndex             i32, zig-zag varint
+///   tag 4: noteIndexInGraceChord  i32, zig-zag varint
+/// ```
+@WireFormat
+public struct GraceNoteIDWire {
+    public var parent: VoiceElementIDWire
+    public var isAfter: Bool
+    public var graceIndex: Int32
+    public var noteIndexInGraceChord: Int32
+
+    public init(from value: GraceNoteID) {
+        parent = VoiceElementIDWire(from: value.parent)
+        isAfter = value.side == .after
+        graceIndex = Int32(value.graceIndex)
+        noteIndexInGraceChord = Int32(value.noteIndexInGraceChord)
+    }
+
+    public func decoded() -> GraceNoteID {
+        GraceNoteID(
+            parent: parent.decoded(),
+            side: isAfter ? .after : .before,
+            graceIndex: Int(graceIndex),
+            noteIndexInGraceChord: Int(noteIndexInGraceChord),
+        )
+    }
+}

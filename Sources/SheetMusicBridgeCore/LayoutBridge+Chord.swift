@@ -145,7 +145,7 @@ extension LayoutBridge {
     /// Apple `ScoreLayerBuilder` per-note `headColor`. Uncolored notes
     /// paint in the ambient color.
     ///
-    /// A selected note (`.note(note.noteID)` in `tint.ids`) is handled by a separate branch below —
+    /// A selected note (`note.selectionItem` in `tint.ids`) is handled by a separate branch below —
     /// **only the notehead and accidental glyphs take the tint**, never the parentheses or augmentation dots.
     /// This is not a simplification; it is `ScoreLayerBuilder+Chord.swift`'s own mechanism: `applySelection`
     /// recolors exactly the `CAShapeLayer`s a build pass `context.attach`ed to the item's ID, and `drawChord`
@@ -178,7 +178,9 @@ extension LayoutBridge {
         into out: inout [DrawCommand],
     ) {
         for note in notes {
-            let selectedArgb = LayoutBridge.tintColor(for: .note(note.noteID), tint: tint)
+            // `selectionItem` — a grace head (`encodeElement`'s `.graceChord` case reuses this path) is selected as
+            // `.graceNote`, never through its synthetic layout `noteID`.
+            let selectedArgb = LayoutBridge.tintColor(for: note.selectionItem, tint: tint)
             let authorArgb = honorColor ? note.color.flatMap(LayoutBridge.argb(from:)) : nil
 
             if let selectedArgb {

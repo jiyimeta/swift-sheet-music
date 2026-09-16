@@ -16,6 +16,7 @@ import Wirelet
 /// 3 = clef(ClefAnchorWire), see ClefAnchorCodec.swift
 /// 4 = text(ScoreTextIDWire), below
 /// 5 = element(ScoreElementIDWire), below
+/// 6 = graceNote(GraceNoteIDWire), see PathIDCodecs.swift
 ///
 /// ScoreTextIDWire — case indices matching ScoreTextID's declaration order:
 /// 0 = lyric(LyricTextIDWire)
@@ -62,6 +63,8 @@ public enum ScoreItemIDWire {
     case clef(ClefAnchorWire)
     case text(ScoreTextIDWire)
     case element(ScoreElementIDWire)
+    /// Appended as choice 6; the choices above keep their numbers.
+    case graceNote(GraceNoteIDWire)
 
     public init(from value: ScoreItemID) {
         switch value {
@@ -77,6 +80,8 @@ public enum ScoreItemIDWire {
             self = .text(ScoreTextIDWire(from: id))
         case let .element(id):
             self = .element(ScoreElementIDWire(from: id))
+        case let .graceNote(id):
+            self = .graceNote(GraceNoteIDWire(from: id))
         }
     }
 
@@ -88,6 +93,7 @@ public enum ScoreItemIDWire {
         case let .clef(wire): return .clef(wire.decoded())
         case let .text(wire): return .text(wire.decoded())
         case let .element(wire): return try .element(wire.decoded())
+        case let .graceNote(wire): return .graceNote(wire.decoded())
         }
     }
 }

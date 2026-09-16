@@ -62,6 +62,8 @@ extension Score {
             }
         case let .clef(anchor):
             return .item(.clef(anchor.withStaff(full)))
+        case let .graceNote(graceID):
+            return .item(.graceNote(graceID.withParent(graceID.parent.withStaff(full))))
         }
     }
 
@@ -196,6 +198,8 @@ extension Score {
             }
         case let .clef(anchor):
             return .item(.clef(anchor.withStaff(filteredStaff)))
+        case let .graceNote(graceID):
+            return .item(.graceNote(graceID.withParent(graceID.parent.withStaff(filteredStaff))))
         }
     }
 }

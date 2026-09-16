@@ -2,9 +2,11 @@ import SheetMusicFoundation
 
 /// A selectable score item — a specific notehead (`NoteID`), a
 /// rest (`RestID`), a tuplet bracket (`TupletID`), a clef
-/// (`ClefAnchor`), engraved text (`ScoreTextID`), or an engraved element (`ScoreElementID`).
+/// (`ClefAnchor`), engraved text (`ScoreTextID`), an engraved element (`ScoreElementID`), or one grace note
+/// (`GraceNoteID`).
 ///
-/// Produced by hit-testing and consumed by selection APIs.
+/// Produced by hit-testing and consumed by selection APIs. Cases are appended, never reordered: the declaration
+/// order is `ScoreItemIDWire`'s choice numbering.
 public enum ScoreItemID: Hashable, Sendable {
     case note(NoteID)
     case rest(RestID)
@@ -17,6 +19,9 @@ public enum ScoreItemID: Hashable, Sendable {
     case text(ScoreTextID)
     /// An engraved element addressed through its anchor, bar, or staff-owned list; see `ScoreElementID`.
     case element(ScoreElementID)
+    /// One note of a grace chord. The positional accessors below answer from the owning chord's slot, so a grace
+    /// selection sits on its parent's staff, bar, voice and element for every consumer that only asks those.
+    case graceNote(GraceNoteID)
 
     public var staff: StaffAddress {
         switch self {
@@ -34,6 +39,7 @@ public enum ScoreItemID: Hashable, Sendable {
                 ?? StaffAddress(partIndex: 0, staffIndexInPart: 0)
         case let .element(id):
             return id.staffIfAddressed ?? id.anchor?.staff ?? StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        case let .graceNote(id): return id.staff
         }
     }
 
@@ -48,6 +54,7 @@ public enum ScoreItemID: Hashable, Sendable {
         case let .text(id): return id.anchor?.measureIndex ?? 0
         case let .element(.jump(_, measureIndex, _)), let .element(.marker(_, measureIndex, _)): return measureIndex
         case let .element(id): return id.anchor?.measureIndex ?? id.measureIndexIfAddressedByBar ?? 0
+        case let .graceNote(id): return id.measureIndex
         }
     }
 
@@ -60,6 +67,7 @@ public enum ScoreItemID: Hashable, Sendable {
         case .clef(.staffDefault): return 0
         case let .text(id): return id.anchor?.voiceIndex ?? 0
         case let .element(id): return id.anchor?.voiceIndex ?? 0
+        case let .graceNote(id): return id.voiceIndex
         }
     }
 
@@ -82,6 +90,7 @@ public enum ScoreItemID: Hashable, Sendable {
         case .clef(.staffDefault): return 0
         case let .text(id): return id.anchor?.elementIndex ?? 0
         case let .element(id): return id.anchor?.elementIndex ?? 0
+        case let .graceNote(id): return id.elementIndex
         }
     }
 
@@ -94,6 +103,12 @@ public enum ScoreItemID: Hashable, Sendable {
     /// The engraved element this item names. Other items report `nil`.
     public var elementID: ScoreElementID? {
         guard case let .element(id) = self else { return nil }
+        return id
+    }
+
+    /// The grace note this item names. Other items report `nil`.
+    public var graceNoteID: GraceNoteID? {
+        guard case let .graceNote(id) = self else { return nil }
         return id
     }
 }
