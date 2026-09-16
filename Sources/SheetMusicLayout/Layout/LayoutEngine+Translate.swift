@@ -54,23 +54,7 @@ extension LayoutEngine {
             stemHidden,
             mag,
         ):
-            let shiftedNotes = notes.map {
-                LayoutChordNote(
-                    noteID: $0.noteID,
-                    step: $0.step,
-                    accidental: $0.accidental,
-                    origin: shift($0.origin),
-                    tieForward: $0.tieForward,
-                    tieBack: $0.tieBack,
-                    hasGlissando: $0.hasGlissando,
-                    headType: $0.headType,
-                    mirror: $0.mirror,
-                    isInvisible: $0.isInvisible,
-                    color: $0.color,
-                    accidentalBracket: $0.accidentalBracket,
-                    parentheses: $0.parentheses,
-                )
-            }
+            let shiftedNotes = notes.map { $0.moved(to: shift($0.origin)) }
             return .chord(
                 notes: shiftedNotes,
                 duration: dur,
@@ -224,23 +208,8 @@ extension LayoutEngine {
         case let .graceChord(
             notes, dur, stem, so, relX, slash, mag, vi,
         ):
-            let shiftedNotes = notes.map {
-                LayoutChordNote(
-                    noteID: $0.noteID,
-                    step: $0.step,
-                    accidental: $0.accidental,
-                    origin: shift($0.origin),
-                    tieForward: $0.tieForward,
-                    tieBack: $0.tieBack,
-                    hasGlissando: $0.hasGlissando,
-                    headType: $0.headType,
-                    mirror: $0.mirror,
-                    isInvisible: $0.isInvisible,
-                    color: $0.color,
-                    accidentalBracket: $0.accidentalBracket,
-                    parentheses: $0.parentheses,
-                )
-            }
+            // `moved(to:)` rather than a field-by-field rebuild: a grace head's `graceNoteID` must survive the shift.
+            let shiftedNotes = notes.map { $0.moved(to: shift($0.origin)) }
             return .graceChord(
                 notes: shiftedNotes,
                 duration: dur,

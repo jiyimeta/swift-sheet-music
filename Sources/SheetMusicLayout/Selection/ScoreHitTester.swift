@@ -92,6 +92,7 @@ public struct ScoreHitTester: Sendable {
         case let .rest(id): return .rest(id)
         case let .tuplet(id): return .tuplet(id)
         case let .clef(anchor): return .clef(anchor)
+        case let .graceNote(id): return .graceNote(id)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
              .tie, .slur, .jump, .marker:
             return target.elementID.map(ScoreItemID.element)
@@ -204,27 +205,49 @@ public struct ScoreHitTester: Sendable {
 
     // MARK: - Notehead / Rest
 
+    /// Ordinary heads keep first-match order; a grace head overrides that only from inside its own `mag`-scaled
+    /// reach and when strictly nearer than every ordinary head that also claims the point. `ScoreHitTarget`'s ladder
+    /// doc has the reason. A measure without graces never enters the grace branch, so its answer is the first match
+    /// exactly as before graces could be hit at all.
     private func hitNote(
         measure: LayoutMeasure,
         base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
         let radius = sp * 1.2
         let radiusSquared = radius * radius
+        var firstNote: NoteID?
+        var nearestNoteDistanceSquared = CGFloat.infinity
+        var nearestGrace: (id: GraceNoteID, distanceSquared: CGFloat)?
+        func distanceSquared(_ note: LayoutChordNote, stem: StemDirection, sp: CGFloat) -> CGFloat {
+            let dx = point.x - (base.x + note.origin.x + note.mirrorDx(stem: stem, sp: sp))
+            let dy = point.y - (base.y + note.origin.y)
+            return dx * dx + dy * dy
+        }
         for el in measure.elements {
-            guard case let .chord(notes, _, stem, _, _, _, _, _, _, _, _) = el
-            else { continue }
-            for n in notes {
-                let mirrorDx = n.mirrorDx(stem: stem, sp: sp)
-                let ax = base.x + n.origin.x + mirrorDx
-                let ay = base.y + n.origin.y
-                let dx = point.x - ax
-                let dy = point.y - ay
-                if dx * dx + dy * dy <= radiusSquared {
-                    return .note(n.noteID)
+            switch el {
+            case let .chord(notes, _, stem, _, _, _, _, _, _, _, _):
+                for n in notes {
+                    let d2 = distanceSquared(n, stem: stem, sp: sp)
+                    guard d2 <= radiusSquared else { continue }
+                    if firstNote == nil { firstNote = n.noteID }
+                    nearestNoteDistanceSquared = min(nearestNoteDistanceSquared, d2)
                 }
+            case let .graceChord(notes, _, stem, _, _, _, mag, _):
+                let graceRadiusSquared = radiusSquared * mag * mag
+                for n in notes {
+                    guard let id = n.graceNoteID else { continue }
+                    let d2 = distanceSquared(n, stem: stem, sp: sp * mag)
+                    guard d2 <= graceRadiusSquared, d2 < nearestGrace?.distanceSquared ?? .infinity else { continue }
+                    nearestGrace = (id, d2)
+                }
+            default:
+                continue
             }
         }
-        return nil
+        if let nearestGrace, nearestGrace.distanceSquared < nearestNoteDistanceSquared {
+            return .graceNote(nearestGrace.id)
+        }
+        return firstNote.map(ScoreHitTarget.note)
     }
 
     private func hitRest(

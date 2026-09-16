@@ -187,5 +187,8 @@ private func editHitItem(from item: ScoreItemID, in score: Score) -> EditHitItem
         return nil
     case .element:
         return nil
+    case .graceNote:
+        // `EditHitItem` has no field for a grace side or index; the web editor has no grace selection yet.
+        return nil
     }
 }

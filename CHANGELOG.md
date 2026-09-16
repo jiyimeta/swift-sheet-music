@@ -34,6 +34,36 @@ and this project adheres to
   Hosts can render an edited score away from the main actor, then swap it into an existing backend-backed engine
   without rebuilding its SoundFont, metronome, audio graph, or user mixer state when the channel layout is unchanged.
 
+- **Breaking: a grace note is a selectable item.** Nothing could name one before — a grace chord is not a voice
+  element, so no `NoteID` reaches it — which left a click on a grace head selecting the chord beside it and the arrow
+  keys walking straight past it. New:
+  - `GraceNoteID` (`parent: VoiceElementID`, `side: .before / .after`, `graceIndex`, `noteIndexInGraceChord`), with
+    `staff` / `measureIndex` / `voiceIndex` / `elementIndex` answered from the parent, `Score[graceNoteID]`,
+    `Score.graceChord(at:)`, `Chord.graceNotes(on:)`, and `Score.eid(at:)` / `Score.graceNotePosition(of:)` for
+    following one across an edit.
+  - **`ScoreItemID.graceNote` and `ScoreHitTarget.graceNote` — both appended cases, so an exhaustive `switch` over
+    either in a host stops compiling.** `ScoreItemID.graceNoteID` reads the payload. `ScoreItemIDWire` gains choice
+    6 (`GraceNoteIDWire`); choices 0–5 are unchanged.
+  - `LayoutChordNote.graceNoteID` (set on every head of a `.graceChord` layout element) and
+    `LayoutChordNote.selectionItem`, which is `.graceNote` for a grace head and `.note(noteID)` otherwise. A grace
+    head's `noteID` stays the synthetic layout key it was. `LayoutChordNote.moved(to:)` shifts a head without
+    dropping the identity; the layout's translate pass and the three renderers now use it.
+  - The notehead rung of `ScoreHitTester` tests grace heads (reach scaled by their `mag`): a grace head wins over
+    an ordinary head only when strictly nearer, so a measure without graces answers exactly as before.
+    `hitTest(at:)`, `itemID(at:)`, `selectableItem` and `LayoutDocument.editingHitTest` all pass the grace through.
+  - The CALayer path registers a grace head's layers — and the Android draw program decides its tint — by
+    `selectionItem`, so a selected grace tints alone and a selected note never tints its graces.
+  - `LayoutDocument.cursorFrame(for:in:)` and `editingCaretRect(for:in:minimumWidth:)` frame a grace note's own
+    column instead of answering `nil`.
+  - The filtered-staff re-addressing (`engineCursorForFilteredTap`, `translateCursorForHiddenStaves`,
+    `ScoreEditingAddressMap`) re-stamps a grace note's parent onto the other staff numbering.
+  - `ElementNavigator.nextChordRest(after:in:)` / `previousChordRest(before:in:)`: MuseScore's plain-arrow walk
+    (`Navigation::nextChordRest` / `prevChordRest` with `skipGrace = false`). Within a voice it runs
+    `… chord → its after-graces → next chord's before-graces → next chord`, crosses barlines like
+    `nextTimedElement`, and lands on a chord's note 0 — the representative the selection vocabulary already uses.
+  The wasm bridge's `EditHitItem` has no grace fields yet, so a web tap on a grace head reports no item. Editing a
+  single grace note is out of scope; `SetGraceNotes` still replaces a chord's lists wholesale.
+
 ### Fixed
 
 - **Copying the first note of a bar no longer takes the bar's clef with it.** A range copy carried every

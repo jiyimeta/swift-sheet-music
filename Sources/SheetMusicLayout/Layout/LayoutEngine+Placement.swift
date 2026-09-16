@@ -2285,6 +2285,7 @@ extension LayoutEngine {
                 color: n.color,
                 accidentalBracket: n.accidentalBracket,
                 parentheses: n.parentheses,
+                graceNoteID: n.graceNoteID,
             )
         }
     }
@@ -2292,8 +2293,9 @@ extension LayoutEngine {
     /// Build `LayoutChordNote` values for a single `GraceChord`.
     /// Mirrors the inline notehead construction used for main chords
     /// but takes `graceIdx` / `isAfter` so synthesized `NoteID`s
-    /// don't collide with the parent chord's notes — important for
-    /// hit-testing and the chord-origin lookup.
+    /// don't collide with the parent chord's notes, and so each head
+    /// carries the real `GraceNoteID` hit testing, selection tint and
+    /// caret geometry key it by (`LayoutChordNote.selectionItem`).
     fileprivate static func makeGraceLayoutNotes( // swiftlint:disable:this function_parameter_count
         grace: GraceChord,
         atX x: CGFloat,
@@ -2350,6 +2352,15 @@ extension LayoutEngine {
                 color: note.elementProperties.color,
                 accidentalBracket: note.accidentalBracket,
                 parentheses: note.parentheses,
+                graceNoteID: GraceNoteID(
+                    parent: VoiceElementID(
+                        staff: staffAddress, measureIndex: measureIndex,
+                        voiceIndex: voiceIdx, elementIndex: voiceElemIdx,
+                    ),
+                    side: isAfter ? .after : .before,
+                    graceIndex: graceIdx,
+                    noteIndexInGraceChord: noteIdx,
+                ),
             )
         }
     }

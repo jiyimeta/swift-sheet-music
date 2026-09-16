@@ -481,6 +481,13 @@ public struct LayoutChordNote: Sendable, Equatable {
     /// none. Carried from `Note.parentheses` and consumed by all three
     /// render paths via `NoteheadParenthesisGlyph.glyphs`.
     public let parentheses: NoteParentheses
+    /// The grace note this head draws, for a head inside a `.graceChord`; `nil` for every ordinary chord note.
+    ///
+    /// A grace head's `noteID` is only a layout-unique key — the parent's slot with a synthetic
+    /// `noteIndexInChord` of `1000 + grace * 100 + note` (before) or `2000 + …` (after) — and names nothing in the
+    /// score. This is the identity a selection, a hit test and a tint registration use instead; see
+    /// `selectionItem`. Anything that rebuilds a `LayoutChordNote` must carry it across.
+    public let graceNoteID: GraceNoteID?
 
     public init(
         noteID: NoteID,
@@ -496,6 +503,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         color: ScoreColor? = nil,
         accidentalBracket: AccidentalBracket = .none,
         parentheses: NoteParentheses = .none,
+        graceNoteID: GraceNoteID? = nil,
     ) {
         self.noteID = noteID
         self.step = step
@@ -510,6 +518,25 @@ public struct LayoutChordNote: Sendable, Equatable {
         self.color = color
         self.accidentalBracket = accidentalBracket
         self.parentheses = parentheses
+        self.graceNoteID = graceNoteID
+    }
+
+    /// The selectable item this head stands for: `.graceNote` for a grace head, `.note(noteID)` otherwise. The one
+    /// key hit testing, selection tint and caret geometry share, so a selected note never lights up its graces and
+    /// a selected grace never lights up its parent.
+    public var selectionItem: ScoreItemID {
+        graceNoteID.map(ScoreItemID.graceNote) ?? .note(noteID)
+    }
+
+    /// This head at `origin`, every other field — `graceNoteID` included — unchanged. For the passes that shift
+    /// laid-out heads between coordinate spaces.
+    public func moved(to origin: CGPoint) -> LayoutChordNote {
+        LayoutChordNote(
+            noteID: noteID, step: step, accidental: accidental, origin: origin,
+            tieForward: tieForward, tieBack: tieBack, hasGlissando: hasGlissando, headType: headType,
+            mirror: mirror, isInvisible: isInvisible, color: color,
+            accidentalBracket: accidentalBracket, parentheses: parentheses, graceNoteID: graceNoteID,
+        )
     }
 
     /// Horizontal offset from `origin.x` to the visual center of the

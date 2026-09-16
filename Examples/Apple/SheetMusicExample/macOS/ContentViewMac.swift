@@ -3277,9 +3277,9 @@
                 selection = .single(.tuplet(id))
             case let .clef(anchor):
                 selection = .single(.clef(anchor))
-            case .text, .element:
-                // The original-PDF geometry indexes notes and rests; it carries no engraved text or
-                // marking, so nothing here can produce one.
+            case .text, .element, .graceNote:
+                // The original-PDF geometry indexes notes and rests; it carries no engraved text, marking or
+                // grace note, so nothing here can produce one.
                 selection = .single(item)
             }
         }
@@ -3414,9 +3414,9 @@
                 selection = .none
                 return
             case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker:
-                // An engraved marking selects itself rather than the chord it hangs from, so the renderer
-                // tints the marking. It takes no part in the note-range logic below.
+                 .articulation, .tie, .slur, .jump, .marker, .graceNote:
+                // An engraved marking or a grace note selects itself rather than the chord beside it, so the
+                // renderer tints just that. It takes no part in the note-range logic below.
                 selection = target.selectableItem.map { .single($0) } ?? .none
                 return
             }
@@ -3484,7 +3484,7 @@
                     kind: .rehearsalMark, at: anchor,
                     controller: controller, ending: lyricSession,
                 )
-            case .note, .rest, .stem, .flag, .beam, .tuplet, .clef,
+            case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
                  .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
                  .articulation, .tie, .slur, .jump, .marker:
                 return

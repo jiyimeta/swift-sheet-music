@@ -7,6 +7,10 @@ public enum SelectionExpansion {
     /// For non-tuplet IDs returns `[id]`; for a tuplet returns the tuplet ID itself plus every member chord/rest the
     /// bracket spans. Keeping the tuplet ID in the result lets a renderer tint the bracket / number, while the member
     /// IDs drive notehead / rest tinting through the same pipeline.
+    ///
+    /// A `.graceNote` expands to itself alone, and a `.note` never to the graces beside it: renderers key a grace
+    /// head by `LayoutChordNote.selectionItem`, so the two selections light disjoint heads. A tuplet's member notes
+    /// are its chords' own notes, so a selected tuplet does not tint its members' graces either.
     public static func expand(
         _ id: ScoreItemID, in score: Score,
     ) -> Set<ScoreItemID> {

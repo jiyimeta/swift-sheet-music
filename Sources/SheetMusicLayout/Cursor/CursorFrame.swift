@@ -363,9 +363,9 @@ extension LayoutDocument {
                     return p.x
                 }
             }
+        case let .graceNote(target): return graceNoteX(target, in: measure)
         case .tuplet, .clef, .text, .element:
-            // Playback cursor does not position on engraving selections
-            // outside noteheads and rests — these are
+            // Playback cursor does not position on engraving selections outside noteheads and rests — these are
             // display-only selection targets, not tick anchors.
             return nil
         }
