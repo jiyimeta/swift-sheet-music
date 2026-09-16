@@ -1,3 +1,5 @@
+/// The staff a single-staff fixture's key and time signature glyphs are drawn on, which their identity names.
+private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 #if os(macOS)
     import CoreGraphics
     @testable import SheetMusicCore
@@ -139,7 +141,7 @@
             #expect(Array(ScoreItemIDCodec.encode(note))[1] == 0)
             #expect(Array(ScoreItemIDCodec.encode(clef))[1] == 3)
             #expect(Array(ScoreItemIDCodec.encode(text))[1] == 4)
-            let element = ScoreItemID.element(.keySignature(measureIndex: 0))
+            let element = ScoreItemID.element(.keySignature(measureIndex: 0, staff: signatureStaff))
             #expect(Array(ScoreItemIDCodec.encode(element))[1] == 5)
             let rest = ScoreItemID.rest(RestID(
                 staff: EditingFixtures.staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 1,

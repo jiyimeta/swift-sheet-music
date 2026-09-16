@@ -41,9 +41,9 @@ enum ElementHitCommandChecks {
                 }
             }
             command = RemoveSpanner(at: anchor, kind: kind)
-        case let .keySignature(measureIndex):
+        case let .keySignature(measureIndex, _):
             command = SetKeySignature(measureIndex: measureIndex, concertKey: 3)
-        case let .timeSignature(measureIndex):
+        case let .timeSignature(measureIndex, _):
             command = SetTimeSignature(measureIndex: measureIndex, numerator: 3, denominator: 4)
         case let .barLine(measureIndex, role):
             let measure = MeasureRef(measureIndex: measureIndex)

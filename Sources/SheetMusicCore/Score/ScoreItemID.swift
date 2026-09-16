@@ -32,9 +32,8 @@ public enum ScoreItemID: Hashable, Sendable {
             // accessor means by it.
             return id.anchor?.staff
                 ?? StaffAddress(partIndex: 0, staffIndexInPart: 0)
-        case let .element(.jump(staff, _, _)), let .element(.marker(staff, _, _)): return staff
         case let .element(id):
-            return id.anchor?.staff ?? StaffAddress(partIndex: 0, staffIndexInPart: 0)
+            return id.staffIfAddressed ?? id.anchor?.staff ?? StaffAddress(partIndex: 0, staffIndexInPart: 0)
         }
     }
 
@@ -69,8 +68,9 @@ public enum ScoreItemID: Hashable, Sendable {
     /// clefs this is `0` (a positional approximation; the
     /// authoritative target is the `ClefAnchor` itself), and for a
     /// bar-addressed item likewise `0` (the authoritative target is the
-    /// bar index, which `measureIndex` answers exactly). Bar-addressed elements
-    /// also approximate staff with the top staff and voice with `0`.
+    /// bar index, which `measureIndex` answers exactly). A barline also
+    /// approximates staff with the top staff; a key or time signature carries
+    /// the staff of its selected glyph. Both approximate voice with `0`.
     /// Navigation identities retain their actual staff and measure, but approximate voice and element
     /// with `0`: their list index is not a voice slot.
     public var elementIndex: Int {

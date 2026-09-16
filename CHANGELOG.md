@@ -9,6 +9,19 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking: a key or time signature identity names the staff of the glyph that was selected.**
+  `ScoreElementID.keySignature` / `.timeSignature` and `ScoreHitTarget.keySignature` / `.timeSignature` are now
+  `(measureIndex:staff:)`, and `LayoutElement.keySignature` / `.timeSignature` carry an `identity: ScoreElementID?`
+  in place of `measureIndex: Int?`. One bar draws a signature on every staff, and every one of those glyphs used to
+  answer to the same bar address, so a click on one selected — and tinted — the whole column. Now a click selects
+  the glyph it landed on, as in MuseScore. The commands are unchanged: `SetKeySignature` and `SetTimeSignature`
+  still take only the bar, so identities that differ only in `staff` address the same edit
+  (`measureIndexIfAddressedByBar` still answers it). `ScoreElementID.staffIfAddressed` is new; `ScoreItemID.staff`
+  reads it. The filtered-score re-addressing (`engineCursorForFilteredTap`, `translateCursorForHiddenStaves`,
+  `ScoreEditingAddressMap`) re-stamps a signature's staff like any other staff-owned identity, and a barline is now
+  the only element that passes through with no staff. `ScoreElementIDWire` choices 5 and 6 carry
+  `(measureIndex, staff)` in place of a bare index; the bytes are a host↔bridge transport nothing persists.
+
 - **Line- and page-break badges are drawn as outlines.** `BreakIndicatorOverlay` (Apple) and the Compose
   `BreakIndicatorOverlay` drew a solid colored plate with a white glyph, and a page break used the filled `doc.fill`
   symbol; at the end of every broken measure that block pulled the eye away from the notation it annotates. Both

@@ -28,21 +28,26 @@ public enum ScoreElementID: Hashable, Sendable {
     /// the slot the volta actually occupies, including a noncanonical staff or a shifted element index.
     /// The slot's durable identifier is available through `Score.eid(at:)`.
     case spanner(anchor: VoiceElementID, kind: Spanner.Kind)
-    /// Transitional positional bar address for a key signature stored in `Voice.elements`.
-    /// `SetKeySignature` writes the leading signature run of voice zero on every pitched staff.
-    /// The identity deliberately omits staff and voice, which the command does not take.
+    /// Transitional positional bar address for a key signature stored in `Voice.elements`, on the staff whose
+    /// glyph was selected.
+    /// `SetKeySignature` writes the leading signature run of voice zero on every pitched staff, and takes only
+    /// `measureIndex`. `staff` is the SELECTION's: one bar draws a key signature on every staff, and a click on
+    /// one of them selects that one glyph (as in MuseScore) rather than lighting up the whole column. Two
+    /// identities differing only in `staff` therefore address the same command.
     /// Mid-bar keys, keys outside that run or voice, and unpitched-staff keys have no identity by design.
     /// Courtesy announcements and system-head restatements likewise do not name a new declaration.
     /// Each staff's declaration slot has its own durable identifier, available through `Score.eid(at:)`.
-    case keySignature(measureIndex: Int)
-    /// Transitional positional bar address for a time signature stored in `Voice.elements`.
-    /// Names the bar's meter for `SetTimeSignature`, not an individual declaration's voice slot.
+    case keySignature(measureIndex: Int, staff: StaffAddress)
+    /// Transitional positional bar address for a time signature stored in `Voice.elements`, on the staff whose
+    /// glyph was selected.
+    /// Names the bar's meter for `SetTimeSignature`, not an individual declaration's voice slot; `staff` is the
+    /// selection's, exactly as for `keySignature`, and the command does not read it.
     /// The command reads declarations anywhere in a bar and replaces existing meters in re-barred runs;
     /// it is not restricted to editing a leading signature prefix.
     /// `SetTimeSignature` re-bars the whole span governed by the meter: editing this glyph has wider
     /// consequences than its appearance suggests.
     /// Each declaration slot's durable identifier is available through `Score.eid(at:)`.
-    case timeSignature(measureIndex: Int)
+    case timeSignature(measureIndex: Int, staff: StaffAddress)
     /// Transitional positional bar address, with a role distinguishing explicit and synthesized barlines.
     /// An explicit barline occupies a `Voice.elements` slot; synthesized roles have no slot to name.
     /// Only the last explicit barline after voice zero's last chord or rest is reached by `SetBarLine`.
@@ -75,11 +80,21 @@ public enum ScoreElementID: Hashable, Sendable {
         }
     }
 
-    /// A staff-independent bar address, or `nil` for anchored and staff-owned navigation identities.
+    /// The bar a bar-addressed command takes, or `nil` for anchored and staff-owned navigation identities.
     public var measureIndexIfAddressedByBar: Int? {
         switch self {
-        case let .keySignature(index), let .timeSignature(index), let .barLine(index, _): return index
+        case let .keySignature(index, _), let .timeSignature(index, _), let .barLine(index, _): return index
         case .dynamic, .fermata, .breath, .tempo, .spanner, .articulation, .tie, .slur, .jump, .marker: return nil
+        }
+    }
+
+    /// The staff this identity names outright: a signature's selected glyph, or a navigation list's owner.
+    /// `nil` for anchored identities (their staff is the anchor's) and for a barline, which names no staff.
+    public var staffIfAddressed: StaffAddress? {
+        switch self {
+        case let .keySignature(_, staff), let .timeSignature(_, staff),
+             let .jump(staff, _, _), let .marker(staff, _, _): return staff
+        case .dynamic, .fermata, .breath, .tempo, .spanner, .barLine, .articulation, .tie, .slur: return nil
         }
     }
 }

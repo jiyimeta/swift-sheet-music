@@ -5,6 +5,9 @@
 @testable import SheetMusicLayout
 import Testing
 
+/// The staff a single-staff fixture's key and time signature glyphs are drawn on, which their identity names.
+private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+
 #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     /// Restatements — the glyphs a page draws again without declaring anything: a courtesy key or time signature
     /// at the trailing edge of a system, and the clef every continuation system opens with.
@@ -91,13 +94,14 @@ import Testing
             let point = try point(in: announcing) { element in
                 // The announcement is the key signature drawn in a bar that declares none of its own: m1 holds
                 // one chord and nothing else.
-                guard case let .keySignature(_, flats, _, _, origin, index) = element,
-                      flats == 2, index == 2
+                guard case let .keySignature(_, flats, _, _, origin, identity) = element,
+                      flats == 2, identity?.measureIndexIfAddressedByBar == 2
                 else { return nil }
                 return origin
             }
 
-            #expect(ScoreHitTester(document: doc).hitTest(at: point) == .keySignature(measureIndex: 2))
+            let hit = ScoreHitTester(document: doc).hitTest(at: point)
+            #expect(hit == .keySignature(measureIndex: 2, staff: signatureStaff))
         }
 
         @Test("a courtesy time signature resolves to the bar it announces")
@@ -106,13 +110,14 @@ import Testing
             let doc = layout(Self.score(clefChange: false))
             let announcing = try system(notContaining: 2, in: doc)
             let point = try point(in: announcing) { element in
-                guard case let .timeSignature(numerator, denominator, _, origin, index) = element,
-                      numerator == 3, denominator == 4, index == 2
+                guard case let .timeSignature(numerator, denominator, _, origin, identity) = element,
+                      numerator == 3, denominator == 4, identity?.measureIndexIfAddressedByBar == 2
                 else { return nil }
                 return origin
             }
 
-            #expect(ScoreHitTester(document: doc).hitTest(at: point) == .timeSignature(measureIndex: 2))
+            let hit = ScoreHitTester(document: doc).hitTest(at: point)
+            #expect(hit == .timeSignature(measureIndex: 2, staff: signatureStaff))
         }
 
         /// The clef a continuation system opens with restates whatever is in force — here the bass clef declared
@@ -178,9 +183,9 @@ import Testing
             let doc = layout(Self.score(clefChange: false))
             let continuation = try system(notContaining: 0, in: doc)
             let redraws = continuation.measures.flatMap { measure in
-                measure.elements.compactMap { element -> Int?? in
-                    guard case let .keySignature(_, _, _, _, _, index) = element else { return nil }
-                    return .some(index)
+                measure.elements.compactMap { element -> ScoreElementID?? in
+                    guard case let .keySignature(_, _, _, _, _, identity) = element else { return nil }
+                    return .some(identity)
                 }
             }
             #expect(!redraws.isEmpty)

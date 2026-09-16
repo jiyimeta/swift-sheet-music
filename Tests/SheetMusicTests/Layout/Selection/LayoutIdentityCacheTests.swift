@@ -2,6 +2,9 @@ import SheetMusicCore
 @testable import SheetMusicLayout
 import Testing
 
+/// The staff a single-staff fixture's key and time signature glyphs are drawn on, which their identity names.
+private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+
 @Suite("Element identity through layout reuse")
 struct LayoutIdentityCacheTests {
     private let _installFontMetrics = TestSupport.installFontMetrics
@@ -25,7 +28,8 @@ struct LayoutIdentityCacheTests {
         #expect(cache.systemMisses == 0)
         #expect(Self.keys(first) == Self.keys(second))
         #expect(Self.keys(second).compactMap(\.elementID) == [
-            .keySignature(measureIndex: 0), .keySignature(measureIndex: 1),
+            .keySignature(measureIndex: 0, staff: signatureStaff),
+            .keySignature(measureIndex: 1, staff: signatureStaff),
         ])
         score.parts.updateValue(at: 0) { part in
             part.staves.updateValue(at: 0) { staff in

@@ -290,7 +290,7 @@ extension LayoutEngine {
                     flats: max(0, -key),
                     clef: clef,
                     origin: CGPoint(x: keySigX, y: staffMidY),
-                    measureIndex: nil,
+                    identity: nil,
                 ))
             }
             if let ts = context.timeSignature {
@@ -302,7 +302,7 @@ extension LayoutEngine {
                         x: timeSigX,
                         y: staffMidY + metrics.sp * geometry.centerOffsetSp,
                     ),
-                    measureIndex: nil,
+                    identity: nil,
                 ))
             }
             // Staff name above the staff, left-aligned at `labelX`

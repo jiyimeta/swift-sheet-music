@@ -57,13 +57,14 @@ public enum LayoutElement: Sendable, Equatable {
     /// on C while a non-zero key was in force — see
     /// `KeySignatureSteps.cancellationNaturals`. In that case `sharps`
     /// and `flats` are both 0 and the naturals are the only glyphs.
-    /// `measureIndex` names the bar whose declaration these glyphs show. An end-of-system COURTESY
-    /// announcement names the bar it announces — the one opening the next system — because the announcement is
-    /// that declaration seen early, and it is the only place those glyphs appear before the break. Keys with no
-    /// addressable declaration at all, and the sticky header's restatements, still pass `nil`.
+    /// `identity` is always a `ScoreElementID.keySignature`: the bar whose declaration these glyphs show, on the
+    /// staff they are drawn on. An end-of-system COURTESY announcement names the bar it announces — the one
+    /// opening the next system — because the announcement is that declaration seen early, and it is the only
+    /// place those glyphs appear before the break. Keys with no addressable declaration at all, and the sticky
+    /// header's restatements, still pass `nil`.
     case keySignature(
         sharps: Int, flats: Int, clef: NotatedClef,
-        naturals: [Int] = [], origin: CGPoint, measureIndex: Int?,
+        naturals: [Int] = [], origin: CGPoint, identity: ScoreElementID?,
     )
     /// `symbol` decides the SHAPE: `.numeric` is the two numbers
     /// stacked around `origin`, anything else is one glyph centered on
@@ -71,12 +72,13 @@ public enum LayoutElement: Sendable, Equatable {
     /// `denominator` ride along either way — the meter is what they say
     /// even when the page draws a C — so a renderer that has no glyph
     /// for a symbol can still fall back to the numbers.
-    /// `measureIndex` names the bar's meter, including declarations outside its leading run, and an
-    /// end-of-system courtesy announcement names the bar it announces — see `keySignature` above for why a
-    /// restatement carries the identity of what it restates. The sticky header's restatements pass `nil`.
+    /// `identity` is always a `ScoreElementID.timeSignature`: the bar's meter, including declarations outside
+    /// its leading run, on the staff the glyphs are drawn on. An end-of-system courtesy announcement names the
+    /// bar it announces — see `keySignature` above for why a restatement carries the identity of what it
+    /// restates. The sticky header's restatements pass `nil`.
     case timeSignature(
         numerator: Int, denominator: Int,
-        symbol: TimeSignatureSymbol = .numeric, origin: CGPoint, measureIndex: Int?,
+        symbol: TimeSignatureSymbol = .numeric, origin: CGPoint, identity: ScoreElementID?,
     )
     /// `origin.y` is the vertical center of the barline's stroke — for
     /// a staff with more than one line that is the staff's own center,

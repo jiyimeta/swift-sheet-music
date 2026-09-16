@@ -5,6 +5,9 @@
 @testable import SheetMusicLayout
 import Testing
 
+/// The staff a single-staff fixture's key and time signature glyphs are drawn on, which their identity names.
+private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+
 #if SHEET_MUSIC_HAS_APPLE_PLATFORM_TEST_SUPPORT
     /// End-of-system courtesy signatures: when the measure that OPENS the
     /// next system begins with an explicit key / time signature change,
@@ -484,8 +487,8 @@ import Testing
             // reader clicking them means that declaration. They used to carry no identity at all, which made
             // them unclickable while the thing they show sat a system away from the click.
             #expect(announcements.allSatisfy { $0.elementID != nil })
-            #expect(announcements.contains { $0.elementID == .keySignature(measureIndex: 2) })
-            #expect(announcements.contains { $0.elementID == .timeSignature(measureIndex: 2) })
+            #expect(announcements.contains { $0.elementID == .keySignature(measureIndex: 2, staff: signatureStaff) })
+            #expect(announcements.contains { $0.elementID == .timeSignature(measureIndex: 2, staff: signatureStaff) })
         }
 
         @Test("a time-only courtesy keeps a single end barline")

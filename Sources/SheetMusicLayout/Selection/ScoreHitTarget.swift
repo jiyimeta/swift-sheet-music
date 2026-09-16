@@ -89,10 +89,12 @@ public enum ScoreHitTarget: Hashable, Sendable {
     case tempo(anchor: VoiceElementID)
     /// A spanner identified by its anchor and kind for `RemoveSpanner`. See `ScoreElementID.spanner`.
     case spanner(anchor: VoiceElementID, kind: Spanner.Kind)
-    /// A bar's key signature, addressed by `SetKeySignature`. See `ScoreElementID.keySignature` for its scope.
-    case keySignature(measureIndex: Int)
-    /// A bar's meter, addressed by `SetTimeSignature`. See `ScoreElementID.timeSignature` for the re-bar scope.
-    case timeSignature(measureIndex: Int)
+    /// A bar's key signature on one staff, addressed by `SetKeySignature`. See `ScoreElementID.keySignature` for
+    /// its scope and for why the staff is the selection's rather than the command's.
+    case keySignature(measureIndex: Int, staff: StaffAddress)
+    /// A bar's meter on one staff, addressed by `SetTimeSignature`. See `ScoreElementID.timeSignature` for the
+    /// re-bar scope.
+    case timeSignature(measureIndex: Int, staff: StaffAddress)
     /// A barline: explicit and trailing roles feed `SetBarLine`, start-repeat feeds `SetRepeatBarLines`.
     /// See `ScoreElementID.barLine` for its address semantics.
     case barLine(measureIndex: Int, role: BarLineRole)
@@ -183,10 +185,10 @@ extension ScoreHitTarget {
             self = .tempo(anchor: anchor)
         case let .spanner(anchor, kind):
             self = .spanner(anchor: anchor, kind: kind)
-        case let .keySignature(measureIndex):
-            self = .keySignature(measureIndex: measureIndex)
-        case let .timeSignature(measureIndex):
-            self = .timeSignature(measureIndex: measureIndex)
+        case let .keySignature(measureIndex, staff):
+            self = .keySignature(measureIndex: measureIndex, staff: staff)
+        case let .timeSignature(measureIndex, staff):
+            self = .timeSignature(measureIndex: measureIndex, staff: staff)
         case let .barLine(measureIndex, role):
             self = .barLine(measureIndex: measureIndex, role: role)
         case let .articulation(anchor, kind):
@@ -213,10 +215,10 @@ extension ScoreHitTarget {
             return .tempo(anchor: anchor)
         case let .spanner(anchor, kind):
             return .spanner(anchor: anchor, kind: kind)
-        case let .keySignature(measureIndex):
-            return .keySignature(measureIndex: measureIndex)
-        case let .timeSignature(measureIndex):
-            return .timeSignature(measureIndex: measureIndex)
+        case let .keySignature(measureIndex, staff):
+            return .keySignature(measureIndex: measureIndex, staff: staff)
+        case let .timeSignature(measureIndex, staff):
+            return .timeSignature(measureIndex: measureIndex, staff: staff)
         case let .barLine(measureIndex, role):
             return .barLine(measureIndex: measureIndex, role: role)
         case let .articulation(anchor, kind):

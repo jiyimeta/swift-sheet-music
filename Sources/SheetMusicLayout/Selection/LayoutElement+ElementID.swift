@@ -9,10 +9,8 @@ extension LayoutElement {
         switch self {
         case let .tieArc(_, _, _, identity): return identity
         case let .marker(_, _, _, identity), let .jump(_, _, identity): return identity
-        case let .keySignature(_, _, _, _, _, measureIndex):
-            return measureIndex.map { .keySignature(measureIndex: $0) }
-        case let .timeSignature(_, _, _, _, measureIndex):
-            return measureIndex.map { .timeSignature(measureIndex: $0) }
+        case let .keySignature(_, _, _, _, _, identity), let .timeSignature(_, _, _, _, identity):
+            return identity
         case let .barLine(_, _, _, measureIndex, role):
             return measureIndex.map { .barLine(measureIndex: $0, role: role) }
         case let .textMark(.dynamic(anchor), _, _):

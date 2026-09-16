@@ -22,6 +22,7 @@ struct ScoreHitTesterSignatureBlockTests {
 
     /// sp = 10, and the fixture puts the element at document (130, 130).
     private static let documentOrigin = CGPoint(x: 130, y: 130)
+    private static let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
     @available(macOS 15.0, iOS 16.0, *)
     private func tester(_ element: LayoutElement) -> ScoreHitTester {
@@ -34,10 +35,11 @@ struct ScoreHitTesterSignatureBlockTests {
     func keySignatureEnvelope() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let element = LayoutElement.keySignature(
-            sharps: 4, flats: 0, clef: .treble, origin: ElementHitFixtures.origin, measureIndex: 0,
+            sharps: 4, flats: 0, clef: .treble, origin: ElementHitFixtures.origin,
+            identity: .keySignature(measureIndex: 0, staff: Self.staff),
         )
         let tester = tester(element)
-        let target = ScoreHitTarget.keySignature(measureIndex: 0)
+        let target = ScoreHitTarget.keySignature(measureIndex: 0, staff: Self.staff)
         let box = try #require(tester.elementHitRect(for: target))
 
         // A 5x5 lattice over the envelope, inset a hair so the samples are strictly inside it.
@@ -59,10 +61,11 @@ struct ScoreHitTesterSignatureBlockTests {
     func timeSignatureEnvelope() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let element = LayoutElement.timeSignature(
-            numerator: 12, denominator: 8, origin: ElementHitFixtures.origin, measureIndex: 0,
+            numerator: 12, denominator: 8, origin: ElementHitFixtures.origin,
+            identity: .timeSignature(measureIndex: 0, staff: Self.staff),
         )
         let tester = tester(element)
-        let target = ScoreHitTarget.timeSignature(measureIndex: 0)
+        let target = ScoreHitTarget.timeSignature(measureIndex: 0, staff: Self.staff)
         let box = try #require(tester.elementHitRect(for: target))
 
         // The middle of the box is the gap BETWEEN the two digit rows — the point the old per-glyph test missed.
@@ -77,10 +80,11 @@ struct ScoreHitTesterSignatureBlockTests {
     func envelopeEnds() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let element = LayoutElement.keySignature(
-            sharps: 4, flats: 0, clef: .treble, origin: ElementHitFixtures.origin, measureIndex: 0,
+            sharps: 4, flats: 0, clef: .treble, origin: ElementHitFixtures.origin,
+            identity: .keySignature(measureIndex: 0, staff: Self.staff),
         )
         let tester = tester(element)
-        let box = try #require(tester.elementHitRect(for: .keySignature(measureIndex: 0)))
+        let box = try #require(tester.elementHitRect(for: .keySignature(measureIndex: 0, staff: Self.staff)))
         let sp = ElementHitFixtures.metrics.sp
 
         #expect(tester.hitTest(at: CGPoint(x: box.minX - sp * 2, y: box.midY)) == nil)
@@ -94,15 +98,16 @@ struct ScoreHitTesterSignatureBlockTests {
     func highlightExcludesTolerance() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let element = LayoutElement.keySignature(
-            sharps: 4, flats: 0, clef: .treble, origin: ElementHitFixtures.origin, measureIndex: 0,
+            sharps: 4, flats: 0, clef: .treble, origin: ElementHitFixtures.origin,
+            identity: .keySignature(measureIndex: 0, staff: Self.staff),
         )
         let tester = tester(element)
-        let box = try #require(tester.elementHitRect(for: .keySignature(measureIndex: 0)))
+        let box = try #require(tester.elementHitRect(for: .keySignature(measureIndex: 0, staff: Self.staff)))
         let sp = ElementHitFixtures.metrics.sp
 
         // Just outside the highlight box, but inside the reach — a hit, yet not part of the frame.
         let justOutside = CGPoint(x: box.minX - sp * 0.25, y: box.midY)
         #expect(!box.contains(justOutside))
-        #expect(tester.hitTest(at: justOutside) == .keySignature(measureIndex: 0))
+        #expect(tester.hitTest(at: justOutside) == .keySignature(measureIndex: 0, staff: Self.staff))
     }
 }

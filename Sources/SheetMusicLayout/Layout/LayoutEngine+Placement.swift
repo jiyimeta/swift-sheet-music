@@ -442,7 +442,7 @@ extension LayoutEngine {
                     // sheet, so answering "not a thing" to a click on it is wrong however true it is that the
                     // redraw declares nothing. `initialKeyMeasureIndex` is that declaration's bar, resolved by
                     // the caller, which is the level that can see the bars before this system.
-                    measureIndex: initialKeyMeasureIndex,
+                    identity: initialKeyMeasureIndex.map { .keySignature(measureIndex: $0, staff: staffAddress) },
                 ))
                 remainingSynthKeySig = false
             }
@@ -535,8 +535,8 @@ extension LayoutEngine {
                             clef: currentClef,
                         ),
                         origin: CGPoint(x: keyX, y: staffMidY),
-                        measureIndex: isPitchedStaff && voiceIdx == 0 && voiceElemIdx < signaturePrefixCount
-                            ? measureIndex : nil,
+                        identity: isPitchedStaff && voiceIdx == 0 && voiceElemIdx < signaturePrefixCount
+                            ? .keySignature(measureIndex: measureIndex, staff: staffAddress) : nil,
                     )
                     if key.visible {
                         out.append(element)
@@ -552,7 +552,7 @@ extension LayoutEngine {
                         denominator: ts.denominator,
                         symbol: ts.symbol,
                         origin: CGPoint(x: tsX, y: timeSigY),
-                        measureIndex: measureIndex,
+                        identity: .timeSignature(measureIndex: measureIndex, staff: staffAddress),
                     )
                     if ts.visible {
                         out.append(element)

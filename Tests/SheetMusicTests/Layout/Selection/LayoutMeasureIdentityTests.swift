@@ -17,6 +17,11 @@ import Testing
 struct LayoutMeasureIdentityTests {
     private let _installFontMetrics = TestSupport.installFontMetrics
 
+    /// The one staff of part `part` — both parts of `score(_:)` carry a single staff.
+    private static func staff(_ part: Int) -> StaffAddress {
+        StaffAddress(partIndex: part, staffIndexInPart: 0)
+    }
+
     private static func chord(_ duration: NoteDuration = .half) -> VoiceElement {
         .chord(Chord(duration: duration, notes: [Note(pitch: 60, tpc: 14)]))
     }
@@ -37,6 +42,8 @@ struct LayoutMeasureIdentityTests {
             .flatMap { $0.elements + $0.invisibleElements }
     }
 
+    /// Each staff's glyph names its own staff, so a click selects that glyph alone — but every one of them hands
+    /// `SetKeySignature` the same bar, which is what the command writes on all pitched staves.
     @Test("Key identity names the bar shared by pitched staves, excluding mid-bar changes")
     func keyCommandAddress() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
@@ -46,7 +53,9 @@ struct LayoutMeasureIdentityTests {
         ])
         let keys = Self.elements(score).filter { if case .keySignature = $0 { true } else { false } }
         #expect(keys.count == 4)
-        #expect(keys.compactMap(\.elementID) == Array(repeating: .keySignature(measureIndex: 1), count: 2))
+        #expect(keys.compactMap(\.elementID) == [
+            .keySignature(measureIndex: 1, staff: Self.staff(0)), .keySignature(measureIndex: 1, staff: Self.staff(1)),
+        ])
         #expect(keys.filter { $0.elementID == nil }.count == 2)
         let index = try #require(keys.compactMap(\.elementID).first?.measureIndexIfAddressedByBar)
         let command = SetKeySignature(measureIndex: index, concertKey: -2)
@@ -60,6 +69,35 @@ struct LayoutMeasureIdentityTests {
         }
         for key in keys {
             #expect(LayoutEngine.translate(element: key, dy: 17).elementID == key.elementID)
+        }
+    }
+
+    /// The glyph a click lands on is the only one selected: one bar draws a key and a meter on every staff, and
+    /// before the staff joined the identity every one of them answered to the same address, so a click on one lit
+    /// up the whole column.
+    @Test("A click on one staff's signature selects that glyph alone")
+    func signatureSelectionIsPerStaff() throws {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let score = Self.score([
+            .keySignature(KeySignature(concertKey: 2)),
+            .timeSignature(TimeSignature(numerator: 3, denominator: 4)),
+            Self.chord(.half), Self.chord(.quarter),
+        ])
+        let document = LayoutEngine.layout(
+            score: ScoreEditor(score: score).score, options: .init(), availableWidth: 1000,
+        )
+        let tester = ScoreHitTester(document: document)
+        for part in 0 ... 1 {
+            let targets: [ScoreHitTarget] = [
+                .keySignature(measureIndex: 1, staff: Self.staff(part)),
+                .timeSignature(measureIndex: 1, staff: Self.staff(part)),
+            ]
+            for target in targets {
+                let rects = tester.elementHitRects(for: target)
+                #expect(rects.count == 1)
+                let rect = try #require(rects.first)
+                #expect(tester.hitTest(at: CGPoint(x: rect.midX, y: rect.midY)) == target)
+            }
         }
     }
 
@@ -89,7 +127,7 @@ struct LayoutMeasureIdentityTests {
             }
         }
         let pitchedKeys = Self.elements(score).filter { if case .keySignature = $0 { true } else { false } }
-        #expect(pitchedKeys.compactMap(\.elementID) == [.keySignature(measureIndex: 1)])
+        #expect(pitchedKeys.compactMap(\.elementID) == [.keySignature(measureIndex: 1, staff: Self.staff(0))])
     }
 
     @Test("A zero-tick non-signature ends the key command's leading run")
@@ -141,8 +179,9 @@ struct LayoutMeasureIdentityTests {
             if case .keySignature = $0 { true } else { false }
         }
         #expect(keys.count == 2)
-        let allMatch3 = keys.allSatisfy { $0.elementID == .keySignature(measureIndex: 0) }
-        #expect(allMatch3)
+        #expect(keys.compactMap(\.elementID) == [
+            .keySignature(measureIndex: 0, staff: Self.staff(0)), .keySignature(measureIndex: 0, staff: Self.staff(1)),
+        ])
     }
 
     @Test("Time declarations after notes in any voice name the bar the command re-bars", arguments: [0, 1])
@@ -163,7 +202,10 @@ struct LayoutMeasureIdentityTests {
             }
         }
         let meters = Self.elements(score).filter { if case .timeSignature = $0 { true } else { false } }
-        #expect(meters.map(\.elementID) == Array(repeating: .timeSignature(measureIndex: 1), count: 2))
+        #expect(meters.map(\.elementID) == [
+            .timeSignature(measureIndex: 1, staff: Self.staff(0)),
+            .timeSignature(measureIndex: 1, staff: Self.staff(1)),
+        ])
         let index = try #require(meters.first?.elementID?.measureIndexIfAddressedByBar)
         let command = SetTimeSignature(measureIndex: index, numerator: 2, denominator: 4)
         #expect(command.measureIndex == 1)
