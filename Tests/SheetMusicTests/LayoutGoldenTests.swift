@@ -178,8 +178,22 @@
         /// on grace heads). With those two payloads rewritten back to the
         /// bare bar index and the grace id dropped on both sides, the merged
         /// digest and the text-font branch's are identical line for line.
+        ///
+        /// **Re-recorded when a system-head clef became a restatement of its
+        /// own bar.** 11 of 3890 lines changed — every one an `el clef(` whose
+        /// `anchor:` went from `.staffDefault(staff)` to
+        /// `.restatement(staff:measureIndex:)` naming the bar that opens its
+        /// system (m7 and m4…m32 across two fixtures). Line counts match
+        /// (3890 both sides), nothing but that payload differs on any changed
+        /// line, and with the `anchor:` field normalized away the two digests
+        /// are identical. No `el keySignature(` line moved, and the reason is
+        /// worth recording rather than reading as agreement: scanning both
+        /// digests, all 44 key lines name the bar they are drawn in ALREADY,
+        /// so the corpus holds no system-head key redraw of an earlier bar's
+        /// declaration. The key half of this change rests on
+        /// `LayoutMeasureIdentityTests` and the restatement suite, not here.
         private static let expectedDigestSHA256 =
-            "c19936084d83afa7e6ab4192fa1daa869ef0573fc51835d11cd64543352082e0"
+            "f4c30ac16ca541336e248d87fd438ab71a89956f83a2e1b6aba0bf3110d8ee32"
 
         @Test("write digest")
         func writeDigest() throws {
