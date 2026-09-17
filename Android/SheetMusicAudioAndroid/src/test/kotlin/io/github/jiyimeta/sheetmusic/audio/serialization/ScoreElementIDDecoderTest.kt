@@ -1,6 +1,7 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
 import io.github.jiyimeta.sheetmusic.audio.model.BarLineRole
+import io.github.jiyimeta.sheetmusic.audio.model.GraceNoteID
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreArticulationKind
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreElementID
@@ -75,7 +76,8 @@ class ScoreElementIDDecoderTest {
 
     @Test
     fun previousElementDiscriminatorsRemainCompatible() {
-        // Hand-derived TLV vectors for choices 0..8. Anchor payload length is 12 (0x0C):
+        // Hand-derived TLV vectors for choices 0..8 except the signatures (5, 6), whose payload changed shape and
+        // has its own test below. Anchor payload length is 12 (0x0C):
         // staff tag 1 + length 4 + two Int32 fields; then measure/voice/slot tags and zig-zag values.
         val anchorBytes = byteArrayOf(0x0C, 0x0A, 0x04, 0x08, 0x04, 0x10, 0x02, 0x10, 0x06, 0x18, 0x02, 0x20, 0x08)
         val cases: List<Pair<ScoreElementID, ByteArray>> = listOf(
@@ -88,8 +90,6 @@ class ScoreElementIDDecoderTest {
                 byteArrayOf(0x1B, 0x05, 0x0A, 0x18, 0x04, 0x0A) + anchorBytes +
                     byteArrayOf(0x12, 0x07, 0x48, 0x61, 0x69, 0x72, 0x50, 0x69, 0x6E)
             ),
-            ScoreElementID.KeySignature(7) to byteArrayOf(0x06, 0x05, 0x0A, 0x03, 0x05, 0x08, 0x0E),
-            ScoreElementID.TimeSignature(7) to byteArrayOf(0x06, 0x05, 0x0A, 0x03, 0x06, 0x08, 0x0E),
             ScoreElementID.BarLine(7, BarLineRole.Explicit) to
                 byteArrayOf(0x09, 0x05, 0x0A, 0x06, 0x07, 0x08, 0x0E, 0x12, 0x01, 0x00),
             // Accent is choice 3; its one-byte payload follows field 2's tag and length.
@@ -100,5 +100,34 @@ class ScoreElementIDDecoderTest {
         for ((expected, bytes) in cases) {
             assertEquals("Previous identity: $expected", ScoreItemID.Element(expected), ScoreItemIDCodec.decode(bytes))
         }
+    }
+
+    // Exact vectors from ScoreItemIDSignatureAndGraceWireTests in
+    // Tests/SheetMusicTests/AndroidJNI/Audio/ScoreItemIDSignatureAndGraceWireTests.swift.
+    // A key or time signature names the staff its glyph is drawn on as well as the bar; choices 5 and 6 keep their
+    // numbers, and the payload is (measureIndex, staff) where it used to be a bare index.
+    @Test
+    fun signatureVectorsDecodeBarAndStaff() {
+        val key = byteArrayOf(0x0C, 0x05, 0x0A, 0x09, 0x05, 0x08, 0x0E, 0x12, 0x04, 0x08, 0x04, 0x10, 0x02)
+        val time = byteArrayOf(0x0C, 0x05, 0x0A, 0x09, 0x06, 0x08, 0x0E, 0x12, 0x04, 0x08, 0x04, 0x10, 0x02)
+        assertEquals(
+            ScoreItemID.Element(ScoreElementID.KeySignature(measureIndex = 7, staff = staff)),
+            ScoreItemIDCodec.decode(key),
+        )
+        assertEquals(
+            ScoreItemID.Element(ScoreElementID.TimeSignature(measureIndex = 7, staff = staff)),
+            ScoreItemIDCodec.decode(time),
+        )
+    }
+
+    @Test
+    fun graceNoteVectorDecodesParentSideAndIndices() {
+        val bytes = byteArrayOf(
+            0x17, 0x06, 0x0A, 0x14, 0x0A, 0x0C,
+            0x0A, 0x04, 0x08, 0x04, 0x10, 0x02, 0x10, 0x06, 0x18, 0x02, 0x20, 0x08,
+            0x10, 0x01, 0x18, 0x02, 0x20, 0x04,
+        )
+        val expected = GraceNoteID(parent = anchor, isAfter = true, graceIndex = 1, noteIndexInGraceChord = 2)
+        assertEquals(ScoreItemID.GraceNote(expected), ScoreItemIDCodec.decode(bytes))
     }
 }
