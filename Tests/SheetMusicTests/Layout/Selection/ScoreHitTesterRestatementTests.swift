@@ -81,6 +81,29 @@ private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
             ])
         }
 
+        /// `plainScore`'s shape on a DRUM staff: three bars, one per system, with bar 0 declaring a key so that
+        /// every continuation system has one to redraw. A drumset part is unpitched, which is the condition the
+        /// identity gate reads — a real drum staff rarely carries a key, and the point here is that even when one
+        /// is written, no glyph on it is addressable.
+        private static func drumScore() -> Score {
+            let staff = Staff(measures: [
+                Measure(voices: [Voice(elements: [
+                    .clef(Clef(concertClefType: "PERC")),
+                    .keySignature(KeySignature(concertKey: 1)),
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    chord(),
+                ])], lineBreak: true),
+                Measure(voices: [Voice(elements: [chord()])], lineBreak: true),
+                Measure(voices: [Voice(elements: [chord()])]),
+            ])
+            return Score(division: 480, parts: [
+                Part(
+                    id: "P0", instrument: Instrument(id: "drumset", longName: "Drumset", useDrumset: true),
+                    staves: [staff],
+                ),
+            ])
+        }
+
         private func layout(_ score: Score) -> LayoutDocument {
             LayoutEngine.layout(score: score, options: ScoreViewOptions(), availableWidth: 900)
         }
@@ -212,6 +235,29 @@ private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
                 [.keySignature(measureIndex: 1, staff: signatureStaff)],
                 [.keySignature(measureIndex: 2, staff: signatureStaff)],
             ])
+        }
+
+        /// An unpitched staff's key signatures carry no identity at all — `SetKeySignature` writes only pitched
+        /// staves, so an address on a drum staff would name a bar the command will not touch. The rule held for
+        /// explicit declarations already; a system-head redraw has to follow it, and the gate that makes it do so
+        /// is new. Both halves are checked here: the clef restatement on the same staff still carries one, so a
+        /// failure cannot be read as "nothing is identified on a drum staff".
+        @Test("a system-head key redraw on an unpitched staff names nothing")
+        func continuationKeySignatureOnDrumStaff() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let doc = layout(Self.drumScore())
+            let continuation = try system(notContaining: 0, in: doc)
+            let keys = continuation.measures.flatMap(\.elements).compactMap { element -> ScoreElementID?? in
+                guard case let .keySignature(_, _, _, _, _, identity) = element else { return nil }
+                return identity
+            }
+
+            #expect(!keys.isEmpty)
+            #expect(keys.allSatisfy { $0 == nil })
+            #expect(clefAnchors(in: continuation).contains { anchor in
+                if case .restatement = anchor { return true }
+                return false
+            })
         }
 
         /// A click on a restated clef answers with that restatement, and the identity it answers with is drawn in

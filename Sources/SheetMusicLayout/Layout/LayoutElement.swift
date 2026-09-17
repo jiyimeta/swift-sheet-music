@@ -80,8 +80,9 @@ public enum LayoutElement: Sendable, Equatable {
     /// for a symbol can still fall back to the numbers.
     /// `identity` is always a `ScoreElementID.timeSignature`: the bar's meter, including declarations outside
     /// its leading run, on the staff the glyphs are drawn on. An end-of-system courtesy announcement names the
-    /// bar it announces — see `keySignature` above for why a restatement carries the identity of what it
-    /// restates. The sticky header's restatements pass `nil`.
+    /// bar it announces, because that bar is where the meter is declared and the announcement is it seen early —
+    /// the same rule `keySignature` above states for a courtesy key. A meter is never redrawn at a system head,
+    /// so the restatement case that rule's other half covers does not arise here. The sticky header passes `nil`.
     case timeSignature(
         numerator: Int, denominator: Int,
         symbol: TimeSignatureSymbol = .numeric, origin: CGPoint, identity: ScoreElementID?,

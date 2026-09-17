@@ -22,7 +22,7 @@ extension ScoreHitTester {
         guard let shape = glissandoShape(element) else { return nil }
         let sp = document.metrics.sp
         let local = shape.local(point)
-        if shape.band.distance(to: local) <= sp * Self.curveHitToleranceSp { return true }
+        if let band = shape.band, band.distance(to: local) <= sp * Self.curveHitToleranceSp { return true }
         guard let label = shape.label else { return false }
         let reach = sp * Self.textHitTolerance
         return label.insetBy(dx: -reach, dy: -reach).contains(local)
@@ -33,21 +33,40 @@ extension ScoreHitTester {
     func glissandoInkRects(_ element: LayoutElement) -> [CGRect]? {
         guard let shape = glissandoShape(element) else { return nil }
         let halfStroke = shape.wavy ? 0 : document.metrics.sp * GlissandoGeometry.lineThicknessSp / 2
-        let line = shape.band.insetBy(dx: 0, dy: -halfStroke)
-        return ([line] + (shape.label.map { [$0] } ?? [])).map(shape.worldBounds)
+        let line = shape.band.map { [$0.insetBy(dx: 0, dy: -halfStroke)] } ?? []
+        return (line + (shape.label.map { [$0] } ?? [])).map(shape.worldBounds)
     }
 
     private func glissandoShape(_ element: LayoutElement) -> GlissandoHitShape? {
         guard case let .glissandoLine(from, to, wavy, text, _) = element else { return nil }
         let length = GlissandoGeometry.length(from: from, to: to)
-        let ink = wavy ? wiggleInkBand() : (minY: CGFloat(0), height: CGFloat(0))
         return GlissandoHitShape(
             from: from,
             angle: GlissandoGeometry.angle(from: from, to: to),
             wavy: wavy,
-            band: CGRect(x: 0, y: ink.minY, width: length, height: ink.height),
+            band: wavy ? wiggleBand(length: length) : CGRect(x: 0, y: 0, width: length, height: 0),
             label: text.flatMap { glissandoLabel($0, length: length, wavy: wavy) },
         )
+    }
+
+    /// The wiggle run's ink over the length the renderers actually cover, or `nil` when they draw no glyph at all.
+    ///
+    /// **The run is what is drawn, not the whole length.** `GlissandoGeometry.wavyGlyphRun` fits `floor(length /
+    /// advance)` glyphs and centers them, so a line shorter than one glyph draws NOTHING — and a band spanning the
+    /// full length would then take clicks on blank paper, which is the one thing measuring ink instead of a bounding
+    /// box exists to prevent. Reachable between two sixteenths, where the 0.8 sp inset at each head can leave less
+    /// than one advance behind.
+    private func wiggleBand(length: CGFloat) -> CGRect? {
+        let font = LayoutFont(face: SMuFLFamily.bravura, pointSize: document.metrics.glyphFontSize)
+        let advance = FontMetrics.provider.typographicWidth(
+            text: String(UnicodeScalar(SMuFLCodepoint.wiggleGlissando) ?? " "), font: font,
+        )
+        // Destructured rather than read as `run.count`, which SwiftLint's `empty_count` rewrites to `isEmpty` —
+        // a property this tuple does not have.
+        let (glyphs, startX) = GlissandoGeometry.wavyGlyphRun(length: length, advance: advance)
+        guard glyphs > 0 else { return nil }
+        let ink = wiggleInkBand()
+        return CGRect(x: startX, y: ink.minY, width: CGFloat(glyphs) * advance, height: ink.height)
     }
 
     /// The wiggle glyph's ink across the line, anchored as the renderers anchor it — centered on the line by its text
@@ -84,8 +103,10 @@ private struct GlissandoHitShape {
     let from: CGPoint
     let angle: CGFloat
     let wavy: Bool
-    /// The line's ink over x ∈ [0, length]. Zero height for a straight stroke, whose centerline it is.
-    let band: CGRect
+    /// The line's ink in its own frame: zero height for a straight stroke, whose centerline it is, and the wiggle
+    /// run's covered span for a wavy one. `nil` where the renderers draw no line at all — a wavy line too short for
+    /// one glyph — so that nothing but its label, if it has one, can be clicked.
+    let band: CGRect?
     let label: CGRect?
 
     /// `point` in the line's frame — the inverse of `GlissandoGeometry.toWorld`.

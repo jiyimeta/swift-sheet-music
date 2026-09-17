@@ -232,7 +232,43 @@ struct GlissandoSelectionTests {
         let straightBox = try #require(straight.elementHitRect(for: target))
         let wavyBox = try #require(wavy.elementHitRect(for: target))
         #expect(wavyBox.height > straightBox.height)
-        #expect(wavyBox.width == straightBox.width)
+        // The wiggle run is centered and fits whole glyphs, so it covers at most the line and never more.
+        #expect(wavyBox.width <= straightBox.width)
+        #expect(wavyBox.width > straightBox.width / 2)
+        // **The band reaches the line it is drawn on.** The glyph is placed by its text band, the same anchor
+        // `glyphInkRects` measures every other glyph with, and against Bravura's wiggle that puts the ink just
+        // above the line and touching it. A band anchored anywhere else — on the baseline, say — would still
+        // report a taller box while sitting clear of the line it is supposed to be drawn along.
+        #expect(wavyBox.minY < 140)
+        #expect(wavyBox.maxY >= 140)
+        #expect(wavyBox.maxY < 140 + wavyBox.height)
+    }
+
+    /// A straight stroke has real thickness, and the rect a host anchors to must carry it: a zero-height rectangle
+    /// contains no point at all, so `CGRect.contains` would answer false for every click on a horizontal line.
+    @Test("A horizontal stroke's hit rect is as tall as the stroke is drawn")
+    func straightLineHitRectCarriesItsStroke() throws {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let target = ScoreHitTarget.glissando(start: Self.start())
+        let straight = Self.tester([Self.spanner(
+            from: CGPoint(x: 40, y: 100), to: CGPoint(x: 240, y: 100),
+        )])
+        let box = try #require(straight.elementHitRect(for: target))
+        #expect(box.height > 0)
+        // The document places this system at (30, 40), so the line is drawn at y = 140.
+        #expect(box.contains(CGPoint(x: 170, y: 140)))
+    }
+
+    /// A wavy line fits whole wiggle glyphs and centers them, so one shorter than a single glyph draws nothing at
+    /// all. Blank paper takes no clicks — the reason this hit test measures ink rather than a bounding box.
+    @Test("A wavy line too short for one wiggle is not hittable")
+    func wavyLineShorterThanOneGlyphIsNotHittable() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let tester = Self.tester([Self.spanner(
+            from: CGPoint(x: 40, y: 100), to: CGPoint(x: 42, y: 100), wavy: true,
+        )])
+        #expect(tester.hitTest(at: CGPoint(x: 41, y: 100)) == nil)
+        #expect(tester.elementHitRect(for: .glissando(start: Self.start())) == nil)
     }
 
     @Test("A line the layout left unnamed is not reported at all")

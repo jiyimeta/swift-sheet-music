@@ -106,10 +106,10 @@ extension ScoreHitTester {
     ///
     /// `elementHitRect(for:)` unions these, which is the right answer for "how big is this thing" and the wrong
     /// one for "where is this thing". An identity can be drawn in places that are nowhere near each other: a
-    /// spanner clipped across a system break, and — since restatements began naming what they restate — a key
-    /// signature whose declaration sits at the head of one system while its courtesy announcement sits at the
-    /// trailing edge of the one before. Unioning those spans the gap between two systems, so a host floating a
-    /// control beside the selection needs the pieces rather than their envelope.
+    /// spanner clipped across a system break, and a key or time signature whose declaration opens one system
+    /// while its courtesy announcement sits at the trailing edge of the one before — the announcement names the
+    /// bar it announces, so the two glyphs share an identity. Unioning those spans the gap between two systems,
+    /// so a host floating a control beside the selection needs the pieces rather than their envelope.
     ///
     /// Empty for a target with no element identity or no laid-out geometry.
     public func elementHitRects(for target: ScoreHitTarget) -> [CGRect] {

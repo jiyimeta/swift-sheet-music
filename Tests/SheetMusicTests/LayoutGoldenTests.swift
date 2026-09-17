@@ -183,7 +183,8 @@
         /// own bar.** 11 of 3890 lines changed — every one an `el clef(` whose
         /// `anchor:` went from `.staffDefault(staff)` to
         /// `.restatement(staff:measureIndex:)` naming the bar that opens its
-        /// system (m7 and m4…m32 across two fixtures). Line counts match
+        /// system (m7 twice, and m4…m36 in steps of 4, across two
+        /// fixtures). Line counts match
         /// (3890 both sides), nothing but that payload differs on any changed
         /// line, and with the `anchor:` field normalized away the two digests
         /// are identical. No `el keySignature(` line moved, and the reason is
