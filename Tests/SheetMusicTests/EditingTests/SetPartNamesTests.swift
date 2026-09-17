@@ -34,18 +34,60 @@ struct SetPartNamesTests {
     }
 
     /// The rename says what the part is called, not what it plays: the sound, the transposition and the catalog
-    /// identity all key off the instrument id, and `trackName` is where the file recorded the instrument's own
-    /// name. A host reads that back to say "なおき is a piano".
-    @Test("leaves the instrument id and the track name alone")
+    /// identity all key off the instrument id, and `Instrument.trackName` is where the file recorded the
+    /// instrument's own name. A host reads that back to say "なおき is a piano".
+    @Test("leaves the instrument id and the instrument's own name alone")
     func leavesIdentityAlone() throws {
+        var score = fixture()
+        _ = try SetPartNames(partIndex: 0, longName: "Solo", shortName: "S.").apply(to: &score)
+
+        #expect(score.parts[0].instrument.id == "flute")
+        #expect(score.parts[0].instrument.trackName == "Flute")
+    }
+
+    /// `Part.trackName` is MuseScore's part name — what its Mixer and instrument list call the part — so a new long
+    /// name reaches it too, or MuseScore would show the new name on the page and the old one everywhere else.
+    @Test("a new long name becomes the part name")
+    func longNameBecomesPartName() throws {
         var score = fixture()
         score.parts.updateValue(at: 0) { partValue in
             partValue.trackName = "Flute"
         }
-        _ = try SetPartNames(partIndex: 0, longName: "Solo", shortName: "S.").apply(to: &score)
+        _ = try SetPartNames(partIndex: 0, longName: "なおき", shortName: "Fl.").apply(to: &score)
 
-        #expect(score.parts[0].instrument.id == "flute")
-        #expect(score.parts[0].trackName == "Flute")
+        #expect(score.parts[0].trackName == "なおき")
+        #expect(score.parts[1].trackName == nil)
+    }
+
+    /// A file can name a part apart from its label, and an edit to the abbreviation alone did not ask to change that.
+    @Test("an abbreviation-only edit keeps the part name")
+    func abbreviationKeepsPartName() throws {
+        var score = fixture()
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.trackName = "Flute 1"
+        }
+        _ = try SetPartNames(partIndex: 0, longName: "Flute", shortName: "Flt.").apply(to: &score)
+
+        #expect(score.parts[0].trackName == "Flute 1")
+    }
+
+    /// One undo takes the whole rename back, the part name included — and the redo that inverse's own inverse makes
+    /// writes the rename again rather than re-deriving it.
+    @Test("the inverse restores the part name, and its inverse redoes it")
+    func inverseRestoresPartName() throws {
+        var score = fixture()
+        score.parts.updateValue(at: 0) { partValue in
+            partValue.trackName = "Flute 1"
+        }
+        let before = score
+        let inverse = try SetPartNames(partIndex: 0, longName: "なおき", shortName: "な").apply(to: &score)
+        let after = score
+
+        let redo = try inverse.apply(to: &score)
+        #expect(score == before)
+
+        _ = try redo.apply(to: &score)
+        #expect(score == after)
     }
 
     /// `nil` clears rather than leaving the name alone — a part with no abbreviation engraves no label from the

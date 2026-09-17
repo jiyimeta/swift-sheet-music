@@ -49,6 +49,16 @@ and this project adheres to
   `TextMarkKind.tempo` gains `color` and `properties`. All are defaulted, so construction sites compile unchanged;
   a positional pattern over these cases needs one more `_`.
 
+- **Renaming a part renames it in MuseScore too: `SetPartNames` writes a new long name to `Part.trackName`.**
+  That field is MuseScore's part name (`<Part><trackName>`), which MuseScore 3.6 and 4.0–4.7 show in the Mixer, the
+  instrument list and the Parts dialog, while the long name is only the label engraved at the staff; a rename used
+  to write the label alone, so MuseScore showed the new name on the page and the old one everywhere else. Only a
+  changed long name moves it — an edit to the abbreviation alone keeps a part name the file set apart from its
+  label — and the inverse restores it, so one undo still takes the whole rename back. `Instrument.trackName`, the
+  instrument's own name, is untouched. The documentation that called `Part.trackName` the instrument's name was
+  wrong and is corrected; a host that read it back to say what a renamed part plays should read
+  `Instrument.trackName` instead.
+
 ### Added
 
 - **A host can edit the title block in place: `LayoutDocument.creditTextLines`, `creditTextLine(at:tolerance:)` and
