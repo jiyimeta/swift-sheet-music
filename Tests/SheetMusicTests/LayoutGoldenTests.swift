@@ -192,8 +192,17 @@
         /// so the corpus holds no system-head key redraw of an earlier bar's
         /// declaration. The key half of this change rests on
         /// `LayoutMeasureIdentityTests` and the restatement suite, not here.
+        ///
+        /// **Re-recorded when a glissando line gained identity.** 4 of 3890 lines changed, and they are all four
+        /// `spanner glissandoLine(` lines the corpus holds: each gains a trailing `start:` naming the note it is
+        /// drawn from, and nothing else on the line moves. With that field stripped from the new digest the two
+        /// files are identical byte for byte (`diff -q` on the normalized copy), so no engraving moved.
+        ///
+        /// **Re-recorded once more where the two met.** Measured against the glissando branch's own digest, the
+        /// merged one differs on exactly the 11 `el clef(` lines the restatement change owns and on nothing else
+        /// — so the merge is the union of the two, with neither change moving what the other draws.
         private static let expectedDigestSHA256 =
-            "f4c30ac16ca541336e248d87fd438ab71a89956f83a2e1b6aba0bf3110d8ee32"
+            "17b1272434414fc05fc42f4c283aac0472e7e7b7f03262cb7ad50a70074189b9"
 
         @Test("write digest")
         func writeDigest() throws {

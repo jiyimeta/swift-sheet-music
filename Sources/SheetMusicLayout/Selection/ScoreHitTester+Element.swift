@@ -34,7 +34,8 @@ extension ScoreHitTester {
     private func hitElement(elements: [LayoutElement], base: CGPoint, point: CGPoint) -> ScoreHitTarget? {
         for element in elements {
             guard let id = element.elementID else { continue }
-            if let contains = arcContains(element, point: CGPoint(x: point.x - base.x, y: point.y - base.y)) {
+            let local = CGPoint(x: point.x - base.x, y: point.y - base.y)
+            if let contains = arcContains(element, point: local) ?? glissandoContains(element, point: local) {
                 if contains { return ScoreHitTarget(elementID: id) }
                 continue
             }
@@ -143,13 +144,15 @@ extension ScoreHitTester {
         return result
     }
 
+    /// Arcs and glissandi measure the ink they are drawn with, in their own frame; see `ScoreHitTester+Arc.swift`
+    /// and `ScoreHitTester+Glissando.swift`, which also own their hit rule — neither falls back to a rectangle.
     /// Barlines use stroke/dot ink bounds; pedals, key signatures and time signatures use glyph ink bounds.
     /// Navigation uses unpadded shipped text rectangles or centered glyph ink, according to its renderer.
     /// Remaining kinds use skyline measurements: fermatas, breaths and articulations use glyph path bounds
     /// with the skyline helper's fallback; dynamics and tempo mix glyph and font metrics; hairpins, ottavas
     /// and voltas use coarse span reservations. No universal ink-coverage claim follows.
     private func elementRects(_ element: LayoutElement) -> [CGRect] {
-        if let rects = arcInkRects(element) { return rects }
+        if let rects = arcInkRects(element) ?? glissandoInkRects(element) { return rects }
         if let rects = navigationRects(element) { return rects }
         switch element {
         case let .barLine(subtype, origin, halfHeight, _, _):

@@ -95,12 +95,13 @@ extension LayoutEngine {
                 level: level,
                 color: color,
             )
-        case let .glissandoLine(from, to, wavy, text):
+        case let .glissandoLine(from, to, wavy, text, start):
             return .glissandoLine(
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
                 wavy: wavy,
                 text: text,
+                start: start,
             )
         case let .guitarBend(from, vertex, to, slight):
             // All three points live in the same frame, so they shift

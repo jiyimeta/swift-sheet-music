@@ -76,7 +76,11 @@ extension MidiRenderer {
     /// `tFromY` + X(t) composition in `dom/easeInOut.cpp:103`. Used by the
     /// portamento pitch-bend ramp (`renderPortamento`); the discrete glissando
     /// renderer distributes its steps uniformly and does not consult it.
-    static func xFromYBezier(_ y: Double, easeIn: Double, easeOut: Double) -> Double {
+    ///
+    /// Public so a host editing `Glissando.easeIn` / `easeOut` can draw the curve it is editing from the same
+    /// function playback rides, rather than from a lookalike. `y` is clamped to 0…1, each ease is a fraction (the
+    /// model's percentage over 100), and 0 / 0 is the linear ramp.
+    public static func xFromYBezier(_ y: Double, easeIn: Double, easeOut: Double) -> Double {
         let clamped = max(0, min(1, y))
         // Y(t) = 3*(1-t)*t² + t³; closed-form solve via trig identity.
         let u = 0.5 + cos((4.0 * .pi + acos(1.0 - 2.0 * clamped)) / 3.0)

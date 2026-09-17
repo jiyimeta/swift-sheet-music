@@ -11,7 +11,7 @@ enum ElementHitCommandChecks {
         var score = ScoreEditor(score: EditingFixtures.twoConsecutiveC4Chords()).score
         let command: any EditCommand
         switch id {
-        case .tie, .slur, .jump, .marker:
+        case .tie, .slur, .jump, .marker, .glissando:
             Issue.record("Use remove(_:from:) with the real layout's score for selection-3 identities")
             return
         case let .dynamic(anchor):

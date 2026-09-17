@@ -355,11 +355,14 @@ public enum LayoutElement: Sendable, Equatable {
         toOrigin: CGPoint,
         placement: TextPlacementMetadata? = nil,
     )
+    /// `start` names the note the glissando is stored on (`Note.glissando`), and both halves of a line split across
+    /// a system break carry it; see `ScoreElementID.glissando`. `nil` draws the line with no identity.
     case glissandoLine(
         fromOrigin: CGPoint,
         toOrigin: CGPoint,
         wavy: Bool,
         text: String?,
+        start: NoteID? = nil,
     )
     /// A guitar bend, in one of the two shapes MuseScore's
     /// `GuitarBendLayout::layoutStandardStaff`

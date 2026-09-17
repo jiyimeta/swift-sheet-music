@@ -9,6 +9,7 @@ extension ScoreElementID {
             return RemoveJump(staff: staff, measureIndex: measureIndex, index: index)
         case let .marker(staff, measureIndex, index):
             return RemoveMarker(staff: staff, measureIndex: measureIndex, index: index)
+        case let .glissando(start): return SetGlissando(at: start, glissando: nil)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature,
              .timeSignature, .barLine, .articulation:
             return nil
