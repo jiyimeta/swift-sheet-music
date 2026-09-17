@@ -212,7 +212,7 @@ extension ScoreLayerBuilder {
                 from: shift(from), to: shift(to), above: above,
                 metrics: metrics, height: height, into: parent,
             )
-        case let .glissandoLine(from, to, wavy, text):
+        case let .glissandoLine(from, to, wavy, text, _):
             drawGlissando(
                 from: shift(from), to: shift(to), wavy: wavy,
                 text: text,

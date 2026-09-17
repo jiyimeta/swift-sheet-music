@@ -178,8 +178,13 @@
         /// on grace heads). With those two payloads rewritten back to the
         /// bare bar index and the grace id dropped on both sides, the merged
         /// digest and the text-font branch's are identical line for line.
+        ///
+        /// **Re-recorded when a glissando line gained identity.** 4 of 3890 lines changed, and they are all four
+        /// `spanner glissandoLine(` lines the corpus holds: each gains a trailing `start:` naming the note it is
+        /// drawn from, and nothing else on the line moves. With that field stripped from the new digest the two
+        /// files are identical byte for byte (`diff -q` on the normalized copy), so no engraving moved.
         private static let expectedDigestSHA256 =
-            "c19936084d83afa7e6ab4192fa1daa869ef0573fc51835d11cd64543352082e0"
+            "c4d29f7c543789d11e9e0d3980f9516f3e0252c9d54bc2dac9691c0df8cdd7b5"
 
         @Test("write digest")
         func writeDigest() throws {

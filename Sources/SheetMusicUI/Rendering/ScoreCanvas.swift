@@ -318,7 +318,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 from: shift(from), to: shift(to),
                 above: above, metrics: metrics,
             )
-        case let .glissandoLine(from, to, wavy, text):
+        case let .glissandoLine(from, to, wavy, text, _):
             GlissandoRenderer.draw(
                 context: &context,
                 from: shift(from), to: shift(to),

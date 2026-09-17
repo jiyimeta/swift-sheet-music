@@ -1,7 +1,7 @@
 import SheetMusicFoundation
 
 extension ScoreItemID {
-    /// Maps owned voice slots while preserving note, verse, articulation, slur, and grace identities.
+    /// Maps owned voice slots while preserving note, verse, articulation, slur, glissando, and grace identities.
     /// Bar addresses and staff-owned navigation lists do not own a voice slot.
     func mappingVoiceElements(_ transform: (VoiceElementID) -> VoiceElementID?) -> ScoreItemID? {
         func note(_ id: NoteID) -> NoteID? {
@@ -50,6 +50,8 @@ extension ScoreItemID {
             case let .tie(start, end):
                 guard let start = note(start), let end = note(end) else { return nil }
                 return .element(.tie(start: start, end: end))
+            case let .glissando(start):
+                return note(start).map { .element(.glissando(start: $0)) }
             case let .slur(.chord(anchor, ordinal)):
                 return transform(anchor).map { .element(.slur(.chord(anchor: $0, ordinal: ordinal))) }
             case let .slur(.voice(anchor)):

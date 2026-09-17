@@ -116,7 +116,7 @@ extension LayoutDocument {
             notes.first.map(ScoreItemID.note)
         case .clef, .lyric, .staffText, .harmony, .rehearsalMark,
              .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker:
+             .tie, .slur, .jump, .marker, .glissando:
             nil
         }
     }

@@ -3031,7 +3031,7 @@
             case .timeSignature: "Time signatures can't be deleted yet."
             case .barLine: "Barlines can't be deleted yet."
             case .articulation: "Articulations can't be deleted yet."
-            case .tie, .slur, .jump, .marker: "This element can't be deleted."
+            case .tie, .slur, .jump, .marker, .glissando: "This element can't be deleted."
             }
         }
 
@@ -3414,7 +3414,7 @@
                 selection = .none
                 return
             case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker, .graceNote:
+                 .articulation, .tie, .slur, .jump, .marker, .glissando, .graceNote:
                 // An engraved marking or a grace note selects itself rather than the chord beside it, so the
                 // renderer tints just that. It takes no part in the note-range logic below.
                 selection = target.selectableItem.map { .single($0) } ?? .none
@@ -3486,7 +3486,7 @@
                 )
             case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
                  .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine,
-                 .articulation, .tie, .slur, .jump, .marker:
+                 .articulation, .tie, .slur, .jump, .marker, .glissando:
                 return
             }
             textEntryFocused = true

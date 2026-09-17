@@ -94,6 +94,7 @@ extension ScoreItemIDCodecTests {
         .slur(.voice(VoiceElementID(start))),
         .jump(staff: start.staff, measureIndex: 7, index: 2),
         .marker(staff: start.staff, measureIndex: 7, index: 2),
+        .glissando(start: start),
     ]
 
     /// Tags are (field << 3) | wireType, with 2 for nested messages and 0 for Int32.
@@ -119,11 +120,16 @@ extension ScoreItemIDCodecTests {
         // Navigation: element payload 11, outer payload 14.
         [0x0E, 0x05, 0x0A, 0x0B, 0x0B, 0x0A, 0x04, 0x08, 0x04, 0x10, 0x02, 0x10, 0x0E, 0x18, 0x04],
         [0x0E, 0x05, 0x0A, 0x0B, 0x0C, 0x0A, 0x04, 0x08, 0x04, 0x10, 0x02, 0x10, 0x0E, 0x18, 0x04],
+        // Glissando: its one note is field 1, so element payload 17 (0x11), outer payload 20 (0x14).
+        [
+            0x14, 0x05, 0x0A, 0x11, 0x0D,
+            0x0A, 0x0E, 0x0A, 0x04, 0x08, 0x04, 0x10, 0x02, 0x10, 0x06, 0x18, 0x02, 0x20, 0x08, 0x28, 0x04,
+        ],
     ]
 
     @Test(
         "New element wire payloads preserve every nonzero field and match hand-derived bytes",
-        arguments: 0 ..< 5,
+        arguments: 0 ..< 6,
     )
     func newElementWirePayloads(_ index: Int) throws {
         let item = ScoreItemID.element(Self.newElements[index])
@@ -150,7 +156,7 @@ extension ScoreItemIDCodecTests {
         return try choice(&reader)
     }
 
-    @Test("Element choices append at 9 through 12 and slur forms remain 0 and 1")
+    @Test("Element choices append at 9 through 13 and slur forms remain 0 and 1")
     func elementWireDiscriminators() throws {
         let anchor = VoiceElementID(Self.start)
         let old: [ScoreElementID] = [
@@ -160,7 +166,7 @@ extension ScoreItemIDCodecTests {
             .timeSignature(measureIndex: 3, staff: signatureStaff),
             .barLine(measureIndex: 3, role: .explicit), .articulation(anchor: anchor, kind: .accent),
         ]
-        let expected: [UInt64] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 12]
+        let expected: [UInt64] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 12, 13]
         for (id, ordinal) in zip(old + Self.newElements, expected) {
             var reader = WireFormatReader(data: ScoreItemIDCodec.encode(.element(id)))
             let (outer, outerPayload) = try Self.choice(&reader)

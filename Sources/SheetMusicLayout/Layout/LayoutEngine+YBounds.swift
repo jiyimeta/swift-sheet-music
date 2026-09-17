@@ -98,7 +98,7 @@ extension LayoutEngine {
                 kind: kind, from: from, to: to, sp: sp,
             )
         case let .tieArc(from, to, _, _),
-             let .glissandoLine(from, to, _, _),
+             let .glissandoLine(from, to, _, _, _),
              let .lyricsMelisma(from, to, _),
              let .lyricHyphen(from, to, _),
              // Never wider than the note it serves — the outermost

@@ -117,6 +117,10 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// One grace notehead, reported by the notehead rung. A click that lands on a grace head resolves here rather
     /// than to the main chord beside it; see `ScoreHitTester`'s notehead rung for how the two are separated.
     case graceNote(GraceNoteID)
+    /// A glissando line, addressed by `SetGlissando(at: start, glissando:)`; see `ScoreElementID.glissando`. It is an
+    /// engraved element, reported only after every notehead has declined the point: the line stops 0.8 sp from each
+    /// notehead's center, inside the head's 1.2 sp reach, so a click at either end still selects the note.
+    case glissando(start: NoteID)
 }
 
 extension ScoreHitTarget {
@@ -153,7 +157,7 @@ extension ScoreHitTarget {
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote:
             return nil
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker:
+             .tie, .slur, .jump, .marker, .glissando:
             return nil
         }
     }
@@ -177,7 +181,7 @@ extension ScoreHitTarget {
         case .lyric, .staffText, .harmony, .rehearsalMark:
             return textID.map(ScoreItemID.text)
         case .dynamic, .fermata, .breath, .tempo, .spanner, .keySignature, .timeSignature, .barLine, .articulation,
-             .tie, .slur, .jump, .marker:
+             .tie, .slur, .jump, .marker, .glissando:
             return elementID.map(ScoreItemID.element)
         }
     }
@@ -209,6 +213,7 @@ extension ScoreHitTarget {
             self = .jump(staff: staff, measureIndex: measureIndex, index: index)
         case let .marker(staff, measureIndex, index):
             self = .marker(staff: staff, measureIndex: measureIndex, index: index)
+        case let .glissando(start): self = .glissando(start: start)
         }
     }
 
@@ -239,6 +244,7 @@ extension ScoreHitTarget {
             return .jump(staff: staff, measureIndex: measureIndex, index: index)
         case let .marker(staff, measureIndex, index):
             return .marker(staff: staff, measureIndex: measureIndex, index: index)
+        case let .glissando(start): return .glissando(start: start)
         case .note, .rest, .stem, .flag, .beam, .tuplet, .clef, .graceNote,
              .lyric, .staffText, .harmony, .rehearsalMark:
             return nil
