@@ -1,11 +1,12 @@
-/// The staff a single-staff fixture's key and time signature glyphs are drawn on, which their identity names.
-private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 #if os(macOS)
     import CoreGraphics
     @testable import SheetMusicCore
     @testable import SheetMusicEditWire
     @testable import SheetMusicLayout
     import Testing
+
+    /// The staff a single-staff fixture's key and time signature glyphs are drawn on, which their identity names.
+    private let signatureStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
 
     /// Naming an engraved text as a selectable item: `ScoreTextID`, the `ScoreItemID.text` case that carries
     /// it, and the two directions between it and `ScoreHitTarget`.
